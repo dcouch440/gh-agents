@@ -9,6 +9,7 @@ The Agent Designer is a **pre-lifecycle function inside task force protocol exec
 - An LLM-generated prompt can be contextually aware, applying prompt engineering best practices automatically
 - The designer runs on a strong model (Sonnet/Opus) and generates prompts detailed enough that crew agents can run on cheaper models (Haiku) — invest once in prompt quality, save on every agent execution
 - Research shows prompt optimization yields +6% accuracy gains more cost-effectively than adding agents ([Multi-Agent Prompt Optimization, 2025](https://arxiv.org/html/2502.02533v1))
+- The belief format (`[tag | confidence]` one-sentence findings) is adapted from [Belief-Oriented Conversation Architecture (BOCA)](../proto/paper.md) — authored context as an alternative to retrieval and summarization. BOCA's Phase 6 demonstrated that prompt-engineered beliefs with research-backed schemas close the accuracy gap between curated beliefs and full context from 4 points to 1 point
 
 **The cascade:**
 ```
@@ -1098,7 +1099,12 @@ fn test_agent_designer_prompt_template_has_variables() {
 
 ## Appendix A: The 21 Beliefs (BOCA-Style Reference)
 
-Operating beliefs baked into the Agent Designer's system prompt. Format: `[tag | confidence]` — one-sentence interpretive findings from prompt engineering research. Derived from the [Prompt Research doc](../docs/PROMPT_RESEARCH.md) and validated against:
+Operating beliefs baked into the Agent Designer's system prompt. Format: `[tag | confidence]` — one-sentence interpretive findings from prompt engineering research.
+
+The belief format — semantically tagged, confidence-weighted, one-sentence hypotheses — is adapted from [Belief-Oriented Conversation Architecture (BOCA)](../proto/paper.md) (Couch, 2026). BOCA demonstrated that authored beliefs carrying semantic tags and confidence metadata transfer sufficient signal for analytical reasoning at 16-20% of full-context token cost. Phase 6 of the paper showed that applying research-backed prompt engineering (reasoning-first schemas, XML-structured prompts, few-shot examples) to belief generation closes the accuracy gap between curated beliefs and full context from 4 points to 1 point.
+
+Derived from the [Prompt Research doc](../docs/PROMPT_RESEARCH.md) and validated against:
+- [BOCA Paper — Belief-Oriented Conversation Architecture](../proto/paper.md)
 - [Anthropic Context Engineering](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents)
 - [Anthropic Multi-Agent Research System](https://www.anthropic.com/engineering/multi-agent-research-system)
 - [Multi-Agent Prompt Optimization (arxiv)](https://arxiv.org/html/2502.02533v1)
