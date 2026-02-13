@@ -386,6 +386,23 @@ SCENARIOS = {
         ],
         "upstream_context": "No upstream outputs available. This is the first step in the workflow.",
     },
+    "codebase": {
+        "name": "Pre-Release Security & Quality Audit",
+        "mission": {
+            "task_description": "Audit the /src directory of a Node.js Express microservice that handles authentication and payment processing. The service processes real transactions and stores PII. Identify security vulnerabilities, performance issues, and code quality problems before the v2.2 release. All findings must be actionable with specific file references and remediation steps.",
+            "failure_mode": "fail_fast",
+            "downstream_context": "Findings block the release pipeline. The engineering lead triages by severity — CRITICAL blocks release, HIGH must have a remediation plan, MODERATE gets tracked.",
+        },
+        "allowed_capabilities": ["file_read", "grep", "shell", "file_write", "git", "database_query"],
+        "roster": [
+            {"id": "agent-mapper-101", "name": "Mapper", "role": "Discover codebase structure, map all entry points and route handlers, trace dependency graph and data flow boundaries between modules", "order": 1},
+            {"id": "agent-secaudit-102", "name": "SecurityAuditor", "role": "Analyze entry points for OWASP Top 10 vulnerabilities including injection, broken authentication, broken access control, and credential exposure", "order": 2},
+            {"id": "agent-perfanalyst-103", "name": "PerformanceAnalyst", "role": "Identify N+1 query patterns, connection pool issues, algorithmic inefficiencies, and database interaction bottlenecks", "order": 3},
+            {"id": "agent-integreview-104", "name": "IntegrationReviewer", "role": "Analyze cross-module data flows for transaction boundary issues, error propagation gaps, race conditions, and state consistency problems", "order": 4},
+            {"id": "agent-reportwriter-105", "name": "ReportWriter", "role": "Compile all findings into a prioritized remediation plan with severity ratings, effort estimates, and specific fix examples", "order": 5},
+        ],
+        "upstream_context": "No upstream outputs available. This is the first step in the workflow.",
+    },
 }
 
 
@@ -643,13 +660,401 @@ EXPECTED_CONTRADICTIONS = [
 ]
 
 
-def setup_mock_files() -> Path:
-    """Create a temp directory with mock story files. Returns the path."""
+# ===========================================================================
+# CODEBASE SCENARIO — Mock Node.js microservice with planted issues
+# ===========================================================================
+
+CODEBASE_MOCK_FILES = {
+    "src/auth/login.js": dedent("""\
+        const express = require('express');
+        const router = express.Router();
+        const db = require('../db/queries');
+
+        // POST /auth/login
+        router.post('/login', async (req, res) => {
+          const { email, password } = req.body;
+
+          if (!email || !password) {
+            return res.status(400).json({ error: 'Email and password required' });
+          }
+
+          try {
+            const user = await db.findUserByEmail(email);
+            if (!user) {
+              return res.status(401).json({ error: 'Invalid credentials' });
+            }
+
+            // Verify password
+            if (user.password_hash === password) {
+              const token = generateToken(user.id);
+              return res.json({ token, user: { id: user.id, email: user.email } });
+            }
+
+            return res.status(401).json({ error: 'Invalid credentials' });
+          } catch (err) {
+            console.error('Login error:', err);
+            return res.status(500).json({ error: 'Internal server error' });
+          }
+        });
+
+        function generateToken(userId) {
+          const jwt = require('jsonwebtoken');
+          return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '24h' });
+        }
+
+        module.exports = router;
+    """),
+
+    "src/auth/middleware.js": dedent("""\
+        const jwt = require('jsonwebtoken');
+
+        // Authentication middleware — validates JWT and attaches user to request
+        function authenticate(req, res, next) {
+          const authHeader = req.headers.authorization;
+          if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return res.status(401).json({ error: 'No token provided' });
+          }
+
+          const token = authHeader.split(' ')[1];
+          try {
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            req.user = decoded;
+            next();
+          } catch (err) {
+            return res.status(401).json({ error: 'Invalid token' });
+          }
+        }
+
+        // Token refresh handler — debounced to prevent concurrent refresh storms.
+        // When multiple requests arrive with near-expiry tokens, only the first
+        // triggers a refresh; others wait for the result. The 50ms delay is
+        // intentional to batch concurrent refresh attempts.
+        let refreshPending = null;
+        function refreshToken(req, res) {
+          if (refreshPending) {
+            return refreshPending.then(token => res.json({ token }));
+          }
+          refreshPending = new Promise(resolve => {
+            setTimeout(() => {
+              const newToken = jwt.sign(
+                { userId: req.user.userId },
+                process.env.JWT_SECRET,
+                { expiresIn: '24h' }
+              );
+              refreshPending = null;
+              resolve(newToken);
+            }, 50);
+          });
+          return refreshPending.then(token => res.json({ token }));
+        }
+
+        module.exports = { authenticate, refreshToken };
+    """),
+
+    "src/payments/checkout.js": dedent("""\
+        const express = require('express');
+        const router = express.Router();
+        const { authenticate } = require('../auth/middleware');
+        const db = require('../db/queries');
+
+        // POST /payments/checkout
+        router.post('/checkout', authenticate, async (req, res) => {
+          const { orderId, amount } = req.body;
+          const userId = req.user.userId;
+
+          try {
+            // Check user's balance
+            const balance = await db.getUserBalance(userId);
+            if (balance < amount) {
+              return res.status(400).json({ error: 'Insufficient balance' });
+            }
+
+            // Charge the user
+            await db.deductBalance(userId, amount);
+
+            // Record the transaction
+            const txn = await db.query(
+              `INSERT INTO transactions (user_id, order_id, amount, status)
+               VALUES (${userId}, '${orderId}', ${amount}, 'completed')
+               RETURNING id, created_at`
+            );
+
+            // Update order status
+            await db.updateOrderStatus(orderId, 'paid');
+
+            return res.json({
+              success: true,
+              transactionId: txn.rows[0].id,
+              remainingBalance: balance - amount,
+            });
+          } catch (err) {
+            console.error('Checkout error:', err);
+            return res.status(500).json({ error: 'Payment processing failed' });
+          }
+        });
+
+        module.exports = router;
+    """),
+
+    "src/payments/refund.js": dedent("""\
+        const express = require('express');
+        const router = express.Router();
+        const { authenticate } = require('../auth/middleware');
+        const db = require('../db/queries');
+
+        // POST /payments/refund
+        router.post('/refund', authenticate, async (req, res) => {
+          const { transactionId } = req.body;
+
+          try {
+            // Look up the transaction
+            const txn = await db.getTransaction(transactionId);
+            if (!txn) {
+              return res.status(404).json({ error: 'Transaction not found' });
+            }
+
+            if (txn.status === 'refunded') {
+              return res.status(400).json({ error: 'Already refunded' });
+            }
+
+            // Process refund — credit user and update status
+            await db.addBalance(txn.user_id, txn.amount);
+            await db.updateTransactionStatus(transactionId, 'refunded');
+
+            return res.json({
+              success: true,
+              refundedAmount: txn.amount,
+            });
+          } catch (err) {
+            console.error('Refund error:', err);
+            return res.status(500).json({ error: 'Refund processing failed' });
+          }
+        });
+
+        module.exports = router;
+    """),
+
+    "src/db/queries.js": dedent("""\
+        const { Pool } = require('pg');
+        const pool = require('../config/database');
+
+        // Parameterized queries — safe from SQL injection
+        async function findUserByEmail(email) {
+          const result = await pool.query(
+            'SELECT id, email, password_hash FROM users WHERE email = $1',
+            [email]
+          );
+          return result.rows[0] || null;
+        }
+
+        async function getUserBalance(userId) {
+          const result = await pool.query(
+            'SELECT balance FROM accounts WHERE user_id = $1',
+            [userId]
+          );
+          return result.rows[0]?.balance || 0;
+        }
+
+        async function deductBalance(userId, amount) {
+          return pool.query(
+            'UPDATE accounts SET balance = balance - $1 WHERE user_id = $2',
+            [amount, userId]
+          );
+        }
+
+        async function addBalance(userId, amount) {
+          return pool.query(
+            'UPDATE accounts SET balance = balance + $1 WHERE user_id = $2',
+            [amount, userId]
+          );
+        }
+
+        async function getTransaction(txnId) {
+          const result = await pool.query(
+            'SELECT * FROM transactions WHERE id = $1',
+            [txnId]
+          );
+          return result.rows[0] || null;
+        }
+
+        async function updateTransactionStatus(txnId, status) {
+          return pool.query(
+            'UPDATE transactions SET status = $1 WHERE id = $2',
+            [status, txnId]
+          );
+        }
+
+        async function updateOrderStatus(orderId, status) {
+          return pool.query(
+            'UPDATE orders SET status = $1 WHERE id = $2',
+            [status, orderId]
+          );
+        }
+
+        // Fetch order with all line items
+        async function fetchOrderWithItems(orderId) {
+          const order = await pool.query(
+            'SELECT * FROM orders WHERE id = $1',
+            [orderId]
+          );
+          if (!order.rows[0]) return null;
+
+          const items = await pool.query(
+            'SELECT id FROM order_items WHERE order_id = $1',
+            [orderId]
+          );
+
+          // Load full details for each item
+          const fullItems = [];
+          for (const item of items.rows) {
+            const detail = await pool.query(
+              'SELECT * FROM order_items WHERE id = $1',
+              [item.id]
+            );
+            fullItems.push(detail.rows[0]);
+          }
+
+          return { ...order.rows[0], items: fullItems };
+        }
+
+        // Generic query helper (used by checkout for transaction inserts)
+        async function query(sql, params) {
+          return pool.query(sql, params);
+        }
+
+        module.exports = {
+          findUserByEmail, getUserBalance, deductBalance, addBalance,
+          getTransaction, updateTransactionStatus, updateOrderStatus,
+          fetchOrderWithItems, query,
+        };
+    """),
+
+    "src/config/database.js": dedent("""\
+        const { Pool } = require('pg');
+
+        // Database connection pool.
+        // Pool size of 5 is intentional — this service handles ~50 req/s peak,
+        // and each query completes in <10ms. 5 connections gives us 500 queries/s
+        // throughput with headroom. Larger pools waste server-side memory and
+        // increase connection overhead on the PostgreSQL side.
+        const pool = new Pool({
+          connectionString: 'postgresql://payments_svc:sk_live_xR7mK9pQ2wN4@db.internal:5432/payments',
+          max: 5,
+          idleTimeoutMillis: 30000,
+          connectionTimeoutMillis: 5000,
+        });
+
+        pool.on('error', (err) => {
+          console.error('Unexpected pool error:', err);
+        });
+
+        module.exports = pool;
+    """),
+
+    ".env.example": dedent("""\
+        # Application
+        NODE_ENV=production
+        PORT=3000
+
+        # Database — use environment-specific connection strings
+        DATABASE_URL=postgresql://user:password@host:5432/dbname
+
+        # Auth
+        JWT_SECRET=your-secret-here
+
+        # Payment provider
+        STRIPE_SECRET_KEY=sk_test_...
+        STRIPE_WEBHOOK_SECRET=whsec_...
+    """),
+
+    "package.json": dedent("""\
+        {
+          "name": "payments-service",
+          "version": "2.1.0",
+          "description": "Payment processing microservice",
+          "main": "src/index.js",
+          "scripts": {
+            "start": "node src/index.js",
+            "test": "jest --coverage",
+            "lint": "eslint src/"
+          },
+          "dependencies": {
+            "express": "4.17.1",
+            "pg": "8.11.3",
+            "jsonwebtoken": "9.0.2",
+            "dotenv": "16.3.1",
+            "cors": "2.8.5",
+            "body-parser": "1.20.2"
+          },
+          "devDependencies": {
+            "jest": "29.7.0",
+            "eslint": "8.56.0"
+          }
+        }
+    """),
+
+    # Entry point file — the app wires routes together
+    "src/index.js": dedent("""\
+        const express = require('express');
+        const cors = require('cors');
+        const bodyParser = require('body-parser');
+        const loginRouter = require('./auth/login');
+        const { authenticate, refreshTokenDebounce } = require('./auth/middleware');
+        const checkoutRouter = require('./payments/checkout');
+        const refundRouter = require('./payments/refund');
+        const db = require('./db/queries');
+
+        const app = express();
+
+        app.use(cors());
+        app.use(bodyParser.json());
+
+        // Public routes
+        app.use('/auth', loginRouter);
+
+        // Protected routes
+        app.use('/payments/checkout', authenticate, checkoutRouter);
+        app.use('/payments/refund', authenticate, refundRouter);
+
+        // Health check
+        app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
+        const PORT = process.env.PORT || 3000;
+        app.listen(PORT, () => {
+          console.log(`Service running on port ${PORT}`);
+        });
+
+        module.exports = app;
+    """),
+}
+
+EXPECTED_ISSUES = [
+    {"id": "sql_injection", "description": "SQL injection via string interpolation in checkout.js"},
+    {"id": "timing_attack", "description": "Non-constant-time password comparison in login.js"},
+    {"id": "no_rate_limit", "description": "No rate limiting on login endpoint"},
+    {"id": "broken_authz", "description": "Missing ownership check on refund endpoint (IDOR)"},
+    {"id": "no_transaction", "description": "Missing transaction boundary in checkout payment flow"},
+    {"id": "n_plus_one", "description": "N+1 query pattern in fetchOrderWithItems"},
+    {"id": "hardcoded_creds", "description": "Hardcoded database credentials in config/database.js"},
+    {"id": "outdated_dep", "description": "Outdated Express version, missing helmet/security middleware"},
+]
+
+
+def setup_mock_files(scenario_key: str = "stories") -> Path:
+    """Create a temp directory with mock files for the given scenario."""
     tmpdir = Path(tempfile.mkdtemp(prefix="designer_test_"))
-    stories_dir = tmpdir / "stories"
-    stories_dir.mkdir()
-    for name, content in MOCK_STORIES.items():
-        (stories_dir / name).write_text(content)
+
+    if scenario_key in ("stories", "stories_upstream"):
+        stories_dir = tmpdir / "stories"
+        stories_dir.mkdir()
+        for name, content in MOCK_STORIES.items():
+            (stories_dir / name).write_text(content)
+    elif scenario_key == "codebase":
+        for relpath, content in CODEBASE_MOCK_FILES.items():
+            fpath = tmpdir / relpath
+            fpath.parent.mkdir(parents=True, exist_ok=True)
+            fpath.write_text(content)
+
     return tmpdir
 
 
@@ -657,22 +1062,32 @@ def cleanup_mock_files(tmpdir: Path):
     shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-def handle_tool_call(tool_name: str, tool_input: dict, stories_dir: Path) -> str:
-    """Execute a mock tool call against the stories directory."""
+def handle_tool_call(tool_name: str, tool_input: dict, base_dir: Path) -> str:
+    """Execute a mock tool call against the base directory (stories/ or project root)."""
     if tool_name == "grep":
         pattern = tool_input.get("pattern", "")
         path = tool_input.get("path", "")
         log(f"    [TOOL] grep pattern='{pattern}' path='{path}'")
         results = []
-        search_dir = stories_dir
         try:
             compiled = re.compile(pattern, re.IGNORECASE)
         except re.error:
             return f"Error: invalid regex pattern '{pattern}'"
-        for fpath in sorted(search_dir.glob("*.txt")):
-            for i, line in enumerate(fpath.read_text().split("\n"), 1):
-                if compiled.search(line):
-                    results.append(f"{fpath.name}:{i}: {line.strip()}")
+        # Search all text-like files recursively
+        extensions = {"*.txt", "*.js", "*.json", "*.md", "*.env", "*.env.example"}
+        seen = set()
+        for ext in extensions:
+            for fpath in sorted(base_dir.rglob(ext)):
+                if fpath in seen:
+                    continue
+                seen.add(fpath)
+                relpath = fpath.relative_to(base_dir)
+                try:
+                    for i, line in enumerate(fpath.read_text().split("\n"), 1):
+                        if compiled.search(line):
+                            results.append(f"{relpath}:{i}: {line.strip()}")
+                except (UnicodeDecodeError, PermissionError):
+                    pass
         if not results:
             return "No matches found."
         return "\n".join(results)
@@ -680,24 +1095,71 @@ def handle_tool_call(tool_name: str, tool_input: dict, stories_dir: Path) -> str
     elif tool_name == "file_read":
         path = tool_input.get("path", "")
         log(f"    [TOOL] file_read path='{path}'")
-        # Normalize — accept /stories/story1.txt or story1.txt or stories/story1.txt
-        filename = Path(path).name
-        fpath = stories_dir / filename
-        if fpath.exists():
-            return fpath.read_text()
-        # Try exact path relative to stories dir
-        for candidate in stories_dir.glob("*.txt"):
-            if candidate.name == filename:
+        # Try resolving relative to base_dir with various path normalizations
+        candidates = [
+            base_dir / path,
+            base_dir / path.lstrip("/"),
+            base_dir / Path(path).name,
+        ]
+        # Also try stripping leading /src/, /stories/ etc.
+        stripped = path.lstrip("/")
+        for prefix in ("src/", "stories/"):
+            if stripped.startswith(prefix):
+                candidates.append(base_dir / stripped)
+                candidates.append(base_dir / stripped[len(prefix):])
+        for candidate in candidates:
+            if candidate.exists() and candidate.is_file():
                 return candidate.read_text()
+        # Fallback: search by filename
+        filename = Path(path).name
+        for fpath in base_dir.rglob(filename):
+            if fpath.is_file():
+                return fpath.read_text()
         return f"Error: file not found: {path}"
 
     elif tool_name == "file_write":
         path = tool_input.get("path", "")
         content = tool_input.get("content", "")
         log(f"    [TOOL] file_write path='{path}' ({len(content)} chars)")
-        filename = Path(path).name
-        (stories_dir / filename).write_text(content)
+        fpath = base_dir / path.lstrip("/")
+        fpath.parent.mkdir(parents=True, exist_ok=True)
+        fpath.write_text(content)
         return f"Written {len(content)} chars to {path}"
+
+    elif tool_name == "shell":
+        command = tool_input.get("command", "")
+        log(f"    [TOOL] shell command='{command}'")
+        # Simulate safe structural commands (find, ls, tree) against mock dir
+        import shlex
+        parts = shlex.split(command) if command else []
+        if not parts:
+            return "Error: empty command"
+        cmd = parts[0]
+        if cmd in ("find", "ls", "tree"):
+            # List all files recursively
+            results = []
+            for fpath in sorted(base_dir.rglob("*")):
+                if fpath.is_file():
+                    results.append(str(fpath.relative_to(base_dir)))
+            return "\n".join(results) if results else "No files found."
+        elif cmd == "cat":
+            # Redirect cat to file_read
+            if len(parts) > 1:
+                return handle_tool_call("file_read", {"path": parts[1]}, base_dir)
+            return "Error: cat requires a file path"
+        elif cmd == "wc":
+            # Count lines across all files
+            results = []
+            for fpath in sorted(base_dir.rglob("*")):
+                if fpath.is_file():
+                    try:
+                        lines = len(fpath.read_text().splitlines())
+                        results.append(f"  {lines} {fpath.relative_to(base_dir)}")
+                    except (UnicodeDecodeError, PermissionError):
+                        pass
+            return "\n".join(results) if results else "No files found."
+        else:
+            return f"Shell command '{cmd}' not available in sandbox. Available: find, ls, tree, cat, wc"
 
     else:
         return f"Unknown tool: {tool_name}"
@@ -705,7 +1167,8 @@ def handle_tool_call(tool_name: str, tool_input: dict, stories_dir: Path) -> str
 
 def run_agent_phase2(
     agent_data: dict,
-    stories_dir: Path,
+    base_dir: Path,
+    scenario_key: str = "stories",
     max_rounds: int = 15,
 ) -> dict:
     """Execute an agent with designer-generated prompts and real tool_use."""
@@ -745,6 +1208,18 @@ def run_agent_phase2(
                 "required": ["path"],
             },
         })
+    if "shell" in assigned_tools:
+        tool_defs.append({
+            "name": "shell",
+            "description": "Execute shell commands in a sandboxed environment. Available commands: find, ls, tree, cat, wc.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "Shell command to execute (e.g., 'find src/ -name *.js')"},
+                },
+                "required": ["command"],
+            },
+        })
     if "file_write" in assigned_tools:
         tool_defs.append({
             "name": "file_write",
@@ -764,6 +1239,7 @@ def run_agent_phase2(
     total_output = 0
     tool_calls = 0
     final_text = ""
+    all_text_blocks: list[str] = []  # accumulate all text across rounds for scoring
     round_num = 0
 
     for round_num in range(1, max_rounds + 1):
@@ -803,6 +1279,11 @@ def run_agent_phase2(
                 })
         messages.append({"role": "assistant", "content": content_dicts})
 
+        # Accumulate all text blocks for scoring
+        for block in assistant_content:
+            if block.type == "text" and block.text.strip():
+                all_text_blocks.append(block.text)
+
         if resp.stop_reason == "end_turn":
             # Extract final text
             for block in assistant_content:
@@ -815,7 +1296,7 @@ def run_agent_phase2(
             for block in assistant_content:
                 if block.type == "tool_use":
                     tool_calls += 1
-                    result = handle_tool_call(block.name, block.input, stories_dir)
+                    result = handle_tool_call(block.name, block.input, base_dir)
                     tool_results.append({
                         "type": "tool_result",
                         "tool_use_id": block.id,
@@ -828,17 +1309,31 @@ def run_agent_phase2(
     log(f"  Agent completed: {round_num} rounds, {tool_calls} tool calls")
     log(f"  Tokens: {total_input} in / {total_output} out")
 
-    # Evaluate: did the agent find the planted contradictions?
-    log_sep(f"PHASE 2: {agent_name} OUTPUT")
-    log_block(f"{agent_name} final output", final_text)
+    # Use accumulated text for scoring if agent hit max rounds without end_turn
+    scoreable_text = final_text if final_text else "\n".join(all_text_blocks)
 
-    log_sep(f"PHASE 2: CONTRADICTION SCORING")
+    # Evaluate output
+    log_sep(f"PHASE 2: {agent_name} OUTPUT")
+    if final_text:
+        log_block(f"{agent_name} final output", final_text)
+    else:
+        log(f"  (No end_turn — scoring accumulated text from {len(all_text_blocks)} blocks, {len(scoreable_text)} chars)")
+        log_block(f"{agent_name} accumulated text", scoreable_text[:2000])
+
+    if scenario_key == "codebase":
+        return _score_codebase(agent_name, scoreable_text, round_num, tool_calls, total_input, total_output)
+    else:
+        return _score_stories(agent_name, scoreable_text, round_num, tool_calls, total_input, total_output)
+
+
+def _score_stories(agent_name: str, final_text: str, round_num: int, tool_calls: int, total_input: int, total_output: int) -> dict:
+    """Score stories scenario output for planted contradictions."""
+    log_sep("PHASE 2: CONTRADICTION SCORING")
     found = []
     missed = []
     output_lower = final_text.lower()
 
     for contra in EXPECTED_CONTRADICTIONS:
-        # Check for signals that this contradiction was found
         detected = False
         if contra["id"] == "eyes":
             detected = ("blue" in output_lower and "brown" in output_lower) or "eye color" in output_lower or "eye colour" in output_lower
@@ -866,8 +1361,105 @@ def run_agent_phase2(
         "rounds": round_num,
         "tool_calls": tool_calls,
         "tokens": {"input": total_input, "output": total_output},
-        "contradictions_found": [c["id"] for c in found],
-        "contradictions_missed": [c["id"] for c in missed],
+        "issues_found": [c["id"] for c in found],
+        "issues_missed": [c["id"] for c in missed],
+        "score": f"{score}/{total}",
+        "final_output_length": len(final_text),
+    }
+
+
+def _score_codebase(agent_name: str, final_text: str, round_num: int, tool_calls: int, total_input: int, total_output: int) -> dict:
+    """Score codebase scenario output for planted security/quality issues."""
+    log_sep("PHASE 2: ISSUE SCORING")
+    found = []
+    missed = []
+    output_lower = final_text.lower()
+
+    for issue in EXPECTED_ISSUES:
+        detected = False
+        iid = issue["id"]
+
+        if iid == "sql_injection":
+            detected = (
+                "sql injection" in output_lower
+                or ("interpolat" in output_lower and "sql" in output_lower)
+                or ("${" in final_text and "query" in output_lower)
+                or "string concatenat" in output_lower
+            )
+        elif iid == "timing_attack":
+            detected = (
+                "timing" in output_lower
+                or "constant-time" in output_lower
+                or "constant time" in output_lower
+                or ("===" in final_text and "password" in output_lower)
+                or "bcrypt" in output_lower
+                or "time-safe" in output_lower
+            )
+        elif iid == "no_rate_limit":
+            detected = (
+                "rate limit" in output_lower
+                or "brute force" in output_lower
+                or "throttl" in output_lower
+            )
+        elif iid == "broken_authz":
+            detected = (
+                ("authorization" in output_lower and "refund" in output_lower)
+                or "idor" in output_lower
+                or ("ownership" in output_lower and "refund" in output_lower)
+                or ("any user" in output_lower and "refund" in output_lower)
+                or "access control" in output_lower
+            )
+        elif iid == "no_transaction":
+            detected = (
+                "transaction" in output_lower
+                or "race condition" in output_lower
+                or "atomicity" in output_lower
+                or ("begin" in output_lower and "commit" in output_lower)
+                or "toctou" in output_lower
+            )
+        elif iid == "n_plus_one":
+            detected = (
+                "n+1" in output_lower
+                or "n + 1" in output_lower
+                or ("loop" in output_lower and "query" in output_lower and "fetchorder" in output_lower)
+                or ("individual" in output_lower and "query" in output_lower and "loop" in output_lower)
+            )
+        elif iid == "hardcoded_creds":
+            detected = (
+                "hardcoded" in output_lower
+                or "hard-coded" in output_lower
+                or ("credential" in output_lower and "source" in output_lower)
+                or ("password" in output_lower and "connection" in output_lower and "string" in output_lower)
+                or "sk_live" in output_lower
+            )
+        elif iid == "outdated_dep":
+            detected = (
+                "outdated" in output_lower
+                or ("express" in output_lower and "4.17" in output_lower)
+                or "helmet" in output_lower
+                or ("cve" in output_lower and "express" in output_lower)
+                or "security middleware" in output_lower
+            )
+
+        if detected:
+            found.append(issue)
+            log(f"  FOUND: {issue['description']}")
+        else:
+            missed.append(issue)
+            log(f"  MISSED: {issue['description']}", level="WARN")
+
+    score = len(found)
+    total = len(EXPECTED_ISSUES)
+    log(f"")
+    log(f"  Score: {score}/{total} issues found")
+
+    return {
+        "agent_name": agent_name,
+        "rounds": round_num,
+        "tool_calls": tool_calls,
+        "tokens": {"input": total_input, "output": total_output},
+        "issues_found": [i["id"] for i in found],
+        "issues_missed": [i["id"] for i in missed],
         "score": f"{score}/{total}",
         "final_output_length": len(final_text),
     }
@@ -1041,6 +1633,40 @@ def run_designer(scenario_key: str) -> dict | None:
     return output
 
 
+def _generate_synthetic_mapper_output(mock_dir: Path) -> str:
+    """Generate a realistic Mapper output (file listing + entry points) for upstream injection."""
+    lines = ["## Codebase Structure\n"]
+
+    # List all files
+    files = sorted(f.relative_to(mock_dir) for f in mock_dir.rglob("*") if f.is_file())
+    lines.append("### Files discovered:")
+    for f in files:
+        lines.append(f"- {f}")
+
+    # Identify entry points from index.js
+    lines.append("\n### Entry Points:")
+    lines.append("- src/index.js — Main application entry, wires Express routes")
+    lines.append("- POST /auth/login — Authentication endpoint (src/auth/login.js)")
+    lines.append("- POST /payments/checkout — Payment processing (src/payments/checkout.js)")
+    lines.append("- POST /payments/refund — Refund handling (src/payments/refund.js)")
+
+    # Data flow boundaries
+    lines.append("\n### Data Flow Boundaries:")
+    lines.append("- Database interaction: src/db/queries.js (query helpers used by auth and payments)")
+    lines.append("- Database config: src/config/database.js (connection pool setup)")
+    lines.append("- Auth middleware: src/auth/middleware.js (JWT validation on protected routes)")
+    lines.append("- External deps: express 4.17.1, pg, bcrypt, jsonwebtoken, dotenv (see package.json)")
+
+    lines.append("\n### Module Dependencies:")
+    lines.append("- src/index.js → src/auth/login.js, src/auth/middleware.js, src/payments/checkout.js, src/payments/refund.js")
+    lines.append("- src/auth/login.js → src/db/queries.js")
+    lines.append("- src/payments/checkout.js → src/db/queries.js")
+    lines.append("- src/payments/refund.js → src/db/queries.js")
+    lines.append("- src/db/queries.js → src/config/database.js")
+
+    return "\n".join(lines)
+
+
 # ===========================================================================
 # MAIN
 # ===========================================================================
@@ -1069,15 +1695,35 @@ if __name__ == "__main__":
 
     # Phase 2: Agent execution (optional)
     if args.run_agent:
-        if args.scenario not in ("stories", "stories_upstream"):
-            log("Phase 2 only supports stories scenarios (need mock files)", level="WARN")
+        supported = ("stories", "stories_upstream", "codebase")
+        if args.scenario not in supported:
+            log(f"Phase 2 only supports {supported} (need mock files)", level="WARN")
         else:
-            first_agent = result["designer_output"]["agents"][0]
-            tmpdir = setup_mock_files()
-            stories_dir = tmpdir / "stories"
-            log(f"Mock files created at: {stories_dir}")
+            agents = result["designer_output"]["agents"]
+
+            if args.scenario == "codebase":
+                # Run SecurityAuditor (index 1) with synthetic Mapper output
+                agent_idx = 1
+                agent_data = dict(agents[agent_idx])
+                tmpdir = setup_mock_files(args.scenario)
+                mock_dir = tmpdir
+
+                # Generate synthetic Mapper output (file listing) for upstream context
+                mapper_output = _generate_synthetic_mapper_output(mock_dir)
+                agent_data["task_prompt"] = agent_data["task_prompt"].replace(
+                    "{Mapper's output will be injected here}", mapper_output
+                )
+                rounds = 25
+            else:
+                agent_idx = 0
+                agent_data = agents[agent_idx]
+                tmpdir = setup_mock_files(args.scenario)
+                mock_dir = tmpdir / "stories"
+                rounds = 15
+
+            log(f"Mock files created at: {mock_dir}")
             try:
-                phase2_result = run_agent_phase2(first_agent, stories_dir)
+                phase2_result = run_agent_phase2(agent_data, mock_dir, scenario_key=args.scenario, max_rounds=rounds)
                 result["phase2"] = phase2_result
 
                 # Re-save with phase 2 results

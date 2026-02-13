@@ -78,14 +78,20 @@ mod tests {
 ```"#;
         let beliefs = parse_extraction_output(content);
         assert_eq!(beliefs.len(), 1);
-        assert_eq!(beliefs[0].content, "The system uses microservices architecture");
+        assert_eq!(
+            beliefs[0].content,
+            "The system uses microservices architecture"
+        );
         assert_eq!(beliefs[0].belief_type, "factual");
         assert_eq!(beliefs[0].confidence, "high");
         assert_eq!(
             beliefs[0].confidence_justification.as_deref(),
             Some("Directly stated in the document")
         );
-        assert_eq!(beliefs[0].semantic_tags, vec!["architecture", "microservices"]);
+        assert_eq!(
+            beliefs[0].semantic_tags,
+            vec!["architecture", "microservices"]
+        );
         assert_eq!(beliefs[0].emotional_tone.as_deref(), Some("neutral"));
         assert!(beliefs[0].cross_source_tension.is_none());
     }

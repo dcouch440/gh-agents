@@ -144,6 +144,16 @@ pub mod vars {
         pub const SOURCE_CONTENT: &str = "BeliefCapture.source_content";
     }
 
+    /// Variables for the Agent Designer pre-lifecycle prompt generation.
+    pub mod designer {
+        pub const TASK_DESCRIPTION: &str = "Designer.task_description";
+        pub const FAILURE_MODE: &str = "Designer.failure_mode";
+        pub const DOWNSTREAM_CONTEXT: &str = "Designer.downstream_context";
+        pub const AGENT_ROSTER: &str = "Designer.agent_roster";
+        pub const UPSTREAM_CONTEXT: &str = "Designer.upstream_context";
+        pub const CAPABILITY_DESCRIPTIONS: &str = "Designer.capability_descriptions";
+    }
+
     /// Variables assembled by the platform (config, context, runtime state).
     pub mod system {
         pub const DOC_NAME: &str = "System.doc_name";
@@ -192,6 +202,13 @@ pub static BELIEF_CAPTURE: Lazy<ProtocolConfig> = Lazy::new(|| {
         "../../config/protocols/belief_capture/config.yaml"
     ))
     .expect("Failed to parse config/protocols/belief_capture/config.yaml")
+});
+
+pub static AGENT_DESIGNER: Lazy<ProtocolConfig> = Lazy::new(|| {
+    serde_yaml::from_str(include_str!(
+        "../../config/protocols/agent_designer/config.yaml"
+    ))
+    .expect("Failed to parse config/protocols/agent_designer/config.yaml")
 });
 
 // ---------------------------------------------------------------------------
@@ -270,6 +287,13 @@ pub mod roles {
         response: Some(include_str!(
             "../../config/protocols/belief_capture/extractor/response.json"
         )),
+    };
+
+    /// Agent Designer: generates optimized prompt pairs for task force agents.
+    pub static AGENT_DESIGNER_DESIGNER: RoleDefinition = RoleDefinition {
+        system: include_str!("../../config/protocols/agent_designer/designer/system.md"),
+        prompt: include_str!("../../config/protocols/agent_designer/designer/prompt.md"),
+        response: None,
     };
 }
 
@@ -430,6 +454,10 @@ mod tests {
         assert!(!roles::BELIEF_CAPTURE_EXTRACTOR.system.is_empty());
         assert!(!roles::BELIEF_CAPTURE_EXTRACTOR.prompt.is_empty());
         assert!(roles::BELIEF_CAPTURE_EXTRACTOR.response.is_some());
+
+        assert!(!roles::AGENT_DESIGNER_DESIGNER.system.is_empty());
+        assert!(!roles::AGENT_DESIGNER_DESIGNER.prompt.is_empty());
+        assert!(roles::AGENT_DESIGNER_DESIGNER.response.is_none());
     }
 
     #[test]
@@ -457,6 +485,17 @@ mod tests {
         assert_eq!(extractor.temperature, 0.2);
         assert_eq!(extractor.max_rounds, 1);
         assert_eq!(extractor.context_budget, 200_000);
+    }
+
+    #[test]
+    fn agent_designer_config_parses() {
+        let cfg = &*AGENT_DESIGNER;
+        let designer = cfg.agent("designer");
+        assert_eq!(designer.model_id, "claude-sonnet-4-20250514");
+        assert_eq!(designer.temperature, 0.4);
+        assert_eq!(designer.max_tokens, 16384);
+        assert_eq!(designer.max_rounds, 1);
+        assert_eq!(designer.context_budget, 480_000);
     }
 
     #[test]
@@ -633,6 +672,12 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
             vars::belief_capture::SOURCE_STEP_NAME,
             vars::belief_capture::SOURCE_TYPE,
             vars::belief_capture::SOURCE_CONTENT,
+            vars::designer::TASK_DESCRIPTION,
+            vars::designer::FAILURE_MODE,
+            vars::designer::DOWNSTREAM_CONTEXT,
+            vars::designer::AGENT_ROSTER,
+            vars::designer::UPSTREAM_CONTEXT,
+            vars::designer::CAPABILITY_DESCRIPTIONS,
         ]);
 
         let all_roles: &[(&str, &RoleDefinition)] = &[
@@ -643,10 +688,8 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
             ("gatekeeper", &roles::MEETING_GATEKEEPER),
             ("node_assistant", &roles::NODE_ASSISTANT_BASE),
             ("task_force_agent", &roles::TASK_FORCE_AGENT),
-            (
-                "belief_capture_extractor",
-                &roles::BELIEF_CAPTURE_EXTRACTOR,
-            ),
+            ("belief_capture_extractor", &roles::BELIEF_CAPTURE_EXTRACTOR),
+            ("agent_designer", &roles::AGENT_DESIGNER_DESIGNER),
         ];
 
         let re = regex::Regex::new(r"\{\{\.([^}]+)\}\}").unwrap();

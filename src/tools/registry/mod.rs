@@ -820,7 +820,9 @@ fn set_tag_vocabulary_tool() -> Tool {
 fn set_contradiction_handling_tool() -> Tool {
     Tool {
         name: "set_contradiction_handling".into(),
-        description: "Set how contradictions between upstream sources are handled during belief extraction.".into(),
+        description:
+            "Set how contradictions between upstream sources are handled during belief extraction."
+                .into(),
         input_schema: json!({
             "type": "object",
             "properties": {
@@ -902,7 +904,9 @@ fn add_member_tool() -> Tool {
 fn update_member_tool() -> Tool {
     Tool {
         name: "update_member".into(),
-        description: "Update an existing room member's role or perspective. Identifies the member by name.".into(),
+        description:
+            "Update an existing room member's role or perspective. Identifies the member by name."
+                .into(),
         input_schema: json!({
             "type": "object",
             "properties": {

@@ -451,6 +451,45 @@ mod tests {
             async fn remove_room_step_member(&self, _: Uuid) -> Result<()> {
                 unimplemented!()
             }
+            // Agent Designer stubs
+            async fn create_designer_run(
+                &self,
+                _: Uuid,
+                _: Uuid,
+                _: Uuid,
+                _: Uuid,
+                _: &str,
+            ) -> Result<crate::db::AgentDesignerRunRow> {
+                unimplemented!()
+            }
+            async fn update_designer_run_tokens(
+                &self,
+                _: Uuid,
+                _: i64,
+                _: i64,
+                _: f32,
+            ) -> Result<()> {
+                unimplemented!()
+            }
+            async fn create_designer_output(
+                &self,
+                _: Uuid,
+                _: Uuid,
+                _: &str,
+                _: &[String],
+                _: &str,
+                _: &str,
+                _: &str,
+                _: i32,
+            ) -> Result<crate::db::AgentDesignerOutputRow> {
+                unimplemented!()
+            }
+            async fn list_designer_outputs(
+                &self,
+                _: Uuid,
+            ) -> Result<Vec<crate::db::AgentDesignerOutputRow>> {
+                unimplemented!()
+            }
         }
 
         // Create test data

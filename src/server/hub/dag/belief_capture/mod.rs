@@ -34,8 +34,10 @@ use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
 use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope, UserId};
 
-use super::{broadcast_workflow_event, resolve_output_key, PortMetadata, StepOutput, WorkflowExecutionContext};
-
+use super::{
+    broadcast_workflow_event, resolve_output_key, PortMetadata, StepOutput,
+    WorkflowExecutionContext,
+};
 
 /// Execute a belief capture step within the DAG.
 ///
@@ -114,8 +116,7 @@ pub(super) async fn execute_belief_capture_step(
     );
 
     // 4. Create protocol execution recorder
-    let recorder =
-        ProtocolExecutionRecorder::new(&*state.repos().protocols, step.id, ctx.run_id);
+    let recorder = ProtocolExecutionRecorder::new(&*state.repos().protocols, step.id, ctx.run_id);
 
     let extractor_cfg = BELIEF_CAPTURE.agent("extractor");
     let total_sources = sources.len();
@@ -453,15 +454,13 @@ struct ExtractedBelief {
 /// Parse the LLM response into a list of extracted beliefs.
 fn parse_extraction_output(content: &str) -> Vec<ExtractedBelief> {
     match parse_structured_output(content) {
-        Some(json) => {
-            match serde_json::from_value::<BeliefExtractionOutput>(json) {
-                Ok(output) => output.beliefs,
-                Err(e) => {
-                    warn!("Failed to deserialize belief extraction output: {}", e);
-                    vec![]
-                }
+        Some(json) => match serde_json::from_value::<BeliefExtractionOutput>(json) {
+            Ok(output) => output.beliefs,
+            Err(e) => {
+                warn!("Failed to deserialize belief extraction output: {}", e);
+                vec![]
             }
-        }
+        },
         None => {
             warn!("No structured JSON found in belief extraction response");
             vec![]
