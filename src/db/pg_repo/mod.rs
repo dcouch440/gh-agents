@@ -13,15 +13,17 @@ use crate::db::traits::{
     ToolRouterRepo, UserRepo, WorkflowCollectionRepo, WorkflowRepo, WorkflowStepAgentRepo,
 };
 use crate::db::{
-    AgentExecutionRow, AgentRow, ChatMessageRow, CollectionRunRow, CollectionWorkflowEdgeRow,
-    CollectionWorkflowRow, ContextStoreRow, DocumentRow, DocumentSearchResult, ExecutionMessageRow,
-    OutputSchemaRow, PromptTemplateRow, ProtocolDocumentDefRow, ProtocolExecutionRow,
-    ProtocolPortRow, ProtocolRow, ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow,
-    RoomSessionRow, RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow,
-    StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow, TaskAgentRosterRow,
-    TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow,
-    ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
-    WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
+    AgentExecutionRow, AgentRow, BeliefExtractionPlanRow, ChatMessageRow, CollectionRunRow,
+    CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
+    DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
+    ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow, ResultRow,
+    RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomStepConfigRow,
+    RoomStepMemberRow, RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow,
+    StepInputRow, StepOutputRow,
+    StepRoutingRuleRow, SystemConfigRow, TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow,
+    ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow, ToolRow, WorkflowCollectionRow,
+    WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow, WorkflowStepEdgeRow,
+    WorkflowStepProtocolRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -1899,6 +1901,154 @@ impl WorkflowRepo for PgRepo {
     async fn remove_roster_agent(&self, agent_id: Uuid) -> Result<()> {
         sqlx::query("DELETE FROM task_agent_roster WHERE id = $1")
             .bind(agent_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    // --- Belief Capture (Extraction Plans) ---
+
+    async fn get_extraction_plan(&self, step_id: Uuid) -> Result<Option<BeliefExtractionPlanRow>> {
+        let row = sqlx::query_as::<_, BeliefExtractionPlanRow>(
+            "SELECT * FROM belief_extraction_plans WHERE step_id = $1",
+        )
+        .bind(step_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn upsert_extraction_plan(
+        &self,
+        step_id: Uuid,
+        extraction_focus: &str,
+        tag_vocabulary: &[String],
+        contradiction_handling: &str,
+        confidence_threshold: &str,
+    ) -> Result<BeliefExtractionPlanRow> {
+        let row = sqlx::query_as::<_, BeliefExtractionPlanRow>(
+            "INSERT INTO belief_extraction_plans (step_id, extraction_focus, tag_vocabulary, contradiction_handling, confidence_threshold)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (step_id) DO UPDATE SET
+                extraction_focus = EXCLUDED.extraction_focus,
+                tag_vocabulary = EXCLUDED.tag_vocabulary,
+                contradiction_handling = EXCLUDED.contradiction_handling,
+                confidence_threshold = EXCLUDED.confidence_threshold,
+                updated_at = now()
+             RETURNING *",
+        )
+        .bind(step_id)
+        .bind(extraction_focus)
+        .bind(tag_vocabulary)
+        .bind(contradiction_handling)
+        .bind(confidence_threshold)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    // --- Room Step Config (Design-Time) ---
+
+    async fn get_room_step_config(&self, step_id: Uuid) -> Result<Option<RoomStepConfigRow>> {
+        let row = sqlx::query_as::<_, RoomStepConfigRow>(
+            "SELECT * FROM room_step_configs WHERE step_id = $1",
+        )
+        .bind(step_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn upsert_room_step_config(
+        &self,
+        step_id: Uuid,
+        meeting_purpose: &str,
+        max_turns: i32,
+        interaction_mode: &str,
+        gatekeeper_enabled: bool,
+    ) -> Result<RoomStepConfigRow> {
+        let row = sqlx::query_as::<_, RoomStepConfigRow>(
+            "INSERT INTO room_step_configs (step_id, meeting_purpose, max_turns, interaction_mode, gatekeeper_enabled)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (step_id) DO UPDATE SET
+                meeting_purpose = EXCLUDED.meeting_purpose,
+                max_turns = EXCLUDED.max_turns,
+                interaction_mode = EXCLUDED.interaction_mode,
+                gatekeeper_enabled = EXCLUDED.gatekeeper_enabled,
+                updated_at = now()
+             RETURNING *",
+        )
+        .bind(step_id)
+        .bind(meeting_purpose)
+        .bind(max_turns)
+        .bind(interaction_mode)
+        .bind(gatekeeper_enabled)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn list_room_step_members(&self, step_id: Uuid) -> Result<Vec<RoomStepMemberRow>> {
+        let rows = sqlx::query_as::<_, RoomStepMemberRow>(
+            "SELECT * FROM room_step_members WHERE step_id = $1 ORDER BY display_order",
+        )
+        .bind(step_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn add_room_step_member(
+        &self,
+        step_id: Uuid,
+        name: &str,
+        role: &str,
+        perspective: &str,
+        display_order: i32,
+    ) -> Result<RoomStepMemberRow> {
+        let row = sqlx::query_as::<_, RoomStepMemberRow>(
+            "INSERT INTO room_step_members (step_id, name, role, perspective, display_order)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING *",
+        )
+        .bind(step_id)
+        .bind(name)
+        .bind(role)
+        .bind(perspective)
+        .bind(display_order)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn update_room_step_member(
+        &self,
+        member_id: Uuid,
+        name: Option<String>,
+        role: Option<String>,
+        perspective: Option<String>,
+    ) -> Result<RoomStepMemberRow> {
+        let row = sqlx::query_as::<_, RoomStepMemberRow>(
+            "UPDATE room_step_members SET
+                name = COALESCE($2, name),
+                role = COALESCE($3, role),
+                perspective = COALESCE($4, perspective),
+                updated_at = now()
+             WHERE id = $1
+             RETURNING *",
+        )
+        .bind(member_id)
+        .bind(name)
+        .bind(role)
+        .bind(perspective)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn remove_room_step_member(&self, member_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM room_step_members WHERE id = $1")
+            .bind(member_id)
             .execute(&self.pool)
             .await?;
         Ok(())

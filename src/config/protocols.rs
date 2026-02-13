@@ -215,6 +215,14 @@ pub mod roles {
     /// Task force archetype block, injected via `{{.System.archetype_block}}`.
     pub const NODE_ASSISTANT_TASK_FORCE_BLOCK: &str =
         include_str!("../../config/protocols/node_assistant/task_force/block.md");
+
+    /// Belief capture archetype block, injected via `{{.System.archetype_block}}`.
+    pub const NODE_ASSISTANT_BELIEF_CAPTURE_BLOCK: &str =
+        include_str!("../../config/protocols/node_assistant/belief_capture/block.md");
+
+    /// Room archetype block, injected via `{{.System.archetype_block}}`.
+    pub const NODE_ASSISTANT_ROOM_BLOCK: &str =
+        include_str!("../../config/protocols/node_assistant/room/block.md");
 }
 
 // ---------------------------------------------------------------------------
@@ -364,6 +372,8 @@ mod tests {
 
         assert!(!roles::NODE_ASSISTANT_DOCUMENTER_BLOCK.is_empty());
         assert!(!roles::NODE_ASSISTANT_TASK_FORCE_BLOCK.is_empty());
+        assert!(!roles::NODE_ASSISTANT_BELIEF_CAPTURE_BLOCK.is_empty());
+        assert!(!roles::NODE_ASSISTANT_ROOM_BLOCK.is_empty());
     }
 
     #[test]

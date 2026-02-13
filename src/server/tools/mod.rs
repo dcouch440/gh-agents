@@ -3,8 +3,10 @@
 //! Provides tool schemas for codebase exploration, document management,
 //! and structured output validation.
 
+pub mod belief_capture;
 pub mod documenter;
 pub mod node_assistant;
+pub mod room_config;
 pub mod task_force;
 
 use serde_json::{json, Value};
