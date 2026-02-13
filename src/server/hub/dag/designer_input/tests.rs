@@ -6,8 +6,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::db::{
-        BeliefRow, ProtocolDocumentDefRow, RoomStepConfigRow, RoomStepMemberRow,
-        TaskAgentRosterRow, TaskMissionBriefRow, WorkflowStepRow,
+        BeliefRow, ProtocolDocumentDefRow, TaskAgentRosterRow, TaskMissionBriefRow, WorkflowStepRow,
     };
     use crate::server::hub::dag::documenter::types::DocumentPlan;
     use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
@@ -120,29 +119,12 @@ mod tests {
         }
     }
 
-    fn make_room_config(purpose: &str) -> RoomStepConfigRow {
-        RoomStepConfigRow {
-            id: Uuid::new_v4(),
-            step_id: Uuid::new_v4(),
-            meeting_purpose: purpose.to_string(),
-            max_turns: 12,
-            interaction_mode: "moderated".to_string(),
-            gatekeeper_enabled: true,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        }
-    }
-
-    fn make_room_member(name: &str, role: &str, perspective: &str) -> RoomStepMemberRow {
-        RoomStepMemberRow {
-            id: Uuid::new_v4(),
-            step_id: Uuid::new_v4(),
+    fn make_room_member(name: &str, role: &str, perspective: &str) -> RoomDesignerMember {
+        RoomDesignerMember {
+            id: Uuid::new_v4().to_string(),
             name: name.to_string(),
             role: role.to_string(),
             perspective: perspective.to_string(),
-            display_order: 0,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
         }
     }
 
@@ -401,7 +383,6 @@ mod tests {
 
     #[test]
     fn test_room_input_basic() {
-        let config = make_room_config("Security Review");
         let members = vec![
             make_room_member(
                 "Alice",
@@ -411,7 +392,14 @@ mod tests {
             make_room_member("Bob", "Product Manager", "Ensures UX quality"),
         ];
 
-        let input = room::build_room_designer_input(&config, &members, &[], &HashMap::new());
+        let input = room::build_room_designer_input(
+            "Security Review",
+            "moderated",
+            12,
+            &members,
+            &[],
+            &HashMap::new(),
+        );
 
         assert_eq!(input.archetype, "room");
         assert_eq!(input.agents.len(), 2);
@@ -425,14 +413,20 @@ mod tests {
 
     #[test]
     fn test_room_input_without_beliefs() {
-        let config = make_room_config("Review");
         let members = vec![make_room_member(
             "Alice",
             "Engineer",
             "Technical perspective",
         )];
 
-        let input = room::build_room_designer_input(&config, &members, &[], &HashMap::new());
+        let input = room::build_room_designer_input(
+            "Review",
+            "moderated",
+            12,
+            &members,
+            &[],
+            &HashMap::new(),
+        );
 
         assert!(!input.agents[0]
             .additional_context
@@ -444,7 +438,6 @@ mod tests {
 
     #[test]
     fn test_room_input_with_beliefs() {
-        let config = make_room_config("Security Review");
         let members = vec![
             make_room_member(
                 "Alice",
@@ -462,7 +455,14 @@ mod tests {
             make_belief("Rate limiting should be per-user", "decision", "high"),
         ];
 
-        let input = room::build_room_designer_input(&config, &members, &beliefs, &HashMap::new());
+        let input = room::build_room_designer_input(
+            "Security Review",
+            "moderated",
+            12,
+            &members,
+            &beliefs,
+            &HashMap::new(),
+        );
 
         // Both members should have beliefs in their additional_context
         for agent in &input.agents {
@@ -474,7 +474,6 @@ mod tests {
 
     #[test]
     fn test_room_input_includes_perspectives() {
-        let config = make_room_config("Review");
         let members = vec![
             make_room_member(
                 "Security Architect",
@@ -488,7 +487,14 @@ mod tests {
             ),
         ];
 
-        let input = room::build_room_designer_input(&config, &members, &[], &HashMap::new());
+        let input = room::build_room_designer_input(
+            "Review",
+            "moderated",
+            12,
+            &members,
+            &[],
+            &HashMap::new(),
+        );
 
         assert!(input.agents[0]
             .additional_context

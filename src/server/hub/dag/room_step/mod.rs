@@ -13,10 +13,14 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
+use crate::db::WorkflowStepEdgeRow;
+use crate::db::WorkflowStepRow;
 use crate::server::executors::room::{
     build_dag_room_prompt, execute_room_turn, RoomMemberWithAgent, SpeakerResult,
 };
+use crate::server::hub::dag::agent_designer::{self, DesignedAgentPrompt};
+use crate::server::hub::dag::designer_input::room::build_room_designer_input;
+use crate::server::hub::dag::designer_input::RoomDesignerMember;
 use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
 use crate::server::state::AppState;
@@ -166,6 +170,85 @@ pub(super) async fn execute_room_step(
         members_with_agents.push(RoomMemberWithAgent { member, agent });
     }
 
+    // 4b. Run Agent Designer pre-lifecycle (if design-time config exists)
+    let designed_prompts: Option<HashMap<Uuid, DesignedAgentPrompt>> = {
+        let wf_repo = &state.repos().workflows;
+        let room_step_config = wf_repo.get_room_step_config(step.id).await.ok().flatten();
+        let room_step_members = wf_repo
+            .list_room_step_members(step.id)
+            .await
+            .unwrap_or_default();
+        let beliefs = wf_repo
+            .list_beliefs_for_execution(ctx.run_id)
+            .await
+            .unwrap_or_default();
+
+        if let Some(ref config) = room_step_config {
+            let designer_members: Vec<RoomDesignerMember> = members_with_agents
+                .iter()
+                .map(|ma| {
+                    let name = ma
+                        .member
+                        .display_name
+                        .clone()
+                        .unwrap_or_else(|| ma.agent.name.clone());
+                    let perspective = room_step_members
+                        .iter()
+                        .find(|m| m.name == name)
+                        .map(|m| m.perspective.clone())
+                        .unwrap_or_default();
+                    RoomDesignerMember {
+                        id: ma.member.agent_id.to_string(),
+                        name,
+                        role: ma.member.role_description.clone(),
+                        perspective,
+                    }
+                })
+                .collect();
+
+            let input = build_room_designer_input(
+                &config.meeting_purpose,
+                &config.interaction_mode,
+                config.max_turns,
+                &designer_members,
+                &beliefs,
+                completed_envelopes,
+            );
+
+            match agent_designer::run_agent_designer(
+                engine, state, ctx, step, input, "room", cancel,
+            )
+            .await
+            {
+                Ok(result) => {
+                    info!(
+                        step_id = %step.id,
+                        run_id = %result.run_id,
+                        prompts = result.prompts.len(),
+                        "Room Agent Designer completed"
+                    );
+                    *total_input_tokens += result.input_tokens;
+                    *total_output_tokens += result.output_tokens;
+                    let lookup: HashMap<Uuid, DesignedAgentPrompt> = result
+                        .prompts
+                        .into_iter()
+                        .filter_map(|p| p.agent_id.parse::<Uuid>().ok().map(|id| (id, p)))
+                        .collect();
+                    Some(lookup)
+                }
+                Err(e) => {
+                    warn!(
+                        "Agent Designer failed for room step {}, using static prompts: {}",
+                        step.id, e
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    };
+
     // 5. Resolve port inputs
     let port_inputs = if let Some(inputs) = port_meta.step_inputs.get(&step.id) {
         match resolve_port_inputs(
@@ -250,6 +333,7 @@ pub(super) async fn execute_room_step(
             &user_message,
             ctx.user_id,
             cancel,
+            designed_prompts.as_ref(),
         )
         .await?;
 
@@ -318,6 +402,7 @@ pub(super) async fn execute_room_step(
             &user_message,
             ctx.user_id,
             cancel,
+            designed_prompts.as_ref(),
         )
         .await?;
 

@@ -238,8 +238,7 @@ mod tests {
     #[test]
     fn validate_receives_from_case_mismatch() {
         let names = vec!["SecurityAuditor".to_string(), "Reporter".to_string()];
-        let result =
-            validate_receives_from(&["security_auditor".to_string()], &names, "Reporter");
+        let result = validate_receives_from(&["security_auditor".to_string()], &names, "Reporter");
         assert_eq!(result, vec!["SecurityAuditor"]);
     }
 

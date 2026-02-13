@@ -3,6 +3,7 @@
 //! Determines speaker order (via gatekeeper or fallback), then runs each
 //! speaker sequentially through the `ExecutionEngine` using a `RoomSpeakerStrategy`.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
@@ -12,6 +13,7 @@ use uuid::Uuid;
 use crate::agents::gatekeeper::{self, GatekeeperInput, RosterEntry, SpeakerSelection};
 use crate::db::{AgentRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry};
 use crate::llm::{LLMProvider, LLMRequest, Message};
+use crate::server::hub::dag::agent_designer::DesignedAgentPrompt;
 use crate::server::hub::streaming::StreamSink;
 use crate::server::hub::{
     ExecutionEngine, ExecutionRecorder, HubError, RoomSpeakerConfig, RoomSpeakerStrategy,
@@ -207,6 +209,7 @@ async fn call_gatekeeper(
 /// 2. Determine speaker order (gatekeeper or fallback)
 /// 3. For each speaker: assemble context, create agent_execution, call LLM via engine
 /// 4. Increment turn, check limits
+#[allow(clippy::too_many_arguments)]
 pub async fn execute_room_turn(
     state: &AppState,
     provider: Arc<dyn LLMProvider>,
@@ -216,6 +219,7 @@ pub async fn execute_room_turn(
     user_message: &str,
     user_id: Uuid,
     cancel: Option<&CancellationToken>,
+    designed_prompts: Option<&HashMap<Uuid, DesignedAgentPrompt>>,
 ) -> Result<RoomTurnResult, HubError> {
     let room_repo = &state.repos().rooms;
     let ae_repo = &state.repos().agent_executions;
@@ -233,7 +237,10 @@ pub async fn execute_room_turn(
     let transcript_block = format_transcript(&transcript, session.transcript_summary.as_deref());
 
     // 3. Determine speaker order
-    let speakers = if room.gatekeeper_enabled {
+    let speakers = if members.len() <= 1 {
+        // Single member: skip gatekeeper, no decision to make
+        gatekeeper::fallback_speaker_order(&roster_rows, &mentions, room.max_speakers_per_turn)
+    } else if room.gatekeeper_enabled {
         call_gatekeeper(
             &provider,
             room,
@@ -297,25 +304,39 @@ pub async fn execute_room_turn(
             .collect();
         let agent_tool_names: Vec<String> = agent_tools.iter().map(|t| t.name.clone()).collect();
 
-        // Build system prompt: agent base + room context + agent docs
-        let room_context = build_room_context(room, &ma.member, &ma.agent, members);
-        let mut system_prompt = ma.agent.system_prompt.clone();
-        system_prompt.push_str("\n\n");
-        system_prompt.push_str(&room_context);
+        // Build prompts: designer-generated or static assembly
+        let (system_prompt, task_prompt_prefix) =
+            if let Some(designed) = designed_prompts.and_then(|m| m.get(&selection.agent_id)) {
+                (
+                    designed.system_prompt.clone(),
+                    Some(designed.task_prompt.clone()),
+                )
+            } else {
+                // Static assembly: agent base + room context + agent docs
+                let room_context = build_room_context(room, &ma.member, &ma.agent, members);
+                let mut sp = ma.agent.system_prompt.clone();
+                sp.push_str("\n\n");
+                sp.push_str(&room_context);
 
-        // Append agent context documents (global knowledge for this agent)
-        if let Ok(agent_docs) = state.repo().get_agent_context(selection.agent_id).await {
-            for doc in &agent_docs {
-                system_prompt.push_str(&format!(
-                    "\n\n---\n## {} (Agent Context)\n{}",
-                    doc.title, doc.content
-                ));
-            }
-        }
+                if let Ok(agent_docs) = state.repo().get_agent_context(selection.agent_id).await {
+                    for doc in &agent_docs {
+                        sp.push_str(&format!(
+                            "\n\n---\n## {} (Agent Context)\n{}",
+                            doc.title, doc.content
+                        ));
+                    }
+                }
+                (sp, None)
+            };
 
-        // Build user prompt: transcript + user message + gatekeeper followup
-        let user_prompt =
+        // Build user prompt: optional designer prefix + transcript + user message
+        let speaker_prompt =
             build_speaker_prompt(user_message, &selection.followup_context, &transcript_block);
+        let user_prompt = if let Some(prefix) = task_prompt_prefix {
+            format!("{}\n\n---\n\n{}", prefix, speaker_prompt)
+        } else {
+            speaker_prompt
+        };
 
         // Apply room tools_enabled override
         let (tools, tool_names) = if room.tools_enabled {

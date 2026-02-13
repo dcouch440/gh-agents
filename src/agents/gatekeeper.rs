@@ -213,4 +213,18 @@ mod tests {
         let speakers = fallback_speaker_order(&roster, &[], 2);
         assert_eq!(speakers.len(), 2);
     }
+
+    #[test]
+    fn fallback_speaker_order_single_member() {
+        let roster = vec![RoomMemberRow {
+            room_id: Uuid::nil(),
+            agent_id: Uuid::from_u128(42),
+            display_name: Some("SoloAgent".to_string()),
+            role_description: "Does everything".to_string(),
+            display_order: 0,
+        }];
+        let speakers = fallback_speaker_order(&roster, &[], 3);
+        assert_eq!(speakers.len(), 1);
+        assert_eq!(speakers[0].agent_id, Uuid::from_u128(42));
+    }
 }
