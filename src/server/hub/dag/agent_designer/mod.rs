@@ -57,6 +57,54 @@ pub struct DesignedAgentPrompt {
     pub task_prompt: String,
     pub reasoning: String,
     pub execution_order: i32,
+    pub receives_from: Vec<String>,
+}
+
+// ── Name normalization ─────────────────────────────────────────────────────
+
+/// Normalize an agent name for case-insensitive matching across case styles.
+/// Strips spaces, underscores, hyphens, and lowercases.
+/// "SecurityAuditor", "security_auditor", "Security Auditor" all → "securityauditor"
+pub(crate) fn normalize_agent_name(name: &str) -> String {
+    name.chars()
+        .filter(|c| *c != ' ' && *c != '_' && *c != '-')
+        .flat_map(|c| c.to_lowercase())
+        .collect()
+}
+
+/// Validate receives_from entries against actual agent names using normalized matching.
+/// Returns a corrected vec with names mapped to their canonical (original) form.
+/// Logs warnings for unresolvable entries.
+fn validate_receives_from(
+    receives_from: &[String],
+    all_agent_names: &[String],
+    current_agent: &str,
+) -> Vec<String> {
+    if receives_from.is_empty() {
+        return Vec::new();
+    }
+
+    let name_lookup: HashMap<String, &String> = all_agent_names
+        .iter()
+        .map(|n| (normalize_agent_name(n), n))
+        .collect();
+
+    receives_from
+        .iter()
+        .filter_map(|entry| {
+            let normalized = normalize_agent_name(entry);
+            if let Some(canonical) = name_lookup.get(&normalized) {
+                Some((*canonical).clone())
+            } else {
+                warn!(
+                    agent = %current_agent,
+                    receives_from = %entry,
+                    "Designer referenced unknown agent in receives_from, stripping"
+                );
+                None
+            }
+        })
+        .collect()
 }
 
 // ── JSON deserialization types ──────────────────────────────────────────────
@@ -75,6 +123,8 @@ pub(crate) struct DesignerAgentEntry {
     system_prompt: String,
     task_prompt: String,
     reasoning: String,
+    #[serde(default)]
+    receives_from: Vec<String>,
 }
 
 // ── Main execution function ─────────────────────────────────────────────────
@@ -231,6 +281,13 @@ pub(crate) async fn run_agent_designer(
         .flat_map(|a| a.capabilities.iter().map(|s| s.as_str()))
         .collect();
 
+    // 8b. Collect all agent names for receives_from validation
+    let all_agent_names: Vec<String> = designer_output
+        .agents
+        .iter()
+        .map(|a| a.agent_name.clone())
+        .collect();
+
     let mut designed_prompts = Vec::with_capacity(designer_output.agents.len());
 
     for (idx, entry) in designer_output.agents.iter().enumerate() {
@@ -270,6 +327,10 @@ pub(crate) async fn run_agent_designer(
             )
             .await;
 
+        // Validate receives_from against actual agent names
+        let valid_receives_from =
+            validate_receives_from(&entry.receives_from, &all_agent_names, &entry.agent_name);
+
         designed_prompts.push(DesignedAgentPrompt {
             agent_id: entry.agent_id.clone(),
             agent_name: entry.agent_name.clone(),
@@ -278,6 +339,7 @@ pub(crate) async fn run_agent_designer(
             task_prompt: entry.task_prompt.clone(),
             reasoning: entry.reasoning.clone(),
             execution_order: idx as i32,
+            receives_from: valid_receives_from,
         });
     }
 

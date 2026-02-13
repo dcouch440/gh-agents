@@ -35,6 +35,7 @@ pub struct DesignedAgentPrompt {
     pub task_prompt: String,
     pub reasoning: String,
     pub execution_order: i32,
+    pub receives_from: Vec<String>,
 }
 
 /// Token usage from the designer call, for accumulating into step totals.
@@ -92,6 +93,7 @@ pub(crate) async fn run_agent_designer(
             task_prompt: entry.task_prompt.clone(),
             reasoning: entry.reasoning.clone(),
             execution_order: roster_entry.execution_order,
+            receives_from: entry.receives_from.clone(),
         });
     }
 
