@@ -388,7 +388,7 @@ pub const OLLAMA_DEFAULT_TIMEOUT_SECS: u64 = 300;
 /// Base URL for the xAI API.
 pub const XAI_DEFAULT_BASE_URL: &str = "https://api.x.ai";
 /// Model optimized for agentic search with server-side tool use.
-pub const XAI_RESEARCH_MODEL: &str = "grok-4-1-fast";
+pub const XAI_RESEARCH_MODEL: &str = "grok-4-1-fast-non-reasoning";
 /// Timeout for research requests (server-side search can take a while).
 pub const XAI_RESEARCH_TIMEOUT_SECS: u64 = 120;
 /// Max output tokens for research responses.

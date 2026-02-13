@@ -1,26 +1,29 @@
-<mission>
-{{.Designer.task_description}}
+<archetype>{{.Designer.archetype}}</archetype>
 
-Failure mode: {{.Designer.failure_mode}}
-{{.Designer.downstream_context}}
-</mission>
+<context>
+{{.Designer.context_description}}
+</context>
 
-<roster>
-{{.Designer.agent_roster}}
-</roster>
+<agents>
+{{.Designer.agent_definitions}}
+</agents>
 
 <upstream_context>
 {{.Designer.upstream_context}}
 </upstream_context>
 
 <available_capabilities>
-These are the tools authorized for this task force. Assign a subset to each
+These are the tools authorized for this execution. Assign a subset to each
 agent based on their role — not every agent needs every tool.
 
-{{.Designer.capability_descriptions}}
+{{.Designer.available_tools}}
 </available_capabilities>
 
-For each agent in the roster, assign tools from the available pool and
+<archetype_guidance>
+{{.Designer.archetype_guidance}}
+</archetype_guidance>
+
+For each agent listed above, assign tools from the available pool and
 design a (system prompt, task prompt) pair. Each agent's task prompt should
 be written as a direct, contextual work assignment — as if a knowledgeable
 team lead is handing them a brief with the right tools for the job.

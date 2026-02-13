@@ -8,9 +8,12 @@
 //! 2. **Research** — parallel per-document LLM calls with capability-resolved tools
 //! 3. **Write** — parallel per-document single-turn LLM calls producing final content
 
+use std::collections::HashMap;
+
 use anyhow::anyhow;
 use serde_json::Value as JsonValue;
 use tokio_util::sync::CancellationToken;
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::db::WorkflowStepRow;
@@ -19,6 +22,7 @@ use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::execution_recorder::ProtocolExecutionRecorder;
 use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
+use crate::types::StepExecutionEnvelope;
 
 use super::utils::{StepOutput, WorkflowExecutionContext};
 use super::{broadcast_workflow_event, resolve_output_key};
@@ -60,6 +64,7 @@ pub(crate) struct DocumenterExecutor<'a> {
     prompt: &'a str,
     cancel: Option<&'a CancellationToken>,
     upstream_context: &'a [ContextDocument],
+    completed_envelopes: &'a HashMap<Uuid, StepExecutionEnvelope>,
     recorder: ProtocolExecutionRecorder<'a>,
 }
 
@@ -72,6 +77,7 @@ impl<'a> DocumenterExecutor<'a> {
         prompt: &'a str,
         cancel: Option<&'a CancellationToken>,
         upstream_context: &'a [ContextDocument],
+        completed_envelopes: &'a HashMap<Uuid, StepExecutionEnvelope>,
     ) -> Self {
         let recorder =
             ProtocolExecutionRecorder::new(&*state.repos().protocols, step.id, ctx.run_id);
@@ -83,6 +89,7 @@ impl<'a> DocumenterExecutor<'a> {
             prompt,
             cancel,
             upstream_context,
+            completed_envelopes,
             recorder,
         }
     }
@@ -112,15 +119,30 @@ impl<'a> DocumenterExecutor<'a> {
             )));
         }
 
-        // Load system prompt from step protocol expansion
-        let system_prompt = self.load_strategy_system_prompt().await?;
+        // ── Agent Designer: Strategist ──────────────────────────────────
+        let strategist_designed = self.run_designer_for_strategist(&doc_defs).await;
+        let (strategy_system, strategy_task) = match strategist_designed {
+            Some(result) if !result.prompts.is_empty() => {
+                total_in += result.input_tokens;
+                total_out += result.output_tokens;
+                total_cost += result.cost_usd;
+                (
+                    result.prompts[0].system_prompt.clone(),
+                    result.prompts[0].task_prompt.clone(),
+                )
+            }
+            _ => {
+                let sys = self.load_strategy_system_prompt().await?;
+                (sys, self.prompt.to_string())
+            }
+        };
 
         // Determine model from protocol config
         let model_id = DOCUMENTER.agent("strategist").model_id.clone();
 
         // ── Phase 1: Strategy ────────────────────────────────────────────
         let strategy_output = self
-            .execute_strategy_phase(&system_prompt, &model_id, &doc_defs)
+            .execute_strategy_phase(&strategy_system, &strategy_task, &model_id, &doc_defs)
             .await?;
 
         total_in += strategy_output.input_tokens;
@@ -136,9 +158,34 @@ impl<'a> DocumenterExecutor<'a> {
         // Load context documents for selective injection into research/write phases
         let context_docs = self.load_context_documents().await;
 
+        // ── Agent Designer: Researchers + Writers ────────────────────────
+        let designed_lookup: HashMap<String, super::agent_designer::DesignedAgentPrompt> =
+            match self
+                .run_designer_for_research_write(&strategy_output.plans)
+                .await
+            {
+                Some(result) => {
+                    total_in += result.input_tokens;
+                    total_out += result.output_tokens;
+                    total_cost += result.cost_usd;
+                    result
+                        .prompts
+                        .into_iter()
+                        .map(|p| (p.agent_id.clone(), p))
+                        .collect()
+                }
+                None => HashMap::new(),
+            };
+
         // ── Phase 2: Research (parallel per document) ────────────────────
         let research_results = self
-            .execute_research_phase(&strategy_output.plans, &doc_defs, &model_id, &context_docs)
+            .execute_research_phase(
+                &strategy_output.plans,
+                &doc_defs,
+                &model_id,
+                &context_docs,
+                &designed_lookup,
+            )
             .await;
 
         for r in &research_results {
@@ -173,6 +220,7 @@ impl<'a> DocumenterExecutor<'a> {
                 &doc_defs,
                 &model_id,
                 &context_docs,
+                &designed_lookup,
             )
             .await;
 
@@ -235,6 +283,93 @@ impl<'a> DocumenterExecutor<'a> {
             output_tokens: total_out,
             cost_usd: total_cost,
         })
+    }
+
+    // ── Designer integration ─────────────────────────────────────────
+
+    /// Run the Agent Designer for the strategist (Phase 1 pre-lifecycle).
+    async fn run_designer_for_strategist(
+        &self,
+        doc_defs: &[crate::db::ProtocolDocumentDefRow],
+    ) -> Option<super::agent_designer::DesignerResult> {
+        let input = super::designer_input::documenter::build_strategist_designer_input(
+            self.step,
+            doc_defs,
+            self.completed_envelopes,
+            &[],
+        );
+
+        match super::agent_designer::run_agent_designer(
+            self.engine,
+            self.state,
+            self.ctx,
+            self.step,
+            input,
+            "strategist",
+            self.cancel,
+        )
+        .await
+        {
+            Ok(result) => {
+                info!(
+                    run_id = %result.run_id,
+                    "Documenter strategist designer completed"
+                );
+                Some(result)
+            }
+            Err(e) => {
+                warn!("Strategist designer failed, using static prompts: {}", e);
+                None
+            }
+        }
+    }
+
+    /// Run the Agent Designer for researchers + writers (Phase 2 & 3 pre-lifecycle).
+    async fn run_designer_for_research_write(
+        &self,
+        plans: &[types::DocumentPlan],
+    ) -> Option<super::agent_designer::DesignerResult> {
+        let all_caps: Vec<String> = plans
+            .iter()
+            .flat_map(|p| p.required_capabilities.iter().cloned())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+
+        let input = super::designer_input::documenter::build_research_write_designer_input(
+            self.step,
+            plans,
+            self.completed_envelopes,
+            &all_caps,
+        );
+
+        match super::agent_designer::run_agent_designer(
+            self.engine,
+            self.state,
+            self.ctx,
+            self.step,
+            input,
+            "research_write",
+            self.cancel,
+        )
+        .await
+        {
+            Ok(result) => {
+                info!(
+                    run_id = %result.run_id,
+                    prompts = result.prompts.len(),
+                    "Documenter research/write designer completed"
+                );
+                Some(result)
+            }
+            Err(e) => {
+                warn!(
+                    "Research/write designer failed, using static prompts: {}",
+                    e
+                );
+                None
+            }
+        }
     }
 
     fn is_cancelled(&self) -> bool {
