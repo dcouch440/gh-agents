@@ -48,7 +48,7 @@ pub async fn compose_prompt(
         let mut parts: Vec<String> = Vec::new();
         // Port inputs from upstream steps (wired via edges)
         if let Some(ports) = port_inputs {
-            for (_, value) in ports {
+            for value in ports.values() {
                 match value {
                     JsonValue::String(s) => parts.push(s.clone()),
                     other => parts.push(
@@ -59,7 +59,7 @@ pub async fn compose_prompt(
         }
         // Prior outputs (port of entry / collection pipeline)
         if parts.is_empty() {
-            for (_, value) in prior_outputs {
+            for value in prior_outputs.values() {
                 match value {
                     JsonValue::String(s) => parts.push(s.clone()),
                     other => parts.push(

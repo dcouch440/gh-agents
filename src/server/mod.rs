@@ -561,7 +561,7 @@ async fn require_auth(
         })
         .ok_or(StatusCode::UNAUTHORIZED)?;
 
-    auth::verify_token(&token, &state.jwt_secret()).map_err(|_| StatusCode::UNAUTHORIZED)?;
+    auth::verify_token(&token, state.jwt_secret()).map_err(|_| StatusCode::UNAUTHORIZED)?;
 
     Ok(next.run(request).await)
 }

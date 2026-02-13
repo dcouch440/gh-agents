@@ -169,13 +169,13 @@ fn validate_dag(subtasks: &[Subtask]) -> Result<()> {
     // Build adjacency list and in-degree count
     for subtask in subtasks {
         in_degree.entry(&subtask.id).or_insert(0);
-        graph.entry(&subtask.id).or_insert_with(Vec::new);
+        graph.entry(&subtask.id).or_default();
 
         for dep in &subtask.depends_on {
             *in_degree.entry(&subtask.id).or_insert(0) += 1;
             graph
                 .entry(dep.as_str())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(&subtask.id);
         }
     }

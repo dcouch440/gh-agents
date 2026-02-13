@@ -568,7 +568,7 @@ fn topological_sort_workflows(
     for edge in edges {
         adj_list
             .entry(edge.from_workflow_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(edge.to_workflow_id);
         *in_degree.entry(edge.to_workflow_id).or_insert(0) += 1;
     }
@@ -656,7 +656,7 @@ fn aggregate_step_outputs(
 
     let mut aggregated = serde_json::Map::new();
 
-    for (_step_id, output) in step_outputs {
+    for output in step_outputs.values() {
         if let Some(structured) = &output.structured_output {
             aggregated.insert(output.variable_name.clone(), structured.clone());
         } else if !output.raw_output.is_empty() {

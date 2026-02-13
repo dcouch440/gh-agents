@@ -51,7 +51,7 @@ pub async fn ws_handler(
 ) -> Result<Response, axum::http::StatusCode> {
     let token = query.token.ok_or(axum::http::StatusCode::UNAUTHORIZED)?;
 
-    let claims = super::auth::verify_token(&token, &state.jwt_secret())
+    let claims = super::auth::verify_token(&token, state.jwt_secret())
         .map_err(|_| axum::http::StatusCode::UNAUTHORIZED)?;
 
     let user_id = uuid::Uuid::parse_str(&claims.sub)
@@ -194,7 +194,7 @@ async fn handle_socket(socket: WebSocket, state: AppState, user_id: Option<UserI
 }
 
 /// todo: Create announce class to handle info!() commands.
-
+///
 /// Handle a client message and return optional control response.
 async fn handle_client_message(
     msg: ClientMessage,

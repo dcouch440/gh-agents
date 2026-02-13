@@ -163,7 +163,7 @@ pub async fn auth_register(
     let _ = state.repo().seed_builtin_tools().await;
     let _ = state.repos().protocols.seed_builtin_protocols().await;
 
-    let token = auth::create_token(&state.jwt_secret(), 24, user.id, &user.email, false)
+    let token = auth::create_token(state.jwt_secret(), 24, user.id, &user.email, false)
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok((
@@ -214,7 +214,7 @@ pub async fn auth_login(
         return Err(AppError::Unauthorized("Invalid credentials".into()));
     }
 
-    let token = auth::create_token(&state.jwt_secret(), 24, user.id, &user.email, user.is_admin)
+    let token = auth::create_token(state.jwt_secret(), 24, user.id, &user.email, user.is_admin)
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(LoginResponse {
