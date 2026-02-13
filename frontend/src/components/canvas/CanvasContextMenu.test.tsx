@@ -19,8 +19,6 @@ const mockDocumenterProtocol = {
   ports: [{ port_name: 'output' }],
 }
 
-const mockProtocolTypes = [{ name: 'documenter' }]
-
 vi.mock('@/stores', () => ({
   useStore: vi.fn((_store: unknown, selector: unknown) => {
     if (typeof selector === 'function') return (selector as (s: unknown) => unknown)(null)
@@ -33,7 +31,7 @@ vi.mock('@/stores', () => ({
   },
   protocolStore: {
     store: 'protocol',
-    selectTypes: () => mockProtocolTypes,
+    selectTypes: () => [],
     selectAll: () => [mockDocumenterProtocol],
   },
   canvasStore: {
@@ -53,9 +51,9 @@ describe('CanvasContextMenu', () => {
     expect(container.firstChild).toBeNull()
   })
 
-  it('renders Protocols section header', () => {
+  it('renders Archetypes section header', () => {
     render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
-    expect(screen.getByText('Protocols')).toBeInTheDocument()
+    expect(screen.getByText('Archetypes')).toBeInTheDocument()
   })
 
   it('renders Utilities section header', () => {
@@ -63,10 +61,16 @@ describe('CanvasContextMenu', () => {
     expect(screen.getByText('Utilities')).toBeInTheDocument()
   })
 
-  it('renders Documenter under Protocols', () => {
+  it('renders all four archetype options', () => {
     render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
     expect(screen.getByTestId('ctx-add-documenter')).toBeInTheDocument()
     expect(screen.getByText('Documenter')).toBeInTheDocument()
+    expect(screen.getByTestId('ctx-add-task_force')).toBeInTheDocument()
+    expect(screen.getByText('Task Force')).toBeInTheDocument()
+    expect(screen.getByTestId('ctx-add-room')).toBeInTheDocument()
+    expect(screen.getByText('Room')).toBeInTheDocument()
+    expect(screen.getByTestId('ctx-add-blank')).toBeInTheDocument()
+    expect(screen.getByText('Blank')).toBeInTheDocument()
   })
 
   it('renders Context under Utilities', () => {
@@ -79,7 +83,6 @@ describe('CanvasContextMenu', () => {
     render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
     expect(screen.queryByText('LLM Step')).not.toBeInTheDocument()
     expect(screen.queryByText('For-Each Step')).not.toBeInTheDocument()
-    expect(screen.queryByText('Room Step')).not.toBeInTheDocument()
     expect(screen.queryByText('Add Step')).not.toBeInTheDocument()
   })
 
@@ -106,6 +109,36 @@ describe('CanvasContextMenu', () => {
     })
   })
 
+  it('creates room step on Room click', async () => {
+    const user = userEvent.setup()
+    render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
+
+    await user.click(screen.getByText('Room'))
+
+    expect(mockCreateStep).toHaveBeenCalledWith({
+      name: 'New Room',
+      execution_mode: 'room',
+      prompt_template: '',
+      position_x: 151,
+      position_y: 251,
+    })
+  })
+
+  it('creates blank step on Blank click', async () => {
+    const user = userEvent.setup()
+    render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
+
+    await user.click(screen.getByText('Blank'))
+
+    expect(mockCreateStep).toHaveBeenCalledWith({
+      name: 'New Blank',
+      execution_mode: 'single',
+      prompt_template: '',
+      position_x: 151,
+      position_y: 251,
+    })
+  })
+
   describe('node context menu', () => {
     const nodePosition = { ...defaultPosition, nodeId: 'step-123' }
 
@@ -114,9 +147,9 @@ describe('CanvasContextMenu', () => {
       expect(screen.getByText('Delete Step')).toBeInTheDocument()
     })
 
-    it('does not render Protocols or Utilities when nodeId is present', () => {
+    it('does not render Archetypes or Utilities when nodeId is present', () => {
       render(<CanvasContextMenu position={nodePosition} onClose={vi.fn()} />)
-      expect(screen.queryByText('Protocols')).not.toBeInTheDocument()
+      expect(screen.queryByText('Archetypes')).not.toBeInTheDocument()
       expect(screen.queryByText('Utilities')).not.toBeInTheDocument()
     })
 
