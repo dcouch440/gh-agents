@@ -4,6 +4,7 @@ pub mod chat;
 pub mod dag_step;
 pub mod documenter;
 pub mod room_speaker;
+pub mod task_force;
 
 pub use chat::{ChatConfig, ChatStrategy, StepChatContext};
 pub use dag_step::DagStepStrategy;
@@ -11,6 +12,7 @@ pub use documenter::{
     DocumenterCoordinatorStrategy, DocumenterResearchStrategy, DocumenterWriterStrategy,
 };
 pub use room_speaker::{RoomSpeakerConfig, RoomSpeakerStrategy};
+pub use task_force::{TaskForceAgentConfig, TaskForceAgentStrategy};
 
 use crate::llm::TokenUsage;
 use crate::server::state::AppState;
