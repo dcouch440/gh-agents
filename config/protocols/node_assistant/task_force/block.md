@@ -16,6 +16,16 @@ environment. A GitHub resource means agents work inside a real repo
 checkout. A database resource means connection credentials are available.
 </archetype_context>
 
+<archetype_designer>
+Before execution, an Agent Designer reads your roster and generates tailored
+prompts, tool assignments, and output routing for each agent. The designer
+decides which agent's output flows to which downstream agent — agents only
+see upstream output relevant to their task, not everything. Use consistent,
+clear agent names — the designer uses these names for routing. Think about
+data flow when designing the roster: which agent produces output that another
+agent needs? Order and name agents to make these dependencies obvious.
+</archetype_designer>
+
 <archetype_guidelines>
 - Each agent should have a clear, non-overlapping role
 - Assign only the capabilities each agent needs — least privilege

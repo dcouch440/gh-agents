@@ -31,6 +31,7 @@ use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
 use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope, UserId};
 
+use super::agent_designer::normalize_agent_name;
 use super::container::{create_optional_container, destroy_optional_container};
 use super::{
     broadcast_workflow_event, compose_prompt, resolve_output_key, resolve_port_inputs,
@@ -218,11 +219,12 @@ pub(super) async fn execute_task_force_step(
                     (vec![], vec![])
                 });
 
-        // Inject previous outputs at runtime (designer can't know these ahead of time)
-        let previous_outputs = build_previous_outputs_block(&agent_outputs);
-        let task_prompt = if agent_outputs.is_empty() {
+        // Inject previous outputs at runtime, filtered by designer routing
+        let filtered = filter_outputs_for_agent(&agent_outputs, &designed.receives_from);
+        let task_prompt = if filtered.is_empty() {
             designed.task_prompt.clone()
         } else {
+            let previous_outputs = build_filtered_outputs_block(&filtered);
             format!(
                 "{}\n\n<previous_agent_outputs>\n{}\n</previous_agent_outputs>",
                 designed.task_prompt, previous_outputs
@@ -459,11 +461,47 @@ fn build_team_roster_string(roster: &[crate::db::TaskAgentRosterRow]) -> String 
 }
 
 /// Build the "previous outputs" block for injection into an agent's system prompt.
+#[cfg(test)]
 fn build_previous_outputs_block(agent_outputs: &[(String, String)]) -> String {
     if agent_outputs.is_empty() {
         "No previous agent outputs yet. You are the first agent to execute.".to_string()
     } else {
         agent_outputs
+            .iter()
+            .map(|(name, output)| format!("### {}\n{}", name, output))
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
+}
+
+/// Filter agent outputs based on receives_from routing.
+/// If receives_from is empty, returns all outputs (backwards-compatible default).
+/// If receives_from is non-empty, returns only outputs from the named agents.
+/// Uses normalized matching to handle case style differences.
+fn filter_outputs_for_agent<'a>(
+    agent_outputs: &'a [(String, String)],
+    receives_from: &[String],
+) -> Vec<&'a (String, String)> {
+    if receives_from.is_empty() {
+        agent_outputs.iter().collect()
+    } else {
+        let normalized_receives: Vec<String> = receives_from
+            .iter()
+            .map(|n| normalize_agent_name(n))
+            .collect();
+        agent_outputs
+            .iter()
+            .filter(|(name, _)| normalized_receives.contains(&normalize_agent_name(name)))
+            .collect()
+    }
+}
+
+/// Build the "previous outputs" block from a filtered set of agent outputs.
+fn build_filtered_outputs_block(outputs: &[&(String, String)]) -> String {
+    if outputs.is_empty() {
+        "No previous agent outputs yet. You are the first agent to execute.".to_string()
+    } else {
+        outputs
             .iter()
             .map(|(name, output)| format!("### {}\n{}", name, output))
             .collect::<Vec<_>>()

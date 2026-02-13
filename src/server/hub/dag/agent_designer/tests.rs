@@ -177,4 +177,92 @@ mod tests {
         let result: Result<DesignerOutputSchema, _> = serde_json::from_str(json);
         assert!(result.is_err());
     }
+
+    #[test]
+    fn parse_designer_output_with_receives_from() {
+        let json = r#"{
+            "agents": [{
+                "agent_id": "aaa",
+                "agent_name": "Analyzer",
+                "tools": ["file_read"],
+                "system_prompt": "sys",
+                "task_prompt": "task",
+                "reasoning": "r",
+                "receives_from": ["Scanner"]
+            }]
+        }"#;
+        let parsed: DesignerOutputSchema = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed.agents[0].receives_from, vec!["Scanner"]);
+    }
+
+    #[test]
+    fn parse_designer_output_without_receives_from_defaults_empty() {
+        let json = r#"{
+            "agents": [{
+                "agent_id": "aaa",
+                "agent_name": "Scanner",
+                "tools": [],
+                "system_prompt": "sys",
+                "task_prompt": "task",
+                "reasoning": "r"
+            }]
+        }"#;
+        let parsed: DesignerOutputSchema = serde_json::from_str(json).unwrap();
+        assert!(parsed.agents[0].receives_from.is_empty());
+    }
+
+    // ── normalize_agent_name ─────────────────────────────────────────────
+
+    use super::super::normalize_agent_name;
+    use super::super::validate_receives_from;
+
+    #[test]
+    fn normalize_agent_name_cases() {
+        let canonical = normalize_agent_name("SecurityAuditor");
+        assert_eq!(canonical, "securityauditor");
+        assert_eq!(normalize_agent_name("security_auditor"), canonical);
+        assert_eq!(normalize_agent_name("security-auditor"), canonical);
+        assert_eq!(normalize_agent_name("Security Auditor"), canonical);
+        assert_eq!(normalize_agent_name("SECURITY_AUDITOR"), canonical);
+    }
+
+    // ── validate_receives_from ───────────────────────────────────────────
+
+    #[test]
+    fn validate_receives_from_exact_match() {
+        let names = vec!["Scanner".to_string(), "Analyzer".to_string()];
+        let result = validate_receives_from(&["Scanner".to_string()], &names, "Analyzer");
+        assert_eq!(result, vec!["Scanner"]);
+    }
+
+    #[test]
+    fn validate_receives_from_case_mismatch() {
+        let names = vec!["SecurityAuditor".to_string(), "Reporter".to_string()];
+        let result =
+            validate_receives_from(&["security_auditor".to_string()], &names, "Reporter");
+        assert_eq!(result, vec!["SecurityAuditor"]);
+    }
+
+    #[test]
+    fn validate_receives_from_unknown_agent() {
+        let names = vec!["Scanner".to_string(), "Analyzer".to_string()];
+        let result = validate_receives_from(&["NonExistent".to_string()], &names, "Analyzer");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn validate_receives_from_mixed() {
+        let names = vec![
+            "Scanner".to_string(),
+            "Analyzer".to_string(),
+            "Reporter".to_string(),
+        ];
+        let receives = vec![
+            "scanner".to_string(),
+            "BadName".to_string(),
+            "REPORTER".to_string(),
+        ];
+        let result = validate_receives_from(&receives, &names, "Worker");
+        assert_eq!(result, vec!["Scanner", "Reporter"]);
+    }
 }

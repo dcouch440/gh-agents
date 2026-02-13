@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests {
     use super::super::{
-        build_previous_outputs_block, build_team_roster_string, compose_combined_output,
+        build_filtered_outputs_block, build_previous_outputs_block, build_team_roster_string,
+        compose_combined_output, filter_outputs_for_agent,
     };
     use uuid::Uuid;
 
@@ -77,5 +78,81 @@ mod tests {
         // JSON output is parsed
         assert!(obj.contains_key("analyzer"));
         assert_eq!(obj["analyzer"]["priority"], "high");
+    }
+
+    // ── filter_outputs_for_agent ─────────────────────────────────────────
+
+    #[test]
+    fn filter_outputs_empty_receives_from_returns_all() {
+        let outputs = vec![
+            ("Scanner".to_string(), "scan results".to_string()),
+            ("Analyzer".to_string(), "analysis".to_string()),
+        ];
+        let filtered = filter_outputs_for_agent(&outputs, &[]);
+        assert_eq!(filtered.len(), 2);
+    }
+
+    #[test]
+    fn filter_outputs_specific_receives_from() {
+        let outputs = vec![
+            ("Scanner".to_string(), "scan results".to_string()),
+            ("Analyzer".to_string(), "analysis".to_string()),
+            ("Reporter".to_string(), "report".to_string()),
+        ];
+        let receives = vec!["Analyzer".to_string()];
+        let filtered = filter_outputs_for_agent(&outputs, &receives);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].0, "Analyzer");
+    }
+
+    #[test]
+    fn filter_outputs_multiple_receives_from() {
+        let outputs = vec![
+            ("Scanner".to_string(), "scan results".to_string()),
+            ("Analyzer".to_string(), "analysis".to_string()),
+            ("Reviewer".to_string(), "review".to_string()),
+        ];
+        let receives = vec!["Scanner".to_string(), "Reviewer".to_string()];
+        let filtered = filter_outputs_for_agent(&outputs, &receives);
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered[0].0, "Scanner");
+        assert_eq!(filtered[1].0, "Reviewer");
+    }
+
+    // ── build_filtered_outputs_block ─────────────────────────────────────
+
+    #[test]
+    fn build_filtered_outputs_block_empty() {
+        let filtered: Vec<&(String, String)> = vec![];
+        let result = build_filtered_outputs_block(&filtered);
+        assert!(result.contains("first agent"));
+    }
+
+    #[test]
+    fn build_filtered_outputs_block_with_entries() {
+        let outputs = vec![
+            ("Scanner".to_string(), "Found 3 issues.".to_string()),
+            ("Analyzer".to_string(), "Prioritized issues.".to_string()),
+        ];
+        let refs: Vec<&(String, String)> = outputs.iter().collect();
+        let result = build_filtered_outputs_block(&refs);
+        assert!(result.contains("### Scanner"));
+        assert!(result.contains("Found 3 issues."));
+        assert!(result.contains("### Analyzer"));
+        assert!(result.contains("Prioritized issues."));
+    }
+
+    // ── case-insensitive filtering ───────────────────────────────────────
+
+    #[test]
+    fn filter_outputs_case_insensitive() {
+        let outputs = vec![
+            ("SecurityAuditor".to_string(), "audit results".to_string()),
+            ("Reporter".to_string(), "report".to_string()),
+        ];
+        let receives = vec!["security_auditor".to_string()];
+        let filtered = filter_outputs_for_agent(&outputs, &receives);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].0, "SecurityAuditor");
     }
 }

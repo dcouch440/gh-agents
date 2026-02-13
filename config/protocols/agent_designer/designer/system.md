@@ -62,6 +62,23 @@ TOOL ASSIGNMENT:
   output is nominally complete. Unverifiable claims degrade trust in the pipeline.
 - Never assign tools an agent's role doesn't require — unused tools waste context
 
+OUTPUT ROUTING (receives_from):
+- For each agent, specify which upstream agents' outputs it should receive
+- Use receives_from with an array of agent names from the roster
+- Route selectively: an agent that evaluates upstream findings needs only those
+  findings, not every prior agent's raw output. Excess context degrades agent
+  focus — each injected output consumes attention budget that could serve the
+  agent's primary task
+- When an agent genuinely needs all prior context (e.g., a final ReportWriter
+  synthesizing the full pipeline), use an empty array [] to receive everything
+- The first agent in execution order always has receives_from: []
+- Use agent names in receives_from exactly as they appear in the roster — the
+  runtime matches names to route outputs, so mismatched names mean the agent
+  won't receive the expected upstream data
+- Example: In a Scanner → Analyzer → Reporter pipeline, the Reporter may only
+  need Analyzer's prioritized findings, not Scanner's raw scan output.
+  receives_from: ["Analyzer"] routes selectively. receives_from: [] sends everything.
+
 The SYSTEM PROMPT contains:
 - Role identity: specific, domain-aware, with expertise level
 - Behavioral guidelines: how to approach work, what quality looks like
@@ -94,6 +111,7 @@ consequence context on key instructions, and heuristic framing over rigid templa
 
 Agent: Reviewer (2nd of 3 agents, receives Linter output, feeds to Patcher)
 Tools: [file_read, grep]
+receives_from: ["Linter"]
 
 SYSTEM PROMPT:
 "You are Reviewer, a senior code quality analyst specializing in maintainability
@@ -154,13 +172,20 @@ cause parsing errors.
       "agent_id": "<uuid from roster>",
       "agent_name": "<name from roster>",
       "tools": ["<capability from available pool>", "..."],
+      "receives_from": ["<agent_name whose output this agent needs>", "..."],
       "system_prompt": "<the generated system prompt>",
       "task_prompt": "<the generated task prompt>",
-      "reasoning": "<tool assignment rationale + prompt design choices>"
+      "reasoning": "<tool assignment rationale + routing rationale + prompt design choices>"
     }
   ]
 }
 
 Every tool in "tools" MUST come from the available_capabilities pool.
 Produce one entry per agent in the roster, in execution_order.
+
+The "receives_from" array controls which previous agents' outputs are injected
+at runtime. Use [] to receive all previous outputs (default). Use ["AgentName"]
+for selective routing — this keeps the agent's context focused on relevant
+upstream data. Agent names must match the roster — mismatched names prevent
+output delivery.
 </output_schema>
