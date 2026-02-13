@@ -7,6 +7,7 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(name = "nexor")]
 #[command(author, version, about, long_about = None)]
+#[derive(Default)]
 pub struct Args {
     /// Increase log verbosity (-v, -vv, -vvv)
     #[arg(short, long, action = clap::ArgAction::Count, global = true)]
@@ -78,14 +79,6 @@ impl Args {
     }
 }
 
-impl Default for Args {
-    fn default() -> Self {
-        Self {
-            verbose: 0,
-            command: None,
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {

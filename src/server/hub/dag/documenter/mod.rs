@@ -36,7 +36,6 @@ mod tests;
 pub(crate) mod types;
 
 // Re-exports for external consumers and tests
-pub(crate) use persistence::{determine_persist_action, DocumentPersistAction};
 pub use prompts::build_documents_output;
 
 pub(crate) use crate::server::hub::protocols::context::{build_context_block, ContextDocument};

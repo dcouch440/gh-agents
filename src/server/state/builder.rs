@@ -151,7 +151,7 @@ impl AppStateBuilder {
         let config = self.config.ok_or(BuilderError::MissingConfig)?;
 
         let (chat_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
-        let events = self.events.unwrap_or_else(EventBus::new);
+        let events = self.events.unwrap_or_default();
         let jwt_secret = self
             .jwt_secret
             .unwrap_or_else(|| rand::random::<[u8; 32]>().to_vec());
@@ -161,7 +161,7 @@ impl AppStateBuilder {
 
         let provider_registry = self
             .provider_registry
-            .unwrap_or_else(ProviderRegistry::default);
+            .unwrap_or_default();
 
         let state = AppState::from_inner(AppStateInner {
             db: self.db,

@@ -30,14 +30,18 @@ impl ProductionMode {
             ProductionMode::Resuming => "resuming",
         }
     }
+}
 
-    pub fn from_str(s: &str) -> Self {
-        match s {
+impl std::str::FromStr for ProductionMode {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
             "refactor_mode" => ProductionMode::RefactorMode,
             "paused" => ProductionMode::Paused,
             "resuming" => ProductionMode::Resuming,
             _ => ProductionMode::Running,
-        }
+        })
     }
 }
 use super::message::VerbosityLevel;

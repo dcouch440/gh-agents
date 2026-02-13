@@ -9,6 +9,6 @@ mod iteration;
 mod pipeline;
 mod tests;
 
-pub(crate) use detection::{detect_for_each_chains, ForEachChain};
+pub(crate) use detection::detect_for_each_chains;
 pub(in crate::server::hub::dag) use iteration::execute_for_each_step;
 pub(in crate::server::hub::dag) use pipeline::execute_for_each_chain;
