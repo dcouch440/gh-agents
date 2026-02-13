@@ -394,6 +394,18 @@ mod tests {
             ) -> Result<crate::db::BeliefExtractionPlanRow> {
                 unimplemented!()
             }
+            async fn insert_belief(
+                &self,
+                _: &crate::db::BeliefRow,
+            ) -> Result<crate::db::BeliefRow> {
+                unimplemented!()
+            }
+            async fn list_beliefs_for_execution(
+                &self,
+                _: Uuid,
+            ) -> Result<Vec<crate::db::BeliefRow>> {
+                unimplemented!()
+            }
             // Room step config stubs
             async fn get_room_step_config(
                 &self,

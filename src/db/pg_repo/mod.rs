@@ -13,7 +13,7 @@ use crate::db::traits::{
     ToolRouterRepo, UserRepo, WorkflowCollectionRepo, WorkflowRepo, WorkflowStepAgentRepo,
 };
 use crate::db::{
-    AgentExecutionRow, AgentRow, BeliefExtractionPlanRow, ChatMessageRow, CollectionRunRow,
+    AgentExecutionRow, AgentRow, BeliefExtractionPlanRow, BeliefRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
     DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
     ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow, ResultRow,
@@ -1945,6 +1945,59 @@ impl WorkflowRepo for PgRepo {
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
+    }
+
+    // --- Belief Capture (Runtime Beliefs) ---
+
+    async fn insert_belief(&self, belief: &BeliefRow) -> Result<BeliefRow> {
+        let row = sqlx::query_as::<_, BeliefRow>(
+            "INSERT INTO beliefs (
+                id, workflow_id, workflow_execution_id, source_step_id,
+                source_document_title, source_document_def_id, source_phase,
+                content, reasoning, belief_type, confidence,
+                confidence_justification, semantic_tags, emotional_tone,
+                cross_source_tension, source_step_name, extraction_model,
+                extraction_tokens_in, extraction_tokens_out
+            ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                $11, $12, $13, $14, $15, $16, $17, $18, $19
+            ) RETURNING *",
+        )
+        .bind(belief.id)
+        .bind(belief.workflow_id)
+        .bind(belief.workflow_execution_id)
+        .bind(belief.source_step_id)
+        .bind(&belief.source_document_title)
+        .bind(belief.source_document_def_id)
+        .bind(&belief.source_phase)
+        .bind(&belief.content)
+        .bind(&belief.reasoning)
+        .bind(&belief.belief_type)
+        .bind(&belief.confidence)
+        .bind(&belief.confidence_justification)
+        .bind(&belief.semantic_tags)
+        .bind(&belief.emotional_tone)
+        .bind(&belief.cross_source_tension)
+        .bind(&belief.source_step_name)
+        .bind(&belief.extraction_model)
+        .bind(belief.extraction_tokens_in)
+        .bind(belief.extraction_tokens_out)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn list_beliefs_for_execution(
+        &self,
+        workflow_execution_id: Uuid,
+    ) -> Result<Vec<BeliefRow>> {
+        let rows = sqlx::query_as::<_, BeliefRow>(
+            "SELECT * FROM beliefs WHERE workflow_execution_id = $1 ORDER BY created_at",
+        )
+        .bind(workflow_execution_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
     }
 
     // --- Room Step Config (Design-Time) ---

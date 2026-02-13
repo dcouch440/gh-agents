@@ -225,6 +225,13 @@ pub enum WorkflowEventKind {
         total_agents: usize,
         status: String,
     },
+    BeliefExtractionProgress {
+        step_id: Uuid,
+        source_step_name: String,
+        sources_completed: usize,
+        sources_total: usize,
+        beliefs_extracted: usize,
+    },
     Completed {
         #[serde(skip_serializing_if = "Option::is_none")]
         duration_ms: Option<u64>,
@@ -279,6 +286,7 @@ impl WorkflowEvent {
             WorkflowEventKind::ForEachProgress { .. } => "for_each_progress",
             WorkflowEventKind::DocumenterPhaseProgress { .. } => "documenter_phase_progress",
             WorkflowEventKind::TaskForceAgentProgress { .. } => "task_force_agent_progress",
+            WorkflowEventKind::BeliefExtractionProgress { .. } => "belief_extraction_progress",
             WorkflowEventKind::Completed { .. } => "completed",
             WorkflowEventKind::Failed { .. } => "failed",
             WorkflowEventKind::Resumed { .. } => "resumed",
