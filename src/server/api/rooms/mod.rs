@@ -338,6 +338,7 @@ pub async fn send_room_message(
             &user_message,
             user_id,
             None,
+            None, // No designer prompts for API-driven turns
         )
         .await
         {

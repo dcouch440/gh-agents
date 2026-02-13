@@ -8,19 +8,22 @@ use std::collections::HashMap;
 
 use uuid::Uuid;
 
-use crate::db::{BeliefRow, RoomStepConfigRow, RoomStepMemberRow};
+use crate::db::BeliefRow;
 use crate::types::StepExecutionEnvelope;
 
-use super::{format_envelopes_as_upstream, AgentDefinition, DesignerInput};
+use super::{format_envelopes_as_upstream, AgentDefinition, DesignerInput, RoomDesignerMember};
 
 /// Build `DesignerInput` for room members.
 ///
-/// Includes beliefs from upstream belief_capture nodes when available.
-/// The designer generates system prompts for each member; the user prompt
-/// (transcript) is built per-turn by the room executor.
+/// Accepts primitive fields rather than DB row types, so it works for both
+/// design-time preview and runtime execution. The caller constructs
+/// `RoomDesignerMember` from whatever source it has (design-time rows or
+/// runtime room members + agents).
 pub fn build_room_designer_input(
-    room_config: &RoomStepConfigRow,
-    members: &[RoomStepMemberRow],
+    meeting_purpose: &str,
+    interaction_mode: &str,
+    max_turns: i32,
+    members: &[RoomDesignerMember],
     beliefs: &[BeliefRow],
     completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
 ) -> DesignerInput {
@@ -50,14 +53,16 @@ pub fn build_room_designer_input(
                 )
             };
 
-            let additional = if belief_context.is_empty() {
+            let additional = if member.perspective.is_empty() {
+                belief_context
+            } else if belief_context.is_empty() {
                 format!("Perspective:\n{}", member.perspective)
             } else {
                 format!("Perspective:\n{}\n\n{}", member.perspective, belief_context)
             };
 
             AgentDefinition {
-                id: member.id.to_string(),
+                id: member.id.clone(),
                 name: member.name.clone(),
                 role: member.role.clone(),
                 capabilities: vec![],
@@ -72,7 +77,7 @@ pub fn build_room_designer_input(
         context_description: format!(
             "A room meeting with {} members. Purpose: {}",
             members.len(),
-            room_config.meeting_purpose,
+            meeting_purpose,
         ),
         agents,
         upstream: format_envelopes_as_upstream(completed_envelopes),
@@ -97,7 +102,7 @@ pub fn build_room_designer_input(
                should match their perspective.\n\
              - Members with \"moderated\" interaction mode should defer to the moderator's \
                direction. Members with \"open\" mode can speak freely.",
-            room_config.meeting_purpose, room_config.interaction_mode, room_config.max_turns,
+            meeting_purpose, interaction_mode, max_turns,
         ),
     }
 }

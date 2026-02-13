@@ -78,6 +78,16 @@ pub struct ToolDescription {
     pub description: String,
 }
 
+/// A room member for the designer input, decoupled from specific DB row types.
+/// At runtime, `id` is `agent_id.to_string()`. At design-time, it's the member row ID.
+#[derive(Debug, Clone)]
+pub struct RoomDesignerMember {
+    pub id: String,
+    pub name: String,
+    pub role: String,
+    pub perspective: String,
+}
+
 // ── Shared utilities ────────────────────────────────────────────────────────
 
 /// Convert step execution envelopes into generic upstream context.
