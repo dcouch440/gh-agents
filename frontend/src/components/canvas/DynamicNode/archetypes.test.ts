@@ -49,8 +49,8 @@ describe('resolveArchetype', () => {
     expect(resolveArchetype({ execution_mode: 'room' }, emptyProtocols)).toBe(Archetype.ROOM)
   })
 
-  it('returns TASK_FORCE for execution_mode agent_designer_input', () => {
-    expect(resolveArchetype({ execution_mode: 'agent_designer_input' }, emptyProtocols)).toBe(Archetype.TASK_FORCE)
+  it('returns TASK_FORCE for execution_mode task_force', () => {
+    expect(resolveArchetype({ execution_mode: 'task_force' }, emptyProtocols)).toBe(Archetype.TASK_FORCE)
   })
 
   it('returns BLANK for execution_mode single', () => {
