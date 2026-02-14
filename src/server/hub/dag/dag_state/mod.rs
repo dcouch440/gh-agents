@@ -29,9 +29,6 @@ mod tests;
 ///
 /// Bundles the six `&mut` arguments that were previously passed individually
 /// to every `execute_*` function, reducing argument counts from 14–15 to ~8–9.
-///
-// room_step, belief_capture, task_force, documenter) to replace the 6 separate
-// &mut args. Deferred because it's a large mechanical signature change.
 pub(crate) struct DagExecutionState {
     pub var_outputs: HashMap<String, JsonValue>,
     pub completed: HashMap<Uuid, StepOutput>,
@@ -195,22 +192,12 @@ pub(crate) fn wrap_in_envelope(
         },
         data: output.structured_output.clone(),
         metadata: ExecutionMetadata {
-            execution_id,
-            execution_time_ms: 0,
             tokens_in: Some(input_tokens as i32),
             tokens_out: Some(output_tokens as i32),
             cost_usd: Some(cost_usd as f64),
             model: Some(agent.model_id.clone()),
             agent_id: Some(agent.id),
-            iteration_index: None,
-            iteration_label: None,
-            routing_label: None,
-
-            upstream_agent_id: None,
-            upstream_routing_label: None,
-            room_session_id: None,
-            room_id: None,
-            total_rounds: None,
+            ..ExecutionMetadata::new(execution_id)
         },
         error: None,
     }
@@ -289,21 +276,11 @@ pub(crate) fn wrap_in_agentless_envelope(
         },
         data,
         metadata: ExecutionMetadata {
-            execution_id: step_id,
             execution_time_ms: duration_ms,
             tokens_in: Some(input_tokens as i32),
             tokens_out: Some(output_tokens as i32),
             cost_usd: Some(cost_usd as f64),
-            model: None,
-            agent_id: None,
-            iteration_index: None,
-            iteration_label: None,
-            routing_label: None,
-            upstream_agent_id: None,
-            upstream_routing_label: None,
-            room_session_id: None,
-            room_id: None,
-            total_rounds: None,
+            ..ExecutionMetadata::new(step_id)
         },
         error: None,
     }

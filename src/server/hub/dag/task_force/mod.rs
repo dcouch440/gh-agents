@@ -9,13 +9,10 @@
 pub(super) mod designer;
 mod tests;
 
-use std::collections::HashMap;
-
 use anyhow::anyhow;
 use serde_json::Value as JsonValue;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
-use uuid::Uuid;
 
 use crate::config::protocols::TASK_FORCE;
 use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
@@ -33,8 +30,9 @@ use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope, Us
 
 use super::agent_designer::normalize_agent_name;
 use super::container::{create_optional_container, destroy_optional_container};
+use super::dag_state::DagExecutionState;
 use super::{
-    broadcast_workflow_event, compose_prompt, resolve_output_key, resolve_port_inputs,
+    broadcast_workflow_event, compose_prompt, resolve_output_key, resolve_step_port_inputs,
     step_display_name, PortMetadata, StepOutput, WorkflowExecutionContext,
 };
 
@@ -44,7 +42,6 @@ use super::{
 /// pre-lifecycle to generate optimized prompts and tool assignments, then
 /// executes each roster agent sequentially with designed prompts.
 /// The combined output is a JSON object keyed by agent name.
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn execute_task_force_step(
     engine: &ExecutionEngine,
     state: &AppState,
@@ -52,13 +49,8 @@ pub(super) async fn execute_task_force_step(
     step: &WorkflowStepRow,
     _steps: &[WorkflowStepRow],
     edges: &[WorkflowStepEdgeRow],
-    var_outputs: &mut HashMap<String, JsonValue>,
-    completed: &mut HashMap<Uuid, StepOutput>,
-    completed_envelopes: &mut HashMap<Uuid, StepExecutionEnvelope>,
+    dag_state: &mut DagExecutionState,
     port_meta: &PortMetadata,
-    total_input_tokens: &mut i64,
-    total_output_tokens: &mut i64,
-    total_cost_usd: &mut f32,
     cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
     let step_start = std::time::Instant::now();
@@ -111,26 +103,8 @@ pub(super) async fn execute_task_force_step(
     );
 
     // 4. Resolve port inputs
-    let port_inputs = if let Some(inputs) = port_meta.step_inputs.get(&step.id) {
-        match resolve_port_inputs(
-            step.id,
-            edges,
-            inputs,
-            &port_meta.step_outputs,
-            completed_envelopes,
-        ) {
-            Ok(resolved) => Some(resolved),
-            Err(e) => {
-                warn!(
-                    "Port resolution failed for task_force step {}: {}",
-                    step.id, e
-                );
-                None
-            }
-        }
-    } else {
-        None
-    };
+    let port_inputs =
+        resolve_step_port_inputs(step, edges, port_meta, &dag_state.completed_envelopes);
 
     // 5. Compose base prompt
     let prompt = compose_prompt(
@@ -139,7 +113,7 @@ pub(super) async fn execute_task_force_step(
         state.doc_repo().as_deref(),
         state.workflow_repo().as_deref(),
         &**state.repo(),
-        var_outputs,
+        &dag_state.var_outputs,
         &ctx.prior_outputs,
         None,
         port_inputs.as_ref(),
@@ -165,7 +139,7 @@ pub(super) async fn execute_task_force_step(
         step,
         &brief,
         &roster,
-        completed_envelopes,
+        &dag_state.completed_envelopes,
         cancel,
     )
     .await?;
@@ -363,9 +337,7 @@ pub(super) async fn execute_task_force_step(
     let output_key = resolve_output_key(step, &port_meta.step_outputs);
 
     // 12. Store results
-    *total_input_tokens += step_in_tokens;
-    *total_output_tokens += step_out_tokens;
-    *total_cost_usd += step_cost;
+    dag_state.accumulate_tokens(step_in_tokens, step_out_tokens, step_cost);
 
     let output = StepOutput {
         variable_name: output_key,
@@ -373,36 +345,20 @@ pub(super) async fn execute_task_force_step(
         structured_output: Some(combined_data.clone()),
     };
 
-    if !output.variable_name.is_empty() {
-        if let Some(ref structured) = output.structured_output {
-            var_outputs.insert(output.variable_name.clone(), structured.clone());
-        }
-    }
-
     let envelope = StepExecutionEnvelope {
         status: ExecutionStatus::Success,
         data: Some(combined_data),
         metadata: ExecutionMetadata {
-            execution_id: step.id,
             execution_time_ms: step_start.elapsed().as_millis() as u64,
             tokens_in: Some(step_in_tokens as i32),
             tokens_out: Some(step_out_tokens as i32),
             cost_usd: Some(step_cost as f64),
             model: Some(agent_cfg.model_id.clone()),
-            agent_id: None,
-            iteration_index: None,
-            iteration_label: None,
-            routing_label: None,
-            upstream_agent_id: None,
-            upstream_routing_label: None,
-            room_session_id: None,
-            room_id: None,
-            total_rounds: None,
+            ..ExecutionMetadata::new(step.id)
         },
         error: None,
     };
-    completed_envelopes.insert(step.id, envelope);
-    completed.insert(step.id, output);
+    dag_state.record_step_output(step.id, output, envelope);
 
     // 13. Broadcast step completed
     broadcast_workflow_event(
@@ -479,7 +435,7 @@ fn filter_outputs_for_agent<'a>(
     if receives_from.is_empty() {
         agent_outputs.iter().collect()
     } else {
-        let normalized_receives: Vec<String> = receives_from
+        let normalized_receives: std::collections::HashSet<String> = receives_from
             .iter()
             .map(|n| normalize_agent_name(n))
             .collect();

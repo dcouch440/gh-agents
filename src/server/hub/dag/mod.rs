@@ -15,7 +15,7 @@ use uuid::Uuid;
 use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::server::state::AppState;
 use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
-use crate::types::{DownstreamRoutingContext, RouteDescription, StepExecutionEnvelope};
+use crate::types::{DownstreamRoutingContext, RouteDescription};
 
 use super::engine::ExecutionEngine;
 use super::error::HubError;
@@ -53,7 +53,7 @@ pub(crate) mod utils;
 pub(crate) use dag_state::{
     broadcast_step_failure_if_real, prefetch_port_metadata, resolve_output_key,
     resolve_step_port_inputs, step_display_name, wrap_in_agentless_envelope, wrap_in_envelope,
-    PortMetadata,
+    DagExecutionState, PortMetadata,
 };
 
 pub use utils::{
@@ -145,48 +145,26 @@ async fn gather_downstream_routing_context(
     contexts
 }
 
-// ── Main DAG Orchestration ──────────────────────────────────────────────────
+// ── Shared DAG Loop ─────────────────────────────────────────────────────────
 
-/// Execute a complete workflow DAG using the unified ExecutionEngine.
+/// Core step dispatch loop shared by both fresh execution and resume paths.
 ///
-/// Executes a DAG via topo sort, variable resolution, for-each fan-out,
-/// and interactive review. Step execution goes through
-/// `ExecutionEngine::execute()` with `DagStepStrategy`.
-///
-/// Supports port-based data flow: if steps define input/output ports and edges
-/// connect them, data flows through envelopes with structured extraction.
-pub async fn execute_workflow_via_engine(
+/// Iterates through topologically-sorted steps, executing each according to its
+/// mode. Handles cancellation, conditional edges, for-each chains, and
+/// provider resolution for non-default LLM providers.
+async fn run_dag_loop(
     engine: &ExecutionEngine,
     state: &AppState,
     ctx: &WorkflowExecutionContext,
     steps: &[WorkflowStepRow],
     edges: &[WorkflowStepEdgeRow],
+    dag_state: &mut DagExecutionState,
+    port_meta: &PortMetadata,
     cancel: Option<&CancellationToken>,
-) -> Result<WorkflowExecutionResult, HubError> {
+) -> Result<(), HubError> {
     let sorted = topological_sort(steps, edges).map_err(|_| HubError::DagCycle)?;
     let step_map: HashMap<Uuid, &WorkflowStepRow> = steps.iter().map(|s| (s.id, s)).collect();
     let workflow_id = steps.first().map(|s| s.workflow_id).unwrap_or(Uuid::nil());
-    let start_time = std::time::Instant::now();
-
-    let mut completed: HashMap<Uuid, StepOutput> = HashMap::new();
-    let mut completed_envelopes: HashMap<Uuid, StepExecutionEnvelope> = HashMap::new();
-    let mut var_outputs: HashMap<String, JsonValue> = HashMap::new();
-    let mut total_input_tokens: i64 = 0;
-    let mut total_output_tokens: i64 = 0;
-    let mut total_cost_usd: f32 = 0.0;
-
-    // Pre-fetch port metadata for all steps
-    let port_meta = prefetch_port_metadata(state, steps).await;
-
-    // Broadcast: workflow started
-    broadcast_workflow_event(
-        state,
-        ctx,
-        workflow_id,
-        WorkflowEventKind::Started {
-            total_steps: sorted.len(),
-        },
-    );
 
     // Phase 6B: Detect chained for-each pipelines
     let chains = detect_for_each_chains(steps, edges);
@@ -205,7 +183,7 @@ pub async fn execute_workflow_via_engine(
 
     for step_id in &sorted {
         // Skip steps already executed as part of a chain
-        if completed.contains_key(step_id) {
+        if dag_state.completed.contains_key(step_id) {
             continue;
         }
 
@@ -220,14 +198,21 @@ pub async fn execute_workflow_via_engine(
         }
 
         // Check step readiness (handles conditional edges)
-        match check_step_readiness(*step_id, edges, &completed, &completed_envelopes) {
+        match check_step_readiness(
+            *step_id,
+            edges,
+            &dag_state.completed,
+            &dag_state.completed_envelopes,
+        ) {
             StepReadiness::Waiting => {
                 warn!("Step {} has uncompleted parents, skipping", step_id);
                 continue;
             }
             StepReadiness::Skipped => {
                 info!("Step {} skipped — no matching conditional edges", step_id);
-                completed.insert(*step_id, StepOutput::skipped(*step_id));
+                dag_state
+                    .completed
+                    .insert(*step_id, StepOutput::skipped(*step_id));
                 continue;
             }
             StepReadiness::Ready => { /* proceed with execution */ }
@@ -236,20 +221,7 @@ pub async fn execute_workflow_via_engine(
         // Phase 6B: If this is the head of a for-each chain, execute the whole chain
         if let Some(chain) = chain_by_head.get(step_id) {
             execute_for_each_chain(
-                engine,
-                state,
-                ctx,
-                chain,
-                &step_map,
-                edges,
-                &mut var_outputs,
-                &mut completed,
-                &mut completed_envelopes,
-                &port_meta,
-                &mut total_input_tokens,
-                &mut total_output_tokens,
-                &mut total_cost_usd,
-                cancel,
+                engine, state, ctx, chain, &step_map, edges, dag_state, port_meta, cancel,
             )
             .await?;
             continue;
@@ -271,8 +243,6 @@ pub async fn execute_workflow_via_engine(
             };
             let value = JsonValue::String(content.clone());
 
-            var_outputs.insert(output_key.clone(), value.clone());
-
             let output = StepOutput {
                 variable_name: output_key,
                 structured_output: Some(value.clone()),
@@ -280,8 +250,7 @@ pub async fn execute_workflow_via_engine(
             };
 
             let envelope = wrap_in_agentless_envelope(step.id, Some(value), 0, 0, 0, 0.0);
-            completed_envelopes.insert(step.id, envelope);
-            completed.insert(step.id, output);
+            dag_state.record_step_output(step.id, output, envelope);
 
             broadcast_workflow_event(
                 state,
@@ -305,20 +274,7 @@ pub async fn execute_workflow_via_engine(
         // Documenter steps — phased pipeline, no agent needed
         if step.execution_mode == "documenter" {
             let step_result = execute_documenter_step(
-                engine,
-                state,
-                ctx,
-                step,
-                steps,
-                edges,
-                &mut var_outputs,
-                &mut completed,
-                &mut completed_envelopes,
-                &port_meta,
-                &mut total_input_tokens,
-                &mut total_output_tokens,
-                &mut total_cost_usd,
-                cancel,
+                engine, state, ctx, step, steps, edges, dag_state, port_meta, cancel,
             )
             .await;
 
@@ -332,20 +288,7 @@ pub async fn execute_workflow_via_engine(
         // Task force steps — sequential multi-agent pipeline, no agent_id needed
         if step.execution_mode == "task_force" {
             let step_result = execute_task_force_step(
-                engine,
-                state,
-                ctx,
-                step,
-                steps,
-                edges,
-                &mut var_outputs,
-                &mut completed,
-                &mut completed_envelopes,
-                &port_meta,
-                &mut total_input_tokens,
-                &mut total_output_tokens,
-                &mut total_cost_usd,
-                cancel,
+                engine, state, ctx, step, steps, edges, dag_state, port_meta, cancel,
             )
             .await;
 
@@ -359,20 +302,7 @@ pub async fn execute_workflow_via_engine(
         // Belief capture steps — per-source LLM extraction, no agent_id needed
         if step.execution_mode == "belief_capture" {
             let step_result = execute_belief_capture_step(
-                engine,
-                state,
-                ctx,
-                step,
-                steps,
-                edges,
-                &mut var_outputs,
-                &mut completed,
-                &mut completed_envelopes,
-                &port_meta,
-                &mut total_input_tokens,
-                &mut total_output_tokens,
-                &mut total_cost_usd,
-                cancel,
+                engine, state, ctx, step, steps, edges, dag_state, port_meta, cancel,
             )
             .await;
 
@@ -433,13 +363,8 @@ pub async fn execute_workflow_via_engine(
                 step,
                 steps,
                 edges,
-                &mut var_outputs,
-                &mut completed,
-                &mut completed_envelopes,
-                &port_meta,
-                &mut total_input_tokens,
-                &mut total_output_tokens,
-                &mut total_cost_usd,
+                dag_state,
+                port_meta,
                 cancel,
             )
             .await
@@ -452,13 +377,8 @@ pub async fn execute_workflow_via_engine(
                 &agent,
                 steps,
                 edges,
-                &mut var_outputs,
-                &mut completed,
-                &mut completed_envelopes,
-                &port_meta,
-                &mut total_input_tokens,
-                &mut total_output_tokens,
-                &mut total_cost_usd,
+                dag_state,
+                port_meta,
                 cancel,
             )
             .await
@@ -471,13 +391,8 @@ pub async fn execute_workflow_via_engine(
                 &agent,
                 steps,
                 edges,
-                &mut var_outputs,
-                &mut completed,
-                &mut completed_envelopes,
-                &port_meta,
-                &mut total_input_tokens,
-                &mut total_output_tokens,
-                &mut total_cost_usd,
+                dag_state,
+                port_meta,
                 cancel,
             )
             .await
@@ -489,18 +404,73 @@ pub async fn execute_workflow_via_engine(
         step_result?;
     }
 
+    Ok(())
+}
+
+// ── Main DAG Orchestration ──────────────────────────────────────────────────
+
+/// Execute a complete workflow DAG using the unified ExecutionEngine.
+///
+/// Executes a DAG via topo sort, variable resolution, for-each fan-out,
+/// and interactive review. Step execution goes through
+/// `ExecutionEngine::execute()` with `DagStepStrategy`.
+///
+/// Supports port-based data flow: if steps define input/output ports and edges
+/// connect them, data flows through envelopes with structured extraction.
+pub async fn execute_workflow_via_engine(
+    engine: &ExecutionEngine,
+    state: &AppState,
+    ctx: &WorkflowExecutionContext,
+    steps: &[WorkflowStepRow],
+    edges: &[WorkflowStepEdgeRow],
+    cancel: Option<&CancellationToken>,
+) -> Result<WorkflowExecutionResult, HubError> {
+    let workflow_id = steps.first().map(|s| s.workflow_id).unwrap_or(Uuid::nil());
+    let start_time = std::time::Instant::now();
+    let sorted_len = topological_sort(steps, edges)
+        .map_err(|_| HubError::DagCycle)?
+        .len();
+
+    let mut dag_state = DagExecutionState::new();
+
+    // Pre-fetch port metadata for all steps
+    let port_meta = prefetch_port_metadata(state, steps).await;
+
+    // Broadcast: workflow started
+    broadcast_workflow_event(
+        state,
+        ctx,
+        workflow_id,
+        WorkflowEventKind::Started {
+            total_steps: sorted_len,
+        },
+    );
+
+    run_dag_loop(
+        engine,
+        state,
+        ctx,
+        steps,
+        edges,
+        &mut dag_state,
+        &port_meta,
+        cancel,
+    )
+    .await?;
+
     let duration_ms = start_time.elapsed().as_millis() as u64;
 
-    let final_outputs: HashMap<String, StepOutput> = completed
+    let final_outputs: HashMap<String, StepOutput> = dag_state
+        .completed
         .into_iter()
         .map(|(id, out)| (id.to_string(), out))
         .collect();
 
     Ok(WorkflowExecutionResult {
         outputs: final_outputs,
-        total_input_tokens,
-        total_output_tokens,
-        total_cost_usd,
+        total_input_tokens: dag_state.total_input_tokens,
+        total_output_tokens: dag_state.total_output_tokens,
+        total_cost_usd: dag_state.total_cost_usd,
         duration_ms,
     })
 }

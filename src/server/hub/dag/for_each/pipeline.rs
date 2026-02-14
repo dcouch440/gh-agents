@@ -18,6 +18,7 @@ use crate::db::{
 use crate::server::hub::dag::container::{
     create_optional_container, destroy_optional_container, run_with_vpn_watchdog,
 };
+use crate::server::hub::dag::dag_state::DagExecutionState;
 use crate::server::hub::dag::single::run_step_via_engine;
 use crate::server::hub::dag::{
     compose_prompt, extract_for_each_label, resolve_for_each_array, resolve_output_key,
@@ -59,7 +60,6 @@ struct PipelineStageData {
 /// - Each pipeline task runs: A[i] → B[i] sequentially
 /// - All N pipelines run concurrently via JoinSet
 /// - Collects results into aggregates for each step in the chain
-#[allow(clippy::too_many_arguments)]
 pub(in crate::server::hub::dag) async fn execute_for_each_chain(
     _engine: &ExecutionEngine,
     state: &AppState,
@@ -67,13 +67,8 @@ pub(in crate::server::hub::dag) async fn execute_for_each_chain(
     chain: &ForEachChain,
     step_map: &HashMap<Uuid, &WorkflowStepRow>,
     _edges: &[WorkflowStepEdgeRow],
-    var_outputs: &mut HashMap<String, JsonValue>,
-    completed: &mut HashMap<Uuid, StepOutput>,
-    completed_envelopes: &mut HashMap<Uuid, StepExecutionEnvelope>,
+    dag_state: &mut DagExecutionState,
     port_meta: &PortMetadata,
-    total_input_tokens: &mut i64,
-    total_output_tokens: &mut i64,
-    total_cost_usd: &mut f32,
     cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
     // 1. Get the first step and resolve the for-each array
@@ -85,11 +80,9 @@ pub(in crate::server::hub::dag) async fn execute_for_each_chain(
         anyhow::anyhow!("chain head step {} missing for_each_ref", chain.step_ids[0])
     })?;
 
-    let array =
-        resolve_for_each_array(for_each_ref, var_outputs, &ctx.prior_outputs).ok_or_else(|| {
-            HubError::ForEachNotArray {
-                reference: for_each_ref.to_string(),
-            }
+    let array = resolve_for_each_array(for_each_ref, &dag_state.var_outputs, &ctx.prior_outputs)
+        .ok_or_else(|| HubError::ForEachNotArray {
+            reference: for_each_ref.to_string(),
         })?;
 
     info!(
@@ -247,10 +240,6 @@ pub(in crate::server::hub::dag) async fn execute_for_each_chain(
             raw_output: String::new(),
         };
 
-        if !variable_name.is_empty() {
-            var_outputs.insert(variable_name, aggregated);
-        }
-
         let default_agent = &stages[stage_idx].default_agent;
         let envelope = wrap_in_envelope(
             &output,
@@ -260,14 +249,11 @@ pub(in crate::server::hub::dag) async fn execute_for_each_chain(
             stage_output_tokens,
             stage_cost,
         );
-        completed_envelopes.insert(*step_id, envelope);
-        completed.insert(*step_id, output);
+        dag_state.record_step_output(*step_id, output, envelope);
 
         // Only accumulate totals once (at the end)
         if stage_idx == chain.step_ids.len() - 1 {
-            *total_input_tokens += stage_input_tokens;
-            *total_output_tokens += stage_output_tokens;
-            *total_cost_usd += stage_cost;
+            dag_state.accumulate_tokens(stage_input_tokens, stage_output_tokens, stage_cost);
         }
     }
 
@@ -399,8 +385,6 @@ async fn execute_pipeline_item(
                     status: ExecutionStatus::Success,
                     data: output.structured_output.clone(),
                     metadata: ExecutionMetadata {
-                        execution_id: Uuid::new_v4(),
-                        execution_time_ms: 0,
                         tokens_in: Some(in_tok as i32),
                         tokens_out: Some(out_tok as i32),
                         cost_usd: Some(cost as f64),
@@ -409,12 +393,9 @@ async fn execute_pipeline_item(
                         iteration_index: Some(item_index),
                         iteration_label: label.clone(),
                         routing_label: routing_label.clone(),
-
                         upstream_agent_id,
                         upstream_routing_label: upstream_routing_label.clone(),
-                        room_session_id: None,
-                        room_id: None,
-                        total_rounds: None,
+                        ..ExecutionMetadata::new(Uuid::new_v4())
                     },
                     error: None,
                 };
@@ -441,22 +422,13 @@ async fn execute_pipeline_item(
                     status: ExecutionStatus::Error,
                     data: None,
                     metadata: ExecutionMetadata {
-                        execution_id: Uuid::new_v4(),
-                        execution_time_ms: 0,
-                        tokens_in: None,
-                        tokens_out: None,
-                        cost_usd: None,
                         model: Some(iteration_agent.model_id.clone()),
                         agent_id: Some(iteration_agent.id),
                         iteration_index: Some(item_index),
                         iteration_label: label.clone(),
-                        routing_label: None,
-
                         upstream_agent_id,
                         upstream_routing_label: upstream_routing_label.clone(),
-                        room_session_id: None,
-                        room_id: None,
-                        total_rounds: None,
+                        ..ExecutionMetadata::new(Uuid::new_v4())
                     },
                     error: Some(ExecutionError {
                         message: format!("{}", e),

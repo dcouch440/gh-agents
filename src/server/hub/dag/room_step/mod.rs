@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use anyhow::anyhow;
 use serde_json::Value as JsonValue;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::db::WorkflowStepEdgeRow;
@@ -27,8 +27,9 @@ use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
 use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
 
+use super::dag_state::DagExecutionState;
 use super::{
-    broadcast_workflow_event, compose_prompt, resolve_output_key, resolve_port_inputs,
+    broadcast_workflow_event, compose_prompt, resolve_output_key, resolve_step_port_inputs,
     step_display_name, PortMetadata, StepOutput, WorkflowExecutionContext,
 };
 
@@ -41,7 +42,6 @@ use super::{
 ///   and closes the session to resume the DAG.
 ///
 /// Produces a composite envelope with per-agent outputs: `{"agent:<uuid>": output, ...}`.
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn execute_room_step(
     engine: &ExecutionEngine,
     state: &AppState,
@@ -49,13 +49,8 @@ pub(super) async fn execute_room_step(
     step: &WorkflowStepRow,
     _steps: &[WorkflowStepRow],
     edges: &[WorkflowStepEdgeRow],
-    var_outputs: &mut HashMap<String, JsonValue>,
-    completed: &mut HashMap<Uuid, StepOutput>,
-    completed_envelopes: &mut HashMap<Uuid, StepExecutionEnvelope>,
+    dag_state: &mut DagExecutionState,
     port_meta: &PortMetadata,
-    total_input_tokens: &mut i64,
-    total_output_tokens: &mut i64,
-    _total_cost_usd: &mut f32,
     cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
     // 1. Extract room_id
@@ -67,7 +62,7 @@ pub(super) async fn execute_room_step(
     })?;
 
     // 2. Check if this is a resume with a completed session
-    if let Some(existing_output) = completed.get(&step.id) {
+    if let Some(existing_output) = dag_state.completed.get(&step.id) {
         if let Some(ref structured) = existing_output.structured_output {
             if structured.get("status").and_then(|v| v.as_str()) == Some("awaiting_room") {
                 // This step was paused for user interaction — check if session is completed
@@ -99,40 +94,18 @@ pub(super) async fn execute_room_step(
                                 let (envelope_data, output) =
                                     extract_room_outputs_from_transcript(&transcript, key_ref);
 
-                                if !output.variable_name.is_empty() {
-                                    if let Some(ref structured) = output.structured_output {
-                                        var_outputs.insert(
-                                            output.variable_name.clone(),
-                                            structured.clone(),
-                                        );
-                                    }
-                                }
-
                                 let envelope = StepExecutionEnvelope {
                                     status: ExecutionStatus::Success,
                                     data: Some(envelope_data),
                                     metadata: ExecutionMetadata {
-                                        execution_id: session_id,
-                                        execution_time_ms: 0,
-                                        tokens_in: None,
-                                        tokens_out: None,
-                                        cost_usd: None,
-                                        model: None,
-                                        agent_id: None,
-                                        iteration_index: None,
-                                        iteration_label: None,
-                                        routing_label: None,
-
-                                        upstream_agent_id: None,
-                                        upstream_routing_label: None,
                                         room_session_id: Some(session_id),
                                         room_id: Some(room_id),
                                         total_rounds: Some(session.current_turn),
+                                        ..ExecutionMetadata::new(session_id)
                                     },
                                     error: None,
                                 };
-                                completed_envelopes.insert(step.id, envelope);
-                                completed.insert(step.id, output);
+                                dag_state.record_step_output(step.id, output, envelope);
                                 return Ok(());
                             }
                         }
@@ -212,7 +185,7 @@ pub(super) async fn execute_room_step(
                 config.max_turns,
                 &designer_members,
                 &beliefs,
-                completed_envelopes,
+                &dag_state.completed_envelopes,
             );
 
             match agent_designer::run_agent_designer(
@@ -227,8 +200,8 @@ pub(super) async fn execute_room_step(
                         prompts = result.prompts.len(),
                         "Room Agent Designer completed"
                     );
-                    *total_input_tokens += result.input_tokens;
-                    *total_output_tokens += result.output_tokens;
+                    dag_state.total_input_tokens += result.input_tokens;
+                    dag_state.total_output_tokens += result.output_tokens;
                     let lookup: HashMap<Uuid, DesignedAgentPrompt> = result
                         .prompts
                         .into_iter()
@@ -250,26 +223,8 @@ pub(super) async fn execute_room_step(
     };
 
     // 5. Resolve port inputs
-    let port_inputs = if let Some(inputs) = port_meta.step_inputs.get(&step.id) {
-        match resolve_port_inputs(
-            step.id,
-            edges,
-            inputs,
-            &port_meta.step_outputs,
-            completed_envelopes,
-        ) {
-            Ok(resolved) => {
-                debug!(step_id = %step.id, ports = resolved.len(), "Resolved port inputs for room step");
-                Some(resolved)
-            }
-            Err(e) => {
-                warn!("Port resolution failed for room step {}: {}", step.id, e);
-                None
-            }
-        }
-    } else {
-        None
-    };
+    let port_inputs =
+        resolve_step_port_inputs(step, edges, port_meta, &dag_state.completed_envelopes);
 
     // 6. Compose initial prompt
     let prompt = compose_prompt(
@@ -278,7 +233,7 @@ pub(super) async fn execute_room_step(
         state.doc_repo().as_deref(),
         state.workflow_repo().as_deref(),
         &**state.repo(),
-        var_outputs,
+        &dag_state.var_outputs,
         &ctx.prior_outputs,
         None,
         port_inputs.as_ref(),
@@ -335,8 +290,8 @@ pub(super) async fn execute_room_step(
         .await?;
 
         for speaker in &turn_result.speakers {
-            *total_input_tokens += speaker.input_tokens as i64;
-            *total_output_tokens += speaker.output_tokens as i64;
+            dag_state.total_input_tokens += speaker.input_tokens as i64;
+            dag_state.total_output_tokens += speaker.output_tokens as i64;
         }
 
         // Store partial output for resume detection
@@ -351,7 +306,7 @@ pub(super) async fn execute_room_step(
                 "status": "awaiting_room"
             })),
         };
-        completed.insert(step.id, partial);
+        dag_state.completed.insert(step.id, partial);
 
         // Broadcast: step paused (awaiting user interaction)
         broadcast_workflow_event(
@@ -404,8 +359,8 @@ pub(super) async fn execute_room_step(
         .await?;
 
         for speaker in &turn_result.speakers {
-            *total_input_tokens += speaker.input_tokens as i64;
-            *total_output_tokens += speaker.output_tokens as i64;
+            dag_state.total_input_tokens += speaker.input_tokens as i64;
+            dag_state.total_output_tokens += speaker.output_tokens as i64;
         }
 
         let session_done = turn_result.session_completed;
@@ -442,12 +397,6 @@ pub(super) async fn execute_room_step(
     };
 
     // 11. Store results
-    if !output.variable_name.is_empty() {
-        if let Some(ref structured) = output.structured_output {
-            var_outputs.insert(output.variable_name.clone(), structured.clone());
-        }
-    }
-
     let final_turn_number = last_turn_result
         .as_ref()
         .map(|t| t.turn_number)
@@ -456,26 +405,16 @@ pub(super) async fn execute_room_step(
         status: ExecutionStatus::Success,
         data: Some(envelope_data),
         metadata: ExecutionMetadata {
-            execution_id: session.id,
-            execution_time_ms: 0,
-            tokens_in: Some(*total_input_tokens as i32),
-            tokens_out: Some(*total_output_tokens as i32),
-            cost_usd: None,
-            model: None,
-            agent_id: None,
-            iteration_index: None,
-            iteration_label: None,
-            routing_label: None,
-            upstream_agent_id: None,
-            upstream_routing_label: None,
+            tokens_in: Some(dag_state.total_input_tokens as i32),
+            tokens_out: Some(dag_state.total_output_tokens as i32),
             room_session_id: Some(session.id),
             room_id: Some(room_id),
             total_rounds: Some(final_turn_number),
+            ..ExecutionMetadata::new(session.id)
         },
         error: None,
     };
-    completed_envelopes.insert(step.id, envelope);
-    completed.insert(step.id, output);
+    dag_state.record_step_output(step.id, output, envelope);
 
     // Broadcast: step completed (room step)
     broadcast_workflow_event(

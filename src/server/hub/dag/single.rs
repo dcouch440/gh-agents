@@ -25,11 +25,11 @@ use crate::server::hub::strategies::dag_step::{compute_cost, DagStepConfig, DagS
 use crate::server::hub::streaming::NullSink;
 use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
-use crate::types::StepExecutionEnvelope;
 
 use super::container::{
     create_optional_container, destroy_optional_container, run_with_vpn_watchdog,
 };
+use super::dag_state::DagExecutionState;
 use super::{
     broadcast_workflow_event, build_routing_instruction_block, compose_prompt,
     gather_downstream_routing_context, resolve_output_key, resolve_step_port_inputs,
@@ -45,13 +45,8 @@ pub(super) async fn execute_single_step(
     agent: &AgentRow,
     steps: &[WorkflowStepRow],
     edges: &[WorkflowStepEdgeRow],
-    var_outputs: &mut HashMap<String, JsonValue>,
-    completed: &mut HashMap<Uuid, StepOutput>,
-    completed_envelopes: &mut HashMap<Uuid, StepExecutionEnvelope>,
+    dag_state: &mut DagExecutionState,
     port_meta: &PortMetadata,
-    total_input_tokens: &mut i64,
-    total_output_tokens: &mut i64,
-    total_cost_usd: &mut f32,
     cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
     let step_start = std::time::Instant::now();
@@ -70,7 +65,8 @@ pub(super) async fn execute_single_step(
     );
 
     // Resolve port inputs if this step has input ports defined
-    let port_inputs = resolve_step_port_inputs(step, edges, port_meta, completed_envelopes);
+    let port_inputs =
+        resolve_step_port_inputs(step, edges, port_meta, &dag_state.completed_envelopes);
 
     let prompt = compose_prompt(
         step,
@@ -78,7 +74,7 @@ pub(super) async fn execute_single_step(
         state.doc_repo().as_deref(),
         state.workflow_repo().as_deref(),
         &**state.repo(),
-        var_outputs,
+        &dag_state.var_outputs,
         &ctx.prior_outputs,
         None,
         port_inputs.as_ref(),
@@ -122,22 +118,11 @@ pub(super) async fn execute_single_step(
 
     let (output, in_tok, out_tok, cost) = result?;
 
-    *total_input_tokens += in_tok;
-    *total_output_tokens += out_tok;
-    *total_cost_usd += cost;
-
-    // Store output in variable map (fixes var_outputs propagation bug)
-    if !output.variable_name.is_empty() {
-        if let Some(ref structured) = output.structured_output {
-            var_outputs.insert(output.variable_name.clone(), structured.clone());
-        }
-    }
+    dag_state.accumulate_tokens(in_tok, out_tok, cost);
 
     // Store envelope for downstream port resolution
     let envelope = wrap_in_envelope(&output, agent, step.id, in_tok, out_tok, cost);
-    completed_envelopes.insert(step.id, envelope);
-
-    completed.insert(step.id, output);
+    dag_state.record_step_output(step.id, output, envelope);
 
     // Broadcast: step completed
     broadcast_workflow_event(

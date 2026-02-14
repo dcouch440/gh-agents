@@ -119,6 +119,17 @@ mod tests {
         assert_eq!(filtered[1].0, "Reviewer");
     }
 
+    #[test]
+    fn filter_outputs_no_match_returns_empty() {
+        let outputs = vec![
+            ("Scanner".to_string(), "scan results".to_string()),
+            ("Analyzer".to_string(), "analysis".to_string()),
+        ];
+        let receives = vec!["NonExistent".to_string()];
+        let filtered = filter_outputs_for_agent(&outputs, &receives);
+        assert!(filtered.is_empty());
+    }
+
     // ── build_filtered_outputs_block ─────────────────────────────────────
 
     #[test]
