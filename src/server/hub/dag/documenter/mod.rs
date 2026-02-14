@@ -24,8 +24,15 @@ use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
 use crate::types::StepExecutionEnvelope;
 
-use super::utils::{StepOutput, WorkflowExecutionContext};
-use super::{broadcast_workflow_event, resolve_output_key};
+use crate::db::WorkflowStepEdgeRow;
+
+use super::utils::{
+    collect_upstream_context_data, compose_prompt, StepOutput, WorkflowExecutionContext,
+};
+use super::{
+    broadcast_workflow_event, resolve_output_key, resolve_step_port_inputs, step_display_name,
+    wrap_in_agentless_envelope, PortMetadata,
+};
 
 mod persistence;
 mod phases;
@@ -38,8 +45,8 @@ pub(crate) use persistence::{determine_persist_action, DocumentPersistAction};
 mod tests;
 pub(crate) mod types;
 
-// Re-exports for external consumers and tests
-pub use prompts::build_documents_output;
+#[cfg(test)]
+pub(crate) use prompts::build_documents_output;
 
 pub(crate) use crate::server::hub::protocols::context::{build_context_block, ContextDocument};
 
@@ -398,4 +405,152 @@ impl<'a> DocumenterExecutor<'a> {
             },
         );
     }
+}
+
+// ── Step Execution ──────────────────────────────────────────────────────────
+
+/// Execute a documenter step through the phased pipeline (strategy → research → write).
+///
+/// Unlike other step types, documenter steps have no agent. They dispatch to
+/// `DocumenterExecutor` which runs three LLM phases internally, recording each
+/// as a `protocol_execution` row and broadcasting WebSocket progress events.
+#[allow(clippy::too_many_arguments)]
+pub(super) async fn execute_documenter_step(
+    engine: &ExecutionEngine,
+    state: &AppState,
+    ctx: &WorkflowExecutionContext,
+    step: &WorkflowStepRow,
+    steps: &[WorkflowStepRow],
+    edges: &[WorkflowStepEdgeRow],
+    var_outputs: &mut HashMap<String, JsonValue>,
+    completed: &mut HashMap<Uuid, StepOutput>,
+    completed_envelopes: &mut HashMap<Uuid, StepExecutionEnvelope>,
+    port_meta: &PortMetadata,
+    total_input_tokens: &mut i64,
+    total_output_tokens: &mut i64,
+    total_cost_usd: &mut f32,
+    cancel: Option<&CancellationToken>,
+) -> Result<(), HubError> {
+    let step_start = std::time::Instant::now();
+
+    // Broadcast: step started (no agent)
+    broadcast_workflow_event(
+        state,
+        ctx,
+        step.workflow_id,
+        WorkflowEventKind::StepStarted {
+            step_id: step.id,
+            step_name: step_display_name(step),
+            agent_id: None,
+            execution_id: None,
+        },
+    );
+
+    // Resolve port inputs
+    let port_inputs = resolve_step_port_inputs(step, edges, port_meta, completed_envelopes);
+
+    // Collect upstream context data from bare (portless) edges connecting context steps
+    let upstream_context =
+        collect_upstream_context_data(step.id, edges, steps, completed_envelopes);
+
+    // Compose prompt
+    let mut prompt = compose_prompt(
+        step,
+        state.prompt_template_repo().as_deref(),
+        state.doc_repo().as_deref(),
+        state.workflow_repo().as_deref(),
+        &**state.repo(),
+        var_outputs,
+        &ctx.prior_outputs,
+        None,
+        port_inputs.as_ref(),
+    )
+    .await;
+
+    // Build ContextDocument objects from upstream context (stable short_ids via title hash)
+    let upstream_docs: Vec<ContextDocument> = upstream_context
+        .iter()
+        .map(|(title, content)| {
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+            let mut hasher = DefaultHasher::new();
+            title.hash(&mut hasher);
+            let short_id = format!("{:08x}", hasher.finish() & 0xFFFF_FFFF);
+            ContextDocument {
+                short_id,
+                title: title.clone(),
+                content: content.clone(),
+            }
+        })
+        .collect();
+
+    // Append upstream context using the same <document_XXXXXXXX> format
+    // so the strategy LLM sees the short_ids it needs for context_document_ids routing
+    let context_block = build_context_block(&[], &upstream_docs);
+    if !context_block.is_empty() {
+        prompt.push_str("\n\n");
+        prompt.push_str(&context_block);
+    }
+
+    // Execute the documenter pipeline
+    let executor = DocumenterExecutor::new(
+        engine,
+        state,
+        ctx,
+        step,
+        &prompt,
+        cancel,
+        &upstream_docs,
+        completed_envelopes,
+    );
+    let result = executor.execute(&port_meta.step_outputs).await?;
+
+    // Accumulate tokens
+    *total_input_tokens += result.input_tokens;
+    *total_output_tokens += result.output_tokens;
+    *total_cost_usd += result.cost_usd;
+
+    // Store output in variable map
+    if !result.output.variable_name.is_empty() {
+        if let Some(ref structured) = result.output.structured_output {
+            var_outputs.insert(result.output.variable_name.clone(), structured.clone());
+        }
+    }
+
+    // Store envelope for downstream port resolution (agent-less)
+    let envelope = wrap_in_agentless_envelope(
+        step.id,
+        result.output.structured_output.clone(),
+        step_start.elapsed().as_millis() as u64,
+        result.input_tokens,
+        result.output_tokens,
+        result.cost_usd,
+    );
+    completed_envelopes.insert(step.id, envelope);
+    completed.insert(step.id, result.output);
+
+    // Broadcast: step completed (no agent)
+    broadcast_workflow_event(
+        state,
+        ctx,
+        step.workflow_id,
+        WorkflowEventKind::StepCompleted {
+            step_id: step.id,
+            step_name: step_display_name(step),
+            agent_id: None,
+            output: None,
+            input_tokens: Some(result.input_tokens as u64),
+            output_tokens: Some(result.output_tokens as u64),
+            duration_ms: Some(step_start.elapsed().as_millis() as u64),
+        },
+    );
+
+    info!(
+        step_id = %step.id,
+        input_tokens = result.input_tokens,
+        output_tokens = result.output_tokens,
+        "Documenter step completed"
+    );
+
+    Ok(())
 }

@@ -17,7 +17,8 @@ use crate::server::hub::dag::container::{
 use crate::server::hub::dag::single::run_step_via_engine;
 use crate::server::hub::dag::{
     broadcast_workflow_event, compose_prompt, extract_for_each_label, resolve_for_each_array,
-    resolve_output_key, wrap_in_envelope, PortMetadata, StepOutput, WorkflowExecutionContext,
+    resolve_output_key, step_display_name, wrap_in_envelope, PortMetadata, StepOutput,
+    WorkflowExecutionContext,
 };
 use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
@@ -67,10 +68,7 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
         step.workflow_id,
         WorkflowEventKind::StepStarted {
             step_id: step.id,
-            step_name: step
-                .output_variable_name
-                .clone()
-                .unwrap_or_else(|| step.id.to_string()),
+            step_name: step_display_name(step),
             agent_id: Some(agent.id),
             execution_id: None,
         },
@@ -233,10 +231,7 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
         step.workflow_id,
         WorkflowEventKind::StepCompleted {
             step_id: step.id,
-            step_name: step
-                .output_variable_name
-                .clone()
-                .unwrap_or_else(|| step.id.to_string()),
+            step_name: step_display_name(step),
             agent_id: Some(agent.id),
             output: None,
             input_tokens: None,

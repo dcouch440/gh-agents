@@ -9,7 +9,6 @@ use std::sync::Arc;
 
 use serde_json::Value as JsonValue;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, warn};
 use uuid::Uuid;
 
 use crate::db::{AgentRow, StepOutputRow, WorkflowStepEdgeRow, WorkflowStepRow};
@@ -33,8 +32,8 @@ use super::container::{
 };
 use super::{
     broadcast_workflow_event, build_routing_instruction_block, compose_prompt,
-    gather_downstream_routing_context, resolve_output_key, resolve_port_inputs, wrap_in_envelope,
-    PortMetadata, StepOutput, WorkflowExecutionContext,
+    gather_downstream_routing_context, resolve_output_key, resolve_step_port_inputs,
+    step_display_name, wrap_in_envelope, PortMetadata, StepOutput, WorkflowExecutionContext,
 };
 
 /// Execute a single (non-for-each) step through the engine.
@@ -64,36 +63,14 @@ pub(super) async fn execute_single_step(
         step.workflow_id,
         WorkflowEventKind::StepStarted {
             step_id: step.id,
-            step_name: step
-                .output_variable_name
-                .clone()
-                .unwrap_or_else(|| step.id.to_string()),
+            step_name: step_display_name(step),
             agent_id: Some(agent.id),
             execution_id: None,
         },
     );
 
     // Resolve port inputs if this step has input ports defined
-    let port_inputs = if let Some(inputs) = port_meta.step_inputs.get(&step.id) {
-        match resolve_port_inputs(
-            step.id,
-            edges,
-            inputs,
-            &port_meta.step_outputs,
-            completed_envelopes,
-        ) {
-            Ok(resolved) => {
-                debug!(step_id = %step.id, ports = resolved.len(), "Resolved port inputs");
-                Some(resolved)
-            }
-            Err(e) => {
-                warn!("Port resolution failed for step {}: {}", step.id, e);
-                None
-            }
-        }
-    } else {
-        None
-    };
+    let port_inputs = resolve_step_port_inputs(step, edges, port_meta, completed_envelopes);
 
     let prompt = compose_prompt(
         step,
@@ -169,10 +146,7 @@ pub(super) async fn execute_single_step(
         step.workflow_id,
         WorkflowEventKind::StepCompleted {
             step_id: step.id,
-            step_name: step
-                .output_variable_name
-                .clone()
-                .unwrap_or_else(|| step.id.to_string()),
+            step_name: step_display_name(step),
             agent_id: Some(agent.id),
             output: None,
             input_tokens: Some(in_tok as u64),

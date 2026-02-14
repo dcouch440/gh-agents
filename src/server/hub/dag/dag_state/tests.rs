@@ -128,6 +128,32 @@ mod tests {
     }
 
     #[test]
+    fn wrap_in_agentless_envelope_success_when_data_present() {
+        let step_id = Uuid::new_v4();
+        let data = Some(json!({"result": "ok"}));
+        let envelope = wrap_in_agentless_envelope(step_id, data.clone(), 150, 100, 200, 0.5);
+
+        assert_eq!(envelope.status, crate::types::ExecutionStatus::Success);
+        assert_eq!(envelope.data, data);
+        assert_eq!(envelope.metadata.execution_id, step_id);
+        assert_eq!(envelope.metadata.execution_time_ms, 150);
+        assert_eq!(envelope.metadata.tokens_in, Some(100));
+        assert_eq!(envelope.metadata.tokens_out, Some(200));
+        assert!(envelope.metadata.agent_id.is_none());
+        assert!(envelope.metadata.model.is_none());
+        assert!(envelope.error.is_none());
+    }
+
+    #[test]
+    fn wrap_in_agentless_envelope_error_when_no_data() {
+        let step_id = Uuid::new_v4();
+        let envelope = wrap_in_agentless_envelope(step_id, None, 0, 0, 0, 0.0);
+
+        assert_eq!(envelope.status, crate::types::ExecutionStatus::Error);
+        assert!(envelope.data.is_none());
+    }
+
+    #[test]
     fn step_display_name_uses_variable_name() {
         let mut step = crate::db::WorkflowStepRow {
             id: Uuid::new_v4(),

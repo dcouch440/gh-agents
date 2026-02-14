@@ -29,7 +29,7 @@ use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
 
 use super::{
     broadcast_workflow_event, compose_prompt, resolve_output_key, resolve_port_inputs,
-    PortMetadata, StepOutput, WorkflowExecutionContext,
+    step_display_name, PortMetadata, StepOutput, WorkflowExecutionContext,
 };
 
 /// Execute a room step within the DAG.
@@ -298,10 +298,7 @@ pub(super) async fn execute_room_step(
         step.workflow_id,
         WorkflowEventKind::StepStarted {
             step_id: step.id,
-            step_name: step
-                .output_variable_name
-                .clone()
-                .unwrap_or_else(|| step.id.to_string()),
+            step_name: step_display_name(step),
             agent_id: None,
             execution_id: Some(session.id),
         },
@@ -487,10 +484,7 @@ pub(super) async fn execute_room_step(
         step.workflow_id,
         WorkflowEventKind::StepCompleted {
             step_id: step.id,
-            step_name: step
-                .output_variable_name
-                .clone()
-                .unwrap_or_else(|| step.id.to_string()),
+            step_name: step_display_name(step),
             agent_id: None,
             output: None,
             input_tokens: None,
