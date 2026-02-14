@@ -16,12 +16,21 @@ function ChatHeader({ onClear, disabled }: ChatHeaderProps) {
         justifyContent: 'space-between',
         alignItems: 'center',
         px: 1.5,
-        py: 0.5,
-        borderBottom: 1,
-        borderColor: 'divider',
+        py: 0.25,
+        position: 'relative',
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          bottom: 0,
+          left: 12,
+          right: 12,
+          height: '1px',
+          bgcolor: 'divider',
+          opacity: 0.5,
+        },
       }}
     >
-      <Typography sx={{ fontSize: 11, fontWeight: 600, color: 'text.secondary' }}>Chat</Typography>
+      <Typography sx={{ fontSize: 11, fontWeight: 500, color: 'text.secondary', opacity: 0.7 }}>Chat</Typography>
       <IconButton size="small" onClick={onClear} disabled={disabled} sx={{ p: 0.25 }}>
         <DeleteOutlined sx={{ fontSize: 14 }} />
       </IconButton>

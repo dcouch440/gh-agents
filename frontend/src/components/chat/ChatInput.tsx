@@ -29,22 +29,45 @@ function ChatInput({ onSend, disabled, placeholder = 'Type a message...' }: Chat
   )
 
   return (
-    <Box sx={{ borderTop: 1, borderColor: 'divider', p: 1.5, bgcolor: 'background.paper' }}>
+    <Box
+      sx={{
+        position: 'relative',
+        px: 1.5,
+        py: 1,
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 12,
+          right: 12,
+          height: '1px',
+          bgcolor: 'divider',
+          opacity: 0.5,
+        },
+      }}
+    >
       <TextField
         fullWidth
         multiline
-        maxRows={6}
+        maxRows={4}
         value={value}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
         disabled={disabled}
         placeholder={placeholder}
-        variant="outlined"
+        variant="standard"
         size="small"
         sx={{
-          '& .MuiOutlinedInput-root': {
+          '& .MuiInput-root': {
             fontFamily: 'monospace',
-            fontSize: '0.875rem',
+            fontSize: '0.8125rem',
+            '&::before': { borderBottom: 'none' },
+            '&::after': { borderBottom: 'none' },
+            '&:hover:not(.Mui-disabled)::before': { borderBottom: 'none' },
+          },
+          '& .MuiInput-input': {
+            py: 0.75,
+            '&::placeholder': { opacity: 0.4 },
           },
         }}
       />

@@ -12,12 +12,15 @@ function ChatMessage({ role, content, streaming }: ChatMessageProps) {
     return (
       <Box
         sx={{
-          py: 0.5,
+          py: 0.25,
           px: 1.5,
-          bgcolor: 'action.hover',
-          borderRadius: 1,
-          alignSelf: 'flex-start',
-          maxWidth: '80%',
+          mx: -1.5,
+          bgcolor: (theme) =>
+            theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : 'rgba(255, 255, 255, 0.03)',
+          boxShadow: (theme) =>
+            theme.palette.mode === 'light'
+              ? 'inset 0 1px 2px rgba(0, 0, 0, 0.03), inset 0 -1px 1px rgba(0, 0, 0, 0.02)'
+              : 'inset 0 1px 2px rgba(0, 0, 0, 0.12), inset 0 -1px 1px rgba(0, 0, 0, 0.08)',
         }}
       >
         <Typography
@@ -25,7 +28,7 @@ function ChatMessage({ role, content, streaming }: ChatMessageProps) {
           sx={{
             whiteSpace: 'pre-wrap',
             fontFamily: 'monospace',
-            fontSize: '0.8125rem',
+            fontSize: '0.875rem',
           }}
         >
           {content}
@@ -35,7 +38,7 @@ function ChatMessage({ role, content, streaming }: ChatMessageProps) {
   }
 
   return (
-    <Box sx={{ py: 0.5 }}>
+    <Box sx={{ py: 0.25 }}>
       <MarkdownPreview content={content} />
       {streaming && content ? (
         <Box

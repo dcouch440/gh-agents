@@ -46,10 +46,16 @@ export function ChatPanel({ messages, onSend, streaming, disabled, emptyMessage,
         sx={{
           flex: 1,
           overflowY: 'auto',
-          p: 2,
+          px: 1.5,
+          pt: 1.5,
+          pb: 1,
           display: 'flex',
           flexDirection: 'column',
-          gap: 1,
+          gap: 0,
+          maskImage:
+            'linear-gradient(to bottom, transparent 0%, black 12px, black calc(100% - 8px), transparent 100%)',
+          WebkitMaskImage:
+            'linear-gradient(to bottom, transparent 0%, black 12px, black calc(100% - 8px), transparent 100%)',
         }}
       >
         {messages.length === 0 && !streamingContent ? (
