@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { createStore, logger } from './lib'
+import { Collections } from '@/utils/collections'
 import { contextMentionStore } from './contextMentionStore'
 import type { PickableEntity, PickableEntityKind } from './contextMentionStore'
 
@@ -78,7 +79,7 @@ const deriveChipPreview = (field: ShareableField): string => {
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 const enterShareMode = (stepId: string, fields: ShareableField[]): void => {
-  const allKeys = new Set(fields.map((f) => f.key))
+  const allKeys = Collections.toSetBy(fields, (f) => f.key)
   store.setState({
     active: true,
     sourceStepId: stepId,

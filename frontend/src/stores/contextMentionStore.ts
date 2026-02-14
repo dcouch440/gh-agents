@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { createStore, logger } from './lib'
+import { Collections } from '@/utils/collections'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,7 +62,7 @@ const selectEntityIds =
   (stepId: string) =>
   (s: ContextMentionState): ReadonlySet<string> => {
     const mentions = s.byStep[stepId] ?? EMPTY_MENTIONS
-    return new Set(mentions.map((m) => m.entityId))
+    return Collections.toSetBy(mentions, (m) => m.entityId)
   }
 
 // ── Actions ──────────────────────────────────────────────────────────────────

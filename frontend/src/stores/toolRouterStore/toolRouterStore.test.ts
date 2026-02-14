@@ -1,5 +1,5 @@
-import { toolRouterStore } from './toolRouterStore'
-import { nmSize, nmGet, createNormalizedMap } from './lib'
+import { toolRouterStore } from '.'
+import { nmSize, nmGet, createNormalizedMap } from '../lib'
 
 const {
   mockList,
@@ -114,6 +114,7 @@ beforeEach(() => {
     toolsByRouter: {},
     modesByRouter: {},
     toolsByMode: {},
+    modeToRouter: {},
     loading: false,
     error: null,
   })
@@ -182,16 +183,17 @@ describe('toolRouterStore', () => {
   })
 
   describe('modes', () => {
-    it('fetchModes stores modes by router', async () => {
+    it('fetchModes stores modes by router and builds reverse lookup', async () => {
       mockListModes.mockResolvedValue([mode1])
 
       const result = await toolRouterStore.fetchModes('r1')
 
       expect(result).toEqual([mode1])
       expect(toolRouterStore.store.getState().modesByRouter['r1']).toEqual([mode1])
+      expect(toolRouterStore.store.getState().modeToRouter['m1']).toBe('r1')
     })
 
-    it('createMode appends to modesByRouter', async () => {
+    it('createMode appends to modesByRouter and updates reverse lookup', async () => {
       mockCreateMode.mockResolvedValue(mode1)
 
       const result = await toolRouterStore.createMode('r1', {
@@ -203,6 +205,7 @@ describe('toolRouterStore', () => {
 
       expect(result).toEqual(mode1)
       expect(toolRouterStore.store.getState().modesByRouter['r1']).toEqual([mode1])
+      expect(toolRouterStore.store.getState().modeToRouter['m1']).toBe('r1')
     })
 
     it('updateMode replaces mode in list', async () => {
@@ -217,13 +220,14 @@ describe('toolRouterStore', () => {
       expect(toolRouterStore.store.getState().modesByRouter['r1']?.[0]?.display_name).toBe('Updated')
     })
 
-    it('deleteMode removes mode from list', async () => {
-      toolRouterStore.store.setState({ modesByRouter: { r1: [mode1] } })
+    it('deleteMode removes mode from list and cleans reverse lookup', async () => {
+      toolRouterStore.store.setState({ modesByRouter: { r1: [mode1] }, modeToRouter: { m1: 'r1' } })
       mockDeleteMode.mockResolvedValue(undefined)
 
       await toolRouterStore.deleteMode('m1')
 
       expect(toolRouterStore.store.getState().modesByRouter['r1']).toEqual([])
+      expect(toolRouterStore.store.getState().modeToRouter['m1']).toBeUndefined()
     })
   })
 

@@ -6,6 +6,7 @@ export { createResourceStore } from './createResourceStore'
 export { createNormalizedMap, toArray, nmGet, nmHas, nmSize, nmSet, nmDelete, nmFromArray, nmMerge } from './NormalizedMap'
 export { logger, configureLogger, enableLogger, disableLogger } from './devtools'
 export { extractError } from './extractError'
+export { lsGet, lsSet } from './localStorage'
 
 export type { StoreApi, SetState, GetState, StateCreator, Listener } from './types'
 export type { NormalizedMap } from './NormalizedMap'
