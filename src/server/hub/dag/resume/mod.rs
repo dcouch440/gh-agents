@@ -7,6 +7,8 @@
 //!   completed state from the database, injects the approved output,
 //!   and delegates to `resume_workflow_via_engine`.
 
+mod tests;
+
 use std::collections::HashMap;
 
 use anyhow::anyhow;
