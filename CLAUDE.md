@@ -171,3 +171,7 @@ frontend/src/
 - **Mock the API** (`../api`), constants (`USE_MOCK_DATA: false`), and WS (`useWebSocket`) as needed
 - **Split large test files** by unit — one test file per context/hook, not one mega test file per feature
 - **No skipped tests, no `TODO` tests** — every test must pass or be removed
+
+## Notes from user
+
+DynamicNode/Protocols are the main focus of the app right now, not the other parts of dag.
