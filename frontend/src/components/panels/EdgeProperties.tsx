@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { PropertySection, PropertyRow } from '@/components/primitives'
 import { useCollapsible } from '@/hooks'
+import { Collections } from '@/utils/collections'
 import type { WorkflowStepEdge, WorkflowStep } from '@/types/workflow'
 
 type EdgePropertiesProps = {
@@ -11,9 +12,9 @@ type EdgePropertiesProps = {
 function EdgeProperties({ edge, steps }: EdgePropertiesProps) {
   const connection = useCollapsible(true)
 
-  const fromStep = useMemo(() => steps.find((s) => s.id === edge.from_step_id), [steps, edge.from_step_id])
-
-  const toStep = useMemo(() => steps.find((s) => s.id === edge.to_step_id), [steps, edge.to_step_id])
+  const stepsById = useMemo(() => Collections.indexById(steps), [steps])
+  const fromStep = stepsById.get(edge.from_step_id)
+  const toStep = stepsById.get(edge.to_step_id)
 
   return (
     <PropertySection title="Connection" {...connection}>

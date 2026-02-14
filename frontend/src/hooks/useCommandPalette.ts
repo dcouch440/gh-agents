@@ -48,18 +48,16 @@ const useCommandPalette = () => {
         return cmd ? { ...cmd, group: 'recent' as const } : null
       })
       const recentSet = Collections.toSetBy(recent, (c) => c.id)
-      const rest = commands.filter((c) => !recentSet.has(c.id))
+      const rest = Collections.filterMap(commands, (c) => (!recentSet.has(c.id) ? c : null))
       return [...recent, ...rest].slice(0, COMMAND_PALETTE.MAX_RESULTS)
     }
 
-    return commands
-      .filter((c) => {
-        if (fuzzyMatch(c.label, query)) return true
-        if (c.description && fuzzyMatch(c.description, query)) return true
-        if (c.keywords?.some((k) => fuzzyMatch(k, query))) return true
-        return false
-      })
-      .slice(0, COMMAND_PALETTE.MAX_RESULTS)
+    return Collections.filterMap(commands, (c) => {
+      if (fuzzyMatch(c.label, query)) return c
+      if (c.description && fuzzyMatch(c.description, query)) return c
+      if (c.keywords?.some((k) => fuzzyMatch(k, query))) return c
+      return null
+    }).slice(0, COMMAND_PALETTE.MAX_RESULTS)
   }, [query, commands, recentIds])
 
   // Clamp selection via derived state

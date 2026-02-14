@@ -59,11 +59,11 @@ function StepProperties({ step, steps, readOnly = false }: StepPropertiesProps) 
 
   // ── Dropdown options ────────────────────────────────────────────────────────
 
-  const agentOptions = useMemo(() => agents.map((a) => ({ value: a.id, label: a.name, secondary: a.model_id })), [agents])
+  const agentOptions = useMemo(() => Collections.mapBy(agents, (a) => ({ value: a.id, label: a.name, secondary: a.model_id })), [agents])
 
   const templateOptions = useMemo(
     () =>
-      templates.map((t) => ({
+      Collections.mapBy(templates, (t) => ({
         value: t.id,
         label: t.name,
         secondary: `${t.variables?.length ?? 0} variable(s)`,
@@ -71,7 +71,7 @@ function StepProperties({ step, steps, readOnly = false }: StepPropertiesProps) 
     [templates],
   )
 
-  const schemaOptions = useMemo(() => schemas.map((s) => ({ value: s.id, label: s.name })), [schemas])
+  const schemaOptions = useMemo(() => Collections.mapBy(schemas, (s) => ({ value: s.id, label: s.name })), [schemas])
 
   // ── Field handlers ─────────────────────────────────────────────────────────
 
@@ -100,7 +100,7 @@ function StepProperties({ step, steps, readOnly = false }: StepPropertiesProps) 
     [edges, step.id, stepsById],
   )
 
-  const upstreamIds = useMemo(() => incomingSteps.map((s) => s.id), [incomingSteps])
+  const upstreamIds = useMemo(() => Collections.mapBy(incomingSteps, (s) => s.id), [incomingSteps])
 
   // ── Variable autocomplete ────────────────────────────────────────────────
 

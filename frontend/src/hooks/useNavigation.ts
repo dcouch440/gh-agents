@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { type ReactNode, useMemo } from 'react'
 import { useLocation } from 'react-router-dom'
 import { createElement } from 'react'
 import DashboardOutlined from '@mui/icons-material/DashboardOutlined'
@@ -10,6 +10,7 @@ import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import RateReviewOutlined from '@mui/icons-material/RateReviewOutlined'
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined'
 import { ROUTES } from '@/constants'
+import { Collections } from '@/utils/collections'
 
 type NavGroup = 'nav' | 'utility'
 
@@ -43,13 +44,16 @@ const isRouteActive = (currentPath: string, routePath: string): boolean => {
 const useNavigation = () => {
   const location = useLocation()
 
-  const allItems: NavItemWithActive[] = NAV_ITEMS.map((item) => ({
-    ...item,
-    isActive: isRouteActive(location.pathname, item.path),
-  }))
+  const allItems: NavItemWithActive[] = useMemo(
+    () =>
+      Collections.mapBy(NAV_ITEMS, (item) => ({
+        ...item,
+        isActive: isRouteActive(location.pathname, item.path),
+      })),
+    [location.pathname],
+  )
 
-  const navItems = allItems.filter((item) => item.group === 'nav')
-  const utilityItems = allItems.filter((item) => item.group === 'utility')
+  const [navItems, utilityItems] = useMemo(() => Collections.partition(allItems, (item) => item.group === 'nav'), [allItems])
 
   return { navItems, utilityItems }
 }

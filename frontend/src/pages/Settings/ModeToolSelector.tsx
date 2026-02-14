@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -17,6 +17,7 @@ import {
   Alert,
 } from '@mui/material'
 import { EmptyState } from '@/components/primitives'
+import { Collections } from '@/utils/collections'
 import type { RouterMode, Tool, SetModeToolsRequest } from '@/types'
 
 type ModeToolSelectorProps = {
@@ -67,8 +68,13 @@ function ModeToolSelector({
     }
   }, [open, mode.id, loadModeTools])
 
+  const selectedIdSet = useMemo(() => Collections.toSet(localSelectedIds), [localSelectedIds])
+
   const handleToggle = (toolId: string) => {
-    setLocalSelectedIds((prev) => (prev.includes(toolId) ? prev.filter((id) => id !== toolId) : [...prev, toolId]))
+    setLocalSelectedIds((prev) => {
+      const prevSet = Collections.toSet(prev)
+      return prevSet.has(toolId) ? Collections.filterMap(prev, (id) => (id !== toolId ? id : null)) : [...prev, toolId]
+    })
   }
 
   const handleSave = async () => {
@@ -116,7 +122,7 @@ function ModeToolSelector({
         ) : (
           <List disablePadding>
             {allTools.map((tool) => {
-              const isSelected = localSelectedIds.includes(tool.id)
+              const isSelected = selectedIdSet.has(tool.id)
               return (
                 <ListItem key={tool.id} disablePadding sx={{ borderBottom: 1, borderColor: 'divider' }}>
                   <ListItemButton onClick={() => handleToggle(tool.id)} disabled={savingTools}>

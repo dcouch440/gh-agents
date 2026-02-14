@@ -1,4 +1,4 @@
-import { useReducer, useEffect } from 'react'
+import { useReducer, useEffect, useMemo } from 'react'
 import {
   Dialog,
   DialogTitle,
@@ -14,7 +14,9 @@ import {
   Typography,
 } from '@mui/material'
 import { useStore, toolStore, toolRouterStore } from '@/stores'
+import { ToolCheckList } from '@/components/routers/ToolCheckList'
 import { ApiError } from '@/api'
+import { Collections } from '@/utils/collections'
 import type { RouterMode } from '@/types'
 
 type ModeFormDialogProps = {
@@ -94,13 +96,15 @@ const formReducer = (state: FormState, action: FormAction): FormState => {
       return { ...state, display_order: action.value }
     case 'SET_SELECTED_TOOL_IDS':
       return { ...state, selectedToolIds: action.value }
-    case 'TOGGLE_TOOL':
+    case 'TOGGLE_TOOL': {
+      const idSet = Collections.toSet(state.selectedToolIds)
       return {
         ...state,
-        selectedToolIds: state.selectedToolIds.includes(action.toolId)
-          ? state.selectedToolIds.filter((id) => id !== action.toolId)
+        selectedToolIds: idSet.has(action.toolId)
+          ? Collections.filterMap(state.selectedToolIds, (id) => (id !== action.toolId ? id : null))
           : [...state.selectedToolIds, action.toolId],
       }
+    }
     case 'SET_SAVING':
       return { ...state, saving: action.value }
     case 'SET_ERROR':
@@ -269,6 +273,8 @@ function ModeFormDialog({ open, onClose, onSave, mode, routerId }: ModeFormDialo
     onClose()
   }
 
+  const selectedIdSet = useMemo(() => Collections.toSet(state.selectedToolIds), [state.selectedToolIds])
+
   return (
     <Dialog open={open} onClose={handleCancel} maxWidth="md" fullWidth>
       <DialogTitle>{isEdit ? 'Edit Router Mode' : 'Create Router Mode'}</DialogTitle>
@@ -408,33 +414,12 @@ function ModeFormDialog({ open, onClose, onSave, mode, routerId }: ModeFormDialo
               No tools available
             </Typography>
           ) : (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-              {allTools.map((tool) => (
-                <FormControlLabel
-                  key={tool.id}
-                  control={
-                    <Checkbox
-                      checked={state.selectedToolIds.includes(tool.id)}
-                      onChange={() => dispatch({ type: 'TOGGLE_TOOL', toolId: tool.id })}
-                      size="small"
-                      disabled={state.saving}
-                    />
-                  }
-                  label={
-                    <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                        {tool.name}
-                      </Typography>
-                      {tool.description ? (
-                        <Typography variant="caption" color="text.secondary">
-                          {tool.description}
-                        </Typography>
-                      ) : null}
-                    </Box>
-                  }
-                />
-              ))}
-            </Box>
+            <ToolCheckList
+              tools={allTools}
+              selectedIds={selectedIdSet}
+              onToggle={(toolId) => dispatch({ type: 'TOGGLE_TOOL', toolId })}
+              disabled={state.saving}
+            />
           )}
         </Box>
       </DialogContent>

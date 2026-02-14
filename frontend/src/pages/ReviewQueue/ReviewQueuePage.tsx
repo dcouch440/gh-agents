@@ -10,6 +10,7 @@ import { MarkdownPreview } from '@/components/primitives/MarkdownPreview'
 import { ReviewCard, ApproveButton, CollapsibleSection } from '@/components/review'
 import { useStore, reviewQueueStore } from '@/stores'
 import { useInteractiveChat } from '@/hooks/useInteractiveChat'
+import { Collections } from '@/utils/collections'
 import type { ChatMessageData } from '@/components/chat/ChatPanel'
 
 function ReviewQueuePage() {
@@ -31,17 +32,16 @@ function ReviewQueuePage() {
 
   const chat = useInteractiveChat(selectedId ?? '')
 
-  const selectedExecution = useMemo(() => executions.find((e) => e.id === selectedId) ?? null, [executions, selectedId])
+  const executionsById = useMemo(() => Collections.indexById(executions), [executions])
+  const selectedExecution = selectedId ? (executionsById.get(selectedId) ?? null) : null
 
   const chatMessages: ChatMessageData[] = useMemo(
     () =>
-      chat.messages
-        .filter((m) => m.role === 'user' || m.role === 'assistant')
-        .map((m) => ({
-          id: m.id,
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        })),
+      Collections.filterMap(chat.messages, (m) =>
+        m.role === 'user' || m.role === 'assistant'
+          ? { id: m.id, role: m.role, content: m.content }
+          : null,
+      ),
     [chat.messages],
   )
 

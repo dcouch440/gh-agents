@@ -12,6 +12,7 @@ import {
   ModeFormDialog,
   ToolAssignmentDialog,
 } from '@/components/routers'
+import { Collections } from '@/utils/collections'
 import type { DocumentListItem } from '@/types/document'
 import type { RouterMode, CreateToolRouterRequest, CreateRouterModeRequest } from '@/types'
 
@@ -89,8 +90,9 @@ function AgentDetailPage() {
   const addDocument = useCallback(
     async (documentId: string) => {
       if (!id) return
-      const currentIds = agentDocs.map((d) => d.id)
-      if (currentIds.includes(documentId)) return
+      const currentIdSet = Collections.toSetBy(agentDocs, (d) => d.id)
+      if (currentIdSet.has(documentId)) return
+      const currentIds = Collections.mapBy(agentDocs, (d) => d.id)
       setSaving(true)
       try {
         await agentStore.setContext(id, [...currentIds, documentId])
@@ -104,7 +106,7 @@ function AgentDetailPage() {
   const removeDocument = useCallback(
     async (documentId: string) => {
       if (!id) return
-      const currentIds = agentDocs.map((d) => d.id).filter((did) => did !== documentId)
+      const currentIds = Collections.filterMap(agentDocs, (d) => (d.id !== documentId ? d.id : null))
       setSaving(true)
       try {
         await agentStore.setContext(id, currentIds)
@@ -143,8 +145,8 @@ function AgentDetailPage() {
   const [assignedToolIds, setAssignedToolIds] = useState<string[]>([])
 
   const availableDocuments = useMemo(() => {
-    const assignedIds = new Set(agentDocs.map((ad) => ad.id))
-    return allDocuments.filter((doc) => !assignedIds.has(doc.id))
+    const assignedIds = Collections.toSetBy(agentDocs, (ad) => ad.id)
+    return Collections.filterMap(allDocuments, (doc) => (!assignedIds.has(doc.id) ? doc : null))
   }, [allDocuments, agentDocs])
 
   if (!id) {
