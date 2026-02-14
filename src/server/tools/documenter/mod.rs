@@ -203,27 +203,8 @@ async fn execute_update_config(
 // Context Building (public helpers for Phase 2 strategy)
 // =========================================================================
 
-/// Classify a step's content status for the port manifest.
-///
-/// - `context` with non-empty `prompt_template` -> "populated" (include preview + word count)
-/// - `context` with empty `prompt_template` -> "empty"
-/// - All other execution modes -> "pending"
-pub fn classify_content_status(
-    step: &crate::db::WorkflowStepRow,
-) -> (&'static str, Option<String>, Option<usize>) {
-    if step.execution_mode == "context" {
-        let content = &step.prompt_template;
-        if content.trim().is_empty() {
-            ("empty", None, None)
-        } else {
-            let preview: String = content.chars().take(500).collect();
-            let word_count = content.split_whitespace().count();
-            ("populated", Some(preview), Some(word_count))
-        }
-    } else {
-        ("pending", None, None)
-    }
-}
+// Re-export from shared module for backward compatibility.
+pub use super::shared::classify_content_status;
 
 /// Build the config snapshot string for `{{.System.current_config}}` injection.
 ///

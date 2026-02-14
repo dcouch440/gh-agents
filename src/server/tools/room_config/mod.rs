@@ -38,27 +38,6 @@ pub async fn execute_room_config_tool(
     }
 }
 
-/// Ensure a room step config exists for this step, creating one if needed.
-#[allow(dead_code)]
-async fn ensure_room_step_config(
-    repo: &dyn WorkflowRepo,
-    ctx: &RoomConfigToolContext,
-) -> Result<Uuid, Value> {
-    match repo.get_room_step_config(ctx.step_id).await {
-        Ok(Some(config)) => Ok(config.id),
-        Ok(None) => {
-            match repo
-                .upsert_room_step_config(ctx.step_id, "", 20, "moderated", true)
-                .await
-            {
-                Ok(config) => Ok(config.id),
-                Err(e) => Err(json!({ "error": format!("Failed to create room config: {}", e) })),
-            }
-        }
-        Err(e) => Err(json!({ "error": format!("Failed to load room config: {}", e) })),
-    }
-}
-
 async fn execute_set_meeting_purpose(
     input: &Value,
     repo: &dyn WorkflowRepo,
@@ -407,7 +386,7 @@ pub async fn build_config_snapshot(
             };
 
             let (status, preview, word_count) =
-                crate::server::tools::documenter::classify_content_status(&upstream);
+                crate::server::tools::shared::classify_content_status(&upstream);
             let name = upstream
                 .name
                 .unwrap_or_else(|| format!("Step {}", upstream.id));

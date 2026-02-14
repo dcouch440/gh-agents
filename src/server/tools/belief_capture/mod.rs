@@ -40,31 +40,6 @@ pub async fn execute_belief_capture_tool(
     }
 }
 
-/// Ensure an extraction plan exists for this step, creating one if needed.
-/// Returns the plan's ID.
-#[allow(dead_code)]
-async fn ensure_extraction_plan(
-    repo: &dyn WorkflowRepo,
-    ctx: &BeliefCaptureToolContext,
-) -> Result<Uuid, Value> {
-    match repo.get_extraction_plan(ctx.step_id).await {
-        Ok(Some(plan)) => Ok(plan.id),
-        Ok(None) => {
-            // Auto-create an empty plan
-            match repo
-                .upsert_extraction_plan(ctx.step_id, "", &[], "flag", "low")
-                .await
-            {
-                Ok(plan) => Ok(plan.id),
-                Err(e) => {
-                    Err(json!({ "error": format!("Failed to create extraction plan: {}", e) }))
-                }
-            }
-        }
-        Err(e) => Err(json!({ "error": format!("Failed to load extraction plan: {}", e) })),
-    }
-}
-
 async fn execute_set_extraction_focus(
     input: &Value,
     repo: &dyn WorkflowRepo,
@@ -342,7 +317,7 @@ pub async fn build_config_snapshot(
             };
 
             let (status, preview, word_count) =
-                crate::server::tools::documenter::classify_content_status(&upstream);
+                crate::server::tools::shared::classify_content_status(&upstream);
             let name = upstream
                 .name
                 .unwrap_or_else(|| format!("Step {}", upstream.id));
