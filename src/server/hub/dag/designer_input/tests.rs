@@ -136,7 +136,7 @@ mod tests {
         BeliefRow {
             id: Uuid::new_v4(),
             workflow_id: Uuid::new_v4(),
-            workflow_execution_id: Uuid::new_v4(),
+            workflow_execution_id: Some(Uuid::new_v4()),
             source_step_id: Uuid::new_v4(),
             source_document_title: None,
             source_document_def_id: None,

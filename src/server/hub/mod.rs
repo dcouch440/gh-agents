@@ -5,7 +5,7 @@
 //! parameterized by an `ExecutionStrategy`. Different strategies handle chat
 //! sessions, DAG workflow steps, and tool routing.
 
-pub mod board_context;
+pub mod chat_beliefs;
 pub mod capability_resolver;
 pub mod dag;
 pub mod engine;
@@ -203,33 +203,16 @@ pub async fn build_step_system_prompt(
 ) -> Result<String, HubError> {
     use crate::config::protocols::{roles, vars};
 
-    // 1. Resolve board context (stale-on-read pattern)
-    let step = state
+    // 1. Load beliefs from connected nodes
+    let connected_beliefs = state
         .repos()
         .workflows
-        .get_step(step_id)
+        .get_beliefs_for_connected_steps(workflow_id, step_id)
         .await
-        .map_err(HubError::Internal)?
-        .ok_or_else(|| HubError::Internal(anyhow::anyhow!("Step {step_id} not found")))?;
+        .unwrap_or_default();
 
-    let board_context = if step.board_context_updated_at.is_some() {
-        // Cache is warm — use directly
-        step.board_context_cache.clone()
-    } else if step.board_context_cache.is_empty() {
-        // Never been rendered — use structural fallback + background refresh
-        let fallback = graph_context::build_graph_context(
-            state.repos().workflows.as_ref(),
-            workflow_id,
-            step_id,
-        )
-        .await?;
-        board_context::spawn_board_refresh(state.clone(), workflow_id);
-        fallback
-    } else {
-        // Has stale cache — use it but refresh in background
-        board_context::spawn_board_refresh(state.clone(), workflow_id);
-        step.board_context_cache.clone()
-    };
+    let board_context =
+        chat_beliefs::format_beliefs_as_board_context(&connected_beliefs);
 
     // 2. Build archetype block + config snapshot based on execution mode
     let (archetype_block, config_snapshot) = match execution_mode {

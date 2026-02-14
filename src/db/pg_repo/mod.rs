@@ -1454,40 +1454,6 @@ impl WorkflowRepo for PgRepo {
         Ok(())
     }
 
-    // --- Board Context ---
-
-    async fn update_step_board_context(&self, step_id: Uuid, context: &str) -> Result<()> {
-        sqlx::query(
-            "UPDATE workflow_steps SET board_context_cache = $1, board_context_updated_at = NOW() WHERE id = $2",
-        )
-        .bind(context)
-        .bind(step_id)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    async fn update_step_goal_summary(&self, step_id: Uuid, goal: &str) -> Result<()> {
-        sqlx::query(
-            "UPDATE workflow_steps SET goal_summary = $1, goal_summary_updated_at = NOW() WHERE id = $2",
-        )
-        .bind(goal)
-        .bind(step_id)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
-    async fn mark_board_context_stale(&self, workflow_id: Uuid) -> Result<()> {
-        sqlx::query(
-            "UPDATE workflow_steps SET board_context_updated_at = NULL WHERE workflow_id = $1",
-        )
-        .bind(workflow_id)
-        .execute(&self.pool)
-        .await?;
-        Ok(())
-    }
-
     // --- Edges ---
 
     async fn set_edges(&self, workflow_id: Uuid, edges: Vec<WorkflowStepEdgeRow>) -> Result<()> {
@@ -2029,6 +1995,87 @@ impl WorkflowRepo for PgRepo {
             "SELECT * FROM beliefs WHERE workflow_execution_id = $1 ORDER BY created_at",
         )
         .bind(workflow_execution_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    // --- Chat Beliefs ---
+
+    async fn replace_chat_beliefs(
+        &self,
+        step_id: Uuid,
+        beliefs: &[BeliefRow],
+    ) -> Result<Vec<BeliefRow>> {
+        let mut tx = self.pool.begin().await?;
+
+        sqlx::query("DELETE FROM beliefs WHERE source_step_id = $1 AND source_phase = 'chat'")
+            .bind(step_id)
+            .execute(&mut *tx)
+            .await?;
+
+        let mut inserted = Vec::with_capacity(beliefs.len());
+        for belief in beliefs {
+            let row = sqlx::query_as::<_, BeliefRow>(
+                "INSERT INTO beliefs (
+                    id, workflow_id, workflow_execution_id, source_step_id,
+                    source_document_title, source_document_def_id, source_phase,
+                    content, reasoning, belief_type, confidence,
+                    confidence_justification, semantic_tags, emotional_tone,
+                    cross_source_tension, source_step_name, extraction_model,
+                    extraction_tokens_in, extraction_tokens_out
+                ) VALUES (
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                    $11, $12, $13, $14, $15, $16, $17, $18, $19
+                ) RETURNING *",
+            )
+            .bind(belief.id)
+            .bind(belief.workflow_id)
+            .bind(belief.workflow_execution_id)
+            .bind(belief.source_step_id)
+            .bind(&belief.source_document_title)
+            .bind(belief.source_document_def_id)
+            .bind(&belief.source_phase)
+            .bind(&belief.content)
+            .bind(&belief.reasoning)
+            .bind(&belief.belief_type)
+            .bind(&belief.confidence)
+            .bind(&belief.confidence_justification)
+            .bind(&belief.semantic_tags)
+            .bind(&belief.emotional_tone)
+            .bind(&belief.cross_source_tension)
+            .bind(&belief.source_step_name)
+            .bind(&belief.extraction_model)
+            .bind(belief.extraction_tokens_in)
+            .bind(belief.extraction_tokens_out)
+            .fetch_one(&mut *tx)
+            .await?;
+            inserted.push(row);
+        }
+
+        tx.commit().await?;
+        Ok(inserted)
+    }
+
+    async fn get_beliefs_for_connected_steps(
+        &self,
+        workflow_id: Uuid,
+        step_id: Uuid,
+    ) -> Result<Vec<BeliefRow>> {
+        let rows = sqlx::query_as::<_, BeliefRow>(
+            "SELECT b.* FROM beliefs b
+             WHERE b.source_phase = 'chat'
+             AND b.source_step_id IN (
+                 SELECT e.from_step_id FROM workflow_step_edges e
+                 WHERE e.to_step_id = $1 AND e.workflow_id = $2
+                 UNION
+                 SELECT e.to_step_id FROM workflow_step_edges e
+                 WHERE e.from_step_id = $1 AND e.workflow_id = $2
+             )
+             ORDER BY b.source_step_name, b.belief_type, b.created_at",
+        )
+        .bind(step_id)
+        .bind(workflow_id)
         .fetch_all(&self.pool)
         .await?;
         Ok(rows)
