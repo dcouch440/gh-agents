@@ -6,6 +6,7 @@ import { useTheme } from '@mui/material/styles'
 import { useStore, shareStore } from '@/stores'
 import { CanvasHandle } from '../CanvasHandle'
 import { SharePickerPanel } from '../SharePickerPanel'
+import { useNodeScale } from '../useNodeScale'
 import { DOCUMENT_NODE } from './constants'
 import { DocumentNodeHeader } from './DocumentNodeHeader'
 import { DocumentNodeContent } from './DocumentNodeContent'
@@ -22,6 +23,7 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
   const isShareSource = useStore(shareStore.store, (s) => s.active && s.sourceStepId === id)
   const accentColor = DOCUMENT_NODE.ACCENT_COLOR
   const [hovered, setHovered] = useState(false)
+  const { containerRef, scaleFactor } = useNodeScale()
   const highlight = getNodeHighlightStyles({
     selected: selected === true,
     accentColor,
@@ -32,6 +34,7 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <Box
+      ref={containerRef}
       onMouseEnter={() => {
         setHovered(true)
       }}
@@ -63,39 +66,43 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
         maxHeight={DOCUMENT_NODE.MAX_HEIGHT}
         lineStyle={{ borderColor: 'transparent', borderWidth: 0 }}
         handleStyle={{
-          width: 8,
-          height: 8,
+          width: 10,
+          height: 10,
           borderRadius: 2,
-          backgroundColor: 'transparent',
-          borderColor: 'transparent',
+          backgroundColor: accentColor,
+          borderColor: accentColor,
+          opacity: 0.6,
         }}
       />
 
-      {/* Header — draggable area */}
-      <Box
-        sx={{
-          height: DOCUMENT_NODE.HEADER_HEIGHT,
-          overflow: 'hidden',
-          borderBottom: 1,
-          borderColor: 'divider',
-          display: 'flex',
-          alignItems: 'center',
-          backgroundColor: theme.palette.custom.bgHeader,
-          flexShrink: 0,
-          cursor: 'grab',
-          '&:active': { cursor: 'grabbing' },
-        }}
-      >
-        <DocumentNodeHeader name={nodeData.label} documenterName={nodeData.documenterName} accentColor={accentColor} />
-      </Box>
+      {/* Zoomed inner container — scales content with node size */}
+      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', zoom: scaleFactor }}>
+        {/* Header — draggable area */}
+        <Box
+          sx={{
+            height: DOCUMENT_NODE.HEADER_HEIGHT,
+            overflow: 'hidden',
+            borderBottom: 1,
+            borderColor: 'divider',
+            display: 'flex',
+            alignItems: 'center',
+            backgroundColor: theme.palette.custom.bgHeader,
+            flexShrink: 0,
+            cursor: 'grab',
+            '&:active': { cursor: 'grabbing' },
+          }}
+        >
+          <DocumentNodeHeader name={nodeData.label} documenterName={nodeData.documenterName} accentColor={accentColor} />
+        </Box>
 
-      {/* Content area — read-only or share overlay */}
-      <Box className="nowheel nodrag nopan" sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-        {isShareSource ? (
-          <SharePickerPanel stepId={id} />
-        ) : (
-          <DocumentNodeContent content={nodeData.content} accentColor={accentColor} />
-        )}
+        {/* Content area — read-only or share overlay */}
+        <Box className="nowheel nodrag nopan" sx={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
+          {isShareSource ? (
+            <SharePickerPanel stepId={id} />
+          ) : (
+            <DocumentNodeContent content={nodeData.content} accentColor={accentColor} />
+          )}
+        </Box>
       </Box>
     </Box>
   )
