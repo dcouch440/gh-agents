@@ -68,17 +68,17 @@ const buildShareableFields = ({
   if (step.prompt_template && step.prompt_template.trim().length > 0) {
     fields.push({
       key: 'prompt',
-      label: 'Prompt',
+      label: 'Content',
       category: 'General',
       kind: 'shared-field',
       color,
-      chipKey: 'prompt',
+      chipKey: 'content',
       entity: {
         kind: 'shared-field',
         id: `${stepId}::prompt`,
         name: stepName,
         summary: 'Prompt template',
-        data: { fieldType: 'Prompt', value: step.prompt_template },
+        data: { fieldType: 'Content', value: step.prompt_template },
       },
     })
   }
