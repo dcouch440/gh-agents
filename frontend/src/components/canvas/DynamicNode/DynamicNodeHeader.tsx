@@ -1,5 +1,7 @@
 import Box from '@mui/material/Box'
+import IconButton from '@mui/material/IconButton'
 import Typography from '@mui/material/Typography'
+import OpenInFullOutlined from '@mui/icons-material/OpenInFullOutlined'
 import { ProtocolBadge } from '@/components/canvas/ProtocolBadge'
 import { Archetype, ARCHETYPE_CONFIGS } from './archetypes'
 import type { Archetype as ArchetypeType } from './archetypes'
@@ -8,9 +10,10 @@ type DynamicNodeHeaderProps = {
   name: string
   archetype: ArchetypeType
   subtitle: string | null
+  onExpand?: () => void
 }
 
-function DynamicNodeHeader({ name, archetype, subtitle }: DynamicNodeHeaderProps) {
+function DynamicNodeHeader({ name, archetype, subtitle, onExpand }: DynamicNodeHeaderProps) {
   const config = ARCHETYPE_CONFIGS[archetype]
   const IconComponent = config.icon
 
@@ -77,6 +80,23 @@ function DynamicNodeHeader({ name, archetype, subtitle }: DynamicNodeHeaderProps
 
       {archetype !== Archetype.BLANK && (
         <ProtocolBadge color={config.color} label={config.label} animated />
+      )}
+
+      {onExpand !== undefined && (
+        <IconButton
+          className="nodrag"
+          onClick={onExpand}
+          size="small"
+          sx={{
+            flexShrink: 0,
+            width: 28,
+            height: 28,
+            color: 'text.secondary',
+            '&:hover': { color: 'text.primary' },
+          }}
+        >
+          <OpenInFullOutlined sx={{ fontSize: 16 }} />
+        </IconButton>
       )}
     </Box>
   )

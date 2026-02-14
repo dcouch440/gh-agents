@@ -19,6 +19,7 @@ import type { CanvasNodeKind } from '../canvasKinds'
 import { Archetype, ARCHETYPE_CONFIGS } from './archetypes'
 import type { Archetype as ArchetypeType } from './archetypes'
 import { DynamicNodeHeader } from './DynamicNodeHeader'
+import { NodeExpandedModal } from './NodeExpandedModal'
 import { ChatTab } from './tabs/ChatTab'
 import { InputsOutputsTab } from './tabs/InputsOutputsTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
@@ -43,6 +44,7 @@ type DynamicNodeData = {
 function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   const [activeTabId, setActiveTabId] = useState('chat')
   const [adding, setAdding] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const nodeData = data as DynamicNodeData
 
   const config = ARCHETYPE_CONFIGS[nodeData.archetype]
@@ -147,27 +149,55 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     return null
   })()
 
-  return (
-    <CanvasFormNode
-      header={
-        <DynamicNodeHeader
-          name={nodeData.label}
-          archetype={nodeData.archetype}
-          subtitle={subtitle}
-        />
-      }
-      tabs={tabs}
-      activeTabId={activeTabId}
-      onTabChange={setActiveTabId}
-      selected={selected === true}
-      accentColor={accentColor}
-      highlightMode={selfHighlight}
-      extraHandles={
-        nodeData.archetype === Archetype.DOCUMENTER ? (
-          <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
-        ) : undefined
-      }
+  const handleExpand = useCallback(() => {
+    setExpanded(true)
+  }, [])
+
+  const handleCollapse = useCallback(() => {
+    setExpanded(false)
+  }, [])
+
+  const headerElement = (
+    <DynamicNodeHeader
+      name={nodeData.label}
+      archetype={nodeData.archetype}
+      subtitle={subtitle}
+      onExpand={handleExpand}
     />
+  )
+
+  return (
+    <>
+      <CanvasFormNode
+        header={headerElement}
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onTabChange={setActiveTabId}
+        selected={selected === true}
+        accentColor={accentColor}
+        highlightMode={selfHighlight}
+        extraHandles={
+          nodeData.archetype === Archetype.DOCUMENTER ? (
+            <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
+          ) : undefined
+        }
+      />
+      <NodeExpandedModal
+        open={expanded}
+        onClose={handleCollapse}
+        header={
+          <DynamicNodeHeader
+            name={nodeData.label}
+            archetype={nodeData.archetype}
+            subtitle={subtitle}
+          />
+        }
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onTabChange={setActiveTabId}
+        accentColor={accentColor}
+      />
+    </>
   )
 }
 
