@@ -8,13 +8,15 @@ import { PIPE } from './constants'
 import { PipeEdgePath } from './PipeEdgePath'
 
 type StepEdgeNodeData = {
-  protocolColor: string | null
+  sourceColor: string
+  isProtocolEdge: boolean
 }
 
 function StepEdgeComponent(props: EdgeProps) {
   const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, selected, data } = props
   const rawData = data as Partial<StepEdgeNodeData> | undefined
-  const protocolColor = rawData?.protocolColor ?? null
+  const sourceColor = rawData?.sourceColor ?? null
+  const isProtocolEdge = rawData?.isProtocolEdge ?? false
 
   const theme = useTheme()
   const { deleteElements } = useReactFlow()
@@ -30,7 +32,7 @@ function StepEdgeComponent(props: EdgeProps) {
 
   const color = selected
     ? theme.palette.primary.main
-    : protocolColor ?? theme.palette.text.secondary
+    : sourceColor ?? theme.palette.text.secondary
 
   const handleDelete = (event: React.MouseEvent) => {
     event.stopPropagation()
@@ -44,7 +46,7 @@ function StepEdgeComponent(props: EdgeProps) {
         edgePath={edgePath}
         color={color}
         selected={selected ?? false}
-        isProtocol={protocolColor !== null}
+        isProtocol={isProtocolEdge}
         animationDirection="normal"
         interactionWidth={PIPE.INTERACTION_WIDTH}
       />

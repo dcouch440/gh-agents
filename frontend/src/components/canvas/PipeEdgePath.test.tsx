@@ -31,11 +31,11 @@ describe('PipeEdgePath', () => {
       expect(paths).toHaveLength(5)
     })
 
-    it('renders 3 layers for non-protocol edges (no glow, no particles)', () => {
+    it('renders 4 layers for non-protocol edges (no glow, but particles visible)', () => {
       const container = renderPipe({ isProtocol: false, selected: false })
       const paths = container.querySelectorAll('path')
-      // interaction + body + core = 3
-      expect(paths).toHaveLength(3)
+      // interaction + body + core + particles = 4
+      expect(paths).toHaveLength(4)
     })
 
     it('renders 5 layers when selected even if not protocol', () => {

@@ -4,6 +4,7 @@ import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { CanvasHandle } from '../CanvasHandle'
 import { HighlightMode } from '../canvasKinds'
+import { getNodeHighlightStyles } from '../nodeHighlightStyles'
 import { FORM_NODE } from './constants'
 import { FormTabStrip } from './FormTabStrip'
 import { resolveScaleFactor } from './scaleNotch'
@@ -23,6 +24,13 @@ function CanvasFormNodeComponent({
 }: CanvasFormNodeProps) {
   const theme = useTheme()
   const resolvedAccent = accentColor ?? theme.palette.primary.main
+  const highlight = getNodeHighlightStyles({
+    selected,
+    accentColor: resolvedAccent,
+    highlightMode,
+    themeMode: theme.palette.mode,
+    variant: 'resizable',
+  })
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0]
   const [hovered, setHovered] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -56,24 +64,8 @@ function CanvasFormNodeComponent({
         borderRadius: '12px',
         backgroundColor: theme.palette.mode === 'light' ? theme.palette.custom.cavityBg : 'background.paper',
         border: 2,
-        borderColor: selected
-          ? resolvedAccent
-          : highlightMode === HighlightMode.SELECT
-            ? resolvedAccent
-            : highlightMode === HighlightMode.HOVER
-              ? `${resolvedAccent}80`
-              : 'divider',
-        boxShadow: selected
-          ? theme.palette.mode === 'dark'
-            ? `0 0 0 1px ${resolvedAccent}40, 0 8px 32px ${resolvedAccent}2E, 0 2px 8px rgba(0, 0, 0, 0.3)`
-            : `0 0 0 1px ${resolvedAccent}30, 0 12px 40px rgba(45, 27, 14, 0.18), 0 4px 12px ${resolvedAccent}1E`
-          : highlightMode === HighlightMode.SELECT
-            ? `0 0 0 1px ${resolvedAccent}40, 0 8px 32px ${resolvedAccent}22`
-            : highlightMode === HighlightMode.HOVER
-              ? `0 0 0 1px ${resolvedAccent}20, 0 6px 24px ${resolvedAccent}14`
-              : theme.palette.mode === 'dark'
-                ? '0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)'
-                : '0 8px 32px rgba(45, 27, 14, 0.14), 0 2px 8px rgba(45, 27, 14, 0.08)',
+        borderColor: highlight.borderColor,
+        boxShadow: highlight.boxShadow,
         transition: 'border-color 150ms ease, box-shadow 150ms ease',
         overflow: 'hidden',
         display: 'flex',

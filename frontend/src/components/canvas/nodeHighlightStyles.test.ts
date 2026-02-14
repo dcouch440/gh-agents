@@ -5,11 +5,10 @@ import { HighlightMode } from './canvasKinds'
 const ACCENT = '#E57373'
 
 describe('getNodeHighlightStyles', () => {
-  describe('borderColor (shared across variants)', () => {
-    it('returns accentColor when selected with protocol', () => {
+  describe('borderColor', () => {
+    it('returns accentColor when selected', () => {
       const { borderColor } = getNodeHighlightStyles({
         selected: true,
-        hasProtocol: true,
         accentColor: ACCENT,
         highlightMode: HighlightMode.NONE,
         themeMode: 'dark',
@@ -17,32 +16,9 @@ describe('getNodeHighlightStyles', () => {
       expect(borderColor).toBe(ACCENT)
     })
 
-    it('returns primary.main when selected without protocol', () => {
-      const { borderColor } = getNodeHighlightStyles({
-        selected: true,
-        hasProtocol: false,
-        accentColor: ACCENT,
-        highlightMode: HighlightMode.NONE,
-        themeMode: 'dark',
-      })
-      expect(borderColor).toBe('primary.main')
-    })
-
-    it('returns divider when not selected and no protocol', () => {
+    it('returns accentColor for SELECT highlight', () => {
       const { borderColor } = getNodeHighlightStyles({
         selected: false,
-        hasProtocol: false,
-        accentColor: ACCENT,
-        highlightMode: HighlightMode.NONE,
-        themeMode: 'dark',
-      })
-      expect(borderColor).toBe('divider')
-    })
-
-    it('returns accentColor for SELECT highlight with protocol', () => {
-      const { borderColor } = getNodeHighlightStyles({
-        selected: false,
-        hasProtocol: true,
         accentColor: ACCENT,
         highlightMode: HighlightMode.SELECT,
         themeMode: 'dark',
@@ -50,10 +26,9 @@ describe('getNodeHighlightStyles', () => {
       expect(borderColor).toBe(ACCENT)
     })
 
-    it('returns accentColor+80 for HOVER highlight with protocol', () => {
+    it('returns accentColor+80 for HOVER highlight', () => {
       const { borderColor } = getNodeHighlightStyles({
         selected: false,
-        hasProtocol: true,
         accentColor: ACCENT,
         highlightMode: HighlightMode.HOVER,
         themeMode: 'dark',
@@ -61,21 +36,19 @@ describe('getNodeHighlightStyles', () => {
       expect(borderColor).toBe(`${ACCENT}80`)
     })
 
-    it('returns accentColor+50 for NONE highlight with protocol', () => {
+    it('returns soft accentColor+30 for NONE highlight', () => {
       const { borderColor } = getNodeHighlightStyles({
         selected: false,
-        hasProtocol: true,
         accentColor: ACCENT,
         highlightMode: HighlightMode.NONE,
         themeMode: 'dark',
       })
-      expect(borderColor).toBe(`${ACCENT}50`)
+      expect(borderColor).toBe(`${ACCENT}30`)
     })
 
     it('selected takes precedence over highlightMode', () => {
       const { borderColor } = getNodeHighlightStyles({
         selected: true,
-        hasProtocol: true,
         accentColor: ACCENT,
         highlightMode: HighlightMode.SELECT,
         themeMode: 'dark',
@@ -85,32 +58,29 @@ describe('getNodeHighlightStyles', () => {
   })
 
   describe('step variant (default)', () => {
-    it('uses simple dark shadow when selected', () => {
+    it('uses accent glow ring when selected in dark mode', () => {
       const { boxShadow } = getNodeHighlightStyles({
         selected: true,
-        hasProtocol: false,
         accentColor: ACCENT,
         highlightMode: HighlightMode.NONE,
         themeMode: 'dark',
       })
-      expect(boxShadow).toBe('0 8px 32px rgba(59, 130, 246, 0.15)')
+      expect(boxShadow).toBe(`0 0 0 2px ${ACCENT}, 0 0 20px ${ACCENT}40, 0 8px 32px ${ACCENT}30`)
     })
 
-    it('uses simple light shadow when selected', () => {
+    it('uses accent glow ring when selected in light mode', () => {
       const { boxShadow } = getNodeHighlightStyles({
         selected: true,
-        hasProtocol: false,
         accentColor: ACCENT,
         highlightMode: HighlightMode.NONE,
         themeMode: 'light',
       })
-      expect(boxShadow).toBe('0 8px 32px rgba(255, 150, 79, 0.16)')
+      expect(boxShadow).toBe(`0 0 0 2px ${ACCENT}, 0 0 16px ${ACCENT}30, 0 8px 32px rgba(45, 27, 14, 0.14)`)
     })
 
     it('uses SELECT shadow for SELECT highlight', () => {
       const { boxShadow } = getNodeHighlightStyles({
         selected: false,
-        hasProtocol: true,
         accentColor: ACCENT,
         highlightMode: HighlightMode.SELECT,
         themeMode: 'dark',
@@ -121,7 +91,6 @@ describe('getNodeHighlightStyles', () => {
     it('uses HOVER shadow for HOVER highlight', () => {
       const { boxShadow } = getNodeHighlightStyles({
         selected: false,
-        hasProtocol: true,
         accentColor: ACCENT,
         highlightMode: HighlightMode.HOVER,
         themeMode: 'dark',
@@ -132,7 +101,6 @@ describe('getNodeHighlightStyles', () => {
     it('uses simple dark default shadow for NONE', () => {
       const { boxShadow } = getNodeHighlightStyles({
         selected: false,
-        hasProtocol: false,
         accentColor: ACCENT,
         highlightMode: HighlightMode.NONE,
         themeMode: 'dark',
@@ -143,7 +111,6 @@ describe('getNodeHighlightStyles', () => {
     it('uses simple light default shadow for NONE', () => {
       const { boxShadow } = getNodeHighlightStyles({
         selected: false,
-        hasProtocol: false,
         accentColor: ACCENT,
         highlightMode: HighlightMode.NONE,
         themeMode: 'light',
@@ -156,35 +123,28 @@ describe('getNodeHighlightStyles', () => {
     it('uses accent glow ring when selected in dark mode', () => {
       const { boxShadow } = getNodeHighlightStyles({
         selected: true,
-        hasProtocol: true,
         accentColor: ACCENT,
         highlightMode: HighlightMode.NONE,
         themeMode: 'dark',
         variant: 'resizable',
       })
-      expect(boxShadow).toBe(
-        `0 0 0 1px ${ACCENT}40, 0 8px 32px ${ACCENT}22, 0 2px 8px rgba(0, 0, 0, 0.3)`,
-      )
+      expect(boxShadow).toBe(`0 0 0 2px ${ACCENT}, 0 0 20px ${ACCENT}40, 0 8px 32px ${ACCENT}30`)
     })
 
     it('uses accent glow ring when selected in light mode', () => {
       const { boxShadow } = getNodeHighlightStyles({
         selected: true,
-        hasProtocol: true,
         accentColor: ACCENT,
         highlightMode: HighlightMode.NONE,
         themeMode: 'light',
         variant: 'resizable',
       })
-      expect(boxShadow).toBe(
-        `0 0 0 1px ${ACCENT}30, 0 12px 40px rgba(45, 27, 14, 0.18), 0 4px 12px ${ACCENT}18`,
-      )
+      expect(boxShadow).toBe(`0 0 0 2px ${ACCENT}, 0 0 16px ${ACCENT}30, 0 8px 32px rgba(45, 27, 14, 0.14)`)
     })
 
     it('uses heavier dark default shadow', () => {
       const { boxShadow } = getNodeHighlightStyles({
         selected: false,
-        hasProtocol: false,
         accentColor: ACCENT,
         highlightMode: HighlightMode.NONE,
         themeMode: 'dark',
@@ -196,7 +156,6 @@ describe('getNodeHighlightStyles', () => {
     it('uses heavier light default shadow', () => {
       const { boxShadow } = getNodeHighlightStyles({
         selected: false,
-        hasProtocol: false,
         accentColor: ACCENT,
         highlightMode: HighlightMode.NONE,
         themeMode: 'light',
@@ -205,10 +164,27 @@ describe('getNodeHighlightStyles', () => {
       expect(boxShadow).toBe('0 8px 32px rgba(45, 27, 14, 0.14), 0 2px 8px rgba(45, 27, 14, 0.08)')
     })
 
+    it('shares selected shadow with step variant', () => {
+      const step = getNodeHighlightStyles({
+        selected: true,
+        accentColor: ACCENT,
+        highlightMode: HighlightMode.NONE,
+        themeMode: 'dark',
+        variant: 'step',
+      })
+      const resizable = getNodeHighlightStyles({
+        selected: true,
+        accentColor: ACCENT,
+        highlightMode: HighlightMode.NONE,
+        themeMode: 'dark',
+        variant: 'resizable',
+      })
+      expect(step.boxShadow).toBe(resizable.boxShadow)
+    })
+
     it('shares SELECT shadow with step variant', () => {
       const step = getNodeHighlightStyles({
         selected: false,
-        hasProtocol: true,
         accentColor: ACCENT,
         highlightMode: HighlightMode.SELECT,
         themeMode: 'dark',
@@ -216,7 +192,6 @@ describe('getNodeHighlightStyles', () => {
       })
       const resizable = getNodeHighlightStyles({
         selected: false,
-        hasProtocol: true,
         accentColor: ACCENT,
         highlightMode: HighlightMode.SELECT,
         themeMode: 'dark',
@@ -228,7 +203,6 @@ describe('getNodeHighlightStyles', () => {
     it('shares HOVER shadow with step variant', () => {
       const step = getNodeHighlightStyles({
         selected: false,
-        hasProtocol: true,
         accentColor: ACCENT,
         highlightMode: HighlightMode.HOVER,
         themeMode: 'dark',
@@ -236,7 +210,6 @@ describe('getNodeHighlightStyles', () => {
       })
       const resizable = getNodeHighlightStyles({
         selected: false,
-        hasProtocol: true,
         accentColor: ACCENT,
         highlightMode: HighlightMode.HOVER,
         themeMode: 'dark',

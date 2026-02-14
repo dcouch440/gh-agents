@@ -6,7 +6,7 @@ import { useTheme } from '@mui/material/styles'
 import { useStore, workflowStore, shareStore } from '@/stores'
 import { SharePickerPanel } from '../SharePickerPanel'
 import { CanvasHandle } from '../CanvasHandle'
-import { GREYSCALE_ACCENT } from '../constants'
+import { STEP_TYPE_COLORS, GREYSCALE_ACCENT } from '../constants'
 import { CONTEXT_NODE } from './constants'
 import { ContextNodeHeader } from './ContextNodeHeader'
 import { ContextNodeContent } from './ContextNodeContent'
@@ -20,13 +20,11 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
   const nodeData = data as ContextNodeData
   const highlightMode = useProtocolHighlight(CanvasNodeKind.CONTEXT, id, nodeData.protocolStepId)
-  const hasProtocol = nodeData.protocolColor !== null
-  const accentColor = nodeData.protocolColor ?? GREYSCALE_ACCENT
+  const accentColor = STEP_TYPE_COLORS['context'] ?? GREYSCALE_ACCENT
   const isShareSource = useStore(shareStore.store, (s) => s.active && s.sourceStepId === id)
   const [hovered, setHovered] = useState(false)
   const highlight = getNodeHighlightStyles({
     selected: selected === true,
-    hasProtocol,
     accentColor,
     highlightMode,
     themeMode: theme.palette.mode,
@@ -53,11 +51,10 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
         height: '100%',
         borderRadius: '12px',
         backgroundColor: theme.palette.mode === 'light' ? theme.palette.custom.cavityBg : 'background.paper',
-        border: hasProtocol ? 3 : 2,
-        borderStyle: hasProtocol ? 'dashed' : 'solid',
+        border: 2,
         borderColor: highlight.borderColor,
         boxShadow: highlight.boxShadow,
-        transition: 'border-color 150ms ease, box-shadow 150ms ease, border-style 150ms ease',
+        transition: 'border-color 150ms ease, box-shadow 150ms ease',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',

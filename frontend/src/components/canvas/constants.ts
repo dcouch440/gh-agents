@@ -47,9 +47,10 @@ export const PIPE = {
   CORE_OPACITY: 0.7,
   PARTICLE_OPACITY: 0.8,
 
-  // Opacities — non-protocol (gray) edges
+  // Opacities — non-protocol edges
   BODY_OPACITY_DIM: 0.15,
   CORE_OPACITY_DIM: 0.3,
+  PARTICLE_OPACITY_DIM: 0.4,
 
   // Opacities — selected state
   GLOW_OPACITY_SELECTED: 0.3,

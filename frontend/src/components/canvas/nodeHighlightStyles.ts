@@ -8,7 +8,6 @@ type NodeHighlightVariant = 'step' | 'resizable'
 
 type NodeHighlightInput = {
   selected: boolean
-  hasProtocol: boolean
   accentColor: string
   highlightMode: HighlightMode
   themeMode: 'light' | 'dark'
@@ -22,15 +21,13 @@ type NodeHighlightOutput = {
 
 const getNodeBorderColor = (
   selected: boolean,
-  hasProtocol: boolean,
   accentColor: string,
   highlightMode: HighlightMode,
 ): string => {
-  if (selected) return hasProtocol ? accentColor : 'primary.main'
-  if (!hasProtocol) return 'divider'
+  if (selected) return accentColor
   if (highlightMode === HighlightMode.SELECT) return accentColor
   if (highlightMode === HighlightMode.HOVER) return `${accentColor}80`
-  return `${accentColor}50`
+  return `${accentColor}30`
 }
 
 const getStepBoxShadow = (
@@ -41,8 +38,8 @@ const getStepBoxShadow = (
 ): string => {
   if (selected) {
     return isDark
-      ? '0 8px 32px rgba(59, 130, 246, 0.15)'
-      : '0 8px 32px rgba(255, 150, 79, 0.16)'
+      ? `0 0 0 2px ${accentColor}, 0 0 20px ${accentColor}40, 0 8px 32px ${accentColor}30`
+      : `0 0 0 2px ${accentColor}, 0 0 16px ${accentColor}30, 0 8px 32px rgba(45, 27, 14, 0.14)`
   }
   if (highlightMode === HighlightMode.SELECT) {
     return `0 0 0 1px ${accentColor}40, 0 8px 32px ${accentColor}22`
@@ -63,8 +60,8 @@ const getResizableBoxShadow = (
 ): string => {
   if (selected) {
     return isDark
-      ? `0 0 0 1px ${accentColor}40, 0 8px 32px ${accentColor}22, 0 2px 8px rgba(0, 0, 0, 0.3)`
-      : `0 0 0 1px ${accentColor}30, 0 12px 40px rgba(45, 27, 14, 0.18), 0 4px 12px ${accentColor}18`
+      ? `0 0 0 2px ${accentColor}, 0 0 20px ${accentColor}40, 0 8px 32px ${accentColor}30`
+      : `0 0 0 2px ${accentColor}, 0 0 16px ${accentColor}30, 0 8px 32px rgba(45, 27, 14, 0.14)`
   }
   if (highlightMode === HighlightMode.SELECT) {
     return `0 0 0 1px ${accentColor}40, 0 8px 32px ${accentColor}22`
@@ -79,14 +76,13 @@ const getResizableBoxShadow = (
 
 const getNodeHighlightStyles = ({
   selected,
-  hasProtocol,
   accentColor,
   highlightMode,
   themeMode,
   variant = 'step',
 }: NodeHighlightInput): NodeHighlightOutput => {
   const isDark = themeMode === 'dark'
-  const borderColor = getNodeBorderColor(selected, hasProtocol, accentColor, highlightMode)
+  const borderColor = getNodeBorderColor(selected, accentColor, highlightMode)
   const boxShadow = variant === 'step'
     ? getStepBoxShadow(selected, accentColor, highlightMode, isDark)
     : getResizableBoxShadow(selected, accentColor, highlightMode, isDark)

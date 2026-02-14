@@ -54,7 +54,8 @@ type StepNodeLookups = {
 }
 
 type StepEdgeData = {
-  protocolColor: string | null
+  sourceColor: string
+  isProtocolEdge: boolean
 }
 
 export type {
