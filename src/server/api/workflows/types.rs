@@ -65,6 +65,7 @@ pub struct WorkflowStepResponse {
     pub position_y: Option<f64>,
     pub name: Option<String>,
     pub system_prompt_suffix: Option<String>,
+    pub room_id: Option<Uuid>,
     pub visible: bool,
     pub description: String,
 }
@@ -208,6 +209,7 @@ pub fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
         position_y: r.position_y,
         name: r.name,
         system_prompt_suffix: r.system_prompt_suffix,
+        room_id: r.room_id,
         visible: r.visible,
         description: r.description,
     }

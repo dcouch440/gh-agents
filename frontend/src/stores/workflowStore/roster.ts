@@ -30,4 +30,17 @@ const deleteRosterAgent = async (stepId: string, agentId: string): Promise<void>
   await fetchRoster(stepId)
 }
 
-export { fetchRoster, createRosterAgent, deleteRosterAgent }
+const fetchRoomStepMembers = async (stepId: string): Promise<void> => {
+  const wid = getActiveId()
+  if (!wid) return
+  try {
+    const members = await api.workflows.listRoomStepMembers(wid, stepId)
+    store.setState((s) => ({
+      roomMembersByStep: { ...s.roomMembersByStep, [stepId]: members },
+    }))
+  } catch (e) {
+    store.setState({ error: extractError('workflows', e) })
+  }
+}
+
+export { fetchRoster, createRosterAgent, deleteRosterAgent, fetchRoomStepMembers }

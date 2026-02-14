@@ -350,6 +350,9 @@ pub mod routes {
     pub const STEP_AGENT_ROSTER: &str = "/workflows/:wid/steps/:sid/agent-roster";
     pub const STEP_ROSTER_AGENT: &str = "/workflows/:wid/steps/:sid/agent-roster/:rid";
 
+    // Room Step Members (design-time)
+    pub const STEP_ROOM_MEMBERS: &str = "/workflows/:wid/steps/:sid/room-members";
+
     // Routing Rules
     pub const STEP_ROUTING_RULES: &str = "/workflows/:wid/steps/:sid/routing-rules";
     pub const STEP_ROUTING_RULE: &str = "/workflows/:wid/steps/:sid/routing-rules/:rid";

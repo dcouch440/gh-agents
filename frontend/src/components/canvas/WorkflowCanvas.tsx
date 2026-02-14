@@ -30,6 +30,7 @@ function WorkflowCanvasInner() {
   const toolsByAgent = useStore(agentStore.store, agentStore.selectToolsByAgent)
   const stepProtocols = useStore(canvasStore.store, canvasStore.selectStepProtocols)
   const documentDefsByStep = useStore(workflowStore.store, workflowStore.selectDocumentDefsByStep)
+  const rosterByStep = useStore(workflowStore.store, workflowStore.selectRosterByStep)
   const { onNodeDragStart, onNodeDrag, onNodeDragStop } = usePackDrag(getNodes, setNodes)
   const stepsById = useMemo(() => Collections.keyBy(steps, (s) => s.id), [steps])
   const [contextMenu, setContextMenu] = useState<MenuPosition>(null)
@@ -76,6 +77,7 @@ function WorkflowCanvasInner() {
     toolsByAgent,
     stepProtocols,
     documentDefsByStep,
+    rosterByStep,
   )
 
   // Map store data to RF format

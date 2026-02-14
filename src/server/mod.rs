@@ -437,6 +437,11 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::STEP_ROSTER_AGENT,
             delete(api::delete_roster_agent),
         )
+        // Room Step Members (design-time)
+        .route(
+            routes::STEP_ROOM_MEMBERS,
+            get(api::list_room_step_members),
+        )
         // Routing Rules
         .route(
             routes::STEP_ROUTING_RULES,

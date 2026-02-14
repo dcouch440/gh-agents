@@ -36,6 +36,11 @@ type DocumentDefInfo = {
   name: string
 }
 
+type RosterAgentInfo = {
+  id: string
+  name: string
+}
+
 type StepNodeLookups = {
   agents: ReadonlyMap<string, { name: string; model_id: string }>
   outputSchemas: ReadonlyMap<string, { name: string }>
@@ -44,6 +49,7 @@ type StepNodeLookups = {
   toolsByAgent: ReadonlyMap<string, string[]>
   protocolsByStep: ReadonlyMap<string, ProtocolStepInfo>
   documentDefsByStep: Readonly<Record<string, ReadonlyArray<DocumentDefInfo>>>
+  rosterByStep: Readonly<Record<string, ReadonlyArray<RosterAgentInfo>>>
   protocolGroups: ReadonlyMap<string, ProtocolGroupEntry>
 }
 
@@ -56,6 +62,7 @@ export type {
   ProtocolGroupEntry,
   StepNodeData,
   DocumentDefInfo,
+  RosterAgentInfo,
   StepNodeLookups,
   StepEdgeData,
 }

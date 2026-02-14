@@ -81,6 +81,7 @@ import type {
   UpdateDocumentDefRequest,
   RosterAgent,
   CreateRosterAgentRequest,
+  RoomStepMember,
   StepChatDebugResponse,
 } from '@/types'
 
@@ -331,6 +332,9 @@ const workflows = {
 
   deleteRosterAgent: (workflowId: string, stepId: string, agentId: string, config?: RequestConfig) =>
     baseApi.del<void>(API.STEP_ROSTER_AGENT(workflowId, stepId, agentId), config),
+
+  listRoomStepMembers: (workflowId: string, stepId: string, config?: RequestConfig) =>
+    baseApi.get<RoomStepMember[]>(API.STEP_ROOM_MEMBERS(workflowId, stepId), config),
 
   getStepSession: (workflowId: string, stepId: string, config?: RequestConfig) =>
     baseApi.get<Session>(API.STEP_CHAT_SESSION(workflowId, stepId), config),

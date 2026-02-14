@@ -49,12 +49,16 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
     const archetype = resolveArchetype(step, lookups.protocolsByStep, step.id)
     if (archetype !== Archetype.BLANK) {
       const config = ARCHETYPE_CONFIGS[archetype]
+      const docDefs = lookups.documentDefsByStep[step.id] ?? []
+      const rosterAgents = lookups.rosterByStep[step.id] ?? []
       const dynamicData: DynamicNodeData = {
         kind: CanvasNodeKind.PROTOCOL,
         archetype,
         label: step.name ?? config.label,
         description: step.description,
-        documentNames: [],
+        documentNames: Collections.mapBy(docDefs, (d) => d.name),
+        rosterNames: Collections.mapBy(rosterAgents, (a) => a.name),
+        roomId: step.room_id ?? null,
         upstreamStepNames,
         promptValue: step.prompt_template,
         modelId: agent?.model_id ?? null,

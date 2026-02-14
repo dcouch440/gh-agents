@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Collections } from '@/utils/collections'
 import { computeProtocolGroups } from './mappers'
 import type { StepNodeLookups, ProtocolStepInfo, ProtocolGroupEntry } from './mappers'
-import type { WorkflowStep, WorkflowStepEdge, DocumentDef, Agent, OutputSchema, Tool } from '@/types'
+import type { WorkflowStep, WorkflowStepEdge, DocumentDef, RosterAgent, Agent, OutputSchema, Tool } from '@/types'
 import type { StepProtocolLink } from '@/stores'
 
 type CanvasLookupsResult = {
@@ -19,6 +19,7 @@ const useCanvasLookups = (
   toolsByAgent: Record<string, Tool[]>,
   stepProtocols: Readonly<Record<string, StepProtocolLink>>,
   documentDefsByStep: Record<string, DocumentDef[]>,
+  rosterByStep: Record<string, RosterAgent[]>,
 ): CanvasLookupsResult => {
   const agentLookup = useMemo(
     () =>
@@ -91,9 +92,10 @@ const useCanvasLookups = (
       toolsByAgent: toolsByAgentLookup,
       protocolsByStep: protocolsByStepLookup,
       documentDefsByStep,
+      rosterByStep,
       protocolGroups,
     }),
-    [agentLookup, schemaLookup, stepNameLookup, edges, toolsByAgentLookup, protocolsByStepLookup, documentDefsByStep, protocolGroups],
+    [agentLookup, schemaLookup, stepNameLookup, edges, toolsByAgentLookup, protocolsByStepLookup, documentDefsByStep, rosterByStep, protocolGroups],
   )
 
   return { lookups, protocolGroups, protocolsByStepLookup }

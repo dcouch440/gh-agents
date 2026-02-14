@@ -1,5 +1,5 @@
 import type { NormalizedMap } from '../lib'
-import type { Workflow, WorkflowStep, WorkflowStepEdge, DocumentDef, RosterAgent } from '@/types/workflow'
+import type { Workflow, WorkflowStep, WorkflowStepEdge, DocumentDef, RosterAgent, RoomStepMember } from '@/types/workflow'
 import type { Document } from '@/types/document'
 
 type WorkflowState = {
@@ -10,6 +10,7 @@ type WorkflowState = {
   documentsByStep: Record<string, Document[]>
   documentDefsByStep: Record<string, DocumentDef[]>
   rosterByStep: Record<string, RosterAgent[]>
+  roomMembersByStep: Record<string, RoomStepMember[]>
   dirtyStepIds: Set<string>
   loading: boolean
   error: string | null
