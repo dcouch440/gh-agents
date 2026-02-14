@@ -145,6 +145,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn render_panel_returns_content() {
+        let ctx = make_ctx();
+        let repo = MockWorkflowRepo::new();
+
+        let input = json!({
+            "content": "# Plan\n- [ ] Step 1\n- [ ] Step 2",
+            "submit_label": "Approve"
+        });
+        let result = execute_node_assistant_tool("render_panel", &input, &repo, &ctx).await;
+
+        assert_eq!(result["rendered"], true);
+        assert_eq!(result["content"], "# Plan\n- [ ] Step 1\n- [ ] Step 2");
+        assert_eq!(result["submit_label"], "Approve");
+    }
+
+    #[tokio::test]
+    async fn render_panel_defaults_submit_label() {
+        let ctx = make_ctx();
+        let repo = MockWorkflowRepo::new();
+
+        let input = json!({ "content": "# Hello" });
+        let result = execute_node_assistant_tool("render_panel", &input, &repo, &ctx).await;
+
+        assert_eq!(result["rendered"], true);
+        assert_eq!(result["submit_label"], "Submit");
+    }
+
+    #[tokio::test]
+    async fn render_panel_rejects_missing_content() {
+        let ctx = make_ctx();
+        let repo = MockWorkflowRepo::new();
+
+        let input = json!({});
+        let result = execute_node_assistant_tool("render_panel", &input, &repo, &ctx).await;
+
+        assert!(result["error"]
+            .as_str()
+            .unwrap()
+            .contains("Missing required parameter"));
+    }
+
+    #[tokio::test]
     async fn all_valid_archetypes_accepted() {
         for archetype in &["documenter", "task_force", "belief_capture", "room"] {
             let ctx = make_ctx();

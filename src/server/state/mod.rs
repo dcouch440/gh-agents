@@ -58,6 +58,8 @@ pub enum StreamChunk {
     ToolEnd { name: String, tool_id: String },
     /// A document was created or updated
     DocUpdate { doc_id: String, title: String },
+    /// An interactive panel was rendered on the node
+    PanelRender { content: String, submit_label: String },
     /// Stream completed successfully
     Done,
     /// Stream error

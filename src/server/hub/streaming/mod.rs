@@ -22,6 +22,9 @@ pub trait StreamSink: Send + Sync {
     /// A tool call finished.
     async fn tool_end(&self, name: &str, tool_id: &str);
 
+    /// An interactive panel was rendered on the node.
+    async fn panel_render(&self, content: &str, submit_label: &str);
+
     /// An error occurred during execution.
     async fn error(&self, msg: &str);
 
@@ -70,6 +73,16 @@ impl StreamSink for SseSink {
         );
     }
 
+    async fn panel_render(&self, content: &str, submit_label: &str) {
+        self.state.send_stream_chunk(
+            self.message_id,
+            StreamChunk::PanelRender {
+                content: content.to_string(),
+                submit_label: submit_label.to_string(),
+            },
+        );
+    }
+
     async fn error(&self, msg: &str) {
         self.state
             .send_stream_chunk(self.message_id, StreamChunk::Error(msg.to_string()));
@@ -91,6 +104,7 @@ impl StreamSink for NullSink {
     async fn token(&self, _text: &str) {}
     async fn tool_start(&self, _name: &str, _tool_id: &str) {}
     async fn tool_end(&self, _name: &str, _tool_id: &str) {}
+    async fn panel_render(&self, _content: &str, _submit_label: &str) {}
     async fn error(&self, _msg: &str) {}
     async fn done(&self) {}
 }

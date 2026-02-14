@@ -8,6 +8,7 @@ import { ChatPanel, StreamingMessage } from '@/components/chat'
 import { ARCHETYPE_CONFIGS } from '../archetypes'
 import type { Archetype } from '../archetypes'
 import { ChatHeader } from './ChatHeader'
+import { PanelOverlay } from './panel'
 
 type ChatTabProps = {
   stepId: string
@@ -16,7 +17,7 @@ type ChatTabProps = {
 
 function ChatTab({ stepId, archetype }: ChatTabProps) {
   const workflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
-  const { messages, streamingSegments, isLoading, error, streaming, sendMessage, clearHistory } = useAssistantSession(workflowId, stepId)
+  const { messages, streamingSegments, isLoading, error, streaming, activePanel, sendMessage, clearHistory, dismissPanel, submitPanelSelections } = useAssistantSession(workflowId, stepId)
 
   const handleClear = useCallback(() => {
     if (window.confirm('Clear chat history?')) {
@@ -50,7 +51,7 @@ function ChatTab({ stepId, archetype }: ChatTabProps) {
     ) : undefined
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
       <ChatHeader onClear={handleClear} disabled={streaming || messages.length === 0} />
       <ChatPanel
         messages={messages}
@@ -60,6 +61,14 @@ function ChatTab({ stepId, archetype }: ChatTabProps) {
         streamingContent={streamingContent}
         emptyMessage={ARCHETYPE_CONFIGS[archetype].chatEmptyMessage}
       />
+      {activePanel ? (
+        <PanelOverlay
+          content={activePanel.content}
+          submitLabel={activePanel.submitLabel}
+          onSubmit={submitPanelSelections}
+          onDismiss={dismissPanel}
+        />
+      ) : null}
     </Box>
   )
 }

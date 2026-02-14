@@ -31,8 +31,25 @@ pub async fn execute_node_assistant_tool(
         "set_node_archetype" => execute_set_archetype(input, repo, ctx).await,
         "set_node_name" => execute_set_name(input, repo, ctx).await,
         "set_node_description" => execute_set_description(input, repo, ctx).await,
+        "render_panel" => execute_render_panel(input),
         _ => json!({ "error": format!("Unknown node assistant tool: {}", name) }),
     }
+}
+
+fn execute_render_panel(input: &Value) -> Value {
+    let Some(content) = input["content"].as_str() else {
+        return json!({ "error": "Missing required parameter: content" });
+    };
+
+    let submit_label = input["submit_label"]
+        .as_str()
+        .unwrap_or("Submit");
+
+    json!({
+        "rendered": true,
+        "content": content,
+        "submit_label": submit_label,
+    })
 }
 
 async fn execute_set_archetype(
