@@ -35,7 +35,7 @@ const ARCHETYPE_CONFIGS: Record<Archetype, ArchetypeConfig> = {
   [Archetype.TASK_FORCE]: {
     label: 'Task Force',
     color: '#3b82f6',
-    executionMode: 'agent_designer_input',
+    executionMode: 'task_force',
     icon: GroupsOutlined,
     archetypeTabLabel: 'Agent Roster',
     chatEmptyMessage: 'Describe your mission and I\'ll help build the team.',
@@ -66,7 +66,7 @@ const resolveArchetype = (
   if (step.execution_mode === 'documenter') return Archetype.DOCUMENTER
   if (stepId && protocolsByStep.get(stepId)?.protocol_type === 'documenter') return Archetype.DOCUMENTER
   if (step.execution_mode === 'room') return Archetype.ROOM
-  if (step.execution_mode === 'agent_designer_input') return Archetype.TASK_FORCE
+  if (step.execution_mode === 'task_force') return Archetype.TASK_FORCE
   return Archetype.BLANK
 }
 
