@@ -4,6 +4,8 @@
 //! step types) and `run_step_via_engine` (the shared low-level engine call
 //! used by single and for-each steps).
 
+mod tests;
+
 use std::collections::HashMap;
 use std::sync::Arc;
 

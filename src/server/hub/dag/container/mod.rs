@@ -3,6 +3,8 @@
 //! Handles creating, running, and destroying Docker containers with optional
 //! WireGuard VPN sidecars for isolated network environments.
 
+mod tests;
+
 use anyhow::anyhow;
 use tracing::{error, info, warn};
 use uuid::Uuid;
