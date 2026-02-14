@@ -207,6 +207,7 @@ function WorkflowCanvasInner() {
 
   const onNodeClick = useCallback((_event: React.MouseEvent, node: { id: string }) => {
     if (shareStore.store.getState().active) {
+      if (node.id.startsWith('doc-artifact-')) return
       shareStore.commitShare(node.id)
       return
     }

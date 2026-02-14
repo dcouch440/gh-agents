@@ -3,7 +3,9 @@ import { Position, NodeResizer } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
+import { useStore, shareStore } from '@/stores'
 import { CanvasHandle } from '../CanvasHandle'
+import { SharePickerPanel } from '../SharePickerPanel'
 import { DOCUMENT_NODE } from './constants'
 import { DocumentNodeHeader } from './DocumentNodeHeader'
 import { DocumentNodeContent } from './DocumentNodeContent'
@@ -17,6 +19,7 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
   const nodeData = data as DocumentNodeData
   const highlightMode = useProtocolHighlight(CanvasNodeKind.DOCUMENT, id, nodeData.protocolStepId)
+  const isShareSource = useStore(shareStore.store, (s) => s.active && s.sourceStepId === id)
   const accentColor = DOCUMENT_NODE.ACCENT_COLOR
   const [hovered, setHovered] = useState(false)
   const highlight = getNodeHighlightStyles({
@@ -88,9 +91,13 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
         <DocumentNodeHeader name={nodeData.label} documenterName={nodeData.documenterName} accentColor={accentColor} />
       </Box>
 
-      {/* Content area — read-only */}
+      {/* Content area — read-only or share overlay */}
       <Box className="nowheel nodrag nopan" sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-        <DocumentNodeContent content={nodeData.content} accentColor={accentColor} />
+        {isShareSource ? (
+          <SharePickerPanel stepId={id} />
+        ) : (
+          <DocumentNodeContent content={nodeData.content} accentColor={accentColor} />
+        )}
       </Box>
     </Box>
   )

@@ -27,6 +27,20 @@ describe('contextMentionStore', () => {
       expect(mentions[0]!.color).toBe('#10b981')
       expect(mentions[0]!.entity).toBe(entity)
       expect(mentions[0]!.id).toBeTruthy()
+      expect(mentions[0]!.chipKey).toBeNull()
+      expect(mentions[0]!.chipPreview).toBeNull()
+    })
+
+    it('stores chipKey and chipPreview when provided', () => {
+      const entity = makeEntity('e1', 'Test Node', 'shared-field')
+      contextMentionStore.addMention('step1', entity, '#10b981', {
+        chipKey: 'name',
+        chipPreview: 'Test Node',
+      })
+
+      const mentions = contextMentionStore.selectMentions('step1')(contextMentionStore.store.getState())
+      expect(mentions[0]!.chipKey).toBe('name')
+      expect(mentions[0]!.chipPreview).toBe('Test Node')
     })
 
     it('deduplicates by entityId', () => {

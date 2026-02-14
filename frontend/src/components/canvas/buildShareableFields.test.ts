@@ -63,6 +63,7 @@ describe('buildShareableFields', () => {
       expect(nameField).toBeDefined()
       expect(nameField!.label).toBe('Name')
       expect(nameField!.category).toBe('General')
+      expect(nameField!.chipKey).toBe('name')
       expect(nameField!.entity.data.value).toBe('My Node')
     })
 
@@ -78,6 +79,7 @@ describe('buildShareableFields', () => {
 
       const descField = fields.find((f) => f.key === 'description')
       expect(descField).toBeDefined()
+      expect(descField!.chipKey).toBe('description')
       expect(descField!.entity.data.value).toBe('Important info')
     })
 
@@ -106,6 +108,7 @@ describe('buildShareableFields', () => {
 
       const promptField = fields.find((f) => f.key === 'prompt')
       expect(promptField).toBeDefined()
+      expect(promptField!.chipKey).toBe('prompt')
       expect(promptField!.entity.data.value).toBe('Do the thing')
     })
 
@@ -142,6 +145,7 @@ describe('buildShareableFields', () => {
       expect(docFields[0]!.key).toBe('doc::d1')
       expect(docFields[0]!.label).toBe('README')
       expect(docFields[0]!.kind).toBe('document')
+      expect(docFields[0]!.chipKey).toBe('doc')
       expect(docFields[1]!.label).toBe('API Guide')
     })
 
@@ -178,6 +182,7 @@ describe('buildShareableFields', () => {
       expect(agentFields[0]!.key).toBe('agent::a1')
       expect(agentFields[0]!.label).toBe('CodeBot')
       expect(agentFields[0]!.kind).toBe('agent')
+      expect(agentFields[0]!.chipKey).toBe('agent')
     })
   })
 
@@ -200,6 +205,7 @@ describe('buildShareableFields', () => {
       expect(memberFields[0]!.key).toBe('member::m1')
       expect(memberFields[0]!.label).toBe('Alice')
       expect(memberFields[0]!.kind).toBe('shared-field')
+      expect(memberFields[0]!.chipKey).toBe('member')
     })
   })
 

@@ -3,7 +3,8 @@ import { Position, NodeResizer } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
-import { workflowStore } from '@/stores'
+import { useStore, workflowStore, shareStore } from '@/stores'
+import { SharePickerPanel } from '../SharePickerPanel'
 import { CanvasHandle } from '../CanvasHandle'
 import { GREYSCALE_ACCENT } from '../constants'
 import { CONTEXT_NODE } from './constants'
@@ -21,6 +22,7 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
   const highlightMode = useProtocolHighlight(CanvasNodeKind.CONTEXT, id, nodeData.protocolStepId)
   const hasProtocol = nodeData.protocolColor !== null
   const accentColor = nodeData.protocolColor ?? GREYSCALE_ACCENT
+  const isShareSource = useStore(shareStore.store, (s) => s.active && s.sourceStepId === id)
   const [hovered, setHovered] = useState(false)
   const highlight = getNodeHighlightStyles({
     selected: selected === true,
@@ -98,7 +100,11 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
 
       {/* Content area — interactive, no drag */}
       <Box className="nowheel nodrag nopan" sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-        <ContextNodeContent content={nodeData.content} accentColor={accentColor} onChange={handleContentChange} />
+        {isShareSource ? (
+          <SharePickerPanel stepId={id} />
+        ) : (
+          <ContextNodeContent content={nodeData.content} accentColor={accentColor} onChange={handleContentChange} />
+        )}
       </Box>
 
       {/* Source handle only — context nodes are source-only, no target handle */}

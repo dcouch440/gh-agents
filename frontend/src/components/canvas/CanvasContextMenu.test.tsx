@@ -191,4 +191,35 @@ describe('CanvasContextMenu', () => {
       expect(onClose).toHaveBeenCalledOnce()
     })
   })
+
+  describe('document artifact context menu', () => {
+    const docPosition = { ...defaultPosition, nodeId: 'doc-artifact-def-1' }
+
+    it('renders Share and Delete Step for doc-artifact nodes', () => {
+      render(<CanvasContextMenu position={docPosition} onClose={vi.fn()} />)
+      expect(screen.getByText('Share')).toBeInTheDocument()
+      expect(screen.getByText('Delete Step')).toBeInTheDocument()
+    })
+
+    it('calls enterShareMode with doc-artifact ID on Share click', async () => {
+      const onClose = vi.fn()
+      const user = userEvent.setup()
+
+      // Override store mock to include document defs for this test
+      const { workflowStore: ws } = await import('@/stores')
+      const original = ws.store.getState
+      vi.spyOn(ws.store, 'getState').mockReturnValue({
+        ...original(),
+        documentDefsByStep: {
+          'step-123': [{ id: 'def-1', step_id: 'step-123', name: 'README', description: 'Project readme', target_length: 500, display_order: 0, created_at: '2025-01-01' }],
+        },
+      })
+
+      render(<CanvasContextMenu position={docPosition} onClose={onClose} />)
+      await user.click(screen.getByText('Share'))
+
+      expect(mockEnterShareMode).toHaveBeenCalledWith('doc-artifact-def-1', expect.any(Array))
+      expect(onClose).toHaveBeenCalledOnce()
+    })
+  })
 })

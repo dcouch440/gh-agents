@@ -8,8 +8,25 @@ import { DEFAULT_STEP_TYPE_COLOR, STEP_TYPE_COLORS } from './constants'
 import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from './DynamicNode/archetypes'
 import type { Archetype as ArchetypeType } from './DynamicNode/archetypes'
 import { buildShareableFields } from './buildShareableFields'
+import type { ShareableField } from '@/stores/shareStore'
+import type { DocumentDef } from '@/types/workflow'
 
 const VIEWPORT_PADDING = 8
+
+const DOC_ARTIFACT_PREFIX = 'doc-artifact-'
+
+const parseDocArtifactId = (nodeId: string): string | null =>
+  nodeId.startsWith(DOC_ARTIFACT_PREFIX) ? nodeId.slice(DOC_ARTIFACT_PREFIX.length) : null
+
+const findParentStepForDef = (
+  documentDefsByStep: Record<string, ReadonlyArray<DocumentDef>>,
+  defId: string,
+): string | null => {
+  for (const [stepId, defs] of Object.entries(documentDefsByStep)) {
+    if (defs.some((d) => d.id === defId)) return stepId
+  }
+  return null
+}
 
 type MenuPosition = {
   x: number
@@ -137,6 +154,52 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     if (!position.nodeId) return
 
     const state = workflowStore.store.getState()
+
+    // Handle document artifact nodes (doc-artifact-{defId})
+    const defId = parseDocArtifactId(position.nodeId)
+    if (defId) {
+      const parentStepId = findParentStepForDef(state.documentDefsByStep, defId)
+      if (!parentStepId) return
+
+      const parentStep = state.steps.byId.get(parentStepId)
+      if (!parentStep) return
+
+      const defs = state.documentDefsByStep[parentStepId] ?? []
+      const targetDef = defs.find((d) => d.id === defId)
+      if (!targetDef) return
+
+      const stepProtocols = canvasStore.store.getState().stepProtocols
+      const protocolsByStep = new Map(
+        Object.entries(stepProtocols).map(([sid, link]) => [sid, { protocol_type: link.protocolType }]),
+      )
+      const archetype = resolveArchetype(parentStep, protocolsByStep, parentStepId)
+      const config = ARCHETYPE_CONFIGS[archetype]
+      const stepName = parentStep.name ?? 'Unnamed'
+
+      const fields: ShareableField[] = [
+        {
+          key: `doc::${targetDef.id}`,
+          label: targetDef.name,
+          category: 'Documents',
+          kind: 'document',
+          color: config.color,
+          chipKey: 'doc',
+          entity: {
+            kind: 'document',
+            id: `${parentStepId}::doc::${targetDef.id}`,
+            name: targetDef.name,
+            summary: `Document from ${stepName}`,
+            data: { documenterName: stepName, description: targetDef.description },
+          },
+        },
+      ]
+
+      shareStore.enterShareMode(position.nodeId, fields)
+      onClose()
+      return
+    }
+
+    // Regular step nodes
     const step = state.steps.byId.get(position.nodeId)
     if (!step) return
 

@@ -23,6 +23,13 @@ type MentionToken = {
   label: string
   color: string
   entity: PickableEntity
+  chipKey: string | null
+  chipPreview: string | null
+}
+
+type AddMentionOptions = {
+  chipKey?: string
+  chipPreview?: string
 }
 
 type ContextMentionState = {
@@ -59,7 +66,7 @@ const selectEntityIds =
 
 // ── Actions ──────────────────────────────────────────────────────────────────
 
-const addMention = (stepId: string, entity: PickableEntity, color: string): void => {
+const addMention = (stepId: string, entity: PickableEntity, color: string, options?: AddMentionOptions): void => {
   const current = store.getState().byStep[stepId] ?? []
   if (current.some((m) => m.entityId === entity.id)) return
 
@@ -70,6 +77,8 @@ const addMention = (stepId: string, entity: PickableEntity, color: string): void
     label: entity.name,
     color,
     entity,
+    chipKey: options?.chipKey ?? null,
+    chipPreview: options?.chipPreview ?? null,
   }
 
   store.setState((s) => ({
@@ -123,4 +132,4 @@ export const contextMentionStore = {
   reset,
 }
 
-export type { ContextMentionState, MentionToken, PickableEntity, PickableEntityKind }
+export type { ContextMentionState, MentionToken, PickableEntity, PickableEntityKind, AddMentionOptions }

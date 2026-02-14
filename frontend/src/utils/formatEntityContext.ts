@@ -6,14 +6,8 @@ const str = (value: unknown): string | null => (typeof value === 'string' && val
 
 const formatAgent: EntityFormatter = (entity) => {
   const d = entity.data
-  return [
-    `[Context: Agent] ${entity.name}`,
-    str(d.model_id) ? `Model: ${str(d.model_id)}` : null,
-    str(d.system_prompt) ? `System Prompt:\n${str(d.system_prompt)}` : null,
-    str(d.status) ? `Status: ${str(d.status)}` : null,
-  ]
-    .filter(Boolean)
-    .join('\n')
+  const role = str(d.role_description)
+  return role ? `Agent "${entity.name}": ${role}` : `Agent "${entity.name}"`
 }
 
 const formatPromptTemplate: EntityFormatter = (entity) => {
@@ -51,13 +45,8 @@ const formatWorkflowStep: EntityFormatter = (entity) => {
 
 const formatDocument: EntityFormatter = (entity) => {
   const d = entity.data
-  return [
-    `[Context: Document] ${entity.name}`,
-    str(d.documenterName) ? `Source: ${str(d.documenterName)}` : null,
-    str(d.content) ? `Content:\n${str(d.content)}` : null,
-  ]
-    .filter(Boolean)
-    .join('\n')
+  const desc = str(d.description)
+  return desc ? `Document "${entity.name}": ${desc}` : `Document "${entity.name}"`
 }
 
 const formatContextNode: EntityFormatter = (entity) => {
@@ -73,12 +62,8 @@ const formatContextNode: EntityFormatter = (entity) => {
 const formatSharedField: EntityFormatter = (entity) => {
   const d = entity.data
   const fieldType = str(d.fieldType) ?? 'Field'
-  return [
-    `[Context: ${fieldType}] ${entity.name}`,
-    str(d.value) ? `${str(d.value)}` : null,
-  ]
-    .filter(Boolean)
-    .join('\n')
+  const value = str(d.value)
+  return value ? `${fieldType}: ${value}` : `${fieldType}: ${entity.name}`
 }
 
 const FORMATTERS: Record<PickableEntityKind, EntityFormatter> = {
