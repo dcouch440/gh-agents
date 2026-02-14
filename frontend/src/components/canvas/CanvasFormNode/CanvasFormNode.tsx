@@ -123,8 +123,9 @@ function CanvasFormNodeComponent({
           </Box>
         )}
 
-        {/* Horizontal tab strip — draggable area */}
+        {/* Horizontal tab strip — nodrag so tabs are clickable */}
         <Box
+          className="nodrag"
           role="tablist"
           sx={{
             height: FORM_NODE.TAB_STRIP_HEIGHT,
