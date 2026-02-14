@@ -3,10 +3,11 @@ import { render, screen } from '@/test/render'
 import userEvent from '@testing-library/user-event'
 import { CanvasContextMenu } from './CanvasContextMenu'
 
-const { mockCreateStep, mockDeleteStep, mockLinkStepProtocol } = vi.hoisted(() => ({
+const { mockCreateStep, mockDeleteStep, mockLinkStepProtocol, mockEnterShareMode } = vi.hoisted(() => ({
   mockCreateStep: vi.fn(),
   mockDeleteStep: vi.fn(),
   mockLinkStepProtocol: vi.fn(),
+  mockEnterShareMode: vi.fn(),
 }))
 
 const mockDocumenterProtocol = {
@@ -19,13 +20,28 @@ const mockDocumenterProtocol = {
   ports: [{ port_name: 'output' }],
 }
 
+const mockStep = {
+  id: 'step-123',
+  name: 'Test Step',
+  description: 'A test step',
+  execution_mode: 'documenter',
+  prompt_template: '',
+}
+
 vi.mock('@/stores', () => ({
   useStore: vi.fn((_store: unknown, selector: unknown) => {
     if (typeof selector === 'function') return (selector as (s: unknown) => unknown)(null)
     return undefined
   }),
   workflowStore: {
-    store: 'workflow',
+    store: {
+      getState: () => ({
+        steps: { byId: new Map([['step-123', mockStep]]) },
+        documentDefsByStep: {},
+        rosterByStep: {},
+        roomMembersByStep: {},
+      }),
+    },
     createStep: mockCreateStep,
     deleteStep: mockDeleteStep,
   },
@@ -35,8 +51,17 @@ vi.mock('@/stores', () => ({
     selectAll: () => [mockDocumenterProtocol],
   },
   canvasStore: {
+    store: { getState: () => ({ stepProtocols: {} }) },
     linkStepProtocol: mockLinkStepProtocol,
   },
+  shareStore: {
+    store: { getState: () => ({ active: false }) },
+    enterShareMode: mockEnterShareMode,
+  },
+}))
+
+vi.mock('./buildShareableFields', () => ({
+  buildShareableFields: vi.fn(() => []),
 }))
 
 beforeEach(() => {
@@ -61,7 +86,7 @@ describe('CanvasContextMenu', () => {
     expect(screen.getByText('Utilities')).toBeInTheDocument()
   })
 
-  it('renders all four archetype options', () => {
+  it('renders three archetype options', () => {
     render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
     expect(screen.getByTestId('ctx-add-documenter')).toBeInTheDocument()
     expect(screen.getByText('Documenter')).toBeInTheDocument()
@@ -69,8 +94,6 @@ describe('CanvasContextMenu', () => {
     expect(screen.getByText('Task Force')).toBeInTheDocument()
     expect(screen.getByTestId('ctx-add-room')).toBeInTheDocument()
     expect(screen.getByText('Room')).toBeInTheDocument()
-    expect(screen.getByTestId('ctx-add-blank')).toBeInTheDocument()
-    expect(screen.getByText('Blank')).toBeInTheDocument()
   })
 
   it('renders Context under Utilities', () => {
@@ -124,26 +147,12 @@ describe('CanvasContextMenu', () => {
     })
   })
 
-  it('creates blank step on Blank click', async () => {
-    const user = userEvent.setup()
-    render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
-
-    await user.click(screen.getByText('Blank'))
-
-    expect(mockCreateStep).toHaveBeenCalledWith({
-      name: 'New Blank',
-      execution_mode: 'single',
-      prompt_template: '',
-      position_x: 151,
-      position_y: 251,
-    })
-  })
-
   describe('node context menu', () => {
     const nodePosition = { ...defaultPosition, nodeId: 'step-123' }
 
-    it('renders Delete Step when position has nodeId', () => {
+    it('renders Share and Delete Step when position has nodeId', () => {
       render(<CanvasContextMenu position={nodePosition} onClose={vi.fn()} />)
+      expect(screen.getByText('Share')).toBeInTheDocument()
       expect(screen.getByText('Delete Step')).toBeInTheDocument()
     })
 
@@ -151,6 +160,17 @@ describe('CanvasContextMenu', () => {
       render(<CanvasContextMenu position={nodePosition} onClose={vi.fn()} />)
       expect(screen.queryByText('Archetypes')).not.toBeInTheDocument()
       expect(screen.queryByText('Utilities')).not.toBeInTheDocument()
+    })
+
+    it('calls enterShareMode on Share click', async () => {
+      const onClose = vi.fn()
+      const user = userEvent.setup()
+      render(<CanvasContextMenu position={nodePosition} onClose={onClose} />)
+
+      await user.click(screen.getByText('Share'))
+
+      expect(mockEnterShareMode).toHaveBeenCalledWith('step-123', expect.any(Array))
+      expect(onClose).toHaveBeenCalledOnce()
     })
 
     it('calls deleteStep with correct node ID on click', async () => {

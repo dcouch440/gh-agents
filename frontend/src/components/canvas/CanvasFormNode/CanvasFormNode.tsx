@@ -19,6 +19,7 @@ function CanvasFormNodeComponent({
   accentColor,
   highlightMode = HighlightMode.NONE,
   extraHandles,
+  overlay,
 }: CanvasFormNodeProps) {
   const theme = useTheme()
   const resolvedAccent = accentColor ?? theme.palette.primary.main
@@ -123,12 +124,19 @@ function CanvasFormNodeComponent({
           </Box>
         )}
 
-        <FormTabStrip tabs={tabs} activeTabId={activeTabId} onTabChange={onTabChange} accentColor={resolvedAccent} />
-
-        {/* Content area — full-bleed, no padding, interactive */}
-        <Box className="nowheel nodrag nopan" sx={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative', cursor: 'text', userSelect: 'text' }}>
-          {activeTab?.content}
-        </Box>
+        {overlay ? (
+          <Box className="nowheel nodrag nopan" sx={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
+            {overlay}
+          </Box>
+        ) : (
+          <>
+            <FormTabStrip tabs={tabs} activeTabId={activeTabId} onTabChange={onTabChange} accentColor={resolvedAccent} />
+            {/* Content area — full-bleed, no padding, interactive */}
+            <Box className="nowheel nodrag nopan" sx={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative', cursor: 'text', userSelect: 'text' }}>
+              {activeTab?.content}
+            </Box>
+          </>
+        )}
       </Box>
 
       {/* Handles */}
