@@ -1,13 +1,15 @@
-import { useState, useCallback } from 'react'
+import { useId, useState, useCallback } from 'react'
 import { Box, TextField } from '@mui/material'
 
 type ChatInputProps = {
   onSend: (message: string) => void
   disabled?: boolean
   placeholder?: string
+  inputRef?: React.RefObject<HTMLTextAreaElement | null>
 }
 
-function ChatInput({ onSend, disabled, placeholder = 'Type a message...' }: ChatInputProps) {
+function ChatInput({ onSend, disabled, placeholder = 'Type a message...', inputRef }: ChatInputProps) {
+  const inputId = useId()
   const [value, setValue] = useState('')
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -30,26 +32,22 @@ function ChatInput({ onSend, disabled, placeholder = 'Type a message...' }: Chat
 
   return (
     <Box
+      component="label"
+      htmlFor={inputId}
       sx={{
+        display: 'block',
         position: 'relative',
         px: 1.5,
         py: 1,
-        '&::before': {
-          content: '""',
-          position: 'absolute',
-          top: 0,
-          left: 12,
-          right: 12,
-          height: '1px',
-          bgcolor: 'divider',
-          opacity: 0.5,
-        },
+        cursor: 'text',
       }}
     >
       <TextField
         fullWidth
         multiline
         maxRows={4}
+        id={inputId}
+        inputRef={inputRef}
         value={value}
         onChange={handleChange}
         onKeyDown={handleKeyDown}

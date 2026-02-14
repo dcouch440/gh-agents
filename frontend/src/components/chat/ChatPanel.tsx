@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { Box } from '@mui/material'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
@@ -15,13 +15,18 @@ export type ChatPanelProps = {
 }
 
 function ChatPanel({ messages, onSend, streaming, disabled, emptyMessage, streamingContent }: ChatPanelProps) {
+  const inputRef = useRef<HTMLTextAreaElement>(null)
+
   return (
     <Box
+      onClick={() => { inputRef.current?.focus() }}
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
+        flex: 1,
+        minHeight: 0,
         bgcolor: 'background.default',
+        cursor: 'text',
       }}
     >
       <MessageList
@@ -30,7 +35,7 @@ function ChatPanel({ messages, onSend, streaming, disabled, emptyMessage, stream
         streamingContent={streamingContent}
         streaming={streaming}
       />
-      <ChatInput onSend={onSend} disabled={disabled} />
+      <ChatInput onSend={onSend} disabled={disabled} inputRef={inputRef} />
     </Box>
   )
 }
