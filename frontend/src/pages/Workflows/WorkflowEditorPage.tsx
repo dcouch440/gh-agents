@@ -4,6 +4,7 @@ import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import { useStore, workflowStore, agentStore, outputSchemaStore, protocolStore } from '@/stores'
 import { WorkflowCanvas } from '@/components/canvas'
+import { ContextPickerOverlay } from '@/components/canvas/ContextPickerOverlay'
 
 function WorkflowEditorPage() {
   const { id } = useParams<{ id: string }>()
@@ -34,6 +35,7 @@ function WorkflowEditorPage() {
       }}
     >
       <WorkflowCanvas />
+      <ContextPickerOverlay />
       {loading && (
         <Box
           sx={{

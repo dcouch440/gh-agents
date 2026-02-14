@@ -2,13 +2,15 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
 import DeleteOutlined from '@mui/icons-material/DeleteOutlined'
+import { ContextPickerToggle } from '@/components/primitives'
 
 type ChatHeaderProps = {
+  stepId: string
   onClear: () => void
   disabled: boolean
 }
 
-function ChatHeader({ onClear, disabled }: ChatHeaderProps) {
+function ChatHeader({ stepId, onClear, disabled }: ChatHeaderProps) {
   return (
     <Box
       sx={{
@@ -31,9 +33,12 @@ function ChatHeader({ onClear, disabled }: ChatHeaderProps) {
       }}
     >
       <Typography sx={{ fontSize: 11, fontWeight: 500, color: 'text.secondary', opacity: 0.7 }}>Chat</Typography>
-      <IconButton size="small" onClick={onClear} disabled={disabled} sx={{ p: 0.25 }}>
-        <DeleteOutlined sx={{ fontSize: 14 }} />
-      </IconButton>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
+        <ContextPickerToggle stepId={stepId} />
+        <IconButton size="small" onClick={onClear} disabled={disabled} sx={{ p: 0.25 }}>
+          <DeleteOutlined sx={{ fontSize: 14 }} />
+        </IconButton>
+      </Box>
     </Box>
   )
 }
