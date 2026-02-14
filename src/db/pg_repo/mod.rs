@@ -1275,7 +1275,7 @@ impl WorkflowRepo for PgRepo {
         let row: WorkflowRow = sqlx::query_as(
             "INSERT INTO workflows (user_id, name, description, container_enabled, target_repo_url, target_branch, vpn_enabled) \
              VALUES ($1, $2, $3, $4, $5, $6, $7) \
-             RETURNING id, user_id, name, description, execution_mode, created_at, version, container_enabled, target_repo_url, target_branch, vpn_enabled",
+             RETURNING id, user_id, name, description, execution_mode, created_at, version, container_enabled, target_repo_url, target_branch, vpn_enabled, board_overview_summary",
         )
         .bind(user_id)
         .bind(&name)
@@ -1291,7 +1291,7 @@ impl WorkflowRepo for PgRepo {
 
     async fn get_workflow(&self, id: Uuid) -> Result<Option<WorkflowRow>> {
         let row: Option<WorkflowRow> = sqlx::query_as(
-            "SELECT id, user_id, name, description, execution_mode, created_at, version, container_enabled, target_repo_url, target_branch, vpn_enabled \
+            "SELECT id, user_id, name, description, execution_mode, created_at, version, container_enabled, target_repo_url, target_branch, vpn_enabled, board_overview_summary \
              FROM workflows WHERE id = $1",
         )
         .bind(id)
@@ -1302,7 +1302,7 @@ impl WorkflowRepo for PgRepo {
 
     async fn list_workflows(&self, user_id: Uuid) -> Result<Vec<WorkflowRow>> {
         let rows: Vec<WorkflowRow> = sqlx::query_as(
-            "SELECT id, user_id, name, description, execution_mode, created_at, version, container_enabled, target_repo_url, target_branch, vpn_enabled \
+            "SELECT id, user_id, name, description, execution_mode, created_at, version, container_enabled, target_repo_url, target_branch, vpn_enabled, board_overview_summary \
              FROM workflows WHERE user_id = $1 ORDER BY created_at DESC",
         )
         .bind(user_id)
@@ -1332,7 +1332,7 @@ impl WorkflowRepo for PgRepo {
              vpn_enabled = COALESCE($8, vpn_enabled), \
              version = version + 1 \
              WHERE id = $9 \
-             RETURNING id, user_id, name, description, execution_mode, created_at, version, container_enabled, target_repo_url, target_branch, vpn_enabled",
+             RETURNING id, user_id, name, description, execution_mode, created_at, version, container_enabled, target_repo_url, target_branch, vpn_enabled, board_overview_summary",
         )
         .bind(name)
         .bind(description)
@@ -2336,6 +2336,75 @@ impl WorkflowRepo for PgRepo {
         .fetch_all(&self.pool)
         .await?;
         Ok(rows)
+    }
+
+    // --- Assistant Notes ---
+
+    async fn get_assistant_notes(&self, step_id: Uuid) -> Result<Option<String>> {
+        let row = sqlx::query_scalar::<_, String>(
+            "SELECT content FROM assistant_notes WHERE step_id = $1",
+        )
+        .bind(step_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn upsert_assistant_notes(&self, step_id: Uuid, content: &str) -> Result<()> {
+        sqlx::query(
+            r#"
+            INSERT INTO assistant_notes (step_id, content, updated_at)
+            VALUES ($1, $2, now())
+            ON CONFLICT (step_id) DO UPDATE
+            SET content = $2, updated_at = now()
+            "#,
+        )
+        .bind(step_id)
+        .bind(content)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn get_all_assistant_notes_for_workflow(
+        &self,
+        workflow_id: Uuid,
+    ) -> Result<Vec<(Uuid, Option<String>, String, String)>> {
+        let rows = sqlx::query_as::<_, (Uuid, Option<String>, String, String)>(
+            r#"
+            SELECT ws.id, ws.name, ws.execution_mode, an.content
+            FROM workflow_steps ws
+            JOIN assistant_notes an ON an.step_id = ws.id
+            WHERE ws.workflow_id = $1 AND an.content != ''
+            ORDER BY ws.name
+            "#,
+        )
+        .bind(workflow_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    // --- Board Overview Summary ---
+
+    async fn get_board_overview_summary(&self, workflow_id: Uuid) -> Result<String> {
+        let summary = sqlx::query_scalar::<_, String>(
+            "SELECT board_overview_summary FROM workflows WHERE id = $1",
+        )
+        .bind(workflow_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .unwrap_or_default();
+        Ok(summary)
+    }
+
+    async fn update_board_overview_summary(&self, workflow_id: Uuid, summary: &str) -> Result<()> {
+        sqlx::query("UPDATE workflows SET board_overview_summary = $1 WHERE id = $2")
+            .bind(summary)
+            .bind(workflow_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 }
 

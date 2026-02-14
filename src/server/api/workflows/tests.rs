@@ -36,6 +36,7 @@ mod tests {
             target_repo_url: None,
             target_branch: None,
             vpn_enabled: false,
+            board_overview_summary: String::new(),
         }
     }
 

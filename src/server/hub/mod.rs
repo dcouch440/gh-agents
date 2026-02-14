@@ -5,6 +5,7 @@
 //! parameterized by an `ExecutionStrategy`. Different strategies handle chat
 //! sessions, DAG workflow steps, and tool routing.
 
+pub mod board_overview;
 pub mod capability_resolver;
 pub mod chat_beliefs;
 pub mod dag;
@@ -213,6 +214,30 @@ pub async fn build_step_system_prompt(
 
     let board_context = chat_beliefs::format_beliefs_as_board_context(&connected_beliefs);
 
+    // 1b. Load board overview summary
+    let board_overview = state
+        .repos()
+        .workflows
+        .get_board_overview_summary(workflow_id)
+        .await
+        .unwrap_or_default();
+    let board_overview_text = if board_overview.is_empty() {
+        "No steps have been configured yet.".to_string()
+    } else {
+        board_overview
+    };
+
+    // 1c. Load assistant notes for this step
+    let assistant_notes = state
+        .repos()
+        .workflows
+        .get_assistant_notes(step_id)
+        .await
+        .unwrap_or_default()
+        .unwrap_or_else(|| {
+            "No notes yet. Use update_notes to record important discoveries.".to_string()
+        });
+
     // 2. Build archetype block + config snapshot based on execution mode
     let (archetype_block, config_snapshot) = match execution_mode {
         "documenter" => {
@@ -287,6 +312,11 @@ pub async fn build_step_system_prompt(
     vars_map.insert(vars::system::BOARD_CONTEXT.to_string(), board_context);
     vars_map.insert(vars::system::ARCHETYPE_BLOCK.to_string(), archetype_block);
     vars_map.insert(vars::system::CURRENT_CONFIG.to_string(), config_snapshot);
+    vars_map.insert(
+        vars::system::BOARD_OVERVIEW.to_string(),
+        board_overview_text,
+    );
+    vars_map.insert(vars::system::ASSISTANT_NOTES.to_string(), assistant_notes);
 
     let resolved = roles::NODE_ASSISTANT_BASE.resolve(&vars_map);
 

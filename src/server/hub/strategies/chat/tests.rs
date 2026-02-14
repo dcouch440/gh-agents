@@ -190,6 +190,7 @@ mod tests {
         assert!(names.contains(&"set_node_name"));
         assert!(names.contains(&"set_node_description"));
         assert!(names.contains(&"think"));
+        assert!(names.contains(&"update_notes"));
         assert!(!names.contains(&"set_node_archetype"));
 
         // Documenter-specific tools
@@ -207,11 +208,31 @@ mod tests {
         assert!(names.contains(&"set_node_name"));
         assert!(names.contains(&"set_node_description"));
         assert!(names.contains(&"think"));
+        assert!(names.contains(&"update_notes"));
         assert!(!names.contains(&"set_node_archetype"));
 
         // No archetype-specific tools
         assert!(!names.contains(&"create_doc_def"));
         assert!(!names.contains(&"update_config"));
+    }
+
+    #[test]
+    fn resolve_step_tools_includes_update_notes_for_all_archetypes() {
+        for mode in &[
+            "documenter",
+            "task_force",
+            "belief_capture",
+            "room",
+            "single",
+            "",
+        ] {
+            let tools = super::super::resolve_step_tools(mode);
+            let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
+            assert!(
+                names.contains(&"update_notes"),
+                "update_notes missing for execution_mode={mode}"
+            );
+        }
     }
 
     // ========================================================================

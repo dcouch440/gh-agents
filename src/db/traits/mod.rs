@@ -787,6 +787,29 @@ pub trait WorkflowRepo: Send + Sync {
         &self,
         designer_run_id: Uuid,
     ) -> Result<Vec<AgentDesignerOutputRow>>;
+
+    // --- Assistant Notes ---
+
+    /// Get a single step's assistant notes content. Returns None if no notes exist.
+    async fn get_assistant_notes(&self, step_id: Uuid) -> Result<Option<String>>;
+
+    /// Create or replace a step's assistant notes (full replacement).
+    async fn upsert_assistant_notes(&self, step_id: Uuid, content: &str) -> Result<()>;
+
+    /// Get all assistant notes across a workflow (for board overview summarizer).
+    /// Returns Vec<(step_id, step_name, execution_mode, notes_content)>.
+    async fn get_all_assistant_notes_for_workflow(
+        &self,
+        workflow_id: Uuid,
+    ) -> Result<Vec<(Uuid, Option<String>, String, String)>>;
+
+    // --- Board Overview Summary ---
+
+    /// Get the board overview summary for a workflow.
+    async fn get_board_overview_summary(&self, workflow_id: Uuid) -> Result<String>;
+
+    /// Update the board overview summary for a workflow.
+    async fn update_board_overview_summary(&self, workflow_id: Uuid, summary: &str) -> Result<()>;
 }
 
 // ============================================================================

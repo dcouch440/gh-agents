@@ -13,6 +13,7 @@ const UNIVERSAL_TOOLS: &[&str] = &[
     "set_node_description",
     "render_panel",
     "think",
+    "update_notes",
 ];
 
 /// Universal tool names handled by node_assistant.
@@ -68,6 +69,26 @@ pub(super) async fn dispatch_step_tool(
     state: &AppState,
     ctx: &StepChatContext,
 ) -> Option<Value> {
+    // update_notes — needs state for board overview spawn
+    if name == "update_notes" {
+        let content = input["content"].as_str().unwrap_or("");
+        match state
+            .repos()
+            .workflows
+            .upsert_assistant_notes(ctx.step_id, content)
+            .await
+        {
+            Ok(()) => {
+                crate::server::hub::board_overview::spawn_board_overview_update(
+                    state.clone(),
+                    ctx.workflow_id,
+                );
+                return Some(serde_json::json!({ "status": "ok" }));
+            }
+            Err(e) => return Some(serde_json::json!({ "error": e.to_string() })),
+        }
+    }
+
     // Universal tools (all archetypes)
     if NODE_ASSISTANT_TOOLS.contains(&name) {
         let tool_ctx = crate::server::tools::node_assistant::StepToolContext {

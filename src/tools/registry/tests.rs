@@ -366,4 +366,17 @@ mod tests {
             "render_panel description should be detailed"
         );
     }
+
+    #[test]
+    fn test_update_notes_schema() {
+        let tool = get_tool_definition("update_notes").unwrap();
+        assert_eq!(tool.name, "update_notes");
+
+        let props = tool.input_schema["properties"].as_object().unwrap();
+        assert!(props.contains_key("content"));
+
+        let required = tool.input_schema["required"].as_array().unwrap();
+        assert_eq!(required.len(), 1);
+        assert_eq!(required[0], "content");
+    }
 }

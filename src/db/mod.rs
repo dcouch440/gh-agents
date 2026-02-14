@@ -163,6 +163,7 @@ pub struct WorkflowRow {
     pub target_repo_url: Option<String>,
     pub target_branch: Option<String>,
     pub vpn_enabled: bool,
+    pub board_overview_summary: String,
 }
 
 /// Row type for a workflow step (DAG node).
