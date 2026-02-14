@@ -101,8 +101,7 @@ impl DockerCli for RealDockerCli {
 ///
 /// Use `.expose()` to access the inner value when you need it
 /// (e.g., for constructing authenticated URLs or env vars).
-#[derive(Clone)]
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct RedactedString(String);
 
 impl RedactedString {
@@ -131,7 +130,6 @@ impl fmt::Display for RedactedString {
         write!(f, "[REDACTED]")
     }
 }
-
 
 // ── Errors ─────────────────────────────────────────────────────────────────
 

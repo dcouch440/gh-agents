@@ -79,7 +79,6 @@ impl Args {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

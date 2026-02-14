@@ -116,7 +116,10 @@ pub async fn list_roster_agents(
     };
 
     Ok(Json(
-        agents.into_iter().map(RosterAgentResponse::from_row).collect(),
+        agents
+            .into_iter()
+            .map(RosterAgentResponse::from_row)
+            .collect(),
     ))
 }
 
@@ -161,7 +164,10 @@ pub async fn create_roster_agent(
         )
         .await?;
 
-    Ok((StatusCode::CREATED, Json(RosterAgentResponse::from_row(row))))
+    Ok((
+        StatusCode::CREATED,
+        Json(RosterAgentResponse::from_row(row)),
+    ))
 }
 
 /// DELETE /api/workflows/:wid/steps/:sid/agent-roster/:rid

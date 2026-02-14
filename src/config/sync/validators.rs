@@ -173,10 +173,7 @@ fn validate_dag(subtasks: &[Subtask]) -> Result<()> {
 
         for dep in &subtask.depends_on {
             *in_degree.entry(&subtask.id).or_insert(0) += 1;
-            graph
-                .entry(dep.as_str())
-                .or_default()
-                .push(&subtask.id);
+            graph.entry(dep.as_str()).or_default().push(&subtask.id);
         }
     }
 

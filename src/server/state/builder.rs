@@ -150,9 +150,7 @@ impl AppStateBuilder {
             .prompt_registry
             .unwrap_or_else(|| Arc::new(PromptRegistry::empty()));
 
-        let provider_registry = self
-            .provider_registry
-            .unwrap_or_default();
+        let provider_registry = self.provider_registry.unwrap_or_default();
 
         let state = AppState::from_inner(AppStateInner {
             db: self.db,
