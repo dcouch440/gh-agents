@@ -25,7 +25,7 @@ const toRFEdges = (
 ): Edge[] => {
   const stepsById = Collections.keyBy(steps, (s) => s.id)
 
-  return edges.map((edge) => {
+  return Collections.mapBy(edges, (edge) => {
     const sourceStep = stepsById.get(edge.from_step_id)
     const sourceColor = sourceStep
       ? resolveStepColor(sourceStep, protocolsByStep)

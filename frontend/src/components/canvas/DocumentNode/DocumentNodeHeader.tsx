@@ -1,6 +1,6 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import { DocumentNodeIcon } from '../Icons/DocumentNodeIcon'
+import { ContextNodeIcon as DocumentNodeIcon } from '../Icons/ContextNodeIcon'
 import { ProtocolBadge } from '../ProtocolBadge'
 import { DOCUMENT_NODE } from './constants'
 

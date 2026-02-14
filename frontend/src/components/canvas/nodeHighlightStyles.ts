@@ -30,33 +30,24 @@ const getNodeBorderColor = (
   return `${accentColor}30`
 }
 
-const getStepBoxShadow = (
-  selected: boolean,
-  accentColor: string,
-  highlightMode: HighlightMode,
-  isDark: boolean,
-): string => {
-  if (selected) {
-    return isDark
-      ? `0 0 0 2px ${accentColor}, 0 0 20px ${accentColor}40, 0 8px 32px ${accentColor}30`
-      : `0 0 0 2px ${accentColor}, 0 0 16px ${accentColor}30, 0 8px 32px rgba(45, 27, 14, 0.14)`
-  }
-  if (highlightMode === HighlightMode.SELECT) {
-    return `0 0 0 1px ${accentColor}40, 0 8px 32px ${accentColor}22`
-  }
-  if (highlightMode === HighlightMode.HOVER) {
-    return `0 0 0 1px ${accentColor}20, 0 6px 24px ${accentColor}14`
-  }
-  return isDark
-    ? '0 4px 24px rgba(0, 0, 0, 0.4)'
-    : '0 4px 24px rgba(45, 27, 14, 0.12)'
+type ShadowPreset = { dark: string; light: string }
+
+const STEP_DEFAULT_SHADOW: ShadowPreset = {
+  dark: '0 4px 24px rgba(0, 0, 0, 0.4)',
+  light: '0 4px 24px rgba(45, 27, 14, 0.12)',
 }
 
-const getResizableBoxShadow = (
+const RESIZABLE_DEFAULT_SHADOW: ShadowPreset = {
+  dark: '0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)',
+  light: '0 8px 32px rgba(45, 27, 14, 0.14), 0 2px 8px rgba(45, 27, 14, 0.08)',
+}
+
+const getBoxShadow = (
   selected: boolean,
   accentColor: string,
   highlightMode: HighlightMode,
   isDark: boolean,
+  defaultPreset: ShadowPreset,
 ): string => {
   if (selected) {
     return isDark
@@ -69,9 +60,7 @@ const getResizableBoxShadow = (
   if (highlightMode === HighlightMode.HOVER) {
     return `0 0 0 1px ${accentColor}20, 0 6px 24px ${accentColor}14`
   }
-  return isDark
-    ? '0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)'
-    : '0 8px 32px rgba(45, 27, 14, 0.14), 0 2px 8px rgba(45, 27, 14, 0.08)'
+  return isDark ? defaultPreset.dark : defaultPreset.light
 }
 
 const getNodeHighlightStyles = ({
@@ -83,9 +72,8 @@ const getNodeHighlightStyles = ({
 }: NodeHighlightInput): NodeHighlightOutput => {
   const isDark = themeMode === 'dark'
   const borderColor = getNodeBorderColor(selected, accentColor, highlightMode)
-  const boxShadow = variant === 'step'
-    ? getStepBoxShadow(selected, accentColor, highlightMode, isDark)
-    : getResizableBoxShadow(selected, accentColor, highlightMode, isDark)
+  const preset = variant === 'step' ? STEP_DEFAULT_SHADOW : RESIZABLE_DEFAULT_SHADOW
+  const boxShadow = getBoxShadow(selected, accentColor, highlightMode, isDark, preset)
 
   return { borderColor, boxShadow }
 }

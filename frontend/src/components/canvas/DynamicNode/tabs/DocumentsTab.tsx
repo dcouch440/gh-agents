@@ -4,7 +4,7 @@ import Button from '@mui/material/Button'
 import AddOutlined from '@mui/icons-material/AddOutlined'
 import { useTheme } from '@mui/material/styles'
 import type { DocumentDef, CreateDocumentDefRequest } from '@/types/workflow'
-import { InlineAddForm } from './InlineAddForm'
+import { InlineAddForm } from '../../DocumenterNode/tabs/InlineAddForm'
 
 type DocumentsTabProps = {
   documents: DocumentDef[]

@@ -15,7 +15,7 @@ import { isDocumenterStep } from './protocolGroups'
 const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
   const edgesByTarget = Collections.groupBy(lookups.edges, (e) => e.to_step_id)
 
-  const stepNodes = steps.map((step): Node => {
+  const stepNodes = Collections.mapBy(steps, (step): Node => {
     // Context nodes
     if (step.execution_mode === 'context') {
       const groupEntry = lookups.protocolGroups.get(step.id)
@@ -41,7 +41,7 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
     const agent = step.agent_id ? lookups.agents.get(step.agent_id) : undefined
     const schema = step.output_schema_id ? lookups.outputSchemas.get(step.output_schema_id) : undefined
     const upstreamEdges = edgesByTarget.get(step.id) ?? []
-    const upstreamStepNames = upstreamEdges.map((e) => lookups.stepNames.get(e.from_step_id) ?? 'Unknown Step')
+    const upstreamStepNames = Collections.mapBy(upstreamEdges, (e) => lookups.stepNames.get(e.from_step_id) ?? 'Unknown Step')
     const toolNames = step.agent_id ? (lookups.toolsByAgent.get(step.agent_id) ?? []) : []
     const protocolInfo = lookups.protocolsByStep.get(step.id)
 

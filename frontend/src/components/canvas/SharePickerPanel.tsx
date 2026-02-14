@@ -6,18 +6,9 @@ import type { SxProps, Theme } from '@mui/material/styles'
 import { useStore, shareStore } from '@/stores'
 import type { ShareableField } from '@/stores/shareStore'
 import { Collections } from '@/utils/collections'
+import { SECTION_LABEL_SX, COLOR_DOT_SX } from './constants'
 
 // ── Styling ──────────────────────────────────────────────────────────────────
-
-const SECTION_LABEL_SX: SxProps<Theme> = {
-  px: 1.5,
-  py: 0.75,
-  fontSize: 10,
-  textTransform: 'uppercase',
-  color: 'text.disabled',
-  letterSpacing: '0.05em',
-  fontWeight: 600,
-}
 
 const ITEM_SX: SxProps<Theme> = {
   display: 'flex',
@@ -27,13 +18,6 @@ const ITEM_SX: SxProps<Theme> = {
   py: 0.25,
   cursor: 'pointer',
   '&:hover': { backgroundColor: 'action.hover' },
-}
-
-const COLOR_DOT_SX: SxProps<Theme> = {
-  width: 8,
-  height: 8,
-  borderRadius: '50%',
-  flexShrink: 0,
 }
 
 const CATEGORY_ORDER = ['General', 'Documents', 'Agents', 'Members']
@@ -50,10 +34,7 @@ function SharePickerPanel({ stepId }: SharePickerPanelProps) {
 
   const grouped = useMemo(() => {
     const groups = Collections.groupBy(availableFields, (f: ShareableField) => f.category)
-    return CATEGORY_ORDER.filter((c) => groups.has(c)).map((c) => ({
-      label: c,
-      items: groups.get(c)!,
-    }))
+    return Collections.filterMap(CATEGORY_ORDER, (c) => groups.has(c) ? { label: c, items: groups.get(c)! } : null)
   }, [availableFields])
 
   const handleToggle = useCallback((key: string) => {

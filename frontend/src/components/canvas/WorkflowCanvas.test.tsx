@@ -82,6 +82,13 @@ vi.mock('@/stores', () => ({
     selectAll: () => [],
     selectTypes: () => [],
   },
+  shareStore: {
+    store: { getState: () => ({ active: false }) },
+    selectActive: () => false,
+    cancelShare: vi.fn(),
+    commitShare: vi.fn(),
+  },
+  batch: vi.fn((fn: () => void) => fn()),
 }))
 
 // Mock React Flow — jsdom can't render SVG canvas

@@ -32,6 +32,24 @@ export const PROTOCOL_LABELS: Record<string, string> = {
   documenter: 'Documenter',
 }
 
+/** Shared styling constants for context menus and picker panels. */
+export const SECTION_LABEL_SX = {
+  px: 1.5,
+  py: 0.75,
+  fontSize: 10,
+  textTransform: 'uppercase',
+  color: 'text.disabled',
+  letterSpacing: '0.05em',
+  fontWeight: 600,
+} as const
+
+export const COLOR_DOT_SX = {
+  width: 8,
+  height: 8,
+  borderRadius: '50%',
+  flexShrink: 0,
+} as const
+
 export const PIPE = {
   // Layer widths (px)
   GLOW_WIDTH: 16,
