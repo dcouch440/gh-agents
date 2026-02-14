@@ -1,14 +1,14 @@
 Make group hover only occur if the user hovers for more than a set time seconds.
-Create test: When selecting a 
+Create test: When selecting a
 
 New architype, the agent builds simulations of agent orchestration, this is done via a folder structure, PAPER.md, README.md and a folder structure for the simulations.
 
 results/
 app/
-  shared_modules/
-  app_v1/
-  app_v2/
-  ...
+shared_modules/
+app_v1/
+app_v2/
+...
 PAPER.md
 README.md
 
@@ -28,13 +28,35 @@ You are continuing from a previous conversation, Before you is a description of 
 <Pleas refrain from mentioning these directly unless specifically requested>
 // note: only see connected items.
 Node 01:
-  Node Name: Research Task Force
-  Description: I chose this because I wanted to know what agents did when they watched tv.
-  Capabilities: [...]
-  Assigned Agents:
-    Agent: Researcher
-    Description: I chose this because I wanted to ...
-    ...
+Node Name: Research Task Force
+Description: I chose this because I wanted to know what agents did when they watched tv.
+Capabilities: [...]
+Assigned Agents:
+Agent: Researcher
+Description: I chose this because I wanted to ...
+...
 Node 02:
-  Node Name: ...
+Node Name: ...
 </Pleas refrain from mentioning these directly unless specifically requested>
+
+See if you can make the chat window feel a bit more premium.  
+ Allow user input size greoth be dependent on the size of the box (use good practices, important),
+
+
+
+RESEARCH APP PLUS ONLINE THEN DESIGN -> IMPLEMENT
+
+
+Assistant personality:
+- Instead of responding with an expanation about what your conntected to, talk to the user like their your friend.
+
+Planning agent loads up docker container.
+Creates a plan in the docker container.
+
+new protocol: PLANNER
+Backstory: Sends messages to other agents on the board after assessing it. Can help build board information.
+
+Detect recenectly delted chat logs for context sweep.
+When a user clicks a node it should automatically enter them in chat.
+
+Tools stay on chat board not disapear. They should be full width instead of small, decorative but fitting the scene.

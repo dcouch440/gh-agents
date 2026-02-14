@@ -171,6 +171,13 @@ pub use document_defs::{
     CreateDocumentDefRequest, DocumentDefResponse, UpdateDocumentDefRequest,
 };
 
+// Re-export agent roster handlers and types
+pub mod agent_roster;
+pub use agent_roster::{
+    create_roster_agent, delete_roster_agent, list_roster_agents,
+    CreateRosterAgentRequest, RosterAgentResponse,
+};
+
 // Re-export routing rule handlers and types
 pub mod routing_rules;
 pub use routing_rules::{

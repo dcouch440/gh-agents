@@ -36,6 +36,7 @@ function WorkflowCanvasInner() {
   const initialFitDone = useRef(false)
   const fetchedToolAgentIds = useRef(new Set<string>())
   const fetchedDocDefStepIds = useRef(new Set<string>())
+  const fetchedRosterStepIds = useRef(new Set<string>())
 
   // Fetch tools for agents not yet fetched
   useEffect(() => {
@@ -53,6 +54,10 @@ function WorkflowCanvasInner() {
       if (step.execution_mode === 'documenter' && !fetchedDocDefStepIds.current.has(step.id)) {
         fetchedDocDefStepIds.current.add(step.id)
         void workflowStore.fetchDocumentDefs(step.id)
+      }
+      if (step.execution_mode === 'task_force' && !fetchedRosterStepIds.current.has(step.id)) {
+        fetchedRosterStepIds.current.add(step.id)
+        void workflowStore.fetchRoster(step.id)
       }
     })
   }, [steps])

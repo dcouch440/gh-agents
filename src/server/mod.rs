@@ -428,6 +428,15 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::STEP_DOCUMENT_DEF,
             patch(api::update_document_def).delete(api::delete_document_def),
         )
+        // Agent Roster
+        .route(
+            routes::STEP_AGENT_ROSTER,
+            get(api::list_roster_agents).post(api::create_roster_agent),
+        )
+        .route(
+            routes::STEP_ROSTER_AGENT,
+            delete(api::delete_roster_agent),
+        )
         // Routing Rules
         .route(
             routes::STEP_ROUTING_RULES,

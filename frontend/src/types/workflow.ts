@@ -125,6 +125,22 @@ type UpdateDocumentDefRequest = {
   target_length?: number
 }
 
+type RosterAgent = {
+  id: string
+  name: string
+  role_description: string
+  capabilities: string[]
+  execution_order: number
+  created_at: string
+}
+
+type CreateRosterAgentRequest = {
+  name: string
+  role_description?: string
+  capabilities?: string[]
+  execution_order?: number
+}
+
 type StepChatDebugResponse = {
   system_prompt: string
   messages: { role: string; content: string }[]
@@ -146,5 +162,7 @@ export type {
   DocumentDef,
   CreateDocumentDefRequest,
   UpdateDocumentDefRequest,
+  RosterAgent,
+  CreateRosterAgentRequest,
   StepChatDebugResponse,
 }

@@ -13,6 +13,7 @@ const store = logger(
     edges: createNormalizedMap<WorkflowStepEdge>(),
     documentsByStep: {},
     documentDefsByStep: {},
+    rosterByStep: {},
     dirtyStepIds: new Set<string>(),
     loading: false,
     error: null,
