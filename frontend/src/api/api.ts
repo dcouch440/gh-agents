@@ -86,46 +86,52 @@ import type {
 } from '@/types'
 
 // ============================================================================
-// Response Types (for endpoints that return lists)
+// Response Types
 // ============================================================================
 
-type TasksResponse = Task[]
-type ToolsResponse = Tool[]
-type DocumentsResponse = DocumentListItem[]
-type SessionsResponse = Session[]
+type LoginResponse = { token: string; expires_in: number }
+
+type RegisterResponse = {
+  token: string
+  expires_in: number
+  user: { id: string; email: string; github_login: string | null }
+}
+
+type MeResponse = {
+  id: string
+  email: string
+  github_login: string | null
+  authenticated: boolean
+  token_expires: number
+}
+
 type ChatResponse = { message_id: string; response: string }
-type SessionHistoryResponse = ChatMessage[]
 type ExecutionMessagesResponse = { messages: ExecutionMessage[] }
-type OutputSchemasResponse = OutputSchema[]
-type PromptTemplatesResponse = PromptTemplate[]
 type CostsResponse = CostResponse
-type ResultsResponse = Result[]
-type WorkflowsResponse = Workflow[]
-type CollectionsResponse = Collection[]
+type ProtocolTypesResponse = { types: ProtocolTypeInfo[] }
+
+// ============================================================================
+// Freeze Helper
+// ============================================================================
+
+const freeze = <T extends Record<string, unknown>>(obj: T): Readonly<T> => Object.freeze(obj)
 
 // ============================================================================
 // Typed Endpoints
 // ============================================================================
 
-const auth = {
+const auth = freeze({
   login: (body: { email: string; password: string }, config?: RequestConfig) =>
-    baseApi.post<{ token: string; expires_in: number }>(API.AUTH_LOGIN, body, config),
+    baseApi.post<LoginResponse>(API.AUTH_LOGIN, body, config),
 
   register: (body: { email: string; password: string }, config?: RequestConfig) =>
-    baseApi.post<{ token: string; expires_in: number; user: { id: string; email: string; github_login: string | null } }>(
-      API.AUTH_REGISTER,
-      body,
-      config,
-    ),
+    baseApi.post<RegisterResponse>(API.AUTH_REGISTER, body, config),
 
   me: (config?: RequestConfig) =>
-    baseApi.get<{ id: string; email: string; github_login: string | null; authenticated: boolean; token_expires: number }>(
-      API.AUTH_ME,
-      config,
-    ),
-}
+    baseApi.get<MeResponse>(API.AUTH_ME, config),
+})
 
-const agents = {
+const agents = freeze({
   list: (config?: RequestConfig) => baseApi.get<AgentsResponse>(API.AGENTS, config),
 
   get: (id: string, config?: RequestConfig) => baseApi.get<Agent>(API.AGENT(id), config),
@@ -144,10 +150,10 @@ const agents = {
 
   setContext: (id: string, docIds: string[], config?: RequestConfig) =>
     baseApi.put<void>(API.AGENT_CONTEXT(id), { document_ids: docIds }, config),
-}
+})
 
-const tasks = {
-  list: (config?: RequestConfig) => baseApi.get<TasksResponse>(API.TASKS, config),
+const tasks = freeze({
+  list: (config?: RequestConfig) => baseApi.get<Task[]>(API.TASKS, config),
 
   get: (id: string, config?: RequestConfig) => baseApi.get<Task>(API.TASK(id), config),
 
@@ -156,10 +162,10 @@ const tasks = {
   update: (id: string, body: Partial<Task>, config?: RequestConfig) => baseApi.patch<Task>(API.TASK(id), body, config),
 
   delete: (id: string, config?: RequestConfig) => baseApi.del<void>(API.TASK(id), config),
-}
+})
 
-const tools = {
-  list: (config?: RequestConfig) => baseApi.get<ToolsResponse>(API.TOOLS, config),
+const tools = freeze({
+  list: (config?: RequestConfig) => baseApi.get<Tool[]>(API.TOOLS, config),
 
   get: (id: string, config?: RequestConfig) => baseApi.get<Tool>(API.TOOL(id), config),
 
@@ -168,10 +174,10 @@ const tools = {
   update: (id: string, body: UpdateToolRequest, config?: RequestConfig) => baseApi.patch<Tool>(API.TOOL(id), body, config),
 
   delete: (id: string, config?: RequestConfig) => baseApi.del<void>(API.TOOL(id), config),
-}
+})
 
-const documents = {
-  list: (config?: RequestConfig) => baseApi.get<DocumentsResponse>(API.DOCUMENTS, config),
+const documents = freeze({
+  list: (config?: RequestConfig) => baseApi.get<DocumentListItem[]>(API.DOCUMENTS, config),
 
   get: (id: string, config?: RequestConfig) => baseApi.get<Document>(API.DOCUMENT(id), config),
 
@@ -181,11 +187,11 @@ const documents = {
 
   delete: (id: string, config?: RequestConfig) => baseApi.del<void>(API.DOCUMENT(id), config),
 
-  search: (query: string, config?: RequestConfig) => baseApi.get<DocumentsResponse>(API.DOCUMENTS_SEARCH(query), config),
-}
+  search: (query: string, config?: RequestConfig) => baseApi.get<DocumentListItem[]>(API.DOCUMENTS_SEARCH(query), config),
+})
 
-const sessions = {
-  list: (config?: RequestConfig) => baseApi.get<SessionsResponse>(API.SESSIONS, config),
+const sessions = freeze({
+  list: (config?: RequestConfig) => baseApi.get<Session[]>(API.SESSIONS, config),
 
   get: (id: string, config?: RequestConfig) => baseApi.get<Session>(API.SESSION(id), config),
 
@@ -198,28 +204,28 @@ const sessions = {
   chat: (id: string, message: SendMessageRequest, config?: RequestConfig) =>
     baseApi.post<ChatResponse>(API.SESSION_CHAT(id), message, config),
 
-  getHistory: (id: string, config?: RequestConfig) => baseApi.get<SessionHistoryResponse>(API.SESSION_HISTORY(id), config),
+  getHistory: (id: string, config?: RequestConfig) => baseApi.get<ChatMessage[]>(API.SESSION_HISTORY(id), config),
 
   clearMessages: (id: string, config?: RequestConfig) => baseApi.del<void>(API.SESSION_MESSAGES(id), config),
-}
+})
 
-const chat = {
+const chat = freeze({
   send: (message: SendMessageRequest, config?: RequestConfig) => baseApi.post<ChatResponse>(API.CHAT, message, config),
 
-  getHistory: (config?: RequestConfig) => baseApi.get<SessionHistoryResponse>(API.CHAT_HISTORY, config),
-}
+  getHistory: (config?: RequestConfig) => baseApi.get<ChatMessage[]>(API.CHAT_HISTORY, config),
+})
 
-const config = {
+const appConfig = freeze({
   get: (config?: RequestConfig) => baseApi.get<Config>(API.CONFIG, config),
 
   update: (body: UpdateConfigRequest, config?: RequestConfig) => baseApi.patch<Config>(API.CONFIG, body, config),
-}
+})
 
-const stats = {
+const stats = freeze({
   get: (config?: RequestConfig) => baseApi.get<UsageSummary>(API.STATS, config),
-}
+})
 
-const agentExecutions = {
+const agentExecutions = freeze({
   list: (params?: { status?: string }, config?: RequestConfig) =>
     baseApi.get<AgentExecution[]>(params?.status ? `${API.AGENT_EXECUTIONS}?status=${params.status}` : API.AGENT_EXECUTIONS, config),
 
@@ -232,10 +238,10 @@ const agentExecutions = {
 
   approve: (id: string, body?: ApproveExecutionRequest, config?: RequestConfig) =>
     baseApi.post<void>(API.EXECUTION_APPROVE(id), body, config),
-}
+})
 
-const outputSchemas = {
-  list: (config?: RequestConfig) => baseApi.get<OutputSchemasResponse>(API.OUTPUT_SCHEMAS, config),
+const outputSchemas = freeze({
+  list: (config?: RequestConfig) => baseApi.get<OutputSchema[]>(API.OUTPUT_SCHEMAS, config),
 
   get: (id: string, config?: RequestConfig) => baseApi.get<OutputSchema>(API.OUTPUT_SCHEMA(id), config),
 
@@ -245,10 +251,10 @@ const outputSchemas = {
     baseApi.patch<OutputSchema>(API.OUTPUT_SCHEMA(id), body, config),
 
   delete: (id: string, config?: RequestConfig) => baseApi.del<void>(API.OUTPUT_SCHEMA(id), config),
-}
+})
 
-const promptTemplates = {
-  list: (config?: RequestConfig) => baseApi.get<PromptTemplatesResponse>(API.PROMPT_TEMPLATES, config),
+const promptTemplates = freeze({
+  list: (config?: RequestConfig) => baseApi.get<PromptTemplate[]>(API.PROMPT_TEMPLATES, config),
 
   get: (id: string, config?: RequestConfig) => baseApi.get<PromptTemplate>(API.PROMPT_TEMPLATE(id), config),
 
@@ -258,20 +264,20 @@ const promptTemplates = {
     baseApi.patch<PromptTemplate>(API.PROMPT_TEMPLATE(id), body, config),
 
   delete: (id: string, config?: RequestConfig) => baseApi.del<void>(API.PROMPT_TEMPLATE(id), config),
-}
+})
 
-const costs = {
+const costs = freeze({
   list: (config?: RequestConfig) => baseApi.get<CostsResponse>(API.COSTS, config),
-}
+})
 
-const results = {
-  list: (config?: RequestConfig) => baseApi.get<ResultsResponse>(API.RESULTS, config),
+const results = freeze({
+  list: (config?: RequestConfig) => baseApi.get<Result[]>(API.RESULTS, config),
 
   get: (id: string, config?: RequestConfig) => baseApi.get<Result>(API.RESULT(id), config),
-}
+})
 
-const workflows = {
-  list: (config?: RequestConfig) => baseApi.get<WorkflowsResponse>(API.WORKFLOWS, config),
+const workflows = freeze({
+  list: (config?: RequestConfig) => baseApi.get<Workflow[]>(API.WORKFLOWS, config),
 
   get: (id: string, config?: RequestConfig) => baseApi.get<Workflow>(API.WORKFLOW(id), config),
 
@@ -353,17 +359,17 @@ const workflows = {
 
   listExecutions: (workflowId: string, config?: RequestConfig) =>
     baseApi.get<WorkflowExecutionSummary[]>(API.WORKFLOW_EXECUTIONS(workflowId), config),
-}
+})
 
-const contextResponse = {
+const contextResponse = freeze({
   get: (config?: RequestConfig) => baseApi.get<unknown>(API.CONTEXT_RESPONSE, config),
-}
+})
 
-const modes = {
+const modes = freeze({
   list: (config?: RequestConfig) => baseApi.get<unknown>(API.MODES, config),
-}
+})
 
-const toolRouters = {
+const toolRouters = freeze({
   list: (config?: RequestConfig) => baseApi.get<ToolRouter[]>(API.TOOL_ROUTERS, config),
 
   get: (id: string, config?: RequestConfig) => baseApi.get<ToolRouter>(API.TOOL_ROUTER(id), config),
@@ -377,54 +383,26 @@ const toolRouters = {
   getTools: (id: string, config?: RequestConfig) => baseApi.get<Tool[]>(API.TOOL_ROUTER_TOOLS(id), config),
 
   setTools: (id: string, body: SetRouterToolsRequest, config?: RequestConfig) => baseApi.put<void>(API.TOOL_ROUTER_TOOLS(id), body, config),
-}
+})
 
-const routerModes = {
-  /**
-   * List all modes for a router
-   * GET /api/tool-routers/:router_id/modes
-   */
+const routerModes = freeze({
   listByRouter: (routerId: string, config?: RequestConfig) => baseApi.get<RouterMode[]>(API.ROUTER_MODES_BY_ROUTER(routerId), config),
 
-  /**
-   * Create new mode for a router
-   * POST /api/tool-routers/:router_id/modes
-   */
   createForRouter: (routerId: string, body: CreateRouterModeRequest, config?: RequestConfig) =>
     baseApi.post<RouterMode>(API.ROUTER_MODES_BY_ROUTER(routerId), body, config),
 
-  /**
-   * Get single mode by ID
-   * GET /api/router-modes/:id
-   */
   get: (id: string, config?: RequestConfig) => baseApi.get<RouterMode>(API.ROUTER_MODE(id), config),
 
-  /**
-   * Update mode
-   * PUT /api/router-modes/:id
-   */
   update: (id: string, body: UpdateRouterModeRequest, config?: RequestConfig) => baseApi.put<RouterMode>(API.ROUTER_MODE(id), body, config),
 
-  /**
-   * Delete mode
-   * DELETE /api/router-modes/:id
-   */
   delete: (id: string, config?: RequestConfig) => baseApi.del<void>(API.ROUTER_MODE(id), config),
 
-  /**
-   * Get tools assigned to mode
-   * GET /api/router-modes/:id/tools
-   */
   getTools: (id: string, config?: RequestConfig) => baseApi.get<Tool[]>(API.MODE_TOOLS(id), config),
 
-  /**
-   * Set tools for mode (replaces all)
-   * PUT /api/router-modes/:id/tools
-   */
   setTools: (id: string, body: SetModeToolsRequest, config?: RequestConfig) => baseApi.put<void>(API.MODE_TOOLS(id), body, config),
-}
+})
 
-const rooms = {
+const rooms = freeze({
   get: (id: string, config?: RequestConfig) => baseApi.get<Room>(API.ROOM(id), config),
 
   create: (body: CreateRoomRequest, config?: RequestConfig) => baseApi.post<Room>(API.ROOMS, body, config),
@@ -442,9 +420,9 @@ const rooms = {
   removeMember: (id: string, agentId: string, config?: RequestConfig) => baseApi.del<void>(API.ROOM_MEMBER(id, agentId), config),
 
   createSession: (id: string, config?: RequestConfig) => baseApi.post<RoomSession>(API.ROOM_SESSIONS(id), undefined, config),
-}
+})
 
-const roomSessions = {
+const roomSessions = freeze({
   get: (id: string, config?: RequestConfig) => baseApi.get<RoomSession>(API.ROOM_SESSION(id), config),
 
   sendMessage: (id: string, body: RoomMessageRequest, config?: RequestConfig) =>
@@ -455,10 +433,10 @@ const roomSessions = {
   close: (id: string, config?: RequestConfig) => baseApi.post<RoomSession>(API.ROOM_SESSION_CLOSE(id), undefined, config),
 
   listOutputs: (id: string, config?: RequestConfig) => baseApi.get<RoomOutput[]>(API.ROOM_SESSION_OUTPUTS(id), config),
-}
+})
 
-const collections = {
-  list: (config?: RequestConfig) => baseApi.get<CollectionsResponse>(API.COLLECTIONS, config),
+const collections = freeze({
+  list: (config?: RequestConfig) => baseApi.get<Collection[]>(API.COLLECTIONS, config),
 
   get: (id: string, config?: RequestConfig) => baseApi.get<Collection>(API.COLLECTION(id), config),
 
@@ -471,11 +449,9 @@ const collections = {
   run: (id: string, config?: RequestConfig) => baseApi.post<CollectionRun>(API.COLLECTION_RUN(id), undefined, config),
 
   getRunStatus: (runId: string, config?: RequestConfig) => baseApi.get<CollectionRun>(API.COLLECTION_RUN_STATUS(runId), config),
-}
+})
 
-type ProtocolTypesResponse = { types: ProtocolTypeInfo[] }
-
-const protocols = {
+const protocols = freeze({
   list: (config?: RequestConfig) => baseApi.get<Protocol[]>(API.PROTOCOLS, config),
 
   get: (id: string, config?: RequestConfig) => baseApi.get<Protocol>(API.PROTOCOL(id), config),
@@ -495,13 +471,13 @@ const protocols = {
     baseApi.del<void>(API.PROTOCOL_PORT(protocolId, portId), config),
 
   preview: (id: string, config?: RequestConfig) => baseApi.post<unknown>(API.PROTOCOL_PREVIEW(id), undefined, config),
-}
+})
 
 // ============================================================================
 // Merge base API methods with typed endpoints into single `api` export
 // ============================================================================
 
-export const api = {
+export const api = Object.freeze({
   // Low-level HTTP methods
   get: baseApi.get,
   post: baseApi.post,
@@ -517,7 +493,7 @@ export const api = {
   documents,
   sessions,
   chat,
-  config,
+  config: appConfig,
   stats,
   agentExecutions,
   outputSchemas,
@@ -533,4 +509,6 @@ export const api = {
   roomSessions,
   collections,
   protocols,
-}
+})
+
+export type Api = typeof api

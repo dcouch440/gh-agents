@@ -1,9 +1,6 @@
-/* eslint-disable @typescript-eslint/require-await */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { api, ApiError, configure, addInterceptor, cancelInFlightRequests } from './client'
+import type { RequestContext } from './client'
 
 const { mockFetch, mockGetItem } = vi.hoisted(() => ({
   mockFetch: vi.fn(),
@@ -83,7 +80,7 @@ describe('api client', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: async () => '{"data":"test"}',
+        text: () => Promise.resolve('{"data":"test"}'),
         headers: new Headers(),
       })
 
@@ -104,7 +101,7 @@ describe('api client', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: async () => '{"data":"test"}',
+        text: () => Promise.resolve('{"data":"test"}'),
         headers: new Headers(),
       })
 
@@ -140,7 +137,7 @@ describe('api client', () => {
         ok: false,
         status: 404,
         statusText: 'Not Found',
-        text: async () => '{"error":"Not found"}',
+        text: () => Promise.resolve('{"error":"Not found"}'),
         headers: new Headers(),
       })
 
@@ -159,7 +156,7 @@ describe('api client', () => {
         ok: false,
         status: 500,
         statusText: 'Internal Server Error',
-        text: async () => 'Server error',
+        text: () => Promise.resolve('Server error'),
         headers: new Headers(),
       })
 
@@ -176,9 +173,7 @@ describe('api client', () => {
         ok: false,
         status: 500,
         statusText: 'Internal Server Error',
-        text: async () => {
-          throw new Error('Cannot read body')
-        },
+        text: () => Promise.reject(new Error('Cannot read body')),
         headers: new Headers(),
       })
 
@@ -194,7 +189,7 @@ describe('api client', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: async () => 'invalid json',
+        text: () => Promise.resolve('invalid json'),
         headers: new Headers(),
       })
 
@@ -210,7 +205,7 @@ describe('api client', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 201,
-        text: async () => '{"id":"123"}',
+        text: () => Promise.resolve('{"id":"123"}'),
         headers: new Headers(),
       })
 
@@ -235,7 +230,7 @@ describe('api client', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: async () => '{"success":true}',
+        text: () => Promise.resolve('{"success":true}'),
         headers: new Headers(),
       })
 
@@ -246,6 +241,7 @@ describe('api client', () => {
       expect(call[1]).toMatchObject({
         method: 'POST',
       })
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- vi.fn() mock calls are untyped
       expect(call[1]?.body).toBeUndefined()
     })
 
@@ -257,14 +253,16 @@ describe('api client', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: async () => '{"uploaded":true}',
+        text: () => Promise.resolve('{"uploaded":true}'),
         headers: new Headers(),
       })
 
       await api.post('/upload', formData)
 
       const call = mockFetch.mock.calls[0]
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- vi.fn() mock calls are untyped
       expect(call[1]?.body).toBeInstanceOf(FormData)
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access -- vi.fn() mock calls are untyped
       expect(call[1]?.headers).not.toHaveProperty('Content-Type')
     })
   })
@@ -275,7 +273,7 @@ describe('api client', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: async () => '{"updated":true}',
+        text: () => Promise.resolve('{"updated":true}'),
         headers: new Headers(),
       })
 
@@ -298,7 +296,7 @@ describe('api client', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: async () => '{"replaced":true}',
+        text: () => Promise.resolve('{"replaced":true}'),
         headers: new Headers(),
       })
 
@@ -340,7 +338,7 @@ describe('api client', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: async () => '{"deleted":true}',
+        text: () => Promise.resolve('{"deleted":true}'),
         headers: new Headers(),
       })
 
@@ -356,7 +354,7 @@ describe('api client', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: async () => '{}',
+        text: () => Promise.resolve('{}'),
         headers: new Headers(),
       })
 
@@ -382,8 +380,8 @@ describe('api client', () => {
 
       let abortSignal: AbortSignal | null = null
       mockFetch.mockImplementation(
-        (_url, options) =>
-          new Promise((resolve, reject) => {
+        (_url: string, options?: RequestInit) =>
+          new Promise<never>((_, reject) => {
             abortSignal = options?.signal ?? null
             abortSignal?.addEventListener('abort', () => {
               reject(new DOMException('Aborted', 'AbortError'))
@@ -409,7 +407,7 @@ describe('api client', () => {
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          text: async () => '{"success":true}',
+          text: () => Promise.resolve('{"success":true}'),
           headers: new Headers(),
         })
 
@@ -427,13 +425,13 @@ describe('api client', () => {
           ok: false,
           status: 500,
           statusText: 'Internal Server Error',
-          text: async () => 'Error',
+          text: () => Promise.resolve('Error'),
           headers: new Headers(),
         })
         .mockResolvedValueOnce({
           ok: true,
           status: 200,
-          text: async () => '{"success":true}',
+          text: () => Promise.resolve('{"success":true}'),
           headers: new Headers(),
         })
 
@@ -450,7 +448,7 @@ describe('api client', () => {
         ok: false,
         status: 404,
         statusText: 'Not Found',
-        text: async () => 'Not found',
+        text: () => Promise.resolve('Not found'),
         headers: new Headers(),
       })
 
@@ -480,7 +478,7 @@ describe('api client', () => {
           return Promise.resolve({
             ok: true,
             status: 200,
-            text: async () => '{}',
+            text: () => Promise.resolve('{}'),
             headers: new Headers(),
           })
         })
@@ -503,7 +501,7 @@ describe('api client', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: async () => '{"data":"test"}',
+        text: () => Promise.resolve('{"data":"test"}'),
         headers: new Headers(),
       })
 
@@ -520,7 +518,7 @@ describe('api client', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: async () => '{"created":true}',
+        text: () => Promise.resolve('{"created":true}'),
         headers: new Headers(),
       })
 
@@ -560,15 +558,12 @@ describe('api client', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: async () => '{}',
+        text: () => Promise.resolve('{}'),
         headers: new Headers(),
       })
 
-      const onRequest = vi.fn((ctx) => {
-        ctx.config.headers = {
-          ...ctx.config.headers,
-          'X-Intercepted': 'true',
-        }
+      const onRequest = vi.fn((ctx: RequestContext): RequestContext => {
+        ctx.config.headers = { ...ctx.config.headers, 'X-Intercepted': 'true' }
         return ctx
       })
 
@@ -580,6 +575,7 @@ describe('api client', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         'http://localhost:3000/api/test',
         expect.objectContaining({
+          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.objectContaining() returns any
           headers: expect.objectContaining({
             'X-Intercepted': 'true',
           }),
@@ -594,16 +590,16 @@ describe('api client', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: async () => '{"value":42}',
+        text: () => Promise.resolve('{"value":42}'),
         headers: new Headers(),
       })
 
-      const onResponse = vi.fn((ctx) => {
-        return {
-          ...ctx,
-          data: { ...ctx.data, intercepted: true },
-        }
-      })
+      /* eslint-disable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access -- ResponseContext<T> generic prevents concrete vi.fn typing */
+      const onResponse = vi.fn((ctx) => ({
+        ...ctx,
+        data: { ...ctx.data, intercepted: true },
+      }))
+      /* eslint-enable @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access */
 
       const remove = addInterceptor({ onResponse })
 
@@ -621,11 +617,11 @@ describe('api client', () => {
         ok: false,
         status: 401,
         statusText: 'Unauthorized',
-        text: async () => 'Unauthorized',
+        text: () => Promise.resolve('Unauthorized'),
         headers: new Headers(),
       })
 
-      const onError = vi.fn((error) => error)
+      const onError = vi.fn((error: ApiError): ApiError => error)
 
       const remove = addInterceptor({ onError })
 
@@ -647,11 +643,11 @@ describe('api client', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
-        text: async () => '{}',
+        text: () => Promise.resolve('{}'),
         headers: new Headers(),
       })
 
-      const onRequest = vi.fn((ctx) => ctx)
+      const onRequest = vi.fn((ctx: RequestContext): RequestContext => ctx)
 
       const remove = addInterceptor({ onRequest })
       remove()
@@ -674,8 +670,8 @@ describe('api client', () => {
 
       let abortSignal: AbortSignal | null = null
       mockFetch.mockImplementation(
-        (_url, options) =>
-          new Promise((resolve, reject) => {
+        (_url: string, options?: RequestInit) =>
+          new Promise<never>((_, reject) => {
             abortSignal = options?.signal ?? null
             abortSignal?.addEventListener('abort', () => {
               reject(new DOMException('Aborted', 'AbortError'))

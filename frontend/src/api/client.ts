@@ -12,7 +12,6 @@ type RequestConfig = {
   retryDelay?: number
   signal?: AbortSignal
   headers?: Record<string, string>
-  onUploadProgress?: (progress: number) => void
 }
 
 type RequestContext = {
@@ -39,7 +38,7 @@ type Interceptor = {
 // Error Types
 // ============================================================================
 
-type ApiErrorType = 'network_error' | 'timeout_error' | 'abort_error' | 'http_error' | 'parse_error' | 'validation_error'
+type ApiErrorType = 'network_error' | 'timeout_error' | 'abort_error' | 'http_error' | 'parse_error'
 
 class ApiError extends Error {
   readonly type: ApiErrorType
@@ -80,12 +79,11 @@ class ApiError extends Error {
 }
 
 // ============================================================================
-// Client State
+// Internal State (module-private, not exported)
 // ============================================================================
 
 type InFlightRequest = {
-  promise: Promise<unknown>
-  controller: AbortController
+  readonly promise: Promise<unknown>
 }
 
 const inFlightRequests = new Map<string, InFlightRequest>()
@@ -120,6 +118,37 @@ const addInterceptor = (interceptor: Interceptor): (() => void) => {
   return () => {
     const idx = interceptors.indexOf(interceptor)
     if (idx > -1) interceptors.splice(idx, 1)
+  }
+}
+
+// ============================================================================
+// Abort Signal Lifecycle
+// ============================================================================
+
+type AbortHandle = {
+  readonly signal: AbortSignal
+  readonly cleanup: () => void
+}
+
+const buildAbortHandle = (timeout: number, externalSignal?: AbortSignal): AbortHandle => {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeout)
+
+  const onExternalAbort = (): void => controller.abort()
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort()
+    } else {
+      externalSignal.addEventListener('abort', onExternalAbort)
+    }
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup: (): void => {
+      clearTimeout(timeoutId)
+      externalSignal?.removeEventListener('abort', onExternalAbort)
+    },
   }
 }
 
@@ -175,24 +204,21 @@ const executeRequest = async <T>(path: string, method: HttpMethod, body?: unknow
       await sleep(retryDelay * Math.pow(2, attempt - 1))
     }
 
+    const { signal, cleanup } = buildAbortHandle(timeout, config.signal)
+
     try {
-      const controller = config.signal ? new AbortController() : new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), timeout)
-
-      if (config.signal) {
-        config.signal.addEventListener('abort', () => controller.abort())
-      }
-
       const headers = buildHeaders(config.headers)
       const fetchOptions: RequestInit = {
         method: context.method,
         headers,
-        signal: controller.signal,
+        signal,
       }
 
       if (context.body !== undefined) {
         if (context.body instanceof FormData) {
-          delete headers['Content-Type']
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructuring to omit Content-Type for FormData
+          const { 'Content-Type': _contentType, ...formHeaders } = buildHeaders(config.headers)
+          fetchOptions.headers = formHeaders
           fetchOptions.body = context.body
         } else {
           fetchOptions.body = JSON.stringify(context.body)
@@ -200,7 +226,6 @@ const executeRequest = async <T>(path: string, method: HttpMethod, body?: unknow
       }
 
       const res = await fetch(context.url, fetchOptions)
-      clearTimeout(timeoutId)
 
       if (!res.ok) {
         const bodyText = await res.text().catch(() => null)
@@ -276,6 +301,8 @@ const executeRequest = async <T>(path: string, method: HttpMethod, body?: unknow
       if (attempt === retries) {
         throw lastError
       }
+    } finally {
+      cleanup()
     }
   }
 
@@ -304,12 +331,11 @@ const deduplicate = async <T>(path: string, method: HttpMethod, body: unknown, e
     return existing.promise as Promise<T>
   }
 
-  const controller = new AbortController()
   const promise = execute().finally(() => {
     inFlightRequests.delete(key)
   })
 
-  inFlightRequests.set(key, { promise, controller })
+  inFlightRequests.set(key, { promise })
   return promise
 }
 
@@ -321,7 +347,7 @@ const request = async <T>(path: string, method: HttpMethod, body?: unknown, conf
   return deduplicate(path, method, body, () => executeRequest<T>(path, method, body, config))
 }
 
-const api = {
+const api = Object.freeze({
   get: <T>(path: string, config?: RequestConfig) => request<T>(path, 'GET', undefined, config),
 
   post: <T>(path: string, body?: unknown, config?: RequestConfig) => request<T>(path, 'POST', body, config),
@@ -331,12 +357,9 @@ const api = {
   put: <T>(path: string, body: unknown, config?: RequestConfig) => request<T>(path, 'PUT', body, config),
 
   del: <T = void>(path: string, config?: RequestConfig) => request<T>(path, 'DELETE', undefined, config),
-}
+})
 
 const cancelInFlightRequests = (): void => {
-  for (const [, { controller }] of inFlightRequests) {
-    controller.abort()
-  }
   inFlightRequests.clear()
 }
 
