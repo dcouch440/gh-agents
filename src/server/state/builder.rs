@@ -11,7 +11,6 @@ use sqlx::PgPool;
 use thiserror::Error;
 use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
-use uuid::Uuid;
 
 use crate::db::traits::ServerRepo;
 use crate::llm::{LLMProvider, ProviderRegistry};
@@ -58,7 +57,6 @@ pub struct AppStateBuilder {
     provider_registry: Option<ProviderRegistry>,
     prompt_registry: Option<Arc<PromptRegistry>>,
     jwt_secret: Option<Vec<u8>>,
-    default_agent_id: Option<Uuid>,
 }
 
 impl AppStateBuilder {
@@ -74,7 +72,6 @@ impl AppStateBuilder {
             provider_registry: None,
             prompt_registry: None,
             jwt_secret: None,
-            default_agent_id: None,
         }
     }
 
@@ -132,12 +129,6 @@ impl AppStateBuilder {
         self
     }
 
-    /// Set the default agent ID.
-    pub fn with_default_agent_id(mut self, id: Uuid) -> Self {
-        self.default_agent_id = Some(id);
-        self
-    }
-
     /// Build the AppState and return it along with the orchestrator message receiver.
     ///
     /// # Errors
@@ -173,7 +164,6 @@ impl AppStateBuilder {
             provider_registry,
             prompt_registry,
             jwt_secret,
-            default_agent_id: self.default_agent_id,
             chat_tx,
             response_streams: DashMap::new(),
             cancellation_tokens: DashMap::new(),
@@ -280,17 +270,14 @@ mod tests {
     #[test]
     fn builder_sets_optional_fields() {
         let custom_secret = vec![1, 2, 3, 4];
-        let agent_id = Uuid::new_v4();
 
         let (state, _rx) = AppStateBuilder::new()
             .with_server_repo(mock_repo())
             .with_repos(default_mock_repos())
             .with_config(default_config())
             .with_jwt_secret(custom_secret.clone())
-            .with_default_agent_id(agent_id)
             .build_for_test();
 
         assert_eq!(state.jwt_secret(), &custom_secret);
-        assert_eq!(state.default_agent_id(), Some(agent_id));
     }
 }

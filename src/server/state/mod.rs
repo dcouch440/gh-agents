@@ -92,8 +92,6 @@ pub(crate) struct AppStateInner {
     pub(crate) prompt_registry: Arc<PromptRegistry>,
     /// JWT secret for token signing
     pub(crate) jwt_secret: Vec<u8>,
-    /// Default agent UUID (looked up at startup)
-    pub(crate) default_agent_id: Option<Uuid>,
     /// Channel to send messages to the orchestrator
     pub(crate) chat_tx: mpsc::Sender<ConsumerMessage>,
     /// Map of message IDs to buffered response streams (DashMap for concurrent access)
@@ -159,7 +157,7 @@ impl AppState {
         // Initialize LLM providers
         let (provider, provider_registry) = Self::init_providers().await;
 
-        let mut state = Self(Arc::new(AppStateInner {
+        let state = Self(Arc::new(AppStateInner {
             db: Some(db),
             server_repo,
             repos,
@@ -169,7 +167,6 @@ impl AppState {
             provider_registry,
             prompt_registry,
             jwt_secret,
-            default_agent_id: None,
             chat_tx,
             response_streams: DashMap::new(),
             cancellation_tokens: DashMap::new(),
@@ -177,24 +174,6 @@ impl AppState {
             ollama_toggle_cache: Arc::new(tokio::sync::RwLock::new((false, Instant::now()))),
             protocol_engine: Arc::new(ProtocolEngine::new()),
         }));
-
-        // Look up default agent from DB (for workflow system)
-        let legacy_user =
-            UserId(uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap());
-        if let Ok(agent_rows) = state.server_repo().list_persisted_agents(legacy_user).await {
-            if let Some(home) = agent_rows
-                .iter()
-                .find(|r| r.name.eq_ignore_ascii_case("home"))
-            {
-                tracing::info!("Default agent: {} ({})", home.name, home.id);
-                // We need to recreate the Arc with the updated default_agent_id
-                let inner = Arc::try_unwrap(state.0).unwrap_or_else(|arc| (*arc).clone_inner());
-                state = Self(Arc::new(AppStateInner {
-                    default_agent_id: Some(home.id),
-                    ..inner
-                }));
-            }
-        }
 
         (state, orchestrator_rx)
     }
@@ -222,7 +201,6 @@ impl AppState {
                 provider_registry: ProviderRegistry::default(),
                 prompt_registry: Arc::new(PromptRegistry::empty()),
                 jwt_secret,
-                default_agent_id: None,
                 chat_tx,
                 response_streams: DashMap::new(),
                 cancellation_tokens: DashMap::new(),
@@ -472,11 +450,6 @@ impl AppState {
         &self.0.jwt_secret
     }
 
-    /// Access the default agent ID.
-    pub fn default_agent_id(&self) -> Option<Uuid> {
-        self.0.default_agent_id
-    }
-
     /// Access the chat sender (for sending messages to orchestrator).
     pub fn chat_tx(&self) -> &mpsc::Sender<ConsumerMessage> {
         &self.0.chat_tx
@@ -679,26 +652,3 @@ impl AppState {
     }
 }
 
-// Helper for cloning inner state (needed for default_agent_id update)
-impl AppStateInner {
-    fn clone_inner(&self) -> Self {
-        Self {
-            db: self.db.clone(),
-            server_repo: self.server_repo.clone(),
-            repos: self.repos.clone(),
-            events: EventBus::new(), // Create new event bus (can't clone senders)
-            config: self.config.clone(),
-            provider: self.provider.clone(),
-            provider_registry: self.provider_registry.clone(),
-            prompt_registry: self.prompt_registry.clone(),
-            jwt_secret: self.jwt_secret.clone(),
-            default_agent_id: self.default_agent_id,
-            chat_tx: self.chat_tx.clone(),
-            response_streams: DashMap::new(), // Fresh map (streams don't survive clone)
-            cancellation_tokens: DashMap::new(), // Fresh map
-            shutdown_token: CancellationToken::new(),
-            ollama_toggle_cache: self.ollama_toggle_cache.clone(),
-            protocol_engine: self.protocol_engine.clone(),
-        }
-    }
-}

@@ -54,7 +54,6 @@ const ARCHETYPE_MENU_ORDER: ArchetypeType[] = [
   Archetype.DOCUMENTER,
   Archetype.TASK_FORCE,
   Archetype.ROOM,
-  Archetype.BLANK,
 ]
 
 function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
