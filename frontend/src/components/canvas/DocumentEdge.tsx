@@ -1,8 +1,8 @@
 import { memo } from 'react'
-import { BaseEdge, getBezierPath } from '@xyflow/react'
+import { getBezierPath } from '@xyflow/react'
 import type { EdgeProps } from '@xyflow/react'
-import { CANVAS, PROTOCOL_TYPE_COLORS } from './constants'
-import './edgeFlow.css'
+import { PIPE, PROTOCOL_TYPE_COLORS } from './constants'
+import { PipeEdgePath } from './PipeEdgePath'
 
 function DocumentEdgeComponent(props: EdgeProps) {
   const { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition } = props
@@ -17,15 +17,13 @@ function DocumentEdgeComponent(props: EdgeProps) {
   })
 
   return (
-    <BaseEdge
-      path={edgePath}
-      style={{
-        stroke: PROTOCOL_TYPE_COLORS['documenter'],
-        strokeWidth: CANVAS.EDGE_STROKE_WIDTH,
-        strokeDasharray: CANVAS.EDGE_DASH_PATTERN,
-        opacity: CANVAS.EDGE_OPACITY_PROTOCOL,
-        animation: `edgeFlow ${CANVAS.EDGE_FLOW_DURATION} linear infinite reverse`,
-      }}
+    <PipeEdgePath
+      edgePath={edgePath}
+      color={PROTOCOL_TYPE_COLORS['documenter']}
+      selected={false}
+      isProtocol={true}
+      animationDirection="reverse"
+      interactionWidth={PIPE.INTERACTION_WIDTH}
     />
   )
 }

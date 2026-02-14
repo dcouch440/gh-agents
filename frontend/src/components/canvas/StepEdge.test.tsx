@@ -7,17 +7,24 @@ const mockGetBezierPath = vi.fn(() => ['M 0 0 C 50 0, 50 100, 100 100', 50, 50])
 const mockDeleteElements = vi.fn(() => Promise.resolve())
 
 vi.mock('@xyflow/react', () => ({
-  BaseEdge: ({ path, style }: { path: string; style: React.CSSProperties }) => (
-    <svg>
-      <path data-testid="edge-path" d={path} style={style} />
-    </svg>
-  ),
   EdgeLabelRenderer: ({ children }: { children: React.ReactNode }) => <div data-testid="edge-label">{children}</div>,
   getBezierPath: (...args: unknown[]) => mockGetBezierPath(...args),
   useReactFlow: () => ({
     deleteElements: mockDeleteElements,
   }),
   Position: { Left: 'left', Right: 'right' },
+}))
+
+vi.mock('./PipeEdgePath', () => ({
+  PipeEdgePath: (props: { edgePath: string; color: string; selected: boolean; isProtocol: boolean; animationDirection: string }) => (
+    <g
+      data-testid="pipe-edge"
+      data-color={props.color}
+      data-selected={String(props.selected)}
+      data-is-protocol={String(props.isProtocol)}
+      data-animation-direction={props.animationDirection}
+    />
+  ),
 }))
 
 const baseProps = {
@@ -32,7 +39,7 @@ const baseProps = {
   targetPosition: 'left' as const,
   selected: false,
   animated: false,
-  data: { condition: null },
+  data: { protocolColor: null },
   interactionWidth: 20,
   sourceHandleId: null,
   targetHandleId: null,
@@ -56,14 +63,38 @@ beforeEach(() => {
 })
 
 describe('StepEdge', () => {
-  it('renders an edge path', () => {
-    const { container } = render(
+  it('renders PipeEdgePath with correct props', () => {
+    render(
       <svg>
         <StepEdge {...baseProps} />
       </svg>,
     )
-    const path = container.querySelector('[data-testid="edge-path"]')
-    expect(path).toBeInTheDocument()
+    const pipe = screen.getByTestId('pipe-edge')
+    expect(pipe).toBeInTheDocument()
+    expect(pipe).toHaveAttribute('data-selected', 'false')
+    expect(pipe).toHaveAttribute('data-is-protocol', 'false')
+    expect(pipe).toHaveAttribute('data-animation-direction', 'normal')
+  })
+
+  it('passes protocol color when present', () => {
+    render(
+      <svg>
+        <StepEdge {...baseProps} data={{ protocolColor: '#3b82f6' }} />
+      </svg>,
+    )
+    const pipe = screen.getByTestId('pipe-edge')
+    expect(pipe).toHaveAttribute('data-color', '#3b82f6')
+    expect(pipe).toHaveAttribute('data-is-protocol', 'true')
+  })
+
+  it('passes selected state to PipeEdgePath', () => {
+    render(
+      <svg>
+        <StepEdge {...baseProps} selected={true} />
+      </svg>,
+    )
+    const pipe = screen.getByTestId('pipe-edge')
+    expect(pipe).toHaveAttribute('data-selected', 'true')
   })
 
   it('calls getBezierPath with source/target coordinates', () => {
@@ -80,26 +111,6 @@ describe('StepEdge', () => {
         targetY: 100,
       }),
     )
-  })
-
-  it('uses lower opacity when not selected', () => {
-    const { container } = render(
-      <svg>
-        <StepEdge {...baseProps} selected={false} />
-      </svg>,
-    )
-    const path = container.querySelector('[data-testid="edge-path"]')
-    expect(path).toHaveStyle({ opacity: '0.4' })
-  })
-
-  it('uses higher opacity when selected', () => {
-    const { container } = render(
-      <svg>
-        <StepEdge {...baseProps} selected={true} />
-      </svg>,
-    )
-    const path = container.querySelector('[data-testid="edge-path"]')
-    expect(path).toHaveStyle({ opacity: '0.8' })
   })
 
   it('renders delete button', () => {

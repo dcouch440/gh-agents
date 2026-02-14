@@ -1,11 +1,11 @@
 import { memo } from 'react'
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, useReactFlow } from '@xyflow/react'
+import { EdgeLabelRenderer, getBezierPath, useReactFlow } from '@xyflow/react'
 import type { EdgeProps } from '@xyflow/react'
 import CloseIcon from '@mui/icons-material/Close'
 import IconButton from '@mui/material/IconButton'
 import { useTheme } from '@mui/material/styles'
-import { CANVAS } from './constants'
-import './edgeFlow.css'
+import { PIPE } from './constants'
+import { PipeEdgePath } from './PipeEdgePath'
 
 type StepEdgeNodeData = {
   protocolColor: string | null
@@ -28,6 +28,10 @@ function StepEdgeComponent(props: EdgeProps) {
     targetPosition,
   })
 
+  const color = selected
+    ? theme.palette.primary.main
+    : protocolColor ?? theme.palette.text.secondary
+
   const handleDelete = (event: React.MouseEvent) => {
     event.stopPropagation()
     event.preventDefault()
@@ -36,18 +40,13 @@ function StepEdgeComponent(props: EdgeProps) {
 
   return (
     <>
-      <BaseEdge
-        path={edgePath}
-        style={{
-          stroke: selected
-            ? theme.palette.primary.main
-            : protocolColor ?? theme.palette.text.secondary,
-          strokeWidth: CANVAS.EDGE_STROKE_WIDTH,
-          strokeDasharray: protocolColor !== null ? CANVAS.EDGE_DASH_PATTERN : undefined,
-          opacity: selected ? CANVAS.EDGE_OPACITY_SELECTED : protocolColor !== null ? CANVAS.EDGE_OPACITY_PROTOCOL : CANVAS.EDGE_OPACITY_DEFAULT,
-          animation: protocolColor !== null ? `edgeFlow ${CANVAS.EDGE_FLOW_DURATION} linear infinite` : undefined,
-          transition: 'stroke 150ms ease, opacity 150ms ease',
-        }}
+      <PipeEdgePath
+        edgePath={edgePath}
+        color={color}
+        selected={selected ?? false}
+        isProtocol={protocolColor !== null}
+        animationDirection="normal"
+        interactionWidth={PIPE.INTERACTION_WIDTH}
       />
       <EdgeLabelRenderer>
         <div
