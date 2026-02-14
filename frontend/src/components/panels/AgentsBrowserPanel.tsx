@@ -1,12 +1,15 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
-import Box from '@mui/material/Box'
+import { useEffect, useMemo, useCallback } from 'react'
 import SmartToyOutlined from '@mui/icons-material/SmartToyOutlined'
-import { SearchInput, AccentBarRow, EmptyState, LoadingSpinner } from '@/components/primitives'
 import { useStore, agentStore, canvasStore, workflowStore } from '@/stores'
 import { DESIGN } from '@/constants'
+import { BrowserPanel } from './BrowserPanel'
+import type { Agent } from '@/types/agent'
+
+const matchesQuery = (agent: Agent, query: string) => agent.name.toLowerCase().includes(query.toLowerCase())
+
+const toRow = (agent: Agent) => ({ primary: agent.name, secondary: agent.model_id })
 
 function AgentsBrowserPanel() {
-  const [query, setQuery] = useState('')
   const agents = useStore(agentStore.store, agentStore.selectAll)
   const loading = useStore(agentStore.store, agentStore.selectLoading)
   const selectedStepIds = useStore(canvasStore.store, canvasStore.selectSelectedStepIds)
@@ -18,8 +21,6 @@ function AgentsBrowserPanel() {
   const firstStepId = useMemo(() => selectedStepIds.values().next().value ?? null, [selectedStepIds])
   const selectedStep = useStore(workflowStore.store, workflowStore.selectStepById(firstStepId))
 
-  const filtered = useMemo(() => agents.filter((a) => a.name.toLowerCase().includes(query.toLowerCase())), [agents, query])
-
   const handleAssign = useCallback(
     (agentId: string) => {
       if (!selectedStep) return
@@ -28,35 +29,21 @@ function AgentsBrowserPanel() {
     [selectedStep],
   )
 
+  const isHighlighted = useCallback((agent: Agent) => agent.id === selectedStep?.agent_id, [selectedStep])
+
   return (
-    <Box>
-      <Box sx={{ px: 1.5, py: 1 }}>
-        <SearchInput value={query} onChange={setQuery} placeholder="Search agents..." />
-      </Box>
-
-      {loading ? <LoadingSpinner label="Loading agents..." /> : null}
-
-      {!loading && filtered.length === 0 ? (
-        <EmptyState icon={<SmartToyOutlined />} message={query ? `No agents matching "${query}"` : 'No agents found'} />
-      ) : null}
-
-      {filtered.map((agent) => (
-        <AccentBarRow
-          key={agent.id}
-          barColor={DESIGN.PORT_STRING}
-          primary={agent.name}
-          secondary={agent.model_id}
-          highlight={agent.id === selectedStep?.agent_id}
-          onClick={
-            selectedStep
-              ? () => {
-                  handleAssign(agent.id)
-                }
-              : null
-          }
-        />
-      ))}
-    </Box>
+    <BrowserPanel
+      items={agents}
+      loading={loading}
+      searchPlaceholder="Search agents..."
+      emptyIcon={<SmartToyOutlined />}
+      emptyLabel="agents"
+      barColor={DESIGN.PORT_STRING}
+      toRow={toRow}
+      matchesQuery={matchesQuery}
+      isHighlighted={isHighlighted}
+      onItemClick={selectedStep ? handleAssign : null}
+    />
   )
 }
 

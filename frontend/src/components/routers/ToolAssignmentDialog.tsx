@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Dialog, DialogTitle, DialogContent, DialogActions, Checkbox, FormControlLabel, Box, Typography } from '@mui/material'
+import { Dialog, DialogTitle, DialogContent, DialogActions, Box, Typography } from '@mui/material'
 import { Button, LoadingSpinner } from '@/components/primitives'
+import { ToolCheckList } from './ToolCheckList'
 import type { Tool } from '@/types'
 
 type ToolAssignmentDialogProps = {
@@ -52,26 +53,7 @@ function ToolAssignmentContent({
             No tools available
           </Typography>
         ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-            {allTools.map((tool) => (
-              <FormControlLabel
-                key={tool.id}
-                control={<Checkbox checked={selectedIds.has(tool.id)} onChange={() => handleToggle(tool.id)} size="small" />}
-                label={
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                      {tool.name}
-                    </Typography>
-                    {tool.description ? (
-                      <Typography variant="caption" color="text.secondary">
-                        {tool.description}
-                      </Typography>
-                    ) : null}
-                  </Box>
-                }
-              />
-            ))}
-          </Box>
+          <ToolCheckList tools={allTools} selectedIds={selectedIds} onToggle={handleToggle} disabled={false} />
         )}
       </DialogContent>
       <DialogActions sx={{ px: 3, py: 2 }}>

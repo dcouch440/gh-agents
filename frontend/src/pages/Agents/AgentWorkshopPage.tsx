@@ -20,6 +20,7 @@ import type { ChatMessageData } from '@/components/chat/ChatPanel'
 import type { SSEEvent } from '@/api'
 import type { DraftConfig } from '@/types'
 import { extractVariables } from '@/utils/variables'
+import { Collections } from '@/utils/collections'
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -228,7 +229,8 @@ const reducer = (state: WorkshopState, action: WorkshopAction): WorkshopState =>
           mockData: newMockData,
           // Reset to system tab if current tab variable no longer exists
           activeTab:
-            action.variables.includes(state.variableSimulation.activeTab) || state.variableSimulation.activeTab === 'system'
+            Collections.toSet(action.variables).has(state.variableSimulation.activeTab) ||
+            state.variableSimulation.activeTab === 'system'
               ? state.variableSimulation.activeTab
               : 'system',
         },

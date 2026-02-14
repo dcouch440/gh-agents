@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react'
+import { Collections } from '@/utils/collections'
 import type { TableColumn } from './types'
 
 type UseTableColumnsProps<T> = {
@@ -19,13 +20,16 @@ function useTableColumns<T>({ columns, defaultVisibleColumns }: UseTableColumnsP
   const [hiddenColumnKeys, setHiddenColumnKeys] = useState<Set<string>>(() => {
     if (defaultVisibleColumns) {
       const defaultSet = new Set(defaultVisibleColumns)
-      return new Set(columns.filter((col) => !defaultSet.has(col.key)).map((col) => col.key))
+      return new Set(Collections.filterMap(columns, (col) => (!defaultSet.has(col.key) ? col.key : null)))
     }
     return new Set()
   })
 
   // Filter visible columns
-  const visibleColumns = useMemo(() => columns.filter((col) => !hiddenColumnKeys.has(col.key)), [columns, hiddenColumnKeys])
+  const visibleColumns = useMemo(
+    () => Collections.filterMap(columns, (col) => (!hiddenColumnKeys.has(col.key) ? col : null)),
+    [columns, hiddenColumnKeys],
+  )
 
   // Toggle column visibility
   const toggleColumnVisibility = useCallback((columnKey: string) => {
@@ -48,7 +52,7 @@ function useTableColumns<T>({ columns, defaultVisibleColumns }: UseTableColumnsP
   // Hide all columns (except at least one must remain visible)
   const hideAllColumns = useCallback(() => {
     if (columns.length > 0) {
-      const allKeysExceptFirst = columns.slice(1).map((col) => col.key)
+      const allKeysExceptFirst = Collections.mapBy(columns.slice(1), (col) => col.key)
       setHiddenColumnKeys(new Set(allKeysExceptFirst))
     }
   }, [columns])
