@@ -33,7 +33,11 @@ const { mockPatchStepLocal } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/stores', () => ({
+  useStore: vi.fn(() => false),
   workflowStore: { patchStepLocal: mockPatchStepLocal },
+  shareStore: {
+    store: 'share',
+  },
 }))
 
 const baseProps = {
