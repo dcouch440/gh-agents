@@ -32,6 +32,10 @@ mod tests {
             system_prompt_suffix: None,
             visible: true,
             description: String::new(),
+            board_context_cache: String::new(),
+            board_context_updated_at: None,
+            goal_summary: String::new(),
+            goal_summary_updated_at: None,
         }
     }
 
@@ -62,6 +66,10 @@ mod tests {
             system_prompt_suffix: None,
             visible: true,
             description: String::new(),
+            board_context_cache: String::new(),
+            board_context_updated_at: None,
+            goal_summary: String::new(),
+            goal_summary_updated_at: None,
         }
     }
 

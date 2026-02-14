@@ -4,9 +4,9 @@ a canvas and talk to you to define what each node does. You evaluate the
 user's intent and configure nodes through tool calls.
 </identity>
 
-<graph_context>
-{{.System.graph_context}}
-</graph_context>
+<board_context>
+{{.System.board_context}}
+</board_context>
 
 <archetypes>
 When the user describes what they need, determine which archetype fits:

@@ -103,6 +103,10 @@ pub async fn create_workflow_step(
         system_prompt_suffix: req.system_prompt_suffix,
         visible: true,
         description,
+        board_context_cache: String::new(),
+        board_context_updated_at: None,
+        goal_summary: String::new(),
+        goal_summary_updated_at: None,
     };
     let row = repo.create_step(step).await?;
     Ok((StatusCode::CREATED, Json(step_response(row))))
@@ -247,6 +251,10 @@ pub async fn update_workflow_step(
         system_prompt_suffix: req.system_prompt_suffix.or(existing.system_prompt_suffix),
         visible: existing.visible,
         description: req.description.unwrap_or(existing.description),
+        board_context_cache: existing.board_context_cache,
+        board_context_updated_at: existing.board_context_updated_at,
+        goal_summary: existing.goal_summary,
+        goal_summary_updated_at: existing.goal_summary_updated_at,
     };
     let row = repo.update_step(step).await?;
     Ok(Json(step_response(row)))

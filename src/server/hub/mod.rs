@@ -5,6 +5,7 @@
 //! parameterized by an `ExecutionStrategy`. Different strategies handle chat
 //! sessions, DAG workflow steps, and tool routing.
 
+pub mod board_context;
 pub mod capability_resolver;
 pub mod dag;
 pub mod engine;
@@ -202,10 +203,33 @@ async fn build_step_system_prompt(
 ) -> Result<String, HubError> {
     use crate::config::protocols::{roles, vars};
 
-    // 1. Build graph context
-    let graph_context =
-        graph_context::build_graph_context(state.repos().workflows.as_ref(), workflow_id, step_id)
-            .await?;
+    // 1. Resolve board context (stale-on-read pattern)
+    let step = state
+        .repos()
+        .workflows
+        .get_step(step_id)
+        .await
+        .map_err(HubError::Internal)?
+        .ok_or_else(|| HubError::Internal(anyhow::anyhow!("Step {step_id} not found")))?;
+
+    let board_context = if step.board_context_updated_at.is_some() {
+        // Cache is warm — use directly
+        step.board_context_cache.clone()
+    } else if step.board_context_cache.is_empty() {
+        // Never been rendered — use structural fallback + background refresh
+        let fallback = graph_context::build_graph_context(
+            state.repos().workflows.as_ref(),
+            workflow_id,
+            step_id,
+        )
+        .await?;
+        board_context::spawn_board_refresh(state.clone(), workflow_id);
+        fallback
+    } else {
+        // Has stale cache — use it but refresh in background
+        board_context::spawn_board_refresh(state.clone(), workflow_id);
+        step.board_context_cache.clone()
+    };
 
     // 2. Build archetype block + config snapshot based on execution mode
     let (archetype_block, config_snapshot) = match execution_mode {
@@ -273,7 +297,7 @@ async fn build_step_system_prompt(
 
     // 3. Resolve base template with all variables
     let mut vars_map = std::collections::HashMap::new();
-    vars_map.insert(vars::system::GRAPH_CONTEXT.to_string(), graph_context);
+    vars_map.insert(vars::system::BOARD_CONTEXT.to_string(), board_context);
     vars_map.insert(vars::system::ARCHETYPE_BLOCK.to_string(), archetype_block);
     vars_map.insert(vars::system::CURRENT_CONFIG.to_string(), config_snapshot);
 

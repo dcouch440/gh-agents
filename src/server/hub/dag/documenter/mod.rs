@@ -32,6 +32,9 @@ mod phases;
 mod prompts;
 
 #[cfg(test)]
+pub(crate) use persistence::{determine_persist_action, DocumentPersistAction};
+
+#[cfg(test)]
 mod tests;
 pub(crate) mod types;
 

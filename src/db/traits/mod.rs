@@ -494,6 +494,18 @@ pub trait WorkflowRepo: Send + Sync {
     async fn update_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow>;
     async fn delete_step(&self, id: Uuid) -> Result<()>;
 
+    // --- Board Context ---
+
+    /// Update a step's cached board context (Haiku-distilled per-node summary).
+    async fn update_step_board_context(&self, step_id: Uuid, context: &str) -> Result<()>;
+
+    /// Update a step's goal summary (Haiku-distilled conversational intent).
+    async fn update_step_goal_summary(&self, step_id: Uuid, goal: &str) -> Result<()>;
+
+    /// Mark board context stale for all steps in a workflow.
+    /// Nulls out `board_context_updated_at` so the next read triggers a refresh.
+    async fn mark_board_context_stale(&self, workflow_id: Uuid) -> Result<()>;
+
     // --- Edges ---
     async fn set_edges(&self, workflow_id: Uuid, edges: Vec<WorkflowStepEdgeRow>) -> Result<()>;
     async fn list_edges(&self, workflow_id: Uuid) -> Result<Vec<WorkflowStepEdgeRow>>;

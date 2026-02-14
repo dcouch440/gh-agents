@@ -193,6 +193,11 @@ pub struct WorkflowStepRow {
     pub system_prompt_suffix: Option<String>,
     pub visible: bool,
     pub description: String,
+    // Board context: Haiku-distilled awareness of the workflow board
+    pub board_context_cache: String,
+    pub board_context_updated_at: Option<DateTime<Utc>>,
+    pub goal_summary: String,
+    pub goal_summary_updated_at: Option<DateTime<Utc>>,
 }
 
 /// Row type for a workflow step edge (DAG edge).
