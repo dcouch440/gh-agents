@@ -60,3 +60,12 @@ Detect recenectly delted chat logs for context sweep.
 When a user clicks a node it should automatically enter them in chat.
 
 Tools stay on chat board not disapear. They should be full width instead of small, decorative but fitting the scene.
+
+
+
+Couple files I want you to look at: 
+  /Users/davidcouch/Dev/gh-agents/frontend/src/hooks/useAssistantSession.ts                                               
+  /Users/davidcouch/Dev/gh-agents/frontend/src/stores/workflowStore/                                                      
+  /Users/davidcouch/Dev/gh-agents/frontend/src/utils/collections.ts                                                       
+                                                                                                                          
+  Looks like we are not up to par in use assistant session. Thats an old file. I would like it if it was refactored into the standards we have elsewhere. No action constants. Really messy and long. Im not sure if we are using the best practices everywhere with collections.
