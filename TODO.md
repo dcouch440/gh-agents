@@ -63,9 +63,8 @@ Tools stay on chat board not disapear. They should be full width instead of smal
 
 
 
-Couple files I want you to look at: 
-  /Users/davidcouch/Dev/gh-agents/frontend/src/hooks/useAssistantSession.ts                                               
-  /Users/davidcouch/Dev/gh-agents/frontend/src/stores/workflowStore/                                                      
-  /Users/davidcouch/Dev/gh-agents/frontend/src/utils/collections.ts                                                       
-                                                                                                                          
-  Looks like we are not up to par in use assistant session. Thats an old file. I would like it if it was refactored into the standards we have elsewhere. No action constants. Really messy and long. Im not sure if we are using the best practices everywhere with collections.
+Remove context routing from designer. Instead, inject all Context nodes Context in every agent we run.
+Additionally, we need to create a "Assistants Notes".
+Instead of injecting context the way we have been doing. We should have the assistant taking notes.
+This will be a file that belongs to them and they will be taking notes off and on in the conversation.
+It should be fore when revelations come from the agent. Direction change, special requirements.

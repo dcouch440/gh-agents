@@ -9,12 +9,31 @@ const makeToken = (id: string, label: string, color = '#10b981'): MentionToken =
   kind: 'context-node',
   label,
   color,
+  chipKey: null,
+  chipPreview: null,
   entity: {
     kind: 'context-node',
     id: `entity-${id}`,
     name: label,
     summary: `Context: ${label}`,
     data: { content: `content of ${label}` },
+  } satisfies PickableEntity,
+})
+
+const makeShareToken = (id: string, chipKey: string, chipPreview: string, color = '#10b981'): MentionToken => ({
+  id,
+  entityId: `entity-${id}`,
+  kind: 'shared-field',
+  label: chipPreview,
+  color,
+  chipKey,
+  chipPreview,
+  entity: {
+    kind: 'shared-field',
+    id: `entity-${id}`,
+    name: chipPreview,
+    summary: `shared-field: ${chipPreview}`,
+    data: { fieldType: chipKey, value: chipPreview },
   } satisfies PickableEntity,
 })
 
@@ -47,6 +66,29 @@ describe('createChipElement', () => {
     const removeBtn = chip.children[2] as HTMLSpanElement
     expect(removeBtn.textContent).toBe('\u00D7')
     expect(removeBtn.getAttribute('data-remove-mention')).toBe('t1')
+  })
+
+  it('renders two-part label for share tokens with chipKey and chipPreview', () => {
+    const token = makeShareToken('t1', 'name', 'MyDocumenter')
+    const chip = createChipElement(token)
+
+    expect(chip.children).toHaveLength(4)
+
+    const keySpan = chip.children[1] as HTMLSpanElement
+    expect(keySpan.textContent).toBe('name: ')
+    expect(keySpan.style.opacity).toBe('0.5')
+
+    const valueSpan = chip.children[2] as HTMLSpanElement
+    expect(valueSpan.textContent).toBe('"MyDocumenter"')
+  })
+
+  it('renders single label for tokens without chipKey', () => {
+    const token = makeToken('t1', 'My Context')
+    const chip = createChipElement(token)
+
+    expect(chip.children).toHaveLength(3)
+    const label = chip.children[1] as HTMLSpanElement
+    expect(label.textContent).toBe('My Context')
   })
 
   it('applies color-based styling', () => {

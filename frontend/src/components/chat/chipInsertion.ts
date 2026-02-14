@@ -44,9 +44,20 @@ const createChipElement = (token: MentionToken): HTMLSpanElement => {
   })
   chip.appendChild(dot)
 
-  const label = document.createElement('span')
-  label.textContent = token.label
-  chip.appendChild(label)
+  if (token.chipKey && token.chipPreview) {
+    const keySpan = document.createElement('span')
+    keySpan.textContent = `${token.chipKey}: `
+    Object.assign(keySpan.style, { opacity: '0.5' })
+    chip.appendChild(keySpan)
+
+    const valueSpan = document.createElement('span')
+    valueSpan.textContent = `"${token.chipPreview}"`
+    chip.appendChild(valueSpan)
+  } else {
+    const label = document.createElement('span')
+    label.textContent = token.label
+    chip.appendChild(label)
+  }
 
   const removeBtn = document.createElement('span')
   removeBtn.textContent = '\u00D7'

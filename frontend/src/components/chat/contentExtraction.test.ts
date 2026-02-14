@@ -10,6 +10,8 @@ const makeToken = (id: string, label: string, kind: PickableEntity['kind'] = 'co
   kind,
   label,
   color: '#10b981',
+  chipKey: null,
+  chipPreview: null,
   entity: {
     kind,
     id: `entity-${id}`,
@@ -107,6 +109,31 @@ describe('extractContent', () => {
     const result = extractContent(container, [token])
     expect(result).toContain('[Context: Context Node] Known')
     expect(result).not.toContain('Missing')
+  })
+
+  it('expands shared-field chips to compact format', () => {
+    const token: MentionToken = {
+      id: 't-sf',
+      entityId: 'entity-sf',
+      kind: 'shared-field',
+      label: 'Test Node',
+      color: '#10b981',
+      chipKey: 'name',
+      chipPreview: 'Test Node',
+      entity: {
+        kind: 'shared-field',
+        id: 'entity-sf',
+        name: 'Test Node',
+        summary: 'shared-field: Test Node',
+        data: { fieldType: 'Name', value: 'Test Node' },
+      },
+    }
+    const chip = createChipElement(token)
+    container.appendChild(chip)
+
+    const result = extractContent(container, [token])
+    expect(result).toBe('Name: Test Node')
+    expect(result).not.toContain('[Context:')
   })
 
   it('returns empty string for empty container', () => {

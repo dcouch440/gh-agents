@@ -15,6 +15,7 @@ type ShareableField = {
   kind: PickableEntityKind
   entity: PickableEntity
   color: string
+  chipKey: string
 }
 
 type ShareState = {
@@ -59,6 +60,21 @@ const selectSelectedKeys = (s: ShareState): ReadonlySet<string> =>
 
 const selectPendingChatFocus = (s: ShareState): string | null => s.pendingChatFocus
 
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+const CHIP_PREVIEW_MAX_LENGTH = 30
+
+const truncatePreview = (value: string, maxLen: number = CHIP_PREVIEW_MAX_LENGTH): string =>
+  value.length <= maxLen ? value : `${value.slice(0, maxLen)}\u2026`
+
+const deriveChipPreview = (field: ShareableField): string => {
+  if (field.kind === 'shared-field') {
+    const value = typeof field.entity.data.value === 'string' ? field.entity.data.value : field.entity.name
+    return truncatePreview(value)
+  }
+  return truncatePreview(field.entity.name)
+}
+
 // ── Actions ──────────────────────────────────────────────────────────────────
 
 const enterShareMode = (stepId: string, fields: ShareableField[]): void => {
@@ -89,7 +105,10 @@ const commitShare = (targetStepId: string): void => {
 
   for (const field of availableFields) {
     if (selectedKeys.has(field.key)) {
-      contextMentionStore.addMention(targetStepId, field.entity, field.color)
+      contextMentionStore.addMention(targetStepId, field.entity, field.color, {
+        chipKey: field.chipKey,
+        chipPreview: deriveChipPreview(field),
+      })
     }
   }
 

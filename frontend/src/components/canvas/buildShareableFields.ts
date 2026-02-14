@@ -37,6 +37,7 @@ const buildShareableFields = ({
     category: 'General',
     kind: 'shared-field',
     color,
+    chipKey: 'name',
     entity: {
       kind: 'shared-field',
       id: `${stepId}::name`,
@@ -53,6 +54,7 @@ const buildShareableFields = ({
       category: 'General',
       kind: 'shared-field',
       color,
+      chipKey: 'description',
       entity: {
         kind: 'shared-field',
         id: `${stepId}::description`,
@@ -70,6 +72,7 @@ const buildShareableFields = ({
       category: 'General',
       kind: 'shared-field',
       color,
+      chipKey: 'prompt',
       entity: {
         kind: 'shared-field',
         id: `${stepId}::prompt`,
@@ -90,6 +93,7 @@ const buildShareableFields = ({
         category: 'Documents',
         kind: 'document',
         color,
+        chipKey: 'doc',
         entity: {
           kind: 'document',
           id: `${stepId}::doc::${doc.id}`,
@@ -114,6 +118,7 @@ const buildShareableFields = ({
         category: 'Agents',
         kind: 'agent',
         color,
+        chipKey: 'agent',
         entity: {
           kind: 'agent',
           id: `${stepId}::agent::${agent.id}`,
@@ -138,6 +143,7 @@ const buildShareableFields = ({
         category: 'Members',
         kind: 'shared-field',
         color,
+        chipKey: 'member',
         entity: {
           kind: 'shared-field',
           id: `${stepId}::member::${member.id}`,
