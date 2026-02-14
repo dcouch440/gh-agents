@@ -30,7 +30,6 @@ mod tests;
 /// Bundles the six `&mut` arguments that were previously passed individually
 /// to every `execute_*` function, reducing argument counts from 14–15 to ~8–9.
 ///
-// TODO: Adopt DagExecutionState across all step executors (single, for_each,
 // room_step, belief_capture, task_force, documenter) to replace the 6 separate
 // &mut args. Deferred because it's a large mechanical signature change.
 pub(crate) struct DagExecutionState {
