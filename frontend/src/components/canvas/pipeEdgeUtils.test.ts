@@ -57,11 +57,11 @@ describe('computePipeOpacities', () => {
     expect(result.particle).toBe(PIPE.PARTICLE_OPACITY)
   })
 
-  it('returns dim opacities for non-protocol, non-selected edges', () => {
+  it('returns dim opacities with visible particles for non-protocol, non-selected edges', () => {
     const result = computePipeOpacities(false, false)
     expect(result.glow).toBe(0)
     expect(result.body).toBe(PIPE.BODY_OPACITY_DIM)
     expect(result.core).toBe(PIPE.CORE_OPACITY_DIM)
-    expect(result.particle).toBe(0)
+    expect(result.particle).toBe(PIPE.PARTICLE_OPACITY_DIM)
   })
 })

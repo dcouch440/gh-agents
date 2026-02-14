@@ -7,7 +7,7 @@ import { useTheme } from '@mui/material/styles'
 import type { StepNodeData } from '../mappers'
 import { nodeDataEqual } from '../mappers'
 import { CanvasHandle } from '../CanvasHandle'
-import { CANVAS, DEFAULT_STEP_TYPE_COLOR, PROTOCOL_TYPE_COLORS, GREYSCALE_ACCENT } from '../constants'
+import { CANVAS, DEFAULT_STEP_TYPE_COLOR, STEP_TYPE_COLORS, PROTOCOL_TYPE_COLORS, GREYSCALE_ACCENT } from '../constants'
 import { CanvasNodeKind } from '../canvasKinds'
 import { useProtocolHighlight } from '../useProtocolHighlight'
 import { getNodeHighlightStyles } from '../nodeHighlightStyles'
@@ -19,12 +19,10 @@ function StepNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
   const nodeData = data as StepNodeData
   const highlightMode = useProtocolHighlight(CanvasNodeKind.STEP, id, nodeData.protocolStepId)
-  const hasProtocol = nodeData.protocolColor !== null
-  const accentColor = nodeData.protocolColor ?? GREYSCALE_ACCENT
+  const accentColor = STEP_TYPE_COLORS[nodeData.stepType] ?? GREYSCALE_ACCENT
   const IconComponent = STEP_TYPE_ICONS[nodeData.stepType] ?? DEFAULT_STEP_TYPE_ICON
   const highlight = getNodeHighlightStyles({
     selected: selected === true,
-    hasProtocol,
     accentColor,
     highlightMode,
     themeMode: theme.palette.mode,
@@ -47,10 +45,9 @@ function StepNodeComponent({ id, data, selected }: NodeProps) {
         borderRadius: '12px',
         backgroundColor: 'background.paper',
         border: 2,
-        borderStyle: hasProtocol ? 'dashed' : 'solid',
         borderColor: highlight.borderColor,
         boxShadow: highlight.boxShadow,
-        transition: 'border-color 150ms ease, box-shadow 150ms ease, border-style 150ms ease',
+        transition: 'border-color 150ms ease, box-shadow 150ms ease',
         overflow: 'hidden',
       }}
     >

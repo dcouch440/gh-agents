@@ -39,7 +39,7 @@ const baseProps = {
   targetPosition: 'left' as const,
   selected: false,
   animated: false,
-  data: { protocolColor: null },
+  data: { sourceColor: '#3b82f6', isProtocolEdge: false },
   interactionWidth: 20,
   sourceHandleId: null,
   targetHandleId: null,
@@ -76,10 +76,10 @@ describe('StepEdge', () => {
     expect(pipe).toHaveAttribute('data-animation-direction', 'normal')
   })
 
-  it('passes protocol color when present', () => {
+  it('passes source color and protocol flag when present', () => {
     render(
       <svg>
-        <StepEdge {...baseProps} data={{ protocolColor: '#3b82f6' }} />
+        <StepEdge {...baseProps} data={{ sourceColor: '#3b82f6', isProtocolEdge: true }} />
       </svg>,
     )
     const pipe = screen.getByTestId('pipe-edge')

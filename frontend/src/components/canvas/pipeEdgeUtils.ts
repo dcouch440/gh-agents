@@ -53,7 +53,7 @@ const computePipeOpacities = (isProtocol: boolean, selected: boolean): PipeOpaci
     glow: 0,
     body: PIPE.BODY_OPACITY_DIM,
     core: PIPE.CORE_OPACITY_DIM,
-    particle: 0,
+    particle: PIPE.PARTICLE_OPACITY_DIM,
   }
 }
 

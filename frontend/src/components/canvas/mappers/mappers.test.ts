@@ -148,7 +148,7 @@ describe('toRFEdges', () => {
   const emptyGroups = new Map()
   const emptyProtocols: ReadonlyMap<string, ProtocolStepInfo> = new Map()
 
-  it('maps WorkflowStepEdge array to React Flow edges', () => {
+  it('maps WorkflowStepEdge array to React Flow edges with source color', () => {
     const edges = toRFEdges([edge1], emptyGroups, emptyProtocols, [step1, step2])
 
     expect(edges).toHaveLength(1)
@@ -157,7 +157,7 @@ describe('toRFEdges', () => {
       type: 'stepEdge',
       source: 'step-001',
       target: 'step-002',
-      data: { protocolColor: null },
+      data: { sourceColor: '#3b82f6', isProtocolEdge: false },
     })
   })
 
@@ -165,36 +165,49 @@ describe('toRFEdges', () => {
     expect(toRFEdges([], emptyGroups, emptyProtocols, [])).toEqual([])
   })
 
-  it('sets protocolColor when source is a protocol step', () => {
+  it('resolves sourceColor from protocol step type', () => {
     const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
       ['step-001', { protocol_type: 'documenter', name: 'Doc', portNames: [] }],
     ])
     const edges = toRFEdges([edge1], emptyGroups, protocols, [step1, step2])
-    expect(edges[0]?.data?.protocolColor).toBe('#D4793E')
+    expect(edges[0]?.data?.sourceColor).toBe('#D4793E')
+    expect(edges[0]?.data?.isProtocolEdge).toBe(true)
   })
 
-  it('sets protocolColor when target is a protocol step', () => {
+  it('marks isProtocolEdge when target is a protocol step', () => {
     const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
       ['step-002', { protocol_type: 'documenter', name: 'Doc', portNames: [] }],
     ])
     const edges = toRFEdges([edge1], emptyGroups, protocols, [step1, step2])
-    expect(edges[0]?.data?.protocolColor).toBe('#D4793E')
+    expect(edges[0]?.data?.sourceColor).toBe('#3b82f6')
+    expect(edges[0]?.data?.isProtocolEdge).toBe(true)
   })
 
-  it('sets protocolColor from protocol group membership', () => {
+  it('uses intrinsic step color even when in a protocol group', () => {
     const groups = new Map([
       ['step-001', { protocolColor: '#D4793E', protocolStepId: 'proto-1' }],
     ])
     const edges = toRFEdges([edge1], groups, emptyProtocols, [step1, step2])
-    expect(edges[0]?.data?.protocolColor).toBe('#D4793E')
+    // Source is a 'single' step → uses its own step type color, not the group color
+    expect(edges[0]?.data?.sourceColor).toBe('#3b82f6')
+    expect(edges[0]?.data?.isProtocolEdge).toBe(true)
   })
 
-  it('sets protocolColor for documenter steps not in protocolsByStep', () => {
+  it('resolves sourceColor for documenter steps by execution_mode', () => {
     const documenterA: WorkflowStep = { ...step1, id: 'doc-a', execution_mode: 'documenter' }
     const documenterB: WorkflowStep = { ...step1, id: 'doc-b', execution_mode: 'documenter' }
     const edge: WorkflowStepEdge = { id: 'edge-doc', from_step_id: 'doc-a', to_step_id: 'doc-b' }
     const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [documenterA, documenterB])
-    expect(edges[0]?.data?.protocolColor).toBe('#D4793E')
+    expect(edges[0]?.data?.sourceColor).toBe('#D4793E')
+    expect(edges[0]?.data?.isProtocolEdge).toBe(true)
+  })
+
+  it('resolves sourceColor from step type for non-protocol edges', () => {
+    const forEachStep: WorkflowStep = { ...step1, id: 'fe-1', execution_mode: 'for_each' }
+    const edge: WorkflowStepEdge = { id: 'edge-fe', from_step_id: 'fe-1', to_step_id: 'step-002' }
+    const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [forEachStep, step2])
+    expect(edges[0]?.data?.sourceColor).toBe('#2dd4bf')
+    expect(edges[0]?.data?.isProtocolEdge).toBe(false)
   })
 })
 

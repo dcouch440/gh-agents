@@ -24,7 +24,6 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
   const [hovered, setHovered] = useState(false)
   const highlight = getNodeHighlightStyles({
     selected: selected === true,
-    hasProtocol: true,
     accentColor,
     highlightMode,
     themeMode: theme.palette.mode,
@@ -44,9 +43,8 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
         height: '100%',
         borderRadius: '12px',
         backgroundColor: theme.palette.mode === 'light' ? theme.palette.custom.cavityBg : 'background.paper',
-        border: 3,
+        border: 2,
         borderColor: highlight.borderColor,
-        borderStyle: 'dashed',
         boxShadow: highlight.boxShadow,
         transition: 'border-color 150ms ease, box-shadow 150ms ease',
         overflow: 'hidden',
