@@ -108,7 +108,8 @@ describe('buildShareableFields', () => {
 
       const promptField = fields.find((f) => f.key === 'prompt')
       expect(promptField).toBeDefined()
-      expect(promptField!.chipKey).toBe('prompt')
+      expect(promptField!.label).toBe('Content')
+      expect(promptField!.chipKey).toBe('content')
       expect(promptField!.entity.data.value).toBe('Do the thing')
     })
 
