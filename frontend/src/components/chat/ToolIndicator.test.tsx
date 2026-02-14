@@ -73,8 +73,8 @@ describe('ToolIndicator', () => {
   })
 
   describe('TOOL_LABELS', () => {
-    it('contains exactly 6 tool mappings', () => {
-      expect(Object.keys(TOOL_LABELS)).toHaveLength(6)
+    it('contains exactly 7 tool mappings', () => {
+      expect(Object.keys(TOOL_LABELS)).toHaveLength(7)
     })
   })
 

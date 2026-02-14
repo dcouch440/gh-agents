@@ -346,4 +346,21 @@ mod tests {
         let required = tool.input_schema["required"].as_array().unwrap();
         assert!(required.is_empty());
     }
+
+    #[test]
+    fn test_render_panel_schema() {
+        let tool = get_tool_definition("render_panel").unwrap();
+        assert_eq!(tool.name, "render_panel");
+
+        let props = tool.input_schema["properties"].as_object().unwrap();
+        assert!(props.contains_key("content"));
+        assert!(props.contains_key("submit_label"));
+
+        let required = tool.input_schema["required"].as_array().unwrap();
+        assert_eq!(required.len(), 1);
+        assert_eq!(required[0], "content");
+
+        // Verify description is detailed (Anthropic best practice)
+        assert!(tool.description.len() > 200, "render_panel description should be detailed");
+    }
 }

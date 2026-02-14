@@ -51,10 +51,11 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "delete_doc_def" => Some(delete_doc_def_tool()),
         "update_config" => Some(update_config_tool()),
 
-        // Universal node assistant tools (3)
+        // Universal node assistant tools (4)
         "set_node_archetype" => Some(set_node_archetype_tool()),
         "set_node_name" => Some(set_node_name_tool()),
         "set_node_description" => Some(set_node_description_tool()),
+        "render_panel" => Some(render_panel_tool()),
 
         // Task force archetype tools (6)
         "set_task" => Some(set_task_tool()),
@@ -642,6 +643,46 @@ fn set_node_description_tool() -> Tool {
                 }
             },
             "required": ["description"]
+        }),
+    }
+}
+
+fn render_panel_tool() -> Tool {
+    Tool {
+        name: "render_panel".into(),
+        description: concat!(
+            "Render an interactive panel overlay on the node. The panel appears as a visual ",
+            "card over the chat area. Use markdown with heading levels to create nested visual cards:\n\n",
+            "- # Heading creates the outer card (highest elevation, strong shadow)\n",
+            "- ## Heading creates inner cards (medium elevation)\n",
+            "- ### Heading creates sub-sections within inner cards\n\n",
+            "Interactive elements:\n",
+            "- `- [ ] Option` renders as a checkbox the user can toggle\n",
+            "- `- [x] Option` renders as a pre-checked checkbox\n\n",
+            "Regular markdown (paragraphs, bullets, tables, bold, code blocks, blockquotes) renders ",
+            "normally inside cards. Use standard `- item` bullets for informational lists and ",
+            "`- [ ] item` checkboxes for choices the user should make.\n\n",
+            "Use this tool when:\n",
+            "- Proposing a plan the user should approve before you execute\n",
+            "- Presenting options where the user needs to choose\n",
+            "- Showing structured information (rosters, configs, summaries)\n\n",
+            "Do NOT use for simple yes/no questions or short responses where chat is ",
+            "sufficient. The user sees the panel as an overlay, makes selections, and ",
+            "submits. Their choices come back as a structured message.",
+        ).into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "description": "Markdown content for the panel. Use headings for nested cards and `- [ ]` checkboxes for interactive choices."
+                },
+                "submit_label": {
+                    "type": "string",
+                    "description": "Label for the submit button (default: 'Submit')"
+                }
+            },
+            "required": ["content"]
         }),
     }
 }

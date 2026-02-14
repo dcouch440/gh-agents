@@ -531,6 +531,7 @@ impl StreamSink for RoomStreamSink {
 
     async fn tool_start(&self, _name: &str, _tool_id: &str) {}
     async fn tool_end(&self, _name: &str, _tool_id: &str) {}
+    async fn panel_render(&self, _content: &str, _submit_label: &str) {}
 
     async fn error(&self, msg: &str) {
         warn!(

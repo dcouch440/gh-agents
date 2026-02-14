@@ -308,6 +308,18 @@ impl ExecutionStrategy for ChatStrategy {
         if let Some(ref ctx) = self.step_context {
             if let Some(value) = dispatch_step_tool(name, input, &self.state, ctx).await {
                 self.broadcast_step_event(name, input, &value);
+                if name == "render_panel" {
+                    if let Some(content) = value["content"].as_str() {
+                        let submit_label = value["submit_label"].as_str().unwrap_or("Submit");
+                        self.state.send_stream_chunk(
+                            self.message_id,
+                            crate::server::state::StreamChunk::PanelRender {
+                                content: content.to_string(),
+                                submit_label: submit_label.to_string(),
+                            },
+                        );
+                    }
+                }
                 return value;
             }
         }
@@ -453,6 +465,7 @@ impl ExecutionStrategy for ChatStrategy {
 const UNIVERSAL_TOOLS: &[&str] = &[
     "set_node_name",
     "set_node_description",
+    "render_panel",
     "think",
 ];
 
@@ -502,6 +515,7 @@ fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
 const NODE_ASSISTANT_TOOLS: &[&str] = &[
     "set_node_name",
     "set_node_description",
+    "render_panel",
 ];
 
 /// Try to dispatch a tool call to a step-specific handler.

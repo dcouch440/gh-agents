@@ -10,12 +10,18 @@ import type { Session, ChatMessage, MessageSegment } from '@/types'
 // State
 // ---------------------------------------------------------------------------
 
+type PanelState = {
+  content: string
+  submitLabel: string
+}
+
 type AssistantState = {
   session: Session | null
   messages: ChatMessageData[]
   streamingSegments: MessageSegment[]
   isLoading: boolean
   error: string | null
+  activePanel: PanelState | null
 }
 
 type AssistantAction =
@@ -30,8 +36,10 @@ type AssistantAction =
   | { type: 'STREAM_TOOL_START'; toolId: string; toolName: string }
   | { type: 'STREAM_TOOL_END'; toolId: string }
   | { type: 'STREAM_DOC_UPDATE'; docId: string; title: string }
+  | { type: 'STREAM_PANEL_RENDER'; content: string; submitLabel: string }
   | { type: 'STREAM_FINALIZE' }
   | { type: 'STREAM_ERROR'; error: string }
+  | { type: 'PANEL_DISMISS' }
   | { type: 'CLEAR_MESSAGES' }
   | { type: 'RESET' }
 
@@ -41,6 +49,7 @@ const initialState: AssistantState = {
   streamingSegments: [],
   isLoading: true,
   error: null,
+  activePanel: null,
 }
 
 const reducer = (state: AssistantState, action: AssistantAction): AssistantState => {
@@ -48,9 +57,9 @@ const reducer = (state: AssistantState, action: AssistantAction): AssistantState
     case 'INIT_START':
       return { ...state, isLoading: true, error: null }
     case 'INIT_SESSION':
-      return { session: action.session, messages: action.messages, streamingSegments: [], isLoading: false, error: null }
+      return { session: action.session, messages: action.messages, streamingSegments: [], isLoading: false, error: null, activePanel: null }
     case 'INIT_EMPTY':
-      return { session: null, messages: [], streamingSegments: [], isLoading: false, error: null }
+      return { session: null, messages: [], streamingSegments: [], isLoading: false, error: null, activePanel: null }
     case 'INIT_ERROR':
       return { ...state, isLoading: false, error: action.error }
     case 'SESSION_CREATED':
@@ -103,8 +112,14 @@ const reducer = (state: AssistantState, action: AssistantAction): AssistantState
       return { ...state, streamingSegments: segments }
     }
 
+    case 'STREAM_PANEL_RENDER':
+      return { ...state, activePanel: { content: action.content, submitLabel: action.submitLabel } }
+
     case 'STREAM_FINALIZE':
       return { ...state, streamingSegments: [] }
+
+    case 'PANEL_DISMISS':
+      return { ...state, activePanel: null }
 
     case 'STREAM_ERROR': {
       const msgs = [...state.messages]
@@ -116,7 +131,7 @@ const reducer = (state: AssistantState, action: AssistantAction): AssistantState
     }
 
     case 'CLEAR_MESSAGES':
-      return { ...state, messages: [], streamingSegments: [] }
+      return { ...state, messages: [], streamingSegments: [], activePanel: null }
     case 'RESET':
       return initialState
     default:
@@ -157,8 +172,11 @@ type UseAssistantSessionReturn = {
   isLoading: boolean
   error: string | null
   streaming: boolean
+  activePanel: PanelState | null
   sendMessage: (content: string) => void
   clearHistory: () => void
+  dismissPanel: () => void
+  submitPanelSelections: (selections: string) => void
 }
 
 const useAssistantSession = (
@@ -271,6 +289,11 @@ const useAssistantSession = (
             dispatch({ type: 'STREAM_DOC_UPDATE', docId: data.doc_id, title: data.title })
             break
           }
+          case 'panel_render': {
+            const data = JSON.parse(event.data) as { content: string; submit_label: string }
+            dispatch({ type: 'STREAM_PANEL_RENDER', content: data.content, submitLabel: data.submit_label })
+            break
+          }
           case 'error': {
             dispatch({ type: 'STREAM_ERROR', error: event.data })
             break
@@ -348,6 +371,18 @@ const useAssistantSession = (
     [workflowId, stepId, send],
   )
 
+  const dismissPanel = useCallback(() => {
+    dispatch({ type: 'PANEL_DISMISS' })
+  }, [])
+
+  const submitPanelSelections = useCallback(
+    (selections: string) => {
+      dispatch({ type: 'PANEL_DISMISS' })
+      sendMessage(selections)
+    },
+    [sendMessage],
+  )
+
   const clearHistory = useCallback(() => {
     if (!workflowId || !state.session) return
 
@@ -377,10 +412,13 @@ const useAssistantSession = (
     isLoading: state.isLoading,
     error: state.error,
     streaming,
+    activePanel: state.activePanel,
     sendMessage,
     clearHistory,
+    dismissPanel,
+    submitPanelSelections,
   }
 }
 
 export { useAssistantSession, reducer, initialState }
-export type { UseAssistantSessionReturn, AssistantState, AssistantAction }
+export type { UseAssistantSessionReturn, AssistantState, AssistantAction, PanelState }

@@ -7,6 +7,7 @@ const TOOL_LABELS: Record<string, (status: ToolStatus) => string> = {
   update_prompt: (s) => (s === 'running' ? 'Updating prompt...' : 'Updated prompt'),
   read_context: (s) => (s === 'running' ? 'Reading context...' : 'Read context'),
   think: (s) => (s === 'running' ? 'Thinking...' : 'Thought'),
+  render_panel: (s) => (s === 'running' ? 'Rendering panel...' : 'Rendered panel'),
 }
 
 const getToolLabel = (toolName: string, status: ToolStatus): string => {

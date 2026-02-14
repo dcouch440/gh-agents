@@ -221,6 +221,10 @@ fn chat_stream_inner(
                     let data = format!(r#"{{"doc_id":"{}","title":"{}"}}"#, doc_id, title);
                     yield Ok(Event::default().event("doc_update").data(data));
                 }
+                StreamChunk::PanelRender { content, submit_label } => {
+                    let data = serde_json::json!({ "content": content, "submit_label": submit_label }).to_string();
+                    yield Ok(Event::default().event("panel_render").data(data));
+                }
                 StreamChunk::Done => {
                     yield Ok(Event::default().event("done").data(""));
                     return;
@@ -256,6 +260,10 @@ fn chat_stream_inner(
                         StreamChunk::DocUpdate { doc_id, title } => {
                             let data = format!(r#"{{"doc_id":"{}","title":"{}"}}"#, doc_id, title);
                             yield Ok(Event::default().event("doc_update").data(data));
+                        }
+                        StreamChunk::PanelRender { content, submit_label } => {
+                            let data = serde_json::json!({ "content": content, "submit_label": submit_label }).to_string();
+                            yield Ok(Event::default().event("panel_render").data(data));
                         }
                         StreamChunk::Done => {
                             yield Ok(Event::default().event("done").data(""));
