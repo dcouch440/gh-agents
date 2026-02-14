@@ -63,8 +63,13 @@ Tools stay on chat board not disapear. They should be full width instead of smal
 
 
 
-Remove context routing from designer. Instead, inject all Context nodes Context in every agent we run.
-Additionally, we need to create a "Assistants Notes".
+Remove context routing from designer system prompt and output schema, remove language from the assistants system prompt that describe this action as well. Instead, inject all Context nodes Context in every agent we run.
+Additionally, we need to create a "Assistants Notes". This is an injection as well.
+The Assistants notes can have useful information about docker container use, submitting stuff.
+API specifications.
+THe notes only
 Instead of injecting context the way we have been doing. We should have the assistant taking notes.
 This will be a file that belongs to them and they will be taking notes off and on in the conversation.
 It should be fore when revelations come from the agent. Direction change, special requirements.
+
+USE MORE SIMPLE LANGUAGE.

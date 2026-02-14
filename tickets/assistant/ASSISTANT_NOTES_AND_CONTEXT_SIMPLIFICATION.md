@@ -4,9 +4,10 @@
 
 Replace selective context routing with universal injection, and introduce a persistent "Assistant's Notes" system where the node assistant maintains its own scratchpad of revelations, direction changes, and special requirements across the conversation.
 
-**Two types of injected knowledge:**
+**Three types of injected knowledge:**
 - **User Notes** (context nodes) — user-provided reference material (API specs, docker info, requirements). Injected into ALL agents at execution time.
-- **Agent Notes** (assistant's notes) — accumulated by the node assistant during conversation. Injected into the DESIGNER ONLY at execution time.
+- **Agent Notes** (assistant's notes) — accumulated by the node assistant during conversation. Injected into the node assistant's own system prompt and into the DESIGNER at execution time.
+- **Board Overview** — haiku-generated one-paragraph summary of all assistant notes across the workflow. Injected into EVERY assistant's system prompt for ambient board awareness.
 
 ---
 
@@ -108,12 +109,40 @@ Note: `execute_task_force_step` currently takes `_steps` (unused). This will now
 
 ### 2B. Designer Input — Include Context Nodes
 
-**File:** `src/server/hub/dag/designer_input/task_force.rs`
+**File:** `src/server/hub/dag/designer_input/mod.rs`
 
-Currently, `build_task_force_designer_input()` formats envelopes as upstream context. Context nodes are mixed in with other step outputs. Make context nodes distinguishable:
+Currently, `format_envelopes_as_upstream()` converts all completed envelopes into `UpstreamContext` entries with `source_type: "step"`. It doesn't know which steps are context-mode because it only has a `HashMap<Uuid, StepExecutionEnvelope>` (no step metadata).
 
-- Add a `source_type: "context"` to upstream entries that come from context-mode steps
-- This lets the designer know which upstream content is user-provided reference material vs. computed outputs
+**Fix:** Pass the steps list so context-mode steps get `source_type: "context"` instead of `"step"`:
+
+```rust
+pub fn format_envelopes_as_upstream(
+    envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
+    steps: &[WorkflowStepRow],  // NEW — needed to check execution_mode
+) -> Vec<UpstreamContext> {
+    // Build a set of context-mode step IDs
+    let context_step_ids: HashSet<Uuid> = steps.iter()
+        .filter(|s| s.execution_mode == "context")
+        .map(|s| s.id)
+        .collect();
+
+    envelopes.iter().map(|(step_id, env)| {
+        let source_type = if context_step_ids.contains(step_id) {
+            "context"  // User Notes
+        } else {
+            "step"     // Computed output
+        };
+        // ... rest of the mapping
+    }).collect()
+}
+```
+
+Update all callers of `format_envelopes_as_upstream()` to pass the steps list. The callers are:
+- `designer_input/task_force.rs` → `build_task_force_designer_input()` — add `steps` param
+- `designer_input/documenter.rs` → both builder functions — add `steps` param
+- `designer_input/room.rs` → the room builder — add `steps` param
+
+This also lets the designer system prompt tell the designer: "Upstream entries with source_type 'context' are User Notes — these are injected into all agents automatically. You don't need to route them via receives_from."
 
 ### 2C. Room Execution — Inject Context Nodes
 
@@ -150,8 +179,29 @@ CREATE UNIQUE INDEX idx_assistant_notes_step_id ON assistant_notes(step_id);
 **File:** `src/db/workflows/` (or new file `src/db/assistant_notes/`)
 
 ```rust
+/// Get a single step's assistant notes. Returns None if no notes exist.
 pub async fn get_assistant_notes(&self, step_id: Uuid) -> Result<Option<String>>;
+
+/// Create or replace a step's assistant notes. Full replacement (not append).
 pub async fn upsert_assistant_notes(&self, step_id: Uuid, content: &str) -> Result<()>;
+
+/// Get all assistant notes for all steps in a workflow. Used by the board
+/// overview summarizer (Part 8) to avoid N+1 queries.
+/// Returns Vec<(step_id, step_name, execution_mode, notes_content)>.
+pub async fn get_all_assistant_notes_for_workflow(
+    &self,
+    workflow_id: Uuid,
+) -> Result<Vec<(Uuid, Option<String>, String, String)>>;
+```
+
+The batch method joins `workflow_steps` with `assistant_notes` to get step metadata + notes in one query:
+```sql
+SELECT ws.id, ws.name, ws.execution_mode, an.content
+FROM workflow_steps ws
+JOIN assistant_notes an ON an.step_id = ws.id
+WHERE ws.workflow_id = $1
+  AND an.content != ''
+ORDER BY ws.name
 ```
 
 `upsert` because the assistant replaces the full content on each update (not append-only — the assistant can reorganize and prune).
@@ -188,15 +238,25 @@ Schema:
 
 **File:** `src/server/tools/assistant_notes.rs` (new)
 
+The handler needs both `workflow_id` and `step_id`. `workflow_id` is needed to trigger the board overview regeneration (Part 8). Both are available from `StepChatContext` during tool dispatch.
+
 ```rust
 pub async fn handle_update_notes(
     state: &AppState,
+    workflow_id: Uuid,
     step_id: Uuid,
     content: &str,
 ) -> Result<String, ToolError> {
     state.repos().workflows
         .upsert_assistant_notes(step_id, content)
         .await?;
+
+    // Regenerate board overview in background (non-blocking)
+    crate::server::hub::board_overview::spawn_board_overview_update(
+        state.clone(),
+        workflow_id,
+    );
+
     Ok("Notes updated.".to_string())
 }
 ```
@@ -207,6 +267,25 @@ pub async fn handle_update_notes(
 
 Add `update_notes` to the universal step tools (not archetype-specific). Route to the handler.
 
+**How existing universal tools are dispatched:** Look at how `set_node_name`, `set_node_description`, `set_node_archetype`, and `render_panel` are dispatched in `dispatch_step_tool()`. These are matched before the archetype-specific `match execution_mode` block. Follow the same pattern:
+
+```rust
+// In dispatch_step_tool():
+"update_notes" => {
+    let content = args.get("content")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| /* missing param error */)?;
+    crate::server::tools::assistant_notes::handle_update_notes(
+        state,
+        ctx.workflow_id,  // from StepChatContext
+        ctx.step_id,      // from StepChatContext
+        content,
+    ).await
+}
+```
+
+**Tool registration:** In `resolve_step_tools()` (same file), `update_notes` must be added to the universal tools list alongside the existing universal tools (`set_node_archetype`, `set_node_name`, `set_node_description`, `render_panel`). Look at how those tools are built using the `Tool` struct from `crate::llm` and follow the same pattern.
+
 ---
 
 ## Part 5: Assistant's Notes — Injection
@@ -215,9 +294,56 @@ Add `update_notes` to the universal step tools (not archetype-specific). Route t
 
 **File:** `config/protocols/node_assistant/base/system.md`
 
-Add a new template variable section between `<board_context>` and the archetype block:
+This is the COMPLETE final template after all changes (Parts 5 + 6 + 8). The current file has `<identity>`, `<voice>`, `<board_context>`, archetype block, config, and `<examples>`. The new version adds `<board_overview>`, `<your_notes>`, and `<notes_guidance>`:
 
 ```xml
+<identity>
+You help the user design this node on their workflow board.
+You configure through tool calls. The user sees updates live on the canvas.
+Use render_panel to present structured options or plans visually instead of
+describing them in chat.
+</identity>
+
+<voice>
+Direct and technically precise. Warm through thoroughness, not performance.
+You speak like a senior engineer on a good team — give the user what they
+need, flag what matters, move on.
+
+When things go well: brief acknowledgment, move forward.
+When things go wrong: lead with facts, follow with action.
+When you disagree: state it, explain why, suggest an alternative.
+When you're uncertain: say so clearly, without apologizing.
+
+Never say "Great question!" or "I'd be happy to help!" — just help.
+Never soften bad news. Never fabricate confidence.
+</voice>
+
+<notes_guidance>
+You have a persistent notepad (update_notes tool). These notes survive across
+conversations and feed into the workflow designer at execution time.
+
+Record when:
+- The user changes direction or clarifies intent
+- You discover a constraint or requirement that affects execution
+- Technical details surface (API specs, container config, credentials setup)
+- The user makes a decision that narrows the solution space
+
+Keep notes:
+- Factual and concise — bullet points over prose
+- Organized by topic, not chronologically
+- Pruned — remove outdated items when direction changes
+- Written for another AI to consume, not for the user to read
+
+Do not:
+- Narrate that you're taking notes — just call the tool
+- Record every conversation detail — only record what changes execution
+- Duplicate information already in the step config
+</notes_guidance>
+
+<board_overview>
+{{.System.board_overview}}
+</board_overview>
+
 <board_context>
 {{.System.board_context}}
 </board_context>
@@ -227,14 +353,27 @@ Add a new template variable section between `<board_context>` and the archetype 
 </your_notes>
 
 {{.System.archetype_block}}
+
+{{.System.current_config}}
+
+<examples>
+user: "I need this team to scan repos for security issues"
+assistant: Security scanning mission. Let me set that up.
+[calls set_step_description("...")]
+What capabilities does the scanning agent need? File read and grep at minimum, shell if you want it running tools directly.
+
+user: "What's connected to this node?"
+assistant: You've got a Context node feeding in upstream and a Doc Gen documenter downstream. The context node has Q2 requirements loaded. Doc Gen doesn't have any documents defined yet.
+
+user: "This isn't working right"
+assistant: What's happening? Walk me through what you expected vs what you're seeing and I'll trace it.
+</examples>
 ```
 
-When notes are empty, the section renders as:
-```xml
-<your_notes>
-No notes yet. Use update_notes to record important discoveries.
-</your_notes>
-```
+**Empty state defaults:**
+- `{{.System.board_overview}}` → `"No steps have been configured yet."`
+- `{{.System.assistant_notes}}` → `"No notes yet. Use update_notes to record important discoveries."`
+- `{{.System.board_context}}` → `"No neighboring nodes have active conversations yet."` (existing behavior)
 
 ### 5B. System Prompt Assembly
 
@@ -264,31 +403,55 @@ pub const ASSISTANT_NOTES: &str = "System.assistant_notes";
 
 ### 5D. Designer Injection (Execution Time)
 
-**File:** `src/server/hub/dag/task_force/mod.rs` (or `designer_input/task_force.rs`)
+The designer input builders (`build_task_force_designer_input`, etc.) are currently **pure functions** — they take data, not `state`. They don't do async DB calls. To keep them pure, load the assistant notes in the CALLER and pass them in.
 
-When building the designer input, load the step's assistant notes and include them as a dedicated upstream context entry:
+**File:** `src/server/hub/dag/task_force/mod.rs` (the caller — `execute_task_force_step`)
+
+Before calling the designer, load the assistant notes:
 
 ```rust
-let notes = state.repos().workflows
+// Load assistant notes for this step (for the designer)
+let assistant_notes = state.repos().workflows
     .get_assistant_notes(step.id)
     .await
     .unwrap_or_default();
+```
 
-if let Some(notes_content) = notes {
-    if !notes_content.is_empty() {
-        // Add as a special upstream context for the designer
-        designer_input.upstream.push(UpstreamContext {
-            source_name: "Assistant's Notes".to_string(),
-            source_type: "agent_notes".to_string(),
-            content: notes_content,
-        });
+**File:** `src/server/hub/dag/designer_input/task_force.rs`
+
+Add an `assistant_notes: Option<&str>` parameter to `build_task_force_designer_input()`:
+
+```rust
+pub fn build_task_force_designer_input(
+    brief: &TaskMissionBriefRow,
+    roster: &[TaskAgentRosterRow],
+    completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
+    assistant_notes: Option<&str>,  // NEW
+) -> DesignerInput {
+    // ... existing code ...
+
+    let mut input = DesignerInput { /* ... */ };
+
+    // Append assistant notes as a special upstream context entry
+    if let Some(notes) = assistant_notes {
+        if !notes.is_empty() {
+            input.upstream.push(UpstreamContext {
+                source_name: "Assistant's Notes".to_string(),
+                source_type: "agent_notes".to_string(),
+                content: notes.to_string(),
+            });
+        }
     }
+
+    input
 }
 ```
 
-The designer will see these notes as part of its upstream context and can factor them into the prompts it generates (direction changes, special API requirements, infrastructure constraints, etc.).
+**Similarly for documenter and room archetypes:** Add the same `assistant_notes` parameter to:
+- `src/server/hub/dag/designer_input/documenter.rs` → `build_strategist_designer_input()` and `build_research_write_designer_input()`
+- `src/server/hub/dag/designer_input/room.rs` → the room designer input builder
 
-Similarly for documenter and room archetypes — their designer input builders should also include assistant notes.
+Each archetype's executor (the caller) loads notes from the DB and passes them through.
 
 ---
 
@@ -305,31 +468,13 @@ Per the personality research:
 
 ### 6B. Note-Taking Guidance in System Prompt
 
-Add to the `<identity>` or create a new `<notes_guidance>` section in the base system prompt:
+See the `<notes_guidance>` section in Part 5A for the complete prompt text. This section is placed after `<voice>` and before the context injections. It tells the assistant when to take notes, how to format them, and what NOT to do.
 
-```xml
-<notes_guidance>
-You have a persistent notepad (update_notes tool). These notes survive across
-conversations and feed into the workflow designer at execution time.
-
-Record when:
-- The user changes direction or clarifies intent
-- You discover a constraint or requirement that affects execution
-- Technical details surface (API specs, container config, credentials setup)
-- The user makes a decision that narrows the solution space
-
-Keep notes:
-- Factual and concise — bullet points over prose
-- Organized by topic, not chronologically
-- Pruned — remove outdated items when direction changes
-- Written for another AI to consume, not for the user to read
-
-Do not:
-- Narrate that you're taking notes — just call the tool
-- Record every conversation detail — only record what changes execution
-- Duplicate information already in the step config
-</notes_guidance>
-```
+Key design decisions in the guidance:
+- **"Record when"** — only direction changes, constraints, technical details, decisions. NOT every conversation detail.
+- **"Written for another AI to consume"** — notes feed into the designer, not the user. This keeps them structured and factual.
+- **"Do not narrate"** — the tool call is silent. The assistant shouldn't say "Let me update my notes..." in the chat.
+- **"Pruned"** — notes are full-replace, so the assistant is expected to reorganize and remove stale items on each update.
 
 ### 6C. Note Format Convention
 
@@ -501,23 +646,20 @@ async fn regenerate_board_overview(
     state: &AppState,
     workflow_id: Uuid,
 ) -> Result<(), anyhow::Error> {
-    // 1. Load all steps for this workflow
-    let steps = state.repos().workflows.list_steps(workflow_id).await?;
+    // 1. Load all assistant notes in one query (see Part 3B batch method)
+    let all_notes = state.repos().workflows
+        .get_all_assistant_notes_for_workflow(workflow_id)
+        .await?;
 
-    // 2. Load assistant notes for every step that has them
-    let mut notes_by_step: Vec<(String, String)> = Vec::new();
-    for step in &steps {
-        if let Some(notes) = state.repos().workflows
-            .get_assistant_notes(step.id)
-            .await?
-        {
-            if !notes.is_empty() {
-                let step_name = step.name.as_deref().unwrap_or("(unnamed)");
-                let step_label = format!("{} ({})", step_name, step.execution_mode);
-                notes_by_step.push((step_label, notes));
-            }
-        }
-    }
+    // 2. Format as (label, content) pairs
+    let notes_by_step: Vec<(String, String)> = all_notes
+        .into_iter()
+        .map(|(_step_id, name, mode, content)| {
+            let step_name = name.as_deref().unwrap_or("(unnamed)");
+            let label = format!("{} ({})", step_name, mode);
+            (label, content)
+        })
+        .collect();
 
     // 3. If no notes exist anywhere, clear the summary
     if notes_by_step.is_empty() {
@@ -617,64 +759,19 @@ Return ONLY the paragraph. No headers, no bullet points, no preamble."#;
 
 ### 8E. Trigger Point
 
-**File:** `src/server/tools/assistant_notes.rs` (the handler from Part 4B)
+The board overview update is triggered from inside `handle_update_notes()` (see Part 4B). The handler calls `spawn_board_overview_update(state.clone(), workflow_id)` after upserting notes. This is non-blocking — the tool returns "Notes updated." immediately while haiku runs in the background.
 
-After successfully upserting notes, spawn the board overview update:
-
-```rust
-pub async fn handle_update_notes(
-    state: &AppState,
-    workflow_id: Uuid,  // Need to pass this through from step context
-    step_id: Uuid,
-    content: &str,
-) -> Result<String, ToolError> {
-    state.repos().workflows
-        .upsert_assistant_notes(step_id, content)
-        .await?;
-
-    // Regenerate board overview in background (non-blocking)
-    crate::server::hub::board_overview::spawn_board_overview_update(
-        state.clone(),
-        workflow_id,
-    );
-
-    Ok("Notes updated.".to_string())
-}
-```
-
-Note: The tool handler needs `workflow_id` in addition to `step_id`. This is available from `StepChatContext` in the chat strategy. Pass it through during tool dispatch.
+No separate trigger mechanism is needed. The chain is:
+1. Assistant calls `update_notes` tool
+2. `dispatch_step_tool()` routes to `handle_update_notes(state, workflow_id, step_id, content)`
+3. Handler upserts notes in DB
+4. Handler spawns `spawn_board_overview_update()` in background
+5. Background task loads ALL notes, calls Haiku, stores summary
+6. Next time ANY assistant's system prompt is built, it picks up the updated `board_overview_summary`
 
 ### 8F. Injection into Assistant System Prompt
 
-**File:** `config/protocols/node_assistant/base/system.md`
-
-Add a `<board_overview>` section. This goes BEFORE `<board_context>` because it's higher-level context:
-
-```xml
-<board_overview>
-{{.System.board_overview}}
-</board_overview>
-
-<board_context>
-{{.System.board_context}}
-</board_context>
-
-<your_notes>
-{{.System.assistant_notes}}
-</your_notes>
-
-{{.System.archetype_block}}
-
-{{.System.current_config}}
-```
-
-**When the summary is empty** (no notes on any step yet), render:
-
-```xml
-<board_overview>
-No steps have been configured yet.
-</board_overview>
-```
+See Part 5A for the complete final system prompt template. The `<board_overview>` section is placed BEFORE `<board_context>` because it's higher-level context (big picture before details). The template variable `{{.System.board_overview}}` is resolved in `build_step_system_prompt()` (Part 8G).
 
 ### 8G. System Prompt Assembly
 
