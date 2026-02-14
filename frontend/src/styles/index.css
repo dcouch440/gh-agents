@@ -24,19 +24,3 @@
 *, *::before, *::after {
   transition: background-color 200ms ease, border-color 200ms ease;
 }
-
-/* Context picking mode — global cursor override */
-body.nexor-context-picking,
-body.nexor-context-picking * {
-  cursor: crosshair !important;
-}
-
-body.nexor-context-picking [data-pickable="true"] {
-  cursor: pointer !important;
-}
-
-body.nexor-context-picking [data-pickable="true"]:hover {
-  outline: 2px solid #3b82f6;
-  outline-offset: -1px;
-  border-radius: 4px;
-}

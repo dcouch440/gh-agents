@@ -85,5 +85,3 @@ export type { VariableChipStripProps } from './VariableChipStrip'
 export { GradientButton } from './GradientButton'
 export type { GradientButtonProps, GradientButtonColor } from './GradientButton'
 
-export { ContextPickerToggle } from './ContextPickerToggle'
-export type { ContextPickerToggleProps } from './ContextPickerToggle'

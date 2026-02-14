@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useCallback } from 'react'
 import DataObjectOutlined from '@mui/icons-material/DataObjectOutlined'
-import { useStore, outputSchemaStore, canvasStore, workflowStore, contextPickerStore } from '@/stores'
+import { useStore, outputSchemaStore, canvasStore, workflowStore } from '@/stores'
 import { DESIGN } from '@/constants'
-import { Collections } from '@/utils/collections'
 import { BrowserPanel } from './BrowserPanel'
 import type { OutputSchema } from '@/types'
 
@@ -23,7 +22,6 @@ function SchemasBrowserPanel() {
   const schemas = useStore(outputSchemaStore.store, outputSchemaStore.selectAll)
   const loading = useStore(outputSchemaStore.store, outputSchemaStore.selectLoading)
   const selectedStepIds = useStore(canvasStore.store, canvasStore.selectSelectedStepIds)
-  const isPickingActive = useStore(contextPickerStore.store, contextPickerStore.selectActive)
 
   useEffect(() => {
     void outputSchemaStore.fetchIfStale()
@@ -32,29 +30,12 @@ function SchemasBrowserPanel() {
   const firstStepId = useMemo(() => selectedStepIds.values().next().value ?? null, [selectedStepIds])
   const selectedStep = useStore(workflowStore.store, workflowStore.selectStepById(firstStepId))
 
-  const schemasById = useMemo(() => Collections.keyBy(schemas, (s) => s.id), [schemas])
-
   const handleAssign = useCallback(
     (schemaId: string) => {
       if (!selectedStep) return
       void workflowStore.updateStep(selectedStep.id, { output_schema_id: schemaId })
     },
     [selectedStep],
-  )
-
-  const handlePick = useCallback(
-    (schemaId: string) => {
-      const schema = schemasById.get(schemaId)
-      if (!schema) return
-      contextPickerStore.pick({
-        kind: 'output-schema',
-        id: schema.id,
-        name: schema.name,
-        summary: `${fieldCount(schema.schema)} field(s)`,
-        data: schema as unknown as Record<string, unknown>,
-      })
-    },
-    [schemasById],
   )
 
   const isHighlighted = useCallback((schema: OutputSchema) => schema.id === selectedStep?.output_schema_id, [selectedStep])
@@ -71,7 +52,6 @@ function SchemasBrowserPanel() {
       matchesQuery={matchesQuery}
       isHighlighted={isHighlighted}
       onItemClick={selectedStep ? handleAssign : null}
-      onPickItem={isPickingActive ? handlePick : null}
     />
   )
 }

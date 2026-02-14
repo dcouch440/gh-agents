@@ -2,6 +2,7 @@ import { useRef, type ReactNode } from 'react'
 import { Box } from '@mui/material'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
+import { RichChatInput } from './RichChatInput'
 import type { ChatMessageData } from './MessageList'
 
 export type ChatPanelProps = {
@@ -12,14 +13,18 @@ export type ChatPanelProps = {
   className?: string
   emptyMessage?: string
   streamingContent?: ReactNode
+  /** When provided, renders RichChatInput with mention chip support */
+  stepId?: string
 }
 
-function ChatPanel({ messages, onSend, streaming, disabled, emptyMessage, streamingContent }: ChatPanelProps) {
+function ChatPanel({ messages, onSend, streaming, disabled, emptyMessage, streamingContent, stepId }: ChatPanelProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   return (
     <Box
-      onClick={() => { inputRef.current?.focus() }}
+      onClick={() => {
+        if (!stepId) inputRef.current?.focus()
+      }}
       sx={{
         display: 'flex',
         flexDirection: 'column',
@@ -35,7 +40,11 @@ function ChatPanel({ messages, onSend, streaming, disabled, emptyMessage, stream
         streamingContent={streamingContent}
         streaming={streaming}
       />
-      <ChatInput onSend={onSend} disabled={disabled} inputRef={inputRef} />
+      {stepId ? (
+        <RichChatInput onSend={onSend} stepId={stepId} disabled={disabled} />
+      ) : (
+        <ChatInput onSend={onSend} disabled={disabled} inputRef={inputRef} />
+      )}
     </Box>
   )
 }
