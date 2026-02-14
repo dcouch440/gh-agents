@@ -5,7 +5,6 @@
 import { createStore, createNormalizedMap, nmFromArray, nmSet, nmDelete, toArray, nmGet, logger, extractError } from './lib'
 import type { NormalizedMap } from './lib'
 import { api } from '@/api'
-import { Collections } from '@/utils/collections'
 import type { Protocol, ProtocolTypeInfo, CreateProtocolRequest, UpdateProtocolRequest, CreatePortRequest } from '@/types/protocol'
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -43,7 +42,7 @@ const selectTypes = (s: ProtocolState): ProtocolTypeInfo[] => s.types
 const selectByType =
   (protocolType: string) =>
   (s: ProtocolState): Protocol[] =>
-    Collections.filterMap(toArray(s.items), (p) => (p.protocol_type === protocolType ? p : null))
+    toArray(s.items).filter((p) => p.protocol_type === protocolType)
 
 const selectLoading = (s: ProtocolState): boolean => s.loading
 

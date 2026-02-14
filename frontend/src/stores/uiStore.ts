@@ -2,7 +2,7 @@
 // uiStore — Centralized UI state (theme, sidebar, toasts, command palette)
 // ============================================================================
 
-import { createStore } from './lib'
+import { createStore, lsGet, lsSet } from './lib'
 import { LS_THEME } from '@/constants'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -29,24 +29,6 @@ type UIState = {
   theme: ThemeMode
   toasts: Toast[]
   commandPaletteOpen: boolean
-}
-
-// ── Safe localStorage ────────────────────────────────────────────────────────
-
-const lsGet = (key: string): string | null => {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-const lsSet = (key: string, value: string): void => {
-  try {
-    localStorage.setItem(key, value)
-  } catch {
-    /* noop */
-  }
 }
 
 // ── Initialization helpers ───────────────────────────────────────────────────

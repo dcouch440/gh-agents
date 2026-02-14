@@ -118,33 +118,49 @@ const sendMessage = async (executionId: string, content: string): Promise<void> 
     // Capture the index of the temp message for O(1) updates during streaming
     const tempIndex = (store.getState().messagesByExecution[executionId] ?? []).length - 1
 
+    // Batch token updates to once per animation frame to avoid per-token array copies
+    let pendingFrame: number | null = null
+
+    const flushTokens = (): void => {
+      pendingFrame = null
+      const current = accumulated
+      store.setState((s) => {
+        const msgs = s.messagesByExecution[executionId] ?? []
+        const updated = msgs.slice()
+        updated[tempIndex] = { ...msgs[tempIndex], content: current }
+        return {
+          messagesByExecution: {
+            ...s.messagesByExecution,
+            [executionId]: updated,
+          },
+        }
+      })
+    }
+
     // Open SSE stream
     const abort = createSSEStream(API.EXECUTION_MESSAGE_STREAM(executionId, response.stream_id), {
       onEvent: (event) => {
         if (event.event === 'token') {
           const tokenText = JSON.parse(event.data) as string
           accumulated += tokenText
-          const current = accumulated
-          store.setState((s) => {
-            const msgs = s.messagesByExecution[executionId] ?? []
-            const updated = msgs.slice()
-            updated[tempIndex] = { ...msgs[tempIndex], content: current }
-            return {
-              messagesByExecution: {
-                ...s.messagesByExecution,
-                [executionId]: updated,
-              },
-            }
-          })
+          pendingFrame ??= requestAnimationFrame(flushTokens)
         }
       },
       onDone: () => {
+        if (pendingFrame !== null) {
+          cancelAnimationFrame(pendingFrame)
+          flushTokens()
+        }
         store.setState((s) => ({
           activeStreams: { ...s.activeStreams, [executionId]: null },
         }))
         void fetchMessages(executionId)
       },
       onError: (err) => {
+        if (pendingFrame !== null) {
+          cancelAnimationFrame(pendingFrame)
+          flushTokens()
+        }
         store.setState((s) => ({
           activeStreams: { ...s.activeStreams, [executionId]: null },
           error: err.message,

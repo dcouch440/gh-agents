@@ -2,7 +2,7 @@
 // layoutStore — Layout panel state (left nav panel, right context panel)
 // ============================================================================
 
-import { createStore } from './lib'
+import { createStore, lsGet, lsSet } from './lib'
 import { LS_LEFT_PANEL_OPEN, LS_LEFT_PANEL_SECTION, LS_RIGHT_PANEL_WIDTH, LAYOUT } from '@/constants'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -14,24 +14,6 @@ type LayoutState = {
   rightPanelSection: string | null
   rightPanelWidth: number
   rightPanelDragging: boolean
-}
-
-// ── Safe localStorage ────────────────────────────────────────────────────────
-
-const lsGet = (key: string): string | null => {
-  try {
-    return localStorage.getItem(key)
-  } catch {
-    return null
-  }
-}
-
-const lsSet = (key: string, value: string): void => {
-  try {
-    localStorage.setItem(key, value)
-  } catch {
-    /* noop */
-  }
 }
 
 // ── Store ────────────────────────────────────────────────────────────────────
