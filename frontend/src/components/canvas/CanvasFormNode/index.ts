@@ -1,3 +1,5 @@
 export { CanvasFormNode } from './CanvasFormNode'
 export { FORM_NODE } from './constants'
+export { resolveScaleNotch, resolveScaleFactor } from './scaleNotch'
+export type { ScaleNotch } from './constants'
 export type { CanvasFormTab, CanvasFormNodeProps } from './types'
