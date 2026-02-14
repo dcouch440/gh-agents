@@ -1,12 +1,13 @@
 import { toArray, nmGet } from '../lib'
 import type { WorkflowState } from './types'
-import type { Workflow, WorkflowStep, WorkflowStepEdge, DocumentDef, RosterAgent } from '@/types/workflow'
+import type { Workflow, WorkflowStep, WorkflowStepEdge, DocumentDef, RosterAgent, RoomStepMember } from '@/types/workflow'
 import type { Document } from '@/types/document'
 import { STALE_THRESHOLD_MS } from './_store'
 
 const EMPTY_DOCS: Document[] = []
 const EMPTY_DEFS: DocumentDef[] = []
 const EMPTY_ROSTER: RosterAgent[] = []
+const EMPTY_ROOM_MEMBERS: RoomStepMember[] = []
 
 const selectAll = (s: WorkflowState): Workflow[] => toArray(s.items)
 
@@ -49,6 +50,17 @@ const selectStepRoster =
   (s: WorkflowState): RosterAgent[] =>
     s.rosterByStep[stepId] ?? EMPTY_ROSTER
 
+const selectRosterByStep = (s: WorkflowState): Record<string, RosterAgent[]> =>
+  s.rosterByStep
+
+const selectRoomStepMembers =
+  (stepId: string) =>
+  (s: WorkflowState): RoomStepMember[] =>
+    s.roomMembersByStep[stepId] ?? EMPTY_ROOM_MEMBERS
+
+const selectRoomMembersByStep = (s: WorkflowState): Record<string, RoomStepMember[]> =>
+  s.roomMembersByStep
+
 const selectLoading = (s: WorkflowState): boolean => s.loading
 
 const selectError = (s: WorkflowState): string | null => s.error
@@ -71,6 +83,9 @@ export {
   selectStepDocumentDefs,
   selectDocumentDefsByStep,
   selectStepRoster,
+  selectRosterByStep,
+  selectRoomStepMembers,
+  selectRoomMembersByStep,
   selectLoading,
   selectError,
   selectDirty,

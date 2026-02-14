@@ -43,6 +43,7 @@ export type {
   UpdateDocumentDefRequest,
   RosterAgent,
   CreateRosterAgentRequest,
+  RoomStepMember,
   StepChatDebugResponse,
 } from './workflow'
 export type {

@@ -143,6 +143,7 @@ export const API = {
   STEP_DOCUMENT_DEF: (wid: string, sid: string, did: string) => `/workflows/${wid}/steps/${sid}/document-defs/${did}`,
   STEP_AGENT_ROSTER: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}/agent-roster`,
   STEP_ROSTER_AGENT: (wid: string, sid: string, rid: string) => `/workflows/${wid}/steps/${sid}/agent-roster/${rid}`,
+  STEP_ROOM_MEMBERS: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}/room-members`,
   STEP_CHAT_SESSION: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}/chat/session`,
   STEP_CHAT_MESSAGES: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}/chat/messages`,
   STEP_CHAT_DEBUG: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}/chat/debug`,

@@ -32,6 +32,8 @@ type DynamicNodeData = {
   label: string
   description: string
   documentNames: string[]
+  rosterNames: string[]
+  roomId: string | null
   upstreamStepNames: string[]
   promptValue: string
   modelId: string | null
@@ -47,6 +49,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   const accentColor = config.color
 
   const documentDefs = useStore(workflowStore.store, workflowStore.selectStepDocumentDefs(id))
+  const roomStepMembers = useStore(workflowStore.store, workflowStore.selectRoomStepMembers(id))
 
   const selfHighlight = useStore(canvasStore.store, (s): HighlightMode => {
     if (s.hoveredStepId === id) return HighlightMode.HOVER
@@ -134,9 +137,15 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   })
 
   // Header subtitle
-  const subtitle = nodeData.archetype === Archetype.DOCUMENTER && nodeData.documentNames.length > 0
-    ? nodeData.documentNames.join(' \u00b7 ')
-    : null
+  const subtitle = (() => {
+    if (nodeData.archetype === Archetype.DOCUMENTER && nodeData.documentNames.length > 0)
+      return nodeData.documentNames.join(' \u00b7 ')
+    if (nodeData.archetype === Archetype.TASK_FORCE && nodeData.rosterNames.length > 0)
+      return nodeData.rosterNames.join(' \u00b7 ')
+    if (nodeData.archetype === Archetype.ROOM && roomStepMembers.length > 0)
+      return roomStepMembers.map((m) => m.name).join(' \u00b7 ')
+    return null
+  })()
 
   return (
     <CanvasFormNode

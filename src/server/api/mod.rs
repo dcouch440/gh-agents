@@ -178,6 +178,10 @@ pub use agent_roster::{
     CreateRosterAgentRequest, RosterAgentResponse,
 };
 
+// Re-export room step member handlers and types
+pub mod room_step_members;
+pub use room_step_members::list_room_step_members;
+
 // Re-export routing rule handlers and types
 pub mod routing_rules;
 pub use routing_rules::{

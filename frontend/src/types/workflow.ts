@@ -28,6 +28,7 @@ type WorkflowStep = {
   position_x: number | null
   position_y: number | null
   name: string | null
+  room_id: string | null
   system_prompt_suffix: string | null
   description: string
 }
@@ -141,6 +142,14 @@ type CreateRosterAgentRequest = {
   execution_order?: number
 }
 
+type RoomStepMember = {
+  id: string
+  name: string
+  role: string
+  perspective: string
+  display_order: number
+}
+
 type StepChatDebugResponse = {
   system_prompt: string
   messages: { role: string; content: string }[]
@@ -164,5 +173,6 @@ export type {
   UpdateDocumentDefRequest,
   RosterAgent,
   CreateRosterAgentRequest,
+  RoomStepMember,
   StepChatDebugResponse,
 }
