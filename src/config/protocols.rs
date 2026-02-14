@@ -163,6 +163,7 @@ pub mod vars {
         pub const CONTEXT_DOCUMENTS_INSTRUCTION: &str = "System.context_documents_instruction";
         pub const CURRENT_CONFIG: &str = "System.current_config";
         pub const GRAPH_CONTEXT: &str = "System.graph_context";
+        pub const BOARD_CONTEXT: &str = "System.board_context";
         pub const ARCHETYPE_BLOCK: &str = "System.archetype_block";
     }
 }
@@ -502,7 +503,7 @@ mod tests {
     fn node_assistant_base_resolves_with_archetype_block() {
         let mut vars = HashMap::new();
         vars.insert(
-            vars::system::GRAPH_CONTEXT.to_string(),
+            vars::system::BOARD_CONTEXT.to_string(),
             "Nodes: A -> B -> [SELECTED] C".to_string(),
         );
         vars.insert(
@@ -519,7 +520,7 @@ mod tests {
         );
         assert!(
             ctx.system_prompt.contains("Nodes: A -> B -> [SELECTED] C"),
-            "should contain graph context"
+            "should contain board context"
         );
         assert!(
             ctx.system_prompt.contains("archetype_context"),
@@ -660,6 +661,7 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
             vars::system::CONTEXT_DOCUMENTS_INSTRUCTION,
             vars::system::CURRENT_CONFIG,
             vars::system::GRAPH_CONTEXT,
+            vars::system::BOARD_CONTEXT,
             vars::system::ARCHETYPE_BLOCK,
             vars::task_force::AGENT_NAME,
             vars::task_force::ROLE_DESCRIPTION,

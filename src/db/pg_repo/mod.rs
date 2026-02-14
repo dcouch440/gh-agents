@@ -1454,6 +1454,40 @@ impl WorkflowRepo for PgRepo {
         Ok(())
     }
 
+    // --- Board Context ---
+
+    async fn update_step_board_context(&self, step_id: Uuid, context: &str) -> Result<()> {
+        sqlx::query(
+            "UPDATE workflow_steps SET board_context_cache = $1, board_context_updated_at = NOW() WHERE id = $2",
+        )
+        .bind(context)
+        .bind(step_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn update_step_goal_summary(&self, step_id: Uuid, goal: &str) -> Result<()> {
+        sqlx::query(
+            "UPDATE workflow_steps SET goal_summary = $1, goal_summary_updated_at = NOW() WHERE id = $2",
+        )
+        .bind(goal)
+        .bind(step_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn mark_board_context_stale(&self, workflow_id: Uuid) -> Result<()> {
+        sqlx::query(
+            "UPDATE workflow_steps SET board_context_updated_at = NULL WHERE workflow_id = $1",
+        )
+        .bind(workflow_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     // --- Edges ---
 
     async fn set_edges(&self, workflow_id: Uuid, edges: Vec<WorkflowStepEdgeRow>) -> Result<()> {

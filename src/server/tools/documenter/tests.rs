@@ -46,6 +46,10 @@ mod tests {
             system_prompt_suffix: None,
             visible: true,
             description: "Test description".to_string(),
+            board_context_cache: String::new(),
+            board_context_updated_at: None,
+            goal_summary: String::new(),
+            goal_summary_updated_at: None,
         }
     }
 

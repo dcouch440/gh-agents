@@ -213,6 +213,17 @@ impl ChatStrategy {
             user_id: Some(self.user_id.0),
             kind,
         });
+
+        // Mark board context stale so neighboring nodes refresh on next read
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            let wf_repo = self.state.repos().workflows.clone();
+            let wf_id = ctx.workflow_id;
+            handle.spawn(async move {
+                if let Err(e) = wf_repo.mark_board_context_stale(wf_id).await {
+                    tracing::error!("Failed to mark board context stale: {e}");
+                }
+            });
+        }
     }
 }
 
@@ -430,6 +441,16 @@ impl ExecutionStrategy for ChatStrategy {
                     }
                 });
             }
+        }
+
+        // Spawn background goal refresh for step-scoped chats
+        if let (Some(ref ctx), Some(session_id)) = (&self.step_context, self.session_id) {
+            crate::server::hub::board_context::spawn_goal_refresh(
+                self.state.clone(),
+                ctx.step_id,
+                session_id,
+                ctx.workflow_id,
+            );
         }
 
         Ok(())
