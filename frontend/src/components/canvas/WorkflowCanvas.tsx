@@ -4,7 +4,7 @@ import type { OnSelectionChangeParams, Connection, OnNodesDelete, OnEdgesDelete,
 import '@xyflow/react/dist/style.css'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
-import { useStore, batch, workflowStore, canvasStore, agentStore, outputSchemaStore, protocolStore } from '@/stores'
+import { useStore, batch, workflowStore, canvasStore, agentStore, outputSchemaStore, protocolStore, shareStore } from '@/stores'
 import { toRFNodes, toRFEdges, toDocumentEdges } from './mappers'
 import { Collections } from '@/utils/collections'
 import { nodeTypes } from './nodeTypes'
@@ -18,6 +18,7 @@ import { computeHighlightedProtocolIds } from './computeHighlightedProtocolIds'
 import { useGroupHoverDelay } from './useGroupHoverDelay'
 import { useCanvasSync } from './useCanvasSync'
 import { useCanvasLookups } from './useCanvasLookups'
+import { ShareModeBanner } from './ShareModeBanner'
 
 function WorkflowCanvasInner() {
   const theme = useTheme()
@@ -33,6 +34,7 @@ function WorkflowCanvasInner() {
   const rosterByStep = useStore(workflowStore.store, workflowStore.selectRosterByStep)
   const { onNodeDragStart, onNodeDrag, onNodeDragStop } = usePackDrag(getNodes, setNodes)
   const stepsById = useMemo(() => Collections.keyBy(steps, (s) => s.id), [steps])
+  const shareActive = useStore(shareStore.store, shareStore.selectActive)
   const [contextMenu, setContextMenu] = useState<MenuPosition>(null)
   const initialFitDone = useRef(false)
   const fetchedToolAgentIds = useRef(new Set<string>())
@@ -100,6 +102,7 @@ function WorkflowCanvasInner() {
   // Selection sync: RF → canvasStore (read-only mirror for sidebar panels)
   // Read protocolStepId / isProtocol directly from node data so there are no stale closures
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
+    if (shareStore.store.getState().active) return
     const nodeIds = Collections.mapBy(params.nodes, (n: { id: string }) => n.id)
     const protocolIds = computeHighlightedProtocolIds(params.nodes)
     batch(() => {
@@ -165,6 +168,7 @@ function WorkflowCanvasInner() {
   const onPaneContextMenu = useCallback(
     (event: React.MouseEvent | MouseEvent) => {
       event.preventDefault()
+      if (shareStore.store.getState().active) return
       const flowPosition = screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
@@ -182,6 +186,7 @@ function WorkflowCanvasInner() {
   // Context menu (right-click on node)
   const onNodeContextMenu = useCallback((event: React.MouseEvent, node: { id: string; position: { x: number; y: number } }) => {
     event.preventDefault()
+    if (shareStore.store.getState().active) return
     setContextMenu({
       x: event.clientX,
       y: event.clientY,
@@ -191,18 +196,40 @@ function WorkflowCanvasInner() {
     })
   }, [])
 
-  // Close context menu on pane or node click
+  // Close context menu on pane or node click — share mode intercepts
   const onPaneClick = useCallback(() => {
+    if (shareStore.store.getState().active) {
+      shareStore.cancelShare()
+      return
+    }
     setContextMenu(null)
   }, [])
 
-  const onNodeClick = useCallback(() => {
+  const onNodeClick = useCallback((_event: React.MouseEvent, node: { id: string }) => {
+    if (shareStore.store.getState().active) {
+      shareStore.commitShare(node.id)
+      return
+    }
     setContextMenu(null)
   }, [])
 
   // Protocol hover tracking for group highlighting.
   // Self-hover is instant; group hover triggers after a 300ms delay.
   const { onNodeMouseEnter, onNodeMouseLeave } = useGroupHoverDelay()
+
+  // ESC to cancel share mode
+  useEffect(() => {
+    if (!shareActive) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        shareStore.cancelShare()
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [shareActive])
 
   const onCanvasMouseDown = useCallback(() => {
     setContextMenu(null)
@@ -287,6 +314,7 @@ function WorkflowCanvasInner() {
         )}
       </ReactFlow>
       <OptionTray />
+      {shareActive && <ShareModeBanner />}
       <CanvasContextMenu
         position={contextMenu}
         onClose={() => {

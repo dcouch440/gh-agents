@@ -6,7 +6,7 @@ import { createStore, logger } from './lib'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type PickableEntityKind = 'agent' | 'prompt-template' | 'output-schema' | 'workflow-step' | 'document' | 'context-node'
+type PickableEntityKind = 'agent' | 'prompt-template' | 'output-schema' | 'workflow-step' | 'document' | 'context-node' | 'shared-field'
 
 type PickableEntity = {
   kind: PickableEntityKind

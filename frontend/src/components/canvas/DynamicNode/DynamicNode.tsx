@@ -1,4 +1,4 @@
-import { memo, useState, useCallback } from 'react'
+import { memo, useState, useCallback, useEffect } from 'react'
 import { Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 
@@ -8,7 +8,7 @@ import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import GroupsOutlined from '@mui/icons-material/GroupsOutlined'
 import ForumOutlined from '@mui/icons-material/ForumOutlined'
 import BugReportOutlined from '@mui/icons-material/BugReportOutlined'
-import { useStore, workflowStore, canvasStore } from '@/stores'
+import { useStore, workflowStore, canvasStore, shareStore } from '@/stores'
 import type { CreateDocumentDefRequest } from '@/types/workflow'
 import { CanvasFormNode } from '../CanvasFormNode'
 import type { CanvasFormTab } from '../CanvasFormNode'
@@ -26,6 +26,7 @@ import { DocumentsTab } from './tabs/DocumentsTab'
 import { AgentRosterTab } from './tabs/AgentRosterTab'
 import { RoomMembersTab } from './tabs/RoomMembersTab'
 import { DebugLogTab } from './tabs/DebugLogTab'
+import { SharePickerPanel } from '../SharePickerPanel'
 
 type DynamicNodeData = {
   kind: CanvasNodeKind
@@ -57,6 +58,26 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     if (s.hoveredStepId === id) return HighlightMode.HOVER
     return HighlightMode.NONE
   })
+
+  // Share mode subscriptions
+  const shareActive = useStore(shareStore.store, shareStore.selectActive)
+  const shareSourceId = useStore(shareStore.store, shareStore.selectSourceStepId)
+  const pendingChatFocus = useStore(shareStore.store, shareStore.selectPendingChatFocus)
+  const isShareSource = shareActive && shareSourceId === id
+
+  // Force tab switch when this node is a share target
+  useEffect(() => {
+    if (pendingChatFocus === id) {
+      queueMicrotask(() => {
+        setActiveTabId('chat')
+      })
+      shareStore.clearPendingChatFocus()
+    }
+  }, [pendingChatFocus, id])
+
+  // Overlay for share source, highlight for potential targets
+  const shareOverlay = isShareSource ? <SharePickerPanel stepId={id} /> : undefined
+  const effectiveHighlight = shareActive && !isShareSource ? HighlightMode.HOVER : selfHighlight
 
   const handleAddDocument = useCallback(() => {
     setAdding(true)
@@ -175,7 +196,8 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
         onTabChange={setActiveTabId}
         selected={selected === true}
         accentColor={accentColor}
-        highlightMode={selfHighlight}
+        highlightMode={effectiveHighlight}
+        overlay={shareOverlay}
         extraHandles={
           nodeData.archetype === Archetype.DOCUMENTER ? (
             <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />

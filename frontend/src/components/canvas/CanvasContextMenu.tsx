@@ -2,11 +2,12 @@ import { useCallback, useMemo } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import type { SxProps, Theme } from '@mui/material/styles'
-import { useStore, workflowStore, protocolStore, canvasStore } from '@/stores'
+import { useStore, workflowStore, protocolStore, canvasStore, shareStore } from '@/stores'
 import { Collections } from '@/utils/collections'
 import { DEFAULT_STEP_TYPE_COLOR, STEP_TYPE_COLORS } from './constants'
-import { Archetype, ARCHETYPE_CONFIGS } from './DynamicNode/archetypes'
+import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from './DynamicNode/archetypes'
 import type { Archetype as ArchetypeType } from './DynamicNode/archetypes'
+import { buildShareableFields } from './buildShareableFields'
 
 const VIEWPORT_PADDING = 8
 
@@ -130,6 +131,38 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     onClose()
   }
 
+  const handleShare = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    event.preventDefault()
+    if (!position.nodeId) return
+
+    const state = workflowStore.store.getState()
+    const step = state.steps.byId.get(position.nodeId)
+    if (!step) return
+
+    const stepProtocols = canvasStore.store.getState().stepProtocols
+    const protocolsByStep = new Map(
+      Object.entries(stepProtocols).map(([sid, link]) => [sid, { protocol_type: link.protocolType }]),
+    )
+    const archetype = resolveArchetype(step, protocolsByStep, position.nodeId)
+
+    const documentDefs = state.documentDefsByStep[position.nodeId] ?? []
+    const rosterAgents = state.rosterByStep[position.nodeId] ?? []
+    const roomMembers = state.roomMembersByStep[position.nodeId] ?? []
+
+    const fields = buildShareableFields({
+      stepId: position.nodeId,
+      step,
+      archetype,
+      documentDefs,
+      rosterAgents,
+      roomMembers,
+    })
+
+    shareStore.enterShareMode(position.nodeId, fields)
+    onClose()
+  }
+
   const handleDelete = (event: React.MouseEvent) => {
     event.stopPropagation()
     event.preventDefault()
@@ -161,9 +194,15 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
       }}
     >
       {position.nodeId !== undefined ? (
-        <Box data-testid="ctx-delete-step" onClick={handleDelete} sx={MENU_ITEM_SX}>
-          <Typography sx={{ fontSize: 12, color: 'error.main' }}>Delete Step</Typography>
-        </Box>
+        <>
+          <Box data-testid="ctx-share-step" onClick={handleShare} sx={MENU_ITEM_SX}>
+            <Typography sx={{ fontSize: 12, color: 'text.primary' }}>Share</Typography>
+          </Box>
+          <Box sx={{ mx: 1.5, my: 0.5, borderTop: 1, borderColor: 'divider' }} />
+          <Box data-testid="ctx-delete-step" onClick={handleDelete} sx={MENU_ITEM_SX}>
+            <Typography sx={{ fontSize: 12, color: 'error.main' }}>Delete Step</Typography>
+          </Box>
+        </>
       ) : (
         <>
           <Typography sx={SECTION_LABEL_SX}>Archetypes</Typography>

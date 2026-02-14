@@ -23,6 +23,7 @@ type CanvasFormNodeProps = {
   accentColor?: string
   highlightMode?: HighlightMode
   extraHandles?: ReactNode
+  overlay?: ReactNode
 }
 
 export type { CanvasFormTab, CanvasFormNodeProps }

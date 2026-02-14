@@ -70,6 +70,17 @@ const formatContextNode: EntityFormatter = (entity) => {
     .join('\n')
 }
 
+const formatSharedField: EntityFormatter = (entity) => {
+  const d = entity.data
+  const fieldType = str(d.fieldType) ?? 'Field'
+  return [
+    `[Context: ${fieldType}] ${entity.name}`,
+    str(d.value) ? `${str(d.value)}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
 const FORMATTERS: Record<PickableEntityKind, EntityFormatter> = {
   'agent': formatAgent,
   'prompt-template': formatPromptTemplate,
@@ -77,6 +88,7 @@ const FORMATTERS: Record<PickableEntityKind, EntityFormatter> = {
   'workflow-step': formatWorkflowStep,
   'document': formatDocument,
   'context-node': formatContextNode,
+  'shared-field': formatSharedField,
 }
 
 const formatEntityContext = (entity: PickableEntity): string => {
