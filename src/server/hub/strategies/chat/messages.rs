@@ -41,12 +41,10 @@ pub(super) async fn build_chat_messages(
         // Inject prior context from session summary via distiller
         if let Ok(Some(session)) = state.repo().get_session(session_id).await {
             if !session.summary.is_empty() {
-                if let Some(targeted) =
-                    tools::haiku_extract_context(&session.summary, input).await
+                if let Some(targeted) = tools::haiku_extract_context(&session.summary, input).await
                 {
                     if !targeted.contains("No prior context needed") {
-                        messages
-                            .insert(0, Message::user(format!("[Prior context] {}", targeted)));
+                        messages.insert(0, Message::user(format!("[Prior context] {}", targeted)));
                         messages.insert(
                             1,
                             Message::assistant("Understood, I have the relevant context."),
