@@ -187,10 +187,10 @@ mod tests {
         let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
 
         // Universal tools
-        assert!(names.contains(&"set_node_archetype"));
         assert!(names.contains(&"set_node_name"));
         assert!(names.contains(&"set_node_description"));
         assert!(names.contains(&"think"));
+        assert!(!names.contains(&"set_node_archetype"));
 
         // Documenter-specific tools
         assert!(names.contains(&"create_doc_def"));
@@ -204,10 +204,10 @@ mod tests {
         let tools = super::super::resolve_step_tools("");
         let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
 
-        assert!(names.contains(&"set_node_archetype"));
         assert!(names.contains(&"set_node_name"));
         assert!(names.contains(&"set_node_description"));
         assert!(names.contains(&"think"));
+        assert!(!names.contains(&"set_node_archetype"));
 
         // No archetype-specific tools
         assert!(!names.contains(&"create_doc_def"));

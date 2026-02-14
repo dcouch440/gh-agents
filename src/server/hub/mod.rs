@@ -292,7 +292,12 @@ pub async fn build_step_system_prompt(
 
             (roles::NODE_ASSISTANT_ROOM_BLOCK.to_string(), snapshot)
         }
-        _ => (String::new(), String::new()),
+        _ => {
+            return Err(HubError::Internal(anyhow::anyhow!(
+                "Step {} has unsupported execution_mode '{}'. Expected: documenter, task_force, belief_capture, or room.",
+                step_id, execution_mode
+            )));
+        }
     };
 
     // 3. Resolve base template with all variables

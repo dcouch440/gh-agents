@@ -461,7 +461,6 @@ impl ExecutionStrategy for ChatStrategy {
 
 /// Universal tools available to all archetypes.
 const UNIVERSAL_TOOLS: &[&str] = &[
-    "set_node_archetype",
     "set_node_name",
     "set_node_description",
     "think",
@@ -511,7 +510,6 @@ fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
 
 /// Universal tool names handled by node_assistant.
 const NODE_ASSISTANT_TOOLS: &[&str] = &[
-    "set_node_archetype",
     "set_node_name",
     "set_node_description",
 ];

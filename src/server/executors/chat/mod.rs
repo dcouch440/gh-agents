@@ -128,7 +128,7 @@ async fn handle_message(
     }
 
     // Existing agent chat path
-    let agent_id = msg.agent_id.or(state.default_agent_id());
+    let agent_id = msg.agent_id;
 
     match agent_id {
         Some(aid) => match crate::server::hub::run_chat(

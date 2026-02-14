@@ -515,8 +515,13 @@ mod tests {
         let ctx = roles::NODE_ASSISTANT_BASE.resolve(&vars);
         assert!(
             ctx.system_prompt
+                .contains("specialized configuration assistant"),
+            "should contain focused identity"
+        );
+        assert!(
+            !ctx.system_prompt
                 .contains("workflow configuration assistant"),
-            "should contain base identity"
+            "should NOT contain old intro agent identity"
         );
         assert!(
             ctx.system_prompt.contains("Nodes: A -> B -> [SELECTED] C"),
@@ -525,10 +530,6 @@ mod tests {
         assert!(
             ctx.system_prompt.contains("archetype_context"),
             "should contain documenter block"
-        );
-        assert!(
-            ctx.system_prompt.contains("three-phase pipeline"),
-            "should contain documenter details"
         );
     }
 
