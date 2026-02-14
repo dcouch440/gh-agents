@@ -1,8 +1,11 @@
+import { useCallback, useState } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
 import DeleteOutlined from '@mui/icons-material/DeleteOutlined'
-import { ContextPickerToggle } from '@/components/primitives'
+import AddLinkOutlined from '@mui/icons-material/AddLinkOutlined'
+import { Tooltip } from '@/components/primitives'
+import { ContextMentionMenu } from '../../ContextMentionMenu'
 
 type ChatHeaderProps = {
   stepId: string
@@ -11,6 +14,16 @@ type ChatHeaderProps = {
 }
 
 function ChatHeader({ stepId, onClear, disabled }: ChatHeaderProps) {
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
+
+  const handleToggleMenu = useCallback((e: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl((prev) => (prev ? null : e.currentTarget))
+  }, [])
+
+  const handleCloseMenu = useCallback(() => {
+    setAnchorEl(null)
+  }, [])
+
   return (
     <Box
       sx={{
@@ -34,7 +47,19 @@ function ChatHeader({ stepId, onClear, disabled }: ChatHeaderProps) {
     >
       <Typography sx={{ fontSize: 11, fontWeight: 500, color: 'text.secondary', opacity: 0.7 }}>Chat</Typography>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}>
-        <ContextPickerToggle stepId={stepId} />
+        <Tooltip title={anchorEl ? 'Close context menu' : 'Add context mentions'}>
+          <IconButton
+            size="small"
+            onClick={handleToggleMenu}
+            sx={{
+              p: 0.25,
+              color: anchorEl ? 'primary.main' : 'text.secondary',
+            }}
+          >
+            <AddLinkOutlined sx={{ fontSize: 14 }} />
+          </IconButton>
+        </Tooltip>
+        <ContextMentionMenu anchorEl={anchorEl} onClose={handleCloseMenu} stepId={stepId} />
         <IconButton size="small" onClick={onClear} disabled={disabled} sx={{ p: 0.25 }}>
           <DeleteOutlined sx={{ fontSize: 14 }} />
         </IconButton>

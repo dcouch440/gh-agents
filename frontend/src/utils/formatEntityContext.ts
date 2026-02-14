@@ -1,4 +1,4 @@
-import type { PickableEntity, PickableEntityKind } from '@/stores/contextPickerStore'
+import type { PickableEntity, PickableEntityKind } from '@/stores/contextMentionStore'
 
 type EntityFormatter = (entity: PickableEntity) => string
 

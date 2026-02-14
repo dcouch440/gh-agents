@@ -19,7 +19,6 @@ type BrowserPanelProps<T extends { id: string }> = {
   matchesQuery: (item: T, query: string) => boolean
   isHighlighted: (item: T) => boolean
   onItemClick: ((itemId: string) => void) | null
-  onPickItem: ((itemId: string) => void) | null
 }
 
 function BrowserPanel<T extends { id: string }>({
@@ -33,7 +32,6 @@ function BrowserPanel<T extends { id: string }>({
   matchesQuery,
   isHighlighted,
   onItemClick,
-  onPickItem = null,
 }: BrowserPanelProps<T>) {
   const [query, setQuery] = useState('')
 
@@ -41,8 +39,6 @@ function BrowserPanel<T extends { id: string }>({
     if (!query) return items
     return Collections.filterMap(items as T[], (item) => (matchesQuery(item, query) ? item : null))
   }, [items, query, matchesQuery])
-
-  const effectiveClick = onPickItem ?? onItemClick
 
   return (
     <Box>
@@ -59,15 +55,14 @@ function BrowserPanel<T extends { id: string }>({
       {filtered.map((item) => {
         const row = toRow(item)
         return (
-          <Box key={item.id} data-pickable={onPickItem ? 'true' : undefined}>
-            <AccentBarRow
-              barColor={barColor}
-              primary={row.primary}
-              secondary={row.secondary}
-              highlight={isHighlighted(item)}
-              onClick={effectiveClick ? () => effectiveClick(item.id) : null}
-            />
-          </Box>
+          <AccentBarRow
+            key={item.id}
+            barColor={barColor}
+            primary={row.primary}
+            secondary={row.secondary}
+            highlight={isHighlighted(item)}
+            onClick={onItemClick ? () => onItemClick(item.id) : null}
+          />
         )
       })}
     </Box>

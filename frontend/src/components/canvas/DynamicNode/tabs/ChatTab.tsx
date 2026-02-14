@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import CircularProgress from '@mui/material/CircularProgress'
-import { useStore, workflowStore } from '@/stores'
+import { useStore, workflowStore, contextMentionStore } from '@/stores'
 import { useAssistantSession } from '@/hooks/useAssistantSession'
 import { ChatPanel, StreamingMessage } from '@/components/chat'
 import { ARCHETYPE_CONFIGS } from '../archetypes'
@@ -24,6 +24,14 @@ function ChatTab({ stepId, archetype }: ChatTabProps) {
       clearHistory()
     }
   }, [clearHistory])
+
+  const handleSend = useCallback(
+    (message: string) => {
+      sendMessage(message)
+      contextMentionStore.clearStep(stepId)
+    },
+    [sendMessage, stepId],
+  )
 
   if (!workflowId) return null
 
@@ -55,11 +63,12 @@ function ChatTab({ stepId, archetype }: ChatTabProps) {
       <ChatHeader stepId={stepId} onClear={handleClear} disabled={streaming || messages.length === 0} />
       <ChatPanel
         messages={messages}
-        onSend={sendMessage}
+        onSend={handleSend}
         streaming={streaming}
         disabled={streaming}
         streamingContent={streamingContent}
         emptyMessage={ARCHETYPE_CONFIGS[archetype].chatEmptyMessage}
+        stepId={stepId}
       />
       {activePanel ? (
         <PanelOverlay
