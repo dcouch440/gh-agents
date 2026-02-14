@@ -52,7 +52,7 @@ function ChatTab({ stepId, archetype }: ChatTabProps) {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
-      <ChatHeader onClear={handleClear} disabled={streaming || messages.length === 0} />
+      <ChatHeader stepId={stepId} onClear={handleClear} disabled={streaming || messages.length === 0} />
       <ChatPanel
         messages={messages}
         onSend={sendMessage}

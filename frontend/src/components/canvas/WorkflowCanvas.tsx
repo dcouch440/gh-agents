@@ -4,7 +4,7 @@ import type { OnSelectionChangeParams, Connection, OnNodesDelete, OnEdgesDelete,
 import '@xyflow/react/dist/style.css'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
-import { useStore, batch, workflowStore, canvasStore, agentStore, outputSchemaStore, protocolStore } from '@/stores'
+import { useStore, batch, workflowStore, canvasStore, agentStore, outputSchemaStore, protocolStore, contextPickerStore } from '@/stores'
 import { toRFNodes, toRFEdges, toDocumentEdges } from './mappers'
 import { Collections } from '@/utils/collections'
 import { nodeTypes } from './nodeTypes'
@@ -99,7 +99,10 @@ function WorkflowCanvasInner() {
 
   // Selection sync: RF → canvasStore (read-only mirror for sidebar panels)
   // Read protocolStepId / isProtocol directly from node data so there are no stale closures
+  // Skip selection updates when context picking is active to prevent UI shifts
   const onSelectionChange = useCallback((params: OnSelectionChangeParams) => {
+    if (contextPickerStore.store.getState().active) return
+
     const nodeIds = Collections.mapBy(params.nodes, (n: { id: string }) => n.id)
     const protocolIds = computeHighlightedProtocolIds(params.nodes)
     batch(() => {
@@ -196,8 +199,45 @@ function WorkflowCanvasInner() {
     setContextMenu(null)
   }, [])
 
-  const onNodeClick = useCallback(() => {
+  const onNodeClick = useCallback((_event: React.MouseEvent, node: { id: string; type?: string; data: unknown }) => {
     setContextMenu(null)
+
+    const pickerState = contextPickerStore.store.getState()
+    if (pickerState.active) {
+      // Don't allow picking the step you're chatting with
+      if (node.id === pickerState.targetStepId) return
+
+      const d = node.data as Record<string, unknown>
+      const label = typeof d.label === 'string' ? d.label : node.id
+      const archetype = typeof d.archetype === 'string' ? d.archetype : 'step'
+      const documenterName = typeof d.documenterName === 'string' ? d.documenterName : null
+
+      if (node.type === 'dynamicNode') {
+        contextPickerStore.pick({
+          kind: 'workflow-step',
+          id: node.id,
+          name: label,
+          summary: `${archetype} workflow step`,
+          data: d,
+        })
+      } else if (node.type === 'contextNode') {
+        contextPickerStore.pick({
+          kind: 'context-node',
+          id: node.id,
+          name: label,
+          summary: 'Context node',
+          data: d,
+        })
+      } else if (node.type === 'documentNode') {
+        contextPickerStore.pick({
+          kind: 'document',
+          id: node.id,
+          name: label,
+          summary: documenterName ? `From: ${documenterName}` : 'Document',
+          data: d,
+        })
+      }
+    }
   }, [])
 
   // Protocol hover tracking for group highlighting.
