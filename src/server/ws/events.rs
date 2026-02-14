@@ -259,6 +259,14 @@ pub enum WorkflowEventKind {
         step_id: Uuid,
         doc_def_id: Uuid,
     },
+    /// Agent roster was changed (agent added, updated, or removed).
+    RosterChanged {
+        step_id: Uuid,
+    },
+    /// Room members were changed (member added, updated, or removed).
+    RoomMembersChanged {
+        step_id: Uuid,
+    },
     /// Step configuration was updated (name, description, prompt).
     StepConfigUpdated {
         step_id: Uuid,
@@ -290,6 +298,8 @@ impl WorkflowEvent {
             WorkflowEventKind::Completed { .. } => "completed",
             WorkflowEventKind::Failed { .. } => "failed",
             WorkflowEventKind::Resumed { .. } => "resumed",
+            WorkflowEventKind::RosterChanged { .. } => "roster_changed",
+            WorkflowEventKind::RoomMembersChanged { .. } => "room_members_changed",
             WorkflowEventKind::DocDefCreated { .. } => "doc_def_created",
             WorkflowEventKind::DocDefUpdated { .. } => "doc_def_updated",
             WorkflowEventKind::DocDefDeleted { .. } => "doc_def_deleted",

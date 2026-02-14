@@ -1,9 +1,10 @@
 import { nmSet } from '../lib'
 import { api } from '@/api'
 import { WORKFLOW_EVENT } from '@/types/ws'
-import type { WsWireMessage, DocDefChangedData, DocDefDeletedData, StepConfigUpdatedData } from '@/types/ws'
+import type { WsWireMessage, DocDefChangedData, DocDefDeletedData, StepConfigUpdatedData, RosterChangedData, RoomMembersChangedData } from '@/types/ws'
 import { store, getActiveId } from './_store'
 import { fetchDocumentDefs } from './documents'
+import { fetchRoster, fetchRoomStepMembers } from './roster'
 
 /** Fetch a single step from the API and patch it into the store silently.
  *  Skips the update if the step has unsaved local edits (dirty). */
@@ -40,6 +41,18 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         const d = msg.data as StepConfigUpdatedData
         if (d.workflow_id !== activeId) break
         void refetchStep(d.workflow_id, d.step_id)
+        break
+      }
+      case WORKFLOW_EVENT.ROSTER_CHANGED: {
+        const d = msg.data as RosterChangedData
+        if (d.workflow_id !== activeId) break
+        void fetchRoster(d.step_id)
+        break
+      }
+      case WORKFLOW_EVENT.ROOM_MEMBERS_CHANGED: {
+        const d = msg.data as RoomMembersChangedData
+        if (d.workflow_id !== activeId) break
+        void fetchRoomStepMembers(d.step_id)
         break
       }
     }

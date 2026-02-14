@@ -27,20 +27,30 @@ function ContextNodeHeader({ name, accentColor = CONTEXT_NODE.ACCENT_COLOR }: Co
         <ContextNodeIcon color={accentColor} size={18} />
       </Box>
 
-      <Typography
-        sx={{
-          fontSize: 13,
-          fontWeight: 600,
-          color: 'text.primary',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          flex: 1,
-          minWidth: 0,
-        }}
-      >
-        {name}
-      </Typography>
+      <Box sx={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+        <Typography
+          sx={{
+            fontSize: 13,
+            fontWeight: 600,
+            color: 'text.primary',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {name}
+        </Typography>
+        <Typography
+          sx={{
+            fontSize: 10,
+            fontWeight: 500,
+            color: 'text.secondary',
+            lineHeight: 1.2,
+          }}
+        >
+          Injected directly in every agent
+        </Typography>
+      </Box>
 
       <Box sx={{ mr: 0.5 }}>
         <ProtocolBadge color={accentColor} label="Context" animated />

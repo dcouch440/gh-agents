@@ -183,9 +183,14 @@ impl ChatStrategy {
             "update_config" => WorkflowEventKind::StepConfigUpdated {
                 step_id: ctx.step_id,
             },
-            // Task force tools — all emit StepConfigUpdated for frontend refetch
-            "set_task" | "add_agent" | "update_agent" | "remove_agent" | "set_capabilities"
-            | "set_failure_mode" => WorkflowEventKind::StepConfigUpdated {
+            // Task force mission-level tools
+            "set_task" | "set_capabilities" | "set_failure_mode" => {
+                WorkflowEventKind::StepConfigUpdated {
+                    step_id: ctx.step_id,
+                }
+            }
+            // Task force roster tools — emit RosterChanged so frontend refetches roster
+            "add_agent" | "update_agent" | "remove_agent" => WorkflowEventKind::RosterChanged {
                 step_id: ctx.step_id,
             },
             // Belief capture tools — all emit StepConfigUpdated for frontend refetch
@@ -195,15 +200,18 @@ impl ChatStrategy {
             | "set_confidence_threshold" => WorkflowEventKind::StepConfigUpdated {
                 step_id: ctx.step_id,
             },
-            // Room tools — all emit StepConfigUpdated for frontend refetch
-            "set_meeting_purpose"
-            | "add_member"
-            | "update_member"
-            | "remove_member"
-            | "set_max_turns"
-            | "set_interaction_mode" => WorkflowEventKind::StepConfigUpdated {
-                step_id: ctx.step_id,
-            },
+            // Room config tools
+            "set_meeting_purpose" | "set_max_turns" | "set_interaction_mode" => {
+                WorkflowEventKind::StepConfigUpdated {
+                    step_id: ctx.step_id,
+                }
+            }
+            // Room member tools — emit RoomMembersChanged so frontend refetches members
+            "add_member" | "update_member" | "remove_member" => {
+                WorkflowEventKind::RoomMembersChanged {
+                    step_id: ctx.step_id,
+                }
+            }
             _ => return,
         };
 
