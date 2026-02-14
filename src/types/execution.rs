@@ -44,6 +44,29 @@ pub struct ExecutionMetadata {
     pub total_rounds: Option<i32>,
 }
 
+impl ExecutionMetadata {
+    /// Create metadata with all optional fields set to None.
+    pub fn new(execution_id: Uuid) -> Self {
+        Self {
+            execution_id,
+            execution_time_ms: 0,
+            tokens_in: None,
+            tokens_out: None,
+            cost_usd: None,
+            model: None,
+            agent_id: None,
+            iteration_index: None,
+            iteration_label: None,
+            routing_label: None,
+            upstream_agent_id: None,
+            upstream_routing_label: None,
+            room_session_id: None,
+            room_id: None,
+            total_rounds: None,
+        }
+    }
+}
+
 /// Execution error details
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionError {
@@ -142,21 +165,13 @@ mod tests {
             status: ExecutionStatus::Success,
             data: Some(serde_json::json!({"result": "test"})),
             metadata: ExecutionMetadata {
-                execution_id: Uuid::new_v4(),
                 execution_time_ms: 100,
                 tokens_in: Some(10),
                 tokens_out: Some(20),
                 cost_usd: Some(0.001),
                 model: Some("claude-opus-4".into()),
                 agent_id: Some(Uuid::new_v4()),
-                iteration_index: None,
-                iteration_label: None,
-                routing_label: None,
-                upstream_agent_id: None,
-                upstream_routing_label: None,
-                room_session_id: None,
-                room_id: None,
-                total_rounds: None,
+                ..ExecutionMetadata::new(Uuid::new_v4())
             },
             error: None,
         };

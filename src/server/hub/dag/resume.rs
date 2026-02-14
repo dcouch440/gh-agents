@@ -7,35 +7,27 @@
 //!   completed state from the database, injects the approved output,
 //!   and delegates to `resume_workflow_via_engine`.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use anyhow::anyhow;
 use serde_json::Value as JsonValue;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::db::traits::WorkflowCollectionRepo;
-use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
+use crate::db::WorkflowStepRow;
 use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
 use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
 use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
 
-use super::dag_state::{prefetch_port_metadata, resolve_output_key, wrap_in_agentless_envelope};
+use super::dag_state::{prefetch_port_metadata, resolve_output_key, DagExecutionState};
 use super::{
-    broadcast_workflow_event, check_step_readiness, topological_sort, StepOutput, StepReadiness,
-    WorkflowExecutionContext, WorkflowExecutionResult,
+    broadcast_workflow_event, run_dag_loop, StepOutput, WorkflowExecutionContext,
+    WorkflowExecutionResult,
 };
-
-// Step execution functions from sibling modules
-use super::belief_capture::execute_belief_capture_step;
-use super::execute_documenter_step;
-use super::for_each::{detect_for_each_chains, execute_for_each_chain, execute_for_each_step};
-use super::room_step::execute_room_step;
-use super::single::execute_single_step;
-use super::task_force::execute_task_force_step;
 
 /// Resume a workflow DAG from a paused state after an interactive step is approved.
 ///
@@ -46,25 +38,20 @@ pub async fn resume_workflow_via_engine(
     engine: &ExecutionEngine,
     state: &AppState,
     ctx: &WorkflowExecutionContext,
-    steps: &[WorkflowStepRow],
-    edges: &[WorkflowStepEdgeRow],
+    steps: &[crate::db::WorkflowStepRow],
+    edges: &[crate::db::WorkflowStepEdgeRow],
     pre_completed: HashMap<Uuid, StepOutput>,
     pre_var_outputs: HashMap<String, JsonValue>,
     cancel: Option<&CancellationToken>,
 ) -> Result<WorkflowExecutionResult, HubError> {
     let start_time = std::time::Instant::now();
-    let sorted = topological_sort(steps, edges).map_err(|_| HubError::DagCycle)?;
-    let step_map: HashMap<Uuid, &WorkflowStepRow> = steps.iter().map(|s| (s.id, s)).collect();
 
-    let mut completed = pre_completed;
-    let mut var_outputs = pre_var_outputs;
-    let mut completed_envelopes: HashMap<Uuid, StepExecutionEnvelope> = HashMap::new();
-    let mut total_input_tokens: i64 = 0;
-    let mut total_output_tokens: i64 = 0;
-    let mut total_cost_usd: f32 = 0.0;
+    let mut dag_state = DagExecutionState::with_completed(pre_completed, pre_var_outputs);
 
     // Build synthetic envelopes for pre-completed steps
-    for (step_id, output) in &completed {
+    let step_ids: Vec<Uuid> = dag_state.completed.keys().copied().collect();
+    for step_id in step_ids {
+        let output = &dag_state.completed[&step_id];
         let envelope = StepExecutionEnvelope {
             status: if output.structured_output.is_some() {
                 ExecutionStatus::Success
@@ -72,272 +59,38 @@ pub async fn resume_workflow_via_engine(
                 ExecutionStatus::Error
             },
             data: output.structured_output.clone(),
-            metadata: ExecutionMetadata {
-                execution_id: *step_id,
-                execution_time_ms: 0,
-                tokens_in: None,
-                tokens_out: None,
-                cost_usd: None,
-                model: None,
-                agent_id: None,
-                iteration_index: None,
-                iteration_label: None,
-                routing_label: None,
-
-                upstream_agent_id: None,
-                upstream_routing_label: None,
-                room_session_id: None,
-                room_id: None,
-                total_rounds: None,
-            },
+            metadata: ExecutionMetadata::new(step_id),
             error: None,
         };
-        completed_envelopes.insert(*step_id, envelope);
+        dag_state.completed_envelopes.insert(step_id, envelope);
     }
 
     // Pre-fetch port metadata
     let port_meta = prefetch_port_metadata(state, steps).await;
 
-    // Phase 6B: Detect chained for-each pipelines
-    let chains = detect_for_each_chains(steps, edges);
-    let chain_member_set: HashSet<Uuid> = chains
-        .iter()
-        .flat_map(|c| c.step_ids.iter().copied())
-        .collect();
-    let chain_by_head: HashMap<Uuid, _> = chains.iter().map(|c| (c.step_ids[0], c)).collect();
+    run_dag_loop(
+        engine,
+        state,
+        ctx,
+        steps,
+        edges,
+        &mut dag_state,
+        &port_meta,
+        cancel,
+    )
+    .await?;
 
-    for step_id in &sorted {
-        // Skip already-completed steps
-        if completed.contains_key(step_id) {
-            continue;
-        }
-
-        let step = match step_map.get(step_id) {
-            Some(s) => *s,
-            None => continue,
-        };
-
-        if cancel.is_some_and(|t| t.is_cancelled()) {
-            return Err(HubError::Cancelled);
-        }
-
-        // Check step readiness (handles conditional edges, matching the main loop)
-        match check_step_readiness(*step_id, edges, &completed, &completed_envelopes) {
-            StepReadiness::Waiting => {
-                warn!("Step {} has uncompleted parents, skipping", step_id);
-                continue;
-            }
-            StepReadiness::Skipped => {
-                info!("Step {} skipped — no matching conditional edges", step_id);
-                completed.insert(*step_id, StepOutput::skipped(*step_id));
-                continue;
-            }
-            StepReadiness::Ready => { /* proceed with execution */ }
-        }
-
-        // Phase 6B: If this is the head of a for-each chain, execute the whole chain
-        if let Some(chain) = chain_by_head.get(step_id) {
-            execute_for_each_chain(
-                engine,
-                state,
-                ctx,
-                chain,
-                &step_map,
-                edges,
-                &mut var_outputs,
-                &mut completed,
-                &mut completed_envelopes,
-                &port_meta,
-                &mut total_input_tokens,
-                &mut total_output_tokens,
-                &mut total_cost_usd,
-                cancel,
-            )
-            .await?;
-            continue;
-        }
-
-        // Skip non-head chain members (already executed by chain head)
-        if chain_member_set.contains(step_id) {
-            continue;
-        }
-
-        // Context steps pass through their prompt_template as output — no LLM call
-        if step.execution_mode == "context" {
-            let output_key = resolve_output_key(step, &port_meta.step_outputs);
-            let content = if step.prompt_template.is_empty() {
-                ctx.initial_input.clone()
-            } else {
-                step.prompt_template.clone()
-            };
-            let value = JsonValue::String(content.clone());
-            var_outputs.insert(output_key.clone(), value.clone());
-
-            let output = StepOutput {
-                variable_name: output_key,
-                structured_output: Some(value.clone()),
-                raw_output: content,
-            };
-            let envelope = wrap_in_agentless_envelope(step.id, Some(value), 0, 0, 0, 0.0);
-            completed_envelopes.insert(step.id, envelope);
-            completed.insert(step.id, output);
-            info!(step_id = %step.id, "Context step pass-through completed (resume)");
-            continue;
-        }
-
-        // Documenter steps — phased pipeline, no agent needed
-        if step.execution_mode == "documenter" {
-            execute_documenter_step(
-                engine,
-                state,
-                ctx,
-                step,
-                steps,
-                edges,
-                &mut var_outputs,
-                &mut completed,
-                &mut completed_envelopes,
-                &port_meta,
-                &mut total_input_tokens,
-                &mut total_output_tokens,
-                &mut total_cost_usd,
-                cancel,
-            )
-            .await?;
-            continue;
-        }
-
-        // Task force steps — sequential multi-agent pipeline, no agent_id needed
-        if step.execution_mode == "task_force" {
-            execute_task_force_step(
-                engine,
-                state,
-                ctx,
-                step,
-                steps,
-                edges,
-                &mut var_outputs,
-                &mut completed,
-                &mut completed_envelopes,
-                &port_meta,
-                &mut total_input_tokens,
-                &mut total_output_tokens,
-                &mut total_cost_usd,
-                cancel,
-            )
-            .await?;
-            continue;
-        }
-
-        // Belief capture steps — per-source LLM extraction, no agent_id needed
-        if step.execution_mode == "belief_capture" {
-            execute_belief_capture_step(
-                engine,
-                state,
-                ctx,
-                step,
-                steps,
-                edges,
-                &mut var_outputs,
-                &mut completed,
-                &mut completed_envelopes,
-                &port_meta,
-                &mut total_input_tokens,
-                &mut total_output_tokens,
-                &mut total_cost_usd,
-                cancel,
-            )
-            .await?;
-            continue;
-        }
-
-        // Agent-based modes: load agent first
-        let agent_id = step.agent_id.ok_or_else(|| {
-            HubError::Internal(anyhow::anyhow!(
-                "step {} has no agent_id for mode '{}'",
-                step_id,
-                step.execution_mode
-            ))
-        })?;
-        let agent = state
-            .repo()
-            .get_persisted_agent(agent_id)
-            .await
-            .map_err(|e| anyhow::anyhow!("failed to load agent: {}", e))?
-            .ok_or_else(|| HubError::AgentNotFound {
-                step_id: *step_id,
-                agent_id,
-            })?;
-
-        if step.execution_mode == "room" {
-            execute_room_step(
-                engine,
-                state,
-                ctx,
-                step,
-                steps,
-                edges,
-                &mut var_outputs,
-                &mut completed,
-                &mut completed_envelopes,
-                &port_meta,
-                &mut total_input_tokens,
-                &mut total_output_tokens,
-                &mut total_cost_usd,
-                cancel,
-            )
-            .await?;
-        } else if step.execution_mode == "for_each" {
-            execute_for_each_step(
-                engine,
-                state,
-                ctx,
-                step,
-                &agent,
-                steps,
-                edges,
-                &mut var_outputs,
-                &mut completed,
-                &mut completed_envelopes,
-                &port_meta,
-                &mut total_input_tokens,
-                &mut total_output_tokens,
-                &mut total_cost_usd,
-                cancel,
-            )
-            .await?;
-        } else {
-            execute_single_step(
-                engine,
-                state,
-                ctx,
-                step,
-                &agent,
-                steps,
-                edges,
-                &mut var_outputs,
-                &mut completed,
-                &mut completed_envelopes,
-                &port_meta,
-                &mut total_input_tokens,
-                &mut total_output_tokens,
-                &mut total_cost_usd,
-                cancel,
-            )
-            .await?;
-        }
-    }
-
-    let final_outputs: HashMap<String, StepOutput> = completed
+    let final_outputs: HashMap<String, StepOutput> = dag_state
+        .completed
         .into_iter()
         .map(|(id, out)| (id.to_string(), out))
         .collect();
 
     Ok(WorkflowExecutionResult {
         outputs: final_outputs,
-        total_input_tokens,
-        total_output_tokens,
-        total_cost_usd,
+        total_input_tokens: dag_state.total_input_tokens,
+        total_output_tokens: dag_state.total_output_tokens,
+        total_cost_usd: dag_state.total_cost_usd,
         duration_ms: start_time.elapsed().as_millis() as u64,
     })
 }

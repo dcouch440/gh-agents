@@ -26,6 +26,7 @@ use crate::types::StepExecutionEnvelope;
 
 use crate::db::WorkflowStepEdgeRow;
 
+use super::dag_state::DagExecutionState;
 use super::utils::{
     collect_upstream_context_data, compose_prompt, StepOutput, WorkflowExecutionContext,
 };
@@ -414,7 +415,6 @@ impl<'a> DocumenterExecutor<'a> {
 /// Unlike other step types, documenter steps have no agent. They dispatch to
 /// `DocumenterExecutor` which runs three LLM phases internally, recording each
 /// as a `protocol_execution` row and broadcasting WebSocket progress events.
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn execute_documenter_step(
     engine: &ExecutionEngine,
     state: &AppState,
@@ -422,13 +422,8 @@ pub(super) async fn execute_documenter_step(
     step: &WorkflowStepRow,
     steps: &[WorkflowStepRow],
     edges: &[WorkflowStepEdgeRow],
-    var_outputs: &mut HashMap<String, JsonValue>,
-    completed: &mut HashMap<Uuid, StepOutput>,
-    completed_envelopes: &mut HashMap<Uuid, StepExecutionEnvelope>,
+    dag_state: &mut DagExecutionState,
     port_meta: &PortMetadata,
-    total_input_tokens: &mut i64,
-    total_output_tokens: &mut i64,
-    total_cost_usd: &mut f32,
     cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
     let step_start = std::time::Instant::now();
@@ -447,11 +442,12 @@ pub(super) async fn execute_documenter_step(
     );
 
     // Resolve port inputs
-    let port_inputs = resolve_step_port_inputs(step, edges, port_meta, completed_envelopes);
+    let port_inputs =
+        resolve_step_port_inputs(step, edges, port_meta, &dag_state.completed_envelopes);
 
     // Collect upstream context data from bare (portless) edges connecting context steps
     let upstream_context =
-        collect_upstream_context_data(step.id, edges, steps, completed_envelopes);
+        collect_upstream_context_data(step.id, edges, steps, &dag_state.completed_envelopes);
 
     // Compose prompt
     let mut prompt = compose_prompt(
@@ -460,7 +456,7 @@ pub(super) async fn execute_documenter_step(
         state.doc_repo().as_deref(),
         state.workflow_repo().as_deref(),
         &**state.repo(),
-        var_outputs,
+        &dag_state.var_outputs,
         &ctx.prior_outputs,
         None,
         port_inputs.as_ref(),
@@ -501,23 +497,13 @@ pub(super) async fn execute_documenter_step(
         &prompt,
         cancel,
         &upstream_docs,
-        completed_envelopes,
+        &dag_state.completed_envelopes,
     );
     let result = executor.execute(&port_meta.step_outputs).await?;
 
-    // Accumulate tokens
-    *total_input_tokens += result.input_tokens;
-    *total_output_tokens += result.output_tokens;
-    *total_cost_usd += result.cost_usd;
+    // Accumulate tokens and store output
+    dag_state.accumulate_tokens(result.input_tokens, result.output_tokens, result.cost_usd);
 
-    // Store output in variable map
-    if !result.output.variable_name.is_empty() {
-        if let Some(ref structured) = result.output.structured_output {
-            var_outputs.insert(result.output.variable_name.clone(), structured.clone());
-        }
-    }
-
-    // Store envelope for downstream port resolution (agent-less)
     let envelope = wrap_in_agentless_envelope(
         step.id,
         result.output.structured_output.clone(),
@@ -526,8 +512,7 @@ pub(super) async fn execute_documenter_step(
         result.output_tokens,
         result.cost_usd,
     );
-    completed_envelopes.insert(step.id, envelope);
-    completed.insert(step.id, result.output);
+    dag_state.record_step_output(step.id, result.output, envelope);
 
     // Broadcast: step completed (no agent)
     broadcast_workflow_event(

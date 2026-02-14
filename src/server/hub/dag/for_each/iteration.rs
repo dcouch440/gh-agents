@@ -14,6 +14,7 @@ use crate::db::{AgentRow, WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::server::hub::dag::container::{
     create_optional_container, destroy_optional_container, run_with_vpn_watchdog,
 };
+use crate::server::hub::dag::dag_state::DagExecutionState;
 use crate::server::hub::dag::single::run_step_via_engine;
 use crate::server::hub::dag::{
     broadcast_workflow_event, compose_prompt, extract_for_each_label, resolve_for_each_array,
@@ -24,10 +25,8 @@ use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
 use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
-use crate::types::StepExecutionEnvelope;
 
 /// Execute a for-each step: expand into N iterations, run sequentially.
-#[allow(clippy::too_many_arguments)]
 pub(in crate::server::hub::dag) async fn execute_for_each_step(
     engine: &ExecutionEngine,
     state: &AppState,
@@ -36,13 +35,8 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
     agent: &AgentRow,
     _steps: &[WorkflowStepRow],
     _edges: &[WorkflowStepEdgeRow],
-    var_outputs: &mut HashMap<String, JsonValue>,
-    completed: &mut HashMap<Uuid, StepOutput>,
-    completed_envelopes: &mut HashMap<Uuid, StepExecutionEnvelope>,
+    dag_state: &mut DagExecutionState,
     port_meta: &PortMetadata,
-    total_input_tokens: &mut i64,
-    total_output_tokens: &mut i64,
-    total_cost_usd: &mut f32,
     cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
     let for_each_ref = step
@@ -50,11 +44,9 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
         .as_deref()
         .ok_or_else(|| anyhow::anyhow!("for_each step {} missing for_each_ref", step.id))?;
 
-    let array =
-        resolve_for_each_array(for_each_ref, var_outputs, &ctx.prior_outputs).ok_or_else(|| {
-            HubError::ForEachNotArray {
-                reference: for_each_ref.to_string(),
-            }
+    let array = resolve_for_each_array(for_each_ref, &dag_state.var_outputs, &ctx.prior_outputs)
+        .ok_or_else(|| HubError::ForEachNotArray {
+            reference: for_each_ref.to_string(),
         })?;
 
     let label_field = step.for_each_label_field.as_deref();
@@ -138,7 +130,7 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
             state.doc_repo().as_deref(),
             state.workflow_repo().as_deref(),
             &**state.repo(),
-            var_outputs,
+            &dag_state.var_outputs,
             &ctx.prior_outputs,
             Some(element),
             None,
@@ -173,9 +165,7 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
 
         match result {
             Ok((output, in_tok, out_tok, cost)) => {
-                *total_input_tokens += in_tok;
-                *total_output_tokens += out_tok;
-                *total_cost_usd += cost;
+                dag_state.accumulate_tokens(in_tok, out_tok, cost);
                 iteration_outputs.push(output.structured_output.clone());
 
                 // Broadcast: for-each progress
@@ -213,16 +203,9 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
         raw_output: String::new(),
     };
 
-    // Store in var_outputs for downstream variable resolution
-    if !variable_name.is_empty() {
-        var_outputs.insert(variable_name, aggregated);
-    }
-
     // Store envelope for downstream port resolution
     let envelope = wrap_in_envelope(&output, agent, step.id, 0, 0, 0.0);
-    completed_envelopes.insert(step.id, envelope);
-
-    completed.insert(step.id, output);
+    dag_state.record_step_output(step.id, output, envelope);
 
     // Broadcast: step completed (for-each)
     broadcast_workflow_event(

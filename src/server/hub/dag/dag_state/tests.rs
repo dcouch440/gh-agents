@@ -128,6 +128,50 @@ mod tests {
     }
 
     #[test]
+    fn dag_state_with_completed_preserves_state() {
+        let step_id = Uuid::new_v4();
+        let mut completed = std::collections::HashMap::new();
+        completed.insert(
+            step_id,
+            StepOutput {
+                variable_name: "test_var".to_string(),
+                structured_output: Some(json!({"done": true})),
+                raw_output: "done".to_string(),
+            },
+        );
+
+        let mut var_outputs = std::collections::HashMap::new();
+        var_outputs.insert("test_var".to_string(), json!({"done": true}));
+
+        let state = DagExecutionState::with_completed(completed, var_outputs);
+        assert!(state.completed.contains_key(&step_id));
+        assert_eq!(
+            state.var_outputs.get("test_var"),
+            Some(&json!({"done": true}))
+        );
+        assert!(state.completed_envelopes.is_empty());
+        assert_eq!(state.total_input_tokens, 0);
+    }
+
+    #[test]
+    fn execution_metadata_new_defaults() {
+        let id = Uuid::new_v4();
+        let meta = crate::types::ExecutionMetadata::new(id);
+        assert_eq!(meta.execution_id, id);
+        assert_eq!(meta.execution_time_ms, 0);
+        assert!(meta.tokens_in.is_none());
+        assert!(meta.tokens_out.is_none());
+        assert!(meta.cost_usd.is_none());
+        assert!(meta.model.is_none());
+        assert!(meta.agent_id.is_none());
+        assert!(meta.iteration_index.is_none());
+        assert!(meta.routing_label.is_none());
+        assert!(meta.room_session_id.is_none());
+        assert!(meta.room_id.is_none());
+        assert!(meta.total_rounds.is_none());
+    }
+
+    #[test]
     fn wrap_in_agentless_envelope_success_when_data_present() {
         let step_id = Uuid::new_v4();
         let data = Some(json!({"result": "ok"}));
