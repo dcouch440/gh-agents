@@ -145,6 +145,7 @@ mod tests {
                     target_repo_url: None,
                     target_branch: None,
                     vpn_enabled: false,
+                    board_overview_summary: String::new(),
                 }))
             }
 
@@ -527,6 +528,25 @@ mod tests {
                 &self,
                 _: Uuid,
             ) -> Result<Vec<crate::db::AgentDesignerOutputRow>> {
+                unimplemented!()
+            }
+            // Assistant Notes stubs
+            async fn get_assistant_notes(&self, _: Uuid) -> Result<Option<String>> {
+                unimplemented!()
+            }
+            async fn upsert_assistant_notes(&self, _: Uuid, _: &str) -> Result<()> {
+                unimplemented!()
+            }
+            async fn get_all_assistant_notes_for_workflow(
+                &self,
+                _: Uuid,
+            ) -> Result<Vec<(Uuid, Option<String>, String, String)>> {
+                unimplemented!()
+            }
+            async fn get_board_overview_summary(&self, _: Uuid) -> Result<String> {
+                unimplemented!()
+            }
+            async fn update_board_overview_summary(&self, _: Uuid, _: &str) -> Result<()> {
                 unimplemented!()
             }
         }

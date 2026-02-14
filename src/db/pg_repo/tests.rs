@@ -2220,4 +2220,191 @@ mod tests {
 
         db.cleanup().await;
     }
+
+    // ============================================================================
+    // Assistant Notes
+    // ============================================================================
+
+    #[tokio::test]
+    #[ignore = "requires running Postgres"]
+    async fn assistant_notes_upsert_and_get() {
+        let db = TestDb::new().await;
+        let repo = PgRepo::new(db.pool.clone());
+        let user_id = create_test_user(&repo).await;
+        let agent = create_test_agent(&repo, user_id).await;
+        let workflow = create_test_workflow(&repo, user_id).await;
+        let step = create_test_step(&repo, workflow.id, agent.id).await;
+
+        // Initially no notes
+        let notes = repo.get_assistant_notes(step.id).await.unwrap();
+        assert!(notes.is_none());
+
+        // Upsert first time
+        repo.upsert_assistant_notes(step.id, "First draft of notes")
+            .await
+            .unwrap();
+        let notes = repo.get_assistant_notes(step.id).await.unwrap();
+        assert_eq!(notes.as_deref(), Some("First draft of notes"));
+
+        // Upsert again — full replacement
+        repo.upsert_assistant_notes(step.id, "Revised notes with new info")
+            .await
+            .unwrap();
+        let notes = repo.get_assistant_notes(step.id).await.unwrap();
+        assert_eq!(notes.as_deref(), Some("Revised notes with new info"));
+
+        db.cleanup().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires running Postgres"]
+    async fn assistant_notes_get_returns_none_when_missing() {
+        let db = TestDb::new().await;
+        let repo = PgRepo::new(db.pool.clone());
+        let user_id = create_test_user(&repo).await;
+        let agent = create_test_agent(&repo, user_id).await;
+        let workflow = create_test_workflow(&repo, user_id).await;
+        let step = create_test_step(&repo, workflow.id, agent.id).await;
+
+        let notes = repo.get_assistant_notes(step.id).await.unwrap();
+        assert!(notes.is_none());
+
+        db.cleanup().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires running Postgres"]
+    async fn assistant_notes_get_all_for_workflow() {
+        let db = TestDb::new().await;
+        let repo = PgRepo::new(db.pool.clone());
+        let user_id = create_test_user(&repo).await;
+        let agent = create_test_agent(&repo, user_id).await;
+        let workflow = create_test_workflow(&repo, user_id).await;
+
+        // Create 3 steps with names
+        let mut step_a = WorkflowStepRow {
+            id: Uuid::new_v4(),
+            workflow_id: workflow.id,
+            agent_id: Some(agent.id),
+            execution_mode: "single".to_string(),
+            agent_execution_mode: None,
+            for_each_ref: None,
+            prompt_template_id: None,
+            prompt_template: "Prompt A".to_string(),
+            output_schema_id: None,
+            output_variable_name: None,
+            interactive_agent_id: None,
+            for_each_label_field: None,
+            room_id: None,
+            routing_mode: None,
+            routing_field: None,
+            display_order: 0,
+            version: 1,
+            reasoning_trace: false,
+            verification_agent_ids: None,
+            position_x: None,
+            position_y: None,
+            name: Some("Alpha".to_string()),
+            system_prompt_suffix: None,
+            visible: true,
+            description: String::new(),
+            board_context_cache: String::new(),
+            board_context_updated_at: None,
+            goal_summary: String::new(),
+            goal_summary_updated_at: None,
+        };
+        let step_a = repo.create_step(step_a.clone()).await.unwrap();
+
+        let mut step_b_row = step_a.clone();
+        step_b_row.id = Uuid::new_v4();
+        step_b_row.name = Some("Bravo".to_string());
+        step_b_row.prompt_template = "Prompt B".to_string();
+        let step_b = repo.create_step(step_b_row).await.unwrap();
+
+        let mut step_c_row = step_a.clone();
+        step_c_row.id = Uuid::new_v4();
+        step_c_row.name = Some("Charlie".to_string());
+        step_c_row.prompt_template = "Prompt C".to_string();
+        let step_c = repo.create_step(step_c_row).await.unwrap();
+
+        // Notes on Alpha and Charlie only
+        repo.upsert_assistant_notes(step_a.id, "Alpha notes")
+            .await
+            .unwrap();
+        repo.upsert_assistant_notes(step_c.id, "Charlie notes")
+            .await
+            .unwrap();
+
+        let all = repo
+            .get_all_assistant_notes_for_workflow(workflow.id)
+            .await
+            .unwrap();
+
+        // Should return 2 entries, ordered by name (Alpha, Charlie)
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].1.as_deref(), Some("Alpha"));
+        assert_eq!(all[0].3, "Alpha notes");
+        assert_eq!(all[1].1.as_deref(), Some("Charlie"));
+        assert_eq!(all[1].3, "Charlie notes");
+
+        db.cleanup().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires running Postgres"]
+    async fn assistant_notes_cascade_on_step_delete() {
+        let db = TestDb::new().await;
+        let repo = PgRepo::new(db.pool.clone());
+        let user_id = create_test_user(&repo).await;
+        let agent = create_test_agent(&repo, user_id).await;
+        let workflow = create_test_workflow(&repo, user_id).await;
+        let step = create_test_step(&repo, workflow.id, agent.id).await;
+
+        repo.upsert_assistant_notes(step.id, "Notes that should vanish")
+            .await
+            .unwrap();
+        assert!(repo.get_assistant_notes(step.id).await.unwrap().is_some());
+
+        // Delete the step — CASCADE should remove notes
+        repo.delete_step(step.id).await.unwrap();
+
+        // Notes should be gone (query returns None, not error)
+        let notes = repo.get_assistant_notes(step.id).await.unwrap();
+        assert!(notes.is_none());
+
+        db.cleanup().await;
+    }
+
+    // ============================================================================
+    // Board Overview Summary
+    // ============================================================================
+
+    #[tokio::test]
+    #[ignore = "requires running Postgres"]
+    async fn board_overview_summary_update_and_get() {
+        let db = TestDb::new().await;
+        let repo = PgRepo::new(db.pool.clone());
+        let user_id = create_test_user(&repo).await;
+        let workflow = create_test_workflow(&repo, user_id).await;
+
+        // Default is empty string
+        let summary = repo.get_board_overview_summary(workflow.id).await.unwrap();
+        assert_eq!(summary, "");
+
+        // Update
+        repo.update_board_overview_summary(workflow.id, "The board focuses on API analysis.")
+            .await
+            .unwrap();
+        let summary = repo.get_board_overview_summary(workflow.id).await.unwrap();
+        assert_eq!(summary, "The board focuses on API analysis.");
+
+        // Update again
+        repo.update_board_overview_summary(workflow.id, "Revised summary.")
+            .await
+            .unwrap();
+        let summary = repo.get_board_overview_summary(workflow.id).await.unwrap();
+        assert_eq!(summary, "Revised summary.");
+
+        db.cleanup().await;
+    }
 }

@@ -51,11 +51,12 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "delete_doc_def" => Some(delete_doc_def_tool()),
         "update_config" => Some(update_config_tool()),
 
-        // Universal node assistant tools (4)
+        // Universal node assistant tools (5)
         "set_node_archetype" => Some(set_node_archetype_tool()),
         "set_node_name" => Some(set_node_name_tool()),
         "set_node_description" => Some(set_node_description_tool()),
         "render_panel" => Some(render_panel_tool()),
+        "update_notes" => Some(update_notes_tool()),
 
         // Task force archetype tools (6)
         "set_task" => Some(set_task_tool()),
@@ -680,6 +681,30 @@ fn render_panel_tool() -> Tool {
                 "submit_label": {
                     "type": "string",
                     "description": "Label for the submit button (default: 'Submit')"
+                }
+            },
+            "required": ["content"]
+        }),
+    }
+}
+
+fn update_notes_tool() -> Tool {
+    Tool {
+        name: "update_notes".into(),
+        description: concat!(
+            "Update your personal notes. These notes persist across conversations and are ",
+            "injected into the workflow designer at execution time. Use this to record important ",
+            "discoveries, direction changes, special requirements, API details, or infrastructure ",
+            "notes. You can reorganize, prune, or rewrite your notes at any time — the full ",
+            "content is replaced on each call.",
+        )
+        .into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "description": "The complete updated notes content (replaces all previous notes). Use markdown formatting. Keep notes concise and actionable."
                 }
             },
             "required": ["content"]

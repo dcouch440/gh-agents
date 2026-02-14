@@ -173,6 +173,8 @@ pub mod vars {
         pub const GRAPH_CONTEXT: &str = "System.graph_context";
         pub const BOARD_CONTEXT: &str = "System.board_context";
         pub const ARCHETYPE_BLOCK: &str = "System.archetype_block";
+        pub const ASSISTANT_NOTES: &str = "System.assistant_notes";
+        pub const BOARD_OVERVIEW: &str = "System.board_overview";
     }
 }
 
@@ -679,6 +681,8 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
             vars::system::GRAPH_CONTEXT,
             vars::system::BOARD_CONTEXT,
             vars::system::ARCHETYPE_BLOCK,
+            vars::system::ASSISTANT_NOTES,
+            vars::system::BOARD_OVERVIEW,
             vars::task_force::AGENT_NAME,
             vars::task_force::ROLE_DESCRIPTION,
             vars::task_force::TASK_DESCRIPTION,
