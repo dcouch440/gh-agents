@@ -245,7 +245,7 @@ pub(super) async fn execute_belief_capture_step(
                     let belief_row = BeliefRow {
                         id: Uuid::new_v4(),
                         workflow_id: step.workflow_id,
-                        workflow_execution_id: ctx.run_id,
+                        workflow_execution_id: Some(ctx.run_id),
                         source_step_id: source.source_step_id,
                         source_document_title: source.source_document_title.clone(),
                         source_document_def_id: source.source_document_def_id,

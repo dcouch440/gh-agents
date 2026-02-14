@@ -706,7 +706,7 @@ pub struct BeliefExtractionPlanRow {
 pub struct BeliefRow {
     pub id: Uuid,
     pub workflow_id: Uuid,
-    pub workflow_execution_id: Uuid,
+    pub workflow_execution_id: Option<Uuid>,
     pub source_step_id: Uuid,
     pub source_document_title: Option<String>,
     pub source_document_def_id: Option<Uuid>,

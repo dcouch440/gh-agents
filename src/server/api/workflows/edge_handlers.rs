@@ -89,7 +89,6 @@ pub async fn add_workflow_edge(
     }
 
     let edge = repo.add_edge(wid, req.from_step_id, req.to_step_id).await?;
-    repo.mark_board_context_stale(wid).await?;
     Ok((
         StatusCode::CREATED,
         Json(EdgeResponse {
@@ -128,7 +127,6 @@ pub async fn remove_workflow_edge(
         return Err(AppError::not_found("Workflow"));
     }
     repo.remove_edge(req.from_step_id, req.to_step_id).await?;
-    repo.mark_board_context_stale(wid).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -161,6 +159,5 @@ pub async fn delete_workflow_edge_by_id(
         return Err(AppError::not_found("Workflow"));
     }
     repo.delete_edge_by_id(eid).await?;
-    repo.mark_board_context_stale(wid).await?;
     Ok(StatusCode::NO_CONTENT)
 }

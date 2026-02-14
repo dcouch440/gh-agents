@@ -144,6 +144,13 @@ pub mod vars {
         pub const SOURCE_CONTENT: &str = "BeliefCapture.source_content";
     }
 
+    /// Variables for chat belief extraction prompts.
+    pub mod chat_belief {
+        pub const NODE_NAME: &str = "ChatBelief.node_name";
+        pub const NODE_ARCHETYPE: &str = "ChatBelief.node_archetype";
+        pub const CONVERSATION: &str = "ChatBelief.conversation";
+    }
+
     /// Variables for the Agent Designer pre-lifecycle prompt generation.
     pub mod designer {
         pub const ARCHETYPE: &str = "Designer.archetype";
@@ -287,6 +294,15 @@ pub mod roles {
         prompt: include_str!("../../config/protocols/belief_capture/extractor/prompt.md"),
         response: Some(include_str!(
             "../../config/protocols/belief_capture/extractor/response.json"
+        )),
+    };
+
+    /// Chat belief extractor: reads chat conversations and extracts user beliefs.
+    pub static CHAT_BELIEF_EXTRACTOR: RoleDefinition = RoleDefinition {
+        system: include_str!("../../config/protocols/chat_belief_extraction/system.md"),
+        prompt: include_str!("../../config/protocols/chat_belief_extraction/prompt.md"),
+        response: Some(include_str!(
+            "../../config/protocols/chat_belief_extraction/response.json"
         )),
     };
 
@@ -456,6 +472,10 @@ mod tests {
         assert!(!roles::BELIEF_CAPTURE_EXTRACTOR.prompt.is_empty());
         assert!(roles::BELIEF_CAPTURE_EXTRACTOR.response.is_some());
 
+        assert!(!roles::CHAT_BELIEF_EXTRACTOR.system.is_empty());
+        assert!(!roles::CHAT_BELIEF_EXTRACTOR.prompt.is_empty());
+        assert!(roles::CHAT_BELIEF_EXTRACTOR.response.is_some());
+
         assert!(!roles::AGENT_DESIGNER_DESIGNER.system.is_empty());
         assert!(!roles::AGENT_DESIGNER_DESIGNER.prompt.is_empty());
         assert!(roles::AGENT_DESIGNER_DESIGNER.response.is_none());
@@ -492,7 +512,7 @@ mod tests {
     fn agent_designer_config_parses() {
         let cfg = &*AGENT_DESIGNER;
         let designer = cfg.agent("designer");
-        assert_eq!(designer.model_id, "claude-sonnet-4-20250514");
+        assert_eq!(designer.model_id, "claude-sonnet-4-5-20250929");
         assert_eq!(designer.temperature, 0.4);
         assert_eq!(designer.max_tokens, 16384);
         assert_eq!(designer.max_rounds, 1);
@@ -515,13 +535,8 @@ mod tests {
         let ctx = roles::NODE_ASSISTANT_BASE.resolve(&vars);
         assert!(
             ctx.system_prompt
-                .contains("specialized configuration assistant"),
+                .contains("help the user design this node"),
             "should contain focused identity"
-        );
-        assert!(
-            !ctx.system_prompt
-                .contains("workflow configuration assistant"),
-            "should NOT contain old intro agent identity"
         );
         assert!(
             ctx.system_prompt.contains("Nodes: A -> B -> [SELECTED] C"),
@@ -675,6 +690,9 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
             vars::belief_capture::SOURCE_STEP_NAME,
             vars::belief_capture::SOURCE_TYPE,
             vars::belief_capture::SOURCE_CONTENT,
+            vars::chat_belief::NODE_NAME,
+            vars::chat_belief::NODE_ARCHETYPE,
+            vars::chat_belief::CONVERSATION,
             vars::designer::ARCHETYPE,
             vars::designer::CONTEXT_DESCRIPTION,
             vars::designer::AGENT_DEFINITIONS,
@@ -692,6 +710,7 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
             ("node_assistant", &roles::NODE_ASSISTANT_BASE),
             ("task_force_agent", &roles::TASK_FORCE_AGENT),
             ("belief_capture_extractor", &roles::BELIEF_CAPTURE_EXTRACTOR),
+            ("chat_belief_extractor", &roles::CHAT_BELIEF_EXTRACTOR),
             ("agent_designer", &roles::AGENT_DESIGNER_DESIGNER),
         ];
 
