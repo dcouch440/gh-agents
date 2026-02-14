@@ -130,13 +130,8 @@ impl ExecutionStrategy for ChatStrategy {
     }
 
     async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError> {
-        messages::build_chat_messages(
-            &self.state,
-            self.session_id,
-            self.config.max_history,
-            input,
-        )
-        .await
+        messages::build_chat_messages(&self.state, self.session_id, self.config.max_history, input)
+            .await
     }
 
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {

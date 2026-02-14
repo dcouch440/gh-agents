@@ -88,11 +88,9 @@ fn spawn_auto_naming(state: AppState, session_id: Uuid, input_preview: String) {
     tokio::spawn(async move {
         if let Ok(Some(session)) = state.repo().get_session(session_id).await {
             if session.title.starts_with("New ") {
-                if let Some(title) = tools::haiku_summarize_title(&format!(
-                    "Conversation opener: {}",
-                    input_preview
-                ))
-                .await
+                if let Some(title) =
+                    tools::haiku_summarize_title(&format!("Conversation opener: {}", input_preview))
+                        .await
                 {
                     let _ = state.repo().update_session_title(session_id, &title).await;
                     state.broadcast_session(crate::server::ws::events::SessionEvent {
@@ -126,9 +124,7 @@ fn spawn_compaction(state: AppState, session_id: Uuid) {
                 .unwrap_or_default();
             let older_messages: Vec<_> = history
                 .iter()
-                .take(
-                    (count as usize).saturating_sub(crate::constants::SUMMARIZE_KEEP_RECENT),
-                )
+                .take((count as usize).saturating_sub(crate::constants::SUMMARIZE_KEEP_RECENT))
                 .collect();
             if !older_messages.is_empty() {
                 let conversation_text = older_messages

@@ -72,8 +72,7 @@ impl ToolEffect {
                 WorkflowEventKind::StepConfigUpdated { step_id }
             }
             Self::DocDefCreated => {
-                let doc_def_id =
-                    parse_uuid_field(result, "id").unwrap_or_else(Uuid::new_v4);
+                let doc_def_id = parse_uuid_field(result, "id").unwrap_or_else(Uuid::new_v4);
                 let name = result["name"].as_str().unwrap_or("Untitled").to_string();
                 WorkflowEventKind::DocDefCreated {
                     step_id,
@@ -93,8 +92,7 @@ impl ToolEffect {
                 }
             }
             Self::DocDefDeleted => {
-                let doc_def_id =
-                    parse_uuid_field(input, "doc_def_id").unwrap_or_else(Uuid::new_v4);
+                let doc_def_id = parse_uuid_field(input, "doc_def_id").unwrap_or_else(Uuid::new_v4);
                 WorkflowEventKind::DocDefDeleted {
                     step_id,
                     doc_def_id,
