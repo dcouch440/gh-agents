@@ -41,6 +41,8 @@ export type {
   DocumentDef,
   CreateDocumentDefRequest,
   UpdateDocumentDefRequest,
+  RosterAgent,
+  CreateRosterAgentRequest,
   StepChatDebugResponse,
 } from './workflow'
 export type {

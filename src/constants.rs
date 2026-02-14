@@ -346,6 +346,10 @@ pub mod routes {
     pub const STEP_DOCUMENT_DEFS: &str = "/workflows/:wid/steps/:sid/document-defs";
     pub const STEP_DOCUMENT_DEF: &str = "/workflows/:wid/steps/:sid/document-defs/:did";
 
+    // Agent Roster
+    pub const STEP_AGENT_ROSTER: &str = "/workflows/:wid/steps/:sid/agent-roster";
+    pub const STEP_ROSTER_AGENT: &str = "/workflows/:wid/steps/:sid/agent-roster/:rid";
+
     // Routing Rules
     pub const STEP_ROUTING_RULES: &str = "/workflows/:wid/steps/:sid/routing-rules";
     pub const STEP_ROUTING_RULE: &str = "/workflows/:wid/steps/:sid/routing-rules/:rid";

@@ -1,11 +1,12 @@
 import { toArray, nmGet } from '../lib'
 import type { WorkflowState } from './types'
-import type { Workflow, WorkflowStep, WorkflowStepEdge, DocumentDef } from '@/types/workflow'
+import type { Workflow, WorkflowStep, WorkflowStepEdge, DocumentDef, RosterAgent } from '@/types/workflow'
 import type { Document } from '@/types/document'
 import { STALE_THRESHOLD_MS } from './_store'
 
 const EMPTY_DOCS: Document[] = []
 const EMPTY_DEFS: DocumentDef[] = []
+const EMPTY_ROSTER: RosterAgent[] = []
 
 const selectAll = (s: WorkflowState): Workflow[] => toArray(s.items)
 
@@ -43,6 +44,11 @@ const selectStepDocumentDefs =
 const selectDocumentDefsByStep = (s: WorkflowState): Record<string, DocumentDef[]> =>
   s.documentDefsByStep
 
+const selectStepRoster =
+  (stepId: string) =>
+  (s: WorkflowState): RosterAgent[] =>
+    s.rosterByStep[stepId] ?? EMPTY_ROSTER
+
 const selectLoading = (s: WorkflowState): boolean => s.loading
 
 const selectError = (s: WorkflowState): string | null => s.error
@@ -64,6 +70,7 @@ export {
   selectStepDocuments,
   selectStepDocumentDefs,
   selectDocumentDefsByStep,
+  selectStepRoster,
   selectLoading,
   selectError,
   selectDirty,
