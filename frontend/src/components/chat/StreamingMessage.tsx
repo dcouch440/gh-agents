@@ -13,7 +13,7 @@ function StreamingMessage({ segments, streaming }: StreamingMessageProps) {
   const showCursor = streaming && lastSegment?.type === 'text' && lastSegment.content.length > 0
 
   return (
-    <Box sx={{ py: 0.5 }}>
+    <Box sx={{ py: 0.25 }}>
       {segments.map((segment, i) => {
         const key = `seg-${i}`
 
