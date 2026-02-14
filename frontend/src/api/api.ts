@@ -79,6 +79,7 @@ import type {
   DocumentDef,
   CreateDocumentDefRequest,
   UpdateDocumentDefRequest,
+  StepChatDebugResponse,
 } from '@/types'
 
 // ============================================================================
@@ -328,6 +329,9 @@ const workflows = {
 
   clearStepMessages: (workflowId: string, stepId: string, config?: RequestConfig) =>
     baseApi.del<void>(API.STEP_CHAT_MESSAGES(workflowId, stepId), config),
+
+  getStepChatDebug: (workflowId: string, stepId: string, config?: RequestConfig) =>
+    baseApi.get<StepChatDebugResponse>(API.STEP_CHAT_DEBUG(workflowId, stepId), config),
 
   run: (id: string, body?: { initial_input?: string }, config?: RequestConfig) =>
     baseApi.post<WorkflowRunResponse>(API.WORKFLOW_RUN(id), body ?? {}, config),

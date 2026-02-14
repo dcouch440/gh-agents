@@ -125,6 +125,11 @@ type UpdateDocumentDefRequest = {
   target_length?: number
 }
 
+type StepChatDebugResponse = {
+  system_prompt: string
+  messages: { role: string; content: string }[]
+}
+
 export type {
   Workflow,
   WorkflowStep,
@@ -141,4 +146,5 @@ export type {
   DocumentDef,
   CreateDocumentDefRequest,
   UpdateDocumentDefRequest,
+  StepChatDebugResponse,
 }

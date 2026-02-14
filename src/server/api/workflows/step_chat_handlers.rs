@@ -1,13 +1,14 @@
 //! Step chat session lifecycle handlers.
 //!
-//! Provides find-or-create semantics for step-scoped chat sessions
-//! and message clearing.
+//! Provides find-or-create semantics for step-scoped chat sessions,
+//! message clearing, and debug prompt inspection.
 
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     Json,
 };
+use serde::Serialize;
 use uuid::Uuid;
 
 use crate::server::api::sessions::SessionResponse;
@@ -15,6 +16,20 @@ use crate::server::api::AppError;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 use crate::server::ws::events::{SessionEvent, SessionEventKind};
+
+/// Response for the step chat debug endpoint.
+#[derive(Debug, Serialize)]
+pub struct StepChatDebugResponse {
+    pub system_prompt: String,
+    pub messages: Vec<DebugMessage>,
+}
+
+/// A single message in the debug view.
+#[derive(Debug, Serialize)]
+pub struct DebugMessage {
+    pub role: String,
+    pub content: String,
+}
 
 /// Path parameters for step chat endpoints.
 #[derive(serde::Deserialize)]
@@ -213,4 +228,58 @@ pub async fn clear_step_messages(
     state.repo().clear_session_messages(session.id).await?;
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// GET /api/workflows/:wid/steps/:sid/chat/debug
+///
+/// Returns the resolved system prompt and message history for debugging.
+/// Useful for inspecting exactly what the LLM receives.
+pub async fn get_step_chat_debug(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(p): Path<StepChatPath>,
+) -> Result<Json<StepChatDebugResponse>, AppError> {
+    // Verify workflow ownership
+    let repo = &state.repos().workflows;
+    let wf = repo
+        .get_workflow(p.wid)
+        .await?
+        .ok_or(AppError::not_found("Workflow"))?;
+    if wf.user_id != auth.user_id.0 {
+        return Err(AppError::not_found("Workflow"));
+    }
+
+    // Load step to get execution_mode
+    let step = repo
+        .get_step(p.sid)
+        .await?
+        .ok_or(AppError::not_found("Step"))?;
+    if step.workflow_id != p.wid {
+        return Err(AppError::not_found("Step"));
+    }
+
+    // Build the resolved system prompt (same logic used at chat time)
+    let system_prompt =
+        crate::server::hub::build_step_system_prompt(&state, p.wid, p.sid, &step.execution_mode)
+            .await
+            .map_err(|e| AppError::Internal(format!("Failed to build system prompt: {e}")))?;
+
+    // Load session history if a session exists
+    let messages = if let Some(session) = state.repo().find_session_by_step_id(p.sid).await? {
+        let history = state.repo().get_session_history(session.id, 50).await?;
+        history
+            .into_iter()
+            .map(|m| DebugMessage {
+                role: m.role,
+                content: m.content,
+            })
+            .collect()
+    } else {
+        vec![]
+    };
+
+    Ok(Json(StepChatDebugResponse {
+        system_prompt,
+        messages,
+    }))
 }

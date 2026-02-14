@@ -195,7 +195,7 @@ pub async fn run_step_chat(
 /// `NODE_ASSISTANT_DOCUMENTER_BLOCK` and the config snapshot from
 /// `build_config_snapshot()`. Other modes get an empty archetype block
 /// (skeleton for future phases).
-async fn build_step_system_prompt(
+pub async fn build_step_system_prompt(
     state: &AppState,
     workflow_id: Uuid,
     step_id: Uuid,
