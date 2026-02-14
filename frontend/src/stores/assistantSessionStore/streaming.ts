@@ -1,7 +1,13 @@
 import { Collections } from '@/utils/collections'
 import type { ChatMessageData } from '@/components/chat'
+import type { SSEEvent } from '@/api'
 import type { ChatMessage, MessageSegment } from '@/types'
+import { SSE_EVENT, isContentEvent } from '@/types'
 import { getStep, updateStep } from './_store'
+
+type ToolEventPayload = { name: string; id: string }
+type DocEventPayload = { doc_id: string; title: string }
+type PanelEventPayload = { content: string; submit_label: string }
 
 // ---------------------------------------------------------------------------
 // Pure helpers
@@ -132,6 +138,68 @@ const handleStreamError = (stepId: string, error: string): void => {
   })
 }
 
+const handleSSEEvent = (stepId: string, event: SSEEvent): number => {
+  switch (event.event) {
+    case SSE_EVENT.TOKEN:
+    case SSE_EVENT.MESSAGE:
+    case SSE_EVENT.CONTENT: {
+      const text = parseTokenText(event.data)
+      streamToken(stepId, text)
+      return text.length
+    }
+    case SSE_EVENT.TOOL_START: {
+      const data = JSON.parse(event.data) as ToolEventPayload
+      addTool(stepId, data.id, data.name)
+      return 0
+    }
+    case SSE_EVENT.TOOL_END: {
+      const data = JSON.parse(event.data) as ToolEventPayload
+      completeTool(stepId, data.id)
+      return 0
+    }
+    case SSE_EVENT.DOC_UPDATE: {
+      const data = JSON.parse(event.data) as DocEventPayload
+      addDoc(stepId, data.doc_id, data.title)
+      return 0
+    }
+    case SSE_EVENT.PANEL_RENDER: {
+      const data = JSON.parse(event.data) as PanelEventPayload
+      setPanel(stepId, data.content, data.submit_label)
+      return 0
+    }
+    case SSE_EVENT.ERROR: {
+      handleStreamError(stepId, event.data)
+      return 0
+    }
+    default:
+      return 0
+  }
+}
+
+const buildDeduplicatingHandler = (
+  stepId: string,
+  dedupeAfter: number,
+  onEvent: (event: SSEEvent) => void,
+  trackLength: (len: number) => void,
+): ((event: SSEEvent) => void) => {
+  let replayedLength = 0
+  return (evt: SSEEvent) => {
+    if (isContentEvent(evt.event)) {
+      const text = parseTokenText(evt.data)
+      replayedLength += text.length
+      if (replayedLength <= dedupeAfter) return
+      const overlap = dedupeAfter - (replayedLength - text.length)
+      const newText = overlap > 0 ? text.slice(overlap) : text
+      if (newText) {
+        trackLength(newText.length)
+        streamToken(stepId, newText)
+      }
+    } else {
+      onEvent(evt)
+    }
+  }
+}
+
 export {
   // Pure helpers (exported for testing)
   appendTextToken,
@@ -151,4 +219,6 @@ export {
   dismissPanel,
   finalizeStream,
   handleStreamError,
+  handleSSEEvent,
+  buildDeduplicatingHandler,
 }

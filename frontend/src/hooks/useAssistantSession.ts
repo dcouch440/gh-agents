@@ -2,12 +2,14 @@ import { useEffect, useCallback, useRef } from 'react'
 import { useStore } from '@/stores'
 import { assistantSessionStore } from '@/stores/assistantSessionStore'
 import { api, createSSEStream } from '@/api'
-import type { SSEEvent } from '@/api'
 import { API } from '@/constants'
 import { useSendSessionMessage } from './useChatMutations'
 import type { ChatMessageData } from '@/components/chat'
 import type { MessageSegment } from '@/types'
 import type { PanelState } from '@/stores/assistantSessionStore'
+
+const STREAM_LOST_ERROR = 'Stream connection lost'
+const SEND_FAILED_ERROR = 'Failed to send message'
 
 type UseAssistantSessionReturn = {
   messages: ChatMessageData[]
@@ -37,7 +39,6 @@ const useAssistantSession = (
   const retriedRef = useRef(false)
   const retryAbortRef = useRef<(() => void) | null>(null)
 
-  // On mount / stepId change: load existing session
   useEffect(() => {
     if (!workflowId) {
       assistantSessionStore.initEmpty(stepId)
@@ -63,47 +64,11 @@ const useAssistantSession = (
       retryAbortRef.current?.()
       retryAbortRef.current = null
 
-      const userMsg: ChatMessageData = { id: crypto.randomUUID(), role: 'user', content }
-      assistantSessionStore.appendMessage(stepId, userMsg)
+      assistantSessionStore.appendMessage(stepId, { id: crypto.randomUUID(), role: 'user', content })
+      assistantSessionStore.appendMessage(stepId, { id: crypto.randomUUID(), role: 'assistant', content: '' })
 
-      const assistantMsg: ChatMessageData = { id: crypto.randomUUID(), role: 'assistant', content: '' }
-      assistantSessionStore.appendMessage(stepId, assistantMsg)
-
-      const onEvent = (event: SSEEvent) => {
-        switch (event.event) {
-          case 'token':
-          case 'message':
-          case 'content': {
-            const text = assistantSessionStore.parseTokenText(event.data)
-            receivedLengthRef.current += text.length
-            assistantSessionStore.streamToken(stepId, text)
-            break
-          }
-          case 'tool_start': {
-            const data = JSON.parse(event.data) as { name: string; id: string }
-            assistantSessionStore.addTool(stepId, data.id, data.name)
-            break
-          }
-          case 'tool_end': {
-            const data = JSON.parse(event.data) as { name: string; id: string }
-            assistantSessionStore.completeTool(stepId, data.id)
-            break
-          }
-          case 'doc_update': {
-            const data = JSON.parse(event.data) as { doc_id: string; title: string }
-            assistantSessionStore.addDoc(stepId, data.doc_id, data.title)
-            break
-          }
-          case 'panel_render': {
-            const data = JSON.parse(event.data) as { content: string; submit_label: string }
-            assistantSessionStore.setPanel(stepId, data.content, data.submit_label)
-            break
-          }
-          case 'error': {
-            assistantSessionStore.handleStreamError(stepId, event.data)
-            break
-          }
-        }
+      const onEvent = (event: Parameters<typeof assistantSessionStore.handleSSEEvent>[1]) => {
+        receivedLengthRef.current += assistantSessionStore.handleSSEEvent(stepId, event)
       }
 
       const onDone = () => {
@@ -127,32 +92,21 @@ const useAssistantSession = (
               if (!retriedRef.current) {
                 retriedRef.current = true
                 const dedupeAfter = receivedLengthRef.current
-
-                let replayedLength = 0
-                const deduplicatingHandler = (evt: SSEEvent) => {
-                  if (evt.event === 'token' || evt.event === 'message' || evt.event === 'content') {
-                    const text = assistantSessionStore.parseTokenText(evt.data)
-                    replayedLength += text.length
-                    if (replayedLength <= dedupeAfter) return
-                    const overlap = dedupeAfter - (replayedLength - text.length)
-                    const newText = overlap > 0 ? text.slice(overlap) : text
-                    if (newText) {
-                      receivedLengthRef.current += newText.length
-                      assistantSessionStore.streamToken(stepId, newText)
-                    }
-                  } else {
-                    onEvent(evt)
-                  }
-                }
+                const handler = dedupeAfter > 0
+                  ? assistantSessionStore.buildDeduplicatingHandler(
+                      stepId,
+                      dedupeAfter,
+                      onEvent,
+                      (len) => { receivedLengthRef.current += len },
+                    )
+                  : onEvent
 
                 retryAbortRef.current = createSSEStream(
                   API.SESSION_CHAT_STREAM(session.id, messageId),
                   {
-                    onEvent: dedupeAfter > 0 ? deduplicatingHandler : onEvent,
+                    onEvent: handler,
                     onDone,
-                    onError: () => {
-                      assistantSessionStore.handleStreamError(stepId, 'Stream connection lost')
-                    },
+                    onError: () => { assistantSessionStore.handleStreamError(stepId, STREAM_LOST_ERROR) },
                   },
                 )
               } else {
@@ -162,10 +116,7 @@ const useAssistantSession = (
           )
           void messageId
         } catch (e) {
-          assistantSessionStore.handleStreamError(
-            stepId,
-            e instanceof Error ? e.message : 'Failed to send message',
-          )
+          assistantSessionStore.handleStreamError(stepId, e instanceof Error ? e.message : SEND_FAILED_ERROR)
         }
       }
 

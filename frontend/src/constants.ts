@@ -12,6 +12,9 @@ export const WS_URL: string =
 export { WS_TOPIC, WS_STATUS, WS_MSG, WS_CONTROL, WORKFLOW_EVENT, ROOM_EVENT, SESSION_EVENT } from '@/types/ws'
 export type { WsTopic, WsStatus, WsWireMessage } from '@/types/ws'
 
+// SSE Events (re-exported from types/streaming.ts)
+export { SSE_EVENT, isContentEvent } from '@/types/streaming'
+
 // WS Reconnect
 export const WS_RECONNECT_BASE_MS = 1000
 export const WS_RECONNECT_MAX_MS = 30000

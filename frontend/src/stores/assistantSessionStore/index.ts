@@ -27,6 +27,8 @@ import {
   dismissPanel,
   finalizeStream,
   handleStreamError,
+  handleSSEEvent,
+  buildDeduplicatingHandler,
   parseTokenText,
 } from './streaming'
 
@@ -55,6 +57,8 @@ export const assistantSessionStore = {
   dismissPanel,
   finalizeStream,
   handleStreamError,
+  handleSSEEvent,
+  buildDeduplicatingHandler,
   parseTokenText,
 }
 
