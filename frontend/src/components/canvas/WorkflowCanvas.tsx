@@ -4,7 +4,7 @@ import type { OnSelectionChangeParams, Connection, OnNodesDelete, OnEdgesDelete,
 import '@xyflow/react/dist/style.css'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
-import { useStore, batch, workflowStore, canvasStore, agentStore, outputSchemaStore, protocolStore, shareStore } from '@/stores'
+import { useStore, batch, workflowStore, canvasStore, agentStore, outputSchemaStore, shareStore } from '@/stores'
 import { toRFNodes, toRFEdges, toDocumentEdges } from './mappers'
 import { Collections } from '@/utils/collections'
 import { nodeTypes } from './nodeTypes'
@@ -18,6 +18,7 @@ import { computeHighlightedProtocolIds } from './computeHighlightedProtocolIds'
 import { useGroupHoverDelay } from './useGroupHoverDelay'
 import { useCanvasSync } from './useCanvasSync'
 import { useCanvasLookups } from './useCanvasLookups'
+import { useCanvasFetch } from './useCanvasFetch'
 import { ShareModeBanner } from './ShareModeBanner'
 
 function WorkflowCanvasInner() {
@@ -37,38 +38,8 @@ function WorkflowCanvasInner() {
   const shareActive = useStore(shareStore.store, shareStore.selectActive)
   const [contextMenu, setContextMenu] = useState<MenuPosition>(null)
   const initialFitDone = useRef(false)
-  const fetchedToolAgentIds = useRef(new Set<string>())
-  const fetchedDocDefStepIds = useRef(new Set<string>())
-  const fetchedRosterStepIds = useRef(new Set<string>())
 
-  // Fetch tools for agents not yet fetched
-  useEffect(() => {
-    agents.forEach((agent) => {
-      if (!fetchedToolAgentIds.current.has(agent.id)) {
-        fetchedToolAgentIds.current.add(agent.id)
-        void agentStore.fetchTools(agent.id)
-      }
-    })
-  }, [agents])
-
-  // Fetch document defs for documenter steps not yet fetched
-  useEffect(() => {
-    steps.forEach((step) => {
-      if (step.execution_mode === 'documenter' && !fetchedDocDefStepIds.current.has(step.id)) {
-        fetchedDocDefStepIds.current.add(step.id)
-        void workflowStore.fetchDocumentDefs(step.id)
-      }
-      if (step.execution_mode === 'task_force' && !fetchedRosterStepIds.current.has(step.id)) {
-        fetchedRosterStepIds.current.add(step.id)
-        void workflowStore.fetchRoster(step.id)
-      }
-    })
-  }, [steps])
-
-  useEffect(() => {
-    void protocolStore.fetchAll()
-    void protocolStore.fetchTypes()
-  }, [])
+  useCanvasFetch(agents, steps)
 
   // Build lookup maps for node data enrichment
   const { lookups, protocolGroups, protocolsByStepLookup } = useCanvasLookups(

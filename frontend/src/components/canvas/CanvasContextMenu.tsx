@@ -3,8 +3,9 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import type { SxProps, Theme } from '@mui/material/styles'
 import { useStore, workflowStore, protocolStore, canvasStore, shareStore } from '@/stores'
+import type { StepProtocolLink } from '@/stores'
 import { Collections } from '@/utils/collections'
-import { DEFAULT_STEP_TYPE_COLOR, STEP_TYPE_COLORS } from './constants'
+import { DEFAULT_STEP_TYPE_COLOR, STEP_TYPE_COLORS, SECTION_LABEL_SX, COLOR_DOT_SX } from './constants'
 import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from './DynamicNode/archetypes'
 import type { Archetype as ArchetypeType } from './DynamicNode/archetypes'
 import { buildShareableFields } from './buildShareableFields'
@@ -23,10 +24,22 @@ const findParentStepForDef = (
   defId: string,
 ): string | null => {
   for (const [stepId, defs] of Object.entries(documentDefsByStep)) {
-    if (defs.some((d) => d.id === defId)) return stepId
+    for (let i = 0; i < defs.length; i++) {
+      if (defs[i]!.id === defId) return stepId
+    }
   }
   return null
 }
+
+/** Build a protocol-type lookup from canvas step-protocol links. */
+const buildProtocolsByStep = (
+  stepProtocols: Readonly<Record<string, StepProtocolLink>>,
+): ReadonlyMap<string, { protocol_type: string }> =>
+  Collections.toLookupMap(
+    Object.entries(stepProtocols),
+    ([sid]) => sid,
+    ([, link]) => ({ protocol_type: link.protocolType }),
+  )
 
 type MenuPosition = {
   x: number
@@ -51,22 +64,6 @@ const MENU_ITEM_SX: SxProps<Theme> = {
   '&:hover': { backgroundColor: 'action.hover' },
 }
 
-const SECTION_LABEL_SX: SxProps<Theme> = {
-  px: 1.5,
-  py: 0.75,
-  fontSize: 10,
-  textTransform: 'uppercase',
-  color: 'text.disabled',
-  letterSpacing: '0.05em',
-  fontWeight: 600,
-}
-
-const COLOR_DOT_SX: SxProps<Theme> = {
-  width: 8,
-  height: 8,
-  borderRadius: '50%',
-  flexShrink: 0,
-}
 
 const ARCHETYPE_MENU_ORDER: ArchetypeType[] = [
   Archetype.DOCUMENTER,
@@ -118,7 +115,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
             protocolId: protocol.id,
             protocolType: protocol.protocol_type,
             protocolName: protocol.name,
-            portNames: protocol.ports.map((p) => p.port_name),
+            portNames: Collections.mapBy(protocol.ports, (p) => p.port_name),
           })
         }
       }
@@ -168,10 +165,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
       const targetDef = defs.find((d) => d.id === defId)
       if (!targetDef) return
 
-      const stepProtocols = canvasStore.store.getState().stepProtocols
-      const protocolsByStep = new Map(
-        Object.entries(stepProtocols).map(([sid, link]) => [sid, { protocol_type: link.protocolType }]),
-      )
+      const protocolsByStep = buildProtocolsByStep(canvasStore.store.getState().stepProtocols)
       const archetype = resolveArchetype(parentStep, protocolsByStep, parentStepId)
       const config = ARCHETYPE_CONFIGS[archetype]
       const stepName = parentStep.name ?? 'Unnamed'
@@ -203,10 +197,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     const step = state.steps.byId.get(position.nodeId)
     if (!step) return
 
-    const stepProtocols = canvasStore.store.getState().stepProtocols
-    const protocolsByStep = new Map(
-      Object.entries(stepProtocols).map(([sid, link]) => [sid, { protocol_type: link.protocolType }]),
-    )
+    const protocolsByStep = buildProtocolsByStep(canvasStore.store.getState().stepProtocols)
     const archetype = resolveArchetype(step, protocolsByStep, position.nodeId)
 
     const documentDefs = state.documentDefsByStep[position.nodeId] ?? []

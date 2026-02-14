@@ -137,6 +137,10 @@ const buildShareableFields = ({
 
   if (archetype === ArchetypeEnum.ROOM) {
     for (const member of roomMembers) {
+      const parts: string[] = []
+      if (member.role) parts.push(`Role: ${member.role}`)
+      if (member.perspective) parts.push(`Perspective: ${member.perspective}`)
+
       fields.push({
         key: `member::${member.id}`,
         label: member.name,
@@ -151,12 +155,7 @@ const buildShareableFields = ({
           summary: `Room member from ${stepName}`,
           data: {
             fieldType: 'Room Member',
-            value: [
-              member.role ? `Role: ${member.role}` : null,
-              member.perspective ? `Perspective: ${member.perspective}` : null,
-            ]
-              .filter(Boolean)
-              .join('\n'),
+            value: parts.join('\n'),
           },
         },
       })
