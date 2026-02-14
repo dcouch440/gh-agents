@@ -7,10 +7,7 @@ mod tests {
     use crate::db::traits::MockWorkflowRepo;
     use crate::db::{ProtocolDocumentDefRow, WorkflowStepEdgeRow, WorkflowStepRow};
 
-    use super::super::{
-        build_config_snapshot, classify_content_status, execute_documenter_tool,
-        DocumenterToolContext,
-    };
+    use super::super::{build_config_snapshot, execute_documenter_tool, DocumenterToolContext};
 
     fn make_ctx() -> DocumenterToolContext {
         DocumenterToolContext {
@@ -65,57 +62,6 @@ mod tests {
             protocol_id: None,
             document_id: None,
         }
-    }
-
-    // =========================================================================
-    // classify_content_status
-    // =========================================================================
-
-    #[test]
-    fn classify_context_with_content_is_populated() {
-        let mut step = make_step(Uuid::new_v4(), Uuid::new_v4(), "context");
-        step.prompt_template = "Some user-provided context here".to_string();
-
-        let (status, preview, word_count) = classify_content_status(&step);
-
-        assert_eq!(status, "populated");
-        assert!(preview.is_some());
-        assert_eq!(word_count, Some(4));
-    }
-
-    #[test]
-    fn classify_context_without_content_is_empty() {
-        let step = make_step(Uuid::new_v4(), Uuid::new_v4(), "context");
-
-        let (status, preview, word_count) = classify_content_status(&step);
-
-        assert_eq!(status, "empty");
-        assert!(preview.is_none());
-        assert!(word_count.is_none());
-    }
-
-    #[test]
-    fn classify_non_context_mode_is_pending() {
-        for mode in &["single", "for_each", "documenter", "room"] {
-            let step = make_step(Uuid::new_v4(), Uuid::new_v4(), mode);
-
-            let (status, preview, word_count) = classify_content_status(&step);
-
-            assert_eq!(status, "pending", "mode={mode} should be pending");
-            assert!(preview.is_none());
-            assert!(word_count.is_none());
-        }
-    }
-
-    #[test]
-    fn classify_populated_preview_truncated_to_500_chars() {
-        let mut step = make_step(Uuid::new_v4(), Uuid::new_v4(), "context");
-        step.prompt_template = "a".repeat(1000);
-
-        let (status, preview, _) = classify_content_status(&step);
-
-        assert_eq!(status, "populated");
-        assert_eq!(preview.unwrap().len(), 500);
     }
 
     // =========================================================================

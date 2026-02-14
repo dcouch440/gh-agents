@@ -394,7 +394,7 @@ pub async fn build_config_snapshot(
             };
 
             let (status, preview, word_count) =
-                crate::server::tools::documenter::classify_content_status(&upstream);
+                crate::server::tools::shared::classify_content_status(&upstream);
             let name = upstream
                 .name
                 .unwrap_or_else(|| format!("Step {}", upstream.id));
