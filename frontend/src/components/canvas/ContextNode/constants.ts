@@ -5,6 +5,6 @@ export const CONTEXT_NODE = {
   MIN_HEIGHT: 200,
   MAX_WIDTH: 800,
   MAX_HEIGHT: 700,
-  HEADER_HEIGHT: 44,
+  HEADER_HEIGHT: 52,
   ACCENT_COLOR: '#10b981',
 } as const
