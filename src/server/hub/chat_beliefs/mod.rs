@@ -12,7 +12,9 @@ use uuid::Uuid;
 
 use crate::config::protocols::{roles, vars};
 use crate::db::{BeliefRow, ChatMessageRow};
-use crate::llm::{AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage};
+use crate::llm::{
+    AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage,
+};
 use crate::server::hub::protocols::json_utils::parse_structured_output;
 use crate::server::state::AppState;
 
@@ -38,8 +40,7 @@ pub fn spawn_chat_belief_extraction(
     session_id: Uuid,
 ) {
     tokio::spawn(async move {
-        if let Err(e) =
-            extract_and_replace_beliefs(&state, workflow_id, step_id, session_id).await
+        if let Err(e) = extract_and_replace_beliefs(&state, workflow_id, step_id, session_id).await
         {
             tracing::error!("Chat belief extraction failed for step {step_id}: {e}");
         }
@@ -65,17 +66,24 @@ async fn extract_and_replace_beliefs(
 
     let node_name = step.name.as_deref().unwrap_or("(unnamed)");
 
-    // 2. Check message count
-    let msg_count = state
-        .repo()
-        .count_session_messages(session_id)
-        .await?;
+    // 2. Load existing beliefs from connected nodes for board awareness
+    let connected_beliefs = state
+        .repos()
+        .workflows
+        .get_beliefs_for_connected_steps(workflow_id, step_id)
+        .await
+        .unwrap_or_default();
+
+    let board_beliefs_text = format_beliefs_for_extraction(&connected_beliefs);
+
+    // 3. Check message count
+    let msg_count = state.repo().count_session_messages(session_id).await?;
 
     if msg_count < MIN_MESSAGES_FOR_EXTRACTION {
         return Ok(());
     }
 
-    // 3. Load conversation
+    // 4. Load conversation
     let messages = state
         .repo()
         .get_session_history(session_id, MAX_CONVERSATION_MESSAGES)
@@ -87,7 +95,7 @@ async fn extract_and_replace_beliefs(
 
     let conversation = format_conversation(&messages);
 
-    // 4. Resolve protocol
+    // 5. Resolve protocol
     let mut vars_map = std::collections::HashMap::new();
     vars_map.insert(
         vars::chat_belief::NODE_NAME.to_string(),
@@ -97,14 +105,15 @@ async fn extract_and_replace_beliefs(
         vars::chat_belief::NODE_ARCHETYPE.to_string(),
         step.execution_mode.clone(),
     );
+    vars_map.insert(vars::chat_belief::CONVERSATION.to_string(), conversation);
     vars_map.insert(
-        vars::chat_belief::CONVERSATION.to_string(),
-        conversation,
+        vars::chat_belief::BOARD_BELIEFS.to_string(),
+        board_beliefs_text,
     );
 
     let resolved = roles::CHAT_BELIEF_EXTRACTOR.resolve(&vars_map);
 
-    // 5. Call Haiku
+    // 6. Call Haiku
     let config = AnthropicConfig::from_env()?;
     let client = AnthropicClient::new(config)?;
 
@@ -117,7 +126,7 @@ async fn extract_and_replace_beliefs(
 
     let response = client.send_message(request).await?;
 
-    // 6. Parse beliefs
+    // 7. Parse beliefs
     let extracted = parse_extraction_output(&response.content);
 
     info!(
@@ -126,7 +135,7 @@ async fn extract_and_replace_beliefs(
         "Extracted chat beliefs"
     );
 
-    // 7. Convert to BeliefRows
+    // 8. Convert to BeliefRows
     let belief_rows: Vec<BeliefRow> = extracted
         .into_iter()
         .map(|b| BeliefRow {
@@ -153,7 +162,7 @@ async fn extract_and_replace_beliefs(
         })
         .collect();
 
-    // 8. Replace in DB
+    // 9. Replace in DB
     state
         .repos()
         .workflows
@@ -212,11 +221,46 @@ pub(crate) fn parse_extraction_output(content: &str) -> Vec<ExtractedBelief> {
 
 // ── Formatting ──────────────────────────────────────────────────────────
 
+/// Format connected-node beliefs as compact context for the extraction prompt.
+///
+/// Passed to Haiku so it can see what the rest of the board already knows
+/// and produce grounded, non-redundant beliefs.
+pub(crate) fn format_beliefs_for_extraction(beliefs: &[BeliefRow]) -> String {
+    if beliefs.is_empty() {
+        return "No beliefs from other nodes yet.".to_string();
+    }
+
+    let mut by_node: BTreeMap<&str, Vec<&BeliefRow>> = BTreeMap::new();
+    for belief in beliefs {
+        by_node
+            .entry(&belief.source_step_name)
+            .or_default()
+            .push(belief);
+    }
+
+    let mut out = String::new();
+    for (i, (node_name, node_beliefs)) in by_node.iter().enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        out.push_str(&format!("[{}]\n", node_name));
+        for belief in node_beliefs {
+            out.push_str(&format!("- {} ({})\n", belief.content, belief.belief_type));
+        }
+    }
+
+    out
+}
+
 /// Format connected-node beliefs into readable text for system prompt injection.
 ///
 /// Groups beliefs by source node name, then lists each belief as a plain
 /// sentence with `[type, confidence]` inline tags. Reads like notes from
 /// a colleague, not a structured spec.
+///
+/// Beliefs with `cross_source_tension` starting with "SUPERSEDED:" indicate
+/// a correction — they stay visible, and the tension note is appended so the
+/// consuming agent understands the pivot.
 pub fn format_beliefs_as_board_context(beliefs: &[BeliefRow]) -> String {
     if beliefs.is_empty() {
         return "No neighboring nodes have active conversations yet.".to_string();
@@ -238,8 +282,6 @@ pub fn format_beliefs_as_board_context(beliefs: &[BeliefRow]) -> String {
             out.push('\n');
         }
 
-        // Find the archetype from the first belief's source_phase context
-        // We don't have archetype in BeliefRow, so just use the node name
         out.push_str(&format!("{}:\n", node_name));
 
         for belief in node_beliefs {

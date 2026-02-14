@@ -59,7 +59,10 @@ pub enum StreamChunk {
     /// A document was created or updated
     DocUpdate { doc_id: String, title: String },
     /// An interactive panel was rendered on the node
-    PanelRender { content: String, submit_label: String },
+    PanelRender {
+        content: String,
+        submit_label: String,
+    },
     /// Stream completed successfully
     Done,
     /// Stream error
@@ -653,4 +656,3 @@ impl AppState {
         self.0.cancellation_tokens.len()
     }
 }
-

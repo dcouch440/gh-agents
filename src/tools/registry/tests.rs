@@ -361,6 +361,9 @@ mod tests {
         assert_eq!(required[0], "content");
 
         // Verify description is detailed (Anthropic best practice)
-        assert!(tool.description.len() > 200, "render_panel description should be detailed");
+        assert!(
+            tool.description.len() > 200,
+            "render_panel description should be detailed"
+        );
     }
 }

@@ -41,9 +41,7 @@ fn execute_render_panel(input: &Value) -> Value {
         return json!({ "error": "Missing required parameter: content" });
     };
 
-    let submit_label = input["submit_label"]
-        .as_str()
-        .unwrap_or("Submit");
+    let submit_label = input["submit_label"].as_str().unwrap_or("Submit");
 
     json!({
         "rendered": true,

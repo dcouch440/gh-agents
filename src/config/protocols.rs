@@ -149,6 +149,7 @@ pub mod vars {
         pub const NODE_NAME: &str = "ChatBelief.node_name";
         pub const NODE_ARCHETYPE: &str = "ChatBelief.node_archetype";
         pub const CONVERSATION: &str = "ChatBelief.conversation";
+        pub const BOARD_BELIEFS: &str = "ChatBelief.board_beliefs";
     }
 
     /// Variables for the Agent Designer pre-lifecycle prompt generation.
@@ -534,8 +535,7 @@ mod tests {
 
         let ctx = roles::NODE_ASSISTANT_BASE.resolve(&vars);
         assert!(
-            ctx.system_prompt
-                .contains("help the user design this node"),
+            ctx.system_prompt.contains("help the user design this node"),
             "should contain focused identity"
         );
         assert!(
@@ -693,6 +693,7 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
             vars::chat_belief::NODE_NAME,
             vars::chat_belief::NODE_ARCHETYPE,
             vars::chat_belief::CONVERSATION,
+            vars::chat_belief::BOARD_BELIEFS,
             vars::designer::ARCHETYPE,
             vars::designer::CONTEXT_DESCRIPTION,
             vars::designer::AGENT_DEFINITIONS,

@@ -5,8 +5,8 @@
 //! parameterized by an `ExecutionStrategy`. Different strategies handle chat
 //! sessions, DAG workflow steps, and tool routing.
 
-pub mod chat_beliefs;
 pub mod capability_resolver;
+pub mod chat_beliefs;
 pub mod dag;
 pub mod engine;
 pub mod error;
@@ -211,8 +211,7 @@ pub async fn build_step_system_prompt(
         .await
         .unwrap_or_default();
 
-    let board_context =
-        chat_beliefs::format_beliefs_as_board_context(&connected_beliefs);
+    let board_context = chat_beliefs::format_beliefs_as_board_context(&connected_beliefs);
 
     // 2. Build archetype block + config snapshot based on execution mode
     let (archetype_block, config_snapshot) = match execution_mode {

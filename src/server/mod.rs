@@ -433,15 +433,9 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::STEP_AGENT_ROSTER,
             get(api::list_roster_agents).post(api::create_roster_agent),
         )
-        .route(
-            routes::STEP_ROSTER_AGENT,
-            delete(api::delete_roster_agent),
-        )
+        .route(routes::STEP_ROSTER_AGENT, delete(api::delete_roster_agent))
         // Room Step Members (design-time)
-        .route(
-            routes::STEP_ROOM_MEMBERS,
-            get(api::list_room_step_members),
-        )
+        .route(routes::STEP_ROOM_MEMBERS, get(api::list_room_step_members))
         // Routing Rules
         .route(
             routes::STEP_ROUTING_RULES,

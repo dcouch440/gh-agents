@@ -200,10 +200,18 @@ mod tests {
             async fn delete_step(&self, _: Uuid) -> Result<()> {
                 unimplemented!()
             }
-            async fn replace_chat_beliefs(&self, _: Uuid, _: &[crate::db::BeliefRow]) -> Result<Vec<crate::db::BeliefRow>> {
+            async fn replace_chat_beliefs(
+                &self,
+                _: Uuid,
+                _: &[crate::db::BeliefRow],
+            ) -> Result<Vec<crate::db::BeliefRow>> {
                 unimplemented!()
             }
-            async fn get_beliefs_for_connected_steps(&self, _: Uuid, _: Uuid) -> Result<Vec<crate::db::BeliefRow>> {
+            async fn get_beliefs_for_connected_steps(
+                &self,
+                _: Uuid,
+                _: Uuid,
+            ) -> Result<Vec<crate::db::BeliefRow>> {
                 unimplemented!()
             }
             async fn set_edges(

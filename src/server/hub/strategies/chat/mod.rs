@@ -213,7 +213,6 @@ impl ChatStrategy {
             user_id: Some(self.user_id.0),
             kind,
         });
-
     }
 }
 
@@ -512,11 +511,7 @@ fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
 }
 
 /// Universal tool names handled by node_assistant.
-const NODE_ASSISTANT_TOOLS: &[&str] = &[
-    "set_node_name",
-    "set_node_description",
-    "render_panel",
-];
+const NODE_ASSISTANT_TOOLS: &[&str] = &["set_node_name", "set_node_description", "render_panel"];
 
 /// Try to dispatch a tool call to a step-specific handler.
 /// Returns `Some(result)` if handled, `None` to fall through to generic tools.

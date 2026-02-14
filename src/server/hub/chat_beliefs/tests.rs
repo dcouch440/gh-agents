@@ -4,7 +4,9 @@ mod tests {
     use uuid::Uuid;
 
     use crate::db::BeliefRow;
-    use crate::server::hub::chat_beliefs::{format_beliefs_as_board_context, parse_extraction_output};
+    use crate::server::hub::chat_beliefs::{
+        format_beliefs_as_board_context, format_beliefs_for_extraction, parse_extraction_output,
+    };
 
     fn make_belief(
         node_name: &str,
@@ -36,17 +38,37 @@ mod tests {
         }
     }
 
+    fn make_belief_with_tension(
+        node_name: &str,
+        content: &str,
+        belief_type: &str,
+        confidence: &str,
+        tension: &str,
+    ) -> BeliefRow {
+        let mut b = make_belief(node_name, content, belief_type, confidence);
+        b.cross_source_tension = Some(tension.to_string());
+        b
+    }
+
+    // ── Board context formatting ────────────────────────────────────────
+
     #[test]
     fn format_empty_beliefs_returns_placeholder() {
         let result = format_beliefs_as_board_context(&[]);
-        assert_eq!(result, "No neighboring nodes have active conversations yet.");
+        assert_eq!(
+            result,
+            "No neighboring nodes have active conversations yet."
+        );
     }
 
     #[test]
     fn format_single_node_beliefs() {
-        let beliefs = vec![
-            make_belief("Research Team", "User wants behavioral data", "goal", "high"),
-        ];
+        let beliefs = vec![make_belief(
+            "Research Team",
+            "User wants behavioral data",
+            "goal",
+            "high",
+        )];
         let result = format_beliefs_as_board_context(&beliefs);
         assert!(result.contains("Research Team:"));
         assert!(result.contains("- User wants behavioral data [goal]"));
@@ -89,6 +111,89 @@ mod tests {
     }
 
     #[test]
+    fn format_includes_correction_beliefs_with_tension() {
+        // A correction belief (with SUPERSEDED) should still appear —
+        // it's the new, correct belief. The tension is informational.
+        let beliefs = vec![
+            make_belief(
+                "Documenter",
+                "SVG specs needed for design layout",
+                "requirement",
+                "high",
+            ),
+            make_belief_with_tension(
+                "Documenter",
+                "Project is about SVG icons for four application groups",
+                "goal",
+                "high",
+                "SUPERSEDED: The project is about cats and dogs",
+            ),
+        ];
+        let result = format_beliefs_as_board_context(&beliefs);
+
+        assert!(result.contains("SVG specs needed for design layout"));
+        assert!(result.contains("Project is about SVG icons for four application groups"));
+    }
+
+    // ── Extraction context formatting ───────────────────────────────────
+
+    #[test]
+    fn extraction_format_empty_returns_placeholder() {
+        let result = format_beliefs_for_extraction(&[]);
+        assert_eq!(result, "No beliefs from other nodes yet.");
+    }
+
+    #[test]
+    fn extraction_format_single_node() {
+        let beliefs = vec![make_belief(
+            "Documenter",
+            "Creating SVG character graphics",
+            "goal",
+            "high",
+        )];
+        let result = format_beliefs_for_extraction(&beliefs);
+
+        assert!(result.contains("[Documenter]"));
+        assert!(result.contains("- Creating SVG character graphics (goal)"));
+    }
+
+    #[test]
+    fn extraction_format_multi_node() {
+        let beliefs = vec![
+            make_belief("Alpha", "First", "goal", "high"),
+            make_belief("Beta", "Second", "requirement", "medium"),
+        ];
+        let result = format_beliefs_for_extraction(&beliefs);
+
+        assert!(result.contains("[Alpha]"));
+        assert!(result.contains("[Beta]"));
+        assert!(result.contains("- First (goal)"));
+        assert!(result.contains("- Second (requirement)"));
+    }
+
+    #[test]
+    fn extraction_format_includes_all_beliefs() {
+        // All beliefs passed to extraction — including corrections — so Haiku
+        // has the full picture of what the board currently believes.
+        let beliefs = vec![
+            make_belief("Node", "Current belief", "goal", "high"),
+            make_belief_with_tension(
+                "Node",
+                "Corrected belief",
+                "goal",
+                "high",
+                "SUPERSEDED: old direction",
+            ),
+        ];
+        let result = format_beliefs_for_extraction(&beliefs);
+
+        assert!(result.contains("Current belief"));
+        assert!(result.contains("Corrected belief"));
+    }
+
+    // ── Parsing ─────────────────────────────────────────────────────────
+
+    #[test]
     fn parse_extraction_output_valid_json() {
         let json = r#"{"beliefs": [{"content": "test belief", "reasoning": "said it", "belief_type": "goal", "confidence": "high"}]}"#;
         let result = parse_extraction_output(json);
@@ -115,5 +220,16 @@ mod tests {
         let json = r#"{"beliefs": []}"#;
         let result = parse_extraction_output(json);
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn parse_extraction_output_with_cross_source_tension() {
+        let json = r#"{"beliefs": [{"content": "New direction", "reasoning": "user pivoted", "belief_type": "goal", "confidence": "high", "cross_source_tension": "SUPERSEDED: old cats and dogs idea"}]}"#;
+        let result = parse_extraction_output(json);
+        assert_eq!(result.len(), 1);
+        assert_eq!(
+            result[0].cross_source_tension.as_deref(),
+            Some("SUPERSEDED: old cats and dogs idea")
+        );
     }
 }
