@@ -7,6 +7,7 @@ import { useStore, workflowStore, shareStore } from '@/stores'
 import { SharePickerPanel } from '../SharePickerPanel'
 import { CanvasHandle } from '../CanvasHandle'
 import { STEP_TYPE_COLORS, GREYSCALE_ACCENT } from '../constants'
+import { useNodeScale } from '../useNodeScale'
 import { CONTEXT_NODE } from './constants'
 import { ContextNodeHeader } from './ContextNodeHeader'
 import { ContextNodeContent } from './ContextNodeContent'
@@ -23,6 +24,7 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
   const accentColor = STEP_TYPE_COLORS['context'] ?? GREYSCALE_ACCENT
   const isShareSource = useStore(shareStore.store, (s) => s.active && s.sourceStepId === id)
   const [hovered, setHovered] = useState(false)
+  const { containerRef, scaleFactor } = useNodeScale()
   const highlight = getNodeHighlightStyles({
     selected: selected === true,
     accentColor,
@@ -40,6 +42,7 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <Box
+      ref={containerRef}
       onMouseEnter={() => {
         setHovered(true)
       }}
@@ -69,39 +72,43 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
         maxHeight={CONTEXT_NODE.MAX_HEIGHT}
         lineStyle={{ borderColor: 'transparent', borderWidth: 0 }}
         handleStyle={{
-          width: 8,
-          height: 8,
+          width: 10,
+          height: 10,
           borderRadius: 2,
-          backgroundColor: 'transparent',
-          borderColor: 'transparent',
+          backgroundColor: accentColor,
+          borderColor: accentColor,
+          opacity: 0.6,
         }}
       />
 
-      {/* Header — draggable area */}
-      <Box
-        sx={{
-          height: CONTEXT_NODE.HEADER_HEIGHT,
-          overflow: 'hidden',
-          borderBottom: 1,
-          borderColor: 'divider',
-          display: 'flex',
-          alignItems: 'center',
-          backgroundColor: theme.palette.custom.bgHeader,
-          flexShrink: 0,
-          cursor: 'grab',
-          '&:active': { cursor: 'grabbing' },
-        }}
-      >
-        <ContextNodeHeader name={nodeData.label} accentColor={accentColor} />
-      </Box>
+      {/* Zoomed inner container — scales content with node size */}
+      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', zoom: scaleFactor }}>
+        {/* Header — draggable area */}
+        <Box
+          sx={{
+            height: CONTEXT_NODE.HEADER_HEIGHT,
+            overflow: 'hidden',
+            borderBottom: 1,
+            borderColor: 'divider',
+            display: 'flex',
+            alignItems: 'center',
+            backgroundColor: theme.palette.custom.bgHeader,
+            flexShrink: 0,
+            cursor: 'grab',
+            '&:active': { cursor: 'grabbing' },
+          }}
+        >
+          <ContextNodeHeader name={nodeData.label} accentColor={accentColor} />
+        </Box>
 
-      {/* Content area — interactive, no drag */}
-      <Box className="nowheel nodrag nopan" sx={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-        {isShareSource ? (
-          <SharePickerPanel stepId={id} />
-        ) : (
-          <ContextNodeContent content={nodeData.content} accentColor={accentColor} onChange={handleContentChange} />
-        )}
+        {/* Content area — interactive, no drag */}
+        <Box className="nowheel nodrag nopan" sx={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
+          {isShareSource ? (
+            <SharePickerPanel stepId={id} />
+          ) : (
+            <ContextNodeContent content={nodeData.content} accentColor={accentColor} onChange={handleContentChange} />
+          )}
+        </Box>
       </Box>
 
       {/* Source handle only — context nodes are source-only, no target handle */}

@@ -1,13 +1,13 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useState } from 'react'
 import { Position, NodeResizer } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { CanvasHandle } from '../CanvasHandle'
 import { HighlightMode } from '../canvasKinds'
 import { getNodeHighlightStyles } from '../nodeHighlightStyles'
+import { useNodeScale } from '../useNodeScale'
 import { FORM_NODE } from './constants'
 import { FormTabStrip } from './FormTabStrip'
-import { resolveScaleFactor } from './scaleNotch'
 import type { CanvasFormNodeProps } from './types'
 
 function CanvasFormNodeComponent({
@@ -33,21 +33,7 @@ function CanvasFormNodeComponent({
   })
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0]
   const [hovered, setHovered] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [scaleFactor, setScaleFactor] = useState(1)
-
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
-    const observer = new ResizeObserver((entries) => {
-      const rect = entries[0]?.contentRect
-      if (!rect) return
-      const next = resolveScaleFactor(rect.width, rect.height)
-      setScaleFactor((prev) => (prev === next ? prev : next))
-    })
-    observer.observe(el)
-    return () => { observer.disconnect() }
-  }, [])
+  const { containerRef, scaleFactor } = useNodeScale()
 
   return (
     <Box
