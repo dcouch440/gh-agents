@@ -1,19 +1,19 @@
 # API Client Usage Examples
 
-Real-world examples of using the new API client.
+Real-world examples of using the API client.
 
 ## Basic CRUD Operations
 
 ### Listing Resources
 
 ```typescript
-import { endpoints } from '@/api'
+import { api } from '@/api'
 
 // List all agents
-const { agents } = await endpoints.agents.list()
+const { agents } = await api.agents.list()
 
 // List with custom config
-const { agents } = await endpoints.agents.list({
+const { agents } = await api.agents.list({
   timeout: 5000,
   retries: 2,
 })
@@ -23,10 +23,10 @@ const { agents } = await endpoints.agents.list({
 
 ```typescript
 // Get a specific agent
-const agent = await endpoints.agents.get('agent-123')
+const agent = await api.agents.get('agent-123')
 
 // With custom timeout
-const agent = await endpoints.agents.get('agent-123', {
+const agent = await api.agents.get('agent-123', {
   timeout: 10000,
 })
 ```
@@ -35,7 +35,7 @@ const agent = await endpoints.agents.get('agent-123', {
 
 ```typescript
 // Create an agent
-const newAgent = await endpoints.agents.create({
+const newAgent = await api.agents.create({
   name: 'My Agent',
   model: 'claude-3-opus',
   tier: 'research',
@@ -43,7 +43,7 @@ const newAgent = await endpoints.agents.create({
 })
 
 // Create a task
-const task = await endpoints.tasks.create({
+const task = await api.tasks.create({
   title: 'Implement feature X',
   description: 'Add authentication to the API',
   priority: 'high',
@@ -55,13 +55,13 @@ const task = await endpoints.tasks.create({
 
 ```typescript
 // Update an agent
-const updated = await endpoints.agents.update('agent-123', {
+const updated = await api.agents.update('agent-123', {
   name: 'Updated Name',
   system_prompt: 'New prompt',
 })
 
 // Update a session
-await endpoints.sessions.update('session-456', {
+await api.sessions.update('session-456', {
   title: 'Updated Session Title',
 })
 ```
@@ -70,10 +70,10 @@ await endpoints.sessions.update('session-456', {
 
 ```typescript
 // Delete an agent
-await endpoints.agents.delete('agent-123')
+await api.agents.delete('agent-123')
 
 // Delete a document
-await endpoints.documents.delete('doc-789')
+await api.documents.delete('doc-789')
 ```
 
 ## Error Handling Patterns
@@ -81,10 +81,10 @@ await endpoints.documents.delete('doc-789')
 ### Basic Error Handling
 
 ```typescript
-import { endpoints, ApiError } from '@/api'
+import { api, ApiError } from '@/api'
 
 try {
-  const agent = await endpoints.agents.get('invalid-id')
+  const agent = await api.agents.get('invalid-id')
 } catch (error) {
   if (error instanceof ApiError) {
     console.error(`API Error: ${error.message}`)
@@ -96,34 +96,50 @@ try {
 }
 ```
 
+### Using Type Guards
+
+```typescript
+import { api } from '@/api'
+import { isHttpError, hasStatus, isNetworkError, isClientError, isServerError } from '@/api'
+
+try {
+  const agent = await api.agents.get('agent-123')
+} catch (error) {
+  if (hasStatus(error, 404)) {
+    alert('Agent not found')
+  } else if (hasStatus(error, 401)) {
+    window.location.href = '/login'
+  } else if (hasStatus(error, 403)) {
+    alert('You do not have permission to view this agent')
+  } else if (isClientError(error)) {
+    alert('Bad request')
+  } else if (isServerError(error)) {
+    alert('Server error. Please try again later.')
+  } else if (isNetworkError(error)) {
+    alert('Network connection failed. Please check your internet.')
+  }
+}
+```
+
 ### Handling Specific Error Types
 
 ```typescript
-import { endpoints, ApiError } from '@/api'
+import { api, ApiError } from '@/api'
 
 try {
-  const agent = await endpoints.agents.get('agent-123')
+  const agent = await api.agents.get('agent-123')
 } catch (error) {
   if (error instanceof ApiError) {
     switch (error.type) {
       case 'http_error':
-        if (error.status === 404) {
-          alert('Agent not found')
-        } else if (error.status === 401) {
-          window.location.href = '/login'
-        } else if (error.status === 403) {
-          alert('You do not have permission to view this agent')
-        }
+        console.log(`HTTP ${error.status}: ${error.statusText}`)
         break
-
       case 'network_error':
         alert('Network connection failed. Please check your internet.')
         break
-
       case 'timeout_error':
         alert('Request timed out. Please try again.')
         break
-
       case 'abort_error':
         console.log('Request was cancelled')
         break
@@ -136,7 +152,7 @@ try {
 
 ```typescript
 // Automatically retry up to 3 times
-const agent = await endpoints.agents.get('agent-123', {
+const agent = await api.agents.get('agent-123', {
   retries: 3,
   retryDelay: 1000, // Start with 1s, then 2s, then 4s (exponential backoff)
 })
@@ -148,7 +164,8 @@ const agent = await endpoints.agents.get('agent-123', {
 
 ```typescript
 import { useState, useEffect } from 'react'
-import { endpoints, ApiError } from '@/api'
+import { api } from '@/api'
+import { isAbortError } from '@/api'
 import type { Agent } from '@/types'
 
 function useAgents() {
@@ -163,13 +180,13 @@ function useAgents() {
       setLoading(true)
       setError(null)
       try {
-        const { agents } = await endpoints.agents.list({
+        const { agents } = await api.agents.list({
           signal: controller.signal,
         })
         setAgents(agents)
       } catch (err) {
-        if (err instanceof ApiError && err.type !== 'abort_error') {
-          setError(err.message)
+        if (!isAbortError(err)) {
+          setError(err instanceof Error ? err.message : 'Unknown error')
         }
       } finally {
         setLoading(false)
@@ -191,7 +208,7 @@ function useAgents() {
 
 ```typescript
 import { useState, useCallback } from 'react'
-import { endpoints, ApiError } from '@/api'
+import { api, ApiError } from '@/api'
 import type { Agent, CreateAgentRequest } from '@/types'
 
 function useCreateAgent() {
@@ -202,7 +219,7 @@ function useCreateAgent() {
     setLoading(true)
     setError(null)
     try {
-      const agent = await endpoints.agents.create(body)
+      const agent = await api.agents.create(body)
       return agent
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : 'Failed to create agent'
@@ -260,17 +277,19 @@ function AgentsList() {
 ### Cancel on Component Unmount
 
 ```typescript
+import { isAbortError } from '@/api'
+
 useEffect(() => {
   const controller = new AbortController()
 
   const fetchData = async () => {
     try {
-      const { agents } = await endpoints.agents.list({
+      const { agents } = await api.agents.list({
         signal: controller.signal,
       })
       setAgents(agents)
     } catch (error) {
-      if (error instanceof ApiError && error.type === 'abort_error') {
+      if (isAbortError(error)) {
         console.log('Request cancelled')
       } else {
         console.error('Error:', error)
@@ -280,7 +299,6 @@ useEffect(() => {
 
   void fetchData()
 
-  // Cleanup: cancel request if component unmounts
   return () => {
     controller.abort()
   }
@@ -304,14 +322,13 @@ function SearchAgents() {
     abortControllerRef.current = controller
 
     try {
-      const { agents } = await endpoints.agents.list({
+      const { agents } = await api.agents.list({
         signal: controller.signal,
       })
-      // Filter results locally (or use a search endpoint)
       const filtered = agents.filter((a) => a.name.includes(searchQuery))
       setResults(filtered)
     } catch (error) {
-      if (error instanceof ApiError && error.type !== 'abort_error') {
+      if (!isAbortError(error)) {
         console.error('Search failed:', error)
       }
     }
@@ -342,7 +359,7 @@ function SearchAgents() {
 ### Request with Custom Headers
 
 ```typescript
-const agent = await endpoints.agents.get('agent-123', {
+const agent = await api.agents.get('agent-123', {
   headers: {
     'X-Custom-Header': 'value',
     'X-Request-ID': crypto.randomUUID(),
@@ -354,32 +371,30 @@ const agent = await endpoints.agents.get('agent-123', {
 
 ```typescript
 // Only fetch if ID is present
-const agent = id ? await endpoints.agents.get(id) : null
+const agent = id ? await api.agents.get(id) : null
 
 // Fetch with fallback
-const agent = await endpoints.agents.get('agent-123').catch(() => null)
+const agent = await api.agents.get('agent-123').catch(() => null)
 ```
 
 ### Parallel Requests
 
 ```typescript
 // Fetch multiple resources in parallel
-const [agentsResult, tasksResult, toolsResult] = await Promise.all([
-  endpoints.agents.list(),
-  endpoints.tasks.list(),
-  endpoints.tools.list(),
+const [agentsResult, tasks, tools] = await Promise.all([
+  api.agents.list(),
+  api.tasks.list(),
+  api.tools.list(),
 ])
 
 const agents = agentsResult.agents
-const tasks = tasksResult.items
-const tools = toolsResult.items
 ```
 
 ### Sequential Requests with Dependencies
 
 ```typescript
 // Create agent, then assign tools
-const agent = await endpoints.agents.create({
+const agent = await api.agents.create({
   name: 'My Agent',
   model: 'claude-3-opus',
   tier: 'research',
@@ -387,54 +402,40 @@ const agent = await endpoints.agents.create({
 })
 
 // Get available tools
-const { items: tools } = await endpoints.tools.list()
+const tools = await api.tools.list()
 
 // Assign tools to the agent
-await endpoints.agents.setTools(
+await api.agents.setTools(
   agent.id,
   tools.map((t) => t.id)
 )
 ```
 
-### Polling for Updates
+### SSE Streaming
 
 ```typescript
-function usePipelineRun(runId: string) {
-  const [run, setRun] = useState<PipelineRun | null>(null)
+import { createSSEStream } from '@/api'
+import { isHttpError } from '@/api'
 
-  useEffect(() => {
-    let cancelled = false
-
-    const poll = async () => {
-      while (!cancelled) {
-        try {
-          const latestRun = await endpoints.pipelineRuns.get(runId)
-          if (!cancelled) {
-            setRun(latestRun)
-
-            // Stop polling if run is complete
-            if (latestRun.status === 'completed' || latestRun.status === 'failed') {
-              break
-            }
-          }
-        } catch (error) {
-          console.error('Polling error:', error)
-        }
-
-        // Wait 2 seconds before next poll
-        await new Promise((resolve) => setTimeout(resolve, 2000))
-      }
+const abort = createSSEStream('/stream/endpoint', {
+  onEvent: (event) => {
+    const parsed = JSON.parse(event.data)
+    console.log(`[${event.event}]`, parsed)
+  },
+  onDone: () => {
+    console.log('Stream complete')
+  },
+  onError: (error) => {
+    if (isHttpError(error)) {
+      console.error(`HTTP ${error.status}: ${error.statusText}`)
+    } else {
+      console.error('Stream error:', error.message)
     }
+  },
+})
 
-    void poll()
-
-    return () => {
-      cancelled = true
-    }
-  }, [runId])
-
-  return run
-}
+// Cancel the stream when done
+abort()
 ```
 
 ## Global Configuration
@@ -451,12 +452,12 @@ configure({
   retryDelay: 1000, // Start with 1 second delay
   requestLogger: (ctx) => {
     if (import.meta.env.DEV) {
-      console.log(`→ ${ctx.method} ${ctx.url}`)
+      console.log(`-> ${ctx.method} ${ctx.url}`)
     }
   },
   responseLogger: (ctx) => {
     if (import.meta.env.DEV) {
-      console.log(`← ${ctx.status} ${ctx.url}`)
+      console.log(`<- ${ctx.status} ${ctx.url}`)
     }
   },
 })
@@ -471,12 +472,10 @@ import { addInterceptor } from '@/api'
 
 const removeInterceptor = addInterceptor({
   onError: (error) => {
-    // Redirect to login on 401
     if (error.status === 401) {
       window.location.href = '/login'
     }
 
-    // Show toast notification
     if (error.status && error.status >= 500) {
       showToast('Server error. Please try again later.')
     }
@@ -484,9 +483,6 @@ const removeInterceptor = addInterceptor({
     return error
   },
 })
-
-// Remove when no longer needed
-// removeInterceptor()
 ```
 
 ### Add Request ID to All Requests
@@ -496,31 +492,10 @@ import { addInterceptor } from '@/api'
 
 addInterceptor({
   onRequest: (ctx) => {
-    return {
-      ...ctx,
-      config: {
-        ...ctx.config,
-        headers: {
-          ...ctx.config.headers,
-          'X-Request-ID': crypto.randomUUID(),
-        },
-      },
+    ctx.config.headers = {
+      ...ctx.config.headers,
+      'X-Request-ID': crypto.randomUUID(),
     }
-  },
-})
-```
-
-### Log All Responses
-
-```typescript
-import { addInterceptor } from '@/api'
-
-addInterceptor({
-  onResponse: (ctx) => {
-    console.log(`Response from ${ctx.url}:`, {
-      status: ctx.status,
-      data: ctx.data,
-    })
     return ctx
   },
 })
@@ -532,11 +507,11 @@ addInterceptor({
 
 ```typescript
 import { vi } from 'vitest'
-import { endpoints } from '@/api'
+import { api } from '@/api'
 
-// Mock the endpoints
+// Mock the api
 vi.mock('@/api', () => ({
-  endpoints: {
+  api: {
     agents: {
       list: vi.fn(),
       get: vi.fn(),
@@ -552,7 +527,7 @@ it('loads agents', async () => {
     { id: '2', name: 'Agent 2' },
   ]
 
-  vi.mocked(endpoints.agents.list).mockResolvedValue({
+  vi.mocked(api.agents.list).mockResolvedValue({
     agents: mockAgents,
   })
 

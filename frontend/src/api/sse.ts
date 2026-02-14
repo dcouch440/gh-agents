@@ -1,40 +1,57 @@
 import { API_BASE, LS_AUTH_TOKEN } from '@/constants'
+import { ApiError } from './client'
+import type { RequestConfig } from './client'
 
 type SSEEvent = {
-  event: string
-  data: string
+  readonly event: string
+  readonly data: string
 }
 
 type SSECallbacks = {
   onEvent: (event: SSEEvent) => void
   onDone: () => void
-  onError: (error: Error) => void
+  onError: (error: ApiError) => void
 }
 
-const createSSEStream = (path: string, callbacks: SSECallbacks): (() => void) => {
+const createSSEStream = (
+  path: string,
+  callbacks: SSECallbacks,
+  config?: Pick<RequestConfig, 'headers' | 'signal'>,
+): (() => void) => {
   const controller = new AbortController()
   const token = localStorage.getItem(LS_AUTH_TOKEN)
+  const url = `${API_BASE}${path}`
 
   const headers: Record<string, string> = {
     Accept: 'text/event-stream',
+    ...config?.headers,
   }
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  fetch(`${API_BASE}${path}`, {
+  // Forward external signal
+  if (config?.signal) {
+    if (config.signal.aborted) {
+      controller.abort()
+    } else {
+      config.signal.addEventListener('abort', () => controller.abort())
+    }
+  }
+
+  fetch(url, {
     headers,
     signal: controller.signal,
   })
     .then(async (res) => {
       if (!res.ok) {
-        callbacks.onError(new Error(`SSE request failed: ${res.status} ${res.statusText}`))
+        callbacks.onError(ApiError.http(url, res.status, res.statusText, null))
         return
       }
 
       const reader = res.body?.getReader()
       if (!reader) {
-        callbacks.onError(new Error('Response body is not readable'))
+        callbacks.onError(ApiError.network(url, new Error('Response body is not readable')))
         return
       }
 
@@ -62,7 +79,7 @@ const createSSEStream = (path: string, callbacks: SSECallbacks): (() => void) =>
               callbacks.onDone()
               return
             }
-            callbacks.onEvent({ event: currentEvent, data })
+            callbacks.onEvent(Object.freeze({ event: currentEvent, data }))
             currentEvent = 'message'
           } else if (line === '') {
             currentEvent = 'message'
@@ -72,7 +89,8 @@ const createSSEStream = (path: string, callbacks: SSECallbacks): (() => void) =>
     })
     .catch((err: unknown) => {
       if (err instanceof DOMException && err.name === 'AbortError') return
-      callbacks.onError(err instanceof Error ? err : new Error('SSE connection failed'))
+      const original = err instanceof Error ? err : new Error('SSE connection failed')
+      callbacks.onError(ApiError.network(url, original))
     })
 
   return () => controller.abort()

@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/require-await */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { createSSEStream } from './sse'
 import type { SSECallbacks } from './sse'
@@ -27,13 +25,13 @@ vi.mock('@/constants', async () => {
 const createMockReader = (chunks: string[]) => {
   let index = 0
   return {
-    read: vi.fn(async () => {
+    read: vi.fn(() => {
       if (index >= chunks.length) {
-        return { done: true, value: undefined }
+        return Promise.resolve({ done: true as const, value: undefined })
       }
       const chunk = chunks[index]
       index++
-      return { done: false, value: new TextEncoder().encode(chunk) }
+      return Promise.resolve({ done: false as const, value: new TextEncoder().encode(chunk) })
     }),
   }
 }
@@ -65,6 +63,7 @@ describe('createSSEStream', () => {
         Accept: 'text/event-stream',
         Authorization: 'Bearer test-token',
       },
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() returns any
       signal: expect.any(AbortSignal),
     })
   })
@@ -83,6 +82,7 @@ describe('createSSEStream', () => {
       headers: {
         Accept: 'text/event-stream',
       },
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- expect.any() returns any
       signal: expect.any(AbortSignal),
     })
   })
@@ -208,7 +208,9 @@ describe('createSSEStream', () => {
     createSSEStream('/test', callbacks)
 
     await vi.waitFor(() => {
-      expect(callbacks.onError).toHaveBeenCalledWith(new Error('SSE request failed: 500 Internal Server Error'))
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'http_error', status: 500, statusText: 'Internal Server Error' }),
+      )
     })
   })
 
@@ -222,7 +224,9 @@ describe('createSSEStream', () => {
     createSSEStream('/test', callbacks)
 
     await vi.waitFor(() => {
-      expect(callbacks.onError).toHaveBeenCalledWith(new Error('Response body is not readable'))
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'network_error' }),
+      )
     })
   })
 
@@ -233,7 +237,9 @@ describe('createSSEStream', () => {
     createSSEStream('/test', callbacks)
 
     await vi.waitFor(() => {
-      expect(callbacks.onError).toHaveBeenCalledWith(new Error('Network error'))
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'network_error' }),
+      )
     })
   })
 
@@ -322,7 +328,9 @@ describe('createSSEStream', () => {
     createSSEStream('/test', callbacks)
 
     await vi.waitFor(() => {
-      expect(callbacks.onError).toHaveBeenCalledWith(new Error('SSE connection failed'))
+      expect(callbacks.onError).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'network_error' }),
+      )
     })
   })
 })
