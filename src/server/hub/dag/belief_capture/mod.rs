@@ -35,7 +35,7 @@ use crate::server::ws::events::WorkflowEventKind;
 use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope, UserId};
 
 use super::{
-    broadcast_workflow_event, resolve_output_key, PortMetadata, StepOutput,
+    broadcast_workflow_event, resolve_output_key, step_display_name, PortMetadata, StepOutput,
     WorkflowExecutionContext,
 };
 
@@ -69,10 +69,7 @@ pub(super) async fn execute_belief_capture_step(
         step.workflow_id,
         WorkflowEventKind::StepStarted {
             step_id: step.id,
-            step_name: step
-                .output_variable_name
-                .clone()
-                .unwrap_or_else(|| step.id.to_string()),
+            step_name: step_display_name(step),
             agent_id: None,
             execution_id: None,
         },
@@ -401,10 +398,7 @@ pub(super) async fn execute_belief_capture_step(
         step.workflow_id,
         WorkflowEventKind::StepCompleted {
             step_id: step.id,
-            step_name: step
-                .output_variable_name
-                .clone()
-                .unwrap_or_else(|| step.id.to_string()),
+            step_name: step_display_name(step),
             agent_id: None,
             output: None,
             input_tokens: Some(step_in_tokens as u64),

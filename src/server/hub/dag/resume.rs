@@ -23,16 +23,19 @@ use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
 use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
 
-use super::dag_state::{prefetch_port_metadata, resolve_output_key};
+use super::dag_state::{prefetch_port_metadata, resolve_output_key, wrap_in_agentless_envelope};
 use super::{
-    broadcast_workflow_event, get_parent_steps, topological_sort, StepOutput,
+    broadcast_workflow_event, check_step_readiness, topological_sort, StepOutput, StepReadiness,
     WorkflowExecutionContext, WorkflowExecutionResult,
 };
 
 // Step execution functions from sibling modules
+use super::belief_capture::execute_belief_capture_step;
+use super::execute_documenter_step;
 use super::for_each::{detect_for_each_chains, execute_for_each_chain, execute_for_each_step};
 use super::room_step::execute_room_step;
 use super::single::execute_single_step;
+use super::task_force::execute_task_force_step;
 
 /// Resume a workflow DAG from a paused state after an interactive step is approved.
 ///
@@ -101,6 +104,7 @@ pub async fn resume_workflow_via_engine(
         .iter()
         .flat_map(|c| c.step_ids.iter().copied())
         .collect();
+    let chain_by_head: HashMap<Uuid, _> = chains.iter().map(|c| (c.step_ids[0], c)).collect();
 
     for step_id in &sorted {
         // Skip already-completed steps
@@ -117,15 +121,22 @@ pub async fn resume_workflow_via_engine(
             return Err(HubError::Cancelled);
         }
 
-        let parents = get_parent_steps(*step_id, edges);
-        let all_parents_done = parents.iter().all(|pid| completed.contains_key(pid));
-        if !all_parents_done {
-            warn!("Step {} has uncompleted parents, skipping", step_id);
-            continue;
+        // Check step readiness (handles conditional edges, matching the main loop)
+        match check_step_readiness(*step_id, edges, &completed, &completed_envelopes) {
+            StepReadiness::Waiting => {
+                warn!("Step {} has uncompleted parents, skipping", step_id);
+                continue;
+            }
+            StepReadiness::Skipped => {
+                info!("Step {} skipped — no matching conditional edges", step_id);
+                completed.insert(*step_id, StepOutput::skipped(*step_id));
+                continue;
+            }
+            StepReadiness::Ready => { /* proceed with execution */ }
         }
 
         // Phase 6B: If this is the head of a for-each chain, execute the whole chain
-        if let Some(chain) = chains.iter().find(|c| c.step_ids[0] == *step_id) {
+        if let Some(chain) = chain_by_head.get(step_id) {
             execute_for_each_chain(
                 engine,
                 state,
@@ -151,6 +162,96 @@ pub async fn resume_workflow_via_engine(
             continue;
         }
 
+        // Context steps pass through their prompt_template as output — no LLM call
+        if step.execution_mode == "context" {
+            let output_key = resolve_output_key(step, &port_meta.step_outputs);
+            let content = if step.prompt_template.is_empty() {
+                ctx.initial_input.clone()
+            } else {
+                step.prompt_template.clone()
+            };
+            let value = JsonValue::String(content.clone());
+            var_outputs.insert(output_key.clone(), value.clone());
+
+            let output = StepOutput {
+                variable_name: output_key,
+                structured_output: Some(value.clone()),
+                raw_output: content,
+            };
+            let envelope = wrap_in_agentless_envelope(step.id, Some(value), 0, 0, 0, 0.0);
+            completed_envelopes.insert(step.id, envelope);
+            completed.insert(step.id, output);
+            info!(step_id = %step.id, "Context step pass-through completed (resume)");
+            continue;
+        }
+
+        // Documenter steps — phased pipeline, no agent needed
+        if step.execution_mode == "documenter" {
+            execute_documenter_step(
+                engine,
+                state,
+                ctx,
+                step,
+                steps,
+                edges,
+                &mut var_outputs,
+                &mut completed,
+                &mut completed_envelopes,
+                &port_meta,
+                &mut total_input_tokens,
+                &mut total_output_tokens,
+                &mut total_cost_usd,
+                cancel,
+            )
+            .await?;
+            continue;
+        }
+
+        // Task force steps — sequential multi-agent pipeline, no agent_id needed
+        if step.execution_mode == "task_force" {
+            execute_task_force_step(
+                engine,
+                state,
+                ctx,
+                step,
+                steps,
+                edges,
+                &mut var_outputs,
+                &mut completed,
+                &mut completed_envelopes,
+                &port_meta,
+                &mut total_input_tokens,
+                &mut total_output_tokens,
+                &mut total_cost_usd,
+                cancel,
+            )
+            .await?;
+            continue;
+        }
+
+        // Belief capture steps — per-source LLM extraction, no agent_id needed
+        if step.execution_mode == "belief_capture" {
+            execute_belief_capture_step(
+                engine,
+                state,
+                ctx,
+                step,
+                steps,
+                edges,
+                &mut var_outputs,
+                &mut completed,
+                &mut completed_envelopes,
+                &port_meta,
+                &mut total_input_tokens,
+                &mut total_output_tokens,
+                &mut total_cost_usd,
+                cancel,
+            )
+            .await?;
+            continue;
+        }
+
+        // Agent-based modes: load agent first
         let agent_id = step.agent_id.ok_or_else(|| {
             HubError::Internal(anyhow::anyhow!(
                 "step {} has no agent_id for mode '{}'",

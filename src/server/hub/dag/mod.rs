@@ -9,16 +9,13 @@ use std::collections::HashSet;
 
 use serde_json::Value as JsonValue;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::server::state::AppState;
 use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
-use crate::types::{
-    DownstreamRoutingContext, ExecutionMetadata, ExecutionStatus, RouteDescription,
-    StepExecutionEnvelope,
-};
+use crate::types::{DownstreamRoutingContext, RouteDescription, StepExecutionEnvelope};
 
 use super::engine::ExecutionEngine;
 use super::error::HubError;
@@ -45,16 +42,18 @@ pub(crate) mod belief_capture;
 pub(crate) mod container;
 pub(crate) mod dag_state;
 pub(crate) mod designer_input;
-pub mod documenter;
+pub(crate) mod documenter;
 pub(crate) mod for_each;
 pub(crate) mod resume;
 pub(crate) mod room_step;
 pub(crate) mod single;
 pub(crate) mod task_force;
-pub mod utils;
+pub(crate) mod utils;
 
 pub(crate) use dag_state::{
-    prefetch_port_metadata, resolve_output_key, wrap_in_envelope, PortMetadata,
+    broadcast_step_failure_if_real, prefetch_port_metadata, resolve_output_key,
+    resolve_step_port_inputs, step_display_name, wrap_in_agentless_envelope, wrap_in_envelope,
+    PortMetadata,
 };
 
 pub use utils::{
@@ -71,6 +70,7 @@ pub use resume::{resume_dag_from_approval, resume_workflow_via_engine};
 
 // Internal imports for the main orchestration loop
 use belief_capture::execute_belief_capture_step;
+use documenter::execute_documenter_step;
 use for_each::{detect_for_each_chains, execute_for_each_chain, execute_for_each_step};
 use room_step::execute_room_step;
 use single::execute_single_step;
@@ -194,6 +194,7 @@ pub async fn execute_workflow_via_engine(
         .iter()
         .flat_map(|c| c.step_ids.iter().copied())
         .collect();
+    let chain_by_head: HashMap<Uuid, _> = chains.iter().map(|c| (c.step_ids[0], c)).collect();
 
     if !chains.is_empty() {
         info!(
@@ -233,7 +234,7 @@ pub async fn execute_workflow_via_engine(
         }
 
         // Phase 6B: If this is the head of a for-each chain, execute the whole chain
-        if let Some(chain) = chains.iter().find(|c| c.step_ids[0] == *step_id) {
+        if let Some(chain) = chain_by_head.get(step_id) {
             execute_for_each_chain(
                 engine,
                 state,
@@ -278,28 +279,7 @@ pub async fn execute_workflow_via_engine(
                 raw_output: content,
             };
 
-            let envelope = StepExecutionEnvelope {
-                status: ExecutionStatus::Success,
-                data: Some(value),
-                metadata: ExecutionMetadata {
-                    execution_id: step.id,
-                    execution_time_ms: 0,
-                    tokens_in: Some(0),
-                    tokens_out: Some(0),
-                    cost_usd: Some(0.0),
-                    model: None,
-                    agent_id: None,
-                    iteration_index: None,
-                    iteration_label: None,
-                    routing_label: None,
-                    upstream_agent_id: None,
-                    upstream_routing_label: None,
-                    room_session_id: None,
-                    room_id: None,
-                    total_rounds: None,
-                },
-                error: None,
-            };
+            let envelope = wrap_in_agentless_envelope(step.id, Some(value), 0, 0, 0, 0.0);
             completed_envelopes.insert(step.id, envelope);
             completed.insert(step.id, output);
 
@@ -309,10 +289,7 @@ pub async fn execute_workflow_via_engine(
                 step.workflow_id,
                 WorkflowEventKind::StepCompleted {
                     step_id: step.id,
-                    step_name: step
-                        .output_variable_name
-                        .clone()
-                        .unwrap_or_else(|| step.id.to_string()),
+                    step_name: step_display_name(step),
                     agent_id: None,
                     output: None,
                     input_tokens: Some(0),
@@ -346,21 +323,7 @@ pub async fn execute_workflow_via_engine(
             .await;
 
             if let Err(ref e) = step_result {
-                if !matches!(e, HubError::AwaitingUser { .. }) {
-                    broadcast_workflow_event(
-                        state,
-                        ctx,
-                        workflow_id,
-                        WorkflowEventKind::StepFailed {
-                            step_id: step.id,
-                            step_name: step
-                                .output_variable_name
-                                .clone()
-                                .unwrap_or_else(|| step.id.to_string()),
-                            error: format!("{}", e),
-                        },
-                    );
-                }
+                broadcast_step_failure_if_real(state, ctx, workflow_id, step, e);
             }
             step_result?;
             continue;
@@ -387,21 +350,7 @@ pub async fn execute_workflow_via_engine(
             .await;
 
             if let Err(ref e) = step_result {
-                if !matches!(e, HubError::AwaitingUser { .. }) {
-                    broadcast_workflow_event(
-                        state,
-                        ctx,
-                        workflow_id,
-                        WorkflowEventKind::StepFailed {
-                            step_id: step.id,
-                            step_name: step
-                                .output_variable_name
-                                .clone()
-                                .unwrap_or_else(|| step.id.to_string()),
-                            error: format!("{}", e),
-                        },
-                    );
-                }
+                broadcast_step_failure_if_real(state, ctx, workflow_id, step, e);
             }
             step_result?;
             continue;
@@ -428,21 +377,7 @@ pub async fn execute_workflow_via_engine(
             .await;
 
             if let Err(ref e) = step_result {
-                if !matches!(e, HubError::AwaitingUser { .. }) {
-                    broadcast_workflow_event(
-                        state,
-                        ctx,
-                        workflow_id,
-                        WorkflowEventKind::StepFailed {
-                            step_id: step.id,
-                            step_name: step
-                                .output_variable_name
-                                .clone()
-                                .unwrap_or_else(|| step.id.to_string()),
-                            error: format!("{}", e),
-                        },
-                    );
-                }
+                broadcast_step_failure_if_real(state, ctx, workflow_id, step, e);
             }
             step_result?;
             continue;
@@ -549,21 +484,7 @@ pub async fn execute_workflow_via_engine(
         };
 
         if let Err(ref e) = step_result {
-            if !matches!(e, HubError::AwaitingUser { .. }) {
-                broadcast_workflow_event(
-                    state,
-                    ctx,
-                    workflow_id,
-                    WorkflowEventKind::StepFailed {
-                        step_id: step.id,
-                        step_name: step
-                            .output_variable_name
-                            .clone()
-                            .unwrap_or_else(|| step.id.to_string()),
-                        error: format!("{}", e),
-                    },
-                );
-            }
+            broadcast_step_failure_if_real(state, ctx, workflow_id, step, e);
         }
         step_result?;
     }
@@ -582,199 +503,6 @@ pub async fn execute_workflow_via_engine(
         total_cost_usd,
         duration_ms,
     })
-}
-
-// ── Documenter Step Execution ───────────────────────────────────────────────
-
-/// Execute a documenter step through the phased pipeline (strategy → research → write).
-///
-/// Unlike other step types, documenter steps have no agent. They dispatch to
-/// `DocumenterExecutor` which runs three LLM phases internally, recording each
-/// as a `protocol_execution` row and broadcasting WebSocket progress events.
-async fn execute_documenter_step(
-    engine: &ExecutionEngine,
-    state: &AppState,
-    ctx: &WorkflowExecutionContext,
-    step: &WorkflowStepRow,
-    steps: &[WorkflowStepRow],
-    edges: &[WorkflowStepEdgeRow],
-    var_outputs: &mut HashMap<String, JsonValue>,
-    completed: &mut HashMap<Uuid, StepOutput>,
-    completed_envelopes: &mut HashMap<Uuid, StepExecutionEnvelope>,
-    port_meta: &PortMetadata,
-    total_input_tokens: &mut i64,
-    total_output_tokens: &mut i64,
-    total_cost_usd: &mut f32,
-    cancel: Option<&CancellationToken>,
-) -> Result<(), HubError> {
-    let step_start = std::time::Instant::now();
-
-    // Broadcast: step started (no agent)
-    broadcast_workflow_event(
-        state,
-        ctx,
-        step.workflow_id,
-        WorkflowEventKind::StepStarted {
-            step_id: step.id,
-            step_name: step
-                .output_variable_name
-                .clone()
-                .unwrap_or_else(|| step.id.to_string()),
-            agent_id: None,
-            execution_id: None,
-        },
-    );
-
-    // Resolve port inputs
-    let port_inputs = if let Some(inputs) = port_meta.step_inputs.get(&step.id) {
-        match resolve_port_inputs(
-            step.id,
-            edges,
-            inputs,
-            &port_meta.step_outputs,
-            completed_envelopes,
-        ) {
-            Ok(resolved) => {
-                debug!(step_id = %step.id, ports = resolved.len(), "Resolved documenter port inputs");
-                Some(resolved)
-            }
-            Err(e) => {
-                warn!(
-                    "Port resolution failed for documenter step {}: {}",
-                    step.id, e
-                );
-                None
-            }
-        }
-    } else {
-        None
-    };
-
-    // Collect upstream context data from bare (portless) edges connecting context steps
-    let upstream_context =
-        collect_upstream_context_data(step.id, edges, steps, completed_envelopes);
-
-    // Compose prompt
-    let mut prompt = compose_prompt(
-        step,
-        state.prompt_template_repo().as_deref(),
-        state.doc_repo().as_deref(),
-        state.workflow_repo().as_deref(),
-        &**state.repo(),
-        var_outputs,
-        &ctx.prior_outputs,
-        None,
-        port_inputs.as_ref(),
-    )
-    .await;
-
-    // Build ContextDocument objects from upstream context (stable short_ids via title hash)
-    let upstream_docs: Vec<documenter::ContextDocument> = upstream_context
-        .iter()
-        .map(|(title, content)| {
-            use std::collections::hash_map::DefaultHasher;
-            use std::hash::{Hash, Hasher};
-            let mut hasher = DefaultHasher::new();
-            title.hash(&mut hasher);
-            let short_id = format!("{:08x}", hasher.finish() & 0xFFFF_FFFF);
-            documenter::ContextDocument {
-                short_id,
-                title: title.clone(),
-                content: content.clone(),
-            }
-        })
-        .collect();
-
-    // Append upstream context using the same <document_XXXXXXXX> format
-    // so the strategy LLM sees the short_ids it needs for context_document_ids routing
-    let context_block = documenter::build_context_block(&[], &upstream_docs);
-    if !context_block.is_empty() {
-        prompt.push_str("\n\n");
-        prompt.push_str(&context_block);
-    }
-
-    // Execute the documenter pipeline
-    let executor = documenter::DocumenterExecutor::new(
-        engine,
-        state,
-        ctx,
-        step,
-        &prompt,
-        cancel,
-        &upstream_docs,
-        completed_envelopes,
-    );
-    let result = executor.execute(&port_meta.step_outputs).await?;
-
-    // Accumulate tokens
-    *total_input_tokens += result.input_tokens;
-    *total_output_tokens += result.output_tokens;
-    *total_cost_usd += result.cost_usd;
-
-    // Store output in variable map
-    if !result.output.variable_name.is_empty() {
-        if let Some(ref structured) = result.output.structured_output {
-            var_outputs.insert(result.output.variable_name.clone(), structured.clone());
-        }
-    }
-
-    // Store envelope for downstream port resolution (agent-less)
-    let envelope = StepExecutionEnvelope {
-        status: if result.output.structured_output.is_some() {
-            ExecutionStatus::Success
-        } else {
-            ExecutionStatus::Error
-        },
-        data: result.output.structured_output.clone(),
-        metadata: ExecutionMetadata {
-            execution_id: step.id,
-            execution_time_ms: step_start.elapsed().as_millis() as u64,
-            tokens_in: Some(result.input_tokens as i32),
-            tokens_out: Some(result.output_tokens as i32),
-            cost_usd: Some(result.cost_usd as f64),
-            model: None,
-            agent_id: None,
-            iteration_index: None,
-            iteration_label: None,
-            routing_label: None,
-            upstream_agent_id: None,
-            upstream_routing_label: None,
-            room_session_id: None,
-            room_id: None,
-            total_rounds: None,
-        },
-        error: None,
-    };
-    completed_envelopes.insert(step.id, envelope);
-    completed.insert(step.id, result.output);
-
-    // Broadcast: step completed (no agent)
-    broadcast_workflow_event(
-        state,
-        ctx,
-        step.workflow_id,
-        WorkflowEventKind::StepCompleted {
-            step_id: step.id,
-            step_name: step
-                .output_variable_name
-                .clone()
-                .unwrap_or_else(|| step.id.to_string()),
-            agent_id: None,
-            output: None,
-            input_tokens: Some(result.input_tokens as u64),
-            output_tokens: Some(result.output_tokens as u64),
-            duration_ms: Some(step_start.elapsed().as_millis() as u64),
-        },
-    );
-
-    info!(
-        step_id = %step.id,
-        input_tokens = result.input_tokens,
-        output_tokens = result.output_tokens,
-        "Documenter step completed"
-    );
-
-    Ok(())
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────

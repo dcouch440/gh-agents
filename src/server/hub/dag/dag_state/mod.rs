@@ -13,10 +13,13 @@ use uuid::Uuid;
 use crate::db::{
     AgentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
+use crate::server::hub::error::HubError;
 use crate::server::state::AppState;
+use crate::server::ws::events::WorkflowEventKind;
 use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
 
-use super::utils::{resolve_port_inputs, StepOutput};
+use super::broadcast_workflow_event;
+use super::utils::{resolve_port_inputs, StepOutput, WorkflowExecutionContext};
 
 mod tests;
 
@@ -26,6 +29,10 @@ mod tests;
 ///
 /// Bundles the six `&mut` arguments that were previously passed individually
 /// to every `execute_*` function, reducing argument counts from 14–15 to ~8–9.
+///
+// TODO: Adopt DagExecutionState across all step executors (single, for_each,
+// room_step, belief_capture, task_force, documenter) to replace the 6 separate
+// &mut args. Deferred because it's a large mechanical signature change.
 pub(crate) struct DagExecutionState {
     pub var_outputs: HashMap<String, JsonValue>,
     pub completed: HashMap<Uuid, StepOutput>,
@@ -241,5 +248,64 @@ pub(crate) fn resolve_step_port_inputs(
             warn!("Port resolution failed for step {}: {}", step.id, e);
             None
         }
+    }
+}
+
+/// Broadcast a StepFailed event, unless the error is an AwaitingUser pause.
+pub(crate) fn broadcast_step_failure_if_real(
+    state: &AppState,
+    ctx: &WorkflowExecutionContext,
+    workflow_id: Uuid,
+    step: &WorkflowStepRow,
+    error: &HubError,
+) {
+    if !matches!(error, HubError::AwaitingUser { .. }) {
+        broadcast_workflow_event(
+            state,
+            ctx,
+            workflow_id,
+            WorkflowEventKind::StepFailed {
+                step_id: step.id,
+                step_name: step_display_name(step),
+                error: format!("{}", error),
+            },
+        );
+    }
+}
+
+/// Wrap step output into an agent-less StepExecutionEnvelope (for context/documenter steps).
+pub(crate) fn wrap_in_agentless_envelope(
+    step_id: Uuid,
+    data: Option<JsonValue>,
+    duration_ms: u64,
+    input_tokens: i64,
+    output_tokens: i64,
+    cost_usd: f32,
+) -> StepExecutionEnvelope {
+    StepExecutionEnvelope {
+        status: if data.is_some() {
+            ExecutionStatus::Success
+        } else {
+            ExecutionStatus::Error
+        },
+        data,
+        metadata: ExecutionMetadata {
+            execution_id: step_id,
+            execution_time_ms: duration_ms,
+            tokens_in: Some(input_tokens as i32),
+            tokens_out: Some(output_tokens as i32),
+            cost_usd: Some(cost_usd as f64),
+            model: None,
+            agent_id: None,
+            iteration_index: None,
+            iteration_label: None,
+            routing_label: None,
+            upstream_agent_id: None,
+            upstream_routing_label: None,
+            room_session_id: None,
+            room_id: None,
+            total_rounds: None,
+        },
+        error: None,
     }
 }
