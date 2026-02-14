@@ -143,6 +143,7 @@ export const API = {
   STEP_DOCUMENT_DEF: (wid: string, sid: string, did: string) => `/workflows/${wid}/steps/${sid}/document-defs/${did}`,
   STEP_CHAT_SESSION: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}/chat/session`,
   STEP_CHAT_MESSAGES: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}/chat/messages`,
+  STEP_CHAT_DEBUG: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}/chat/debug`,
   WORKFLOW_RUN: (id: string) => `/workflows/${id}/run`,
   WORKFLOW_EXECUTIONS: (id: string) => `/workflows/${id}/executions`,
 

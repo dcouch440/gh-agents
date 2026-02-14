@@ -2,12 +2,43 @@ import { Box, Typography } from '@mui/material'
 import { MarkdownPreview } from '@/components/primitives/MarkdownPreview'
 
 type ChatMessageProps = {
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'system'
   content: string
   streaming?: boolean
 }
 
 function ChatMessage({ role, content, streaming }: ChatMessageProps) {
+  if (role === 'system') {
+    return (
+      <Box
+        sx={{
+          py: 1,
+          px: 1.5,
+          mx: -1.5,
+          mb: 1,
+          borderLeft: 2,
+          borderColor: 'primary.main',
+          bgcolor: (theme) =>
+            theme.palette.mode === 'light' ? 'rgba(99, 102, 241, 0.06)' : 'rgba(99, 102, 241, 0.10)',
+        }}
+      >
+        <Typography
+          variant="caption"
+          sx={{
+            fontWeight: 600,
+            mb: 0.5,
+            display: 'block',
+            color: 'primary.main',
+            letterSpacing: '0.05em',
+          }}
+        >
+          SYSTEM PROMPT
+        </Typography>
+        <MarkdownPreview content={content} />
+      </Box>
+    )
+  }
+
   if (role === 'user') {
     return (
       <Box

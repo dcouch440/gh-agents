@@ -41,6 +41,7 @@ export type {
   DocumentDef,
   CreateDocumentDefRequest,
   UpdateDocumentDefRequest,
+  StepChatDebugResponse,
 } from './workflow'
 export type {
   AgentExecution,

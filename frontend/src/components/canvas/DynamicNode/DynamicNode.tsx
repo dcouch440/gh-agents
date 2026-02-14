@@ -7,6 +7,7 @@ import InputOutlined from '@mui/icons-material/InputOutlined'
 import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import GroupsOutlined from '@mui/icons-material/GroupsOutlined'
 import ForumOutlined from '@mui/icons-material/ForumOutlined'
+import BugReportOutlined from '@mui/icons-material/BugReportOutlined'
 import { useStore, workflowStore, canvasStore } from '@/stores'
 import type { CreateDocumentDefRequest } from '@/types/workflow'
 import { CanvasFormNode } from '../CanvasFormNode'
@@ -23,6 +24,7 @@ import { InputsOutputsTab } from './tabs/InputsOutputsTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
 import { AgentRosterTab } from './tabs/AgentRosterTab'
 import { RoomMembersTab } from './tabs/RoomMembersTab'
+import { DebugLogTab } from './tabs/DebugLogTab'
 
 type DynamicNodeData = {
   kind: CanvasNodeKind
@@ -90,7 +92,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     },
   ]
 
-  // Archetype-specific third tab
+  // Archetype-specific tab
   if (nodeData.archetype === Archetype.DOCUMENTER) {
     tabs.push({
       id: 'documents',
@@ -122,6 +124,14 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
       content: <RoomMembersTab stepId={id} />,
     })
   }
+
+  // Debug tab always last
+  tabs.push({
+    id: 'debug',
+    icon: BugReportOutlined,
+    tooltip: 'Debug Log',
+    content: <DebugLogTab stepId={id} />,
+  })
 
   // Header subtitle
   const subtitle = nodeData.archetype === Archetype.DOCUMENTER && nodeData.documentNames.length > 0

@@ -304,6 +304,10 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::WORKFLOW_STEP_CHAT_MESSAGES,
             delete(api::clear_step_messages),
         )
+        .route(
+            routes::WORKFLOW_STEP_CHAT_DEBUG,
+            get(api::get_step_chat_debug),
+        )
         .route(routes::WORKFLOW_STEP_CONFIG, get(api::get_step_config))
         .route(routes::WORKFLOW_RUN, post(api::run_workflow))
         .route(
