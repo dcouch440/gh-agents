@@ -33,7 +33,10 @@ function MessageList({ messages, emptyMessage, streamingContent, streaming }: Me
       ref={messagesRef}
       sx={{
         flex: 1,
+        minHeight: 0,
         overflowY: 'auto',
+        scrollbarWidth: 'none',
+        '&::-webkit-scrollbar': { display: 'none' },
         px: 1.5,
         pt: 1.5,
         pb: 1,

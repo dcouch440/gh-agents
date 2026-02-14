@@ -197,7 +197,7 @@ function CanvasFormNodeComponent({
         </Box>
 
         {/* Content area — full-bleed, no padding, interactive */}
-        <Box className="nowheel nodrag nopan" sx={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative', cursor: 'text' }}>
+        <Box className="nowheel nodrag nopan" sx={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative', cursor: 'text', userSelect: 'text' }}>
           {activeTab?.content}
         </Box>
       </Box>
