@@ -38,6 +38,9 @@ vi.mock('@/stores', () => ({
   shareStore: {
     store: 'share',
   },
+  canvasStore: {
+    store: 'canvas',
+  },
 }))
 
 const baseProps = {

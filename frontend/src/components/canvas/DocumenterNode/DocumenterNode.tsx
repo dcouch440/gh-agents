@@ -147,6 +147,7 @@ function DocumenterNodeComponent({ id, data, selected }: NodeProps) {
 
   return (
     <CanvasFormNode
+      nodeId={id}
       header={
         <DocumenterHeader
           name={nodeData.label}
