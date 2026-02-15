@@ -53,7 +53,16 @@ const remove = async (id: string): Promise<void> => {
 const loadWorkflow = async (id: string): Promise<void> => {
   store.setState({ loading: true, error: null })
   try {
-    const [workflow, steps, edges] = await Promise.all([api.workflows.get(id), api.workflows.listSteps(id), api.workflows.listEdges(id)])
+    const [workflow, steps, edges, notes] = await Promise.all([
+      api.workflows.get(id),
+      api.workflows.listSteps(id),
+      api.workflows.listEdges(id),
+      api.workflows.getAllNotes(id),
+    ])
+    const notesByStep: Record<string, string> = {}
+    for (const entry of notes) {
+      notesByStep[entry.step_id] = entry.content
+    }
     store.setState((s) => ({
       items: nmSet(s.items, workflow.id, workflow),
       activeWorkflowId: id,
@@ -61,6 +70,7 @@ const loadWorkflow = async (id: string): Promise<void> => {
       edges: nmFromArray(edges),
       documentsByStep: {},
       documentDefsByStep: {},
+      notesByStep,
       dirtyStepIds: new Set<string>(),
       loading: false,
       dirty: false,

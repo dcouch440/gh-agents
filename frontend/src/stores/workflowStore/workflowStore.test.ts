@@ -19,6 +19,7 @@ const {
   mockListStepDocuments,
   mockAddStepDocument,
   mockRemoveStepDocument,
+  mockGetAllNotes,
 } = vi.hoisted(() => ({
   mockList: vi.fn(),
   mockGet: vi.fn(),
@@ -35,6 +36,7 @@ const {
   mockListStepDocuments: vi.fn(),
   mockAddStepDocument: vi.fn(),
   mockRemoveStepDocument: vi.fn(),
+  mockGetAllNotes: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -56,6 +58,7 @@ vi.mock('@/api', () => ({
       listStepDocuments: mockListStepDocuments,
       addStepDocument: mockAddStepDocument,
       removeStepDocument: mockRemoveStepDocument,
+      getAllNotes: mockGetAllNotes,
     },
   },
 }))
@@ -142,6 +145,7 @@ const resetStore = () => {
 beforeEach(() => {
   vi.clearAllMocks()
   resetStore()
+  mockGetAllNotes.mockResolvedValue([])
 })
 
 describe('workflowStore', () => {
@@ -200,10 +204,13 @@ describe('workflowStore', () => {
   })
 
   describe('loadWorkflow', () => {
-    it('fetches workflow, steps, and edges in parallel', async () => {
+    it('fetches workflow, steps, edges, and notes in parallel', async () => {
       mockGet.mockResolvedValue(wf1)
       mockListSteps.mockResolvedValue([step1, step2])
       mockListEdges.mockResolvedValue([edge1])
+      mockGetAllNotes.mockResolvedValue([
+        { step_id: 's1', content: 'Note for step 1' },
+      ])
 
       await workflowStore.loadWorkflow('wf1')
 
@@ -211,6 +218,7 @@ describe('workflowStore', () => {
       expect(s.activeWorkflowId).toBe('wf1')
       expect(toArray(s.steps)).toEqual([step1, step2])
       expect(toArray(s.edges)).toEqual([edge1])
+      expect(s.notesByStep).toEqual({ s1: 'Note for step 1' })
       expect(s.documentsByStep).toEqual({})
       expect(s.loading).toBe(false)
       expect(s.dirty).toBe(false)
@@ -220,6 +228,7 @@ describe('workflowStore', () => {
       mockGet.mockRejectedValue(new Error('Not found'))
       mockListSteps.mockRejectedValue(new Error('Not found'))
       mockListEdges.mockRejectedValue(new Error('Not found'))
+      mockGetAllNotes.mockRejectedValue(new Error('Not found'))
 
       await workflowStore.loadWorkflow('wf1')
 
