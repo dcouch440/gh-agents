@@ -12,6 +12,7 @@ type WorkflowState = {
   rosterByStep: Record<string, RosterAgent[]>
   roomMembersByStep: Record<string, RoomStepMember[]>
   notesByStep: Record<string, string>
+  documentContentByDefId: Record<string, string>
   dirtyStepIds: Set<string>
   loading: boolean
   error: string | null

@@ -51,6 +51,7 @@ type StepNodeLookups = {
   documentDefsByStep: Readonly<Record<string, ReadonlyArray<DocumentDefInfo>>>
   rosterByStep: Readonly<Record<string, ReadonlyArray<RosterAgentInfo>>>
   notesByStep: Readonly<Record<string, string>>
+  documentContentByDefId: Readonly<Record<string, string>>
   protocolGroups: ReadonlyMap<string, ProtocolGroupEntry>
 }
 

@@ -118,7 +118,7 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
         kind: CanvasNodeKind.DOCUMENT,
         label: def.name,
         documenterName: step.name ?? 'Documenter',
-        content: '',
+        content: lookups.documentContentByDefId[def.id] ?? '',
         protocolStepId: step.id,
       }
       documentNodes.push({

@@ -83,6 +83,7 @@ import type {
   CreateRosterAgentRequest,
   RoomStepMember,
   StepChatDebugResponse,
+  StepLastRunResponse,
 } from '@/types'
 
 // ============================================================================
@@ -353,6 +354,9 @@ const workflows = freeze({
 
   getStepChatDebug: (workflowId: string, stepId: string, config?: RequestConfig) =>
     baseApi.get<StepChatDebugResponse>(API.STEP_CHAT_DEBUG(workflowId, stepId), config),
+
+  getStepLastRun: (workflowId: string, stepId: string, config?: RequestConfig) =>
+    baseApi.get<StepLastRunResponse>(API.STEP_LAST_RUN(workflowId, stepId), config),
 
   run: (id: string, body?: { initial_input?: string }, config?: RequestConfig) =>
     baseApi.post<WorkflowRunResponse>(API.WORKFLOW_RUN(id), body ?? {}, config),

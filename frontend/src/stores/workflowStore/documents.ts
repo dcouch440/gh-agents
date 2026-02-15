@@ -60,4 +60,30 @@ const deleteDocumentDef = async (stepId: string, defId: string): Promise<void> =
   await fetchDocumentDefs(stepId)
 }
 
-export { fetchStepDocuments, addStepDocument, removeStepDocument, fetchDocumentDefs, createDocumentDef, deleteDocumentDef }
+// ── Document Content (generated content from workflow runs) ──────────
+
+const fetchDocumentContent = async (stepId: string): Promise<void> => {
+  const defs = store.getState().documentDefsByStep[stepId] ?? []
+  const withDocId = defs.filter((d): d is typeof d & { document_id: string } => d.document_id !== null)
+  if (withDocId.length === 0) return
+
+  try {
+    const results = await Promise.all(
+      withDocId.map(async (def) => {
+        const doc = await api.documents.get(def.document_id)
+        return { defId: def.id, content: doc.content }
+      }),
+    )
+    store.setState((s) => {
+      const updated = { ...s.documentContentByDefId }
+      for (const { defId, content } of results) {
+        updated[defId] = content
+      }
+      return { documentContentByDefId: updated }
+    })
+  } catch {
+    // Non-fatal: documents display as empty until next run
+  }
+}
+
+export { fetchStepDocuments, addStepDocument, removeStepDocument, fetchDocumentDefs, createDocumentDef, deleteDocumentDef, fetchDocumentContent }

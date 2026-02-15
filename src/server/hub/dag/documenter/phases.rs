@@ -400,6 +400,7 @@ impl<'a> DocumenterExecutor<'a> {
             let engine = self.engine.clone_with_provider();
             let state = self.state.clone();
             let user_id = self.ctx.user_id;
+            let run_id = self.ctx.run_id;
             let model = model_id.to_string();
             let doc_name = research.document_name.clone();
             let exec_id = exec_row.id;
@@ -442,6 +443,23 @@ impl<'a> DocumenterExecutor<'a> {
                             step_id,
                         };
                         persist_document_content(&state, &persist_ctx, &exec_result.content).await;
+
+                        // Broadcast live document content update via WS
+                        if let Some(did) = def_id {
+                            state.broadcast_workflow(
+                                crate::server::ws::events::WorkflowEvent {
+                                    run_id: Some(run_id),
+                                    workflow_id,
+                                    user_id: Some(user_id),
+                                    kind: crate::server::ws::events::WorkflowEventKind::DocumentContentUpdated {
+                                        step_id,
+                                        document_def_id: did,
+                                        document_name: doc_name.clone(),
+                                        content: exec_result.content.clone(),
+                                    },
+                                },
+                            );
+                        }
 
                         PhaseTaskResult {
                             exec_id,

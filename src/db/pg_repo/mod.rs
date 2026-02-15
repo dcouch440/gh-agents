@@ -2536,6 +2536,23 @@ impl AgentExecutionRepo for PgRepo {
         Ok(rows)
     }
 
+    async fn list_agent_executions_for_step_and_run(
+        &self,
+        workflow_step_id: Uuid,
+        workflow_execution_id: Uuid,
+    ) -> Result<Vec<AgentExecutionRow>> {
+        let rows = sqlx::query_as::<_, AgentExecutionRow>(
+            "SELECT * FROM agent_executions \
+             WHERE workflow_step_id = $1 AND workflow_execution_id = $2 \
+             ORDER BY started_at DESC",
+        )
+        .bind(workflow_step_id)
+        .bind(workflow_execution_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
     async fn list_agent_executions(
         &self,
         user_id: Uuid,

@@ -174,7 +174,10 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(value["type"], "events_missed");
         assert_eq!(value["missed_count"], 42);
-        assert_eq!(value["message"], "Missed 42 events. Re-fetch state via REST.");
+        assert_eq!(
+            value["message"],
+            "Missed 42 events. Re-fetch state via REST."
+        );
     }
 
     // ============================================================================

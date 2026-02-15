@@ -111,6 +111,7 @@ type DocumentDef = {
   target_length: number
   display_order: number
   created_at: string
+  document_id: string | null
 }
 
 type CreateDocumentDefRequest = {
@@ -155,6 +156,37 @@ type StepChatDebugResponse = {
   messages: { role: string; content: string }[]
 }
 
+type PhaseExecution = {
+  id: string
+  phase: string
+  document_name: string | null
+  status: string
+  output_content: string | null
+  input_tokens: number | null
+  output_tokens: number | null
+  cost_usd: number | null
+  model: string | null
+  started_at: string
+  completed_at: string | null
+  error_message: string | null
+}
+
+type StepLastRunResponse = {
+  execution_id: string
+  workflow_execution_id: string
+  status: string
+  started_at: string | null
+  completed_at: string | null
+  duration_ms: number | null
+  output: string | null
+  structured_output: Record<string, unknown> | null
+  input_tokens: number | null
+  output_tokens: number | null
+  cost_usd: number | null
+  error: string | null
+  phases: PhaseExecution[] | null
+}
+
 export type {
   Workflow,
   WorkflowStep,
@@ -175,4 +207,6 @@ export type {
   CreateRosterAgentRequest,
   RoomStepMember,
   StepChatDebugResponse,
+  PhaseExecution,
+  StepLastRunResponse,
 }
