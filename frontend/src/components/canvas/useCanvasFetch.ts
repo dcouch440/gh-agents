@@ -44,10 +44,11 @@ const useCanvasFetch = (
     }
   }, [steps])
 
-  // Fetch protocol catalog once
+  // Fetch protocol catalog and notes once
   useEffect(() => {
     void protocolStore.fetchAll()
     void protocolStore.fetchTypes()
+    void workflowStore.fetchAllNotes()
   }, [])
 }
 

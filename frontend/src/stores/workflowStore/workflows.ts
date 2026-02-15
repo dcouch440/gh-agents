@@ -77,6 +77,7 @@ const clearActive = (): void => {
     edges: createNormalizedMap<WorkflowStepEdge>(),
     documentsByStep: {},
     documentDefsByStep: {},
+    notesByStep: {},
     dirtyStepIds: new Set<string>(),
     dirty: false,
   })

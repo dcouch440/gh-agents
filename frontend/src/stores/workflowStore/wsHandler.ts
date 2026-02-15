@@ -1,7 +1,7 @@
 import { nmSet } from '../lib'
 import { api } from '@/api'
 import { WORKFLOW_EVENT } from '@/types/ws'
-import type { WsWireMessage, DocDefChangedData, DocDefDeletedData, StepConfigUpdatedData, RosterChangedData, RoomMembersChangedData } from '@/types/ws'
+import type { WsWireMessage, DocDefChangedData, DocDefDeletedData, StepConfigUpdatedData, RosterChangedData, RoomMembersChangedData, AssistantNotesUpdatedData } from '@/types/ws'
 import { store, getActiveId } from './_store'
 import { fetchDocumentDefs } from './documents'
 import { fetchRoster, fetchRoomStepMembers } from './roster'
@@ -53,6 +53,14 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         const d = msg.data as RoomMembersChangedData
         if (d.workflow_id !== activeId) break
         void fetchRoomStepMembers(d.step_id)
+        break
+      }
+      case WORKFLOW_EVENT.ASSISTANT_NOTES_UPDATED: {
+        const d = msg.data as AssistantNotesUpdatedData
+        if (d.workflow_id !== activeId) break
+        store.setState((s) => ({
+          notesByStep: { ...s.notesByStep, [d.step_id]: d.content },
+        }))
         break
       }
     }

@@ -72,4 +72,25 @@ const toDocumentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[
   return edges
 }
 
-export { toRFEdges, toDocumentEdges }
+const toNotesEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] => {
+  const edges: Edge[] = []
+  for (const step of steps) {
+    if (step.execution_mode === 'context') continue
+    const content = lookups.notesByStep[step.id]
+    if (!content) continue
+
+    edges.push({
+      id: `notes-edge-${step.id}`,
+      type: 'notesEdge',
+      source: step.id,
+      sourceHandle: 'notes',
+      target: `notes-${step.id}`,
+      targetHandle: 'notes-input',
+      selectable: false,
+      deletable: false,
+    })
+  }
+  return edges
+}
+
+export { toRFEdges, toDocumentEdges, toNotesEdges }

@@ -185,6 +185,13 @@ pub struct WorkflowExecutionResponse {
 // Helper Functions
 // ============================================================================
 
+/// A single step's assistant notes.
+#[derive(Serialize)]
+pub struct WorkflowNoteEntry {
+    pub step_id: String,
+    pub content: String,
+}
+
 pub fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
     WorkflowStepResponse {
         id: r.id,

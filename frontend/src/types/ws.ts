@@ -79,6 +79,7 @@ export const WORKFLOW_EVENT = {
   STEP_CONFIG_UPDATED: 'step_config_updated',
   ROSTER_CHANGED: 'roster_changed',
   ROOM_MEMBERS_CHANGED: 'room_members_changed',
+  ASSISTANT_NOTES_UPDATED: 'assistant_notes_updated',
 } as const
 
 export type WorkflowStartedData = { workflow_id: string; total_steps: number }
@@ -110,6 +111,7 @@ export type DocDefDeletedData = { workflow_id: string; step_id: string; doc_def_
 export type StepConfigUpdatedData = { workflow_id: string; step_id: string }
 export type RosterChangedData = { workflow_id: string; step_id: string }
 export type RoomMembersChangedData = { workflow_id: string; step_id: string }
+export type AssistantNotesUpdatedData = { workflow_id: string; step_id: string; content: string }
 
 // ============================================================================
 // Room Events

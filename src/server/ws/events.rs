@@ -281,6 +281,11 @@ pub enum WorkflowEventKind {
         step_id: Uuid,
         name: String,
     },
+    /// Assistant notes were updated for a step.
+    AssistantNotesUpdated {
+        step_id: Uuid,
+        content: String,
+    },
 }
 
 impl WorkflowEvent {
@@ -306,6 +311,7 @@ impl WorkflowEvent {
             WorkflowEventKind::StepConfigUpdated { .. } => "step_config_updated",
             WorkflowEventKind::ArchetypeChanged { .. } => "archetype_changed",
             WorkflowEventKind::StepNameUpdated { .. } => "step_name_updated",
+            WorkflowEventKind::AssistantNotesUpdated { .. } => "assistant_notes_updated",
         }
     }
 
