@@ -203,7 +203,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
             {nodeData.archetype === Archetype.DOCUMENTER && (
               <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
             )}
-            <CanvasHandle type="source" position={Position.Left} id="notes" color="#f85149" variant="passive" />
+            <CanvasHandle type="source" position={Position.Bottom} id="notes" color="#f85149" variant="passive" />
           </>
         }
       />
