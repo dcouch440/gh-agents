@@ -96,19 +96,15 @@ function FocusModeOverlay() {
     return upstream
   }, [currentStepId, edges, stepNamesMap])
 
-  // Compute accent colors for nav dots (use STEP_TYPE_COLORS for input/context)
+  // Compute accent colors for nav dots (protocol steps only — no input/context)
   const accentColors = useMemo(() => {
     const colors: string[] = []
     for (let i = 0; i < orderedStepIds.length; i++) {
       const id = orderedStepIds[i]!
       const step = steps.find((s) => s.id === id)
       if (step) {
-        if (step.execution_mode === 'input' || step.execution_mode === 'context') {
-          colors.push(STEP_TYPE_COLORS[step.execution_mode] ?? DEFAULT_STEP_TYPE_COLOR)
-        } else {
-          const arch = resolveArchetype(step, protocolsMap, id)
-          colors.push(ARCHETYPE_CONFIGS[arch].color)
-        }
+        const arch = resolveArchetype(step, protocolsMap, id)
+        colors.push(ARCHETYPE_CONFIGS[arch].color)
       } else {
         colors.push('#7d8590')
       }
@@ -116,8 +112,26 @@ function FocusModeOverlay() {
     return colors
   }, [orderedStepIds, steps, protocolsMap])
 
-  // Build per-step sections for the artifact bar
+  // Build per-step sections for the artifact bar, grouping input/context into their protocol
   const stepSections = useMemo((): readonly StepSection[] => {
+    // 1. Map input/context steps → their downstream protocol step via edges
+    const protocolInputCards = new Map<string, CardEntry[]>()
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i]!
+      if (step.execution_mode !== 'input' && step.execution_mode !== 'context') continue
+      const color = STEP_TYPE_COLORS[step.execution_mode] ?? DEFAULT_STEP_TYPE_COLOR
+      for (let j = 0; j < edges.length; j++) {
+        const edge = edges[j]!
+        if (edge.from_step_id === step.id) {
+          const cards = protocolInputCards.get(edge.to_step_id) ?? []
+          cards.push({ id: step.id, name: step.name ?? 'Unnamed', subtitle: null, accentOverride: color })
+          protocolInputCards.set(edge.to_step_id, cards)
+          break
+        }
+      }
+    }
+
+    // 2. Build sections from orderedStepIds (protocol steps only)
     const sections: StepSection[] = []
     for (let i = 0; i < orderedStepIds.length; i++) {
       const id = orderedStepIds[i]!
@@ -128,16 +142,25 @@ function FocusModeOverlay() {
       const color = accentColors[i] ?? '#7d8590'
       const cards: CardEntry[] = []
 
+      // Prepend any input/context cards that feed into this protocol
+      const inputCards = protocolInputCards.get(id)
+      if (inputCards) {
+        for (let j = 0; j < inputCards.length; j++) {
+          cards.push(inputCards[j]!)
+        }
+      }
+
+      // Add protocol's own children
       switch (step.execution_mode) {
         case 'task_force': {
           const roster = rosterByStep[id] ?? []
           if (roster.length > 0) {
             for (let j = 0; j < roster.length; j++) {
               const agent = roster[j]!
-              cards.push({ id: agent.id, name: agent.name, subtitle: agent.role_description })
+              cards.push({ id: agent.id, name: agent.name, subtitle: agent.role_description, accentOverride: null })
             }
           } else {
-            cards.push({ id, name: stepName, subtitle: 'No agents' })
+            cards.push({ id, name: stepName, subtitle: 'No agents', accentOverride: null })
           }
           break
         }
@@ -146,10 +169,10 @@ function FocusModeOverlay() {
           if (docs.length > 0) {
             for (let j = 0; j < docs.length; j++) {
               const d = docs[j]!
-              cards.push({ id: d.id, name: d.name, subtitle: `~${d.target_length} chars` })
+              cards.push({ id: d.id, name: d.name, subtitle: `~${d.target_length} chars`, accentOverride: null })
             }
           } else {
-            cards.push({ id, name: stepName, subtitle: 'No documents' })
+            cards.push({ id, name: stepName, subtitle: 'No documents', accentOverride: null })
           }
           break
         }
@@ -158,22 +181,22 @@ function FocusModeOverlay() {
           if (members.length > 0) {
             for (let j = 0; j < members.length; j++) {
               const m = members[j]!
-              cards.push({ id: m.id, name: m.name, subtitle: m.role })
+              cards.push({ id: m.id, name: m.name, subtitle: m.role, accentOverride: null })
             }
           } else {
-            cards.push({ id, name: stepName, subtitle: 'No members' })
+            cards.push({ id, name: stepName, subtitle: 'No members', accentOverride: null })
           }
           break
         }
         default:
-          cards.push({ id, name: stepName, subtitle: null })
+          cards.push({ id, name: stepName, subtitle: null, accentOverride: null })
           break
       }
 
       sections.push({ stepId: id, stepName, accentColor: color, cards })
     }
     return sections
-  }, [orderedStepIds, steps, accentColors, rosterByStep, documentDefsByStep, roomMembersByStep])
+  }, [orderedStepIds, steps, edges, accentColors, rosterByStep, documentDefsByStep, roomMembersByStep])
 
   const handleStepCardClick = useCallback((stepId: string) => {
     const idx = orderedStepIds.indexOf(stepId)

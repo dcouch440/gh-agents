@@ -192,7 +192,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     const allSteps = workflowStore.store.getState()
     const stepsArr = [...allSteps.steps.byId.values()]
     const edgesArr = [...allSteps.edges.byId.values()]
-    const ordered = topoSortStepIds(stepsArr, edgesArr, { includeAll: true })
+    const ordered = topoSortStepIds(stepsArr, edgesArr)
     if (ordered.length > 0) {
       focusModeStore.enter(ordered, id)
     }
