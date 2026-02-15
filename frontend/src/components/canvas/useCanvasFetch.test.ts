@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   fetchDocumentDefs: vi.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined),
   fetchDocumentContent: vi.fn<(id: string) => void>(),
   fetchRoster: vi.fn<(id: string) => void>(),
+  fetchRoomStepMembers: vi.fn<(id: string) => void>(),
   fetchAllProtocols: vi.fn<() => void>(),
   fetchProtocolTypes: vi.fn<() => void>(),
 }))
@@ -19,6 +20,7 @@ vi.mock('@/stores', () => ({
     fetchDocumentDefs: mocks.fetchDocumentDefs,
     fetchDocumentContent: mocks.fetchDocumentContent,
     fetchRoster: mocks.fetchRoster,
+    fetchRoomStepMembers: mocks.fetchRoomStepMembers,
   },
   protocolStore: {
     fetchAll: mocks.fetchAllProtocols,
@@ -112,12 +114,21 @@ describe('useCanvasFetch', () => {
     expect(mocks.fetchRoster).toHaveBeenCalledWith('s1')
   })
 
+  it('fetches room members for room steps once', () => {
+    const steps = [makeStep('s1', 'room')]
+    renderHook(() => useCanvasFetch([], steps))
+
+    expect(mocks.fetchRoomStepMembers).toHaveBeenCalledTimes(1)
+    expect(mocks.fetchRoomStepMembers).toHaveBeenCalledWith('s1')
+  })
+
   it('does not fetch for non-special step types', () => {
     const steps = [makeStep('s1', 'single')]
     renderHook(() => useCanvasFetch([], steps))
 
     expect(mocks.fetchDocumentDefs).not.toHaveBeenCalled()
     expect(mocks.fetchRoster).not.toHaveBeenCalled()
+    expect(mocks.fetchRoomStepMembers).not.toHaveBeenCalled()
   })
 
   it('fetches protocol catalog on mount', () => {

@@ -17,6 +17,7 @@ const useCanvasFetch = (
   const fetchedToolAgentIds = useRef(new Set<string>())
   const fetchedDocDefStepIds = useRef(new Set<string>())
   const fetchedRosterStepIds = useRef(new Set<string>())
+  const fetchedMemberStepIds = useRef(new Set<string>())
 
   // Fetch tools for agents not yet fetched
   useEffect(() => {
@@ -42,6 +43,10 @@ const useCanvasFetch = (
       if (step.execution_mode === 'task_force' && !fetchedRosterStepIds.current.has(step.id)) {
         fetchedRosterStepIds.current.add(step.id)
         void workflowStore.fetchRoster(step.id)
+      }
+      if (step.execution_mode === 'room' && !fetchedMemberStepIds.current.has(step.id)) {
+        fetchedMemberStepIds.current.add(step.id)
+        void workflowStore.fetchRoomStepMembers(step.id)
       }
     }
   }, [steps])
