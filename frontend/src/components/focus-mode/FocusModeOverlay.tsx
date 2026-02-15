@@ -7,13 +7,14 @@ import { Tooltip } from '@/components/primitives/Tooltip'
 import { useTheme } from '@mui/material/styles'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore, workflowStore, canvasStore, focusModeStore } from '@/stores'
-import type { ArtifactKind } from '@/stores'
 import { FOCUS_MODE } from '@/constants'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { useFocusNavigation } from '@/hooks/useFocusNavigation'
 import { resolveArchetype, ARCHETYPE_CONFIGS } from '@/components/canvas/DynamicNode/archetypes'
+import { STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR } from '@/components/canvas/constants'
 import { Collections } from '@/utils/collections'
 import { ArtifactBar } from './ArtifactBar'
+import type { StepSection, CardEntry } from './ArtifactBar'
 import { FocusNodeView } from './FocusNodeView'
 import { FocusNavBar } from './FocusNavBar'
 import { ArtifactDetailPanel } from './ArtifactDetailPanel'
@@ -54,6 +55,7 @@ function FocusModeOverlay() {
   const edges = useStore(workflowStore.store, workflowStore.selectEdges)
   const rosterByStep = useStore(workflowStore.store, workflowStore.selectRosterByStep)
   const roomMembersByStep = useStore(workflowStore.store, workflowStore.selectRoomMembersByStep)
+  const documentDefsByStep = useStore(workflowStore.store, workflowStore.selectDocumentDefsByStep)
   const protocolsByStep = useStore(canvasStore.store, canvasStore.selectStepProtocols)
 
   // Build a Map<string, ProtocolStepInfo> from the canvas store's Record format
@@ -94,15 +96,19 @@ function FocusModeOverlay() {
     return upstream
   }, [currentStepId, edges, stepNamesMap])
 
-  // Compute accent colors for nav dots
+  // Compute accent colors for nav dots (use STEP_TYPE_COLORS for input/context)
   const accentColors = useMemo(() => {
     const colors: string[] = []
     for (let i = 0; i < orderedStepIds.length; i++) {
       const id = orderedStepIds[i]!
       const step = steps.find((s) => s.id === id)
       if (step) {
-        const arch = resolveArchetype(step, protocolsMap, id)
-        colors.push(ARCHETYPE_CONFIGS[arch].color)
+        if (step.execution_mode === 'input' || step.execution_mode === 'context') {
+          colors.push(STEP_TYPE_COLORS[step.execution_mode] ?? DEFAULT_STEP_TYPE_COLOR)
+        } else {
+          const arch = resolveArchetype(step, protocolsMap, id)
+          colors.push(ARCHETYPE_CONFIGS[arch].color)
+        }
       } else {
         colors.push('#7d8590')
       }
@@ -110,9 +116,71 @@ function FocusModeOverlay() {
     return colors
   }, [orderedStepIds, steps, protocolsMap])
 
-  const handleArtifactClick = useCallback((id: string, kind: ArtifactKind) => {
-    focusModeStore.expandArtifact(id, kind)
-  }, [])
+  // Build per-step sections for the artifact bar
+  const stepSections = useMemo((): readonly StepSection[] => {
+    const sections: StepSection[] = []
+    for (let i = 0; i < orderedStepIds.length; i++) {
+      const id = orderedStepIds[i]!
+      const step = steps.find((s) => s.id === id)
+      if (!step) continue
+
+      const stepName = step.name ?? 'Unnamed'
+      const color = accentColors[i] ?? '#7d8590'
+      const cards: CardEntry[] = []
+
+      switch (step.execution_mode) {
+        case 'task_force': {
+          const roster = rosterByStep[id] ?? []
+          if (roster.length > 0) {
+            for (let j = 0; j < roster.length; j++) {
+              const agent = roster[j]!
+              cards.push({ id: agent.id, name: agent.name, subtitle: agent.role_description })
+            }
+          } else {
+            cards.push({ id, name: stepName, subtitle: 'No agents' })
+          }
+          break
+        }
+        case 'documenter': {
+          const docs = documentDefsByStep[id] ?? []
+          if (docs.length > 0) {
+            for (let j = 0; j < docs.length; j++) {
+              const d = docs[j]!
+              cards.push({ id: d.id, name: d.name, subtitle: `~${d.target_length} chars` })
+            }
+          } else {
+            cards.push({ id, name: stepName, subtitle: 'No documents' })
+          }
+          break
+        }
+        case 'room': {
+          const members = roomMembersByStep[id] ?? []
+          if (members.length > 0) {
+            for (let j = 0; j < members.length; j++) {
+              const m = members[j]!
+              cards.push({ id: m.id, name: m.name, subtitle: m.role })
+            }
+          } else {
+            cards.push({ id, name: stepName, subtitle: 'No members' })
+          }
+          break
+        }
+        default:
+          cards.push({ id, name: stepName, subtitle: null })
+          break
+      }
+
+      sections.push({ stepId: id, stepName, accentColor: color, cards })
+    }
+    return sections
+  }, [orderedStepIds, steps, accentColors, rosterByStep, documentDefsByStep, roomMembersByStep])
+
+  const handleStepCardClick = useCallback((stepId: string) => {
+    const idx = orderedStepIds.indexOf(stepId)
+    if (idx >= 0) {
+      focusModeStore.goToIndex(idx)
+    }
+  }, [orderedStepIds])
 
   const handleCollapseArtifact = useCallback(() => {
     focusModeStore.collapseArtifact()
@@ -142,11 +210,9 @@ function FocusModeOverlay() {
       {/* Top bar: artifacts + close button */}
       <Box sx={{ position: 'relative', flexShrink: 0 }}>
         <ArtifactBar
-          steps={steps}
-          rosterByStep={rosterByStep}
-          roomMembersByStep={roomMembersByStep}
+          sections={stepSections}
           currentStepId={currentStepId}
-          onArtifactClick={handleArtifactClick}
+          onStepClick={handleStepCardClick}
         />
         <Tooltip title="Exit Focus Mode (Esc)" placement="bottom">
           <IconButton

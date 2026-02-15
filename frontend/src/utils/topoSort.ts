@@ -1,18 +1,24 @@
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 
+type TopoSortOptions = { includeAll?: boolean }
+
 /**
  * Returns step IDs in topological order (sources first) using Kahn's algorithm.
- * Filters out `context` and `input` execution_mode steps (not navigable).
+ * By default filters out `context` and `input` execution_mode steps.
+ * Pass `{ includeAll: true }` to include every step.
  * Uses `display_order` as tiebreaker for same-level nodes.
  * Cycle remnants are appended by display_order for graceful degradation.
  */
 const topoSortStepIds = (
   steps: readonly WorkflowStep[],
   edges: readonly WorkflowStepEdge[],
+  options?: TopoSortOptions,
 ): string[] => {
-  const navigable = steps.filter(
-    (s) => s.execution_mode !== 'context' && s.execution_mode !== 'input',
-  )
+  const navigable = options?.includeAll
+    ? steps
+    : steps.filter(
+        (s) => s.execution_mode !== 'context' && s.execution_mode !== 'input',
+      )
   if (navigable.length === 0) return []
 
   const navIds = new Set<string>()
@@ -82,3 +88,4 @@ const topoSortStepIds = (
 }
 
 export { topoSortStepIds }
+export type { TopoSortOptions }

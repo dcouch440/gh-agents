@@ -37,7 +37,7 @@ function OptionTray({ autoSaveFlush, autoSaveSaving }: OptionTrayProps) {
   }, [])
 
   const handleEnterFocusMode = useCallback(() => {
-    const ordered = topoSortStepIds(steps, edges)
+    const ordered = topoSortStepIds(steps, edges, { includeAll: true })
     if (ordered.length === 0) return
     const selectedIds = canvasStore.store.getState().selectedStepIds
     const initialId = ordered.find((id) => selectedIds.has(id))

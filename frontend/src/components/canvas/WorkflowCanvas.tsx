@@ -217,7 +217,7 @@ function WorkflowCanvasInner() {
     const handleFocusKey = (e: KeyboardEvent) => {
       if (e.altKey && (e.key === 'f' || e.key === 'F') && !focusModeStore.store.getState().active) {
         e.preventDefault()
-        const ordered = topoSortStepIds(steps, edges)
+        const ordered = topoSortStepIds(steps, edges, { includeAll: true })
         if (ordered.length === 0) return
         const selectedIds = canvasStore.store.getState().selectedStepIds
         const initialId = ordered.find((id) => selectedIds.has(id))
