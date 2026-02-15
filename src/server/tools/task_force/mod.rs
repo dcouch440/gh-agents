@@ -31,7 +31,7 @@ pub async fn execute_task_force_tool(
         "set_task" => execute_set_task(input, repo, ctx).await,
         "add_agent" => execute_add_agent(input, repo, ctx).await,
         "update_agent" => execute_update_agent(input, repo).await,
-        "remove_agent" => execute_remove_agent(input, repo).await,
+        "remove_agent" => execute_remove_agent(input, repo, ctx).await,
         "set_capabilities" => execute_set_capabilities(input, repo, ctx).await,
         "set_failure_mode" => execute_set_failure_mode(input, repo, ctx).await,
         _ => json!({ "error": format!("Unknown task force tool: {}", name) }),
@@ -173,7 +173,15 @@ async fn execute_update_agent(input: &Value, repo: &dyn WorkflowRepo) -> Value {
     }
 }
 
-async fn execute_remove_agent(input: &Value, repo: &dyn WorkflowRepo) -> Value {
+/// Remove an agent from the roster.
+///
+/// Looks up the agent name before deleting so the result can be used by the
+/// consistency scanner to detect stale references in other nodes' notes.
+async fn execute_remove_agent(
+    input: &Value,
+    repo: &dyn WorkflowRepo,
+    ctx: &TaskForceToolContext,
+) -> Value {
     let Some(id_str) = input["agent_id"].as_str() else {
         return json!({ "error": "Missing required parameter: agent_id" });
     };
@@ -181,8 +189,24 @@ async fn execute_remove_agent(input: &Value, repo: &dyn WorkflowRepo) -> Value {
         return json!({ "error": format!("Invalid UUID: {}", id_str) });
     };
 
+    // Load the agent name before deleting (needed for consistency scanning)
+    let agent_name = if let Ok(Some(brief)) = repo.get_mission_brief(ctx.step_id).await {
+        repo.list_agent_roster(brief.id)
+            .await
+            .ok()
+            .and_then(|roster| roster.into_iter().find(|a| a.id == agent_id))
+            .map(|a| a.name)
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+
     match repo.remove_roster_agent(agent_id).await {
-        Ok(()) => json!({ "deleted": true }),
+        Ok(()) => json!({
+            "deleted": true,
+            "name": agent_name,
+            "id": agent_id.to_string(),
+        }),
         Err(e) => json!({ "error": e.to_string() }),
     }
 }

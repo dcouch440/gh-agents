@@ -3,6 +3,9 @@
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::server::hub::consistency_scanner::{
+    self, DeletedItem, DeletedItemType,
+};
 use crate::server::state::AppState;
 use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
 use crate::types::UserId;
@@ -149,4 +152,40 @@ pub(super) fn broadcast_step_event(
         user_id: Some(user_id.0),
         kind,
     });
+
+    // Schedule consistency scan for deletion events
+    schedule_consistency_scan_if_deletion(state, ctx, name, input, result);
+}
+
+/// If the tool was a deletion (doc def or roster agent), schedule a
+/// debounced consistency scan to detect stale references in other notes.
+fn schedule_consistency_scan_if_deletion(
+    state: &AppState,
+    ctx: &StepChatContext,
+    tool_name: &str,
+    input: &Value,
+    result: &Value,
+) {
+    let (item_type, id_field) = match tool_name {
+        "delete_doc_def" => (DeletedItemType::DocumentDef, "doc_def_id"),
+        "remove_agent" => (DeletedItemType::RosterAgent, "agent_id"),
+        _ => return,
+    };
+
+    let item_name = result["name"].as_str().unwrap_or("Unknown").to_string();
+    let item_id = parse_uuid_field(result, "id")
+        .or_else(|| parse_uuid_field(input, id_field))
+        .unwrap_or_else(Uuid::new_v4);
+
+    consistency_scanner::schedule_consistency_scan(
+        state.clone(),
+        ctx.workflow_id,
+        DeletedItem {
+            item_type,
+            name: item_name,
+            id: item_id,
+            source_step_id: ctx.step_id,
+            source_step_name: ctx.step_name.clone(),
+        },
+    );
 }

@@ -115,6 +115,9 @@ pub(crate) struct AppStateInner {
     pub(crate) ws_connection_count: AtomicUsize,
     /// Active WebSocket connections per IP address.
     pub(crate) ws_connections_by_ip: DashMap<IpAddr, usize>,
+    /// Pending deleted items awaiting consistency scan (debounce accumulator).
+    pub(crate) pending_scan_items:
+        DashMap<Uuid, Vec<crate::server::hub::consistency_scanner::DeletedItem>>,
 }
 
 /// Application state shared across all HTTP handlers.
@@ -186,6 +189,7 @@ impl AppState {
             protocol_engine: Arc::new(ProtocolEngine::new()),
             ws_connection_count: AtomicUsize::new(0),
             ws_connections_by_ip: DashMap::new(),
+            pending_scan_items: DashMap::new(),
         }));
 
         (state, orchestrator_rx)
@@ -222,6 +226,7 @@ impl AppState {
                 protocol_engine: Arc::new(ProtocolEngine::new()),
                 ws_connection_count: AtomicUsize::new(0),
                 ws_connections_by_ip: DashMap::new(),
+                pending_scan_items: DashMap::new(),
             })),
             orchestrator_rx,
         )
@@ -458,6 +463,13 @@ impl AppState {
     /// Access the protocol engine.
     pub fn protocol_engine(&self) -> &Arc<ProtocolEngine> {
         &self.0.protocol_engine
+    }
+
+    /// Access the pending consistency-scan items accumulator.
+    pub(crate) fn pending_scan_items(
+        &self,
+    ) -> &DashMap<Uuid, Vec<crate::server::hub::consistency_scanner::DeletedItem>> {
+        &self.0.pending_scan_items
     }
 
     /// Access the JWT secret.

@@ -87,6 +87,7 @@ mod tests {
                 workflow_id,
                 step_id,
                 execution_mode: "documenter".into(),
+                step_name: "Test Step".into(),
             },
         );
 
@@ -130,6 +131,7 @@ mod tests {
                 workflow_id: Uuid::new_v4(),
                 step_id: Uuid::new_v4(),
                 execution_mode: "documenter".into(),
+                step_name: "Test Step".into(),
             },
         );
 
@@ -226,6 +228,7 @@ mod tests {
                 workflow_id,
                 step_id,
                 execution_mode: "single".into(),
+                step_name: "Test Step".into(),
             },
         );
 
@@ -291,6 +294,7 @@ mod tests {
                 workflow_id,
                 step_id,
                 execution_mode: "single".into(),
+                step_name: "Test Step".into(),
             },
         );
 
@@ -331,6 +335,7 @@ mod tests {
                 workflow_id,
                 step_id,
                 execution_mode: "single".into(),
+                step_name: "Test Step".into(),
             },
         );
 

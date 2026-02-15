@@ -210,11 +210,15 @@ mod tests {
     // =========================================================================
 
     #[tokio::test]
-    async fn delete_doc_def_returns_deleted_true() {
+    async fn delete_doc_def_returns_deleted_with_name() {
         let ctx = make_ctx();
-        let def_id = Uuid::new_v4();
+        let existing = make_doc_def(ctx.step_id);
+        let def_id = existing.id;
 
         let mut repo = MockWorkflowRepo::new();
+        let existing_clone = existing.clone();
+        repo.expect_list_document_defs()
+            .returning(move |_| Ok(vec![existing_clone.clone()]));
         repo.expect_delete_document_def()
             .withf(move |id| *id == def_id)
             .returning(|_| Ok(()));
@@ -223,6 +227,8 @@ mod tests {
         let result = execute_documenter_tool("delete_doc_def", &input, &repo, &ctx).await;
 
         assert_eq!(result["deleted"], true);
+        assert_eq!(result["name"], "API Reference");
+        assert_eq!(result["id"], def_id.to_string());
     }
 
     #[tokio::test]

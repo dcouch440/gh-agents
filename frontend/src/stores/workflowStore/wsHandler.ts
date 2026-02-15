@@ -1,7 +1,8 @@
 import { nmSet } from '../lib'
+import { Collections } from '@/utils/collections'
 import { api } from '@/api'
 import { WORKFLOW_EVENT } from '@/types/ws'
-import type { WsWireMessage, DocDefChangedData, DocDefDeletedData, StepConfigUpdatedData, RosterChangedData, RoomMembersChangedData, AssistantNotesUpdatedData, DocumentContentUpdatedData } from '@/types/ws'
+import type { WsWireMessage, DocDefChangedData, DocDefDeletedData, StepConfigUpdatedData, RosterChangedData, RoomMembersChangedData, AssistantNotesUpdatedData, DocumentContentUpdatedData, ConsistencyIssuesData } from '@/types/ws'
 import { store, getActiveId } from './_store'
 import { fetchDocumentDefs } from './documents'
 import { fetchRoster, fetchRoomStepMembers } from './roster'
@@ -71,6 +72,13 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         }))
         // Refetch defs to pick up the new document_id link
         void fetchDocumentDefs(d.step_id)
+        break
+      }
+      case WORKFLOW_EVENT.CONSISTENCY_ISSUES: {
+        const d = msg.data as ConsistencyIssuesData
+        if (d.workflow_id !== activeId) break
+        const grouped = Collections.groupBy(d.issues, (issue) => issue.step_id)
+        store.setState({ issuesByStep: Object.fromEntries(grouped) })
         break
       }
     }

@@ -246,6 +246,42 @@ pub async fn delete_document_def(
     Path((wid, sid, did)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
     verify_step_access(&state, wid, sid, auth.user_id.0).await?;
+
+    // Load name + step name before deleting (for consistency scanner)
+    let def_name = state
+        .repos()
+        .workflows
+        .list_document_defs(sid)
+        .await
+        .ok()
+        .and_then(|defs| defs.into_iter().find(|d| d.id == did))
+        .map(|d| d.name)
+        .unwrap_or_default();
+
+    let step_name = state
+        .repos()
+        .workflows
+        .get_step(sid)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|s| s.name)
+        .unwrap_or_default();
+
     state.repos().workflows.delete_document_def(did).await?;
+
+    // Schedule consistency scan
+    crate::server::hub::consistency_scanner::schedule_consistency_scan(
+        state.clone(),
+        wid,
+        crate::server::hub::consistency_scanner::DeletedItem {
+            item_type: crate::server::hub::consistency_scanner::DeletedItemType::DocumentDef,
+            name: def_name,
+            id: did,
+            source_step_id: sid,
+            source_step_name: step_name,
+        },
+    );
+
     Ok(StatusCode::NO_CONTENT)
 }

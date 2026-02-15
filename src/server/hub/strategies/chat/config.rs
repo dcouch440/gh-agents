@@ -36,4 +36,5 @@ pub struct StepChatContext {
     pub workflow_id: Uuid,
     pub step_id: Uuid,
     pub execution_mode: String,
+    pub step_name: String,
 }

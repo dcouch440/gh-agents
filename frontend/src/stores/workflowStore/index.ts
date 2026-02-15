@@ -20,6 +20,8 @@ import {
   selectError,
   selectDirty,
   selectDirtyStepIds,
+  selectIssuesByStep,
+  selectStepIssues,
   selectIsStale,
 } from './selectors'
 import { fetchAll, fetchIfStale, fetchOne, create, update, remove, loadWorkflow, clearActive, upsert, setDirty } from './workflows'
@@ -60,6 +62,8 @@ export const workflowStore = {
   selectError,
   selectDirty,
   selectDirtyStepIds,
+  selectIssuesByStep,
+  selectStepIssues,
   selectIsStale,
   fetchAll,
   fetchIfStale,
