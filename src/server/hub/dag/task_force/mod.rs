@@ -14,7 +14,8 @@ use serde_json::Value as JsonValue;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-use crate::config::protocols::TASK_FORCE;
+use crate::config::protocols::{roles, vars, TASK_FORCE};
+use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow};
 use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::server::hub::capability_resolver::resolve_capabilities_to_tools;
 use crate::server::hub::engine::ExecutionEngine;
@@ -139,7 +140,7 @@ pub(super) async fn execute_task_force_step(
     .await?;
 
     // 8. Run Agent Designer pre-lifecycle to generate optimized prompts
-    let (designed_prompts, designer_usage) = designer::run_agent_designer(
+    let (designed_prompts, designer_usage) = match designer::run_agent_designer(
         engine,
         state,
         ctx,
@@ -150,7 +151,24 @@ pub(super) async fn execute_task_force_step(
         steps,
         cancel,
     )
-    .await?;
+    .await
+    {
+        Ok(result) => result,
+        Err(e) => {
+            warn!(
+                step_id = %step.id,
+                error = %e,
+                "Task force designer failed, using static prompts"
+            );
+            let fallback = build_static_fallback_prompts(&brief, &roster, &prompt);
+            let usage = designer::DesignerTokenUsage {
+                input_tokens: 0,
+                output_tokens: 0,
+                cost_usd: 0.0,
+            };
+            (fallback, usage)
+        }
+    };
 
     // 8b. Build user_notes block from context nodes (shared across all agents)
     let user_notes_block = if upstream_context.is_empty() {
@@ -426,8 +444,53 @@ pub(super) async fn execute_task_force_step(
 
 // ── Helper functions ─────────────────────────────────────────────────────
 
+/// Build static fallback prompts from config when the Agent Designer fails.
+///
+/// Resolves `roles::TASK_FORCE_AGENT` templates for each roster entry,
+/// producing the same `DesignedAgentPrompt` shape the execution loop expects.
+fn build_static_fallback_prompts(
+    brief: &TaskMissionBriefRow,
+    roster: &[TaskAgentRosterRow],
+    base_prompt: &str,
+) -> Vec<designer::DesignedAgentPrompt> {
+    let team_roster = build_team_roster_string(roster);
+
+    roster
+        .iter()
+        .map(|entry| {
+            let mut v = std::collections::HashMap::new();
+            v.insert(vars::task_force::AGENT_NAME.into(), entry.name.clone());
+            v.insert(
+                vars::task_force::ROLE_DESCRIPTION.into(),
+                entry.role_description.clone(),
+            );
+            v.insert(
+                vars::task_force::TASK_DESCRIPTION.into(),
+                brief.task_description.clone(),
+            );
+            v.insert(vars::task_force::TEAM_ROSTER.into(), team_roster.clone());
+            // Previous outputs are empty here — injected at runtime in the
+            // execution loop via filter_outputs_for_agent.
+            v.insert(vars::task_force::PREVIOUS_OUTPUTS.into(), String::new());
+            v.insert(vars::user::PROMPT.into(), base_prompt.to_string());
+
+            let role_ctx = roles::TASK_FORCE_AGENT.resolve(&v);
+
+            designer::DesignedAgentPrompt {
+                agent_roster_entry_id: entry.id,
+                agent_name: entry.name.clone(),
+                tools: entry.capabilities.clone(),
+                system_prompt: role_ctx.system_prompt,
+                task_prompt: role_ctx.user_prompt,
+                reasoning: "Static fallback — Agent Designer unavailable".to_string(),
+                execution_order: entry.execution_order,
+                receives_from: vec![],
+            }
+        })
+        .collect()
+}
+
 /// Build a human-readable team roster string for prompt injection.
-#[cfg(test)]
 fn build_team_roster_string(roster: &[crate::db::TaskAgentRosterRow]) -> String {
     roster
         .iter()

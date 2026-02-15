@@ -51,7 +51,10 @@ pub(crate) use prompts::build_documents_output;
 
 pub(crate) use crate::server::hub::protocols::context::{build_context_block, ContextDocument};
 
-use crate::config::protocols::DOCUMENTER;
+use crate::config::protocols::{roles, vars, DOCUMENTER};
+use crate::server::hub::protocols::compilers::documenter::prompt::{
+    format_capabilities_block, format_context_documents_instruction,
+};
 
 /// Result from a complete documenter pipeline execution.
 pub struct DocumenterResult {
@@ -146,8 +149,8 @@ impl<'a> DocumenterExecutor<'a> {
                 )
             }
             _ => {
-                let sys = self.load_strategy_system_prompt().await?;
-                (sys, self.prompt.to_string())
+                let role_ctx = self.resolve_strategist_from_config(&doc_defs);
+                (role_ctx.system_prompt, role_ctx.user_prompt)
             }
         };
 
@@ -406,6 +409,67 @@ impl<'a> DocumenterExecutor<'a> {
                 None
             }
         }
+    }
+
+    /// Resolve the strategist's prompts from config templates.
+    ///
+    /// Uses `roles::DOCUMENTER_STRATEGIST` with the same template variables
+    /// as the compiler, producing both system and user prompts.
+    fn resolve_strategist_from_config(
+        &self,
+        doc_defs: &[crate::db::ProtocolDocumentDefRow],
+    ) -> crate::config::protocols::ProtocolContext {
+        let doc_values: Vec<serde_json::Value> = doc_defs
+            .iter()
+            .map(|d| {
+                serde_json::json!({
+                    "name": d.name,
+                    "description": d.description,
+                    "target_length": d.target_length,
+                })
+            })
+            .collect();
+
+        let docs_block = doc_values
+            .iter()
+            .enumerate()
+            .map(|(i, def)| {
+                let name = def["name"].as_str().unwrap_or("Unnamed");
+                let description = def["description"].as_str().unwrap_or("");
+                let target_length = def["target_length"].as_i64().unwrap_or(2000);
+                if description.is_empty() {
+                    format!(
+                        "{}. \"{}\" (target: ~{} characters)",
+                        i + 1,
+                        name,
+                        target_length
+                    )
+                } else {
+                    format!(
+                        "{}. \"{}\" \u{2014} {} (target: ~{} characters)",
+                        i + 1,
+                        name,
+                        description,
+                        target_length
+                    )
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let has_context = !self.upstream_context.is_empty();
+        let mut v = HashMap::new();
+        v.insert(vars::system::REQUESTED_DOCUMENTS.into(), docs_block);
+        v.insert(
+            vars::system::AVAILABLE_CAPABILITIES.into(),
+            format_capabilities_block(&[]),
+        );
+        v.insert(
+            vars::system::CONTEXT_DOCUMENTS_INSTRUCTION.into(),
+            format_context_documents_instruction(has_context),
+        );
+        v.insert(vars::user::PROMPT.into(), self.prompt.to_string());
+        roles::DOCUMENTER_STRATEGIST.resolve(&v)
     }
 
     fn is_cancelled(&self) -> bool {

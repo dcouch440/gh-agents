@@ -50,9 +50,11 @@ pub fn build_strategist_designer_input(
         execution_order: 0,
         additional_context: format!(
             "Requested documents:\n{}\n\n\
-             The strategist's output is a structured JSON with document_plans containing \
-             research_strategy, required_capabilities, and writer_prompt per document. \
-             This output directly drives the research and writing phases.",
+             When this agent runs, it will produce a structured plan for each document \
+             that includes research strategies, required capabilities, and writing \
+             instructions. Its output feeds directly into the research and writing phases. \
+             Design the system and task prompts so the strategist produces thorough, \
+             actionable plans per document.",
             docs_summary,
         ),
     };
@@ -83,9 +85,11 @@ pub fn build_strategist_designer_input(
              Phase 1 (Strategist): Plans research and writing — this is the agent being designed\n\
              Phase 2 (Researchers): Execute the strategist's research plans using tools\n\
              Phase 3 (Writers): Produce final documents from research findings\n\n\
-             The strategist must produce a JSON response with a document_plans array. \
-             Each plan needs: document_name, research_strategy, required_capabilities, \
-             writer_prompt, and optional context_document_ids.\n\n\
+             You are designing the strategist agent's prompts. The strategist will plan \
+             research strategies and writing instructions for each document listed below. \
+             Design prompts that guide it to produce thorough, actionable plans covering \
+             research approach, required capabilities, and detailed writing direction \
+             per document.\n\n\
              Documents being produced:\n{}",
             docs_summary,
         ),
