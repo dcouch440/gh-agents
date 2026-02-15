@@ -13,6 +13,7 @@ import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from '../DynamicNode/a
 import type { DynamicNodeData } from '../DynamicNode/DynamicNode'
 import type { StepNodeLookups } from './types'
 import { isDocumenterStep } from './protocolGroups'
+import { getStoredDimensions, getStoredPosition } from '../nodeResizeStorage'
 
 const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
   const edgesByTarget = Collections.groupBy(lookups.edges, (e) => e.to_step_id)
@@ -33,8 +34,8 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
         type: 'contextNode',
         position: { x: step.position_x ?? 0, y: step.position_y ?? 0 },
         style: {
-          width: CONTEXT_NODE.DEFAULT_WIDTH,
-          height: CONTEXT_NODE.DEFAULT_HEIGHT,
+          width: step.width ?? CONTEXT_NODE.DEFAULT_WIDTH,
+          height: step.height ?? CONTEXT_NODE.DEFAULT_HEIGHT,
         },
         data: contextData,
       }
@@ -71,8 +72,8 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
         type: 'dynamicNode',
         position: { x: step.position_x ?? 0, y: step.position_y ?? 0 },
         style: {
-          width: FORM_NODE.DEFAULT_WIDTH,
-          height: FORM_NODE.DEFAULT_HEIGHT,
+          width: step.width ?? FORM_NODE.DEFAULT_WIDTH,
+          height: step.height ?? FORM_NODE.DEFAULT_HEIGHT,
         },
         data: dynamicData,
       }
@@ -121,16 +122,19 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
         content: lookups.documentContentByDefId[def.id] ?? '',
         protocolStepId: step.id,
       }
+      const docNodeId = `doc-artifact-${def.id}`
+      const docDims = getStoredDimensions(docNodeId)
+      const docPos = getStoredPosition(docNodeId)
       documentNodes.push({
-        id: `doc-artifact-${def.id}`,
+        id: docNodeId,
         type: 'documentNode',
-        position: {
+        position: docPos ?? {
           x: (step.position_x ?? 0) + i * (DOCUMENT_NODE.DEFAULT_WIDTH + 20),
           y: (step.position_y ?? 0) - DOCUMENT_NODE.DEFAULT_HEIGHT - 40,
         },
         style: {
-          width: DOCUMENT_NODE.DEFAULT_WIDTH,
-          height: DOCUMENT_NODE.DEFAULT_HEIGHT,
+          width: docDims?.width ?? DOCUMENT_NODE.DEFAULT_WIDTH,
+          height: docDims?.height ?? DOCUMENT_NODE.DEFAULT_HEIGHT,
         },
         draggable: true,
         connectable: false,
@@ -153,16 +157,19 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
       content,
       protocolStepId: step.id,
     }
+    const notesNodeId = `notes-${step.id}`
+    const notesDims = getStoredDimensions(notesNodeId)
+    const notesPos = getStoredPosition(notesNodeId)
     notesNodes.push({
-      id: `notes-${step.id}`,
+      id: notesNodeId,
       type: 'notesNode',
-      position: {
+      position: notesPos ?? {
         x: (step.position_x ?? 0),
         y: (step.position_y ?? 0) + NOTES_NODE.DEFAULT_HEIGHT + 40,
       },
       style: {
-        width: NOTES_NODE.DEFAULT_WIDTH,
-        height: NOTES_NODE.DEFAULT_HEIGHT,
+        width: notesDims?.width ?? NOTES_NODE.DEFAULT_WIDTH,
+        height: notesDims?.height ?? NOTES_NODE.DEFAULT_HEIGHT,
       },
       draggable: true,
       connectable: false,

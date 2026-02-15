@@ -1,5 +1,6 @@
-import { memo, useState } from 'react'
+import { memo, useState, useCallback } from 'react'
 import { Position, NodeResizer } from '@xyflow/react'
+import type { ResizeParams } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { CanvasHandle } from '../CanvasHandle'
@@ -21,6 +22,7 @@ function CanvasFormNodeComponent({
   highlightMode = HighlightMode.NONE,
   extraHandles,
   overlay,
+  onResizeEnd: onResizeEndProp,
 }: CanvasFormNodeProps) {
   const theme = useTheme()
   const resolvedAccent = accentColor ?? theme.palette.primary.main
@@ -34,6 +36,13 @@ function CanvasFormNodeComponent({
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0]
   const [hovered, setHovered] = useState(false)
   const { containerRef, scaleFactor } = useNodeScale()
+
+  const handleResizeEnd = useCallback(
+    (_event: unknown, params: ResizeParams) => {
+      onResizeEndProp?.(Math.round(params.width), Math.round(params.height))
+    },
+    [onResizeEndProp],
+  )
 
   return (
     <Box
@@ -65,6 +74,7 @@ function CanvasFormNodeComponent({
         minHeight={FORM_NODE.MIN_HEIGHT}
         maxWidth={FORM_NODE.MAX_WIDTH}
         maxHeight={FORM_NODE.MAX_HEIGHT}
+        onResizeEnd={handleResizeEnd}
         lineStyle={{
           borderColor: 'transparent',
           borderWidth: 0,

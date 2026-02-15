@@ -1361,8 +1361,8 @@ impl WorkflowRepo for PgRepo {
     async fn create_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow> {
         let row: WorkflowStepRow = sqlx::query_as(
             r#"
-            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, for_each_label_field, display_order, reasoning_trace, verification_agent_ids, position_x, position_y, name, system_prompt_suffix, visible, description)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, for_each_label_field, display_order, reasoning_trace, verification_agent_ids, position_x, position_y, width, height, name, system_prompt_suffix, visible, description)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
             RETURNING *
             "#,
         )
@@ -1382,6 +1382,8 @@ impl WorkflowRepo for PgRepo {
         .bind(&step.verification_agent_ids)
         .bind(step.position_x)
         .bind(step.position_y)
+        .bind(step.width)
+        .bind(step.height)
         .bind(&step.name)
         .bind(&step.system_prompt_suffix)
         .bind(step.visible)
@@ -1416,9 +1418,9 @@ impl WorkflowRepo for PgRepo {
             UPDATE workflow_steps
             SET agent_id = $1, execution_mode = $2, for_each_ref = $3, prompt_template_id = $4, prompt_template = $5,
                 output_schema_id = $6, output_variable_name = $7, interactive_agent_id = $8, for_each_label_field = $9, display_order = $10,
-                reasoning_trace = $11, verification_agent_ids = $12, position_x = $13, position_y = $14, name = $15, system_prompt_suffix = $16,
-                visible = $17, description = $18, version = version + 1
-            WHERE id = $19
+                reasoning_trace = $11, verification_agent_ids = $12, position_x = $13, position_y = $14, width = $15, height = $16,
+                name = $17, system_prompt_suffix = $18, visible = $19, description = $20, version = version + 1
+            WHERE id = $21
             RETURNING *
             "#,
         )
@@ -1436,6 +1438,8 @@ impl WorkflowRepo for PgRepo {
         .bind(&step.verification_agent_ids)
         .bind(step.position_x)
         .bind(step.position_y)
+        .bind(step.width)
+        .bind(step.height)
         .bind(&step.name)
         .bind(&step.system_prompt_suffix)
         .bind(step.visible)

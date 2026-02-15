@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 import MuiButton from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Tooltip from '@mui/material/Tooltip'
@@ -9,20 +9,19 @@ import { useTheme } from '@mui/material/styles'
 import { useStore, workflowStore } from '@/stores'
 import { TRAY_BUTTON_CONTAINED_SX } from './constants'
 
-function SaveDiscardGroup() {
+type SaveDiscardGroupProps = {
+  autoSaveFlush: () => void
+  autoSaveSaving: boolean
+}
+
+function SaveDiscardGroup({ autoSaveFlush, autoSaveSaving }: SaveDiscardGroupProps) {
   const theme = useTheme()
   const isDark = theme.palette.mode === 'dark'
   const dirty = useStore(workflowStore.store, workflowStore.selectDirty)
-  const [saving, setSaving] = useState(false)
 
-  const handleSave = useCallback(async () => {
-    setSaving(true)
-    try {
-      await workflowStore.saveAllDirtySteps()
-    } finally {
-      setSaving(false)
-    }
-  }, [])
+  const handleSave = useCallback(() => {
+    autoSaveFlush()
+  }, [autoSaveFlush])
 
   const handleDiscard = useCallback(() => {
     void workflowStore.revertSteps()
@@ -32,8 +31,8 @@ function SaveDiscardGroup() {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault()
-        if (dirty && !saving) {
-          void handleSave()
+        if (dirty && !autoSaveSaving) {
+          handleSave()
         }
       }
     }
@@ -41,9 +40,16 @@ function SaveDiscardGroup() {
     return () => {
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [dirty, saving, handleSave])
+  }, [dirty, autoSaveSaving, handleSave])
 
   const chromeBg = theme.palette.custom.chromeBg
+
+  const saveLabel = autoSaveSaving ? 'Saving' : dirty ? 'Save' : 'Saved'
+  const saveTooltip = autoSaveSaving
+    ? 'Saving...'
+    : dirty
+      ? 'Save changes (\u2318S)'
+      : 'All changes saved'
 
   return (
     <>
@@ -54,7 +60,7 @@ function SaveDiscardGroup() {
             variant="outlined"
             startIcon={<UndoOutlined sx={{ fontSize: 16 }} />}
             onClick={handleDiscard}
-            disabled={!dirty || saving}
+            disabled={!dirty || autoSaveSaving}
             sx={{
               fontSize: 13,
               fontWeight: 500,
@@ -80,7 +86,7 @@ function SaveDiscardGroup() {
       </Tooltip>
 
       <Tooltip
-        title={saving ? 'Saving...' : dirty ? 'Save changes (\u2318S)' : 'All changes saved'}
+        title={saveTooltip}
         TransitionComponent={Fade}
         enterDelay={500}
         placement="top"
@@ -89,11 +95,9 @@ function SaveDiscardGroup() {
           <MuiButton
             size="small"
             variant="contained"
-            startIcon={saving ? <CircularProgress size={14} thickness={5} color="inherit" /> : <SaveOutlined sx={{ fontSize: 16 }} />}
-            onClick={() => {
-              void handleSave()
-            }}
-            disabled={!dirty || saving}
+            startIcon={autoSaveSaving ? <CircularProgress size={14} thickness={5} color="inherit" /> : <SaveOutlined sx={{ fontSize: 16 }} />}
+            onClick={handleSave}
+            disabled={!dirty || autoSaveSaving}
             sx={{
               ...TRAY_BUTTON_CONTAINED_SX,
               minWidth: 100,
@@ -106,7 +110,7 @@ function SaveDiscardGroup() {
               },
             }}
           >
-            {saving ? 'Saving' : dirty ? 'Save' : 'Saved'}
+            {saveLabel}
           </MuiButton>
         </span>
       </Tooltip>

@@ -35,10 +35,12 @@ vi.mock('framer-motion', () => ({
   },
 }))
 
-const renderTray = () => render(<OptionTray />)
+const mockFlush = vi.fn()
+const renderTray = () => render(<OptionTray autoSaveFlush={mockFlush} autoSaveSaving={false} />)
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockFlush.mockClear()
   mockSelectDirty.mockReturnValue(false)
   mockSelectActiveWorkflowId.mockReturnValue('wf-001')
 })
@@ -104,7 +106,7 @@ describe('OptionTray', () => {
     await user.click(screen.getByTestId('tray-toggle'))
     await user.click(screen.getByText('Save'))
 
-    expect(mockSaveAllDirtySteps).toHaveBeenCalledOnce()
+    expect(mockFlush).toHaveBeenCalledOnce()
   })
 
   it('calls revertSteps when Discard is clicked', async () => {

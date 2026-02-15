@@ -1,6 +1,6 @@
-import { memo, useState } from 'react'
+import { memo, useState, useCallback } from 'react'
 import { Position, NodeResizer } from '@xyflow/react'
-import type { NodeProps } from '@xyflow/react'
+import type { NodeProps, ResizeParams } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { CanvasHandle } from '../CanvasHandle'
@@ -10,6 +10,7 @@ import { NotesNodeHeader } from './NotesNodeHeader'
 import { NotesNodeContent } from './NotesNodeContent'
 import type { NotesNodeData } from './types'
 import { nodeDataEqual } from '../mappers'
+import { setStoredDimensions } from '../nodeResizeStorage'
 import { CanvasNodeKind } from '../canvasKinds'
 import { useProtocolHighlight } from '../useProtocolHighlight'
 import { getNodeHighlightStyles } from '../nodeHighlightStyles'
@@ -28,6 +29,13 @@ function NotesNodeComponent({ id, data, selected }: NodeProps) {
     themeMode: theme.palette.mode,
     variant: 'resizable',
   })
+
+  const handleResizeEnd = useCallback(
+    (_event: unknown, params: ResizeParams) => {
+      setStoredDimensions(id, { width: Math.round(params.width), height: Math.round(params.height) })
+    },
+    [id],
+  )
 
   return (
     <Box
@@ -61,6 +69,7 @@ function NotesNodeComponent({ id, data, selected }: NodeProps) {
         minHeight={NOTES_NODE.MIN_HEIGHT}
         maxWidth={NOTES_NODE.MAX_WIDTH}
         maxHeight={NOTES_NODE.MAX_HEIGHT}
+        onResizeEnd={handleResizeEnd}
         lineStyle={{ borderColor: 'transparent', borderWidth: 0 }}
         handleStyle={{
           width: 10,

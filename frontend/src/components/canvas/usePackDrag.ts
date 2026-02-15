@@ -3,6 +3,7 @@ import type { Node } from '@xyflow/react'
 import { workflowStore } from '@/stores'
 import { Collections } from '@/utils/collections'
 import { CanvasNodeKind, HOVER_ELIGIBLE_KINDS } from './canvasKinds'
+import { isVirtualNode, setStoredPosition } from './nodeResizeStorage'
 
 type PackNode = {
   id: string
@@ -88,11 +89,13 @@ const usePackDrag = (
 
   const onNodeDragStop = useCallback(
     (_event: React.MouseEvent, node: Node) => {
-      // Skip virtual document artifact nodes — they have no backing workflow step
-      if (!node.id.startsWith('doc-artifact-')) {
+      const roundedPos = { x: Math.round(node.position.x), y: Math.round(node.position.y) }
+      if (isVirtualNode(node.id)) {
+        setStoredPosition(node.id, roundedPos)
+      } else {
         void workflowStore.updateStep(node.id, {
-          position_x: Math.round(node.position.x),
-          position_y: Math.round(node.position.y),
+          position_x: roundedPos.x,
+          position_y: roundedPos.y,
         })
       }
 
@@ -103,11 +106,15 @@ const usePackDrag = (
         for (let i = 0; i < allNodes.length; i++) {
           const n = allNodes[i]!
           if (!members.has(n.id)) continue
-          if (n.id.startsWith('doc-artifact-')) continue
-          void workflowStore.updateStep(n.id, {
-            position_x: Math.round(n.position.x),
-            position_y: Math.round(n.position.y),
-          })
+          const memberPos = { x: Math.round(n.position.x), y: Math.round(n.position.y) }
+          if (isVirtualNode(n.id)) {
+            setStoredPosition(n.id, memberPos)
+          } else {
+            void workflowStore.updateStep(n.id, {
+              position_x: memberPos.x,
+              position_y: memberPos.y,
+            })
+          }
         }
       }
 

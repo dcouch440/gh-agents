@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useAutoSave } from '@/hooks'
 import { ReactFlow, Background, MiniMap, useReactFlow, ReactFlowProvider, BackgroundVariant } from '@xyflow/react'
 import type { OnSelectionChangeParams, Connection, OnNodesDelete, OnEdgesDelete, Edge } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -40,6 +41,8 @@ function WorkflowCanvasInner() {
   const shareActive = useStore(shareStore.store, shareStore.selectActive)
   const [contextMenu, setContextMenu] = useState<MenuPosition>(null)
   const initialFitDone = useRef(false)
+
+  const autoSave = useAutoSave(true)
 
   useCanvasFetch(agents, steps)
 
@@ -289,7 +292,7 @@ function WorkflowCanvasInner() {
           />
         )}
       </ReactFlow>
-      <OptionTray />
+      <OptionTray autoSaveFlush={autoSave.flush} autoSaveSaving={autoSave.saving} />
       {shareActive && <ShareModeBanner />}
       <CanvasContextMenu
         position={contextMenu}
