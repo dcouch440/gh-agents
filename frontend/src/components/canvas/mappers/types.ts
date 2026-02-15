@@ -34,6 +34,7 @@ type StepNodeData = {
 type DocumentDefInfo = {
   id: string
   name: string
+  document_id: string | null
 }
 
 type RosterAgentInfo = {

@@ -6,7 +6,7 @@
 
 pub mod belief_capture;
 pub mod documenter;
-mod documents;
+pub mod documents;
 mod exploration;
 pub mod haiku;
 pub mod node_assistant;

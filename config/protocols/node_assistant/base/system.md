@@ -40,6 +40,12 @@ Structure notes as:
 ## Requirements — hard constraints, special requirements
 ## Technical Details — API specs, infrastructure notes
 ## Decisions — key choices and reasoning
+## Required Reading — document IDs agents should read at runtime
+
+When the user shares documents with you, record their IDs as required reading.
+The workflow designer will instruct agents to call read_document(document_id)
+to fetch these documents before starting their work.
+Format: `- Document Name (document_id: <uuid>)`
 
 Do not:
 - Narrate that you're taking notes — just call the tool

@@ -155,6 +155,34 @@ pub(crate) async fn execute_search_docs(input: &Value, state: &AppState, user_id
     }
 }
 
+pub(crate) async fn execute_read_document(input: &Value, state: &AppState) -> Value {
+    let Some(doc_repo) = state.doc_repo() else {
+        return json!({ "error": "Document repository not initialized" });
+    };
+
+    let Some(id_str) = input["document_id"].as_str() else {
+        return json!({ "error": "document_id is required" });
+    };
+
+    let Ok(doc_id) = uuid::Uuid::parse_str(id_str) else {
+        return json!({ "error": format!("Invalid UUID: {}", id_str) });
+    };
+
+    match doc_repo.get_document(doc_id).await {
+        Ok(Some(doc)) => json!({
+            "document_id": doc.id.to_string(),
+            "title": doc.title,
+            "content": doc.content,
+            "doc_type": doc.doc_type,
+            "ref_tag": doc.ref_tag,
+            "tags": doc.tags,
+            "summary": doc.summary,
+        }),
+        Ok(None) => json!({ "error": format!("Document not found: {}", id_str) }),
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
 pub(crate) async fn execute_submit_prd(input: &Value, state: &AppState, user_id: UserId) -> Value {
     let mut errors = Vec::new();
 

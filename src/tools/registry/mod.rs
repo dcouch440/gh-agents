@@ -36,12 +36,13 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "run_command" => Some(run_command_tool()),
         "web_research" => Some(web_research_tool()),
 
-        // Orchestrator tools (7 additional unique)
+        // Orchestrator tools (8 additional unique)
         "search_files" => Some(search_files_tool()),
         "think" => Some(think_tool()),
         "create_doc" => Some(create_doc_tool()),
         "update_doc" => Some(update_doc_tool()),
         "search_docs" => Some(search_docs_tool()),
+        "read_document" => Some(read_document_tool()),
         "submit_prd" => Some(submit_prd_tool()),
         "submit_ticket" => Some(submit_ticket_tool()),
 
@@ -414,6 +415,23 @@ fn search_docs_tool() -> Tool {
                 }
             },
             "required": ["query"]
+        }),
+    }
+}
+
+fn read_document_tool() -> Tool {
+    Tool {
+        name: "read_document".into(),
+        description: "Read a document from the knowledge base by ID. Returns the document title, content, and metadata.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "document_id": {
+                    "type": "string",
+                    "description": "UUID of the document to read"
+                }
+            },
+            "required": ["document_id"]
         }),
     }
 }

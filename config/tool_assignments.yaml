@@ -170,6 +170,14 @@ tool_assignments:
   # KNOWLEDGE MANAGEMENT
   # ==========================================================================
 
+  read_document:
+    capabilities:
+      - document_read
+    notes: >
+      Read a knowledge base document by ID. Returns title, content,
+      and metadata. Read-only operation.
+    priority: 10
+
   create_doc:
     capabilities:
       - document_create

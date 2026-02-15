@@ -145,6 +145,7 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
         documenterName: step.name ?? 'Documenter',
         content: lookups.documentContentByDefId[def.id] ?? '',
         protocolStepId: step.id,
+        documentId: def.document_id,
       }
       const docNodeId = `doc-artifact-${def.id}`
       const docDims = getStoredDimensions(docNodeId)
