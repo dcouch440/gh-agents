@@ -16,13 +16,12 @@ vi.mock('@xyflow/react', () => ({
 }))
 
 vi.mock('./PipeEdgePath', () => ({
-  PipeEdgePath: (props: { edgePath: string; color: string; selected: boolean; isProtocol: boolean; animationDirection: string }) => (
+  PipeEdgePath: (props: { edgePath: string; color: string; selected: boolean; isProtocol: boolean }) => (
     <g
       data-testid="pipe-edge"
       data-color={props.color}
       data-selected={String(props.selected)}
       data-is-protocol={String(props.isProtocol)}
-      data-animation-direction={props.animationDirection}
     />
   ),
 }))
@@ -73,7 +72,6 @@ describe('StepEdge', () => {
     expect(pipe).toBeInTheDocument()
     expect(pipe).toHaveAttribute('data-selected', 'false')
     expect(pipe).toHaveAttribute('data-is-protocol', 'false')
-    expect(pipe).toHaveAttribute('data-animation-direction', 'normal')
   })
 
   it('passes source color and protocol flag when present', () => {

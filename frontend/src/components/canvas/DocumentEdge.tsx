@@ -22,7 +22,6 @@ function DocumentEdgeComponent(props: EdgeProps) {
       color={PROTOCOL_TYPE_COLORS['documenter']}
       selected={false}
       isProtocol={true}
-      animationDirection="reverse"
       interactionWidth={PIPE.INTERACTION_WIDTH}
     />
   )

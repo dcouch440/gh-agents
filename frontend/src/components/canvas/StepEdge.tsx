@@ -47,7 +47,6 @@ function StepEdgeComponent(props: EdgeProps) {
         color={color}
         selected={selected ?? false}
         isProtocol={isProtocolEdge}
-        animationDirection="normal"
         interactionWidth={PIPE.INTERACTION_WIDTH}
       />
       <EdgeLabelRenderer>
