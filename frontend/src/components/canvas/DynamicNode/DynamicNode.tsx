@@ -199,9 +199,12 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
         highlightMode={effectiveHighlight}
         overlay={shareOverlay}
         extraHandles={
-          nodeData.archetype === Archetype.DOCUMENTER ? (
-            <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
-          ) : undefined
+          <>
+            {nodeData.archetype === Archetype.DOCUMENTER && (
+              <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
+            )}
+            <CanvasHandle type="source" position={Position.Left} id="notes" color="#f85149" variant="passive" />
+          </>
         }
       />
       <NodeExpandedModal

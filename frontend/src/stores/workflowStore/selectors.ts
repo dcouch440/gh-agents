@@ -61,6 +61,9 @@ const selectRoomStepMembers =
 const selectRoomMembersByStep = (s: WorkflowState): Record<string, RoomStepMember[]> =>
   s.roomMembersByStep
 
+const selectNotesByStep = (s: WorkflowState): Record<string, string> =>
+  s.notesByStep
+
 const selectLoading = (s: WorkflowState): boolean => s.loading
 
 const selectError = (s: WorkflowState): string | null => s.error
@@ -86,6 +89,7 @@ export {
   selectRosterByStep,
   selectRoomStepMembers,
   selectRoomMembersByStep,
+  selectNotesByStep,
   selectLoading,
   selectError,
   selectDirty,

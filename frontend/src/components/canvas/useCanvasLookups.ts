@@ -20,6 +20,7 @@ const useCanvasLookups = (
   stepProtocols: Readonly<Record<string, StepProtocolLink>>,
   documentDefsByStep: Record<string, DocumentDef[]>,
   rosterByStep: Record<string, RosterAgent[]>,
+  notesByStep: Record<string, string>,
 ): CanvasLookupsResult => {
   const agentLookup = useMemo(
     () =>
@@ -93,9 +94,10 @@ const useCanvasLookups = (
       protocolsByStep: protocolsByStepLookup,
       documentDefsByStep,
       rosterByStep,
+      notesByStep,
       protocolGroups,
     }),
-    [agentLookup, schemaLookup, stepNameLookup, edges, toolsByAgentLookup, protocolsByStepLookup, documentDefsByStep, rosterByStep, protocolGroups],
+    [agentLookup, schemaLookup, stepNameLookup, edges, toolsByAgentLookup, protocolsByStepLookup, documentDefsByStep, rosterByStep, notesByStep, protocolGroups],
   )
 
   return { lookups, protocolGroups, protocolsByStepLookup }

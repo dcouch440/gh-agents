@@ -152,6 +152,7 @@ export const API = {
   STEP_CHAT_DEBUG: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}/chat/debug`,
   WORKFLOW_RUN: (id: string) => `/workflows/${id}/run`,
   WORKFLOW_EXECUTIONS: (id: string) => `/workflows/${id}/executions`,
+  WORKFLOW_NOTES: (id: string) => `/workflows/${id}/notes`,
 
   // Pipeline Stage Members
   STAGE_MEMBERS: (pid: string, num: number) => `/pipelines/${pid}/stages/${num}/members`,

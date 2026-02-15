@@ -12,7 +12,8 @@ use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 
 use super::types::{
-    step_response, CreateStepRequest, UpdateStepRequest, WorkflowStepPath, WorkflowStepResponse,
+    step_response, CreateStepRequest, UpdateStepRequest, WorkflowNoteEntry, WorkflowStepPath,
+    WorkflowStepResponse,
 };
 
 /// POST /api/workflows/:id/steps
@@ -356,4 +357,31 @@ pub async fn delete_workflow_step(
 
     repo.delete_step(p.sid).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// GET /api/workflows/:id/notes — all assistant notes for a workflow
+pub async fn get_workflow_notes(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(workflow_id): Path<Uuid>,
+) -> Result<Json<Vec<WorkflowNoteEntry>>, AppError> {
+    let repo = &state.repos().workflows;
+    let wf = repo
+        .get_workflow(workflow_id)
+        .await?
+        .ok_or(AppError::not_found("Workflow"))?;
+    if wf.user_id != auth.user_id.0 {
+        return Err(AppError::not_found("Workflow"));
+    }
+    let notes = repo
+        .get_all_assistant_notes_for_workflow(workflow_id)
+        .await?;
+    let entries: Vec<WorkflowNoteEntry> = notes
+        .into_iter()
+        .map(|(step_id, _name, _mode, content)| WorkflowNoteEntry {
+            step_id: step_id.to_string(),
+            content,
+        })
+        .collect();
+    Ok(Json(entries))
 }

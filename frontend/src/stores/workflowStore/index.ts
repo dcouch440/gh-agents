@@ -14,6 +14,7 @@ import {
   selectRosterByStep,
   selectRoomStepMembers,
   selectRoomMembersByStep,
+  selectNotesByStep,
   selectLoading,
   selectError,
   selectDirty,
@@ -32,6 +33,7 @@ import {
   deleteDocumentDef,
 } from './documents'
 import { fetchRoster, createRosterAgent, deleteRosterAgent, fetchRoomStepMembers } from './roster'
+import { fetchAllNotes } from './notes'
 import { handleWsEvent } from './wsHandler'
 
 export const workflowStore = {
@@ -50,6 +52,7 @@ export const workflowStore = {
   selectRosterByStep,
   selectRoomStepMembers,
   selectRoomMembersByStep,
+  selectNotesByStep,
   selectLoading,
   selectError,
   selectDirty,
@@ -82,6 +85,7 @@ export const workflowStore = {
   createRosterAgent,
   deleteRosterAgent,
   fetchRoomStepMembers,
+  fetchAllNotes,
   handleWsEvent,
   setDirty,
   upsert,

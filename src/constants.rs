@@ -276,6 +276,7 @@ pub mod routes {
     pub const WORKFLOW_STEP_CHAT_MESSAGES: &str = "/workflows/:wid/steps/:sid/chat/messages";
     pub const WORKFLOW_STEP_CHAT_DEBUG: &str = "/workflows/:wid/steps/:sid/chat/debug";
     pub const WORKFLOW_STEP_CONFIG: &str = "/workflows/:wid/steps/:sid/config";
+    pub const WORKFLOW_NOTES: &str = "/workflows/:id/notes";
 
     // Workflow Collections
     pub const COLLECTIONS: &str = "/collections";

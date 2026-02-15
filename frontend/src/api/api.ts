@@ -359,6 +359,9 @@ const workflows = freeze({
 
   listExecutions: (workflowId: string, config?: RequestConfig) =>
     baseApi.get<WorkflowExecutionSummary[]>(API.WORKFLOW_EXECUTIONS(workflowId), config),
+
+  getAllNotes: (workflowId: string, config?: RequestConfig) =>
+    baseApi.get<Array<{ step_id: string; content: string }>>(API.WORKFLOW_NOTES(workflowId), config),
 })
 
 const contextResponse = freeze({

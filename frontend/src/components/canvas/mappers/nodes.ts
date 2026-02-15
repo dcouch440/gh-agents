@@ -6,6 +6,8 @@ import { CONTEXT_NODE } from '../ContextNode'
 import type { ContextNodeData } from '../ContextNode'
 import { DOCUMENT_NODE } from '../DocumentNode'
 import type { DocumentNodeData } from '../DocumentNode'
+import { NOTES_NODE } from '../NotesNode'
+import type { NotesNodeData } from '../NotesNode'
 import { CanvasNodeKind } from '../canvasKinds'
 import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from '../DynamicNode/archetypes'
 import type { DynamicNodeData } from '../DynamicNode/DynamicNode'
@@ -137,7 +139,38 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
     }
   }
 
-  return [...stepNodes, ...documentNodes]
+  // Auto-generate notes nodes for steps that have assistant notes
+  const notesNodes: Node[] = []
+  for (const step of steps) {
+    if (step.execution_mode === 'context') continue
+    const content = lookups.notesByStep[step.id]
+    if (!content) continue
+
+    const notesData: NotesNodeData = {
+      kind: CanvasNodeKind.NOTES,
+      label: 'Agent Notes',
+      stepName: step.name ?? step.execution_mode,
+      content,
+      protocolStepId: step.id,
+    }
+    notesNodes.push({
+      id: `notes-${step.id}`,
+      type: 'notesNode',
+      position: {
+        x: (step.position_x ?? 0) - NOTES_NODE.DEFAULT_WIDTH - 40,
+        y: (step.position_y ?? 0),
+      },
+      style: {
+        width: NOTES_NODE.DEFAULT_WIDTH,
+        height: NOTES_NODE.DEFAULT_HEIGHT,
+      },
+      draggable: true,
+      connectable: false,
+      data: notesData,
+    })
+  }
+
+  return [...stepNodes, ...documentNodes, ...notesNodes]
 }
 
 export { toRFNodes }
