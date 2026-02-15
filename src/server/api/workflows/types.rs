@@ -163,6 +163,43 @@ pub struct StepDocumentResponse {
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct RunWorkflowRequest {
     pub initial_input: Option<String>,
+    pub template_id: Option<Uuid>,
+}
+
+// ============================================================================
+// Run Template Types
+// ============================================================================
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct CreateTemplateRequest {
+    #[schema(max_length = 200)]
+    pub name: String,
+    pub description: Option<String>,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct RunTemplateResponse {
+    pub id: Uuid,
+    pub workflow_id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct RunTemplateDetailResponse {
+    pub id: Uuid,
+    pub workflow_id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub snapshot: serde_json::Value,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Deserialize)]
+pub struct TemplatePath {
+    pub id: Uuid,
+    pub template_id: Uuid,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]

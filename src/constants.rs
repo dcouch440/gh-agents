@@ -297,6 +297,10 @@ pub mod routes {
     pub const WORKFLOW_WORKSHOP_STEP_EXECUTE: &str =
         "/workflows/:id/workshop/steps/:step_id/execute";
 
+    // Run Templates (frozen workflow snapshots)
+    pub const WORKFLOW_TEMPLATES: &str = "/workflows/:id/templates";
+    pub const WORKFLOW_TEMPLATE: &str = "/workflows/:id/templates/:template_id";
+
     // Workflow Collections
     pub const COLLECTIONS: &str = "/collections";
     pub const COLLECTION: &str = "/collections/:id";

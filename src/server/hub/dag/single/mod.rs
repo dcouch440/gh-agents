@@ -189,12 +189,16 @@ pub(crate) async fn run_step_via_engine(
         .agent_execution_repo()
         .ok_or_else(|| anyhow::anyhow!("agent_execution_repo not configured"))?;
 
-    // Load agent tools
-    let agent_tool_rows = state
-        .repo()
-        .get_agent_tools(agent.id)
-        .await
-        .unwrap_or_default();
+    // Load agent tools (from snapshot if template-based, else from live DB)
+    let agent_tool_rows = if let Some(snap) = &ctx.snapshot {
+        snap.agent_tools.get(&agent.id).cloned().unwrap_or_default()
+    } else {
+        state
+            .repo()
+            .get_agent_tools(agent.id)
+            .await
+            .unwrap_or_default()
+    };
     let tools: Vec<crate::llm::Tool> = agent_tool_rows
         .iter()
         .filter_map(|row| crate::tools::registry::get_tool_definition(&row.name))

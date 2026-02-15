@@ -115,6 +115,21 @@ pub(crate) struct PortMetadata {
     pub routing_rules: HashMap<Uuid, Vec<StepRoutingRuleRow>>,
 }
 
+impl PortMetadata {
+    /// Construct from pre-loaded data (used by template-based execution).
+    pub fn new(
+        step_inputs: HashMap<Uuid, Vec<StepInputRow>>,
+        step_outputs: HashMap<Uuid, Vec<StepOutputRow>>,
+        routing_rules: HashMap<Uuid, Vec<StepRoutingRuleRow>>,
+    ) -> Self {
+        Self {
+            step_inputs,
+            step_outputs,
+            routing_rules,
+        }
+    }
+}
+
 /// Pre-fetch port metadata (inputs, outputs, routing rules) for all steps.
 pub(crate) async fn prefetch_port_metadata(
     state: &AppState,

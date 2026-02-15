@@ -91,6 +91,9 @@ pub struct WorkflowExecutionContext {
     pub container_config: Option<ContainerExecutionConfig>,
     /// wg-easy API client for VPN peer management. None if VPN is not configured.
     pub wg_client: Option<Arc<crate::execution::WgEasyClient>>,
+    /// Frozen workflow snapshot for template-based execution. When present, agent/tool data
+    /// is loaded from the snapshot instead of live DB.
+    pub snapshot: Option<Arc<super::super::templates::WorkflowSnapshot>>,
 }
 
 /// Result of executing one workflow.

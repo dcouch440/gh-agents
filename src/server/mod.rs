@@ -324,6 +324,14 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             post(api::execute_workshop_step),
         )
         .route(
+            routes::WORKFLOW_TEMPLATES,
+            post(api::create_template).get(api::list_templates),
+        )
+        .route(
+            routes::WORKFLOW_TEMPLATE,
+            get(api::get_template).delete(api::delete_template),
+        )
+        .route(
             routes::WORKFLOW_EXECUTIONS,
             get(api::list_workflow_executions),
         )

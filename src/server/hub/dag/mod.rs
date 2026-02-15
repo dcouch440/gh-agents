@@ -49,6 +49,7 @@ pub(crate) mod room_step;
 pub(crate) mod single;
 pub(crate) mod staging;
 pub(crate) mod task_force;
+pub mod templates;
 pub(crate) mod utils;
 pub(crate) mod versioning;
 
@@ -328,7 +329,7 @@ async fn run_dag_loop(
             continue;
         }
 
-        // Load agent
+        // Load agent (from snapshot if template-based, else from live DB)
         let agent_id = step.agent_id.ok_or_else(|| {
             HubError::Internal(anyhow::anyhow!(
                 "step {} has no agent_id for mode '{}'",
@@ -336,15 +337,25 @@ async fn run_dag_loop(
                 step.execution_mode
             ))
         })?;
-        let agent = state
-            .repo()
-            .get_persisted_agent(agent_id)
-            .await
-            .map_err(|e| anyhow::anyhow!("failed to load agent: {}", e))?
-            .ok_or_else(|| HubError::AgentNotFound {
-                step_id: *step_id,
-                agent_id,
-            })?;
+        let agent = if let Some(snap) = &ctx.snapshot {
+            snap.agents
+                .get(&agent_id)
+                .cloned()
+                .ok_or_else(|| HubError::AgentNotFound {
+                    step_id: *step_id,
+                    agent_id,
+                })?
+        } else {
+            state
+                .repo()
+                .get_persisted_agent(agent_id)
+                .await
+                .map_err(|e| anyhow::anyhow!("failed to load agent: {}", e))?
+                .ok_or_else(|| HubError::AgentNotFound {
+                    step_id: *step_id,
+                    agent_id,
+                })?
+        };
 
         // Resolve provider: use registry if agent targets non-default provider
         let step_engine = if agent.model_provider == "anthropic" || agent.model_provider.is_empty()
@@ -448,8 +459,11 @@ pub async fn execute_workflow_via_engine(
 
     let mut dag_state = DagExecutionState::new();
 
-    // Pre-fetch port metadata for all steps
-    let port_meta = prefetch_port_metadata(state, steps).await;
+    // Pre-fetch port metadata: from snapshot if template-based, otherwise from live DB
+    let port_meta = match &ctx.snapshot {
+        Some(snap) => templates::port_metadata_from_snapshot(snap),
+        None => prefetch_port_metadata(state, steps).await,
+    };
 
     // Broadcast: workflow started
     broadcast_workflow_event(
