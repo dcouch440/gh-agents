@@ -53,7 +53,7 @@ function NotesNodeComponent({ id, data, selected }: NodeProps) {
         cursor: 'default',
       }}
     >
-      <CanvasHandle type="target" position={Position.Bottom} id="notes-input" color={accentColor} variant="passive" />
+      <CanvasHandle type="target" position={Position.Top} id="notes-input" color={accentColor} variant="passive" />
 
       <NodeResizer
         isVisible={hovered || selected === true}

@@ -157,8 +157,8 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
       id: `notes-${step.id}`,
       type: 'notesNode',
       position: {
-        x: (step.position_x ?? 0) - NOTES_NODE.DEFAULT_WIDTH - 40,
-        y: (step.position_y ?? 0),
+        x: (step.position_x ?? 0),
+        y: (step.position_y ?? 0) + NOTES_NODE.DEFAULT_HEIGHT + 40,
       },
       style: {
         width: NOTES_NODE.DEFAULT_WIDTH,

@@ -467,8 +467,8 @@ describe('toRFNodes — notes nodes', () => {
     }
     const nodes = toRFNodes([step1], lookups)
     const notesNode = nodes.find((n) => n.id === 'notes-step-001')
-    expect(notesNode?.position.x).toBeLessThan(step1.position_x ?? 0)
-    expect(notesNode?.position.y).toBe(step1.position_y ?? 0)
+    expect(notesNode?.position.x).toBe(step1.position_x ?? 0)
+    expect(notesNode?.position.y).toBeGreaterThan(step1.position_y ?? 0)
   })
 
   it('falls back to execution_mode for stepName when name is null', () => {
