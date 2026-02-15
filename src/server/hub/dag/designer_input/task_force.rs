@@ -20,6 +20,7 @@ pub fn build_task_force_designer_input(
     roster: &[TaskAgentRosterRow],
     completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
     steps: &[WorkflowStepRow],
+    assistant_notes: Option<&str>,
 ) -> DesignerInput {
     let agents = roster
         .iter()
@@ -40,6 +41,17 @@ pub fn build_task_force_designer_input(
         }
     }
 
+    let mut upstream = format_envelopes_as_upstream(completed_envelopes, steps);
+    if let Some(notes) = assistant_notes {
+        if !notes.is_empty() {
+            upstream.push(super::UpstreamContext {
+                source_name: "Assistant's Notes".to_string(),
+                source_type: "agent_notes".to_string(),
+                content: notes.to_string(),
+            });
+        }
+    }
+
     DesignerInput {
         archetype: "task_force".to_string(),
         context_description: format!(
@@ -47,7 +59,7 @@ pub fn build_task_force_designer_input(
             super::truncate_for_context(&brief.task_description, 200),
         ),
         agents,
-        upstream: format_envelopes_as_upstream(completed_envelopes, steps),
+        upstream,
         available_tools: build_tool_descriptions(&brief.available_capabilities),
         archetype_guidance: guidance,
     }

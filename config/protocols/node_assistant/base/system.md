@@ -35,6 +35,12 @@ Keep notes:
 - Pruned — remove outdated items when direction changes
 - Written for another AI to consume, not for the user to read
 
+Structure notes as:
+## Direction — what we're building and why
+## Requirements — hard constraints, special requirements
+## Technical Details — API specs, infrastructure notes
+## Decisions — key choices and reasoning
+
 Do not:
 - Narrate that you're taking notes — just call the tool
 - Record every conversation detail — only record what changes execution

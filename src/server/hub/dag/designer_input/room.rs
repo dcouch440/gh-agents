@@ -27,6 +27,7 @@ pub fn build_room_designer_input(
     beliefs: &[BeliefRow],
     completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
     steps: &[WorkflowStepRow],
+    assistant_notes: Option<&str>,
 ) -> DesignerInput {
     let agents = members
         .iter()
@@ -73,6 +74,17 @@ pub fn build_room_designer_input(
         })
         .collect();
 
+    let mut upstream = format_envelopes_as_upstream(completed_envelopes, steps);
+    if let Some(notes) = assistant_notes {
+        if !notes.is_empty() {
+            upstream.push(super::UpstreamContext {
+                source_name: "Assistant's Notes".to_string(),
+                source_type: "agent_notes".to_string(),
+                content: notes.to_string(),
+            });
+        }
+    }
+
     DesignerInput {
         archetype: "room".to_string(),
         context_description: format!(
@@ -81,7 +93,7 @@ pub fn build_room_designer_input(
             meeting_purpose,
         ),
         agents,
-        upstream: format_envelopes_as_upstream(completed_envelopes, steps),
+        upstream,
         available_tools: vec![],
         archetype_guidance: format!(
             "This is a room — a meeting space where agents discuss, debate, or review.\n\n\

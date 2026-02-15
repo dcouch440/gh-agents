@@ -89,6 +89,7 @@ mod tests {
             &[],
             &HashMap::new(),
             &[],
+            None,
         );
 
         assert_eq!(input.archetype, "room");

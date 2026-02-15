@@ -27,6 +27,7 @@ pub fn build_strategist_designer_input(
     completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
     available_capabilities: &[String],
     steps: &[WorkflowStepRow],
+    assistant_notes: Option<&str>,
 ) -> DesignerInput {
     let docs_summary = doc_defs
         .iter()
@@ -56,6 +57,17 @@ pub fn build_strategist_designer_input(
         ),
     };
 
+    let mut upstream = format_envelopes_as_upstream(completed_envelopes, steps);
+    if let Some(notes) = assistant_notes {
+        if !notes.is_empty() {
+            upstream.push(super::UpstreamContext {
+                source_name: "Assistant's Notes".to_string(),
+                source_type: "agent_notes".to_string(),
+                content: notes.to_string(),
+            });
+        }
+    }
+
     DesignerInput {
         archetype: "documenter".to_string(),
         context_description: format!(
@@ -64,7 +76,7 @@ pub fn build_strategist_designer_input(
             doc_defs.len(),
         ),
         agents: vec![agent],
-        upstream: format_envelopes_as_upstream(completed_envelopes, steps),
+        upstream,
         available_tools: build_tool_descriptions(available_capabilities),
         archetype_guidance: format!(
             "This is Phase 1 of a three-phase documenter pipeline:\n\
@@ -92,6 +104,7 @@ pub fn build_research_write_designer_input(
     completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
     available_capabilities: &[String],
     steps: &[WorkflowStepRow],
+    assistant_notes: Option<&str>,
 ) -> DesignerInput {
     let mut agents = Vec::with_capacity(document_plans.len() * 2);
 
@@ -137,6 +150,17 @@ pub fn build_research_write_designer_input(
         });
     }
 
+    let mut upstream = format_envelopes_as_upstream(completed_envelopes, steps);
+    if let Some(notes) = assistant_notes {
+        if !notes.is_empty() {
+            upstream.push(super::UpstreamContext {
+                source_name: "Assistant's Notes".to_string(),
+                source_type: "agent_notes".to_string(),
+                content: notes.to_string(),
+            });
+        }
+    }
+
     DesignerInput {
         archetype: "documenter".to_string(),
         context_description: format!(
@@ -146,7 +170,7 @@ pub fn build_research_write_designer_input(
             document_plans.len(),
         ),
         agents,
-        upstream: format_envelopes_as_upstream(completed_envelopes, steps),
+        upstream,
         available_tools: build_tool_descriptions(available_capabilities),
         archetype_guidance: "Researchers run in parallel (Phase 2), then writers run in parallel \
              (Phase 3).\n\

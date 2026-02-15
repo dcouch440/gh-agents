@@ -50,7 +50,7 @@ mod tests {
     fn build_task_force_input_sets_archetype() {
         let brief = make_brief();
         let roster = make_roster();
-        let input = build_task_force_designer_input(&brief, &roster, &HashMap::new(), &[]);
+        let input = build_task_force_designer_input(&brief, &roster, &HashMap::new(), &[], None);
         assert_eq!(input.archetype, "task_force");
     }
 
@@ -58,7 +58,7 @@ mod tests {
     fn build_task_force_input_maps_roster_to_agents() {
         let brief = make_brief();
         let roster = make_roster();
-        let input = build_task_force_designer_input(&brief, &roster, &HashMap::new(), &[]);
+        let input = build_task_force_designer_input(&brief, &roster, &HashMap::new(), &[], None);
         assert_eq!(input.agents.len(), 2);
         assert_eq!(input.agents[0].name, "Scanner");
         assert_eq!(input.agents[0].id, "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
@@ -69,7 +69,7 @@ mod tests {
     fn build_task_force_input_includes_guidance() {
         let brief = make_brief();
         let roster = make_roster();
-        let input = build_task_force_designer_input(&brief, &roster, &HashMap::new(), &[]);
+        let input = build_task_force_designer_input(&brief, &roster, &HashMap::new(), &[], None);
         assert!(input.archetype_guidance.contains("halt_and_report"));
         assert!(input
             .archetype_guidance
@@ -80,7 +80,7 @@ mod tests {
     fn build_task_force_input_includes_tools() {
         let brief = make_brief();
         let roster = make_roster();
-        let input = build_task_force_designer_input(&brief, &roster, &HashMap::new(), &[]);
+        let input = build_task_force_designer_input(&brief, &roster, &HashMap::new(), &[], None);
         assert_eq!(input.available_tools.len(), 2);
         assert_eq!(input.available_tools[0].name, "file_read");
     }

@@ -181,6 +181,14 @@ pub(super) async fn execute_room_step(
                 })
                 .collect();
 
+            // Load assistant notes for the designer
+            let assistant_notes = state
+                .repos()
+                .workflows
+                .get_assistant_notes(step.id)
+                .await
+                .unwrap_or_default();
+
             let input = build_room_designer_input(
                 &config.meeting_purpose,
                 &config.interaction_mode,
@@ -189,6 +197,7 @@ pub(super) async fn execute_room_step(
                 &beliefs,
                 &dag_state.completed_envelopes,
                 steps,
+                assistant_notes.as_deref(),
             );
 
             match agent_designer::run_agent_designer(
