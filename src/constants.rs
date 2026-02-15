@@ -297,6 +297,10 @@ pub mod routes {
     pub const WORKFLOW_WORKSHOP_STEP_EXECUTE: &str =
         "/workflows/:id/workshop/steps/:step_id/execute";
 
+    // Execution History (per-step results for specific runs)
+    pub const WORKFLOW_EXECUTION_STEPS: &str = "/workflows/:wid/executions/:eid/steps";
+    pub const WORKFLOW_EXECUTION_STEP: &str = "/workflows/:wid/executions/:eid/steps/:sid";
+
     // Run Templates (frozen workflow snapshots)
     pub const WORKFLOW_TEMPLATES: &str = "/workflows/:id/templates";
     pub const WORKFLOW_TEMPLATE: &str = "/workflows/:id/templates/:template_id";

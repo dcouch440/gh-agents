@@ -84,6 +84,7 @@ import type {
   RoomStepMember,
   StepChatDebugResponse,
   StepLastRunResponse,
+  RunDetailResponse,
 } from '@/types'
 
 // ============================================================================
@@ -363,6 +364,9 @@ const workflows = freeze({
 
   listExecutions: (workflowId: string, config?: RequestConfig) =>
     baseApi.get<WorkflowExecutionSummary[]>(API.WORKFLOW_EXECUTIONS(workflowId), config),
+
+  getRunDetail: (workflowId: string, executionId: string, config?: RequestConfig) =>
+    baseApi.get<RunDetailResponse>(API.WORKFLOW_EXECUTION_STEPS(workflowId, executionId), config),
 
   getAllNotes: (workflowId: string, config?: RequestConfig) =>
     baseApi.get<Array<{ step_id: string; content: string }>>(API.WORKFLOW_NOTES(workflowId), config),

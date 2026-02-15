@@ -335,6 +335,11 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::WORKFLOW_EXECUTIONS,
             get(api::list_workflow_executions),
         )
+        .route(routes::WORKFLOW_EXECUTION_STEPS, get(api::get_run_detail))
+        .route(
+            routes::WORKFLOW_EXECUTION_STEP,
+            get(api::get_step_run_for_execution),
+        )
         .route(
             routes::COLLECTIONS,
             get(api::list_collections).post(api::create_collection),

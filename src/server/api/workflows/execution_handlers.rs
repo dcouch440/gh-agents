@@ -63,6 +63,8 @@ pub async fn list_workflow_executions(
             completed_at: r.completed_at,
             outputs: r.outputs,
             error: r.error,
+            execution_mode: r.execution_mode,
+            template_id: r.template_id,
         })
         .collect();
 

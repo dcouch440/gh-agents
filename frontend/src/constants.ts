@@ -36,6 +36,8 @@ export const ROUTES = {
   DOCUMENT_DETAIL: '/documents/:id',
   WORKFLOWS: '/workflows',
   WORKFLOW_EDITOR: '/workflows/:id',
+  WORKFLOW_RUNS: '/workflows/:id/runs',
+  WORKFLOW_RUN_DETAIL: '/workflows/:id/runs/:runId',
   SCHEMAS: '/schemas',
   SCHEMA_DETAIL: '/schemas/:id',
   PROMPTS: '/prompts',
@@ -153,6 +155,8 @@ export const API = {
   STEP_LAST_RUN: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}/last-run`,
   WORKFLOW_RUN: (id: string) => `/workflows/${id}/run`,
   WORKFLOW_EXECUTIONS: (id: string) => `/workflows/${id}/executions`,
+  WORKFLOW_EXECUTION_STEPS: (wid: string, eid: string) => `/workflows/${wid}/executions/${eid}/steps`,
+  WORKFLOW_EXECUTION_STEP: (wid: string, eid: string, sid: string) => `/workflows/${wid}/executions/${eid}/steps/${sid}`,
   WORKFLOW_NOTES: (id: string) => `/workflows/${id}/notes`,
 
   // Pipeline Stage Members

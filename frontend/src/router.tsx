@@ -14,6 +14,8 @@ import { ChatPage } from './pages/Chat/ChatPage'
 import { ReviewQueuePage } from './pages/ReviewQueue'
 import { WorkflowsPage } from './pages/Workflows/WorkflowsPage'
 import { WorkflowEditorPage } from './pages/Workflows/WorkflowEditorPage'
+import { RunHistoryPage } from './pages/Workflows/RunHistoryPage'
+import { RunDetailPage } from './pages/Workflows/RunDetailPage'
 
 export const router = createBrowserRouter([
   {
@@ -34,6 +36,8 @@ export const router = createBrowserRouter([
           { path: ROUTES.TASKS, element: <TasksPage /> },
           { path: ROUTES.WORKFLOWS, element: <WorkflowsPage /> },
           { path: ROUTES.WORKFLOW_EDITOR, element: <WorkflowEditorPage /> },
+          { path: ROUTES.WORKFLOW_RUNS, element: <RunHistoryPage /> },
+          { path: ROUTES.WORKFLOW_RUN_DETAIL, element: <RunDetailPage /> },
           { path: ROUTES.REVIEW_QUEUE, element: <ReviewQueuePage /> },
           { path: ROUTES.DOCUMENTS, element: <DocumentsPage /> },
           { path: ROUTES.SETTINGS, element: <SettingsPage /> },

@@ -105,6 +105,8 @@ type WorkflowExecutionSummary = {
   completed_at: string | null
   outputs: Record<string, unknown> | null
   error: string | null
+  execution_mode: string
+  template_id: string | null
 }
 
 type DocumentDef = {
@@ -191,6 +193,34 @@ type StepLastRunResponse = {
   phases: PhaseExecution[] | null
 }
 
+type RunStepResult = {
+  step_id: string
+  step_name: string | null
+  execution_mode: string
+  execution_id: string | null
+  status: string
+  started_at: string | null
+  completed_at: string | null
+  duration_ms: number | null
+  output: string | null
+  structured_output: Record<string, unknown> | null
+  input_tokens: number | null
+  output_tokens: number | null
+  cost_usd: number | null
+  error: string | null
+  phases: PhaseExecution[] | null
+}
+
+type RunDetailResponse = {
+  execution: WorkflowExecutionSummary
+  steps: RunStepResult[]
+  total_input_tokens: number
+  total_output_tokens: number
+  total_cost_usd: number
+  duration_ms: number | null
+  template_name: string | null
+}
+
 export type {
   Workflow,
   WorkflowStep,
@@ -213,4 +243,6 @@ export type {
   StepChatDebugResponse,
   PhaseExecution,
   StepLastRunResponse,
+  RunStepResult,
+  RunDetailResponse,
 }
