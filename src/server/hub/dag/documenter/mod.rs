@@ -306,12 +306,22 @@ impl<'a> DocumenterExecutor<'a> {
         &self,
         doc_defs: &[crate::db::ProtocolDocumentDefRow],
     ) -> Option<super::agent_designer::DesignerResult> {
+        // Load assistant notes for the designer
+        let assistant_notes = self
+            .state
+            .repos()
+            .workflows
+            .get_assistant_notes(self.step.id)
+            .await
+            .unwrap_or_default();
+
         let input = super::designer_input::documenter::build_strategist_designer_input(
             self.step,
             doc_defs,
             self.completed_envelopes,
             &[],
             self.steps,
+            assistant_notes.as_deref(),
         );
 
         match super::agent_designer::run_agent_designer(
@@ -351,12 +361,22 @@ impl<'a> DocumenterExecutor<'a> {
             .into_iter()
             .collect();
 
+        // Load assistant notes for the designer
+        let assistant_notes = self
+            .state
+            .repos()
+            .workflows
+            .get_assistant_notes(self.step.id)
+            .await
+            .unwrap_or_default();
+
         let input = super::designer_input::documenter::build_research_write_designer_input(
             self.step,
             plans,
             self.completed_envelopes,
             &all_caps,
             self.steps,
+            assistant_notes.as_deref(),
         );
 
         match super::agent_designer::run_agent_designer(

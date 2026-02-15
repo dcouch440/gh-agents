@@ -238,8 +238,13 @@ mod tests {
             make_roster_entry("Reporter", "Write audit report", 2),
         ];
 
-        let input =
-            task_force::build_task_force_designer_input(&brief, &roster, &HashMap::new(), &[]);
+        let input = task_force::build_task_force_designer_input(
+            &brief,
+            &roster,
+            &HashMap::new(),
+            &[],
+            None,
+        );
 
         assert_eq!(input.archetype, "task_force");
         assert_eq!(input.agents.len(), 3);
@@ -256,8 +261,13 @@ mod tests {
         let brief = make_brief("Test task", vec![]);
         let roster = vec![make_roster_entry("Agent", "Do stuff", 0)];
 
-        let input =
-            task_force::build_task_force_designer_input(&brief, &roster, &HashMap::new(), &[]);
+        let input = task_force::build_task_force_designer_input(
+            &brief,
+            &roster,
+            &HashMap::new(),
+            &[],
+            None,
+        );
 
         assert_eq!(input.upstream.len(), 1);
         assert!(input.upstream[0].content.contains("No upstream"));
@@ -272,8 +282,13 @@ mod tests {
             make_roster_entry("Second", "role", 1),
         ];
 
-        let input =
-            task_force::build_task_force_designer_input(&brief, &roster, &HashMap::new(), &[]);
+        let input = task_force::build_task_force_designer_input(
+            &brief,
+            &roster,
+            &HashMap::new(),
+            &[],
+            None,
+        );
 
         assert_eq!(input.agents[0].execution_order, 2);
         assert_eq!(input.agents[1].execution_order, 0);
@@ -296,6 +311,7 @@ mod tests {
             &HashMap::new(),
             &["file_read".to_string()],
             &[],
+            None,
         );
 
         assert_eq!(input.archetype, "documenter");
@@ -330,6 +346,7 @@ mod tests {
             &HashMap::new(),
             &["file_read".to_string(), "grep".to_string()],
             &[],
+            None,
         );
 
         assert_eq!(input.agents.len(), 4);
@@ -358,6 +375,7 @@ mod tests {
             &HashMap::new(),
             &["file_read".to_string()],
             &[],
+            None,
         );
 
         // Researcher has capabilities from the plan
@@ -384,6 +402,7 @@ mod tests {
             &HashMap::new(),
             &[],
             &[],
+            None,
         );
 
         assert!(input.agents[0]
@@ -415,6 +434,7 @@ mod tests {
             &[],
             &HashMap::new(),
             &[],
+            None,
         );
 
         assert_eq!(input.archetype, "room");
@@ -443,6 +463,7 @@ mod tests {
             &[],
             &HashMap::new(),
             &[],
+            None,
         );
 
         assert!(!input.agents[0]
@@ -480,6 +501,7 @@ mod tests {
             &beliefs,
             &HashMap::new(),
             &[],
+            None,
         );
 
         // Both members should have beliefs in their additional_context
@@ -488,6 +510,50 @@ mod tests {
             assert!(agent.additional_context.contains("OAuth 2.0 PKCE"));
             assert!(agent.additional_context.contains("Rate limiting"));
         }
+    }
+
+    // ── Assistant notes injection tests ─────────────────────────────────────
+
+    #[test]
+    fn test_task_force_input_includes_assistant_notes() {
+        let brief = make_brief("Test task", vec![]);
+        let roster = vec![make_roster_entry("Agent", "Do stuff", 0)];
+
+        let input = task_force::build_task_force_designer_input(
+            &brief,
+            &roster,
+            &HashMap::new(),
+            &[],
+            Some("## Direction\n- Build auth system"),
+        );
+
+        let notes_entry = input
+            .upstream
+            .iter()
+            .find(|u| u.source_type == "agent_notes");
+        assert!(notes_entry.is_some());
+        let entry = notes_entry.unwrap();
+        assert_eq!(entry.source_name, "Assistant's Notes");
+        assert!(entry.content.contains("Build auth system"));
+    }
+
+    #[test]
+    fn test_task_force_input_skips_empty_notes() {
+        let brief = make_brief("Test task", vec![]);
+        let roster = vec![make_roster_entry("Agent", "Do stuff", 0)];
+
+        let input = task_force::build_task_force_designer_input(
+            &brief,
+            &roster,
+            &HashMap::new(),
+            &[],
+            Some(""),
+        );
+
+        assert!(!input
+            .upstream
+            .iter()
+            .any(|u| u.source_type == "agent_notes"));
     }
 
     #[test]
@@ -513,6 +579,7 @@ mod tests {
             &[],
             &HashMap::new(),
             &[],
+            None,
         );
 
         assert!(input.agents[0]

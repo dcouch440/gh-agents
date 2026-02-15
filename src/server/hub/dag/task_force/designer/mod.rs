@@ -64,8 +64,22 @@ pub(crate) async fn run_agent_designer(
     steps: &[WorkflowStepRow],
     cancel: Option<&CancellationToken>,
 ) -> Result<(Vec<DesignedAgentPrompt>, DesignerTokenUsage), HubError> {
+    // Load assistant notes for the designer
+    let assistant_notes = state
+        .repos()
+        .workflows
+        .get_assistant_notes(step.id)
+        .await
+        .unwrap_or_default();
+
     // Build the generic DesignerInput from task force config
-    let input = build_task_force_designer_input(brief, roster, completed_envelopes, steps);
+    let input = build_task_force_designer_input(
+        brief,
+        roster,
+        completed_envelopes,
+        steps,
+        assistant_notes.as_deref(),
+    );
 
     // Delegate to the generic designer
     let result =
