@@ -65,6 +65,22 @@ impl DagExecutionState {
         }
     }
 
+    /// Create from pre-populated state including envelopes (used by staging path).
+    pub fn from_snapshots(
+        completed: HashMap<Uuid, StepOutput>,
+        var_outputs: HashMap<String, JsonValue>,
+        completed_envelopes: HashMap<Uuid, StepExecutionEnvelope>,
+    ) -> Self {
+        Self {
+            var_outputs,
+            completed,
+            completed_envelopes,
+            total_input_tokens: 0,
+            total_output_tokens: 0,
+            total_cost_usd: 0.0,
+        }
+    }
+
     /// Accumulate token and cost values from a step execution.
     pub fn accumulate_tokens(&mut self, input: i64, output: i64, cost: f32) {
         self.total_input_tokens += input;

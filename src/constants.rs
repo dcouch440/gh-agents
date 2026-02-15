@@ -292,6 +292,12 @@ pub mod routes {
     pub const WORKFLOW_STEP_LAST_RUN: &str = "/workflows/:wid/steps/:sid/last-run";
     pub const WORKFLOW_NOTES: &str = "/workflows/:id/notes";
 
+    // Staging (node-by-node execution)
+    pub const WORKFLOW_STAGING: &str = "/workflows/:id/staging";
+    pub const WORKFLOW_STAGING_RUN: &str = "/workflows/:id/staging/:run_id";
+    pub const WORKFLOW_STAGING_STEP_EXECUTE: &str =
+        "/workflows/:id/staging/:run_id/steps/:step_id/execute";
+
     // Workflow Collections
     pub const COLLECTIONS: &str = "/collections";
     pub const COLLECTION: &str = "/collections/:id";

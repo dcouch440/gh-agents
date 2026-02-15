@@ -90,8 +90,7 @@ impl ExecutionStrategy for DocumenterResearchStrategy {
         // Stateful tools that need DB access (AppState)
         if name == "read_document" {
             if let Some(ref state) = self.config.state {
-                return crate::server::tools::documents::execute_read_document(input, state)
-                    .await;
+                return crate::server::tools::documents::execute_read_document(input, state).await;
             }
             return json!({ "error": "Document reading not available in this context" });
         }
