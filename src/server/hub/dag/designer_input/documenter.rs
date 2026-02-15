@@ -26,6 +26,7 @@ pub fn build_strategist_designer_input(
     doc_defs: &[ProtocolDocumentDefRow],
     completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
     available_capabilities: &[String],
+    steps: &[WorkflowStepRow],
 ) -> DesignerInput {
     let docs_summary = doc_defs
         .iter()
@@ -63,7 +64,7 @@ pub fn build_strategist_designer_input(
             doc_defs.len(),
         ),
         agents: vec![agent],
-        upstream: format_envelopes_as_upstream(completed_envelopes),
+        upstream: format_envelopes_as_upstream(completed_envelopes, steps),
         available_tools: build_tool_descriptions(available_capabilities),
         archetype_guidance: format!(
             "This is Phase 1 of a three-phase documenter pipeline:\n\
@@ -90,6 +91,7 @@ pub fn build_research_write_designer_input(
     document_plans: &[DocumentPlan],
     completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
     available_capabilities: &[String],
+    steps: &[WorkflowStepRow],
 ) -> DesignerInput {
     let mut agents = Vec::with_capacity(document_plans.len() * 2);
 
@@ -144,7 +146,7 @@ pub fn build_research_write_designer_input(
             document_plans.len(),
         ),
         agents,
-        upstream: format_envelopes_as_upstream(completed_envelopes),
+        upstream: format_envelopes_as_upstream(completed_envelopes, steps),
         available_tools: build_tool_descriptions(available_capabilities),
         archetype_guidance: "Researchers run in parallel (Phase 2), then writers run in parallel \
              (Phase 3).\n\

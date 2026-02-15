@@ -75,10 +75,12 @@ pub(crate) struct DocumenterExecutor<'a> {
     cancel: Option<&'a CancellationToken>,
     upstream_context: &'a [ContextDocument],
     completed_envelopes: &'a HashMap<Uuid, StepExecutionEnvelope>,
+    steps: &'a [WorkflowStepRow],
     recorder: ProtocolExecutionRecorder<'a>,
 }
 
 impl<'a> DocumenterExecutor<'a> {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         engine: &'a ExecutionEngine,
         state: &'a AppState,
@@ -88,6 +90,7 @@ impl<'a> DocumenterExecutor<'a> {
         cancel: Option<&'a CancellationToken>,
         upstream_context: &'a [ContextDocument],
         completed_envelopes: &'a HashMap<Uuid, StepExecutionEnvelope>,
+        steps: &'a [WorkflowStepRow],
     ) -> Self {
         let recorder =
             ProtocolExecutionRecorder::new(&*state.repos().protocols, step.id, ctx.run_id);
@@ -100,6 +103,7 @@ impl<'a> DocumenterExecutor<'a> {
             cancel,
             upstream_context,
             completed_envelopes,
+            steps,
             recorder,
         }
     }
@@ -307,6 +311,7 @@ impl<'a> DocumenterExecutor<'a> {
             doc_defs,
             self.completed_envelopes,
             &[],
+            self.steps,
         );
 
         match super::agent_designer::run_agent_designer(
@@ -351,6 +356,7 @@ impl<'a> DocumenterExecutor<'a> {
             plans,
             self.completed_envelopes,
             &all_caps,
+            self.steps,
         );
 
         match super::agent_designer::run_agent_designer(
@@ -498,6 +504,7 @@ pub(super) async fn execute_documenter_step(
         cancel,
         &upstream_docs,
         &dag_state.completed_envelopes,
+        steps,
     );
     let result = executor.execute(&port_meta.step_outputs).await?;
 

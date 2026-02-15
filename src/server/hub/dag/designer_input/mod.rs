@@ -9,10 +9,11 @@ pub mod room;
 pub mod task_force;
 mod tests;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use uuid::Uuid;
 
+use crate::db::WorkflowStepRow;
 use crate::types::StepExecutionEnvelope;
 
 // ── Generic input types ─────────────────────────────────────────────────────
@@ -94,6 +95,7 @@ pub struct RoomDesignerMember {
 /// Used by all archetype formatters.
 pub fn format_envelopes_as_upstream(
     envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
+    steps: &[WorkflowStepRow],
 ) -> Vec<UpstreamContext> {
     if envelopes.is_empty() {
         return vec![UpstreamContext {
@@ -104,13 +106,24 @@ pub fn format_envelopes_as_upstream(
         }];
     }
 
+    let context_step_ids: HashSet<Uuid> = steps
+        .iter()
+        .filter(|s| s.execution_mode == "context")
+        .map(|s| s.id)
+        .collect();
+
     envelopes
         .iter()
         .map(|(step_id, env)| {
             let data_str = env.data.as_ref().map(|d| d.to_string()).unwrap_or_default();
+            let source_type = if context_step_ids.contains(step_id) {
+                "context"
+            } else {
+                "step"
+            };
             UpstreamContext {
                 source_name: step_id.to_string(),
-                source_type: "step".to_string(),
+                source_type: source_type.to_string(),
                 content: truncate_for_context(&data_str, 4000).to_string(),
             }
         })
