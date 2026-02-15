@@ -182,6 +182,57 @@ describe('useAssistantSession', () => {
     expect(mockGetStepSession).not.toHaveBeenCalled()
   })
 
+  it('preserves state when one of two consumers unmounts (full-screen toggle)', async () => {
+    const session = makeSession()
+    mockGetStepSession.mockResolvedValue(session)
+    mockGetHistory.mockResolvedValue(makeHistory())
+
+    // First consumer (canvas ChatTab)
+    const hook1 = renderHook(() => useAssistantSession('wf-001', 'step-001'))
+
+    await waitFor(() => {
+      expect(hook1.result.current.messages).toHaveLength(2)
+    })
+
+    // Second consumer mounts (full-screen modal ChatTab)
+    const hook2 = renderHook(() => useAssistantSession('wf-001', 'step-001'))
+
+    // Both see the same messages
+    expect(hook2.result.current.messages).toHaveLength(2)
+
+    // Second consumer unmounts (modal closes)
+    hook2.unmount()
+
+    // Allow any queued microtasks to flush
+    await waitFor(() => {
+      expect(hook1.result.current.messages).toHaveLength(2)
+    })
+
+    // First consumer still has its messages — state was NOT wiped
+    expect(hook1.result.current.messages[0]?.content).toBe('hello')
+    expect(hook1.result.current.messages[1]?.content).toBe('hi there')
+  })
+
+  it('resets state when ALL consumers for a stepId unmount', async () => {
+    const session = makeSession()
+    mockGetStepSession.mockResolvedValue(session)
+    mockGetHistory.mockResolvedValue(makeHistory())
+
+    const hook1 = renderHook(() => useAssistantSession('wf-001', 'step-001'))
+
+    await waitFor(() => {
+      expect(hook1.result.current.messages).toHaveLength(2)
+    })
+
+    hook1.unmount()
+
+    // After the last consumer unmounts, state should be reset
+    await waitFor(() => {
+      const step = assistantSessionStore.store.getState().byStep['step-001']
+      expect(step).toBeUndefined()
+    })
+  })
+
   it('resets state when stepId changes', async () => {
     const session = makeSession()
     mockGetStepSession.mockResolvedValue(session)
