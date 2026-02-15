@@ -11,6 +11,11 @@ import type { PanelState } from '@/stores/assistantSessionStore'
 const STREAM_LOST_ERROR = 'Stream connection lost'
 const SEND_FAILED_ERROR = 'Failed to send message'
 
+// Track how many hook instances are mounted per stepId so we only
+// reset store state when the *last* consumer unmounts (e.g. full-screen
+// modal closing while the canvas ChatTab stays mounted).
+const stepMountCounts = new Map<string, number>()
+
 type UseAssistantSessionReturn = {
   messages: ChatMessageData[]
   streamingSegments: MessageSegment[]
@@ -40,18 +45,43 @@ const useAssistantSession = (
   const retryAbortRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
+    const prev = stepMountCounts.get(stepId) ?? 0
+    stepMountCounts.set(stepId, prev + 1)
+
     if (!workflowId) {
-      assistantSessionStore.initEmpty(stepId)
-      return
+      if (prev === 0) assistantSessionStore.initEmpty(stepId)
+      return () => {
+        const next = (stepMountCounts.get(stepId) ?? 1) - 1
+        stepMountCounts.set(stepId, next)
+        if (next <= 0) {
+          stepMountCounts.delete(stepId)
+          assistantSessionStore.resetStep(stepId)
+        }
+      }
     }
 
-    void assistantSessionStore.loadSession(workflowId, stepId)
+    // Only fetch when the first consumer mounts for this stepId
+    if (prev === 0) {
+      void assistantSessionStore.loadSession(workflowId, stepId)
+    }
 
     return () => {
       abort()
       retryAbortRef.current?.()
       retryAbortRef.current = null
-      assistantSessionStore.resetStep(stepId)
+
+      const next = (stepMountCounts.get(stepId) ?? 1) - 1
+      stepMountCounts.set(stepId, next)
+      if (next <= 0) {
+        stepMountCounts.delete(stepId)
+        // Defer reset to allow re-mount in the same render cycle
+        // (e.g. effect re-fire due to dependency change)
+        queueMicrotask(() => {
+          if ((stepMountCounts.get(stepId) ?? 0) === 0) {
+            assistantSessionStore.resetStep(stepId)
+          }
+        })
+      }
     }
   }, [workflowId, stepId, abort])
 
