@@ -14,6 +14,7 @@ type CanvasFormTab = {
 }
 
 type CanvasFormNodeProps = {
+  nodeId: string
   header: ReactNode | null
   headerHeight?: number
   tabs: CanvasFormTab[]
@@ -24,7 +25,6 @@ type CanvasFormNodeProps = {
   highlightMode?: HighlightMode
   extraHandles?: ReactNode
   overlay?: ReactNode
-  onResizeEnd?: (width: number, height: number) => void
 }
 
 export type { CanvasFormTab, CanvasFormNodeProps }

@@ -1,13 +1,12 @@
-import { memo, useState, useCallback } from 'react'
-import { Position, NodeResizer } from '@xyflow/react'
-import type { NodeProps, ResizeParams } from '@xyflow/react'
+import { memo, useCallback } from 'react'
+import { Position } from '@xyflow/react'
+import type { NodeProps } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { useStore, workflowStore, shareStore } from '@/stores'
 import { SharePickerPanel } from '../SharePickerPanel'
 import { CanvasHandle } from '../CanvasHandle'
 import { STEP_TYPE_COLORS, GREYSCALE_ACCENT } from '../constants'
-import { useNodeScale } from '../useNodeScale'
 import { CONTEXT_NODE } from './constants'
 import { ContextNodeHeader } from './ContextNodeHeader'
 import { ContextNodeContent } from './ContextNodeContent'
@@ -16,6 +15,7 @@ import { nodeDataEqual } from '../mappers'
 import { CanvasNodeKind } from '../canvasKinds'
 import { useProtocolHighlight } from '../useProtocolHighlight'
 import { getNodeHighlightStyles } from '../nodeHighlightStyles'
+import { ResizableNodeShell, toConstraints } from '../ResizableNodeShell'
 
 function ContextNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
@@ -23,8 +23,6 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
   const highlightMode = useProtocolHighlight(CanvasNodeKind.CONTEXT, id, nodeData.protocolStepId)
   const accentColor = STEP_TYPE_COLORS['context'] ?? GREYSCALE_ACCENT
   const isShareSource = useStore(shareStore.store, (s) => s.active && s.sourceStepId === id)
-  const [hovered, setHovered] = useState(false)
-  const { containerRef, scaleFactor } = useNodeScale()
   const highlight = getNodeHighlightStyles({
     selected: selected === true,
     accentColor,
@@ -40,91 +38,42 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
     [id],
   )
 
-  const handleResizeEnd = useCallback(
-    (_event: unknown, params: ResizeParams) => {
-      void workflowStore.updateStep(id, {
-        width: Math.round(params.width),
-        height: Math.round(params.height),
-      })
-    },
-    [id],
-  )
-
   return (
-    <Box
-      ref={containerRef}
-      onMouseEnter={() => {
-        setHovered(true)
-      }}
-      onMouseLeave={() => {
-        setHovered(false)
-      }}
-      sx={{
-        width: '100%',
-        height: '100%',
-        borderRadius: '12px',
-        backgroundColor: theme.palette.mode === 'light' ? theme.palette.custom.cavityBg : 'background.paper',
-        border: 2,
-        borderColor: highlight.borderColor,
-        boxShadow: highlight.boxShadow,
-        transition: 'border-color 150ms ease, box-shadow 150ms ease',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        cursor: 'default',
-      }}
+    <ResizableNodeShell
+      nodeId={id}
+      selected={selected === true}
+      accentColor={accentColor}
+      highlight={highlight}
+      constraints={toConstraints(CONTEXT_NODE)}
+      handles={<CanvasHandle type="source" position={Position.Bottom} color={accentColor} />}
     >
-      <NodeResizer
-        isVisible={hovered || selected === true}
-        minWidth={CONTEXT_NODE.MIN_WIDTH}
-        minHeight={CONTEXT_NODE.MIN_HEIGHT}
-        maxWidth={CONTEXT_NODE.MAX_WIDTH}
-        maxHeight={CONTEXT_NODE.MAX_HEIGHT}
-        onResizeEnd={handleResizeEnd}
-        lineStyle={{ borderColor: 'transparent', borderWidth: 0 }}
-        handleStyle={{
-          width: 10,
-          height: 10,
-          borderRadius: 2,
-          backgroundColor: accentColor,
-          borderColor: accentColor,
-          opacity: 0.6,
+      {/* Header — draggable area */}
+      <Box
+        sx={{
+          height: CONTEXT_NODE.HEADER_HEIGHT,
+          overflow: 'hidden',
+          borderBottom: 1,
+          borderColor: 'divider',
+          display: 'flex',
+          alignItems: 'center',
+          backgroundColor: theme.palette.custom.bgHeader,
+          flexShrink: 0,
+          cursor: 'grab',
+          '&:active': { cursor: 'grabbing' },
         }}
-      />
-
-      {/* Zoomed inner container — scales content with node size */}
-      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', zoom: scaleFactor }}>
-        {/* Header — draggable area */}
-        <Box
-          sx={{
-            height: CONTEXT_NODE.HEADER_HEIGHT,
-            overflow: 'hidden',
-            borderBottom: 1,
-            borderColor: 'divider',
-            display: 'flex',
-            alignItems: 'center',
-            backgroundColor: theme.palette.custom.bgHeader,
-            flexShrink: 0,
-            cursor: 'grab',
-            '&:active': { cursor: 'grabbing' },
-          }}
-        >
-          <ContextNodeHeader name={nodeData.label} accentColor={accentColor} />
-        </Box>
-
-        {/* Content area — interactive, no drag */}
-        <Box className="nowheel nodrag nopan" sx={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
-          {isShareSource ? (
-            <SharePickerPanel stepId={id} />
-          ) : (
-            <ContextNodeContent content={nodeData.content} accentColor={accentColor} onChange={handleContentChange} />
-          )}
-        </Box>
+      >
+        <ContextNodeHeader name={nodeData.label} accentColor={accentColor} />
       </Box>
 
-      {/* Source handle only — context nodes are source-only, no target handle */}
-      <CanvasHandle type="source" position={Position.Bottom} color={accentColor} />
-    </Box>
+      {/* Content area — interactive, no drag */}
+      <Box className="nowheel nodrag nopan" sx={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
+        {isShareSource ? (
+          <SharePickerPanel stepId={id} />
+        ) : (
+          <ContextNodeContent content={nodeData.content} accentColor={accentColor} onChange={handleContentChange} />
+        )}
+      </Box>
+    </ResizableNodeShell>
   )
 }
 

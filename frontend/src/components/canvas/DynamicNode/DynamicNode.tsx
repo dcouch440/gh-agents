@@ -181,13 +181,6 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     return null
   })()
 
-  const handleResizeEnd = useCallback(
-    (width: number, height: number) => {
-      void workflowStore.updateStep(id, { width, height })
-    },
-    [id],
-  )
-
   const handleExpand = useCallback(() => {
     setExpanded(true)
   }, [])
@@ -212,6 +205,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   return (
     <>
       <CanvasFormNode
+        nodeId={id}
         header={headerElement}
         tabs={tabs}
         activeTabId={activeTabId}
@@ -220,7 +214,6 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
         accentColor={accentColor}
         highlightMode={effectiveHighlight}
         overlay={shareOverlay}
-        onResizeEnd={handleResizeEnd}
         extraHandles={
           <>
             {nodeData.archetype === Archetype.DOCUMENTER && (

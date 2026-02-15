@@ -1,27 +1,24 @@
-import { memo, useState, useCallback } from 'react'
-import { Position, NodeResizer } from '@xyflow/react'
-import type { NodeProps, ResizeParams } from '@xyflow/react'
+import { memo } from 'react'
+import { Position } from '@xyflow/react'
+import type { NodeProps } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { CanvasHandle } from '../CanvasHandle'
-import { useNodeScale } from '../useNodeScale'
 import { NOTES_NODE } from './constants'
 import { NotesNodeHeader } from './NotesNodeHeader'
 import { NotesNodeContent } from './NotesNodeContent'
 import type { NotesNodeData } from './types'
 import { nodeDataEqual } from '../mappers'
-import { setStoredDimensions } from '../nodeResizeStorage'
 import { CanvasNodeKind } from '../canvasKinds'
 import { useProtocolHighlight } from '../useProtocolHighlight'
 import { getNodeHighlightStyles } from '../nodeHighlightStyles'
+import { ResizableNodeShell, toConstraints } from '../ResizableNodeShell'
 
 function NotesNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
   const nodeData = data as NotesNodeData
   const highlightMode = useProtocolHighlight(CanvasNodeKind.NOTES, id, nodeData.protocolStepId)
   const accentColor = NOTES_NODE.ACCENT_COLOR
-  const [hovered, setHovered] = useState(false)
-  const { containerRef, scaleFactor } = useNodeScale()
   const highlight = getNodeHighlightStyles({
     selected: selected === true,
     accentColor,
@@ -30,80 +27,36 @@ function NotesNodeComponent({ id, data, selected }: NodeProps) {
     variant: 'resizable',
   })
 
-  const handleResizeEnd = useCallback(
-    (_event: unknown, params: ResizeParams) => {
-      setStoredDimensions(id, { width: Math.round(params.width), height: Math.round(params.height) })
-    },
-    [id],
-  )
-
   return (
-    <Box
-      ref={containerRef}
-      onMouseEnter={() => {
-        setHovered(true)
-      }}
-      onMouseLeave={() => {
-        setHovered(false)
-      }}
-      sx={{
-        width: '100%',
-        height: '100%',
-        borderRadius: '12px',
-        backgroundColor: theme.palette.mode === 'light' ? theme.palette.custom.cavityBg : 'background.paper',
-        border: 2,
-        borderColor: highlight.borderColor,
-        boxShadow: highlight.boxShadow,
-        transition: 'border-color 150ms ease, box-shadow 150ms ease',
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        cursor: 'default',
-      }}
+    <ResizableNodeShell
+      nodeId={id}
+      selected={selected === true}
+      accentColor={accentColor}
+      highlight={highlight}
+      constraints={toConstraints(NOTES_NODE)}
+      handles={<CanvasHandle type="target" position={Position.Top} id="notes-input" color={accentColor} variant="passive" />}
     >
-      <CanvasHandle type="target" position={Position.Top} id="notes-input" color={accentColor} variant="passive" />
-
-      <NodeResizer
-        isVisible={hovered || selected === true}
-        minWidth={NOTES_NODE.MIN_WIDTH}
-        minHeight={NOTES_NODE.MIN_HEIGHT}
-        maxWidth={NOTES_NODE.MAX_WIDTH}
-        maxHeight={NOTES_NODE.MAX_HEIGHT}
-        onResizeEnd={handleResizeEnd}
-        lineStyle={{ borderColor: 'transparent', borderWidth: 0 }}
-        handleStyle={{
-          width: 10,
-          height: 10,
-          borderRadius: 2,
-          backgroundColor: accentColor,
-          borderColor: accentColor,
-          opacity: 0.6,
+      <Box
+        sx={{
+          height: NOTES_NODE.HEADER_HEIGHT,
+          overflow: 'hidden',
+          borderBottom: 1,
+          borderColor: 'divider',
+          display: 'flex',
+          alignItems: 'center',
+          backgroundColor: theme.palette.custom.bgHeader,
+          flexShrink: 0,
+          cursor: 'grab',
+          '&:active': { cursor: 'grabbing' },
         }}
-      />
-
-      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', zoom: scaleFactor }}>
-        <Box
-          sx={{
-            height: NOTES_NODE.HEADER_HEIGHT,
-            overflow: 'hidden',
-            borderBottom: 1,
-            borderColor: 'divider',
-            display: 'flex',
-            alignItems: 'center',
-            backgroundColor: theme.palette.custom.bgHeader,
-            flexShrink: 0,
-            cursor: 'grab',
-            '&:active': { cursor: 'grabbing' },
-          }}
-        >
-          <NotesNodeHeader name={nodeData.label} stepName={nodeData.stepName} accentColor={accentColor} />
-        </Box>
-
-        <Box className="nowheel nodrag nopan" sx={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
-          <NotesNodeContent content={nodeData.content} />
-        </Box>
+      >
+        <NotesNodeHeader name={nodeData.label} stepName={nodeData.stepName} accentColor={accentColor} />
       </Box>
-    </Box>
+
+      <Box className="nowheel nodrag nopan" sx={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>
+        <NotesNodeContent content={nodeData.content} />
+      </Box>
+    </ResizableNodeShell>
   )
 }
 
