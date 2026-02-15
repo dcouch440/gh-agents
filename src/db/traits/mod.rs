@@ -11,15 +11,15 @@ use uuid::Uuid;
 use crate::db::{
     AgentDesignerOutputRow, AgentDesignerRunRow, AgentExecutionRow, AgentGuidanceRow, AgentRow,
     BeliefExtractionPlanRow, BeliefRow, ChatMessageRow, CollectionRunRow,
-    CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContextStoreRow, DocumentRow,
-    DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
+    CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContentVersionRow, ContextStoreRow,
+    DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
     ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow, ResultRow,
     RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomStepConfigRow,
-    RoomStepMemberRow, RoomTranscriptEntry, RouterRequestRow, SessionRow, StepDocumentRow,
-    StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow, TaskAgentRosterRow,
-    TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow, ToolRouterRow,
-    ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
-    WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
+    RoomStepMemberRow, RoomTranscriptEntry, RouterRequestRow, RunSnapshotRow, SessionRow,
+    StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow,
+    TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow,
+    ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow,
+    WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -512,6 +512,9 @@ pub trait WorkflowRepo: Send + Sync {
     async fn remove_step_document(&self, step_id: Uuid, document_id: Uuid) -> Result<()>;
 
     // --- Protocol Document Definitions ---
+
+    /// Get a single document definition by ID.
+    async fn get_document_def(&self, id: Uuid) -> Result<Option<ProtocolDocumentDefRow>>;
 
     /// List all document definitions for a documenter step.
     async fn list_document_defs(&self, step_id: Uuid) -> Result<Vec<ProtocolDocumentDefRow>>;
@@ -1652,4 +1655,53 @@ pub trait ProtocolRepo: Send + Sync {
         &self,
         run_id: Uuid,
     ) -> Result<Vec<ProtocolExecutionRow>>;
+}
+
+// ============================================================================
+// Content Version Repository
+// ============================================================================
+
+/// Database operations for content versioning and run snapshots.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait ContentVersionRepo: Send + Sync {
+    /// Find an existing version by (source_id, content_type, content_hash)
+    /// or create a new one. Returns the version row (existing or newly created).
+    async fn find_or_create_version(
+        &self,
+        source_id: Uuid,
+        content_type: &str,
+        content_hash: &str,
+        content: &str,
+    ) -> Result<ContentVersionRow>;
+
+    /// Create a run snapshot linking (run_id, step_id, content_type, role) to a version.
+    async fn create_run_snapshot(
+        &self,
+        run_id: Uuid,
+        step_id: Uuid,
+        content_type: &str,
+        role: &str,
+        content_version_id: Uuid,
+        source_id: Uuid,
+    ) -> Result<RunSnapshotRow>;
+
+    /// Get the content version for a specific (run_id, step_id, content_type, role).
+    async fn get_run_snapshot(
+        &self,
+        run_id: Uuid,
+        step_id: Uuid,
+        content_type: &str,
+        role: &str,
+    ) -> Result<Option<RunSnapshotRow>>;
+
+    /// List all snapshots for a given run.
+    async fn list_run_snapshots(&self, run_id: Uuid) -> Result<Vec<RunSnapshotRow>>;
+
+    /// Resolve a document def_id to its versioned content for a specific run.
+    async fn resolve_document_version_by_def(
+        &self,
+        def_id: Uuid,
+        run_id: Uuid,
+    ) -> Result<Option<ContentVersionRow>>;
 }

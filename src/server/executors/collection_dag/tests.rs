@@ -321,6 +321,12 @@ mod tests {
             ) -> Result<Option<crate::db::WorkflowStepRow>> {
                 unimplemented!()
             }
+            async fn get_document_def(
+                &self,
+                _: Uuid,
+            ) -> Result<Option<crate::db::ProtocolDocumentDefRow>> {
+                Ok(None)
+            }
             async fn list_document_defs(
                 &self,
                 _: Uuid,

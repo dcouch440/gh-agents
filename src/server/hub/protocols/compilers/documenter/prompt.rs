@@ -101,17 +101,19 @@ pub fn format_document_defs_section(defs: &[ProtocolDocumentDefRow]) -> String {
         };
         if def.description.is_empty() {
             out.push_str(&format!(
-                "\n{}. \"{}\" (target: ~{} characters) \u{2014} {}",
+                "\n{}. \"{}\" [def_id: {}] (target: ~{} characters) \u{2014} {}",
                 i + 1,
                 def.name,
+                def.id,
                 def.target_length,
                 description,
             ));
         } else {
             out.push_str(&format!(
-                "\n{}. \"{}\" \u{2014} {} (target: ~{} characters)",
+                "\n{}. \"{}\" [def_id: {}] \u{2014} {} (target: ~{} characters)",
                 i + 1,
                 def.name,
+                def.id,
                 description,
                 def.target_length,
             ));

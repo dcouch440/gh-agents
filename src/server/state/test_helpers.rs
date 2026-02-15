@@ -5,10 +5,10 @@
 use std::sync::Arc;
 
 use crate::db::traits::{
-    MockAgentExecutionRepo, MockContextStoreRepo, MockDocumentRepo, MockOutputSchemaRepo,
-    MockPromptTemplateRepo, MockProtocolRepo, MockResultRepo, MockRoomRepo, MockRouterRequestRepo,
-    MockSystemConfigRepo, MockTokenLedgerRepo, MockToolCapabilityRepo, MockToolRouterRepo,
-    MockUserRepo, MockWorkflowRepo,
+    MockAgentExecutionRepo, MockContentVersionRepo, MockContextStoreRepo, MockDocumentRepo,
+    MockOutputSchemaRepo, MockPromptTemplateRepo, MockProtocolRepo, MockResultRepo, MockRoomRepo,
+    MockRouterRequestRepo, MockSystemConfigRepo, MockTokenLedgerRepo, MockToolCapabilityRepo,
+    MockToolRouterRepo, MockUserRepo, MockWorkflowRepo,
 };
 
 use super::Repos;
@@ -34,6 +34,7 @@ pub fn default_mock_repos() -> Repos {
         Arc::new(MockToolCapabilityRepo::new()),
         Arc::new(MockSystemConfigRepo::new()),
         Arc::new(MockProtocolRepo::new()),
+        Arc::new(MockContentVersionRepo::new()),
     )
 }
 
@@ -146,6 +147,15 @@ impl MockReposBuilder {
         repo: Arc<dyn crate::db::traits::ToolCapabilityRepo>,
     ) -> Self {
         self.repos.tool_capabilities = repo;
+        self
+    }
+
+    /// Override the content versions repository.
+    pub fn with_content_versions(
+        mut self,
+        repo: Arc<dyn crate::db::traits::ContentVersionRepo>,
+    ) -> Self {
+        self.repos.content_versions = repo;
         self
     }
 

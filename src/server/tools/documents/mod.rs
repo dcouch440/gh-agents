@@ -183,6 +183,71 @@ pub(crate) async fn execute_read_document(input: &Value, state: &AppState) -> Va
     }
 }
 
+/// Read a document by its definition ID, resolved for the current run.
+///
+/// Resolution path: `(def_id, run_id) → run_snapshots → content_versions → content`.
+/// Falls back to the "latest" document linked via `protocol_document_defs.document_id`
+/// if no versioned content exists for this run.
+pub(crate) async fn execute_read_document_by_def_id(
+    input: &Value,
+    state: &AppState,
+    run_id: uuid::Uuid,
+) -> Value {
+    let Some(id_str) = input["def_id"].as_str() else {
+        return json!({ "error": "def_id is required" });
+    };
+    let Ok(def_id) = uuid::Uuid::parse_str(id_str) else {
+        return json!({ "error": format!("Invalid UUID: {}", id_str) });
+    };
+
+    // Try version-aware resolution: (def_id, run_id) → content_versions
+    let cv_repo = &*state.repos().content_versions;
+    match cv_repo
+        .resolve_document_version_by_def(def_id, run_id)
+        .await
+    {
+        Ok(Some(version)) => {
+            return json!({
+                "def_id": id_str,
+                "content": version.content,
+                "version_number": version.version_number,
+                "content_hash": version.content_hash,
+            });
+        }
+        Ok(None) => {} // Fall through to latest-document fallback
+        Err(e) => {
+            tracing::warn!("Version resolution failed for def {def_id}: {e}");
+        }
+    }
+
+    // Fallback: read latest from protocol_document_defs → documents
+    let wf_repo = &*state.repos().workflows;
+    let def = match wf_repo.get_document_def(def_id).await {
+        Ok(Some(def)) => def,
+        Ok(None) => return json!({ "error": format!("Document definition not found: {id_str}") }),
+        Err(e) => return json!({ "error": format!("Failed to load document def: {e}") }),
+    };
+
+    let Some(doc_id) = def.document_id else {
+        return json!({ "error": "Document not yet generated for this definition" });
+    };
+
+    let Some(doc_repo) = state.doc_repo() else {
+        return json!({ "error": "Document repository not initialized" });
+    };
+
+    match doc_repo.get_document(doc_id).await {
+        Ok(Some(doc)) => json!({
+            "def_id": id_str,
+            "content": doc.content,
+            "version_number": null,
+            "note": "Reading latest version (no run-specific version found)",
+        }),
+        Ok(None) => json!({ "error": format!("Linked document not found: {doc_id}") }),
+        Err(e) => json!({ "error": e.to_string() }),
+    }
+}
+
 pub(crate) async fn execute_submit_prd(input: &Value, state: &AppState, user_id: UserId) -> Value {
     let mut errors = Vec::new();
 

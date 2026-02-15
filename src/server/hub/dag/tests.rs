@@ -42,7 +42,8 @@ mod tests {
             position_x: None,
             position_y: None,
             width: None,
-            height: None,            name: None,
+            height: None,
+            name: None,
             system_prompt_suffix: None,
             visible: true,
             description: String::new(),
@@ -170,9 +171,13 @@ mod tests {
     use super::super::execute_workflow_via_engine;
     use super::super::WorkflowExecutionContext;
     use crate::db::traits::{
-        MockAgentExecutionRepo, MockServerRepo, MockTokenLedgerRepo, MockWorkflowRepo,
+        MockAgentExecutionRepo, MockContentVersionRepo, MockServerRepo, MockTokenLedgerRepo,
+        MockWorkflowRepo,
     };
-    use crate::db::{AgentExecutionRow, AgentRow, ExecutionMessageRow, TokenLedgerRow};
+    use crate::db::{
+        AgentExecutionRow, AgentRow, ContentVersionRow, ExecutionMessageRow, RunSnapshotRow,
+        TokenLedgerRow,
+    };
     use crate::llm::{
         LLMError, LLMProvider, LLMRequest, LLMResponse, StopReason, StreamChunk, TokenUsage,
     };
@@ -386,7 +391,8 @@ mod tests {
             position_x: None,
             position_y: None,
             width: None,
-            height: None,            name: None,
+            height: None,
+            name: None,
             system_prompt_suffix: None,
             visible: true,
             description: String::new(),
@@ -427,7 +433,8 @@ mod tests {
             position_x: None,
             position_y: None,
             width: None,
-            height: None,            name: None,
+            height: None,
+            name: None,
             system_prompt_suffix: None,
             visible: true,
             description: String::new(),
@@ -537,10 +544,42 @@ mod tests {
             .expect_insert_ledger_entry()
             .returning(|_, _, _, _, _, _| Ok(dummy_tl_row()));
 
+        // MockContentVersionRepo — permissive (snapshotting is fire-and-forget)
+        let mut cv_repo = MockContentVersionRepo::new();
+        cv_repo.expect_find_or_create_version().returning(
+            |source_id, content_type, content_hash, _content| {
+                Ok(ContentVersionRow {
+                    id: Uuid::new_v4(),
+                    source_id,
+                    content_type: content_type.to_string(),
+                    content_hash: content_hash.to_string(),
+                    content: String::new(),
+                    version_number: 1,
+                    byte_size: 0,
+                    created_at: Utc::now(),
+                })
+            },
+        );
+        cv_repo.expect_create_run_snapshot().returning(
+            |run_id, step_id, content_type, role, cv_id, source_id| {
+                Ok(RunSnapshotRow {
+                    id: Uuid::new_v4(),
+                    run_id,
+                    step_id,
+                    content_type: content_type.to_string(),
+                    role: role.to_string(),
+                    content_version_id: cv_id,
+                    source_id,
+                    created_at: Utc::now(),
+                })
+            },
+        );
+
         let repos = MockReposBuilder::new()
             .with_workflows(Arc::new(wf_repo))
             .with_agent_executions(Arc::new(ae_repo))
             .with_token_ledger(Arc::new(tl_repo))
+            .with_content_versions(Arc::new(cv_repo))
             .build();
 
         let engine = ExecutionEngine::new(provider.clone());

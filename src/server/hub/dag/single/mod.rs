@@ -83,6 +83,18 @@ pub(super) async fn execute_single_step(
     )
     .await;
 
+    // Snapshot composed user prompt for run history
+    let _ = super::versioning::snapshot_content(
+        &*state.repos().content_versions,
+        ctx.run_id,
+        step.id,
+        step.id,
+        super::versioning::content_types::PROMPT,
+        "input",
+        &prompt,
+    )
+    .await;
+
     // Phase 6: Inject downstream routing context into the prompt
     let mut prompt = prompt;
     let local_step_map: HashMap<Uuid, &WorkflowStepRow> = steps.iter().map(|s| (s.id, s)).collect();
@@ -124,7 +136,20 @@ pub(super) async fn execute_single_step(
 
     // Store envelope for downstream port resolution
     let envelope = wrap_in_envelope(&output, agent, step.id, in_tok, out_tok, cost);
+
+    // Snapshot envelope for run history
+    let envelope_json = serde_json::to_string(&envelope).unwrap_or_default();
     dag_state.record_step_output(step.id, output, envelope);
+    let _ = super::versioning::snapshot_content(
+        &*state.repos().content_versions,
+        ctx.run_id,
+        step.id,
+        step.id,
+        super::versioning::content_types::ENVELOPE,
+        "output",
+        &envelope_json,
+    )
+    .await;
 
     // Broadcast: step completed
     broadcast_workflow_event(
@@ -195,6 +220,18 @@ pub(crate) async fn run_step_via_engine(
             output_schema_value = Some(schema.schema.clone());
         }
     }
+
+    // Snapshot system prompt for run history
+    let _ = super::versioning::snapshot_content(
+        &*state.repos().content_versions,
+        ctx.run_id,
+        step.id,
+        step.id,
+        super::versioning::content_types::SYSTEM_PROMPT,
+        "input",
+        &system_prompt,
+    )
+    .await;
 
     // Create agent_execution row
     let ae_row = ae_repo
