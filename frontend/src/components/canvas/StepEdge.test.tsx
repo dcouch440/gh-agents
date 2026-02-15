@@ -15,6 +15,8 @@ vi.mock('@xyflow/react', () => ({
   Position: { Left: 'left', Right: 'right' },
 }))
 
+vi.mock('./useCanvasLOD', () => ({ useCanvasLOD: () => 'full' }))
+
 vi.mock('./PipeEdgePath', () => ({
   PipeEdgePath: (props: { edgePath: string; color: string; selected: boolean; isProtocol: boolean }) => (
     <g

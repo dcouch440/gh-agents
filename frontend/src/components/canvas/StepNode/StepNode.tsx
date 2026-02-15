@@ -7,16 +7,19 @@ import { useTheme } from '@mui/material/styles'
 import type { StepNodeData } from '../mappers'
 import { nodeDataEqual } from '../mappers'
 import { CanvasHandle } from '../CanvasHandle'
-import { CANVAS, DEFAULT_STEP_TYPE_COLOR, STEP_TYPE_COLORS, PROTOCOL_TYPE_COLORS, GREYSCALE_ACCENT } from '../constants'
+import { CANVAS, DEFAULT_STEP_TYPE_COLOR, STEP_TYPE_COLORS, PROTOCOL_TYPE_COLORS, GREYSCALE_ACCENT, DetailLevel } from '../constants'
 import { CanvasNodeKind } from '../canvasKinds'
 import { useProtocolHighlight } from '../useProtocolHighlight'
 import { getNodeHighlightStyles } from '../nodeHighlightStyles'
+import { useCanvasLOD } from '../useCanvasLOD'
+import { MinimalNodeShell } from '../MinimalNodeShell'
 import { SectionLabel } from './SectionLabel'
 import { BadgeList } from './BadgeList'
 import { STEP_TYPE_ICONS, DEFAULT_STEP_TYPE_ICON } from './constants'
 
 function StepNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
+  const detailLevel = useCanvasLOD()
   const nodeData = data as StepNodeData
   const highlightMode = useProtocolHighlight(CanvasNodeKind.STEP, id, nodeData.protocolStepId)
   const accentColor = STEP_TYPE_COLORS[nodeData.stepType] ?? GREYSCALE_ACCENT
@@ -37,6 +40,21 @@ function StepNodeComponent({ id, data, selected }: NodeProps) {
   const subtitle = nodeData.agentName ? (nodeData.modelId ? `${nodeData.agentName} \u00b7 ${nodeData.modelId}` : nodeData.agentName) : null
 
   const portColor = PROTOCOL_TYPE_COLORS[nodeData.protocolType ?? ''] ?? DEFAULT_STEP_TYPE_COLOR
+
+  if (detailLevel === DetailLevel.MINIMAL) {
+    return (
+      <Box sx={{ width: CANVAS.NODE_WIDTH }}>
+        <MinimalNodeShell
+          label={nodeData.label}
+          accentColor={accentColor}
+          borderColor={highlight.borderColor}
+          boxShadow={highlight.boxShadow}
+        />
+        <CanvasHandle type="target" position={Position.Left} color={accentColor} />
+        <CanvasHandle type="source" position={Position.Right} color={accentColor} />
+      </Box>
+    )
+  }
 
   return (
     <Box

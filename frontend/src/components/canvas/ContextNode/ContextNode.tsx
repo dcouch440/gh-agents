@@ -6,7 +6,7 @@ import { useTheme } from '@mui/material/styles'
 import { useStore, workflowStore, shareStore } from '@/stores'
 import { SharePickerPanel } from '../SharePickerPanel'
 import { CanvasHandle } from '../CanvasHandle'
-import { STEP_TYPE_COLORS, GREYSCALE_ACCENT } from '../constants'
+import { STEP_TYPE_COLORS, GREYSCALE_ACCENT, DetailLevel } from '../constants'
 import { CONTEXT_NODE } from './constants'
 import { ContextNodeHeader } from './ContextNodeHeader'
 import { ContextNodeContent } from './ContextNodeContent'
@@ -15,10 +15,13 @@ import { nodeDataEqual } from '../mappers'
 import { CanvasNodeKind } from '../canvasKinds'
 import { useProtocolHighlight } from '../useProtocolHighlight'
 import { getNodeHighlightStyles } from '../nodeHighlightStyles'
+import { useCanvasLOD } from '../useCanvasLOD'
+import { MinimalNodeShell } from '../MinimalNodeShell'
 import { ResizableNodeShell, toConstraints } from '../ResizableNodeShell'
 
 function ContextNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
+  const detailLevel = useCanvasLOD()
   const nodeData = data as ContextNodeData
   const highlightMode = useProtocolHighlight(CanvasNodeKind.CONTEXT, id, nodeData.protocolStepId)
   const accentColor = STEP_TYPE_COLORS['context'] ?? GREYSCALE_ACCENT
@@ -37,6 +40,20 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
     },
     [id],
   )
+
+  if (detailLevel === DetailLevel.MINIMAL) {
+    return (
+      <Box sx={{ width: '100%', height: '100%' }}>
+        <MinimalNodeShell
+          label={nodeData.label}
+          accentColor={accentColor}
+          borderColor={highlight.borderColor}
+          boxShadow={highlight.boxShadow}
+        />
+        <CanvasHandle type="source" position={Position.Bottom} color={accentColor} />
+      </Box>
+    )
+  }
 
   return (
     <ResizableNodeShell
