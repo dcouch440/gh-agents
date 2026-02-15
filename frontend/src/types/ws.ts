@@ -17,6 +17,7 @@ export type WsWireMessage<T = Record<string, unknown>> = {
   ts: string
   run_id: string | null
   user_id: string | null
+  seq: number | null
   data: T
 }
 
@@ -25,6 +26,7 @@ export const WS_CONTROL = {
   SUBSCRIBED: 'subscribed',
   ERROR: 'error',
   PONG: 'pong',
+  EVENTS_MISSED: 'events_missed',
 } as const
 
 // Control messages (direct socket responses, not broadcast)
@@ -32,6 +34,7 @@ export type WsControlMessage =
   | { type: typeof WS_CONTROL.SUBSCRIBED; topics: WsTopic[] }
   | { type: typeof WS_CONTROL.ERROR; message: string }
   | { type: typeof WS_CONTROL.PONG; client_ts: string; server_ts: string }
+  | { type: typeof WS_CONTROL.EVENTS_MISSED; missed_count: number; message: string }
 
 // Client message types
 export const WS_MSG = {

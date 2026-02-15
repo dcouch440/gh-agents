@@ -71,6 +71,10 @@ pub enum ControlMessage {
         client_ts: String,
         server_ts: DateTime<Utc>,
     },
+    /// Notifies client that events were missed due to slow consumption.
+    /// Client should re-fetch relevant state via REST API.
+    #[serde(rename = "events_missed")]
+    EventsMissed { missed_count: u64, message: String },
 }
 
 // ============================================================================

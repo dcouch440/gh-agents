@@ -27,6 +27,18 @@ function WsStoreRouter() {
     }
   }, [subscribe])
 
+  // Re-fetch stale data when events are missed (server lag notification)
+  useEffect(() => {
+    const handleEventsMissed = () => {
+      void sessionStore.fetchAll()
+      void workflowStore.fetchIfStale()
+    }
+    window.addEventListener('ws:events-missed', handleEventsMissed)
+    return () => {
+      window.removeEventListener('ws:events-missed', handleEventsMissed)
+    }
+  }, [])
+
   return null
 }
 

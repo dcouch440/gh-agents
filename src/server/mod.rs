@@ -70,9 +70,12 @@ pub async fn start_server(db: PgPool, config: AppConfig, addr: SocketAddr) -> Re
     info!("Server listening on http://{}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal(shutdown_state))
-        .await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal(shutdown_state))
+    .await?;
 
     // Drain: wait for active executions to complete (with timeout)
     let drain_timeout =
