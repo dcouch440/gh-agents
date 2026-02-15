@@ -182,7 +182,7 @@ mod tests {
 
     #[test]
     fn test_format_envelopes_as_upstream_empty() {
-        let result = format_envelopes_as_upstream(&HashMap::new());
+        let result = format_envelopes_as_upstream(&HashMap::new(), &[]);
         assert_eq!(result.len(), 1);
         assert!(result[0].content.contains("No upstream"));
         assert_eq!(result[0].source_type, "none");
@@ -194,7 +194,7 @@ mod tests {
         let id = Uuid::new_v4();
         envelopes.insert(id, make_envelope(serde_json::json!({"key": "value"})));
 
-        let result = format_envelopes_as_upstream(&envelopes);
+        let result = format_envelopes_as_upstream(&envelopes, &[]);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].source_type, "step");
         assert!(result[0].content.contains("key"));
@@ -238,7 +238,8 @@ mod tests {
             make_roster_entry("Reporter", "Write audit report", 2),
         ];
 
-        let input = task_force::build_task_force_designer_input(&brief, &roster, &HashMap::new());
+        let input =
+            task_force::build_task_force_designer_input(&brief, &roster, &HashMap::new(), &[]);
 
         assert_eq!(input.archetype, "task_force");
         assert_eq!(input.agents.len(), 3);
@@ -255,7 +256,8 @@ mod tests {
         let brief = make_brief("Test task", vec![]);
         let roster = vec![make_roster_entry("Agent", "Do stuff", 0)];
 
-        let input = task_force::build_task_force_designer_input(&brief, &roster, &HashMap::new());
+        let input =
+            task_force::build_task_force_designer_input(&brief, &roster, &HashMap::new(), &[]);
 
         assert_eq!(input.upstream.len(), 1);
         assert!(input.upstream[0].content.contains("No upstream"));
@@ -270,7 +272,8 @@ mod tests {
             make_roster_entry("Second", "role", 1),
         ];
 
-        let input = task_force::build_task_force_designer_input(&brief, &roster, &HashMap::new());
+        let input =
+            task_force::build_task_force_designer_input(&brief, &roster, &HashMap::new(), &[]);
 
         assert_eq!(input.agents[0].execution_order, 2);
         assert_eq!(input.agents[1].execution_order, 0);
@@ -292,6 +295,7 @@ mod tests {
             &doc_defs,
             &HashMap::new(),
             &["file_read".to_string()],
+            &[],
         );
 
         assert_eq!(input.archetype, "documenter");
@@ -325,6 +329,7 @@ mod tests {
             &plans,
             &HashMap::new(),
             &["file_read".to_string(), "grep".to_string()],
+            &[],
         );
 
         assert_eq!(input.agents.len(), 4);
@@ -352,6 +357,7 @@ mod tests {
             &plans,
             &HashMap::new(),
             &["file_read".to_string()],
+            &[],
         );
 
         // Researcher has capabilities from the plan
@@ -372,8 +378,13 @@ mod tests {
             "Write comprehensive endpoint documentation",
         )];
 
-        let input =
-            documenter::build_research_write_designer_input(&step, &plans, &HashMap::new(), &[]);
+        let input = documenter::build_research_write_designer_input(
+            &step,
+            &plans,
+            &HashMap::new(),
+            &[],
+            &[],
+        );
 
         assert!(input.agents[0]
             .additional_context
@@ -403,6 +414,7 @@ mod tests {
             &members,
             &[],
             &HashMap::new(),
+            &[],
         );
 
         assert_eq!(input.archetype, "room");
@@ -430,6 +442,7 @@ mod tests {
             &members,
             &[],
             &HashMap::new(),
+            &[],
         );
 
         assert!(!input.agents[0]
@@ -466,6 +479,7 @@ mod tests {
             &members,
             &beliefs,
             &HashMap::new(),
+            &[],
         );
 
         // Both members should have beliefs in their additional_context
@@ -498,6 +512,7 @@ mod tests {
             &members,
             &[],
             &HashMap::new(),
+            &[],
         );
 
         assert!(input.agents[0]

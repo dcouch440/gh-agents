@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use uuid::Uuid;
 
-use crate::db::BeliefRow;
+use crate::db::{BeliefRow, WorkflowStepRow};
 use crate::types::StepExecutionEnvelope;
 
 use super::{format_envelopes_as_upstream, AgentDefinition, DesignerInput, RoomDesignerMember};
@@ -26,6 +26,7 @@ pub fn build_room_designer_input(
     members: &[RoomDesignerMember],
     beliefs: &[BeliefRow],
     completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
+    steps: &[WorkflowStepRow],
 ) -> DesignerInput {
     let agents = members
         .iter()
@@ -80,7 +81,7 @@ pub fn build_room_designer_input(
             meeting_purpose,
         ),
         agents,
-        upstream: format_envelopes_as_upstream(completed_envelopes),
+        upstream: format_envelopes_as_upstream(completed_envelopes, steps),
         available_tools: vec![],
         archetype_guidance: format!(
             "This is a room — a meeting space where agents discuss, debate, or review.\n\n\

@@ -23,11 +23,13 @@ use crate::server::hub::dag::designer_input::room::build_room_designer_input;
 use crate::server::hub::dag::designer_input::RoomDesignerMember;
 use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
+use crate::server::hub::protocols::context::{build_context_block, ContextDocument};
 use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
 use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
 
 use super::dag_state::DagExecutionState;
+use super::utils::collect_upstream_context_data;
 use super::{
     broadcast_workflow_event, compose_prompt, resolve_output_key, resolve_step_port_inputs,
     step_display_name, PortMetadata, StepOutput, WorkflowExecutionContext,
@@ -47,7 +49,7 @@ pub(super) async fn execute_room_step(
     state: &AppState,
     ctx: &WorkflowExecutionContext,
     step: &WorkflowStepRow,
-    _steps: &[WorkflowStepRow],
+    steps: &[WorkflowStepRow],
     edges: &[WorkflowStepEdgeRow],
     dag_state: &mut DagExecutionState,
     port_meta: &PortMetadata,
@@ -186,6 +188,7 @@ pub(super) async fn execute_room_step(
                 &designer_members,
                 &beliefs,
                 &dag_state.completed_envelopes,
+                steps,
             );
 
             match agent_designer::run_agent_designer(
@@ -226,8 +229,12 @@ pub(super) async fn execute_room_step(
     let port_inputs =
         resolve_step_port_inputs(step, edges, port_meta, &dag_state.completed_envelopes);
 
+    // 5b. Collect upstream context from context nodes
+    let upstream_context =
+        collect_upstream_context_data(step.id, edges, steps, &dag_state.completed_envelopes);
+
     // 6. Compose initial prompt
-    let prompt = compose_prompt(
+    let mut prompt = compose_prompt(
         step,
         state.prompt_template_repo().as_deref(),
         state.doc_repo().as_deref(),
@@ -239,6 +246,27 @@ pub(super) async fn execute_room_step(
         port_inputs.as_ref(),
     )
     .await;
+
+    // 6b. Inject user notes (context nodes) into room prompt
+    if !upstream_context.is_empty() {
+        let docs: Vec<ContextDocument> = upstream_context
+            .iter()
+            .map(|(title, content)| {
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+                let mut hasher = DefaultHasher::new();
+                title.hash(&mut hasher);
+                let short_id = format!("{:08x}", hasher.finish() & 0xFFFF_FFFF);
+                ContextDocument {
+                    short_id,
+                    title: title.clone(),
+                    content: content.clone(),
+                }
+            })
+            .collect();
+        let context_block = build_context_block(&[], &docs);
+        prompt.push_str(&format!("\n\n<user_notes>\n{context_block}\n</user_notes>"));
+    }
 
     // 7. Create room session
     let session = room_repo

@@ -28,9 +28,12 @@ use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
 use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope, UserId};
 
+use crate::server::hub::protocols::context::{build_context_block, ContextDocument};
+
 use super::agent_designer::normalize_agent_name;
 use super::container::{create_optional_container, destroy_optional_container};
 use super::dag_state::DagExecutionState;
+use super::utils::collect_upstream_context_data;
 use super::{
     broadcast_workflow_event, compose_prompt, resolve_output_key, resolve_step_port_inputs,
     step_display_name, PortMetadata, StepOutput, WorkflowExecutionContext,
@@ -47,7 +50,7 @@ pub(super) async fn execute_task_force_step(
     state: &AppState,
     ctx: &WorkflowExecutionContext,
     step: &WorkflowStepRow,
-    _steps: &[WorkflowStepRow],
+    steps: &[WorkflowStepRow],
     edges: &[WorkflowStepEdgeRow],
     dag_state: &mut DagExecutionState,
     port_meta: &PortMetadata,
@@ -106,6 +109,10 @@ pub(super) async fn execute_task_force_step(
     let port_inputs =
         resolve_step_port_inputs(step, edges, port_meta, &dag_state.completed_envelopes);
 
+    // 4b. Collect upstream context from context nodes
+    let upstream_context =
+        collect_upstream_context_data(step.id, edges, steps, &dag_state.completed_envelopes);
+
     // 5. Compose base prompt
     let prompt = compose_prompt(
         step,
@@ -140,9 +147,33 @@ pub(super) async fn execute_task_force_step(
         &brief,
         &roster,
         &dag_state.completed_envelopes,
+        steps,
         cancel,
     )
     .await?;
+
+    // 8b. Build user_notes block from context nodes (shared across all agents)
+    let user_notes_block = if upstream_context.is_empty() {
+        String::new()
+    } else {
+        let docs: Vec<ContextDocument> = upstream_context
+            .iter()
+            .map(|(title, content)| {
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+                let mut hasher = DefaultHasher::new();
+                title.hash(&mut hasher);
+                let short_id = format!("{:08x}", hasher.finish() & 0xFFFF_FFFF);
+                ContextDocument {
+                    short_id,
+                    title: title.clone(),
+                    content: content.clone(),
+                }
+            })
+            .collect();
+        let inner = build_context_block(&[], &docs);
+        format!("<user_notes>\n{inner}\n</user_notes>")
+    };
 
     // 9. Sequential agent execution loop (using designer-generated prompts)
     let mut agent_outputs: Vec<(String, String)> = Vec::new();
@@ -192,7 +223,7 @@ pub(super) async fn execute_task_force_step(
 
         // Inject previous outputs at runtime, filtered by designer routing
         let filtered = filter_outputs_for_agent(&agent_outputs, &designed.receives_from);
-        let task_prompt = if filtered.is_empty() {
+        let mut task_prompt = if filtered.is_empty() {
             designed.task_prompt.clone()
         } else {
             let previous_outputs = build_filtered_outputs_block(&filtered);
@@ -201,6 +232,11 @@ pub(super) async fn execute_task_force_step(
                 designed.task_prompt, previous_outputs
             )
         };
+
+        // Inject user notes (context nodes) into every agent's task prompt
+        if !user_notes_block.is_empty() {
+            task_prompt = format!("{user_notes_block}\n\n{task_prompt}");
+        }
 
         // Build strategy with designer-generated system prompt
         let strategy = TaskForceAgentStrategy::new(TaskForceAgentConfig {

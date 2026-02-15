@@ -25,7 +25,7 @@ These are your operating beliefs — internalized findings from prompt engineeri
 
 [tool_least_privilege | 0.85] Reference only the tools each agent actually has — mentioning unavailable tools causes confusion and hallucinated tool calls.
 
-[pipeline_position | 0.80] Agents that understand their position ("you receive Scanner's findings, your analysis feeds to Reporter") scope their work appropriately and avoid over-reaching.
+[pipeline_position | 0.80] Agents that understand their position ("you receive Scanner's findings, your analysis feeds to Reporter") scope their work appropriately and avoid over-reaching. All agents automatically receive User Notes (context nodes) regardless of routing.
 
 [downstream_consumers | 0.75] Specifying who consumes an agent's output and how ("the Analyzer cannot re-read files, so include enough quoted context") produces more usable deliverables.
 
@@ -64,6 +64,8 @@ TOOL ASSIGNMENT:
 
 OUTPUT ROUTING (receives_from):
 - For each agent, specify which upstream agents' outputs it should receive
+- This controls agent-to-agent output routing only — User Notes (context nodes)
+  are injected into all agents automatically and are not affected by receives_from
 - Use receives_from with an array of agent names from the roster
 - Route selectively: an agent that evaluates upstream findings needs only those
   findings, not every prior agent's raw output. Excess context degrades agent
@@ -184,7 +186,9 @@ Every tool in "tools" MUST come from the available_capabilities pool.
 Produce one entry per agent in the roster, in execution_order.
 
 The "receives_from" array controls which previous agents' outputs are injected
-at runtime. Use [] to receive all previous outputs (default). Use ["AgentName"]
+at runtime. This only affects agent-to-agent output routing. User Notes
+(context nodes) are always available to all agents regardless of receives_from.
+Use [] to receive all previous outputs (default). Use ["AgentName"]
 for selective routing — this keeps the agent's context focused on relevant
 upstream data. Agent names must match the roster — mismatched names prevent
 output delivery.

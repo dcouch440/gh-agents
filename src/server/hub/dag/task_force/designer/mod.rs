@@ -61,10 +61,11 @@ pub(crate) async fn run_agent_designer(
     brief: &TaskMissionBriefRow,
     roster: &[TaskAgentRosterRow],
     completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
+    steps: &[WorkflowStepRow],
     cancel: Option<&CancellationToken>,
 ) -> Result<(Vec<DesignedAgentPrompt>, DesignerTokenUsage), HubError> {
     // Build the generic DesignerInput from task force config
-    let input = build_task_force_designer_input(brief, roster, completed_envelopes);
+    let input = build_task_force_designer_input(brief, roster, completed_envelopes, steps);
 
     // Delegate to the generic designer
     let result =
