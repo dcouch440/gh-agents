@@ -271,6 +271,7 @@ pub struct WorkflowExecutionRow {
     pub completed_at: Option<DateTime<Utc>>,
     pub outputs: Option<serde_json::Value>,
     pub error: Option<String>,
+    pub execution_mode: String,
 }
 
 /// Row type for workflow step agents (multi-agent step support).

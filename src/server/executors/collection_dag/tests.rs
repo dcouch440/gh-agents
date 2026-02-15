@@ -574,6 +574,7 @@ mod tests {
                 "summary": "Test complete"
             })),
             error: None,
+            execution_mode: "full".to_string(),
         };
 
         completed_workflows.insert(workflow_id, workflow_exec);

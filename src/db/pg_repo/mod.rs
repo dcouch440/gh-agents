@@ -3886,6 +3886,40 @@ impl WorkflowCollectionRepo for PgRepo {
         .await?;
         Ok(row)
     }
+
+    async fn get_or_create_workshop(
+        &self,
+        workflow_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<WorkflowExecutionRow> {
+        // Try to find existing workshop for this workflow
+        let existing = sqlx::query_as::<_, WorkflowExecutionRow>(
+            "SELECT * FROM workflow_executions \
+             WHERE workflow_id = $1 AND execution_mode = 'workshop' \
+             LIMIT 1",
+        )
+        .bind(workflow_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = existing {
+            return Ok(row);
+        }
+
+        // Create new workshop (unique index prevents duplicates under races)
+        let row = sqlx::query_as::<_, WorkflowExecutionRow>(
+            "INSERT INTO workflow_executions (workflow_id, user_id, status, execution_mode) \
+             VALUES ($1, $2, 'workshop', 'workshop') \
+             ON CONFLICT (workflow_id) WHERE execution_mode = 'workshop' \
+             DO UPDATE SET workflow_id = EXCLUDED.workflow_id \
+             RETURNING *",
+        )
+        .bind(workflow_id)
+        .bind(user_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
 }
 
 // ============================================================================

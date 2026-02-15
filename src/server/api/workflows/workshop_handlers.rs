@@ -1,8 +1,7 @@
-//! Staging (node-by-node) workflow execution handlers
+//! Workshop (node-by-node) workflow execution handlers
 
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
     Json,
 };
 use std::collections::HashMap;
@@ -23,29 +22,29 @@ use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
 
 use super::types::{
-    CreateStagingRunRequest, StagedStepResponse, StagingRunPath, StagingRunResponse,
-    StagingRunStatusResponse, StagingStepPath, StagingStepSummary,
+    CreateWorkshopRequest, WorkshopResponse, WorkshopStatusResponse, WorkshopStepPath,
+    WorkshopStepResponse, WorkshopStepSummary,
 };
 
-/// POST /api/workflows/:id/staging - Create a staging run for node-by-node execution.
+/// POST /api/workflows/:id/workshop - Get or create the workshop for node-by-node execution.
 #[utoipa::path(
     post,
-    path = "/api/workflows/{id}/staging",
+    path = "/api/workflows/{id}/workshop",
     tag = "Workflows",
     security(("bearer_auth" = [])),
     params(("id" = Uuid, Path, description = "Workflow ID")),
-    request_body(content = Option<CreateStagingRunRequest>, content_type = "application/json"),
+    request_body(content = Option<CreateWorkshopRequest>, content_type = "application/json"),
     responses(
-        (status = 201, description = "Staging run created", body = StagingRunResponse),
+        (status = 200, description = "Workshop retrieved or created", body = WorkshopResponse),
         (status = 404, description = "Workflow not found")
     )
 )]
-pub async fn create_staging_run(
+pub async fn get_or_create_workshop(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
-    body: Option<Json<CreateStagingRunRequest>>,
-) -> Result<(StatusCode, Json<StagingRunResponse>), AppError> {
+    body: Option<Json<CreateWorkshopRequest>>,
+) -> Result<Json<WorkshopResponse>, AppError> {
     let workflow_repo = &state.repos().workflows;
 
     // Verify workflow exists and user owns it
@@ -63,29 +62,23 @@ pub async fn create_staging_run(
         return Err(AppError::bad_request("Workflow has no steps"));
     }
 
-    // Create execution row
+    // Get or create the workshop execution row
     let db = state
         .db()
         .ok_or(AppError::Internal("Database not available".into()))?
         .clone();
     let collection_repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
-    let execution = collection_repo
-        .create_standalone_workflow_execution(id, auth.user_id.0)
+    let workshop = collection_repo
+        .get_or_create_workshop(id, auth.user_id.0)
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    // Set status to "staging"
-    collection_repo
-        .update_workflow_execution_status(execution.id, "staging", None, None)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-
-    // Store initial_input if provided, so staged steps can reference it
+    // Store initial_input if provided, so workshop steps can reference it
     let initial_input = body.and_then(|b| b.0.initial_input).unwrap_or_default();
     if !initial_input.is_empty() {
         let _ = crate::server::hub::dag::versioning::snapshot_content(
             &*state.repos().content_versions,
-            execution.id,
+            workshop.id,
             Uuid::nil(),
             Uuid::nil(),
             "initial_input",
@@ -95,38 +88,34 @@ pub async fn create_staging_run(
         .await;
     }
 
-    Ok((
-        StatusCode::CREATED,
-        Json(StagingRunResponse {
-            run_id: execution.id,
-            workflow_id: id,
-            status: "staging".to_string(),
-        }),
-    ))
+    Ok(Json(WorkshopResponse {
+        run_id: workshop.id,
+        workflow_id: id,
+        status: workshop.status,
+    }))
 }
 
-/// POST /api/workflows/:id/staging/:run_id/steps/:step_id/execute - Execute one step.
+/// POST /api/workflows/:id/workshop/steps/:step_id/execute - Execute one step in the workshop.
 #[utoipa::path(
     post,
-    path = "/api/workflows/{id}/staging/{run_id}/steps/{step_id}/execute",
+    path = "/api/workflows/{id}/workshop/steps/{step_id}/execute",
     tag = "Workflows",
     security(("bearer_auth" = [])),
     params(
         ("id" = Uuid, Path, description = "Workflow ID"),
-        ("run_id" = Uuid, Path, description = "Staging run ID"),
         ("step_id" = Uuid, Path, description = "Step ID to execute"),
     ),
     responses(
-        (status = 200, description = "Step executed", body = StagedStepResponse),
+        (status = 200, description = "Step executed", body = WorkshopStepResponse),
         (status = 404, description = "Workflow or step not found"),
-        (status = 409, description = "Step not ready or run busy")
+        (status = 409, description = "Step not ready or workshop busy")
     )
 )]
-pub async fn execute_staging_step(
+pub async fn execute_workshop_step(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
-    Path(path): Path<StagingStepPath>,
-) -> Result<Json<StagedStepResponse>, AppError> {
+    Path(path): Path<WorkshopStepPath>,
+) -> Result<Json<WorkshopStepResponse>, AppError> {
     let workflow_repo = &state.repos().workflows;
 
     // Verify workflow exists and user owns it
@@ -138,27 +127,24 @@ pub async fn execute_staging_step(
         return Err(AppError::not_found("Workflow"));
     }
 
-    // Verify execution exists and is in staging mode
+    // Look up the workshop for this workflow
     let db = state
         .db()
         .ok_or(AppError::Internal("Database not available".into()))?
         .clone();
     let collection_repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
-    let execution = collection_repo
-        .get_workflow_execution(path.run_id)
+    let workshop = collection_repo
+        .get_or_create_workshop(path.id, auth.user_id.0)
         .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or(AppError::not_found("Staging run"))?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    if execution.workflow_id != path.id {
-        return Err(AppError::not_found("Staging run"));
-    }
+    let run_id = workshop.id;
 
-    // Concurrency guard: must be "staging" (not running another step)
-    if execution.status != "staging" {
+    // Concurrency guard: must be "workshop" (not running another step)
+    if workshop.status != "workshop" {
         return Err(AppError::Conflict(format!(
-            "Staging run is '{}', not ready for step execution",
-            execution.status
+            "Workshop is '{}', not ready for step execution",
+            workshop.status
         )));
     }
 
@@ -180,7 +166,7 @@ pub async fn execute_staging_step(
         &*state.repos().content_versions,
         &steps,
         &port_meta,
-        path.run_id,
+        run_id,
     )
     .await
     .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -218,7 +204,7 @@ pub async fn execute_staging_step(
 
     // Mark as running
     let _ = collection_repo
-        .update_workflow_execution_status(path.run_id, "staging_running", None, None)
+        .update_workflow_execution_status(run_id, "workshop_running", None, None)
         .await;
 
     // Build execution context
@@ -229,8 +215,8 @@ pub async fn execute_staging_step(
     }
 
     let ctx = WorkflowExecutionContext {
-        stage_execution_id: path.run_id,
-        run_id: path.run_id,
+        stage_execution_id: run_id,
+        run_id,
         user_id: auth.user_id.0,
         initial_input,
         prior_outputs,
@@ -251,7 +237,7 @@ pub async fn execute_staging_step(
                 .clone()
                 .unwrap_or_else(|| path.step_id.to_string()),
             agent_id: step.agent_id,
-            execution_id: Some(path.run_id),
+            execution_id: Some(run_id),
         },
     );
 
@@ -267,9 +253,9 @@ pub async fn execute_staging_step(
     )
     .await;
 
-    // Reset status back to staging
+    // Reset status back to workshop
     let _ = collection_repo
-        .update_workflow_execution_status(path.run_id, "staging", None, None)
+        .update_workflow_execution_status(run_id, "workshop", None, None)
         .await;
 
     let step_result = result.map_err(|e| AppError::Internal(e.to_string()))?;
@@ -296,7 +282,7 @@ pub async fn execute_staging_step(
         },
     );
 
-    Ok(Json(StagedStepResponse {
+    Ok(Json(WorkshopStepResponse {
         step_id: step_result.step_id,
         status: step_result.status,
         output: step_result.output,
@@ -308,56 +294,52 @@ pub async fn execute_staging_step(
     }))
 }
 
-/// GET /api/workflows/:id/staging/:run_id - Get staging run status + completed steps.
+/// GET /api/workflows/:id/workshop - Get workshop status + completed steps.
 #[utoipa::path(
     get,
-    path = "/api/workflows/{id}/staging/{run_id}",
+    path = "/api/workflows/{id}/workshop",
     tag = "Workflows",
     security(("bearer_auth" = [])),
     params(
         ("id" = Uuid, Path, description = "Workflow ID"),
-        ("run_id" = Uuid, Path, description = "Staging run ID"),
     ),
     responses(
-        (status = 200, description = "Staging run status", body = StagingRunStatusResponse),
-        (status = 404, description = "Workflow or run not found")
+        (status = 200, description = "Workshop status", body = WorkshopStatusResponse),
+        (status = 404, description = "Workflow not found")
     )
 )]
-pub async fn get_staging_run(
+pub async fn get_workshop(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
-    Path(path): Path<StagingRunPath>,
-) -> Result<Json<StagingRunStatusResponse>, AppError> {
+    Path(id): Path<Uuid>,
+) -> Result<Json<WorkshopStatusResponse>, AppError> {
     let workflow_repo = &state.repos().workflows;
 
     // Verify workflow exists and user owns it
     let workflow = workflow_repo
-        .get_workflow(path.id)
+        .get_workflow(id)
         .await?
         .ok_or(AppError::not_found("Workflow"))?;
     if workflow.user_id != auth.user_id.0 {
         return Err(AppError::not_found("Workflow"));
     }
 
-    // Verify execution exists
+    // Get or create the workshop
     let db = state
         .db()
         .ok_or(AppError::Internal("Database not available".into()))?
         .clone();
     let collection_repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
-    let execution = collection_repo
-        .get_workflow_execution(path.run_id)
+    let workshop = collection_repo
+        .get_or_create_workshop(id, auth.user_id.0)
         .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or(AppError::not_found("Staging run"))?;
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    if execution.workflow_id != path.id {
-        return Err(AppError::not_found("Staging run"));
-    }
+    let run_id = workshop.id;
 
     // Load steps + edges
-    let steps = workflow_repo.list_steps(path.id).await?;
-    let edges = workflow_repo.list_edges(path.id).await?;
+    let steps = workflow_repo.list_steps(id).await?;
+    let edges = workflow_repo.list_edges(id).await?;
 
     let port_meta = prefetch_port_metadata(&state, &steps).await;
 
@@ -366,16 +348,16 @@ pub async fn get_staging_run(
         &*state.repos().content_versions,
         &steps,
         &port_meta,
-        path.run_id,
+        run_id,
     )
     .await
     .map_err(|e| AppError::Internal(e.to_string()))?;
 
     // Build completed steps list
-    let completed_steps: Vec<StagingStepSummary> = dag_state
+    let completed_steps: Vec<WorkshopStepSummary> = dag_state
         .completed
         .keys()
-        .map(|step_id| StagingStepSummary {
+        .map(|step_id| WorkshopStepSummary {
             step_id: *step_id,
             status: "completed".to_string(),
         })
@@ -384,10 +366,10 @@ pub async fn get_staging_run(
     // Compute next executable steps
     let next = compute_next_executable_steps(&steps, &edges, &dag_state);
 
-    Ok(Json(StagingRunStatusResponse {
-        run_id: path.run_id,
-        workflow_id: path.id,
-        status: execution.status,
+    Ok(Json(WorkshopStatusResponse {
+        run_id,
+        workflow_id: id,
+        status: workshop.status,
         completed_steps,
         next_executable_steps: next,
     }))
