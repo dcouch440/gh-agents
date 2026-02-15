@@ -1,39 +1,17 @@
 import Box from '@mui/material/Box'
-import { Outlet, Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { TopNavBar } from './TopNavBar'
 import { ThemeToggle } from './ThemeToggle'
-import { useStore, authStore, selectUser, selectAuthStatus, reviewQueueStore } from '@/stores'
+import { useStore, reviewQueueStore } from '@/stores'
 import { useNavigation } from '@/hooks/useNavigation'
-import { LoadingSpinner } from '@/components/primitives'
 import { ROUTES } from '@/constants'
 import type { NavBarItem } from './types'
 
 function AppLayout() {
-  const status = useStore(authStore.store, selectAuthStatus)
-  const user = useStore(authStore.store, selectUser)
   const location = useLocation()
   const navigate = useNavigate()
   const { navItems, utilityItems } = useNavigation()
   const pendingCount = useStore(reviewQueueStore.store, reviewQueueStore.selectPendingCount)
-
-  if (status === 'idle' || status === 'loading') {
-    return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: '100vh',
-        }}
-      >
-        <LoadingSpinner label="Loading..." />
-      </Box>
-    )
-  }
-
-  if (!user) {
-    return <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />
-  }
 
   const toNavItem = (item: { path: string; icon: React.ReactNode; label: string; isActive: boolean }): NavBarItem => ({
     key: item.path,

@@ -11,6 +11,7 @@ import { createAppTheme } from './theme'
 import { CommandPalette } from './components/command-palette'
 import { ReviewQueueNotification } from './components/layout/ReviewQueueNotification'
 import { authStore, reviewQueueStore } from './stores'
+import { setupAuthInterceptor } from './api/authInterceptor'
 import { dismissSplash } from './utils/splash'
 
 function AppInner() {
@@ -18,6 +19,7 @@ function AppInner() {
   const theme = useMemo(() => createAppTheme(mode), [mode])
 
   useEffect(() => {
+    setupAuthInterceptor()
     void authStore.hydrate()
     void reviewQueueStore.fetchPending()
     dismissSplash()

@@ -6,7 +6,7 @@ type ButtonVariant = 'primary' | 'secondary' | 'danger'
 type ButtonSize = 'small' | 'medium'
 
 type ButtonProps = {
-  onClick: () => void
+  onClick?: () => void
   children: ReactNode
   variant?: ButtonVariant
   size?: ButtonSize

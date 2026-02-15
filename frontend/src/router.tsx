@@ -1,5 +1,6 @@
 import { createBrowserRouter } from 'react-router-dom'
 import { ROUTES } from './constants'
+import { AuthGuard } from './components/auth/AuthGuard'
 import { AppLayout } from './components/layout/AppLayout'
 import { DashboardPage } from './pages/Dashboard/DashboardPage'
 import { AgentsPage } from './pages/Agents/AgentsPage'
@@ -20,19 +21,24 @@ export const router = createBrowserRouter([
     element: <LoginPage />,
   },
   {
-    element: <AppLayout />,
+    element: <AuthGuard />,
     children: [
-      { path: ROUTES.DASHBOARD, element: <DashboardPage /> },
-      { path: ROUTES.CHAT, element: <ChatPage /> },
-      { path: ROUTES.AGENTS, element: <AgentsPage /> },
-      { path: ROUTES.AGENT_WORKSHOP, element: <AgentWorkshopPage /> },
-      { path: ROUTES.AGENT_DETAIL, element: <AgentDetailPage /> },
-      { path: ROUTES.TASKS, element: <TasksPage /> },
-      { path: ROUTES.WORKFLOWS, element: <WorkflowsPage /> },
-      { path: ROUTES.WORKFLOW_EDITOR, element: <WorkflowEditorPage /> },
-      { path: ROUTES.REVIEW_QUEUE, element: <ReviewQueuePage /> },
-      { path: ROUTES.DOCUMENTS, element: <DocumentsPage /> },
-      { path: ROUTES.SETTINGS, element: <SettingsPage /> },
+      {
+        element: <AppLayout />,
+        children: [
+          { path: ROUTES.DASHBOARD, element: <DashboardPage /> },
+          { path: ROUTES.CHAT, element: <ChatPage /> },
+          { path: ROUTES.AGENTS, element: <AgentsPage /> },
+          { path: ROUTES.AGENT_WORKSHOP, element: <AgentWorkshopPage /> },
+          { path: ROUTES.AGENT_DETAIL, element: <AgentDetailPage /> },
+          { path: ROUTES.TASKS, element: <TasksPage /> },
+          { path: ROUTES.WORKFLOWS, element: <WorkflowsPage /> },
+          { path: ROUTES.WORKFLOW_EDITOR, element: <WorkflowEditorPage /> },
+          { path: ROUTES.REVIEW_QUEUE, element: <ReviewQueuePage /> },
+          { path: ROUTES.DOCUMENTS, element: <DocumentsPage /> },
+          { path: ROUTES.SETTINGS, element: <SettingsPage /> },
+        ],
+      },
     ],
   },
 ])

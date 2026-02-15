@@ -18,17 +18,16 @@ vi.mock('./TopNavBar', () => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
+  authStore.store.setState({
+    user: { id: 'u1', email: 'test@test.com', github_login: null },
+    token: 'fake-token',
+    status: 'authenticated',
+    error: null,
+  })
 })
 
 describe('AppLayout', () => {
-  it('renders top nav bar and outlet when authenticated', () => {
-    authStore.store.setState({
-      user: { id: 'u1', email: 'test@test.com', github_login: null },
-      token: 'fake-token',
-      status: 'authenticated',
-      error: null,
-    })
-
+  it('renders top nav bar and outlet', () => {
     render(
       <MemoryRouter initialEntries={['/']}>
         <Routes>
@@ -44,13 +43,6 @@ describe('AppLayout', () => {
   })
 
   it('renders multiple routes through outlet', () => {
-    authStore.store.setState({
-      user: { id: 'u1', email: 'test@test.com', github_login: null },
-      token: 'fake-token',
-      status: 'authenticated',
-      error: null,
-    })
-
     render(
       <MemoryRouter initialEntries={['/']}>
         <Routes>
@@ -63,50 +55,5 @@ describe('AppLayout', () => {
     )
 
     expect(screen.getByText('Home')).toBeInTheDocument()
-  })
-
-  it('shows loading spinner when status is idle', () => {
-    authStore.store.setState({
-      user: null,
-      token: null,
-      status: 'idle',
-      error: null,
-    })
-
-    render(
-      <MemoryRouter initialEntries={['/']}>
-        <Routes>
-          <Route path="/" element={<AppLayout />}>
-            <Route index element={<div>Home</div>} />
-          </Route>
-        </Routes>
-      </MemoryRouter>,
-    )
-
-    expect(screen.getByText('Loading...')).toBeInTheDocument()
-    expect(screen.queryByText('Home')).not.toBeInTheDocument()
-  })
-
-  it('redirects to login when unauthenticated', () => {
-    authStore.store.setState({
-      user: null,
-      token: null,
-      status: 'unauthenticated',
-      error: null,
-    })
-
-    render(
-      <MemoryRouter initialEntries={['/']}>
-        <Routes>
-          <Route path="/" element={<AppLayout />}>
-            <Route index element={<div>Home</div>} />
-          </Route>
-          <Route path="/login" element={<div>Login Page</div>} />
-        </Routes>
-      </MemoryRouter>,
-    )
-
-    expect(screen.getByText('Login Page')).toBeInTheDocument()
-    expect(screen.queryByText('Home')).not.toBeInTheDocument()
   })
 })

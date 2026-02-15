@@ -1,9 +1,0 @@
-created_at,tier,model_id,input_tokens,output_tokens,session_title
-2026-01-31 10:58:35.208258+00,orchestrator,claude-sonnet-4-20250514,5368,73,New agent_builder session
-2026-01-31 10:58:37.875023+00,orchestrator,claude-sonnet-4-20250514,5570,57,New agent_builder session
-2026-01-31 10:58:41.433635+00,orchestrator,claude-sonnet-4-20250514,6332,98,New agent_builder session
-2026-01-31 10:58:43.575333+00,orchestrator,claude-sonnet-4-20250514,6490,53,New agent_builder session
-2026-01-31 10:58:46.122574+00,orchestrator,claude-sonnet-4-20250514,6645,49,New agent_builder session
-2026-01-31 10:58:49.108839+00,orchestrator,claude-sonnet-4-20250514,6716,85,New agent_builder session
-2026-01-31 10:58:59.445526+00,orchestrator,claude-sonnet-4-20250514,6839,55,New agent_builder session
-2026-01-31 10:59:09.284902+00,orchestrator,claude-sonnet-4-20250514,7275,68,New agent_builder session
