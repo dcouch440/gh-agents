@@ -232,8 +232,8 @@ async fn run_dag_loop(
             continue;
         }
 
-        // Context steps pass through their prompt_template as output — no LLM call
-        if step.execution_mode == "context" {
+        // Context / input steps pass through their prompt_template as output — no LLM call
+        if step.execution_mode == "context" || step.execution_mode == "input" {
             let step_start = std::time::Instant::now();
             let output_key = resolve_output_key(step, &port_meta.step_outputs);
             let content = if step.prompt_template.is_empty() {

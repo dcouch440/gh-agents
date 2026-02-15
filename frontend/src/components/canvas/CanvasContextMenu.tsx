@@ -145,6 +145,25 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     onClose()
   }
 
+  const handleAddInput = (event: React.MouseEvent) => {
+    event.stopPropagation()
+    event.preventDefault()
+    // Enforce single-input constraint on the frontend
+    const steps = workflowStore.selectSteps(workflowStore.store.getState())
+    const hasInput = steps.some((s) => s.execution_mode === 'input')
+    if (hasInput) {
+      onClose()
+      return
+    }
+    void workflowStore.createStep({
+      name: 'Input',
+      execution_mode: 'input',
+      position_x: Math.round(position.flowX),
+      position_y: Math.round(position.flowY),
+    })
+    onClose()
+  }
+
   const handleShare = (event: React.MouseEvent) => {
     event.stopPropagation()
     event.preventDefault()
@@ -281,6 +300,10 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
           <Box data-testid="ctx-add-context" onClick={handleAddContext} sx={MENU_ITEM_SX}>
             <Box sx={{ ...COLOR_DOT_SX, backgroundColor: STEP_TYPE_COLORS['context'] ?? DEFAULT_STEP_TYPE_COLOR }} />
             <Typography sx={{ fontSize: 12, color: 'text.primary' }}>Context</Typography>
+          </Box>
+          <Box data-testid="ctx-add-input" onClick={handleAddInput} sx={MENU_ITEM_SX}>
+            <Box sx={{ ...COLOR_DOT_SX, backgroundColor: STEP_TYPE_COLORS['input'] ?? DEFAULT_STEP_TYPE_COLOR }} />
+            <Typography sx={{ fontSize: 12, color: 'text.primary' }}>Input</Typography>
           </Box>
         </>
       )}

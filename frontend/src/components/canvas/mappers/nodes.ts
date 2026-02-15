@@ -6,6 +6,8 @@ import { CONTEXT_NODE } from '../ContextNode'
 import type { ContextNodeData } from '../ContextNode'
 import { DOCUMENT_NODE } from '../DocumentNode'
 import type { DocumentNodeData } from '../DocumentNode'
+import { INPUT_NODE } from '../InputNode'
+import type { InputNodeData } from '../InputNode'
 import { NOTES_NODE } from '../NotesNode'
 import type { NotesNodeData } from '../NotesNode'
 import { CanvasNodeKind } from '../canvasKinds'
@@ -38,6 +40,28 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
           height: step.height ?? CONTEXT_NODE.DEFAULT_HEIGHT,
         },
         data: contextData,
+      }
+    }
+
+    // Input nodes
+    if (step.execution_mode === 'input') {
+      const groupEntry = lookups.protocolGroups.get(step.id)
+      const inputData: InputNodeData = {
+        kind: CanvasNodeKind.INPUT,
+        label: step.name ?? 'Input',
+        content: step.prompt_template,
+        protocolColor: groupEntry?.protocolColor ?? null,
+        protocolStepId: groupEntry?.protocolStepId ?? null,
+      }
+      return {
+        id: step.id,
+        type: 'inputNode',
+        position: { x: step.position_x ?? 0, y: step.position_y ?? 0 },
+        style: {
+          width: step.width ?? INPUT_NODE.DEFAULT_WIDTH,
+          height: step.height ?? INPUT_NODE.DEFAULT_HEIGHT,
+        },
+        data: inputData,
       }
     }
 
@@ -146,7 +170,7 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
   // Auto-generate notes nodes for steps that have assistant notes
   const notesNodes: Node[] = []
   for (const step of steps) {
-    if (step.execution_mode === 'context') continue
+    if (step.execution_mode === 'context' || step.execution_mode === 'input') continue
     const content = lookups.notesByStep[step.id]
     if (!content) continue
 

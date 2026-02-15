@@ -47,8 +47,21 @@ pub async fn create_workflow_step(
     // Auto-wire entry/documenter: resolve agent, schema, and reasoning
     let execution_mode = req.execution_mode.unwrap_or_else(|| "single".to_string());
 
+    // Enforce single-input constraint: only one input step per workflow
+    if execution_mode == "input" {
+        let existing_steps = repo.list_steps(wid).await?;
+        if existing_steps
+            .iter()
+            .any(|s| s.execution_mode == "input")
+        {
+            return Err(AppError::bad_request(
+                "Workflow can have at most one input step",
+            ));
+        }
+    }
+
     let (resolved_agent_id, resolved_schema_id, resolved_reasoning): (Option<Uuid>, _, _) =
-        if execution_mode == "context" {
+        if execution_mode == "context" || execution_mode == "input" {
             (None, None, false)
         } else if execution_mode == "documenter" {
             let proto = state
@@ -220,7 +233,7 @@ pub async fn update_workflow_step(
         return Err(AppError::not_found("Step"));
     }
     let execution_mode = req.execution_mode.unwrap_or(existing.execution_mode);
-    let agent_id = if execution_mode == "context" {
+    let agent_id = if execution_mode == "context" || execution_mode == "input" {
         None
     } else {
         req.agent_id.or(existing.agent_id)

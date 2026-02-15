@@ -461,6 +461,17 @@ describe('toRFNodes — notes nodes', () => {
     expect(notesNode).toBeUndefined()
   })
 
+  it('skips notes node for input steps', () => {
+    const inputStep: WorkflowStep = { ...step1, id: 'input-1', execution_mode: 'input' }
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      notesByStep: { 'input-1': 'should not appear' },
+    }
+    const nodes = toRFNodes([inputStep], lookups)
+    const notesNode = nodes.find((n) => n.id === 'notes-input-1')
+    expect(notesNode).toBeUndefined()
+  })
+
   it('positions notes node to the left of the parent step', () => {
     const lookups: StepNodeLookups = {
       ...emptyLookups,
@@ -481,6 +492,59 @@ describe('toRFNodes — notes nodes', () => {
     const nodes = toRFNodes([stepNoName], lookups)
     const notesNode = nodes.find((n) => n.id === 'notes-step-001')
     expect(notesNode?.data.stepName).toBe('single')
+  })
+})
+
+describe('toRFNodes — input nodes', () => {
+  it('maps input step to inputNode with correct data', () => {
+    const inputStep: WorkflowStep = {
+      ...step1,
+      id: 'input-001',
+      name: 'User Input',
+      execution_mode: 'input',
+      prompt_template: 'Project contains 2 categories.',
+      position_x: 50,
+      position_y: 75,
+    }
+    const nodes = toRFNodes([inputStep], emptyLookups)
+
+    expect(nodes).toHaveLength(1)
+    expect(nodes[0]).toEqual({
+      id: 'input-001',
+      type: 'inputNode',
+      position: { x: 50, y: 75 },
+      style: { width: 420, height: 360 },
+      data: {
+        kind: 'input',
+        label: 'User Input',
+        content: 'Project contains 2 categories.',
+        protocolColor: null,
+        protocolStepId: null,
+      },
+    })
+  })
+
+  it('uses custom width/height from step when set', () => {
+    const inputStep: WorkflowStep = {
+      ...step1,
+      id: 'input-002',
+      execution_mode: 'input',
+      width: 600,
+      height: 500,
+    }
+    const nodes = toRFNodes([inputStep], emptyLookups)
+    expect(nodes[0]?.style).toEqual({ width: 600, height: 500 })
+  })
+
+  it('falls back to "Input" when name is null', () => {
+    const inputStep: WorkflowStep = {
+      ...step1,
+      id: 'input-003',
+      execution_mode: 'input',
+      name: null,
+    }
+    const nodes = toRFNodes([inputStep], emptyLookups)
+    expect(nodes[0]?.data.label).toBe('Input')
   })
 })
 
@@ -560,6 +624,16 @@ describe('toNotesEdges', () => {
       notesByStep: { 'ctx-1': 'hidden' },
     }
     const edges = toNotesEdges([contextStep], lookups)
+    expect(edges).toEqual([])
+  })
+
+  it('skips input steps', () => {
+    const inputStep: WorkflowStep = { ...step1, id: 'input-1', execution_mode: 'input' }
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      notesByStep: { 'input-1': 'hidden' },
+    }
+    const edges = toNotesEdges([inputStep], lookups)
     expect(edges).toEqual([])
   })
 

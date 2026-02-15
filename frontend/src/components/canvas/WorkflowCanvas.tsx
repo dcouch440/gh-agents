@@ -96,7 +96,7 @@ function WorkflowCanvasInner() {
       if (connection.sourceHandle === 'documents' || connection.sourceHandle === 'notes') return false
       const targetStep = connection.target ? stepsById.get(connection.target) : undefined
       if (!targetStep) return false
-      if (targetStep.execution_mode === 'context') return false
+      if (targetStep.execution_mode === 'context' || targetStep.execution_mode === 'input') return false
       if (connection.source === connection.target) return false
       return true
     },
