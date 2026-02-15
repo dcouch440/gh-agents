@@ -11,6 +11,7 @@ type CardEntry = {
   id: string
   name: string
   subtitle: string | null
+  accentOverride: string | null
 }
 
 type StepSection = {
@@ -83,7 +84,7 @@ function ArtifactBar({ sections, currentStepId, onStepClick }: ArtifactBarProps)
                 key={card.id}
                 name={card.name}
                 subtitle={card.subtitle}
-                accentColor={section.accentColor}
+                accentColor={card.accentOverride ?? section.accentColor}
                 highlighted={section.stepId === currentStepId}
                 onClick={() => {
                   onStepClick(section.stepId)
