@@ -42,12 +42,10 @@ Node Name: ...
 See if you can make the chat window feel a bit more premium.  
  Allow user input size greoth be dependent on the size of the box (use good practices, important),
 
-
-
 RESEARCH APP PLUS ONLINE THEN DESIGN -> IMPLEMENT
 
-
 Assistant personality:
+
 - Instead of responding with an expanation about what your conntected to, talk to the user like their your friend.
 
 Planning agent loads up docker container.
@@ -61,8 +59,6 @@ When a user clicks a node it should automatically enter them in chat.
 
 Tools stay on chat board not disapear. They should be full width instead of small, decorative but fitting the scene.
 
-
-
 Ensure Assistants NEVER include any information including the actual contents of a document. Only definitions. This is because the assistant should understand that intermediate runs are for creation pourposes only. The assistant should always be setting things up for future runs and they should understand they are there to asssist the user for their next final run.
 The assistant should be able to view the content to help currate its affectivness giving feedback to the user on how to improve their document for the upcoming job.
 
@@ -70,7 +66,33 @@ Example -> Document -> Task force is required to read document.
 Assistant conversates about its validity and effectivness for the job.
 The assistant is the all knowing expert for how the information will be handles in the lifecycle of a run.
 
-
-
-
 USE MORE SIMPLE LANGUAGE.
+
+ So I want to understand if this works how I think it does.  
+ When A user creates a workflow that has never ran, everything is blank.  
+ What about if it has ran but they want to return to thir "snapshot".  
+ What shows on the table, is the snapshot version forever their run results?  
+ are all runs "read only" if they want to visit a snapshot that has ran?
+The thing is, we want the user to be able to interact with past events, maybe go in there and start talking to the
+agents?  
+ What are we to do. Seems complex...?
+I think their own snapshot should be thier workbench for future runs, always returning to that workbenched version.  
+ Real runs are completly different.
+They should be able to reference the documents and talk about their use or even reference agents and talk about their
+use.
+
+THis reveals another problem, heres some notes I had from erlier today:
+"Ensure Assistants NEVER include any information including the actual contents of a document. Only definitions. This is because the assistant should understand that intermediate runs are for creation pourposes only. The assistant should always be setting things up for future runs and they should understand they are there to asssist the user for their next final run.
+The assistant should be able to view the content to help currate its affectivness giving feedback to the user on how to improve their document for the upcoming job.
+
+Example -> Document -> Task force is required to read document.
+Assistant conversates about its validity and effectivness for the job.
+The assistant is the all knowing expert for how the information will be handles in the lifecycle of a run."
+
+The point is that the assistant should be aware that he is trying to improve the run and NEVER speak about actual
+content like its fact, because we are only using it to understand.
+
+The goal is to have a clean running system with each agent knowing what is happening. This means the assistant needs  
+ access to view any
+
+If you imagine, we might have a "workshop" version and run versions?
