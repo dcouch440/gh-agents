@@ -43,6 +43,7 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "update_doc" => Some(update_doc_tool()),
         "search_docs" => Some(search_docs_tool()),
         "read_document" => Some(read_document_tool()),
+        "read_document_by_def_id" => Some(read_document_by_def_id_tool()),
         "submit_prd" => Some(submit_prd_tool()),
         "submit_ticket" => Some(submit_ticket_tool()),
 
@@ -432,6 +433,23 @@ fn read_document_tool() -> Tool {
                 }
             },
             "required": ["document_id"]
+        }),
+    }
+}
+
+fn read_document_by_def_id_tool() -> Tool {
+    Tool {
+        name: "read_document_by_def_id".into(),
+        description: "Read a document produced by an upstream documenter step, identified by its document definition ID. Returns the content generated in the current workflow run.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "def_id": {
+                    "type": "string",
+                    "description": "UUID of the document definition (from the documenter step's document definitions list)"
+                }
+            },
+            "required": ["def_id"]
         }),
     }
 }

@@ -412,7 +412,19 @@ pub(super) async fn execute_task_force_step(
         },
         error: None,
     };
+    // Snapshot envelope for run history
+    let envelope_json = serde_json::to_string(&envelope).unwrap_or_default();
     dag_state.record_step_output(step.id, output, envelope);
+    let _ = super::versioning::snapshot_content(
+        &*state.repos().content_versions,
+        ctx.run_id,
+        step.id,
+        step.id,
+        super::versioning::content_types::ENVELOPE,
+        "output",
+        &envelope_json,
+    )
+    .await;
 
     // 13. Broadcast step completed
     broadcast_workflow_event(

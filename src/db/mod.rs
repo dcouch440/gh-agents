@@ -757,6 +757,32 @@ pub struct RoomStepMemberRow {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Row type for immutable content version snapshots.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct ContentVersionRow {
+    pub id: Uuid,
+    pub source_id: Uuid,
+    pub content_type: String,
+    pub content_hash: String,
+    pub content: String,
+    pub version_number: i32,
+    pub byte_size: i32,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Row type for run snapshot linkage (run → content version).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct RunSnapshotRow {
+    pub id: Uuid,
+    pub run_id: Uuid,
+    pub step_id: Uuid,
+    pub content_type: String,
+    pub role: String,
+    pub content_version_id: Uuid,
+    pub source_id: Uuid,
+    pub created_at: DateTime<Utc>,
+}
+
 /// Type alias for the database pool
 pub type DbPool = PgPool;
 

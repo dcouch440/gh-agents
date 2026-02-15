@@ -6,9 +6,9 @@
 use std::sync::Arc;
 
 use crate::db::traits::{
-    AgentExecutionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo, PromptTemplateRepo,
-    ProtocolRepo, ResultRepo, RoomRepo, RouterRequestRepo, SystemConfigRepo, TokenLedgerRepo,
-    ToolCapabilityRepo, ToolRouterRepo, UserRepo, WorkflowRepo,
+    AgentExecutionRepo, ContentVersionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo,
+    PromptTemplateRepo, ProtocolRepo, ResultRepo, RoomRepo, RouterRequestRepo, SystemConfigRepo,
+    TokenLedgerRepo, ToolCapabilityRepo, ToolRouterRepo, UserRepo, WorkflowRepo,
 };
 
 /// All repository trait objects grouped together.
@@ -47,6 +47,8 @@ pub struct Repos {
     pub system_config: Arc<dyn SystemConfigRepo>,
     /// Protocol management (execution recipes)
     pub protocols: Arc<dyn ProtocolRepo>,
+    /// Content versioning operations
+    pub content_versions: Arc<dyn ContentVersionRepo>,
 }
 
 impl Repos {
@@ -68,6 +70,7 @@ impl Repos {
         tool_capabilities: Arc<dyn ToolCapabilityRepo>,
         system_config: Arc<dyn SystemConfigRepo>,
         protocols: Arc<dyn ProtocolRepo>,
+        content_versions: Arc<dyn ContentVersionRepo>,
     ) -> Self {
         Self {
             users,
@@ -85,6 +88,7 @@ impl Repos {
             tool_capabilities,
             system_config,
             protocols,
+            content_versions,
         }
     }
 }

@@ -117,6 +117,14 @@ impl ExecutionStrategy for DagStepStrategy {
             return crate::server::tools::documents::execute_read_document(input, &self.state)
                 .await;
         }
+        if name == "read_document_by_def_id" {
+            return crate::server::tools::documents::execute_read_document_by_def_id(
+                input,
+                &self.state,
+                self.config.run_id,
+            )
+            .await;
+        }
 
         // Container mode: route through docker exec
         if let Some(ref handle) = self.config.container_handle {

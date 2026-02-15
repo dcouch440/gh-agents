@@ -49,6 +49,7 @@ pub(crate) mod room_step;
 pub(crate) mod single;
 pub(crate) mod task_force;
 pub(crate) mod utils;
+pub(crate) mod versioning;
 
 pub(crate) use dag_state::{
     broadcast_step_failure_if_real, prefetch_port_metadata, resolve_output_key,
@@ -250,7 +251,20 @@ async fn run_dag_loop(
             };
 
             let envelope = wrap_in_agentless_envelope(step.id, Some(value), 0, 0, 0, 0.0);
+
+            // Snapshot envelope for run history
+            let envelope_json = serde_json::to_string(&envelope).unwrap_or_default();
             dag_state.record_step_output(step.id, output, envelope);
+            let _ = versioning::snapshot_content(
+                &*state.repos().content_versions,
+                ctx.run_id,
+                step.id,
+                step.id,
+                versioning::content_types::ENVELOPE,
+                "output",
+                &envelope_json,
+            )
+            .await;
 
             broadcast_workflow_event(
                 state,

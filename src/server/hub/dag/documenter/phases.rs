@@ -441,6 +441,7 @@ impl<'a> DocumenterExecutor<'a> {
                             user_id,
                             workflow_id,
                             step_id,
+                            run_id,
                         };
                         persist_document_content(&state, &persist_ctx, &exec_result.content).await;
 

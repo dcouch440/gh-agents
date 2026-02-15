@@ -318,6 +318,20 @@ impl<'a> DocumenterExecutor<'a> {
             .await
             .unwrap_or_default();
 
+        if let Some(ref notes) = assistant_notes {
+            let cv_repo = &*self.state.repos().content_versions;
+            let _ = super::versioning::snapshot_content(
+                cv_repo,
+                self.ctx.run_id,
+                self.step.id,
+                self.step.id,
+                super::versioning::content_types::ASSISTANT_NOTES,
+                "input",
+                notes,
+            )
+            .await;
+        }
+
         let input = super::designer_input::documenter::build_strategist_designer_input(
             self.step,
             doc_defs,
@@ -372,6 +386,20 @@ impl<'a> DocumenterExecutor<'a> {
             .get_assistant_notes(self.step.id)
             .await
             .unwrap_or_default();
+
+        if let Some(ref notes) = assistant_notes {
+            let cv_repo = &*self.state.repos().content_versions;
+            let _ = super::versioning::snapshot_content(
+                cv_repo,
+                self.ctx.run_id,
+                self.step.id,
+                self.step.id,
+                super::versioning::content_types::ASSISTANT_NOTES,
+                "input",
+                notes,
+            )
+            .await;
+        }
 
         let input = super::designer_input::documenter::build_research_write_designer_input(
             self.step,
@@ -603,7 +631,19 @@ pub(super) async fn execute_documenter_step(
         result.output_tokens,
         result.cost_usd,
     );
+    // Snapshot envelope for run history
+    let envelope_json = serde_json::to_string(&envelope).unwrap_or_default();
     dag_state.record_step_output(step.id, result.output, envelope);
+    let _ = super::versioning::snapshot_content(
+        &*state.repos().content_versions,
+        ctx.run_id,
+        step.id,
+        step.id,
+        super::versioning::content_types::ENVELOPE,
+        "output",
+        &envelope_json,
+    )
+    .await;
 
     // Broadcast: step completed (no agent)
     broadcast_workflow_event(

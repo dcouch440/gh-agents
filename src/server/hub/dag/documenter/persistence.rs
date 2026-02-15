@@ -45,6 +45,7 @@ pub(super) struct DocumentPersistContext {
     pub user_id: Uuid,
     pub workflow_id: Uuid,
     pub step_id: Uuid,
+    pub run_id: Uuid,
 }
 
 /// Persist the generated document content to the database.
@@ -61,11 +62,12 @@ pub(super) async fn persist_document_content(
         None => return,
     };
 
-    match determine_persist_action(ctx.document_id, ctx.def_id) {
+    let persisted_doc_id = match determine_persist_action(ctx.document_id, ctx.def_id) {
         DocumentPersistAction::Update(did) => {
             let _ = doc_repo
                 .update_document(did, Some(content.to_string()), None, None)
                 .await;
+            Some(did)
         }
         DocumentPersistAction::CreateAndLink(did) => {
             match doc_repo
@@ -87,12 +89,32 @@ pub(super) async fn persist_document_content(
                     let _ = doc_repo
                         .update_document(doc.id, Some(content.to_string()), None, None)
                         .await;
+                    Some(doc.id)
                 }
                 Err(e) => {
                     warn!(doc = %ctx.doc_name, "Failed to create document: {}", e);
+                    None
                 }
             }
         }
-        DocumentPersistAction::Skip => {}
+        DocumentPersistAction::Skip => None,
+    };
+
+    // Create content version snapshot for this run
+    if let Some(doc_id) = persisted_doc_id {
+        let cv_repo = &*state.repos().content_versions;
+        if let Err(e) = super::super::versioning::snapshot_content(
+            cv_repo,
+            ctx.run_id,
+            ctx.step_id,
+            doc_id,
+            super::super::versioning::content_types::DOCUMENT,
+            "output",
+            content,
+        )
+        .await
+        {
+            warn!(doc = %ctx.doc_name, "Failed to snapshot document version: {e}");
+        }
     }
 }

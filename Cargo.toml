@@ -36,6 +36,7 @@ regex = "1"
 uuid = { version = "1", features = ["v4", "v5", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 rand = "0.8"
+sha2 = "0.10"
 
 # Logging
 tracing = "0.1"
