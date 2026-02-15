@@ -9,6 +9,7 @@ import { useStore, authStore, selectUser } from '@/stores'
 import { ROUTES, APP_NAME } from '@/constants'
 import { Button } from '@/components/primitives'
 import { FadeIn } from '@/components/animation'
+import { hasRedirectState } from '@/utils/routing'
 
 function LoginPage() {
   const [email, setEmail] = useState('')
@@ -19,7 +20,7 @@ function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname ?? ROUTES.DASHBOARD
+  const from = hasRedirectState(location.state) ? location.state.from.pathname : ROUTES.DASHBOARD
 
   if (user) {
     return <Navigate to={from} replace />
@@ -107,7 +108,7 @@ function LoginPage() {
               sx={{ mb: 3 }}
             />
 
-            <Button onClick={() => {}} type="submit" variant="primary" size="medium" loading={loading}>
+            <Button type="submit" variant="primary" size="medium" loading={loading}>
               {loading ? 'Logging in...' : 'Login'}
             </Button>
           </form>

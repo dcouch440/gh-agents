@@ -3,10 +3,11 @@ import { authStore, selectUser, selectIsAuthenticated, selectAuthStatus, selectA
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-const { mockLogin, mockRegister, mockMe } = vi.hoisted(() => ({
+const { mockLogin, mockRegister, mockMe, mockCancelInFlight } = vi.hoisted(() => ({
   mockLogin: vi.fn(),
   mockRegister: vi.fn(),
   mockMe: vi.fn(),
+  mockCancelInFlight: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -17,6 +18,7 @@ vi.mock('@/api', () => ({
       me: mockMe,
     },
   },
+  cancelInFlightRequests: mockCancelInFlight,
 }))
 
 const mockStorage = vi.hoisted(() => {
@@ -120,6 +122,16 @@ describe('authStore', () => {
 
       await expect(authStore.login('a@b.com', 'pass')).rejects.toThrow('Network error')
     })
+
+    it('clears token from localStorage when /me fails after successful login', async () => {
+      mockLogin.mockResolvedValue({ token: 'tok-stale', expires_in: 3600 })
+      mockMe.mockRejectedValue(new Error('Server error'))
+
+      await expect(authStore.login('a@b.com', 'pass')).rejects.toThrow('Server error')
+
+      expect(mockStorage.removeItem).toHaveBeenCalledWith(LS_AUTH_TOKEN)
+      expect(mockStorage.store.has(LS_AUTH_TOKEN)).toBe(false)
+    })
   })
 
   describe('register', () => {
@@ -183,6 +195,12 @@ describe('authStore', () => {
 
       expect(mockStorage.removeItem).toHaveBeenCalledWith(LS_AUTH_TOKEN)
       expect(mockStorage.store.has(LS_AUTH_TOKEN)).toBe(false)
+    })
+
+    it('cancels in-flight requests', () => {
+      authStore.logout()
+
+      expect(mockCancelInFlight).toHaveBeenCalledOnce()
     })
   })
 

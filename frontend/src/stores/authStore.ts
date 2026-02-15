@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { createStore, extractError } from './lib'
-import { api } from '@/api'
+import { api, cancelInFlightRequests } from '@/api'
 import { LS_AUTH_TOKEN } from '@/constants'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -56,6 +56,7 @@ const login = async (email: string, password: string): Promise<void> => {
       status: 'authenticated',
     })
   } catch (e) {
+    clearToken()
     store.setState({ status: 'unauthenticated', error: extractError('auth', e) })
     throw e
   }
@@ -78,6 +79,7 @@ const register = async (email: string, password: string): Promise<void> => {
 }
 
 const logout = (): void => {
+  cancelInFlightRequests()
   clearToken()
   store.setState({ user: null, token: null, status: 'unauthenticated', error: null })
 }
