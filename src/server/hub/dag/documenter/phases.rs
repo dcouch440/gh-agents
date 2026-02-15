@@ -4,7 +4,6 @@
 //! `impl DocumenterExecutor` block, plus shared phase result collection logic.
 
 use anyhow::anyhow;
-use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use tokio::task::JoinSet;
 use tracing::{error, info, warn};
@@ -538,54 +537,6 @@ impl<'a> DocumenterExecutor<'a> {
     }
 
     // ── Context loading ──────────────────────────────────────────────────
-
-    /// Load the strategy system prompt from the step's protocol expansion.
-    ///
-    /// Falls back to generating a basic prompt from doc defs if no expansion is found.
-    pub(super) async fn load_strategy_system_prompt(&self) -> Result<String, HubError> {
-        if let Ok(Some(step_protocol)) = self
-            .state
-            .repos()
-            .protocols
-            .get_step_protocol(self.step.id)
-            .await
-        {
-            if let Some(prompt) = step_protocol
-                .applied_expansion
-                .get("prompt_injection")
-                .and_then(|v| v.as_str())
-            {
-                return Ok(prompt.to_string());
-            }
-        }
-
-        let doc_defs = self
-            .state
-            .repos()
-            .workflows
-            .list_document_defs(self.step.id)
-            .await
-            .map_err(|e| HubError::Internal(anyhow!("failed to load doc defs: {}", e)))?;
-
-        let doc_values: Vec<JsonValue> = doc_defs
-            .iter()
-            .map(|d| {
-                serde_json::json!({
-                    "name": d.name,
-                    "description": d.description,
-                    "target_length": d.target_length,
-                })
-            })
-            .collect();
-
-        Ok(
-            crate::server::hub::protocols::compilers::documenter::prompt::documenter_prompt(
-                &doc_values,
-                &[],
-                true,
-            ),
-        )
-    }
 
     /// Load context documents from agent context and step documents.
     pub(super) async fn load_context_documents(&self) -> Vec<ContextDocument> {

@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
     use super::super::{
-        build_filtered_outputs_block, build_previous_outputs_block, build_team_roster_string,
-        compose_combined_output, filter_outputs_for_agent,
+        build_filtered_outputs_block, build_previous_outputs_block, build_static_fallback_prompts,
+        build_team_roster_string, compose_combined_output, filter_outputs_for_agent,
     };
     use uuid::Uuid;
 
@@ -151,6 +151,91 @@ mod tests {
         assert!(result.contains("Found 3 issues."));
         assert!(result.contains("### Analyzer"));
         assert!(result.contains("Prioritized issues."));
+    }
+
+    // ── build_static_fallback_prompts ────────────────────────────────────
+
+    #[test]
+    fn static_fallback_produces_prompts_for_each_roster_entry() {
+        use chrono::Utc;
+
+        let brief_id = Uuid::new_v4();
+        let brief = crate::db::TaskMissionBriefRow {
+            id: brief_id,
+            step_id: Uuid::new_v4(),
+            task_description: "Review the authentication module".to_string(),
+            available_capabilities: vec![],
+            failure_mode: "skip_and_continue".to_string(),
+            downstream_context: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+
+        let roster = vec![
+            crate::db::TaskAgentRosterRow {
+                id: Uuid::new_v4(),
+                mission_brief_id: brief_id,
+                name: "Scanner".to_string(),
+                role_description: "Scans for vulnerabilities".to_string(),
+                capabilities: vec!["file_read".to_string(), "grep".to_string()],
+                execution_order: 0,
+                created_at: Utc::now(),
+            },
+            crate::db::TaskAgentRosterRow {
+                id: Uuid::new_v4(),
+                mission_brief_id: brief_id,
+                name: "Analyzer".to_string(),
+                role_description: "Analyzes findings".to_string(),
+                capabilities: vec![],
+                execution_order: 1,
+                created_at: Utc::now(),
+            },
+        ];
+
+        let prompts = build_static_fallback_prompts(&brief, &roster, "Check auth module");
+
+        assert_eq!(prompts.len(), 2);
+
+        // First agent
+        assert_eq!(prompts[0].agent_name, "Scanner");
+        assert_eq!(prompts[0].agent_roster_entry_id, roster[0].id);
+        assert_eq!(prompts[0].tools, vec!["file_read", "grep"]);
+        assert_eq!(prompts[0].execution_order, 0);
+        assert!(prompts[0].receives_from.is_empty());
+        assert!(prompts[0].system_prompt.contains("Scanner"));
+        assert!(prompts[0]
+            .system_prompt
+            .contains("Scans for vulnerabilities"));
+        assert!(prompts[0]
+            .system_prompt
+            .contains("Review the authentication module"));
+
+        // Second agent
+        assert_eq!(prompts[1].agent_name, "Analyzer");
+        assert_eq!(prompts[1].agent_roster_entry_id, roster[1].id);
+        assert!(prompts[1].tools.is_empty());
+        assert_eq!(prompts[1].execution_order, 1);
+        assert!(prompts[1].system_prompt.contains("Analyzer"));
+        assert!(prompts[1].system_prompt.contains("Analyzes findings"));
+    }
+
+    #[test]
+    fn static_fallback_empty_roster_returns_empty() {
+        use chrono::Utc;
+
+        let brief = crate::db::TaskMissionBriefRow {
+            id: Uuid::new_v4(),
+            step_id: Uuid::new_v4(),
+            task_description: "Test".to_string(),
+            available_capabilities: vec![],
+            failure_mode: "fail_fast".to_string(),
+            downstream_context: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        };
+
+        let prompts = build_static_fallback_prompts(&brief, &[], "prompt");
+        assert!(prompts.is_empty());
     }
 
     // ── case-insensitive filtering ───────────────────────────────────────
