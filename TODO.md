@@ -63,13 +63,14 @@ Tools stay on chat board not disapear. They should be full width instead of smal
 
 
 
-Remove context routing from designer system prompt and output schema, remove language from the assistants system prompt that describe this action as well. Instead, inject all Context nodes Context in every agent we run.
-Additionally, we need to create a "Assistants Notes". This is an injection as well.
-The Assistants notes can have useful information about docker container use, submitting stuff.
-API specifications.
-THe notes only
-Instead of injecting context the way we have been doing. We should have the assistant taking notes.
-This will be a file that belongs to them and they will be taking notes off and on in the conversation.
-It should be fore when revelations come from the agent. Direction change, special requirements.
+Ensure Assistants NEVER include any information including the actual contents of a document. Only definitions. This is because the assistant should understand that intermediate runs are for creation pourposes only. The assistant should always be setting things up for future runs and they should understand they are there to asssist the user for their next final run.
+The assistant should be able to view the content to help currate its affectivness giving feedback to the user on how to improve their document for the upcoming job.
+
+Example -> Document -> Task force is required to read document.
+Assistant conversates about its validity and effectivness for the job.
+The assistant is the all knowing expert for how the information will be handles in the lifecycle of a run.
+
+
+
 
 USE MORE SIMPLE LANGUAGE.
