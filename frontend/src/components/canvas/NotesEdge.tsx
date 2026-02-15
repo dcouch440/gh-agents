@@ -23,7 +23,6 @@ function NotesEdgeComponent(props: EdgeProps) {
       color={NOTES_NODE.ACCENT_COLOR}
       selected={false}
       isProtocol={true}
-      animationDirection="reverse"
       interactionWidth={PIPE.INTERACTION_WIDTH}
     />
   )

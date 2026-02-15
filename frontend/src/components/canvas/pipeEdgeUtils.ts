@@ -4,7 +4,6 @@ type PipeOpacities = {
   glow: number
   body: number
   core: number
-  particle: number
 }
 
 const parseHex = (hex: string): [number, number, number] => {
@@ -38,7 +37,6 @@ const computePipeOpacities = (isProtocol: boolean, selected: boolean): PipeOpaci
       glow: PIPE.GLOW_OPACITY_SELECTED,
       body: PIPE.BODY_OPACITY_SELECTED,
       core: PIPE.CORE_OPACITY_SELECTED,
-      particle: PIPE.PARTICLE_OPACITY_SELECTED,
     }
   }
   if (isProtocol) {
@@ -46,14 +44,12 @@ const computePipeOpacities = (isProtocol: boolean, selected: boolean): PipeOpaci
       glow: PIPE.GLOW_OPACITY,
       body: PIPE.BODY_OPACITY,
       core: PIPE.CORE_OPACITY,
-      particle: PIPE.PARTICLE_OPACITY,
     }
   }
   return {
     glow: 0,
     body: PIPE.BODY_OPACITY_DIM,
     core: PIPE.CORE_OPACITY_DIM,
-    particle: PIPE.PARTICLE_OPACITY_DIM,
   }
 }
 

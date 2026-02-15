@@ -53,34 +53,25 @@ export const COLOR_DOT_SX = {
 
 export const PIPE = {
   // Layer widths (px)
-  GLOW_WIDTH: 16,
+  GLOW_WIDTH: 10,
   BODY_WIDTH: 6,
   CORE_WIDTH: 2,
-  PARTICLE_WIDTH: 2,
   BODY_WIDTH_DIM: 4,
   CORE_WIDTH_DIM: 1.5,
 
   // Opacities — protocol edges
-  GLOW_OPACITY: 0.15,
+  GLOW_OPACITY: 0.1,
   BODY_OPACITY: 0.35,
   CORE_OPACITY: 0.7,
-  PARTICLE_OPACITY: 0.8,
 
   // Opacities — non-protocol edges
   BODY_OPACITY_DIM: 0.15,
   CORE_OPACITY_DIM: 0.3,
-  PARTICLE_OPACITY_DIM: 0.4,
 
   // Opacities — selected state
-  GLOW_OPACITY_SELECTED: 0.3,
+  GLOW_OPACITY_SELECTED: 0.2,
   BODY_OPACITY_SELECTED: 0.5,
   CORE_OPACITY_SELECTED: 0.9,
-  PARTICLE_OPACITY_SELECTED: 1.0,
-
-  // Particle animation
-  PARTICLE_DASH: '4 8',
-  PARTICLE_DASH_OFFSET: 12,
-  FLOW_DURATION: '1.2s',
 
   // Inner core brightness boost (0..1 — how much to mix toward white)
   CORE_BRIGHTEN: 0.4,
