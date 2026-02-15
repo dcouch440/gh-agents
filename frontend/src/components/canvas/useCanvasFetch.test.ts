@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   fetchTools: vi.fn<(id: string) => void>(),
   fetchDocumentDefs: vi.fn<(id: string) => void>(),
   fetchRoster: vi.fn<(id: string) => void>(),
+  fetchAllNotes: vi.fn<() => void>(),
   fetchAllProtocols: vi.fn<() => void>(),
   fetchProtocolTypes: vi.fn<() => void>(),
 }))
@@ -17,6 +18,7 @@ vi.mock('@/stores', () => ({
   workflowStore: {
     fetchDocumentDefs: mocks.fetchDocumentDefs,
     fetchRoster: mocks.fetchRoster,
+    fetchAllNotes: mocks.fetchAllNotes,
   },
   protocolStore: {
     fetchAll: mocks.fetchAllProtocols,
@@ -107,11 +109,12 @@ describe('useCanvasFetch', () => {
     expect(mocks.fetchRoster).not.toHaveBeenCalled()
   })
 
-  it('fetches protocol catalog on mount', () => {
+  it('fetches protocol catalog and notes on mount', () => {
     renderHook(() => useCanvasFetch([], []))
 
     expect(mocks.fetchAllProtocols).toHaveBeenCalledTimes(1)
     expect(mocks.fetchProtocolTypes).toHaveBeenCalledTimes(1)
+    expect(mocks.fetchAllNotes).toHaveBeenCalledTimes(1)
   })
 
   it('deduplicates tool fetches when new agents are added', () => {

@@ -217,6 +217,55 @@ mod tests {
     }
 
     #[test]
+    fn broadcast_step_event_emits_assistant_notes_updated() {
+        let state = make_state();
+        let mut rx = state.events().subscribe();
+
+        let step_id = Uuid::new_v4();
+        let workflow_id = Uuid::new_v4();
+        let strategy = ChatStrategy::with_step_context(
+            ChatConfig {
+                system_prompt: "sys".into(),
+                model_id: "m".into(),
+                ..Default::default()
+            },
+            state,
+            UserId::new(),
+            None,
+            Uuid::new_v4(),
+            StepChatContext {
+                workflow_id,
+                step_id,
+                execution_mode: "single".into(),
+            },
+        );
+
+        let input = serde_json::json!({ "content": "## Direction\n- Build auth system" });
+        let result = serde_json::json!("Notes updated.");
+
+        strategy.broadcast_step_event("update_notes", &input, &result);
+
+        let event = rx.try_recv().unwrap();
+        match event {
+            ServerEvent::Workflow(e) => {
+                assert_eq!(e.workflow_id, workflow_id);
+                assert!(e.run_id.is_none());
+                match e.kind {
+                    WorkflowEventKind::AssistantNotesUpdated {
+                        step_id: sid,
+                        content,
+                    } => {
+                        assert_eq!(sid, step_id);
+                        assert_eq!(content, "## Direction\n- Build auth system");
+                    }
+                    other => panic!("Expected AssistantNotesUpdated, got {:?}", other),
+                }
+            }
+            other => panic!("Expected Workflow event, got {:?}", other),
+        }
+    }
+
+    #[test]
     fn resolve_step_tools_includes_update_notes_for_all_archetypes() {
         for mode in &[
             "documenter",
