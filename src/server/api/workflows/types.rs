@@ -222,6 +222,56 @@ pub struct WorkflowExecutionResponse {
     pub completed_at: Option<DateTime<Utc>>,
     pub outputs: Option<serde_json::Value>,
     pub error: Option<String>,
+    pub execution_mode: String,
+    pub template_id: Option<Uuid>,
+}
+
+// ============================================================================
+// Run Detail Types
+// ============================================================================
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct RunStepResultResponse {
+    pub step_id: Uuid,
+    pub step_name: Option<String>,
+    pub execution_mode: String,
+    pub execution_id: Option<String>,
+    pub status: String,
+    pub started_at: Option<String>,
+    pub completed_at: Option<String>,
+    pub duration_ms: Option<u64>,
+    pub output: Option<String>,
+    pub structured_output: Option<serde_json::Value>,
+    pub input_tokens: Option<i64>,
+    pub output_tokens: Option<i64>,
+    pub cost_usd: Option<f64>,
+    pub error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub phases: Option<Vec<super::last_run_handlers::PhaseExecution>>,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct RunDetailResponse {
+    pub execution: WorkflowExecutionResponse,
+    pub steps: Vec<RunStepResultResponse>,
+    pub total_input_tokens: i64,
+    pub total_output_tokens: i64,
+    pub total_cost_usd: f64,
+    pub duration_ms: Option<u64>,
+    pub template_name: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct ExecutionStepPath {
+    pub wid: Uuid,
+    pub eid: Uuid,
+    pub sid: Uuid,
+}
+
+#[derive(Deserialize)]
+pub struct ExecutionPath {
+    pub wid: Uuid,
+    pub eid: Uuid,
 }
 
 // ============================================================================

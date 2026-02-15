@@ -1,7 +1,10 @@
 import { useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
+import MuiButton from '@mui/material/Button'
 import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined'
 import ErrorOutline from '@mui/icons-material/ErrorOutline'
+import HistoryOutlined from '@mui/icons-material/HistoryOutlined'
 import { EmptyState } from '@/components/primitives'
 import { useStore, workflowExecutionStore, workflowStore } from '@/stores'
 import { ExecutionRunSelector } from './ExecutionRunSelector'
@@ -23,6 +26,7 @@ const deriveStepIds = (eventLog: StepTimelineEvent[]): string[] => {
 }
 
 function ExecutionPanel() {
+  const navigate = useNavigate()
   const activeWorkflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
   const runId = useStore(workflowExecutionStore.store, workflowExecutionStore.selectRunId)
   const isRunning = useStore(workflowExecutionStore.store, workflowExecutionStore.selectIsRunning)
@@ -69,6 +73,18 @@ function ExecutionPanel() {
         onSelectRun={workflowExecutionStore.viewHistoricalRun}
         onReturnToLive={workflowExecutionStore.returnToLive}
       />
+      {hasHistory && activeWorkflowId && (
+        <Box sx={{ px: 1, pb: 0.5 }}>
+          <MuiButton
+            size="small"
+            startIcon={<HistoryOutlined fontSize="small" />}
+            onClick={() => { void navigate(`/workflows/${activeWorkflowId}/runs`) }}
+            sx={{ fontSize: '0.75rem', textTransform: 'none' }}
+          >
+            View All Runs
+          </MuiButton>
+        </Box>
+      )}
       {viewMode === 'live' && hasLiveRun && (
         <>
           <ExecutionRunHeader

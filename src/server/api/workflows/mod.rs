@@ -6,6 +6,7 @@ pub mod document_handlers;
 pub mod edge_handlers;
 pub mod execution_handlers;
 pub mod last_run_handlers;
+pub mod run_detail_handlers;
 pub mod run_handlers;
 pub mod step_chat_handlers;
 pub mod step_handlers;
@@ -19,6 +20,7 @@ pub use edge_handlers::{
 };
 pub use execution_handlers::list_workflow_executions;
 pub use last_run_handlers::get_step_last_run;
+pub use run_detail_handlers::{get_run_detail, get_step_run_for_execution};
 pub use run_handlers::run_workflow;
 pub use step_chat_handlers::{
     clear_step_messages, get_or_create_step_session, get_step_chat_debug, get_step_session,
@@ -30,10 +32,10 @@ pub use step_handlers::{
 pub use template_handlers::{create_template, delete_template, get_template, list_templates};
 pub use types::{
     CreateStepRequest, CreateTemplateRequest, CreateWorkflowRequest, EdgeRequest, EdgeResponse,
-    RunTemplateDetailResponse, RunTemplateResponse, RunWorkflowRequest, StepDocumentRequest,
-    StepDocumentResponse, UpdateStepRequest, UpdateWorkflowRequest, WorkflowExecutionResponse,
-    WorkflowResponse, WorkflowRunResponse, WorkflowStepResponse, WorkshopResponse,
-    WorkshopStatusResponse, WorkshopStepResponse,
+    RunDetailResponse, RunStepResultResponse, RunTemplateDetailResponse, RunTemplateResponse,
+    RunWorkflowRequest, StepDocumentRequest, StepDocumentResponse, UpdateStepRequest,
+    UpdateWorkflowRequest, WorkflowExecutionResponse, WorkflowResponse, WorkflowRunResponse,
+    WorkflowStepResponse, WorkshopResponse, WorkshopStatusResponse, WorkshopStepResponse,
 };
 pub use workflow_handlers::{
     create_workflow, delete_workflow, get_workflow, list_workflows, update_workflow,

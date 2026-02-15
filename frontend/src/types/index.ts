@@ -47,6 +47,8 @@ export type {
   StepChatDebugResponse,
   PhaseExecution,
   StepLastRunResponse,
+  RunStepResult,
+  RunDetailResponse,
 } from './workflow'
 export type {
   AgentExecution,

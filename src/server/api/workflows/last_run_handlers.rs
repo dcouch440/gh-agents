@@ -1,4 +1,7 @@
 //! Step last-run handler — returns execution data for the most recent workflow run.
+//!
+//! Also contains `build_step_run_response()`, the shared utility for building
+//! per-step execution results used by both last-run and run-detail endpoints.
 
 use axum::{
     extract::{Path, State},
@@ -10,6 +13,7 @@ use uuid::Uuid;
 
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::WorkflowCollectionRepo;
+use crate::db::WorkflowStepRow;
 use crate::server::api::AppError;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
@@ -112,23 +116,41 @@ pub async fn get_step_last_run(
         .first()
         .ok_or(AppError::not_found("No executions found for this workflow"))?;
 
-    let is_documenter = step.execution_mode == "documenter";
+    build_step_run_response(&state, &step, latest_exec.id)
+        .await
+        .map(Json)
+}
 
-    if is_documenter {
+// ============================================================================
+// Shared Step-Result Builder
+// ============================================================================
+
+/// Build a `StepLastRunResponse` for a given step + execution pair.
+///
+/// Shared by `get_step_last_run` (latest run) and the run-detail endpoints
+/// (specific historical run). Handles both documenter and non-documenter steps.
+pub(super) async fn build_step_run_response(
+    state: &AppState,
+    step: &WorkflowStepRow,
+    execution_id: Uuid,
+) -> Result<StepLastRunResponse, AppError> {
+    let workflow_repo = &state.repos().workflows;
+
+    if step.execution_mode == "documenter" {
         // Documenter: use protocol_executions for phase-level detail
         let all_phases = state
             .repos()
             .protocols
-            .list_protocol_executions_by_run(latest_exec.id)
+            .list_protocol_executions_by_run(execution_id)
             .await?;
 
         let step_phases: Vec<_> = all_phases
             .into_iter()
-            .filter(|p| p.protocol_step_id == sid)
+            .filter(|p| p.protocol_step_id == step.id)
             .collect();
 
         // Build doc-def name lookup
-        let doc_defs = workflow_repo.list_document_defs(sid).await?;
+        let doc_defs = workflow_repo.list_document_defs(step.id).await?;
         let def_names: std::collections::HashMap<Uuid, String> =
             doc_defs.into_iter().map(|d| (d.id, d.name)).collect();
 
@@ -185,9 +207,9 @@ pub async fn get_step_last_run(
             })
             .collect();
 
-        Ok(Json(StepLastRunResponse {
-            execution_id: latest_exec.id.to_string(),
-            workflow_execution_id: latest_exec.id.to_string(),
+        Ok(StepLastRunResponse {
+            execution_id: execution_id.to_string(),
+            workflow_execution_id: execution_id.to_string(),
             status: overall_status.to_string(),
             started_at: earliest.map(|t| t.to_rfc3339()),
             completed_at: latest_completed.map(|t| t.to_rfc3339()),
@@ -199,13 +221,13 @@ pub async fn get_step_last_run(
             cost_usd: Some(total_cost),
             error: None,
             phases: Some(phases),
-        }))
+        })
     } else {
         // Non-documenter: use agent_executions
         let agent_execs = state
             .repos()
             .agent_executions
-            .list_agent_executions_for_step_and_run(sid, latest_exec.id)
+            .list_agent_executions_for_step_and_run(step.id, execution_id)
             .await?;
 
         let exec = agent_execs
@@ -216,9 +238,9 @@ pub async fn get_step_last_run(
             .completed_at
             .map(|end| (end - exec.started_at).num_milliseconds().unsigned_abs());
 
-        Ok(Json(StepLastRunResponse {
+        Ok(StepLastRunResponse {
             execution_id: exec.id.to_string(),
-            workflow_execution_id: latest_exec.id.to_string(),
+            workflow_execution_id: execution_id.to_string(),
             status: exec.status.clone(),
             started_at: Some(exec.started_at.to_rfc3339()),
             completed_at: exec.completed_at.map(|t| t.to_rfc3339()),
@@ -230,6 +252,6 @@ pub async fn get_step_last_run(
             cost_usd: None,
             error: None,
             phases: None,
-        }))
+        })
     }
 }
