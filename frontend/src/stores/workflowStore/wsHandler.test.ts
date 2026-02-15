@@ -77,6 +77,50 @@ describe('workflowStore/wsHandler', () => {
     })
   })
 
+  describe('assistant_notes_updated', () => {
+    it('updates notesByStep for active workflow', () => {
+      store.setState({ activeWorkflowId: 'wf-1', notesByStep: {} })
+      handleWsEvent(makeMsg('assistant_notes_updated', {
+        workflow_id: 'wf-1',
+        step_id: 'step-1',
+        content: '## Direction\n- Build auth',
+      }))
+      expect(store.getState().notesByStep).toEqual({ 'step-1': '## Direction\n- Build auth' })
+    })
+
+    it('merges with existing notes', () => {
+      store.setState({ activeWorkflowId: 'wf-1', notesByStep: { 'step-2': 'existing notes' } })
+      handleWsEvent(makeMsg('assistant_notes_updated', {
+        workflow_id: 'wf-1',
+        step_id: 'step-1',
+        content: 'new notes',
+      }))
+      const notes = store.getState().notesByStep
+      expect(notes['step-1']).toBe('new notes')
+      expect(notes['step-2']).toBe('existing notes')
+    })
+
+    it('replaces existing notes for same step', () => {
+      store.setState({ activeWorkflowId: 'wf-1', notesByStep: { 'step-1': 'old' } })
+      handleWsEvent(makeMsg('assistant_notes_updated', {
+        workflow_id: 'wf-1',
+        step_id: 'step-1',
+        content: 'updated',
+      }))
+      expect(store.getState().notesByStep['step-1']).toBe('updated')
+    })
+
+    it('ignores events for a different workflow', () => {
+      store.setState({ activeWorkflowId: 'wf-1', notesByStep: {} })
+      handleWsEvent(makeMsg('assistant_notes_updated', {
+        workflow_id: 'wf-other',
+        step_id: 'step-1',
+        content: 'should not appear',
+      }))
+      expect(store.getState().notesByStep).toEqual({})
+    })
+  })
+
   describe('unknown events', () => {
     it('does not crash on unrecognized events', () => {
       expect(() => handleWsEvent(makeMsg('started', { workflow_id: 'wf-1', total_steps: 5 }))).not.toThrow()
