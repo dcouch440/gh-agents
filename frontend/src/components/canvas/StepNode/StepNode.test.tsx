@@ -7,6 +7,8 @@ vi.mock('@xyflow/react', () => ({
   Position: { Left: 'left', Right: 'right' },
 }))
 
+vi.mock('../useCanvasLOD', () => ({ useCanvasLOD: () => 'full' }))
+
 const baseProps = {
   id: 'step-001',
   type: 'stepNode',

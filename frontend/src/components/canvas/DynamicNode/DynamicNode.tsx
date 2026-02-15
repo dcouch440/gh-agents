@@ -2,6 +2,8 @@ import { memo, useState, useCallback, useEffect } from 'react'
 import { Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 
+import Box from '@mui/material/Box'
+import { useTheme } from '@mui/material/styles'
 import AutoAwesomeOutlined from '@mui/icons-material/AutoAwesomeOutlined'
 import InputOutlined from '@mui/icons-material/InputOutlined'
 import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
@@ -14,9 +16,13 @@ import type { CreateDocumentDefRequest } from '@/types/workflow'
 import { CanvasFormNode } from '../CanvasFormNode'
 import type { CanvasFormTab } from '../CanvasFormNode'
 import { CanvasHandle } from '../CanvasHandle'
+import { DetailLevel } from '../constants'
 import { nodeDataEqual } from '../mappers'
 import { HighlightMode } from '../canvasKinds'
 import type { CanvasNodeKind } from '../canvasKinds'
+import { getNodeHighlightStyles } from '../nodeHighlightStyles'
+import { useCanvasLOD } from '../useCanvasLOD'
+import { MinimalNodeShell } from '../MinimalNodeShell'
 import { Archetype, ARCHETYPE_CONFIGS } from './archetypes'
 import type { Archetype as ArchetypeType } from './archetypes'
 import { DynamicNodeHeader } from './DynamicNodeHeader'
@@ -45,9 +51,11 @@ type DynamicNodeData = {
 }
 
 function DynamicNodeComponent({ id, data, selected }: NodeProps) {
+  const theme = useTheme()
   const [activeTabId, setActiveTabId] = useState('chat')
   const [adding, setAdding] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const detailLevel = useCanvasLOD()
   const nodeData = data as DynamicNodeData
 
   const config = ARCHETYPE_CONFIGS[nodeData.archetype]
@@ -190,6 +198,32 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   }, [])
 
   const issueDescriptions = stepIssues.map((issue) => issue.description)
+
+  if (detailLevel === DetailLevel.MINIMAL) {
+    const highlight = getNodeHighlightStyles({
+      selected: selected === true,
+      accentColor,
+      highlightMode: effectiveHighlight,
+      themeMode: theme.palette.mode,
+      variant: 'resizable',
+    })
+    return (
+      <Box sx={{ width: '100%', height: '100%' }}>
+        <MinimalNodeShell
+          label={nodeData.label}
+          accentColor={accentColor}
+          borderColor={highlight.borderColor}
+          boxShadow={highlight.boxShadow}
+        />
+        <CanvasHandle type="target" position={Position.Left} color={accentColor} />
+        <CanvasHandle type="source" position={Position.Right} color={accentColor} />
+        {nodeData.archetype === Archetype.DOCUMENTER && (
+          <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
+        )}
+        <CanvasHandle type="source" position={Position.Bottom} id="notes" color="#f85149" variant="passive" />
+      </Box>
+    )
+  }
 
   const headerElement = (
     <DynamicNodeHeader

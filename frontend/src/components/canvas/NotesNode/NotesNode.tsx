@@ -4,6 +4,7 @@ import type { NodeProps } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { CanvasHandle } from '../CanvasHandle'
+import { DetailLevel } from '../constants'
 import { NOTES_NODE } from './constants'
 import { NotesNodeHeader } from './NotesNodeHeader'
 import { NotesNodeContent } from './NotesNodeContent'
@@ -12,10 +13,13 @@ import { nodeDataEqual } from '../mappers'
 import { CanvasNodeKind } from '../canvasKinds'
 import { useProtocolHighlight } from '../useProtocolHighlight'
 import { getNodeHighlightStyles } from '../nodeHighlightStyles'
+import { useCanvasLOD } from '../useCanvasLOD'
+import { MinimalNodeShell } from '../MinimalNodeShell'
 import { ResizableNodeShell, toConstraints } from '../ResizableNodeShell'
 
 function NotesNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
+  const detailLevel = useCanvasLOD()
   const nodeData = data as NotesNodeData
   const highlightMode = useProtocolHighlight(CanvasNodeKind.NOTES, id, nodeData.protocolStepId)
   const accentColor = NOTES_NODE.ACCENT_COLOR
@@ -26,6 +30,20 @@ function NotesNodeComponent({ id, data, selected }: NodeProps) {
     themeMode: theme.palette.mode,
     variant: 'resizable',
   })
+
+  if (detailLevel === DetailLevel.MINIMAL) {
+    return (
+      <Box sx={{ width: '100%', height: '100%' }}>
+        <MinimalNodeShell
+          label={nodeData.label}
+          accentColor={accentColor}
+          borderColor={highlight.borderColor}
+          boxShadow={highlight.boxShadow}
+        />
+        <CanvasHandle type="target" position={Position.Top} id="notes-input" color={accentColor} variant="passive" />
+      </Box>
+    )
+  }
 
   return (
     <ResizableNodeShell

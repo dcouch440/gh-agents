@@ -6,6 +6,7 @@ import { useTheme } from '@mui/material/styles'
 import { useStore, shareStore } from '@/stores'
 import { CanvasHandle } from '../CanvasHandle'
 import { SharePickerPanel } from '../SharePickerPanel'
+import { DetailLevel } from '../constants'
 import { DOCUMENT_NODE } from './constants'
 import { DocumentNodeHeader } from './DocumentNodeHeader'
 import { DocumentNodeContent } from './DocumentNodeContent'
@@ -14,10 +15,13 @@ import { nodeDataEqual } from '../mappers'
 import { CanvasNodeKind } from '../canvasKinds'
 import { useProtocolHighlight } from '../useProtocolHighlight'
 import { getNodeHighlightStyles } from '../nodeHighlightStyles'
+import { useCanvasLOD } from '../useCanvasLOD'
+import { MinimalNodeShell } from '../MinimalNodeShell'
 import { ResizableNodeShell, toConstraints } from '../ResizableNodeShell'
 
 function DocumentNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
+  const detailLevel = useCanvasLOD()
   const nodeData = data as DocumentNodeData
   const highlightMode = useProtocolHighlight(CanvasNodeKind.DOCUMENT, id, nodeData.protocolStepId)
   const isShareSource = useStore(shareStore.store, (s) => s.active && s.sourceStepId === id)
@@ -29,6 +33,20 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
     themeMode: theme.palette.mode,
     variant: 'resizable',
   })
+
+  if (detailLevel === DetailLevel.MINIMAL) {
+    return (
+      <Box sx={{ width: '100%', height: '100%' }}>
+        <MinimalNodeShell
+          label={nodeData.label}
+          accentColor={accentColor}
+          borderColor={highlight.borderColor}
+          boxShadow={highlight.boxShadow}
+        />
+        <CanvasHandle type="target" position={Position.Bottom} id="document-input" color={accentColor} variant="passive" />
+      </Box>
+    )
+  }
 
   return (
     <ResizableNodeShell

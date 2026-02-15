@@ -1,6 +1,7 @@
 import { memo } from 'react'
-import { PIPE } from './constants'
+import { DetailLevel, LOD, PIPE } from './constants'
 import { brightenHex, computePipeOpacities } from './pipeEdgeUtils'
+import { useCanvasLOD } from './useCanvasLOD'
 
 type PipeEdgePathProps = {
   edgePath: string
@@ -17,6 +18,30 @@ function PipeEdgePathComponent({
   isProtocol,
   interactionWidth,
 }: PipeEdgePathProps) {
+  const detailLevel = useCanvasLOD()
+
+  if (detailLevel === DetailLevel.MINIMAL) {
+    return (
+      <g>
+        <path
+          d={edgePath}
+          fill="none"
+          strokeOpacity={0}
+          strokeWidth={interactionWidth}
+          className="react-flow__edge-interaction"
+        />
+        <path
+          d={edgePath}
+          fill="none"
+          stroke={color}
+          strokeWidth={PIPE.BODY_WIDTH}
+          strokeOpacity={LOD.MINIMAL_EDGE_OPACITY}
+          strokeLinecap="round"
+        />
+      </g>
+    )
+  }
+
   const opacities = computePipeOpacities(isProtocol, selected)
   const coreColor = brightenHex(color, PIPE.CORE_BRIGHTEN)
   const showGlow = opacities.glow > 0

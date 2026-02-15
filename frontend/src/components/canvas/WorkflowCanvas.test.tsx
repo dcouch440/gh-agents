@@ -140,6 +140,8 @@ vi.mock('@xyflow/react', () => {
 
 vi.mock('@xyflow/react/dist/style.css', () => ({}))
 
+vi.mock('./useCanvasLOD', () => ({ useCanvasLOD: () => 'full' }))
+
 beforeEach(() => {
   vi.clearAllMocks()
   _steps.value = []

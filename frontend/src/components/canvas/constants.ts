@@ -51,6 +51,21 @@ export const COLOR_DOT_SX = {
   flexShrink: 0,
 } as const
 
+export const DetailLevel = {
+  FULL: 'full',
+  MINIMAL: 'minimal',
+} as const
+
+export type DetailLevel = (typeof DetailLevel)[keyof typeof DetailLevel]
+
+export const LOD = {
+  THRESHOLD_DOWN: 0.45,
+  THRESHOLD_UP: 0.50,
+  MINIMAL_LABEL_FONT_SIZE: 48,
+  ACCENT_STRIPE_WIDTH: 12,
+  MINIMAL_EDGE_OPACITY: 0.4,
+} as const
+
 export const PIPE = {
   // Layer widths (px)
   GLOW_WIDTH: 10,
