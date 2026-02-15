@@ -112,6 +112,12 @@ impl ExecutionStrategy for DagStepStrategy {
     }
 
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
+        // Stateful tools that need DB access (AppState)
+        if name == "read_document" {
+            return crate::server::tools::documents::execute_read_document(input, &self.state)
+                .await;
+        }
+
         // Container mode: route through docker exec
         if let Some(ref handle) = self.config.container_handle {
             info!(

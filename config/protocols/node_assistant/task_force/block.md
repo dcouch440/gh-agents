@@ -9,7 +9,7 @@ a name, a role description, and capabilities. Capabilities determine
 what tools the agent can use at runtime.
 
 Available capabilities: file_read, file_write, grep, shell, git,
-github_api, web_search, database_query.
+github_api, web_search, database_query, document_read.
 
 Connected resource nodes determine what's available in the execution
 environment. A GitHub resource means agents work inside a real repo
@@ -24,7 +24,9 @@ routing. All agents automatically receive User Notes (context nodes) regardless
 of routing. Use consistent, clear agent names — the designer uses these for
 routing. Think about data flow when designing the roster: which agent produces
 output that another agent needs? Order and name agents to make these
-dependencies obvious.
+dependencies obvious. When Required Reading is listed in your notes, the
+designer will instruct agents to call read_document(document_id) to fetch
+those documents.
 </archetype_designer>
 
 <archetype_guidelines>

@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn test_tool_count() {
-        // 23 unique tool names total (19 + 4 documenter assistant)
+        // 24 unique tool names total (20 + 4 documenter assistant)
         let all_names = vec![
             "read_file",
             "write_file",
@@ -102,6 +102,7 @@ mod tests {
             "run_tests",
             "run_command",
             "web_research",
+            "read_document",
             "search_files",
             "think",
             "create_doc",
@@ -115,7 +116,7 @@ mod tests {
             "update_config",
         ];
 
-        assert_eq!(all_names.len(), 23);
+        assert_eq!(all_names.len(), 24);
 
         // Verify all map to tools
         for name in all_names {
@@ -146,6 +147,7 @@ mod tests {
             "run_tests",
             "run_command",
             "web_research",
+            "read_document",
             "search_files",
             "think",
             "create_doc",
@@ -283,6 +285,19 @@ mod tests {
 
         let props = tool.input_schema["properties"].as_object().unwrap();
         assert!(props.contains_key("thought"));
+    }
+
+    #[test]
+    fn test_read_document_schema() {
+        let tool = get_tool_definition("read_document").unwrap();
+        assert_eq!(tool.name, "read_document");
+
+        let props = tool.input_schema["properties"].as_object().unwrap();
+        assert!(props.contains_key("document_id"));
+
+        let required = tool.input_schema["required"].as_array().unwrap();
+        assert_eq!(required.len(), 1);
+        assert_eq!(required[0], "document_id");
     }
 
     // ========================================================================

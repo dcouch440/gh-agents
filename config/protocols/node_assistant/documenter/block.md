@@ -15,6 +15,10 @@ length. The coordinator sees all document definitions and the full upstream
 context. It assigns research tasks and writing tasks automatically.
 Your job is defining WHAT gets produced, not HOW the agents work.
 
+Researchers have the document_read capability. When Required Reading is listed
+in your notes, the designer will instruct researchers to call
+read_document(document_id) to fetch reference material before researching.
+
 Understanding incoming context:
 - populated — The source has content right now. Use it to inform definitions.
 - empty — A context node that exists but hasn't been filled in yet.

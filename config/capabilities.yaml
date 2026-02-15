@@ -256,6 +256,16 @@ capabilities:
   # KNOWLEDGE & DOCUMENTS
   # ==========================================================================
 
+  - key: document_read
+    display_name: Document Reading
+    category: knowledge
+    safety_level: safe
+    description: Read knowledge documents by ID from the knowledge base
+    examples: [read_document]
+    notes: >
+      Fetch full document content by UUID. Read-only, no side effects.
+      Essential for agents that need to reference shared documents.
+
   - key: document_create
     display_name: Document Creation
     category: knowledge

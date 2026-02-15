@@ -144,6 +144,7 @@ pub fn build_tool_descriptions(capabilities: &[String]) -> Vec<ToolDescription> 
                 "github_api" => "Interact with GitHub API (issues, PRs, reviews)",
                 "web_search" => "Search the web for information",
                 "database_query" => "Execute read-only SQL queries",
+                "document_read" => "Read a document from the knowledge base by ID",
                 other => other,
             };
             ToolDescription {

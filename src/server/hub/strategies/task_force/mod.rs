@@ -7,7 +7,7 @@
 mod tests;
 
 use async_trait::async_trait;
-use serde_json::Value;
+use serde_json::{json, Value};
 use tracing::info;
 use uuid::Uuid;
 
@@ -94,6 +94,15 @@ impl ExecutionStrategy for TaskForceAgentStrategy {
     }
 
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
+        // Stateful tools that need DB access (AppState)
+        if name == "read_document" {
+            if let Some(ref state) = self.config.state {
+                return crate::server::tools::documents::execute_read_document(input, state)
+                    .await;
+            }
+            return json!({ "error": "Document reading not available in this context" });
+        }
+
         // Container mode: route through docker exec
         if let Some(ref handle) = self.config.container_handle {
             info!(

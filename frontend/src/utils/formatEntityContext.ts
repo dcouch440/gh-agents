@@ -46,7 +46,9 @@ const formatWorkflowStep: EntityFormatter = (entity) => {
 const formatDocument: EntityFormatter = (entity) => {
   const d = entity.data
   const desc = str(d.description)
-  return desc ? `Document "${entity.name}": ${desc}` : `Document "${entity.name}"`
+  const docId = str(d.document_id)
+  const idSuffix = docId ? ` (document_id: ${docId})` : ''
+  return desc ? `Document "${entity.name}"${idSuffix}: ${desc}` : `Document "${entity.name}"${idSuffix}`
 }
 
 const formatContextNode: EntityFormatter = (entity) => {

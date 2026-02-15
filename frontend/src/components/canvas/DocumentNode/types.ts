@@ -6,6 +6,7 @@ type DocumentNodeData = {
   documenterName: string
   content: string
   protocolStepId: string | null
+  documentId: string | null
 }
 
 export type { DocumentNodeData }

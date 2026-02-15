@@ -96,12 +96,13 @@ const buildShareableFields = ({
         chipKey: 'doc',
         entity: {
           kind: 'document',
-          id: `${stepId}::doc::${doc.id}`,
+          id: doc.document_id ?? `${stepId}::doc::${doc.id}`,
           name: doc.name,
           summary: `Document from ${stepName}`,
           data: {
             documenterName: stepName,
             description: doc.description,
+            document_id: doc.document_id,
           },
         },
       })
