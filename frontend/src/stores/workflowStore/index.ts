@@ -15,6 +15,7 @@ import {
   selectRoomStepMembers,
   selectRoomMembersByStep,
   selectNotesByStep,
+  selectDocumentContentByDefId,
   selectLoading,
   selectError,
   selectDirty,
@@ -31,6 +32,7 @@ import {
   fetchDocumentDefs,
   createDocumentDef,
   deleteDocumentDef,
+  fetchDocumentContent,
 } from './documents'
 import { fetchRoster, createRosterAgent, deleteRosterAgent, fetchRoomStepMembers } from './roster'
 import { fetchAllNotes } from './notes'
@@ -53,6 +55,7 @@ export const workflowStore = {
   selectRoomStepMembers,
   selectRoomMembersByStep,
   selectNotesByStep,
+  selectDocumentContentByDefId,
   selectLoading,
   selectError,
   selectDirty,
@@ -81,6 +84,7 @@ export const workflowStore = {
   fetchDocumentDefs,
   createDocumentDef,
   deleteDocumentDef,
+  fetchDocumentContent,
   fetchRoster,
   createRosterAgent,
   deleteRosterAgent,

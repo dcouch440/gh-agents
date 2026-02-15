@@ -6,7 +6,8 @@ import type { WorkflowStep } from '@/types/workflow'
 
 const mocks = vi.hoisted(() => ({
   fetchTools: vi.fn<(id: string) => void>(),
-  fetchDocumentDefs: vi.fn<(id: string) => void>(),
+  fetchDocumentDefs: vi.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined),
+  fetchDocumentContent: vi.fn<(id: string) => void>(),
   fetchRoster: vi.fn<(id: string) => void>(),
   fetchAllProtocols: vi.fn<() => void>(),
   fetchProtocolTypes: vi.fn<() => void>(),
@@ -16,6 +17,7 @@ vi.mock('@/stores', () => ({
   agentStore: { fetchTools: mocks.fetchTools },
   workflowStore: {
     fetchDocumentDefs: mocks.fetchDocumentDefs,
+    fetchDocumentContent: mocks.fetchDocumentContent,
     fetchRoster: mocks.fetchRoster,
   },
   protocolStore: {
@@ -89,6 +91,17 @@ describe('useCanvasFetch', () => {
 
     expect(mocks.fetchDocumentDefs).toHaveBeenCalledTimes(1)
     expect(mocks.fetchDocumentDefs).toHaveBeenCalledWith('s1')
+  })
+
+  it('chains fetchDocumentContent after fetchDocumentDefs for documenter steps', async () => {
+    const steps = [makeStep('s1', 'documenter')]
+    renderHook(() => useCanvasFetch([], steps))
+
+    // Wait for the .then() chain to resolve
+    await vi.waitFor(() => {
+      expect(mocks.fetchDocumentContent).toHaveBeenCalledTimes(1)
+      expect(mocks.fetchDocumentContent).toHaveBeenCalledWith('s1')
+    })
   })
 
   it('fetches roster for task_force steps once', () => {

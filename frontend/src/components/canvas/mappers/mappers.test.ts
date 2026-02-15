@@ -49,6 +49,7 @@ const emptyLookups: StepNodeLookups = {
   toolsByAgent: new Map(),
   protocolsByStep: new Map(),
   documentDefsByStep: {},
+  documentContentByDefId: {},
   rosterByStep: {},
   notesByStep: {},
   protocolGroups: new Map(),
@@ -480,6 +481,50 @@ describe('toRFNodes — notes nodes', () => {
     const nodes = toRFNodes([stepNoName], lookups)
     const notesNode = nodes.find((n) => n.id === 'notes-step-001')
     expect(notesNode?.data.stepName).toBe('single')
+  })
+})
+
+describe('toRFNodes — document nodes', () => {
+  const documenterStep: WorkflowStep = {
+    ...step1,
+    id: 'doc-step',
+    execution_mode: 'documenter',
+    position_x: 200,
+    position_y: 300,
+  }
+
+  it('generates document nodes with content from documentContentByDefId', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      documentDefsByStep: {
+        'doc-step': [
+          { id: 'def-1', step_id: 'doc-step', name: 'README', description: '', target_length: 5000, display_order: 0, created_at: '2025-01-01', document_id: 'doc-aaa' },
+        ],
+      },
+      documentContentByDefId: { 'def-1': '# Generated README' },
+      protocolsByStep: new Map([['doc-step', { protocol_type: 'documenter', name: 'Doc', portNames: [] }]]),
+    }
+    const nodes = toRFNodes([documenterStep], lookups)
+    const docNode = nodes.find((n) => n.id === 'doc-artifact-def-1')
+    expect(docNode).toBeDefined()
+    expect(docNode?.type).toBe('documentNode')
+    expect(docNode?.data.content).toBe('# Generated README')
+  })
+
+  it('falls back to empty string when no content exists for def', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      documentDefsByStep: {
+        'doc-step': [
+          { id: 'def-2', step_id: 'doc-step', name: 'CHANGELOG', description: '', target_length: 2000, display_order: 0, created_at: '2025-01-01', document_id: null },
+        ],
+      },
+      protocolsByStep: new Map([['doc-step', { protocol_type: 'documenter', name: 'Doc', portNames: [] }]]),
+    }
+    const nodes = toRFNodes([documenterStep], lookups)
+    const docNode = nodes.find((n) => n.id === 'doc-artifact-def-2')
+    expect(docNode).toBeDefined()
+    expect(docNode?.data.content).toBe('')
   })
 })
 

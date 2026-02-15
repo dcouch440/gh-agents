@@ -241,7 +241,10 @@ mod tests {
         assert_eq!(value["event"], "assistant_notes_updated");
         assert_eq!(value["data"]["workflow_id"], workflow_id.to_string());
         assert_eq!(value["data"]["step_id"], step_id.to_string());
-        assert_eq!(value["data"]["content"], "## Direction\n- Build auth system");
+        assert_eq!(
+            value["data"]["content"],
+            "## Direction\n- Build auth system"
+        );
     }
 
     #[test]

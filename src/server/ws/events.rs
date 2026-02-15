@@ -290,6 +290,13 @@ pub enum WorkflowEventKind {
         step_id: Uuid,
         content: String,
     },
+    /// A generated document's content was written (live update from documenter pipeline).
+    DocumentContentUpdated {
+        step_id: Uuid,
+        document_def_id: Uuid,
+        document_name: String,
+        content: String,
+    },
 }
 
 impl WorkflowEvent {
@@ -316,6 +323,7 @@ impl WorkflowEvent {
             WorkflowEventKind::ArchetypeChanged { .. } => "archetype_changed",
             WorkflowEventKind::StepNameUpdated { .. } => "step_name_updated",
             WorkflowEventKind::AssistantNotesUpdated { .. } => "assistant_notes_updated",
+            WorkflowEventKind::DocumentContentUpdated { .. } => "document_content_updated",
         }
     }
 

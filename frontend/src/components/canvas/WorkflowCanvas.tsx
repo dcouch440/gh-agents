@@ -34,6 +34,7 @@ function WorkflowCanvasInner() {
   const documentDefsByStep = useStore(workflowStore.store, workflowStore.selectDocumentDefsByStep)
   const rosterByStep = useStore(workflowStore.store, workflowStore.selectRosterByStep)
   const notesByStep = useStore(workflowStore.store, workflowStore.selectNotesByStep)
+  const documentContentByDefId = useStore(workflowStore.store, workflowStore.selectDocumentContentByDefId)
   const { onNodeDragStart, onNodeDrag, onNodeDragStop } = usePackDrag(getNodes, setNodes)
   const stepsById = useMemo(() => Collections.keyBy(steps, (s) => s.id), [steps])
   const shareActive = useStore(shareStore.store, shareStore.selectActive)
@@ -53,6 +54,7 @@ function WorkflowCanvasInner() {
     documentDefsByStep,
     rosterByStep,
     notesByStep,
+    documentContentByDefId,
   )
 
   // Map store data to RF format

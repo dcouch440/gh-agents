@@ -35,7 +35,9 @@ const useCanvasFetch = (
       const step = steps[i]!
       if (step.execution_mode === 'documenter' && !fetchedDocDefStepIds.current.has(step.id)) {
         fetchedDocDefStepIds.current.add(step.id)
-        void workflowStore.fetchDocumentDefs(step.id)
+        void workflowStore.fetchDocumentDefs(step.id).then(() => {
+          void workflowStore.fetchDocumentContent(step.id)
+        })
       }
       if (step.execution_mode === 'task_force' && !fetchedRosterStepIds.current.has(step.id)) {
         fetchedRosterStepIds.current.add(step.id)

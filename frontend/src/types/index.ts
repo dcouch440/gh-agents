@@ -45,6 +45,8 @@ export type {
   CreateRosterAgentRequest,
   RoomStepMember,
   StepChatDebugResponse,
+  PhaseExecution,
+  StepLastRunResponse,
 } from './workflow'
 export type {
   AgentExecution,

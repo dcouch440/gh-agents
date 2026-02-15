@@ -5,10 +5,12 @@ const {
   mockListDocumentDefs,
   mockCreateDocumentDef,
   mockDeleteDocumentDef,
+  mockGetDocument,
 } = vi.hoisted(() => ({
   mockListDocumentDefs: vi.fn(),
   mockCreateDocumentDef: vi.fn(),
   mockDeleteDocumentDef: vi.fn(),
+  mockGetDocument: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -34,6 +36,9 @@ vi.mock('@/api', () => ({
       createDocumentDef: mockCreateDocumentDef,
       deleteDocumentDef: mockDeleteDocumentDef,
     },
+    documents: {
+      get: mockGetDocument,
+    },
   },
 }))
 
@@ -49,6 +54,7 @@ const mockDefs: DocumentDef[] = [
     target_length: 5000,
     display_order: 0,
     created_at: '2025-01-01T00:00:00Z',
+    document_id: null,
   },
   {
     id: 'def-002',
@@ -58,6 +64,7 @@ const mockDefs: DocumentDef[] = [
     target_length: 2000,
     display_order: 1,
     created_at: '2025-01-01T00:00:00Z',
+    document_id: null,
   },
 ]
 
@@ -137,6 +144,76 @@ describe('workflowStore documents', () => {
       workflowStore.store.setState({ activeWorkflowId: null })
       await workflowStore.deleteDocumentDef('step-1', 'def-001')
       expect(mockDeleteDocumentDef).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('fetchDocumentContent', () => {
+    const defsWithDocId: DocumentDef[] = [
+      { ...mockDefs[0]!, document_id: 'doc-aaa' },
+      { ...mockDefs[1]!, document_id: 'doc-bbb' },
+    ]
+
+    it('fetches content for defs that have a document_id', async () => {
+      workflowStore.store.setState({ documentDefsByStep: { 'step-1': defsWithDocId } })
+      mockGetDocument
+        .mockResolvedValueOnce({ id: 'doc-aaa', content: '# README Content' })
+        .mockResolvedValueOnce({ id: 'doc-bbb', content: '# CHANGELOG Content' })
+
+      await workflowStore.fetchDocumentContent('step-1')
+
+      expect(mockGetDocument).toHaveBeenCalledTimes(2)
+      expect(mockGetDocument).toHaveBeenCalledWith('doc-aaa')
+      expect(mockGetDocument).toHaveBeenCalledWith('doc-bbb')
+
+      const state = workflowStore.store.getState()
+      expect(state.documentContentByDefId['def-001']).toBe('# README Content')
+      expect(state.documentContentByDefId['def-002']).toBe('# CHANGELOG Content')
+    })
+
+    it('skips defs without a document_id', async () => {
+      // mockDefs have document_id: null
+      workflowStore.store.setState({ documentDefsByStep: { 'step-1': mockDefs } })
+
+      await workflowStore.fetchDocumentContent('step-1')
+
+      expect(mockGetDocument).not.toHaveBeenCalled()
+    })
+
+    it('does nothing when no defs exist for step', async () => {
+      workflowStore.store.setState({ documentDefsByStep: {} })
+
+      await workflowStore.fetchDocumentContent('step-1')
+
+      expect(mockGetDocument).not.toHaveBeenCalled()
+    })
+
+    it('preserves existing content for other defs', async () => {
+      workflowStore.store.setState({
+        documentDefsByStep: { 'step-1': [defsWithDocId[0]!] },
+        documentContentByDefId: { 'def-existing': 'keep me' },
+      })
+      mockGetDocument.mockResolvedValueOnce({ id: 'doc-aaa', content: 'new content' })
+
+      await workflowStore.fetchDocumentContent('step-1')
+
+      const state = workflowStore.store.getState()
+      expect(state.documentContentByDefId['def-001']).toBe('new content')
+      expect(state.documentContentByDefId['def-existing']).toBe('keep me')
+    })
+
+    it('silently catches fetch errors', async () => {
+      workflowStore.store.setState({
+        documentDefsByStep: { 'step-1': defsWithDocId },
+        documentContentByDefId: {},
+      })
+      mockGetDocument.mockRejectedValueOnce(new Error('Network error'))
+
+      // Should not throw
+      await workflowStore.fetchDocumentContent('step-1')
+
+      // No new content stored, no error set
+      const state = workflowStore.store.getState()
+      expect(state.documentContentByDefId).toEqual({})
     })
   })
 })

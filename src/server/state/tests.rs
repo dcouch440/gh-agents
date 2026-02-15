@@ -105,10 +105,7 @@ mod tests {
             kind: SessionEventKind::Deleted,
         });
         let envelope = rx.try_recv().unwrap();
-        assert_eq!(
-            envelope.topic,
-            crate::server::ws::events::Topic::Session
-        );
+        assert_eq!(envelope.topic, crate::server::ws::events::Topic::Session);
         assert!(!envelope.json.is_empty());
     }
 

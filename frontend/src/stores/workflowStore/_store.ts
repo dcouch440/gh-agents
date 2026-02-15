@@ -16,6 +16,7 @@ const store = logger(
     rosterByStep: {},
     roomMembersByStep: {},
     notesByStep: {},
+    documentContentByDefId: {},
     dirtyStepIds: new Set<string>(),
     loading: false,
     error: null,

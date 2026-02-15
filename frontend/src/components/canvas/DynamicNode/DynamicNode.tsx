@@ -8,6 +8,7 @@ import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import GroupsOutlined from '@mui/icons-material/GroupsOutlined'
 import ForumOutlined from '@mui/icons-material/ForumOutlined'
 import BugReportOutlined from '@mui/icons-material/BugReportOutlined'
+import HistoryOutlined from '@mui/icons-material/HistoryOutlined'
 import { useStore, workflowStore, canvasStore, shareStore } from '@/stores'
 import type { CreateDocumentDefRequest } from '@/types/workflow'
 import { CanvasFormNode } from '../CanvasFormNode'
@@ -26,6 +27,7 @@ import { DocumentsTab } from './tabs/DocumentsTab'
 import { AgentRosterTab } from './tabs/AgentRosterTab'
 import { RoomMembersTab } from './tabs/RoomMembersTab'
 import { DebugLogTab } from './tabs/DebugLogTab'
+import { LastRunTab } from './tabs/LastRunTab'
 import { SharePickerPanel } from '../SharePickerPanel'
 
 type DynamicNodeData = {
@@ -150,6 +152,14 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
       content: <RoomMembersTab stepId={id} />,
     })
   }
+
+  // Last Run tab
+  tabs.push({
+    id: 'lastrun',
+    icon: HistoryOutlined,
+    tooltip: 'Last Run',
+    content: <LastRunTab stepId={id} />,
+  })
 
   // Debug tab always last
   tabs.push({

@@ -880,6 +880,13 @@ pub trait AgentExecutionRepo: Send + Sync {
         status: Option<String>,
     ) -> Result<Vec<AgentExecutionRow>>;
 
+    /// List agent executions for a specific step within a specific workflow run.
+    async fn list_agent_executions_for_step_and_run(
+        &self,
+        workflow_step_id: Uuid,
+        workflow_execution_id: Uuid,
+    ) -> Result<Vec<AgentExecutionRow>>;
+
     /// List completed executions marked as exemplary for few-shot injection.
     /// Returns rows ordered by most recent, limited to `limit`.
     async fn list_exemplary_executions(
