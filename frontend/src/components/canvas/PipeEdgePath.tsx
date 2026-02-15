@@ -34,7 +34,7 @@ function PipeEdgePathComponent({
           d={edgePath}
           fill="none"
           stroke={color}
-          strokeWidth={PIPE.BODY_WIDTH}
+          strokeWidth={LOD.MINIMAL_EDGE_WIDTH}
           strokeOpacity={LOD.MINIMAL_EDGE_OPACITY}
           strokeLinecap="round"
         />
