@@ -192,6 +192,7 @@ pub async fn resume_dag_from_approval(
         execution_context: None,
         container_config: None,
         wg_client: None,
+        snapshot: None,
     };
 
     // Create engine and resume

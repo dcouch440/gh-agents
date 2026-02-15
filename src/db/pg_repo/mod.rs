@@ -19,8 +19,8 @@ use crate::db::{
     DocumentRow, DocumentSearchResult, EnvelopeSnapshotRow, ExecutionMessageRow, OutputSchemaRow,
     PromptTemplateRow, ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow,
     ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomStepConfigRow,
-    RoomStepMemberRow, RoomTranscriptEntry, RouterRequestRow, RunSnapshotRow, SessionRow,
-    StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow,
+    RoomStepMemberRow, RoomTranscriptEntry, RouterRequestRow, RunSnapshotRow, RunTemplateRow,
+    SessionRow, StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow,
     TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow,
     ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow,
     WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
@@ -2416,6 +2416,58 @@ impl WorkflowRepo for PgRepo {
         sqlx::query("UPDATE workflows SET board_overview_summary = $1 WHERE id = $2")
             .bind(summary)
             .bind(workflow_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    // --- Run Templates ---
+
+    async fn create_template(
+        &self,
+        workflow_id: Uuid,
+        user_id: Uuid,
+        name: &str,
+        description: Option<String>,
+        snapshot: serde_json::Value,
+    ) -> Result<RunTemplateRow> {
+        let row = sqlx::query_as::<_, RunTemplateRow>(
+            "INSERT INTO run_templates (workflow_id, user_id, name, description, snapshot) \
+             VALUES ($1, $2, $3, $4, $5) RETURNING *",
+        )
+        .bind(workflow_id)
+        .bind(user_id)
+        .bind(name)
+        .bind(description)
+        .bind(&snapshot)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_template(&self, template_id: Uuid) -> Result<Option<RunTemplateRow>> {
+        let row = sqlx::query_as::<_, RunTemplateRow>("SELECT * FROM run_templates WHERE id = $1")
+            .bind(template_id)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(row)
+    }
+
+    async fn list_templates(&self, workflow_id: Uuid) -> Result<Vec<RunTemplateRow>> {
+        let rows = sqlx::query_as::<_, RunTemplateRow>(
+            "SELECT id, workflow_id, user_id, name, description, \
+             '{}'::jsonb AS snapshot, created_at \
+             FROM run_templates WHERE workflow_id = $1 ORDER BY created_at DESC",
+        )
+        .bind(workflow_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn delete_template(&self, template_id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM run_templates WHERE id = $1")
+            .bind(template_id)
             .execute(&self.pool)
             .await?;
         Ok(())

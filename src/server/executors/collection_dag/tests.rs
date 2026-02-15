@@ -555,6 +555,26 @@ mod tests {
             async fn update_board_overview_summary(&self, _: Uuid, _: &str) -> Result<()> {
                 unimplemented!()
             }
+            // Run template stubs
+            async fn create_template(
+                &self,
+                _: Uuid,
+                _: Uuid,
+                _: &str,
+                _: Option<String>,
+                _: serde_json::Value,
+            ) -> Result<crate::db::RunTemplateRow> {
+                unimplemented!()
+            }
+            async fn get_template(&self, _: Uuid) -> Result<Option<crate::db::RunTemplateRow>> {
+                unimplemented!()
+            }
+            async fn list_templates(&self, _: Uuid) -> Result<Vec<crate::db::RunTemplateRow>> {
+                unimplemented!()
+            }
+            async fn delete_template(&self, _: Uuid) -> Result<()> {
+                unimplemented!()
+            }
         }
 
         // Create test data
@@ -575,6 +595,7 @@ mod tests {
             })),
             error: None,
             execution_mode: "full".to_string(),
+            template_id: None,
         };
 
         completed_workflows.insert(workflow_id, workflow_exec);

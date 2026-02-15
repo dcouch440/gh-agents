@@ -13,6 +13,7 @@ use crate::db::pg_repo::PgRepo;
 use crate::db::traits::WorkflowCollectionRepo;
 use crate::server::api::AppError;
 use crate::server::auth as auth_utils;
+use crate::server::hub::dag::templates::WorkflowSnapshot;
 use crate::server::hub::dag::{
     broadcast_workflow_event, execute_workflow_via_engine, WorkflowExecutionContext,
 };
@@ -65,9 +66,38 @@ pub async fn run_workflow(
 
     let execution_id = execution.id;
 
-    // Load steps + edges
-    let steps = workflow_repo.list_steps(id).await?;
-    let edges = workflow_repo.list_edges(id).await?;
+    // Extract template_id and initial_input from body before consuming
+    let (body_input, template_id) = match body {
+        Some(Json(req)) => (req.initial_input, req.template_id),
+        None => (None, None),
+    };
+
+    // If template_id is provided, load and deserialize the frozen snapshot
+    let snapshot: Option<Arc<WorkflowSnapshot>> = match template_id {
+        Some(tid) => {
+            let template = workflow_repo
+                .get_template(tid)
+                .await?
+                .ok_or(AppError::not_found("Template"))?;
+            if template.workflow_id != id {
+                return Err(AppError::not_found("Template"));
+            }
+            let ws: WorkflowSnapshot = serde_json::from_value(template.snapshot)
+                .map_err(|e| AppError::Internal(format!("Invalid template snapshot: {e}")))?;
+            Some(Arc::new(ws))
+        }
+        None => None,
+    };
+
+    // Load steps + edges from snapshot or live DB
+    let (steps, edges) = match &snapshot {
+        Some(snap) => (snap.steps.clone(), snap.edges.clone()),
+        None => {
+            let s = workflow_repo.list_steps(id).await?;
+            let e = workflow_repo.list_edges(id).await?;
+            (s, e)
+        }
+    };
 
     if steps.is_empty() {
         return Err(AppError::bad_request("Workflow has no steps"));
@@ -81,7 +111,6 @@ pub async fn run_workflow(
     let engine = ExecutionEngine::new(provider);
 
     // Resolve initial_input: prefer POST body, fall back to first context step's prompt_template
-    let body_input = body.and_then(|b| b.0.initial_input);
     let initial_input = body_input.unwrap_or_else(|| {
         steps
             .iter()
@@ -107,6 +136,7 @@ pub async fn run_workflow(
         execution_context: None,
         container_config: None,
         wg_client: None,
+        snapshot,
     };
 
     // Spawn execution in background (non-blocking, return 202)

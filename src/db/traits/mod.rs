@@ -15,8 +15,8 @@ use crate::db::{
     DocumentRow, DocumentSearchResult, EnvelopeSnapshotRow, ExecutionMessageRow, OutputSchemaRow,
     PromptTemplateRow, ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow,
     ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomStepConfigRow,
-    RoomStepMemberRow, RoomTranscriptEntry, RouterRequestRow, RunSnapshotRow, SessionRow,
-    StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow,
+    RoomStepMemberRow, RoomTranscriptEntry, RouterRequestRow, RunSnapshotRow, RunTemplateRow,
+    SessionRow, StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow,
     TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow,
     ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow,
     WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
@@ -813,6 +813,27 @@ pub trait WorkflowRepo: Send + Sync {
 
     /// Update the board overview summary for a workflow.
     async fn update_board_overview_summary(&self, workflow_id: Uuid, summary: &str) -> Result<()>;
+
+    // --- Run Templates ---
+
+    /// Create a run template (frozen workflow snapshot).
+    async fn create_template(
+        &self,
+        workflow_id: Uuid,
+        user_id: Uuid,
+        name: &str,
+        description: Option<String>,
+        snapshot: serde_json::Value,
+    ) -> Result<RunTemplateRow>;
+
+    /// Get a run template by ID.
+    async fn get_template(&self, template_id: Uuid) -> Result<Option<RunTemplateRow>>;
+
+    /// List all run templates for a workflow (newest first, without snapshot blob).
+    async fn list_templates(&self, workflow_id: Uuid) -> Result<Vec<RunTemplateRow>>;
+
+    /// Delete a run template.
+    async fn delete_template(&self, template_id: Uuid) -> Result<()>;
 }
 
 // ============================================================================

@@ -455,6 +455,7 @@ mod tests {
             execution_context: None,
             container_config: None,
             wg_client: None,
+            snapshot: None,
         }
     }
 

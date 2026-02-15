@@ -14,7 +14,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 /// Row type for persisted agent definitions.
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct AgentRow {
     pub id: Uuid,
     pub user_id: Option<Uuid>,
@@ -36,7 +36,7 @@ pub struct AgentRow {
 }
 
 /// Row type for protocol document definitions (documenter step config).
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct ProtocolDocumentDefRow {
     pub id: Uuid,
     pub step_id: Option<Uuid>,
@@ -86,7 +86,7 @@ pub struct AgentGuidanceRow {
 }
 
 /// Row type for persisted tool definitions.
-#[derive(Debug, Clone, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct ToolRow {
     pub id: Uuid,
     pub name: String,
@@ -167,7 +167,7 @@ pub struct WorkflowRow {
 }
 
 /// Row type for a workflow step (DAG node).
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct WorkflowStepRow {
     pub id: Uuid,
     pub workflow_id: Uuid,
@@ -204,7 +204,7 @@ pub struct WorkflowStepRow {
 }
 
 /// Row type for a workflow step edge (DAG edge).
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct WorkflowStepEdgeRow {
     pub id: Uuid,
     pub from_step_id: Uuid,
@@ -272,6 +272,19 @@ pub struct WorkflowExecutionRow {
     pub outputs: Option<serde_json::Value>,
     pub error: Option<String>,
     pub execution_mode: String,
+    pub template_id: Option<Uuid>,
+}
+
+/// Row type for run templates (frozen workflow snapshots).
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct RunTemplateRow {
+    pub id: Uuid,
+    pub workflow_id: Uuid,
+    pub user_id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub snapshot: serde_json::Value,
+    pub created_at: DateTime<Utc>,
 }
 
 /// Row type for workflow step agents (multi-agent step support).
@@ -474,7 +487,7 @@ pub struct RoomTranscriptEntry {
 // ============================================================================
 
 /// Input port definition for workflow steps
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct StepInputRow {
     pub id: Uuid,
     pub workflow_step_id: Uuid,
@@ -488,7 +501,7 @@ pub struct StepInputRow {
 }
 
 /// Output port definition for workflow steps
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct StepOutputRow {
     pub id: Uuid,
     pub workflow_step_id: Uuid,
@@ -501,7 +514,7 @@ pub struct StepOutputRow {
 }
 
 /// Routing rule for label-based agent assignment
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct StepRoutingRuleRow {
     pub id: Uuid,
     pub workflow_step_id: Uuid,
@@ -612,7 +625,7 @@ pub struct ProtocolPortRow {
 }
 
 /// Row type for workflow step ↔ protocol linkage.
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct WorkflowStepProtocolRow {
     pub id: Uuid,
     pub workflow_step_id: Uuid,
@@ -626,7 +639,7 @@ pub struct WorkflowStepProtocolRow {
 // ============================================================================
 
 /// Row type for task force mission briefs (one per step).
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct TaskMissionBriefRow {
     pub id: Uuid,
     pub step_id: Uuid,
@@ -639,7 +652,7 @@ pub struct TaskMissionBriefRow {
 }
 
 /// Row type for task force agent roster entries.
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct TaskAgentRosterRow {
     pub id: Uuid,
     pub mission_brief_id: Uuid,
@@ -734,7 +747,7 @@ pub struct BeliefRow {
 // Room Step Config Row Types (Design-Time)
 // ============================================================================
 
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct RoomStepConfigRow {
     pub id: Uuid,
     pub step_id: Uuid,
@@ -746,7 +759,7 @@ pub struct RoomStepConfigRow {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct RoomStepMemberRow {
     pub id: Uuid,
     pub step_id: Uuid,
