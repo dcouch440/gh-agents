@@ -59,8 +59,8 @@ export const DetailLevel = {
 export type DetailLevel = (typeof DetailLevel)[keyof typeof DetailLevel]
 
 export const LOD = {
-  THRESHOLD_DOWN: 0.45,
-  THRESHOLD_UP: 0.50,
+  THRESHOLD_DOWN: 0.28,
+  THRESHOLD_UP: 0.33,
   MINIMAL_LABEL_FONT_SIZE: 48,
   ACCENT_STRIPE_WIDTH: 12,
   MINIMAL_EDGE_WIDTH: 10,

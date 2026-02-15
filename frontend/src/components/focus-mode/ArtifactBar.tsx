@@ -17,6 +17,7 @@ type CardEntry = {
 type StepSection = {
   stepId: string
   stepName: string
+  sectionLabel: string
   accentColor: string
   cards: readonly CardEntry[]
 }
@@ -77,7 +78,7 @@ function ArtifactBar({ sections, currentStepId, onStepClick }: ArtifactBarProps)
                 whiteSpace: 'nowrap',
               }}
             >
-              {section.stepName}
+              {section.sectionLabel}
             </Typography>
             {section.cards.map((card) => (
               <ArtifactCard

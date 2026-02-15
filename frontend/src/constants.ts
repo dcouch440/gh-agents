@@ -276,7 +276,7 @@ export const DESIGN = {
 export const FOCUS_MODE = {
   ARTIFACT_BAR_HEIGHT: 92,
   NAV_BAR_HEIGHT: 48,
-  CARD_WIDTH: 56,
+  CARD_WIDTH: 112,
   CARD_HEIGHT: 68,
   Z_INDEX: 1400,
 } as const
