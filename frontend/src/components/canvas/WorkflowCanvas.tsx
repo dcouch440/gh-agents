@@ -5,7 +5,7 @@ import type { OnSelectionChangeParams, Connection, OnNodesDelete, OnEdgesDelete,
 import '@xyflow/react/dist/style.css'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
-import { useStore, batch, workflowStore, canvasStore, agentStore, outputSchemaStore, shareStore } from '@/stores'
+import { useStore, batch, workflowStore, canvasStore, agentStore, outputSchemaStore, shareStore, focusModeStore } from '@/stores'
 import { toRFNodes, toRFEdges, toDocumentEdges, toNotesEdges } from './mappers'
 import { Collections } from '@/utils/collections'
 import { nodeTypes } from './nodeTypes'
@@ -21,6 +21,8 @@ import { useCanvasSync } from './useCanvasSync'
 import { useCanvasLookups } from './useCanvasLookups'
 import { useCanvasFetch } from './useCanvasFetch'
 import { ShareModeBanner } from './ShareModeBanner'
+import { FocusModeOverlay } from '@/components/focus-mode'
+import { topoSortStepIds } from '@/utils/topoSort'
 
 function WorkflowCanvasInner() {
   const theme = useTheme()
@@ -210,6 +212,24 @@ function WorkflowCanvasInner() {
     }
   }, [shareActive])
 
+  // Alt+F to enter focus mode
+  useEffect(() => {
+    const handleFocusKey = (e: KeyboardEvent) => {
+      if (e.altKey && (e.key === 'f' || e.key === 'F') && !focusModeStore.store.getState().active) {
+        e.preventDefault()
+        const ordered = topoSortStepIds(steps, edges)
+        if (ordered.length === 0) return
+        const selectedIds = canvasStore.store.getState().selectedStepIds
+        const initialId = ordered.find((id) => selectedIds.has(id))
+        focusModeStore.enter(ordered, initialId)
+      }
+    }
+    document.addEventListener('keydown', handleFocusKey)
+    return () => {
+      document.removeEventListener('keydown', handleFocusKey)
+    }
+  }, [steps, edges])
+
   const onCanvasMouseDown = useCallback(() => {
     setContextMenu(null)
   }, [])
@@ -302,6 +322,7 @@ function WorkflowCanvasInner() {
           setContextMenu(null)
         }}
       />
+      <FocusModeOverlay />
     </Box>
   )
 }

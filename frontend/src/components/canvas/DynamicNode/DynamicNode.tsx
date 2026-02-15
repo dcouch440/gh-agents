@@ -11,7 +11,8 @@ import GroupsOutlined from '@mui/icons-material/GroupsOutlined'
 import ForumOutlined from '@mui/icons-material/ForumOutlined'
 import BugReportOutlined from '@mui/icons-material/BugReportOutlined'
 import HistoryOutlined from '@mui/icons-material/HistoryOutlined'
-import { useStore, workflowStore, canvasStore, shareStore } from '@/stores'
+import { useStore, workflowStore, canvasStore, shareStore, focusModeStore } from '@/stores'
+import { topoSortStepIds } from '@/utils/topoSort'
 import type { CreateDocumentDefRequest } from '@/types/workflow'
 import { CanvasFormNode } from '../CanvasFormNode'
 import type { CanvasFormTab } from '../CanvasFormNode'
@@ -26,7 +27,6 @@ import { MinimalNodeShell } from '../MinimalNodeShell'
 import { Archetype, ARCHETYPE_CONFIGS } from './archetypes'
 import type { Archetype as ArchetypeType } from './archetypes'
 import { DynamicNodeHeader } from './DynamicNodeHeader'
-import { NodeExpandedModal } from './NodeExpandedModal'
 import { ChatTab } from './tabs/ChatTab'
 import { InputsOutputsTab } from './tabs/InputsOutputsTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
@@ -54,7 +54,6 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
   const [activeTabId, setActiveTabId] = useState('chat')
   const [adding, setAdding] = useState(false)
-  const [expanded, setExpanded] = useState(false)
   const detailLevel = useCanvasLOD()
   const nodeData = data as DynamicNodeData
 
@@ -189,13 +188,15 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     return null
   })()
 
-  const handleExpand = useCallback(() => {
-    setExpanded(true)
-  }, [])
-
-  const handleCollapse = useCallback(() => {
-    setExpanded(false)
-  }, [])
+  const handleEnterFocusMode = useCallback(() => {
+    const allSteps = workflowStore.store.getState()
+    const stepsArr = [...allSteps.steps.byId.values()]
+    const edgesArr = [...allSteps.edges.byId.values()]
+    const ordered = topoSortStepIds(stepsArr, edgesArr)
+    if (ordered.length > 0) {
+      focusModeStore.enter(ordered, id)
+    }
+  }, [id])
 
   const issueDescriptions = stepIssues.map((issue) => issue.description)
 
@@ -232,7 +233,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
       subtitle={subtitle}
       issueCount={stepIssues.length}
       issueDescriptions={issueDescriptions}
-      onExpand={handleExpand}
+      onExpand={handleEnterFocusMode}
     />
   )
 
@@ -256,23 +257,6 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
             <CanvasHandle type="source" position={Position.Bottom} id="notes" color="#f85149" variant="passive" />
           </>
         }
-      />
-      <NodeExpandedModal
-        open={expanded}
-        onClose={handleCollapse}
-        header={
-          <DynamicNodeHeader
-            name={nodeData.label}
-            archetype={nodeData.archetype}
-            subtitle={subtitle}
-            issueCount={stepIssues.length}
-            issueDescriptions={issueDescriptions}
-          />
-        }
-        tabs={tabs}
-        activeTabId={activeTabId}
-        onTabChange={setActiveTabId}
-        accentColor={accentColor}
       />
     </>
   )

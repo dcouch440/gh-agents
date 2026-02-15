@@ -272,6 +272,15 @@ export const DESIGN = {
   SYN_TAG: '#7ee787',
 } as const
 
+// Focus Mode
+export const FOCUS_MODE = {
+  ARTIFACT_BAR_HEIGHT: 92,
+  NAV_BAR_HEIGHT: 48,
+  CARD_WIDTH: 56,
+  CARD_HEIGHT: 68,
+  Z_INDEX: 1400,
+} as const
+
 // Auto-save
 export const AUTO_SAVE_DEBOUNCE_MS = 500
 
