@@ -315,11 +315,13 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::WORKFLOW_STEP_LAST_RUN, get(api::get_step_last_run))
         .route(routes::WORKFLOW_NOTES, get(api::get_workflow_notes))
         .route(routes::WORKFLOW_RUN, post(api::run_workflow))
-        .route(routes::WORKFLOW_STAGING, post(api::create_staging_run))
-        .route(routes::WORKFLOW_STAGING_RUN, get(api::get_staging_run))
         .route(
-            routes::WORKFLOW_STAGING_STEP_EXECUTE,
-            post(api::execute_staging_step),
+            routes::WORKFLOW_WORKSHOP,
+            post(api::get_or_create_workshop).get(api::get_workshop),
+        )
+        .route(
+            routes::WORKFLOW_WORKSHOP_STEP_EXECUTE,
+            post(api::execute_workshop_step),
         )
         .route(
             routes::WORKFLOW_EXECUTIONS,

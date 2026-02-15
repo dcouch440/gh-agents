@@ -1365,6 +1365,13 @@ pub trait WorkflowCollectionRepo: Send + Sync {
         workflow_id: Uuid,
         user_id: Uuid,
     ) -> Result<WorkflowExecutionRow>;
+
+    // --- Workshop (persistent per-workflow execution context) ---
+    async fn get_or_create_workshop(
+        &self,
+        workflow_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<WorkflowExecutionRow>;
 }
 
 // ============================================================================
