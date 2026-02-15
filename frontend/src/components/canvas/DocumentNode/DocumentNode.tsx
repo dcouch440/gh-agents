@@ -1,6 +1,6 @@
-import { memo, useState } from 'react'
+import { memo, useState, useCallback } from 'react'
 import { Position, NodeResizer } from '@xyflow/react'
-import type { NodeProps } from '@xyflow/react'
+import type { NodeProps, ResizeParams } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { useStore, shareStore } from '@/stores'
@@ -12,6 +12,7 @@ import { DocumentNodeHeader } from './DocumentNodeHeader'
 import { DocumentNodeContent } from './DocumentNodeContent'
 import type { DocumentNodeData } from './types'
 import { nodeDataEqual } from '../mappers'
+import { setStoredDimensions } from '../nodeResizeStorage'
 import { CanvasNodeKind } from '../canvasKinds'
 import { useProtocolHighlight } from '../useProtocolHighlight'
 import { getNodeHighlightStyles } from '../nodeHighlightStyles'
@@ -31,6 +32,13 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
     themeMode: theme.palette.mode,
     variant: 'resizable',
   })
+
+  const handleResizeEnd = useCallback(
+    (_event: unknown, params: ResizeParams) => {
+      setStoredDimensions(id, { width: Math.round(params.width), height: Math.round(params.height) })
+    },
+    [id],
+  )
 
   return (
     <Box
@@ -64,6 +72,7 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
         minHeight={DOCUMENT_NODE.MIN_HEIGHT}
         maxWidth={DOCUMENT_NODE.MAX_WIDTH}
         maxHeight={DOCUMENT_NODE.MAX_HEIGHT}
+        onResizeEnd={handleResizeEnd}
         lineStyle={{ borderColor: 'transparent', borderWidth: 0 }}
         handleStyle={{
           width: 10,

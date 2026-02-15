@@ -3,9 +3,8 @@ import { render, screen } from '@/test/render'
 import userEvent from '@testing-library/user-event'
 import { SaveDiscardGroup } from './SaveDiscardGroup'
 
-const { mockSelectDirty, mockSaveAllDirtySteps, mockRevertSteps } = vi.hoisted(() => ({
+const { mockSelectDirty, mockRevertSteps } = vi.hoisted(() => ({
   mockSelectDirty: vi.fn(() => false),
-  mockSaveAllDirtySteps: vi.fn(() => Promise.resolve()),
   mockRevertSteps: vi.fn(() => Promise.resolve()),
 }))
 
@@ -17,21 +16,21 @@ vi.mock('@/stores', () => ({
   workflowStore: {
     store: { getState: vi.fn(), subscribe: vi.fn() },
     selectDirty: mockSelectDirty,
-    saveAllDirtySteps: mockSaveAllDirtySteps,
     revertSteps: mockRevertSteps,
   },
 }))
 
+const mockFlush = vi.fn()
+
 beforeEach(() => {
   vi.clearAllMocks()
   mockSelectDirty.mockReturnValue(false)
-  mockSaveAllDirtySteps.mockReturnValue(Promise.resolve())
   mockRevertSteps.mockReturnValue(Promise.resolve())
 })
 
 describe('SaveDiscardGroup', () => {
   it('Save and Discard buttons are disabled when not dirty', () => {
-    render(<SaveDiscardGroup />)
+    render(<SaveDiscardGroup autoSaveFlush={mockFlush} autoSaveSaving={false} />)
 
     const saveBtn = screen.getByTestId('toolbar-save-button').querySelector('button')
     const discardBtn = screen.getByTestId('toolbar-discard-button').querySelector('button')
@@ -42,7 +41,7 @@ describe('SaveDiscardGroup', () => {
 
   it('Save and Discard buttons are enabled when dirty', () => {
     mockSelectDirty.mockReturnValue(true)
-    render(<SaveDiscardGroup />)
+    render(<SaveDiscardGroup autoSaveFlush={mockFlush} autoSaveSaving={false} />)
 
     const saveBtn = screen.getByTestId('toolbar-save-button').querySelector('button')
     const discardBtn = screen.getByTestId('toolbar-discard-button').querySelector('button')
@@ -51,23 +50,30 @@ describe('SaveDiscardGroup', () => {
     expect(discardBtn).not.toBeDisabled()
   })
 
-  it('Save calls saveAllDirtySteps', async () => {
+  it('Save calls autoSaveFlush', async () => {
     mockSelectDirty.mockReturnValue(true)
     const user = userEvent.setup()
-    render(<SaveDiscardGroup />)
+    render(<SaveDiscardGroup autoSaveFlush={mockFlush} autoSaveSaving={false} />)
 
     await user.click(screen.getByText('Save'))
 
-    expect(mockSaveAllDirtySteps).toHaveBeenCalledOnce()
+    expect(mockFlush).toHaveBeenCalledOnce()
   })
 
   it('Discard calls revertSteps', async () => {
     mockSelectDirty.mockReturnValue(true)
     const user = userEvent.setup()
-    render(<SaveDiscardGroup />)
+    render(<SaveDiscardGroup autoSaveFlush={mockFlush} autoSaveSaving={false} />)
 
     await user.click(screen.getByText('Discard'))
 
     expect(mockRevertSteps).toHaveBeenCalledOnce()
+  })
+
+  it('shows Saving label when autoSaveSaving is true', () => {
+    mockSelectDirty.mockReturnValue(true)
+    render(<SaveDiscardGroup autoSaveFlush={mockFlush} autoSaveSaving={true} />)
+
+    expect(screen.getByText('Saving')).toBeInTheDocument()
   })
 })

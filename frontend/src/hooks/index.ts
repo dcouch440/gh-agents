@@ -12,6 +12,7 @@ export { useConfirmModal } from './useConfirmModal'
 
 // Utility
 export { useDebounceCallback } from './useDebounceCallback'
+export { useAutoSave } from './useAutoSave'
 
 // Data
 export { useSendSessionMessage } from './useChatMutations'

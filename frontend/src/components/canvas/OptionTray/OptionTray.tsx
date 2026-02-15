@@ -5,7 +5,12 @@ import { TrayToggle } from './TrayToggle'
 import { RunButton } from './RunButton'
 import { SaveDiscardGroup } from './SaveDiscardGroup'
 
-function OptionTray() {
+type OptionTrayProps = {
+  autoSaveFlush: () => void
+  autoSaveSaving: boolean
+}
+
+function OptionTray({ autoSaveFlush, autoSaveSaving }: OptionTrayProps) {
   const dirty = useStore(workflowStore.store, workflowStore.selectDirty)
   const activeWorkflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
   const [open, setOpen] = useState(false)
@@ -32,7 +37,7 @@ function OptionTray() {
   return (
     <>
       <TrayPanel visible={open} dirty={dirty}>
-        <SaveDiscardGroup />
+        <SaveDiscardGroup autoSaveFlush={autoSaveFlush} autoSaveSaving={autoSaveSaving} />
         <RunButton />
       </TrayPanel>
       <TrayToggle open={open} onClick={handleToggle} />

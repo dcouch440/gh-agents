@@ -272,6 +272,9 @@ export const DESIGN = {
   SYN_TAG: '#7ee787',
 } as const
 
+// Auto-save
+export const AUTO_SAVE_DEBOUNCE_MS = 500
+
 // Animation
 export const ANIMATION = {
   FAST: 150,

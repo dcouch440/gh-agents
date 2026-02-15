@@ -1,6 +1,6 @@
 import { memo, useState, useCallback } from 'react'
 import { Position, NodeResizer } from '@xyflow/react'
-import type { NodeProps } from '@xyflow/react'
+import type { NodeProps, ResizeParams } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { useStore, workflowStore, shareStore } from '@/stores'
@@ -40,6 +40,16 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
     [id],
   )
 
+  const handleResizeEnd = useCallback(
+    (_event: unknown, params: ResizeParams) => {
+      void workflowStore.updateStep(id, {
+        width: Math.round(params.width),
+        height: Math.round(params.height),
+      })
+    },
+    [id],
+  )
+
   return (
     <Box
       ref={containerRef}
@@ -70,6 +80,7 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
         minHeight={CONTEXT_NODE.MIN_HEIGHT}
         maxWidth={CONTEXT_NODE.MAX_WIDTH}
         maxHeight={CONTEXT_NODE.MAX_HEIGHT}
+        onResizeEnd={handleResizeEnd}
         lineStyle={{ borderColor: 'transparent', borderWidth: 0 }}
         handleStyle={{
           width: 10,

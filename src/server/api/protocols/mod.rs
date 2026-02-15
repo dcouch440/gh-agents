@@ -741,6 +741,8 @@ pub async fn apply_protocol(
             verification_agent_ids: None,
             position_x: None,
             position_y: None,
+            width: None,
+            height: None,
             name: None,
             system_prompt_suffix: None,
             visible: true,

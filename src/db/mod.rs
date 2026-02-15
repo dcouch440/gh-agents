@@ -190,6 +190,8 @@ pub struct WorkflowStepRow {
     pub verification_agent_ids: Option<serde_json::Value>,
     pub position_x: Option<f64>,
     pub position_y: Option<f64>,
+    pub width: Option<f64>,
+    pub height: Option<f64>,
     pub name: Option<String>,
     pub system_prompt_suffix: Option<String>,
     pub visible: bool,

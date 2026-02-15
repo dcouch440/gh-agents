@@ -27,6 +27,8 @@ type WorkflowStep = {
   verification_agent_ids: string[]
   position_x: number | null
   position_y: number | null
+  width: number | null
+  height: number | null
   name: string | null
   room_id: string | null
   system_prompt_suffix: string | null
@@ -60,6 +62,8 @@ type CreateStepRequest = {
   execution_mode?: string
   position_x?: number
   position_y?: number
+  width?: number
+  height?: number
   name?: string
   prompt_template_id?: string
   output_schema_id?: string
