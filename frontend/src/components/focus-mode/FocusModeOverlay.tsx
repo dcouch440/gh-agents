@@ -16,8 +16,20 @@ import { Collections } from '@/utils/collections'
 import { ArtifactBar } from './ArtifactBar'
 import type { StepSection, CardEntry } from './ArtifactBar'
 import { FocusNodeView } from './FocusNodeView'
-import { FocusNavBar } from './FocusNavBar'
 import { ArtifactDetailPanel } from './ArtifactDetailPanel'
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+const executionModeLabel = (mode: string): string => {
+  switch (mode) {
+    case 'task_force': return 'Workforce'
+    case 'documenter': return 'Documenter'
+    case 'room': return 'Room'
+    case 'single': return 'Agent'
+    case 'for_each': return 'Pipeline'
+    default: return mode
+  }
+}
 
 // ── Slide variants ───────────────────────────────────────────────────────────
 
@@ -42,8 +54,6 @@ function FocusModeOverlay() {
 
   const active = useStore(focusModeStore.store, focusModeStore.selectActive)
   const currentStepId = useStore(focusModeStore.store, focusModeStore.selectCurrentStepId)
-  const currentIndex = useStore(focusModeStore.store, focusModeStore.selectCurrentIndex)
-  const stepCount = useStore(focusModeStore.store, focusModeStore.selectStepCount)
   const orderedStepIds = useStore(focusModeStore.store, focusModeStore.selectOrderedStepIds)
   const slideDirection = useStore(focusModeStore.store, focusModeStore.selectSlideDirection)
   const activeTabId = useStore(focusModeStore.store, focusModeStore.selectActiveTabId)
@@ -193,7 +203,7 @@ function FocusModeOverlay() {
           break
       }
 
-      sections.push({ stepId: id, stepName, accentColor: color, cards })
+      sections.push({ stepId: id, stepName, sectionLabel: executionModeLabel(step.execution_mode), accentColor: color, cards })
     }
     return sections
   }, [orderedStepIds, steps, edges, accentColors, rosterByStep, documentDefsByStep, roomMembersByStep])
@@ -296,16 +306,6 @@ function FocusModeOverlay() {
         )}
       </Box>
 
-      {/* Navigation bar */}
-      <FocusNavBar
-        stepCount={stepCount}
-        currentIndex={currentIndex}
-        currentStepName={currentStepName}
-        accentColors={accentColors}
-        onPrev={focusModeStore.goPrev}
-        onNext={focusModeStore.goNext}
-        onDotClick={focusModeStore.goToIndex}
-      />
     </Box>
   )
 
