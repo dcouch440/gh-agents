@@ -169,8 +169,18 @@ const sendMessage = async (executionId: string, content: string): Promise<void> 
       },
     })
 
+    // Wrap abort to also cancel any pending rAF — stopStream() can't
+    // reach the closure-scoped pendingFrame directly
+    const stop = (): void => {
+      if (pendingFrame !== null) {
+        cancelAnimationFrame(pendingFrame)
+        flushTokens()
+      }
+      abort()
+    }
+
     store.setState((s) => ({
-      activeStreams: { ...s.activeStreams, [executionId]: abort },
+      activeStreams: { ...s.activeStreams, [executionId]: stop },
     }))
   } catch (e) {
     store.setState({ error: extractError('executions', e) })

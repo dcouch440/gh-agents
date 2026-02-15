@@ -281,6 +281,7 @@ function AgentWorkshopPage() {
   const [showDocumentSelector, setShowDocumentSelector] = useState(false)
   const [showSchemaDialog, setShowSchemaDialog] = useState(false)
   const contentRef = useRef('')
+  const pendingFrameRef = useRef<number | null>(null)
   const justNavigatedRef = useRef(false)
 
   useEffect(() => {
@@ -458,14 +459,28 @@ function AgentWorkshopPage() {
             // If parsing fails, use the raw data
           }
           contentRef.current += text
-          dispatch({
-            type: 'UPDATE_LAST_ASSISTANT',
-            content: contentRef.current,
+          // Batch token updates to once per animation frame to avoid
+          // copying the entire messages array on every single token
+          pendingFrameRef.current ??= requestAnimationFrame(() => {
+            pendingFrameRef.current = null
+            dispatch({
+              type: 'UPDATE_LAST_ASSISTANT',
+              content: contentRef.current,
+            })
           })
         }
       }
 
       const onDone = () => {
+        // Flush any pending batched token update before ending the stream
+        if (pendingFrameRef.current !== null) {
+          cancelAnimationFrame(pendingFrameRef.current)
+          pendingFrameRef.current = null
+          dispatch({
+            type: 'UPDATE_LAST_ASSISTANT',
+            content: contentRef.current,
+          })
+        }
         dispatch({ type: 'SET_STREAMING', value: false })
       }
 
