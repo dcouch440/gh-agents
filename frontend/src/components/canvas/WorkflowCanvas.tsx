@@ -264,7 +264,7 @@ function WorkflowCanvasInner() {
         deleteKeyCode={['Backspace', 'Delete']}
         multiSelectionKeyCode="Shift"
         reconnectRadius={20}
-        minZoom={0.1}
+        minZoom={0.25}
         maxZoom={4}
         snapToGrid
         snapGrid={[CANVAS.GRID_SIZE, CANVAS.GRID_SIZE]}
