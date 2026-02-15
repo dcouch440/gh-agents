@@ -783,6 +783,14 @@ pub struct RunSnapshotRow {
     pub created_at: DateTime<Utc>,
 }
 
+/// Lightweight row for reconstructing envelopes from snapshots (JOIN result).
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct EnvelopeSnapshotRow {
+    pub step_id: Uuid,
+    pub content: String,
+    pub source_id: Uuid,
+}
+
 /// Type alias for the database pool
 pub type DbPool = PgPool;
 

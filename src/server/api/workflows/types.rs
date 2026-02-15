@@ -188,6 +188,64 @@ pub struct WorkflowExecutionResponse {
 }
 
 // ============================================================================
+// Staging Types
+// ============================================================================
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct CreateStagingRunRequest {
+    pub initial_input: Option<String>,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct StagingRunResponse {
+    pub run_id: Uuid,
+    pub workflow_id: Uuid,
+    pub status: String,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct StagedStepResponse {
+    pub step_id: Uuid,
+    pub status: String,
+    pub output: Option<serde_json::Value>,
+    pub tokens_in: i64,
+    pub tokens_out: i64,
+    pub cost_usd: f32,
+    pub duration_ms: u64,
+    pub next_executable_steps: Vec<Uuid>,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct StagingRunStatusResponse {
+    pub run_id: Uuid,
+    pub workflow_id: Uuid,
+    pub status: String,
+    pub completed_steps: Vec<StagingStepSummary>,
+    pub next_executable_steps: Vec<Uuid>,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct StagingStepSummary {
+    pub step_id: Uuid,
+    pub status: String,
+}
+
+/// Path params for staging step execution.
+#[derive(Deserialize)]
+pub struct StagingStepPath {
+    pub id: Uuid,
+    pub run_id: Uuid,
+    pub step_id: Uuid,
+}
+
+/// Path params for staging run.
+#[derive(Deserialize)]
+pub struct StagingRunPath {
+    pub id: Uuid,
+    pub run_id: Uuid,
+}
+
+// ============================================================================
 // Helper Functions
 // ============================================================================
 

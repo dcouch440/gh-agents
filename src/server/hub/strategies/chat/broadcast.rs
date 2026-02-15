@@ -3,9 +3,7 @@
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::server::hub::consistency_scanner::{
-    self, DeletedItem, DeletedItemType,
-};
+use crate::server::hub::consistency_scanner::{self, DeletedItem, DeletedItemType};
 use crate::server::state::AppState;
 use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
 use crate::types::UserId;

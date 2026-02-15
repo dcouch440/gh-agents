@@ -158,9 +158,7 @@ pub async fn get_step_last_run(
         let earliest = step_phases.iter().map(|p| p.created_at).min();
         let latest_completed = step_phases.iter().filter_map(|p| p.completed_at).max();
         let duration_ms = match (earliest, latest_completed) {
-            (Some(start), Some(end)) => {
-                Some((end - start).num_milliseconds().unsigned_abs())
-            }
+            (Some(start), Some(end)) => Some((end - start).num_milliseconds().unsigned_abs()),
             _ => None,
         };
 
@@ -214,9 +212,9 @@ pub async fn get_step_last_run(
             .first()
             .ok_or(AppError::not_found("No execution found for this step"))?;
 
-        let duration_ms = exec.completed_at.map(|end| {
-            (end - exec.started_at).num_milliseconds().unsigned_abs()
-        });
+        let duration_ms = exec
+            .completed_at
+            .map(|end| (end - exec.started_at).num_milliseconds().unsigned_abs());
 
         Ok(Json(StepLastRunResponse {
             execution_id: exec.id.to_string(),

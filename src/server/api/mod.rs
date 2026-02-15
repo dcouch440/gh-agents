@@ -108,16 +108,17 @@ pub use results::{delete_result, get_result, list_results, ResultQuery, ResultRe
 
 // Re-export workflow handlers and types
 pub use workflows::{
-    add_step_document, add_workflow_edge, clear_step_messages, create_workflow,
+    add_step_document, add_workflow_edge, clear_step_messages, create_staging_run, create_workflow,
     create_workflow_step, delete_workflow, delete_workflow_edge_by_id, delete_workflow_step,
-    get_or_create_step_session, get_step_chat_debug, get_step_config, get_step_last_run,
-    get_step_session, get_workflow, get_workflow_notes, get_workflow_step, list_step_documents,
-    list_workflow_edges, list_workflow_executions, list_workflow_steps, list_workflows,
-    remove_step_document, remove_workflow_edge, run_workflow, update_workflow,
-    update_workflow_step, CreateStepRequest,
-    CreateWorkflowRequest, EdgeRequest, EdgeResponse, RunWorkflowRequest, StepDocumentRequest,
-    StepDocumentResponse, UpdateStepRequest, UpdateWorkflowRequest, WorkflowExecutionResponse,
-    WorkflowResponse, WorkflowRunResponse, WorkflowStepResponse,
+    execute_staging_step, get_or_create_step_session, get_staging_run, get_step_chat_debug,
+    get_step_config, get_step_last_run, get_step_session, get_workflow, get_workflow_notes,
+    get_workflow_step, list_step_documents, list_workflow_edges, list_workflow_executions,
+    list_workflow_steps, list_workflows, remove_step_document, remove_workflow_edge, run_workflow,
+    update_workflow, update_workflow_step, CreateStepRequest, CreateWorkflowRequest, EdgeRequest,
+    EdgeResponse, RunWorkflowRequest, StagedStepResponse, StagingRunResponse,
+    StagingRunStatusResponse, StepDocumentRequest, StepDocumentResponse, UpdateStepRequest,
+    UpdateWorkflowRequest, WorkflowExecutionResponse, WorkflowResponse, WorkflowRunResponse,
+    WorkflowStepResponse,
 };
 
 // Re-export archetype handlers

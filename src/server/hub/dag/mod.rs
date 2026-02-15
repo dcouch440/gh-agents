@@ -47,6 +47,7 @@ pub(crate) mod for_each;
 pub(crate) mod resume;
 pub(crate) mod room_step;
 pub(crate) mod single;
+pub(crate) mod staging;
 pub(crate) mod task_force;
 pub(crate) mod utils;
 pub(crate) mod versioning;

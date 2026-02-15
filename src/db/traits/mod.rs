@@ -12,9 +12,9 @@ use crate::db::{
     AgentDesignerOutputRow, AgentDesignerRunRow, AgentExecutionRow, AgentGuidanceRow, AgentRow,
     BeliefExtractionPlanRow, BeliefRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContentVersionRow, ContextStoreRow,
-    DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
-    ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow, ResultRow,
-    RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomStepConfigRow,
+    DocumentRow, DocumentSearchResult, EnvelopeSnapshotRow, ExecutionMessageRow, OutputSchemaRow,
+    PromptTemplateRow, ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow,
+    ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomStepConfigRow,
     RoomStepMemberRow, RoomTranscriptEntry, RouterRequestRow, RunSnapshotRow, SessionRow,
     StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow,
     TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow,
@@ -1704,4 +1704,11 @@ pub trait ContentVersionRepo: Send + Sync {
         def_id: Uuid,
         run_id: Uuid,
     ) -> Result<Option<ContentVersionRow>>;
+
+    /// List all envelope output snapshots for a run (JOIN with content_versions).
+    /// Returns (step_id, envelope_json, source_id) for DagState reconstruction.
+    async fn list_envelope_snapshots_for_run(
+        &self,
+        run_id: Uuid,
+    ) -> Result<Vec<EnvelopeSnapshotRow>>;
 }

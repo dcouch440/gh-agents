@@ -12,7 +12,9 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::llm::{AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage};
+use crate::llm::{
+    AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage,
+};
 use crate::server::state::AppState;
 use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
 
@@ -189,7 +191,10 @@ pub(crate) fn format_scan_input(
 
     for (step_id, step_name, _mode, content) in all_notes {
         let name = step_name.as_deref().unwrap_or("(unnamed)");
-        out.push_str(&format!("[{} (step_id: {})]\n{}\n\n", name, step_id, content));
+        out.push_str(&format!(
+            "[{} (step_id: {})]\n{}\n\n",
+            name, step_id, content
+        ));
     }
     out.push_str("</notes>");
     out

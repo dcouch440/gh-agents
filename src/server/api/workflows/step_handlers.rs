@@ -50,10 +50,7 @@ pub async fn create_workflow_step(
     // Enforce single-input constraint: only one input step per workflow
     if execution_mode == "input" {
         let existing_steps = repo.list_steps(wid).await?;
-        if existing_steps
-            .iter()
-            .any(|s| s.execution_mode == "input")
-        {
+        if existing_steps.iter().any(|s| s.execution_mode == "input") {
             return Err(AppError::bad_request(
                 "Workflow can have at most one input step",
             ));

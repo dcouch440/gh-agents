@@ -16,9 +16,9 @@ use crate::db::{
     AgentDesignerOutputRow, AgentDesignerRunRow, AgentExecutionRow, AgentRow,
     BeliefExtractionPlanRow, BeliefRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContentVersionRow, ContextStoreRow,
-    DocumentRow, DocumentSearchResult, ExecutionMessageRow, OutputSchemaRow, PromptTemplateRow,
-    ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow, ResultRow,
-    RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomStepConfigRow,
+    DocumentRow, DocumentSearchResult, EnvelopeSnapshotRow, ExecutionMessageRow, OutputSchemaRow,
+    PromptTemplateRow, ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow,
+    ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomStepConfigRow,
     RoomStepMemberRow, RoomTranscriptEntry, RouterRequestRow, RunSnapshotRow, SessionRow,
     StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow,
     TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow,
@@ -4802,6 +4802,22 @@ impl ContentVersionRepo for PgRepo {
         .fetch_optional(&self.pool)
         .await?;
         Ok(row)
+    }
+
+    async fn list_envelope_snapshots_for_run(
+        &self,
+        run_id: Uuid,
+    ) -> Result<Vec<EnvelopeSnapshotRow>> {
+        let rows = sqlx::query_as::<_, EnvelopeSnapshotRow>(
+            "SELECT rs.step_id, cv.content, rs.source_id \
+             FROM run_snapshots rs \
+             JOIN content_versions cv ON cv.id = rs.content_version_id \
+             WHERE rs.run_id = $1 AND rs.content_type = 'envelope' AND rs.role = 'output'",
+        )
+        .bind(run_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
     }
 }
 
