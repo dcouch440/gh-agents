@@ -36,7 +36,7 @@ vi.mock('@/stores', () => ({
   workflowStore: {
     store: {
       getState: () => ({
-        steps: { byId: new Map([['step-123', mockStep]]) },
+        steps: { byId: new Map([['step-123', mockStep]]), ids: ['step-123'] },
         documentDefsByStep: {},
         rosterByStep: {},
         roomMembersByStep: {},
@@ -44,6 +44,7 @@ vi.mock('@/stores', () => ({
     },
     createStep: mockCreateStep,
     deleteStep: mockDeleteStep,
+    selectSteps: () => [mockStep],
   },
   protocolStore: {
     store: 'protocol',
@@ -100,6 +101,42 @@ describe('CanvasContextMenu', () => {
     render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
     expect(screen.getByTestId('ctx-add-context')).toBeInTheDocument()
     expect(screen.getByText('Context')).toBeInTheDocument()
+  })
+
+  it('renders Input under Utilities', () => {
+    render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
+    expect(screen.getByTestId('ctx-add-input')).toBeInTheDocument()
+    expect(screen.getByText('Input')).toBeInTheDocument()
+  })
+
+  it('creates input step with rounded position', async () => {
+    const user = userEvent.setup()
+    render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
+
+    await user.click(screen.getByText('Input'))
+
+    expect(mockCreateStep).toHaveBeenCalledWith({
+      name: 'Input',
+      execution_mode: 'input',
+      position_x: 151,
+      position_y: 251,
+    })
+  })
+
+  it('does not create input step when one already exists', async () => {
+    // Override selectSteps to return an input step
+    const { workflowStore: ws } = await import('@/stores')
+    const inputStep = { ...mockStep, execution_mode: 'input' }
+    vi.spyOn(ws, 'selectSteps' as never).mockReturnValue([inputStep])
+
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    render(<CanvasContextMenu position={defaultPosition} onClose={onClose} />)
+
+    await user.click(screen.getByText('Input'))
+
+    expect(mockCreateStep).not.toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalledOnce()
   })
 
   it('does not render old step types', () => {

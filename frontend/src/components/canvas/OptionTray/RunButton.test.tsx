@@ -72,6 +72,18 @@ describe('RunButton', () => {
     expect(mockRunWorkflow).toHaveBeenCalledWith('wf-001', { initial_input: 'Summarize this' })
   })
 
+  it('prefers input step over context step for initial_input', async () => {
+    const contextStep = { ...mockWorkflowStep, id: 'ctx-1', execution_mode: 'context' as const, prompt_template: 'Context text' }
+    const inputStep = { ...mockWorkflowStep, id: 'input-1', execution_mode: 'input' as const, prompt_template: 'Input text' }
+    mockSelectSteps.mockReturnValue([contextStep, inputStep])
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<RunButton />)
+
+    await user.click(screen.getByText('Run'))
+
+    expect(mockRunWorkflow).toHaveBeenCalledWith('wf-001', { initial_input: 'Input text' })
+  })
+
   it('shows Running... while executing', async () => {
     let resolveRun: () => void = () => {}
     mockRunWorkflow.mockReturnValue(new Promise<void>((r) => { resolveRun = r }))

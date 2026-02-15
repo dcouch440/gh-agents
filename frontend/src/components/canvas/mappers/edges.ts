@@ -75,7 +75,7 @@ const toDocumentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[
 const toNotesEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] => {
   const edges: Edge[] = []
   for (const step of steps) {
-    if (step.execution_mode === 'context') continue
+    if (step.execution_mode === 'context' || step.execution_mode === 'input') continue
     const content = lookups.notesByStep[step.id]
     if (!content) continue
 

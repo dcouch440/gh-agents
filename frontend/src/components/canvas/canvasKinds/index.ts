@@ -11,6 +11,7 @@ type HighlightMode = (typeof HighlightMode)[keyof typeof HighlightMode]
 const CanvasNodeKind = {
   CONTEXT: 'context',
   DOCUMENT: 'document',
+  INPUT: 'input',
   NOTES: 'notes',
   PROTOCOL: 'protocol',
   STEP: 'step',
@@ -18,7 +19,7 @@ const CanvasNodeKind = {
 
 type CanvasNodeKind = (typeof CanvasNodeKind)[keyof typeof CanvasNodeKind]
 
-const HOVER_ELIGIBLE_KINDS = Collections.toSet<CanvasNodeKind>(['context', 'document', 'notes'])
+const HOVER_ELIGIBLE_KINDS = Collections.toSet<CanvasNodeKind>(['context', 'document', 'input', 'notes'])
 
 export { HighlightMode, CanvasNodeKind, HOVER_ELIGIBLE_KINDS }
 export type { HighlightMode, CanvasNodeKind }

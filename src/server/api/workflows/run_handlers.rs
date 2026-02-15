@@ -85,7 +85,7 @@ pub async fn run_workflow(
     let initial_input = body_input.unwrap_or_else(|| {
         steps
             .iter()
-            .find(|s| s.execution_mode == "context")
+            .find(|s| s.execution_mode == "context" || s.execution_mode == "input")
             .map(|s| s.prompt_template.clone())
             .unwrap_or_default()
     });
