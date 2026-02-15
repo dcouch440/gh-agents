@@ -6,6 +6,7 @@
 //! sessions, DAG workflow steps, and tool routing.
 
 pub mod board_overview;
+pub mod consistency_scanner;
 pub mod capability_resolver;
 pub mod chat_beliefs;
 pub mod dag;
@@ -160,6 +161,7 @@ pub async fn run_step_chat(
         workflow_id,
         step_id,
         execution_mode: step.execution_mode.clone(),
+        step_name: step.name.clone().unwrap_or_default(),
     };
     let strategy = ChatStrategy::with_step_context(
         chat_config,

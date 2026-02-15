@@ -55,6 +55,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
 
   const documentDefs = useStore(workflowStore.store, workflowStore.selectStepDocumentDefs(id))
   const roomStepMembers = useStore(workflowStore.store, workflowStore.selectRoomStepMembers(id))
+  const stepIssues = useStore(workflowStore.store, workflowStore.selectStepIssues(id))
 
   const selfHighlight = useStore(canvasStore.store, (s): HighlightMode => {
     if (s.hoveredStepId === id) return HighlightMode.HOVER
@@ -195,11 +196,15 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     setExpanded(false)
   }, [])
 
+  const issueDescriptions = stepIssues.map((issue) => issue.description)
+
   const headerElement = (
     <DynamicNodeHeader
       name={nodeData.label}
       archetype={nodeData.archetype}
       subtitle={subtitle}
+      issueCount={stepIssues.length}
+      issueDescriptions={issueDescriptions}
       onExpand={handleExpand}
     />
   )
@@ -233,6 +238,8 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
             name={nodeData.label}
             archetype={nodeData.archetype}
             subtitle={subtitle}
+            issueCount={stepIssues.length}
+            issueDescriptions={issueDescriptions}
           />
         }
         tabs={tabs}

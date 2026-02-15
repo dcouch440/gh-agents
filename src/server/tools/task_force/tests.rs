@@ -333,11 +333,20 @@ mod tests {
     // =========================================================================
 
     #[tokio::test]
-    async fn remove_agent_success() {
+    async fn remove_agent_returns_deleted_with_name() {
         let ctx = make_ctx();
-        let agent_id = Uuid::new_v4();
+        let brief = make_brief(ctx.step_id);
+        let brief_id = brief.id;
+        let agent = make_roster_agent(brief_id, "Security Scanner", 0);
+        let agent_id = agent.id;
 
         let mut repo = MockWorkflowRepo::new();
+        let brief_clone = brief.clone();
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(brief_clone.clone())));
+        let agent_clone = agent.clone();
+        repo.expect_list_agent_roster()
+            .returning(move |_| Ok(vec![agent_clone.clone()]));
         repo.expect_remove_roster_agent()
             .withf(move |id| *id == agent_id)
             .returning(|_| Ok(()));
@@ -346,6 +355,8 @@ mod tests {
         let result = execute_task_force_tool("remove_agent", &input, &repo, &ctx).await;
 
         assert_eq!(result["deleted"], true);
+        assert_eq!(result["name"], "Security Scanner");
+        assert_eq!(result["id"], agent_id.to_string());
     }
 
     #[tokio::test]

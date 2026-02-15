@@ -192,6 +192,46 @@ pub async fn delete_roster_agent(
     Path((wid, sid, rid)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
     verify_step_access(&state, wid, sid, auth.user_id.0).await?;
+
+    // Load agent name + step name before deleting (for consistency scanner)
+    let agent_name = if let Ok(Some(brief)) = state.repos().workflows.get_mission_brief(sid).await {
+        state
+            .repos()
+            .workflows
+            .list_agent_roster(brief.id)
+            .await
+            .ok()
+            .and_then(|roster| roster.into_iter().find(|a| a.id == rid))
+            .map(|a| a.name)
+            .unwrap_or_default()
+    } else {
+        String::new()
+    };
+
+    let step_name = state
+        .repos()
+        .workflows
+        .get_step(sid)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|s| s.name)
+        .unwrap_or_default();
+
     state.repos().workflows.remove_roster_agent(rid).await?;
+
+    // Schedule consistency scan
+    crate::server::hub::consistency_scanner::schedule_consistency_scan(
+        state.clone(),
+        wid,
+        crate::server::hub::consistency_scanner::DeletedItem {
+            item_type: crate::server::hub::consistency_scanner::DeletedItemType::RosterAgent,
+            name: agent_name,
+            id: rid,
+            source_step_id: sid,
+            source_step_name: step_name,
+        },
+    );
+
     Ok(StatusCode::NO_CONTENT)
 }

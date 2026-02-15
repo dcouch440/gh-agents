@@ -290,6 +290,10 @@ pub enum WorkflowEventKind {
         step_id: Uuid,
         content: String,
     },
+    /// Consistency issues detected after an entity deletion.
+    ConsistencyIssues {
+        issues: Vec<crate::server::hub::consistency_scanner::ConsistencyIssue>,
+    },
     /// A generated document's content was written (live update from documenter pipeline).
     DocumentContentUpdated {
         step_id: Uuid,
@@ -323,6 +327,7 @@ impl WorkflowEvent {
             WorkflowEventKind::ArchetypeChanged { .. } => "archetype_changed",
             WorkflowEventKind::StepNameUpdated { .. } => "step_name_updated",
             WorkflowEventKind::AssistantNotesUpdated { .. } => "assistant_notes_updated",
+            WorkflowEventKind::ConsistencyIssues { .. } => "consistency_issues",
             WorkflowEventKind::DocumentContentUpdated { .. } => "document_content_updated",
         }
     }

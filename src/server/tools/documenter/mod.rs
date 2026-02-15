@@ -40,7 +40,7 @@ pub async fn execute_documenter_tool(
     match name {
         "create_doc_def" => execute_create_doc_def(input, repo, ctx).await,
         "update_doc_def" => execute_update_doc_def(input, repo, ctx).await,
-        "delete_doc_def" => execute_delete_doc_def(input, repo).await,
+        "delete_doc_def" => execute_delete_doc_def(input, repo, ctx).await,
         "update_config" => execute_update_config(input, repo, ctx).await,
         _ => json!({ "error": format!("Unknown documenter tool: {}", name) }),
     }
@@ -141,7 +141,14 @@ async fn execute_update_doc_def(
 }
 
 /// Delete a document definition.
-async fn execute_delete_doc_def(input: &Value, repo: &dyn WorkflowRepo) -> Value {
+///
+/// Looks up the def name before deleting so the result can be used by the
+/// consistency scanner to detect stale references in other nodes' notes.
+async fn execute_delete_doc_def(
+    input: &Value,
+    repo: &dyn WorkflowRepo,
+    ctx: &DocumenterToolContext,
+) -> Value {
     let Some(id_str) = input["doc_def_id"].as_str() else {
         return json!({ "error": "Missing required parameter: doc_def_id" });
     };
@@ -149,8 +156,21 @@ async fn execute_delete_doc_def(input: &Value, repo: &dyn WorkflowRepo) -> Value
         return json!({ "error": format!("Invalid UUID: {}", id_str) });
     };
 
+    // Load the def name before deleting (needed for consistency scanning)
+    let def_name = repo
+        .list_document_defs(ctx.step_id)
+        .await
+        .ok()
+        .and_then(|defs| defs.into_iter().find(|d| d.id == def_id))
+        .map(|d| d.name)
+        .unwrap_or_default();
+
     match repo.delete_document_def(def_id).await {
-        Ok(()) => json!({ "deleted": true }),
+        Ok(()) => json!({
+            "deleted": true,
+            "name": def_name,
+            "id": def_id.to_string(),
+        }),
         Err(e) => json!({ "error": e.to_string() }),
     }
 }

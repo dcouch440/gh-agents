@@ -1,6 +1,7 @@
 import type { NormalizedMap } from '../lib'
 import type { Workflow, WorkflowStep, WorkflowStepEdge, DocumentDef, RosterAgent, RoomStepMember } from '@/types/workflow'
 import type { Document } from '@/types/document'
+import type { ConsistencyIssue } from '@/types/ws'
 
 type WorkflowState = {
   items: NormalizedMap<Workflow>
@@ -13,6 +14,7 @@ type WorkflowState = {
   roomMembersByStep: Record<string, RoomStepMember[]>
   notesByStep: Record<string, string>
   documentContentByDefId: Record<string, string>
+  issuesByStep: Record<string, ConsistencyIssue[]>
   dirtyStepIds: Set<string>
   loading: boolean
   error: string | null

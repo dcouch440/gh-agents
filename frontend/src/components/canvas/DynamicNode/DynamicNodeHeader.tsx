@@ -1,5 +1,6 @@
 import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import OpenInFullOutlined from '@mui/icons-material/OpenInFullOutlined'
 import { ProtocolBadge } from '@/components/canvas/ProtocolBadge'
@@ -10,12 +11,17 @@ type DynamicNodeHeaderProps = {
   name: string
   archetype: ArchetypeType
   subtitle: string | null
+  issueCount?: number
+  issueDescriptions?: string[]
   onExpand?: () => void
 }
 
-function DynamicNodeHeader({ name, archetype, subtitle, onExpand }: DynamicNodeHeaderProps) {
+const ISSUE_COLOR = '#f85149'
+
+function DynamicNodeHeader({ name, archetype, subtitle, issueCount, issueDescriptions, onExpand }: DynamicNodeHeaderProps) {
   const config = ARCHETYPE_CONFIGS[archetype]
   const IconComponent = config.icon
+  const hasIssues = issueCount !== undefined && issueCount > 0
 
   return (
     <Box
@@ -78,9 +84,31 @@ function DynamicNodeHeader({ name, archetype, subtitle, onExpand }: DynamicNodeH
         </Typography>
       </Box>
 
-      {archetype !== Archetype.BLANK && (
+      {hasIssues ? (
+        <Tooltip
+          title={
+            <Box sx={{ py: 0.5 }}>
+              {(issueDescriptions ?? []).map((desc, i) => (
+                <Typography key={i} sx={{ fontSize: 12, lineHeight: 1.4 }}>
+                  {desc}
+                </Typography>
+              ))}
+            </Box>
+          }
+          arrow
+          placement="top"
+        >
+          <span>
+            <ProtocolBadge
+              color={ISSUE_COLOR}
+              label={`${issueCount} Issue${issueCount > 1 ? 's' : ''}`}
+              animated
+            />
+          </span>
+        </Tooltip>
+      ) : archetype !== Archetype.BLANK ? (
         <ProtocolBadge color={config.color} label={config.label} animated />
-      )}
+      ) : null}
 
       {onExpand !== undefined && (
         <IconButton
