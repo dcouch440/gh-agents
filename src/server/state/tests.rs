@@ -104,11 +104,12 @@ mod tests {
             user_id: None,
             kind: SessionEventKind::Deleted,
         });
-        let event = rx.try_recv().unwrap();
-        assert!(matches!(
-            event,
-            crate::server::ws::events::ServerEvent::Session(_)
-        ));
+        let envelope = rx.try_recv().unwrap();
+        assert_eq!(
+            envelope.topic,
+            crate::server::ws::events::Topic::Session
+        );
+        assert!(!envelope.json.is_empty());
     }
 
     #[test]
@@ -215,5 +216,52 @@ mod tests {
         assert_eq!(state.active_execution_count(), 1);
         state.remove_cancellation(id);
         assert_eq!(state.active_execution_count(), 0);
+    }
+
+    // ── WebSocket connection tracking tests ──────────────────────────────
+
+    #[test]
+    fn ws_connection_acquire_and_release() {
+        let state = make_state();
+        let ip: std::net::IpAddr = "127.0.0.1".parse().unwrap();
+        assert_eq!(state.ws_connection_count(), 0);
+
+        assert!(state.try_acquire_ws_connection(ip));
+        assert_eq!(state.ws_connection_count(), 1);
+
+        state.release_ws_connection(ip);
+        assert_eq!(state.ws_connection_count(), 0);
+    }
+
+    #[test]
+    fn ws_connection_per_ip_limit() {
+        let state = make_state();
+        let ip: std::net::IpAddr = "10.0.0.1".parse().unwrap();
+
+        for _ in 0..crate::constants::WS_MAX_CONNECTIONS_PER_IP {
+            assert!(state.try_acquire_ws_connection(ip));
+        }
+        // Next one from same IP should be rejected
+        assert!(!state.try_acquire_ws_connection(ip));
+
+        // But a different IP should still work
+        let other_ip: std::net::IpAddr = "10.0.0.2".parse().unwrap();
+        assert!(state.try_acquire_ws_connection(other_ip));
+    }
+
+    #[test]
+    fn ws_connection_release_cleans_up_ip_entry() {
+        let state = make_state();
+        let ip: std::net::IpAddr = "192.168.1.1".parse().unwrap();
+
+        assert!(state.try_acquire_ws_connection(ip));
+        assert!(state.try_acquire_ws_connection(ip));
+        assert_eq!(state.ws_connection_count(), 2);
+
+        state.release_ws_connection(ip);
+        assert_eq!(state.ws_connection_count(), 1);
+
+        state.release_ws_connection(ip);
+        assert_eq!(state.ws_connection_count(), 0);
     }
 }

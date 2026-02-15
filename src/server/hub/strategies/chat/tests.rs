@@ -7,7 +7,7 @@ mod tests {
     use crate::server::hub::strategy::ExecutionStrategy;
     use crate::server::state::test_helpers::default_mock_repos;
     use crate::server::state::AppState;
-    use crate::server::ws::events::{ServerEvent, WorkflowEventKind};
+    use crate::server::ws::events::Topic;
     use crate::types::{AppConfig, UserId};
     use std::sync::Arc;
     use uuid::Uuid;
@@ -100,26 +100,15 @@ mod tests {
 
         strategy.broadcast_step_event("create_doc_def", &input, &result);
 
-        let event = rx.try_recv().unwrap();
-        match event {
-            ServerEvent::Workflow(e) => {
-                assert!(e.run_id.is_none());
-                assert_eq!(e.workflow_id, workflow_id);
-                match e.kind {
-                    WorkflowEventKind::DocDefCreated {
-                        step_id: sid,
-                        doc_def_id,
-                        name,
-                    } => {
-                        assert_eq!(sid, step_id);
-                        assert_eq!(doc_def_id, doc_id);
-                        assert_eq!(name, "API Docs");
-                    }
-                    other => panic!("Expected DocDefCreated, got {:?}", other),
-                }
-            }
-            other => panic!("Expected Workflow event, got {:?}", other),
-        }
+        let envelope = rx.try_recv().unwrap();
+        assert_eq!(envelope.topic, Topic::Workflow);
+        assert!(envelope.run_id.is_none());
+        let value: serde_json::Value = serde_json::from_str(&envelope.json).unwrap();
+        assert_eq!(value["event"], "doc_def_created");
+        assert_eq!(value["data"]["workflow_id"], workflow_id.to_string());
+        assert_eq!(value["data"]["step_id"], step_id.to_string());
+        assert_eq!(value["data"]["doc_def_id"], doc_id.to_string());
+        assert_eq!(value["data"]["name"], "API Docs");
     }
 
     #[test]
@@ -245,24 +234,14 @@ mod tests {
 
         strategy.broadcast_step_event("update_notes", &input, &result);
 
-        let event = rx.try_recv().unwrap();
-        match event {
-            ServerEvent::Workflow(e) => {
-                assert_eq!(e.workflow_id, workflow_id);
-                assert!(e.run_id.is_none());
-                match e.kind {
-                    WorkflowEventKind::AssistantNotesUpdated {
-                        step_id: sid,
-                        content,
-                    } => {
-                        assert_eq!(sid, step_id);
-                        assert_eq!(content, "## Direction\n- Build auth system");
-                    }
-                    other => panic!("Expected AssistantNotesUpdated, got {:?}", other),
-                }
-            }
-            other => panic!("Expected Workflow event, got {:?}", other),
-        }
+        let envelope = rx.try_recv().unwrap();
+        assert_eq!(envelope.topic, Topic::Workflow);
+        assert!(envelope.run_id.is_none());
+        let value: serde_json::Value = serde_json::from_str(&envelope.json).unwrap();
+        assert_eq!(value["event"], "assistant_notes_updated");
+        assert_eq!(value["data"]["workflow_id"], workflow_id.to_string());
+        assert_eq!(value["data"]["step_id"], step_id.to_string());
+        assert_eq!(value["data"]["content"], "## Direction\n- Build auth system");
     }
 
     #[test]
@@ -320,20 +299,12 @@ mod tests {
 
         strategy.broadcast_step_event("set_node_archetype", &input, &result);
 
-        let event = rx.try_recv().unwrap();
-        match event {
-            ServerEvent::Workflow(e) => match e.kind {
-                WorkflowEventKind::ArchetypeChanged {
-                    step_id: sid,
-                    archetype,
-                } => {
-                    assert_eq!(sid, step_id);
-                    assert_eq!(archetype, "documenter");
-                }
-                other => panic!("Expected ArchetypeChanged, got {:?}", other),
-            },
-            other => panic!("Expected Workflow event, got {:?}", other),
-        }
+        let envelope = rx.try_recv().unwrap();
+        assert_eq!(envelope.topic, Topic::Workflow);
+        let value: serde_json::Value = serde_json::from_str(&envelope.json).unwrap();
+        assert_eq!(value["event"], "archetype_changed");
+        assert_eq!(value["data"]["step_id"], step_id.to_string());
+        assert_eq!(value["data"]["archetype"], "documenter");
     }
 
     #[test]
@@ -368,16 +339,11 @@ mod tests {
 
         strategy.broadcast_step_event("set_node_name", &input, &result);
 
-        let event = rx.try_recv().unwrap();
-        match event {
-            ServerEvent::Workflow(e) => match e.kind {
-                WorkflowEventKind::StepNameUpdated { step_id: sid, name } => {
-                    assert_eq!(sid, step_id);
-                    assert_eq!(name, "My Node");
-                }
-                other => panic!("Expected StepNameUpdated, got {:?}", other),
-            },
-            other => panic!("Expected Workflow event, got {:?}", other),
-        }
+        let envelope = rx.try_recv().unwrap();
+        assert_eq!(envelope.topic, Topic::Workflow);
+        let value: serde_json::Value = serde_json::from_str(&envelope.json).unwrap();
+        assert_eq!(value["event"], "step_name_updated");
+        assert_eq!(value["data"]["step_id"], step_id.to_string());
+        assert_eq!(value["data"]["name"], "My Node");
     }
 }

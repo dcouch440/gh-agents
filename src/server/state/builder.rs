@@ -168,6 +168,8 @@ impl AppStateBuilder {
             shutdown_token: CancellationToken::new(),
             ollama_toggle_cache: Arc::new(tokio::sync::RwLock::new((false, Instant::now()))),
             protocol_engine: Arc::new(crate::server::hub::protocols::ProtocolEngine::new()),
+            ws_connection_count: std::sync::atomic::AtomicUsize::new(0),
+            ws_connections_by_ip: dashmap::DashMap::new(),
         });
 
         Ok((state, orchestrator_rx))

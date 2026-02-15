@@ -83,6 +83,10 @@ function WebSocketProvider({ children }: { children: ReactNode }) {
       if (msg.type === WS_CONTROL.PONG && typeof msg.client_ts === 'string') {
         const rtt = Date.now() - new Date(msg.client_ts).getTime()
         if (!cancelled) wsConnectionStore.setState({ latency: rtt })
+      } else if (msg.type === WS_CONTROL.EVENTS_MISSED) {
+        const count = typeof msg.missed_count === 'number' ? msg.missed_count : 0
+        console.warn(`[ws] Missed ${count} events. Triggering data re-fetch.`)
+        window.dispatchEvent(new CustomEvent('ws:events-missed', { detail: { missed_count: count } }))
       }
     }
 

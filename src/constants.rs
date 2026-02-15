@@ -109,6 +109,19 @@ pub const RATE_LIMIT_GLOBAL_BACKOFF_INITIAL_MS: u64 = 2000;
 /// Maximum global backoff delay.
 pub const RATE_LIMIT_GLOBAL_BACKOFF_MAX_MS: u64 = 60000;
 
+// ── WebSocket Limits ──────────────────────────────────────────────────────────
+
+/// Maximum concurrent WebSocket connections (global).
+pub const WS_MAX_CONNECTIONS: usize = 2000;
+/// Maximum concurrent WebSocket connections per IP address.
+pub const WS_MAX_CONNECTIONS_PER_IP: usize = 20;
+/// Maximum WebSocket frame size (1 MB).
+pub const WS_MAX_FRAME_SIZE: usize = 1_048_576;
+/// Maximum WebSocket message size (4 MB).
+pub const WS_MAX_MESSAGE_SIZE: usize = 4_194_304;
+/// Seconds without a pong before a connection is considered dead.
+pub const WS_PONG_TIMEOUT_SECS: u64 = 90;
+
 // ── Channel Buffer Sizes ────────────────────────────────────────────────────
 
 /// Buffer size for agent command/response channels.

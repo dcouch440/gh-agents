@@ -3,6 +3,8 @@
 //! This module provides `AppState`, the central state container shared across all
 //! HTTP handlers. It wraps an inner `Arc<AppStateInner>` for cheap cloning.
 
+use std::net::IpAddr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use std::time::{Duration, Instant};
@@ -28,7 +30,7 @@ mod events;
 mod repos;
 
 pub use builder::{AppStateBuilder, BuilderError};
-pub use events::EventBus;
+pub use events::{BroadcastEnvelope, EventBus};
 pub use repos::Repos;
 
 #[cfg(test)]
@@ -109,6 +111,10 @@ pub(crate) struct AppStateInner {
     pub(crate) ollama_toggle_cache: Arc<tokio::sync::RwLock<(bool, Instant)>>,
     /// Protocol engine for expanding protocol configurations into workflow primitives.
     pub(crate) protocol_engine: Arc<ProtocolEngine>,
+    /// Current number of active WebSocket connections (global).
+    pub(crate) ws_connection_count: AtomicUsize,
+    /// Active WebSocket connections per IP address.
+    pub(crate) ws_connections_by_ip: DashMap<IpAddr, usize>,
 }
 
 /// Application state shared across all HTTP handlers.
@@ -178,6 +184,8 @@ impl AppState {
             shutdown_token: CancellationToken::new(),
             ollama_toggle_cache: Arc::new(tokio::sync::RwLock::new((false, Instant::now()))),
             protocol_engine: Arc::new(ProtocolEngine::new()),
+            ws_connection_count: AtomicUsize::new(0),
+            ws_connections_by_ip: DashMap::new(),
         }));
 
         (state, orchestrator_rx)
@@ -212,6 +220,8 @@ impl AppState {
                 shutdown_token: CancellationToken::new(),
                 ollama_toggle_cache: Arc::new(tokio::sync::RwLock::new((false, Instant::now()))),
                 protocol_engine: Arc::new(ProtocolEngine::new()),
+                ws_connection_count: AtomicUsize::new(0),
+                ws_connections_by_ip: DashMap::new(),
             })),
             orchestrator_rx,
         )
@@ -654,5 +664,44 @@ impl AppState {
     /// Return the number of active execution tokens.
     pub fn active_execution_count(&self) -> usize {
         self.0.cancellation_tokens.len()
+    }
+
+    // =========================================================================
+    // WebSocket connection tracking
+    // =========================================================================
+
+    /// Try to acquire a WebSocket connection slot for the given IP.
+    /// Returns `true` if the connection is allowed, `false` if limits are exceeded.
+    pub fn try_acquire_ws_connection(&self, ip: IpAddr) -> bool {
+        let current = self.0.ws_connection_count.load(Ordering::Relaxed);
+        if current >= crate::constants::WS_MAX_CONNECTIONS {
+            return false;
+        }
+
+        let mut ip_count = self.0.ws_connections_by_ip.entry(ip).or_insert(0);
+        if *ip_count >= crate::constants::WS_MAX_CONNECTIONS_PER_IP {
+            return false;
+        }
+
+        *ip_count += 1;
+        self.0.ws_connection_count.fetch_add(1, Ordering::Relaxed);
+        true
+    }
+
+    /// Release a WebSocket connection slot for the given IP.
+    pub fn release_ws_connection(&self, ip: IpAddr) {
+        self.0.ws_connection_count.fetch_sub(1, Ordering::Relaxed);
+        if let Some(mut entry) = self.0.ws_connections_by_ip.get_mut(&ip) {
+            *entry = entry.saturating_sub(1);
+            if *entry == 0 {
+                drop(entry);
+                self.0.ws_connections_by_ip.remove(&ip);
+            }
+        }
+    }
+
+    /// Return the current number of active WebSocket connections.
+    pub fn ws_connection_count(&self) -> usize {
+        self.0.ws_connection_count.load(Ordering::Relaxed)
     }
 }

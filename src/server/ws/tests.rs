@@ -164,6 +164,19 @@ mod tests {
         assert!(value["server_ts"].is_string());
     }
 
+    #[test]
+    fn control_message_events_missed_serialize() {
+        let msg = ControlMessage::EventsMissed {
+            missed_count: 42,
+            message: "Missed 42 events. Re-fetch state via REST.".to_string(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(value["type"], "events_missed");
+        assert_eq!(value["missed_count"], 42);
+        assert_eq!(value["message"], "Missed 42 events. Re-fetch state via REST.");
+    }
+
     // ============================================================================
     // WireMessage serialization
     // ============================================================================
@@ -418,17 +431,17 @@ mod tests {
     }
 
     // ============================================================================
-    // handle_client_message
+    // handle_client_message (now sync — uses std::sync::Mutex)
     // ============================================================================
 
-    #[tokio::test]
-    async fn handle_subscribe_topics() {
+    #[test]
+    fn handle_subscribe_topics() {
         let topics: TopicSubscriptions = Arc::new(Mutex::new(HashSet::new()));
         let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
         let msg = ClientMessage::Subscribe {
             topics: vec![Topic::Workflow, Topic::Room],
         };
-        let response = handle_client_message(msg, &topics, &run_subs).await;
+        let response = handle_client_message(msg, &topics, &run_subs);
         assert!(response.is_some());
         if let Some(ControlMessage::Subscribed { topics: current }) = response {
             assert_eq!(current.len(), 2);
@@ -437,17 +450,17 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn handle_unsubscribe_topics() {
+    #[test]
+    fn handle_unsubscribe_topics() {
         let topics: TopicSubscriptions = Arc::new(Mutex::new(HashSet::new()));
-        topics.lock().await.insert(Topic::Workflow);
-        topics.lock().await.insert(Topic::Session);
+        topics.lock().unwrap().insert(Topic::Workflow);
+        topics.lock().unwrap().insert(Topic::Session);
 
         let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
         let msg = ClientMessage::Unsubscribe {
             topics: vec![Topic::Workflow],
         };
-        let response = handle_client_message(msg, &topics, &run_subs).await;
+        let response = handle_client_message(msg, &topics, &run_subs);
         if let Some(ControlMessage::Subscribed { topics: current }) = response {
             assert_eq!(current.len(), 1);
             assert!(current.contains(&Topic::Session));
@@ -456,38 +469,38 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn handle_subscribe_run() {
+    #[test]
+    fn handle_subscribe_run() {
         let topics: TopicSubscriptions = Arc::new(Mutex::new(HashSet::new()));
         let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
         let run_id = uuid::Uuid::new_v4();
         let msg = ClientMessage::SubscribeRun { run_id };
-        let response = handle_client_message(msg, &topics, &run_subs).await;
+        let response = handle_client_message(msg, &topics, &run_subs);
         assert!(response.is_none());
-        assert!(run_subs.lock().await.contains(&run_id));
+        assert!(run_subs.lock().unwrap().contains(&run_id));
     }
 
-    #[tokio::test]
-    async fn handle_unsubscribe_run() {
+    #[test]
+    fn handle_unsubscribe_run() {
         let topics: TopicSubscriptions = Arc::new(Mutex::new(HashSet::new()));
         let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
         let run_id = uuid::Uuid::new_v4();
-        run_subs.lock().await.insert(run_id);
+        run_subs.lock().unwrap().insert(run_id);
 
         let msg = ClientMessage::UnsubscribeRun { run_id };
-        let response = handle_client_message(msg, &topics, &run_subs).await;
+        let response = handle_client_message(msg, &topics, &run_subs);
         assert!(response.is_none());
-        assert!(!run_subs.lock().await.contains(&run_id));
+        assert!(!run_subs.lock().unwrap().contains(&run_id));
     }
 
-    #[tokio::test]
-    async fn handle_ping() {
+    #[test]
+    fn handle_ping() {
         let topics: TopicSubscriptions = Arc::new(Mutex::new(HashSet::new()));
         let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
         let msg = ClientMessage::Ping {
             ts: "2024-01-01T00:00:00.000Z".to_string(),
         };
-        let response = handle_client_message(msg, &topics, &run_subs).await;
+        let response = handle_client_message(msg, &topics, &run_subs);
         if let Some(ControlMessage::Pong { client_ts, .. }) = response {
             assert_eq!(client_ts, "2024-01-01T00:00:00.000Z");
         } else {
@@ -495,20 +508,20 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn subscribe_idempotent() {
+    #[test]
+    fn subscribe_idempotent() {
         let topics: TopicSubscriptions = Arc::new(Mutex::new(HashSet::new()));
         let run_subs: RunSubscriptions = Arc::new(Mutex::new(HashSet::new()));
 
         let msg = ClientMessage::Subscribe {
             topics: vec![Topic::Workflow],
         };
-        handle_client_message(msg, &topics, &run_subs).await;
+        handle_client_message(msg, &topics, &run_subs);
 
         let msg = ClientMessage::Subscribe {
             topics: vec![Topic::Workflow],
         };
-        let response = handle_client_message(msg, &topics, &run_subs).await;
+        let response = handle_client_message(msg, &topics, &run_subs);
         if let Some(ControlMessage::Subscribed { topics: current }) = response {
             assert_eq!(current.len(), 1);
         } else {
@@ -523,6 +536,13 @@ mod tests {
     #[test]
     fn ping_interval_is_30_seconds() {
         assert_eq!(PING_INTERVAL, Duration::from_secs(30));
+    }
+
+    #[test]
+    fn pong_timeout_is_90_seconds() {
+        assert_eq!(PONG_TIMEOUT, Duration::from_secs(90));
+        // 3 missed pings (30s each) before disconnect
+        assert!(PONG_TIMEOUT > PING_INTERVAL * 2);
     }
 
     // ============================================================================
@@ -546,7 +566,7 @@ mod tests {
         })
     }
 
-    /// Pure function replicating the filtering logic from `handle_socket` (lines 147-169).
+    /// Pure function replicating the filtering logic from `handle_socket`.
     /// This allows exhaustive testing without a real WebSocket connection.
     fn event_passes_filters(
         evt: &ServerEvent,
@@ -586,8 +606,10 @@ mod tests {
         let run_id = uuid::Uuid::new_v4();
         bus.broadcast(make_workflow_event(None, run_id));
 
-        let received: ServerEvent = rx.recv().await.unwrap();
-        assert_eq!(received.run_id(), Some(run_id));
+        let envelope = rx.recv().await.unwrap();
+        assert_eq!(envelope.topic, Topic::Workflow);
+        assert_eq!(envelope.run_id, Some(run_id));
+        assert!(!envelope.json.is_empty());
     }
 
     #[tokio::test]
@@ -598,10 +620,12 @@ mod tests {
         let run_id = uuid::Uuid::new_v4();
         bus.broadcast(make_workflow_event(None, run_id));
 
-        let e1: ServerEvent = rx1.recv().await.unwrap();
-        let e2: ServerEvent = rx2.recv().await.unwrap();
-        assert_eq!(e1.run_id(), Some(run_id));
-        assert_eq!(e2.run_id(), Some(run_id));
+        let e1 = rx1.recv().await.unwrap();
+        let e2 = rx2.recv().await.unwrap();
+        assert_eq!(e1.run_id, Some(run_id));
+        assert_eq!(e2.run_id, Some(run_id));
+        // Both receivers share the same Arc — same json content
+        assert_eq!(e1.json, e2.json);
     }
 
     #[tokio::test]
@@ -644,8 +668,8 @@ mod tests {
         bus.broadcast(make_workflow_event(None, run_id));
 
         // Should only get the second event
-        let received: ServerEvent = rx.recv().await.unwrap();
-        assert_eq!(received.run_id(), Some(run_id));
+        let envelope = rx.recv().await.unwrap();
+        assert_eq!(envelope.run_id, Some(run_id));
     }
 
     #[tokio::test]
@@ -662,6 +686,61 @@ mod tests {
             Err(RecvError::Closed) => {} // expected
             other => panic!("Expected Closed, got {:?}", other),
         }
+    }
+
+    #[tokio::test]
+    async fn eventbus_envelope_contains_valid_json() {
+        let bus = EventBus::new();
+        let mut rx = bus.subscribe();
+        let run_id = uuid::Uuid::new_v4();
+        bus.broadcast(make_workflow_event(None, run_id));
+
+        let envelope = rx.recv().await.unwrap();
+        // JSON should be valid and parseable
+        let value: serde_json::Value = serde_json::from_str(&envelope.json).unwrap();
+        assert_eq!(value["topic"], "workflow");
+        assert_eq!(value["event"], "started");
+        assert!(value["data"]["total_steps"].is_number());
+    }
+
+    #[tokio::test]
+    async fn eventbus_seq_monotonically_increasing() {
+        let bus = EventBus::new();
+        let mut rx = bus.subscribe();
+
+        bus.broadcast(make_workflow_event(None, uuid::Uuid::new_v4()));
+        bus.broadcast(make_workflow_event(None, uuid::Uuid::new_v4()));
+        bus.broadcast(make_workflow_event(None, uuid::Uuid::new_v4()));
+
+        let e1 = rx.recv().await.unwrap();
+        let e2 = rx.recv().await.unwrap();
+        let e3 = rx.recv().await.unwrap();
+
+        assert_eq!(e1.seq, 0);
+        assert_eq!(e2.seq, 1);
+        assert_eq!(e3.seq, 2);
+    }
+
+    #[tokio::test]
+    async fn eventbus_envelope_preserves_user_id() {
+        let bus = EventBus::new();
+        let mut rx = bus.subscribe();
+        let user_id = uuid::Uuid::new_v4();
+        bus.broadcast(make_workflow_event(Some(user_id), uuid::Uuid::new_v4()));
+
+        let envelope = rx.recv().await.unwrap();
+        assert_eq!(envelope.user_id, Some(user_id));
+    }
+
+    #[tokio::test]
+    async fn eventbus_envelope_session_has_no_run_id() {
+        let bus = EventBus::new();
+        let mut rx = bus.subscribe();
+        bus.broadcast(make_session_event(None));
+
+        let envelope = rx.recv().await.unwrap();
+        assert_eq!(envelope.topic, Topic::Session);
+        assert_eq!(envelope.run_id, None);
     }
 
     // ============================================================================
