@@ -313,6 +313,22 @@ pub enum WorkflowEventKind {
         child_execution_id: Uuid,
         status: String,
     },
+    /// Progress event for a child step within a sub-workflow, relayed to the parent's channel.
+    SubWorkflowStepProgress {
+        parent_step_id: Uuid,
+        child_execution_id: Uuid,
+        child_step_id: Uuid,
+        child_step_name: String,
+        status: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        input_tokens: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        output_tokens: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u64>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
 }
 
 impl WorkflowEvent {
@@ -343,6 +359,7 @@ impl WorkflowEvent {
             WorkflowEventKind::DocumentContentUpdated { .. } => "document_content_updated",
             WorkflowEventKind::SubWorkflowStarted { .. } => "sub_workflow_started",
             WorkflowEventKind::SubWorkflowCompleted { .. } => "sub_workflow_completed",
+            WorkflowEventKind::SubWorkflowStepProgress { .. } => "sub_workflow_step_progress",
         }
     }
 

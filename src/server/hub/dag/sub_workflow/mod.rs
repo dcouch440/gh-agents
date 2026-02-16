@@ -26,7 +26,9 @@ use crate::types::{ExecutionError, ExecutionMetadata, ExecutionStatus, StepExecu
 
 use super::dag_state::DagExecutionState;
 use super::templates::WorkflowSnapshot;
-use super::utils::{StepOutput, WorkflowExecutionContext, WorkflowExecutionResult};
+use super::utils::{
+    StepOutput, SubWorkflowParentContext, WorkflowExecutionContext, WorkflowExecutionResult,
+};
 use super::{
     broadcast_workflow_event, execute_workflow_via_engine, resolve_output_key,
     resolve_step_port_inputs, step_display_name, PortMetadata,
@@ -162,6 +164,11 @@ pub(super) async fn execute_sub_workflow_step(
         container_config: ctx.container_config.clone(),
         wg_client: ctx.wg_client.clone(),
         snapshot: Some(Arc::new(snapshot.clone())),
+        parent_context: Some(SubWorkflowParentContext {
+            parent_step_id: step.id,
+            parent_run_id: ctx.run_id,
+            parent_workflow_id: step.workflow_id,
+        }),
     };
 
     // 10. Execute child workflow (recursive call, propagate cancellation token)

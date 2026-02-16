@@ -224,6 +224,7 @@ pub async fn execute_workshop_step(
         container_config: None,
         wg_client: None,
         snapshot: None,
+        parent_context: None,
     };
 
     // Broadcast step started
