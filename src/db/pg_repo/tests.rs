@@ -92,6 +92,7 @@ mod tests {
             board_context_updated_at: None,
             goal_summary: String::new(),
             goal_summary_updated_at: None,
+            sub_workflow_template_id: None,
         };
         repo.create_step(step).await.unwrap()
     }
@@ -2316,6 +2317,7 @@ mod tests {
             board_context_updated_at: None,
             goal_summary: String::new(),
             goal_summary_updated_at: None,
+            sub_workflow_template_id: None,
         };
         let step_a = repo.create_step(step_a.clone()).await.unwrap();
 

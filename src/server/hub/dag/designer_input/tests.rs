@@ -60,6 +60,7 @@ mod tests {
                 room_session_id: None,
                 room_id: None,
                 total_rounds: None,
+                child_workflow_execution_id: None,
             },
             error: None,
         }
@@ -98,6 +99,7 @@ mod tests {
             board_context_updated_at: None,
             goal_summary: String::new(),
             goal_summary_updated_at: None,
+            sub_workflow_template_id: None,
         }
     }
 

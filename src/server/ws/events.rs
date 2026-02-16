@@ -301,6 +301,18 @@ pub enum WorkflowEventKind {
         document_name: String,
         content: String,
     },
+    /// A sub-workflow execution started within a parent step.
+    SubWorkflowStarted {
+        parent_step_id: Uuid,
+        child_execution_id: Uuid,
+        total_steps: usize,
+    },
+    /// A sub-workflow execution completed within a parent step.
+    SubWorkflowCompleted {
+        parent_step_id: Uuid,
+        child_execution_id: Uuid,
+        status: String,
+    },
 }
 
 impl WorkflowEvent {
@@ -329,6 +341,8 @@ impl WorkflowEvent {
             WorkflowEventKind::AssistantNotesUpdated { .. } => "assistant_notes_updated",
             WorkflowEventKind::ConsistencyIssues { .. } => "consistency_issues",
             WorkflowEventKind::DocumentContentUpdated { .. } => "document_content_updated",
+            WorkflowEventKind::SubWorkflowStarted { .. } => "sub_workflow_started",
+            WorkflowEventKind::SubWorkflowCompleted { .. } => "sub_workflow_completed",
         }
     }
 

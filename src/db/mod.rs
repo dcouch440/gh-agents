@@ -201,6 +201,8 @@ pub struct WorkflowStepRow {
     pub board_context_updated_at: Option<DateTime<Utc>>,
     pub goal_summary: String,
     pub goal_summary_updated_at: Option<DateTime<Utc>>,
+    /// Template to execute as a child workflow (sub_workflow execution mode).
+    pub sub_workflow_template_id: Option<Uuid>,
 }
 
 /// Row type for a workflow step edge (DAG edge).
@@ -273,6 +275,8 @@ pub struct WorkflowExecutionRow {
     pub error: Option<String>,
     pub execution_mode: String,
     pub template_id: Option<Uuid>,
+    /// Parent execution for sub-workflow nesting.
+    pub parent_execution_id: Option<Uuid>,
 }
 
 /// Row type for run templates (frozen workflow snapshots).

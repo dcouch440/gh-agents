@@ -120,6 +120,7 @@ pub async fn create_workflow_step(
         board_context_updated_at: None,
         goal_summary: String::new(),
         goal_summary_updated_at: None,
+        sub_workflow_template_id: None,
     };
     let row = repo.create_step(step).await?;
     Ok((StatusCode::CREATED, Json(step_response(row))))
@@ -270,6 +271,7 @@ pub async fn update_workflow_step(
         board_context_updated_at: existing.board_context_updated_at,
         goal_summary: existing.goal_summary,
         goal_summary_updated_at: existing.goal_summary_updated_at,
+        sub_workflow_template_id: existing.sub_workflow_template_id,
     };
     let row = repo.update_step(step).await?;
     Ok(Json(step_response(row)))

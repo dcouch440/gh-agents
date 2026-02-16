@@ -596,6 +596,7 @@ mod tests {
             error: None,
             execution_mode: "full".to_string(),
             template_id: None,
+            parent_execution_id: None,
         };
 
         completed_workflows.insert(workflow_id, workflow_exec);
