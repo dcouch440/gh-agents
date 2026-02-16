@@ -464,6 +464,7 @@ where
             container_config,
             wg_client,
             snapshot: None,
+            parent_context: None,
         };
 
         // 6. Execute workflow DAG via unified hub engine

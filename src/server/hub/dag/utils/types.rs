@@ -76,6 +76,18 @@ pub struct ContainerExecutionConfig {
     pub vpn_enabled: bool,
 }
 
+/// Parent workflow context for sub-workflow event relay.
+///
+/// When a child workflow executes inside a sub-workflow step, this struct
+/// carries the parent's identifiers so child step events can be relayed
+/// to the parent's WebSocket channel.
+#[derive(Debug, Clone)]
+pub struct SubWorkflowParentContext {
+    pub parent_step_id: Uuid,
+    pub parent_run_id: Uuid,
+    pub parent_workflow_id: Uuid,
+}
+
 /// Context passed into the DAG executor for one workflow run.
 #[derive(Clone)]
 pub struct WorkflowExecutionContext {
@@ -94,6 +106,9 @@ pub struct WorkflowExecutionContext {
     /// Frozen workflow snapshot for template-based execution. When present, agent/tool data
     /// is loaded from the snapshot instead of live DB.
     pub snapshot: Option<Arc<super::super::templates::WorkflowSnapshot>>,
+    /// Parent context for sub-workflow execution. When set, child step events are relayed
+    /// to the parent's WebSocket channel with this context.
+    pub parent_context: Option<SubWorkflowParentContext>,
 }
 
 /// Result of executing one workflow.

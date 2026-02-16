@@ -21,8 +21,8 @@ pub use ports::{
 };
 pub use prompts::{build_routing_instruction_block, compose_prompt};
 pub use types::{
-    ContainerExecutionConfig, DagPaused, StepOutput, StepReadiness, WorkflowExecutionContext,
-    WorkflowExecutionResult,
+    ContainerExecutionConfig, DagPaused, StepOutput, StepReadiness, SubWorkflowParentContext,
+    WorkflowExecutionContext, WorkflowExecutionResult,
 };
 pub use variables::{extract_for_each_label, resolve_for_each_array, resolve_variables};
 
