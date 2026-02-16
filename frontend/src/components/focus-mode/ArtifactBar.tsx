@@ -3,6 +3,7 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import { useTheme } from '@mui/material/styles'
 import { FOCUS_MODE } from '@/constants'
+import type { ArtifactKind } from '@/stores'
 import { ArtifactCard } from './ArtifactCard'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -12,6 +13,7 @@ type CardEntry = {
   name: string
   subtitle: string | null
   accentOverride: string | null
+  artifactKind: ArtifactKind
 }
 
 type StepSection = {
@@ -25,12 +27,12 @@ type StepSection = {
 type ArtifactBarProps = {
   sections: readonly StepSection[]
   currentStepId: string | null
-  onStepClick: (stepId: string) => void
+  onCardClick: (stepId: string, cardId: string, kind: ArtifactKind) => void
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-function ArtifactBar({ sections, currentStepId, onStepClick }: ArtifactBarProps) {
+function ArtifactBar({ sections, currentStepId, onCardClick }: ArtifactBarProps) {
   const theme = useTheme()
 
   if (sections.length === 0) return null
@@ -88,7 +90,7 @@ function ArtifactBar({ sections, currentStepId, onStepClick }: ArtifactBarProps)
                 accentColor={card.accentOverride ?? section.accentColor}
                 highlighted={section.stepId === currentStepId}
                 onClick={() => {
-                  onStepClick(section.stepId)
+                  onCardClick(section.stepId, card.id, card.artifactKind)
                 }}
               />
             ))}

@@ -7,6 +7,7 @@ import { Tooltip } from '@/components/primitives/Tooltip'
 import { useTheme } from '@mui/material/styles'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useStore, workflowStore, canvasStore, focusModeStore } from '@/stores'
+import type { ArtifactKind } from '@/stores'
 import { FOCUS_MODE } from '@/constants'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { useFocusNavigation } from '@/hooks/useFocusNavigation'
@@ -134,7 +135,7 @@ function FocusModeOverlay() {
         const edge = edges[j]!
         if (edge.from_step_id === step.id) {
           const cards = protocolInputCards.get(edge.to_step_id) ?? []
-          cards.push({ id: step.id, name: step.name ?? 'Unnamed', subtitle: null, accentOverride: color })
+          cards.push({ id: step.id, name: step.name ?? 'Unnamed', subtitle: null, accentOverride: color, artifactKind: step.execution_mode as ArtifactKind })
           protocolInputCards.set(edge.to_step_id, cards)
           break
         }
@@ -167,10 +168,10 @@ function FocusModeOverlay() {
           if (roster.length > 0) {
             for (let j = 0; j < roster.length; j++) {
               const agent = roster[j]!
-              cards.push({ id: agent.id, name: agent.name, subtitle: agent.role_description, accentOverride: null })
+              cards.push({ id: agent.id, name: agent.name, subtitle: agent.role_description, accentOverride: null, artifactKind: 'roster-agent' })
             }
           } else {
-            cards.push({ id, name: stepName, subtitle: 'No agents', accentOverride: null })
+            cards.push({ id, name: stepName, subtitle: 'No agents', accentOverride: null, artifactKind: 'task-force' })
           }
           break
         }
@@ -179,10 +180,10 @@ function FocusModeOverlay() {
           if (docs.length > 0) {
             for (let j = 0; j < docs.length; j++) {
               const d = docs[j]!
-              cards.push({ id: d.id, name: d.name, subtitle: `~${d.target_length} chars`, accentOverride: null })
+              cards.push({ id: d.id, name: d.name, subtitle: `~${d.target_length} chars`, accentOverride: null, artifactKind: 'document' })
             }
           } else {
-            cards.push({ id, name: stepName, subtitle: 'No documents', accentOverride: null })
+            cards.push({ id, name: stepName, subtitle: 'No documents', accentOverride: null, artifactKind: 'document' })
           }
           break
         }
@@ -191,15 +192,15 @@ function FocusModeOverlay() {
           if (members.length > 0) {
             for (let j = 0; j < members.length; j++) {
               const m = members[j]!
-              cards.push({ id: m.id, name: m.name, subtitle: m.role, accentOverride: null })
+              cards.push({ id: m.id, name: m.name, subtitle: m.role, accentOverride: null, artifactKind: 'room-member' })
             }
           } else {
-            cards.push({ id, name: stepName, subtitle: 'No members', accentOverride: null })
+            cards.push({ id, name: stepName, subtitle: 'No members', accentOverride: null, artifactKind: 'room' })
           }
           break
         }
         default:
-          cards.push({ id, name: stepName, subtitle: null, accentOverride: null })
+          cards.push({ id, name: stepName, subtitle: null, accentOverride: null, artifactKind: 'document' })
           break
       }
 
@@ -208,12 +209,13 @@ function FocusModeOverlay() {
     return sections
   }, [orderedStepIds, steps, edges, accentColors, rosterByStep, documentDefsByStep, roomMembersByStep])
 
-  const handleStepCardClick = useCallback((stepId: string) => {
+  const handleCardClick = useCallback((stepId: string, cardId: string, kind: ArtifactKind) => {
     const idx = orderedStepIds.indexOf(stepId)
-    if (idx >= 0) {
+    if (idx >= 0 && stepId !== currentStepId) {
       focusModeStore.goToIndex(idx)
     }
-  }, [orderedStepIds])
+    focusModeStore.expandArtifact(cardId, kind)
+  }, [orderedStepIds, currentStepId])
 
   const handleCollapseArtifact = useCallback(() => {
     focusModeStore.collapseArtifact()
@@ -245,7 +247,7 @@ function FocusModeOverlay() {
         <ArtifactBar
           sections={stepSections}
           currentStepId={currentStepId}
-          onStepClick={handleStepCardClick}
+          onCardClick={handleCardClick}
         />
         <Tooltip title="Exit Focus Mode (Esc)" placement="bottom">
           <IconButton
