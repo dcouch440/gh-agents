@@ -1396,6 +1396,11 @@ pub trait WorkflowCollectionRepo: Send + Sync {
         template_id: Uuid,
     ) -> Result<WorkflowExecutionRow>;
 
+    async fn list_child_executions(
+        &self,
+        parent_execution_id: Uuid,
+    ) -> Result<Vec<WorkflowExecutionRow>>;
+
     // --- Workshop (persistent per-workflow execution context) ---
     async fn get_or_create_workshop(
         &self,

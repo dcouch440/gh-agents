@@ -3961,6 +3961,21 @@ impl WorkflowCollectionRepo for PgRepo {
         Ok(row)
     }
 
+    async fn list_child_executions(
+        &self,
+        parent_execution_id: Uuid,
+    ) -> Result<Vec<WorkflowExecutionRow>> {
+        let rows = sqlx::query_as::<_, WorkflowExecutionRow>(
+            "SELECT * FROM workflow_executions \
+             WHERE parent_execution_id = $1 \
+             ORDER BY started_at",
+        )
+        .bind(parent_execution_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
     async fn get_or_create_workshop(
         &self,
         workflow_id: Uuid,

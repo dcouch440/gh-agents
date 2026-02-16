@@ -70,6 +70,7 @@ pub struct WorkflowStepResponse {
     pub room_id: Option<Uuid>,
     pub visible: bool,
     pub description: String,
+    pub sub_workflow_template_id: Option<Uuid>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -93,6 +94,7 @@ pub struct CreateStepRequest {
     pub name: Option<String>,
     pub system_prompt_suffix: Option<String>,
     pub description: Option<String>,
+    pub sub_workflow_template_id: Option<Uuid>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -116,6 +118,7 @@ pub struct UpdateStepRequest {
     pub name: Option<String>,
     pub system_prompt_suffix: Option<String>,
     pub description: Option<String>,
+    pub sub_workflow_template_id: Option<Uuid>,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -263,6 +266,21 @@ pub struct RunStepResultResponse {
     pub error: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub phases: Option<Vec<super::last_run_handlers::PhaseExecution>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub child_execution_id: Option<Uuid>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub child_steps: Option<Vec<ChildStepResult>>,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct ChildStepResult {
+    pub step_name: Option<String>,
+    pub execution_mode: String,
+    pub status: String,
+    pub input_tokens: Option<i64>,
+    pub output_tokens: Option<i64>,
+    pub duration_ms: Option<u64>,
+    pub error: Option<String>,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -379,5 +397,6 @@ pub fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
         room_id: r.room_id,
         visible: r.visible,
         description: r.description,
+        sub_workflow_template_id: r.sub_workflow_template_id,
     }
 }

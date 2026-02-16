@@ -10,6 +10,8 @@ import { INPUT_NODE } from '../InputNode'
 import type { InputNodeData } from '../InputNode'
 import { NOTES_NODE } from '../NotesNode'
 import type { NotesNodeData } from '../NotesNode'
+import { SUB_WORKFLOW_NODE } from '../SubWorkflowNode'
+import type { SubWorkflowNodeData } from '../SubWorkflowNode'
 import { CanvasNodeKind } from '../canvasKinds'
 import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from '../DynamicNode/archetypes'
 import type { DynamicNodeData } from '../DynamicNode/DynamicNode'
@@ -62,6 +64,25 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
           height: step.height ?? INPUT_NODE.DEFAULT_HEIGHT,
         },
         data: inputData,
+      }
+    }
+
+    // Sub-workflow nodes
+    if (step.execution_mode === 'sub_workflow') {
+      const subData: SubWorkflowNodeData = {
+        kind: CanvasNodeKind.SUB_WORKFLOW,
+        label: step.name ?? 'Sub-Workflow',
+        templateName: null,
+      }
+      return {
+        id: step.id,
+        type: 'subWorkflowNode',
+        position: { x: step.position_x ?? 0, y: step.position_y ?? 0 },
+        style: {
+          width: step.width ?? SUB_WORKFLOW_NODE.DEFAULT_WIDTH,
+          height: step.height ?? SUB_WORKFLOW_NODE.DEFAULT_HEIGHT,
+        },
+        data: subData,
       }
     }
 

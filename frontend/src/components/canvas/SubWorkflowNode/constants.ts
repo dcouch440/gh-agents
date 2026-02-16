@@ -1,0 +1,5 @@
+export const SUB_WORKFLOW_NODE = {
+  DEFAULT_WIDTH: 180,
+  DEFAULT_HEIGHT: 56,
+  ACCENT_COLOR: '#10b981',
+} as const

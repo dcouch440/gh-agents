@@ -33,6 +33,7 @@ type WorkflowStep = {
   room_id: string | null
   system_prompt_suffix: string | null
   description: string
+  sub_workflow_template_id: string | null
 }
 
 type WorkflowStepEdge = {
@@ -77,6 +78,7 @@ type CreateStepRequest = {
   verification_agent_ids?: string[]
   system_prompt_suffix?: string
   description?: string
+  sub_workflow_template_id?: string
 }
 
 type UpdateStepRequest = Partial<CreateStepRequest>
@@ -193,6 +195,16 @@ type StepLastRunResponse = {
   phases: PhaseExecution[] | null
 }
 
+type ChildStepResult = {
+  step_name: string | null
+  execution_mode: string
+  status: string
+  input_tokens: number | null
+  output_tokens: number | null
+  duration_ms: number | null
+  error: string | null
+}
+
 type RunStepResult = {
   step_id: string
   step_name: string | null
@@ -209,6 +221,16 @@ type RunStepResult = {
   cost_usd: number | null
   error: string | null
   phases: PhaseExecution[] | null
+  child_execution_id: string | null
+  child_steps: ChildStepResult[] | null
+}
+
+type RunTemplate = {
+  id: string
+  workflow_id: string
+  name: string
+  description: string | null
+  created_at: string
 }
 
 type RunDetailResponse = {
@@ -256,4 +278,6 @@ export type {
   RunDetailResponse,
   RebaseRequest,
   RebaseResponse,
+  ChildStepResult,
+  RunTemplate,
 }
