@@ -105,7 +105,6 @@ mod tests {
                 "system prompt",
                 "user prompt",
                 None,
-                None,
             )
             .await;
         assert!(result.is_err());

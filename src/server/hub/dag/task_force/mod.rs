@@ -156,6 +156,7 @@ pub(super) async fn execute_task_force_step(
         &dag_state.completed_envelopes,
         steps,
         cancel,
+        Some(designer_phase.id),
     )
     .await
     {

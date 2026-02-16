@@ -214,7 +214,7 @@ pub(super) async fn execute_room_step(
             );
 
             match agent_designer::run_agent_designer(
-                engine, state, ctx, step, input, "room", cancel,
+                engine, state, ctx, step, input, "room", cancel, None,
             )
             .await
             {

@@ -160,7 +160,6 @@ mod tests {
             input: String::new(),
             output: None,
             structured_output: None,
-            selected_mode_id: None,
             room_session_id: None,
             speaker_order: None,
             status: "pending".to_string(),
@@ -488,11 +487,11 @@ mod tests {
 
         ae_mock
             .expect_create_agent_execution()
-            .withf(move |aid, _, _, parent_id, _, _, _, _, _, _| {
+            .withf(move |aid, _, _, parent_id, _, _, _, _, _| {
                 *aid == agent_id && *parent_id == Some(parent_ae_id)
             })
             .times(1)
-            .returning(move |_, _, _, _, _, _, _, _, _, _| Ok(make_ae_row(agent_id)));
+            .returning(move |_, _, _, _, _, _, _, _, _| Ok(make_ae_row(agent_id)));
 
         ae_mock
             .expect_update_agent_execution_status()

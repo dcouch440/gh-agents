@@ -783,12 +783,19 @@ pub trait WorkflowRepo: Send + Sync {
         generated_task_prompt: &str,
         design_reasoning: &str,
         execution_order: i32,
+        protocol_execution_id: Option<Uuid>,
     ) -> Result<AgentDesignerOutputRow>;
 
     /// List all designer outputs for a run, ordered by execution_order.
     async fn list_designer_outputs(
         &self,
         designer_run_id: Uuid,
+    ) -> Result<Vec<AgentDesignerOutputRow>>;
+
+    /// List designer outputs linked to a specific protocol execution phase.
+    async fn list_designer_outputs_by_protocol_execution(
+        &self,
+        protocol_execution_id: Uuid,
     ) -> Result<Vec<AgentDesignerOutputRow>>;
 
     /// List designer runs for a step within a specific workflow execution.
@@ -860,7 +867,6 @@ pub trait AgentExecutionRepo: Send + Sync {
         parent_agent_execution_id: Option<Uuid>,
         system_prompt_rendered: &str,
         input: &str,
-        selected_mode_id: Option<Uuid>,
         room_session_id: Option<Uuid>,
         speaker_order: Option<i32>,
         workflow_execution_id: Option<Uuid>,
@@ -1406,6 +1412,12 @@ pub trait WorkflowCollectionRepo: Send + Sync {
     async fn list_child_executions(
         &self,
         parent_execution_id: Uuid,
+    ) -> Result<Vec<WorkflowExecutionRow>>;
+
+    /// List the full execution tree rooted at `root_id` (O(1) via root_execution_id index).
+    async fn list_execution_tree(
+        &self,
+        root_id: Uuid,
     ) -> Result<Vec<WorkflowExecutionRow>>;
 
     // --- Workshop (persistent per-workflow execution context) ---

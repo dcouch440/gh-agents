@@ -1347,7 +1347,6 @@ mod tests {
                 None,  // parent_agent_execution_id
                 "You are a test agent.",
                 "What is 2+2?",
-                None, // selected_mode_id
                 None, // room_session_id
                 None, // speaker_order
                 None, // workflow_execution_id
@@ -1389,7 +1388,7 @@ mod tests {
         // --- completed: sets completed_at + stores output ---
         let exec1 = repo
             .create_agent_execution(
-                agent.id, None, false, None, "sys", "input1", None, None, None, None,
+                agent.id, None, false, None, "sys", "input1", None, None, None,
             )
             .await
             .unwrap();
@@ -1413,7 +1412,7 @@ mod tests {
         // --- failed: sets completed_at ---
         let exec2 = repo
             .create_agent_execution(
-                agent.id, None, false, None, "sys", "input2", None, None, None, None,
+                agent.id, None, false, None, "sys", "input2", None, None, None,
             )
             .await
             .unwrap();
@@ -1427,7 +1426,7 @@ mod tests {
         // --- COALESCE: passing None preserves previous output ---
         let exec3 = repo
             .create_agent_execution(
-                agent.id, None, false, None, "sys", "input3", None, None, None, None,
+                agent.id, None, false, None, "sys", "input3", None, None, None,
             )
             .await
             .unwrap();
@@ -1470,7 +1469,6 @@ mod tests {
                     None,
                     "sys",
                     "input",
-                    None,
                     None,
                     None,
                     Some(we_id),
@@ -1532,7 +1530,6 @@ mod tests {
                 None,
                 None,
                 None,
-                None,
             )
             .await
             .unwrap();
@@ -1548,7 +1545,6 @@ mod tests {
                 None,
                 "s",
                 "i",
-                None,
                 None,
                 None,
                 None,
@@ -1570,7 +1566,6 @@ mod tests {
             None,
             None,
             None,
-            None,
         )
         .await
         .unwrap();
@@ -1584,7 +1579,6 @@ mod tests {
                 None,
                 "s",
                 "i",
-                None,
                 None,
                 None,
                 None,
@@ -1630,7 +1624,6 @@ mod tests {
                 None,
                 "s",
                 "i",
-                None,
                 None,
                 None,
                 None,
@@ -2050,7 +2043,6 @@ mod tests {
                 None,
                 "sys",
                 "input",
-                None,
                 Some(session.id),
                 Some(1),
                 None,
@@ -2065,7 +2057,6 @@ mod tests {
                 None,
                 "sys",
                 "input",
-                None,
                 Some(session.id),
                 Some(2),
                 None,

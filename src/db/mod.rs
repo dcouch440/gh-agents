@@ -283,6 +283,10 @@ pub struct WorkflowExecutionRow {
     pub template_id: Option<Uuid>,
     /// Parent execution for sub-workflow nesting.
     pub parent_execution_id: Option<Uuid>,
+    /// Root execution for O(1) tree traversal (Temporal pattern).
+    pub root_execution_id: Option<Uuid>,
+    /// Nesting depth: 0 = top-level, 1 = first sub-workflow, etc.
+    pub depth: i32,
 }
 
 /// Row type for run templates (frozen workflow snapshots).
@@ -326,7 +330,6 @@ pub struct AgentExecutionRow {
     pub input: String,
     pub output: Option<String>,
     pub structured_output: Option<serde_json::Value>,
-    pub selected_mode_id: Option<Uuid>,
     pub room_session_id: Option<Uuid>,
     pub speaker_order: Option<i32>,
     pub status: String,
@@ -708,6 +711,8 @@ pub struct AgentDesignerOutputRow {
     pub execution_order: i32,
     pub source_entity_id: String,
     pub source_archetype: String,
+    /// Direct link to the protocol execution phase that triggered this designer output.
+    pub protocol_execution_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
 }
 

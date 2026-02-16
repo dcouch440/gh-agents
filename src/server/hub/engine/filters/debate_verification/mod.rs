@@ -318,7 +318,6 @@ impl ExecutionFilter for DebateVerificationFilter {
                             &verifier_user,
                             None,
                             None,
-                            None,
                             workflow_execution_id,
                         )
                         .await
