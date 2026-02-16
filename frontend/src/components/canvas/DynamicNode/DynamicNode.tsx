@@ -129,7 +129,13 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   ]
 
   // Archetype-specific tab
-  if (nodeData.archetype === Archetype.DOCUMENTER) {
+  if (nodeData.archetype === Archetype.WORKFORCE) {
+    tabs.push({
+      id: 'agents',
+      icon: GroupsOutlined,
+      tooltip: 'Agent Roster',
+      content: <AgentRosterTab stepId={id} />,
+    })
     tabs.push({
       id: 'documents',
       icon: DescriptionOutlined,
@@ -144,13 +150,6 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
           onRemove={handleRemoveDocument}
         />
       ),
-    })
-  } else if (nodeData.archetype === Archetype.TASK_FORCE) {
-    tabs.push({
-      id: 'agents',
-      icon: GroupsOutlined,
-      tooltip: 'Agent Roster',
-      content: <AgentRosterTab stepId={id} />,
     })
   } else if (nodeData.archetype === Archetype.ROOM) {
     tabs.push({
@@ -179,10 +178,10 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
 
   // Header subtitle
   const subtitle = (() => {
-    if (nodeData.archetype === Archetype.DOCUMENTER && nodeData.documentNames.length > 0)
-      return nodeData.documentNames.join(' \u00b7 ')
-    if (nodeData.archetype === Archetype.TASK_FORCE && nodeData.rosterNames.length > 0)
-      return nodeData.rosterNames.join(' \u00b7 ')
+    if (nodeData.archetype === Archetype.WORKFORCE) {
+      const parts = [...nodeData.rosterNames, ...nodeData.documentNames]
+      return parts.length > 0 ? parts.join(' \u00b7 ') : null
+    }
     if (nodeData.archetype === Archetype.ROOM && roomStepMembers.length > 0)
       return roomStepMembers.map((m) => m.name).join(' \u00b7 ')
     return null
@@ -218,7 +217,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
         />
         <CanvasHandle type="target" position={Position.Left} color={accentColor} />
         <CanvasHandle type="source" position={Position.Right} color={accentColor} />
-        {nodeData.archetype === Archetype.DOCUMENTER && (
+        {nodeData.archetype === Archetype.WORKFORCE && (
           <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
         )}
         <CanvasHandle type="source" position={Position.Bottom} id="notes" color="#f85149" variant="passive" />
@@ -251,7 +250,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
         overlay={shareOverlay}
         extraHandles={
           <>
-            {nodeData.archetype === Archetype.DOCUMENTER && (
+            {nodeData.archetype === Archetype.WORKFORCE && (
               <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
             )}
             <CanvasHandle type="source" position={Position.Bottom} id="notes" color="#f85149" variant="passive" />

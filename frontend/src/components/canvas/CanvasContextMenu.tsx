@@ -1,8 +1,8 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import type { SxProps, Theme } from '@mui/material/styles'
-import { useStore, workflowStore, protocolStore, canvasStore, shareStore } from '@/stores'
+import { workflowStore, canvasStore, shareStore } from '@/stores'
 import type { StepProtocolLink } from '@/stores'
 import { Collections } from '@/utils/collections'
 import { DEFAULT_STEP_TYPE_COLOR, STEP_TYPE_COLORS, SECTION_LABEL_SX, COLOR_DOT_SX } from './constants'
@@ -66,15 +66,11 @@ const MENU_ITEM_SX: SxProps<Theme> = {
 
 
 const ARCHETYPE_MENU_ORDER: ArchetypeType[] = [
-  Archetype.DOCUMENTER,
-  Archetype.TASK_FORCE,
+  Archetype.WORKFORCE,
   Archetype.ROOM,
 ]
 
 function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
-  const allProtocols = useStore(protocolStore.store, protocolStore.selectAll)
-  const protocolsByType = useMemo(() => Collections.keyBy(allProtocols, (p) => p.protocol_type), [allProtocols])
-
   // Callback ref: clamp menu position to stay within viewport after mount
   const menuRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) return
@@ -96,39 +92,13 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     event.preventDefault()
     const config = ARCHETYPE_CONFIGS[archetype]
 
-    // For documenter, preserve existing protocol-linking behavior
-    if (archetype === Archetype.DOCUMENTER) {
-      const protocol = protocolsByType.get('documenter')
-      const createAndLink = async () => {
-        const step = await workflowStore.createStep({
-          name: `New ${config.label}`,
-          execution_mode: config.executionMode,
-          agent_id: protocol?.agent?.id,
-          output_schema_id: protocol?.output_schema?.id,
-          prompt_template_id: protocol?.prompt_template?.id,
-          prompt_template: '',
-          position_x: Math.round(position.flowX),
-          position_y: Math.round(position.flowY),
-        })
-        if (step && protocol) {
-          canvasStore.linkStepProtocol(step.id, {
-            protocolId: protocol.id,
-            protocolType: protocol.protocol_type,
-            protocolName: protocol.name,
-            portNames: Collections.mapBy(protocol.ports, (p) => p.port_name),
-          })
-        }
-      }
-      void createAndLink()
-    } else {
-      void workflowStore.createStep({
-        name: `New ${config.label}`,
-        execution_mode: config.executionMode,
-        prompt_template: '',
-        position_x: Math.round(position.flowX),
-        position_y: Math.round(position.flowY),
-      })
-    }
+    void workflowStore.createStep({
+      name: `New ${config.label}`,
+      execution_mode: config.executionMode,
+      prompt_template: '',
+      position_x: Math.round(position.flowX),
+      position_y: Math.round(position.flowY),
+    })
 
     onClose()
   }
@@ -202,7 +172,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
             id: `${parentStepId}::doc::${targetDef.id}`,
             name: targetDef.name,
             summary: `Document from ${stepName}`,
-            data: { documenterName: stepName, description: targetDef.description },
+            data: { parentStepName: stepName, description: targetDef.description },
           },
         },
       ]

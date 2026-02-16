@@ -83,9 +83,9 @@ const buildShareableFields = ({
     })
   }
 
-  // ── Documents (DOCUMENTER) ─────────────────────────────────────────────
+  // ── Workforce (documents + agents) ────────────────────────────────────
 
-  if (archetype === ArchetypeEnum.DOCUMENTER) {
+  if (archetype === ArchetypeEnum.WORKFORCE) {
     for (const doc of documentDefs) {
       fields.push({
         key: `doc::${doc.id}`,
@@ -100,18 +100,14 @@ const buildShareableFields = ({
           name: doc.name,
           summary: `Document from ${stepName}`,
           data: {
-            documenterName: stepName,
+            parentStepName: stepName,
             description: doc.description,
             document_id: doc.document_id,
           },
         },
       })
     }
-  }
 
-  // ── Agents (TASK_FORCE) ────────────────────────────────────────────────
-
-  if (archetype === ArchetypeEnum.TASK_FORCE) {
     for (const agent of rosterAgents) {
       fields.push({
         key: `agent::${agent.id}`,

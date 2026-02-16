@@ -72,7 +72,7 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
           '&:active': { cursor: 'grabbing' },
         }}
       >
-        <DocumentNodeHeader name={nodeData.label} documenterName={nodeData.documenterName} accentColor={accentColor} />
+        <DocumentNodeHeader name={nodeData.label} parentStepName={nodeData.parentStepName} accentColor={accentColor} />
       </Box>
 
       {/* Content area — read-only or share overlay */}

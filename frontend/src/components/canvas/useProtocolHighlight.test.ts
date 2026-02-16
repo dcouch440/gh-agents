@@ -150,10 +150,10 @@ describe('useProtocolHighlight', () => {
 
     it('only the hovered document highlights, not its sibling', () => {
       const { result: doc1 } = renderHook(() =>
-        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-1', 'documenter-1'),
+        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-1', 'workforce-1'),
       )
       const { result: doc2 } = renderHook(() =>
-        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-2', 'documenter-1'),
+        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-2', 'workforce-1'),
       )
 
       act(() => {
@@ -166,10 +166,10 @@ describe('useProtocolHighlight', () => {
 
     it('only the hovered document highlights, context sibling stays none', () => {
       const { result: doc } = renderHook(() =>
-        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-1', 'documenter-1'),
+        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-1', 'workforce-1'),
       )
       const { result: ctx } = renderHook(() =>
-        useProtocolHighlight(CanvasNodeKind.CONTEXT, 'ctx-1', 'documenter-1'),
+        useProtocolHighlight(CanvasNodeKind.CONTEXT, 'ctx-1', 'workforce-1'),
       )
 
       act(() => {
@@ -196,14 +196,14 @@ describe('useProtocolHighlight', () => {
   describe('multi-node protocol scenarios', () => {
     it('two document nodes with same protocolStepId both hover when protocol is hovered', () => {
       const { result: doc1 } = renderHook(() =>
-        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-1', 'documenter-1'),
+        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-1', 'workforce-1'),
       )
       const { result: doc2 } = renderHook(() =>
-        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-2', 'documenter-1'),
+        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-2', 'workforce-1'),
       )
 
       act(() => {
-        canvasStore.setHoveredStep('documenter-1', 'documenter-1')
+        canvasStore.setHoveredStep('workforce-1', 'workforce-1')
       })
 
       expect(doc1.current).toBe(HighlightMode.HOVER)
@@ -212,14 +212,14 @@ describe('useProtocolHighlight', () => {
 
     it('two document nodes with same protocolStepId both select when protocol is selected', () => {
       const { result: doc1 } = renderHook(() =>
-        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-1', 'documenter-1'),
+        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-1', 'workforce-1'),
       )
       const { result: doc2 } = renderHook(() =>
-        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-2', 'documenter-1'),
+        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-2', 'workforce-1'),
       )
 
       act(() => {
-        canvasStore.selectSteps(['documenter-1'])
+        canvasStore.selectSteps(['workforce-1'])
       })
 
       expect(doc1.current).toBe(HighlightMode.SELECT)
@@ -228,14 +228,14 @@ describe('useProtocolHighlight', () => {
 
     it('context node does not select when a different protocol is selected', () => {
       const { result: context } = renderHook(() =>
-        useProtocolHighlight(CanvasNodeKind.CONTEXT, 'ctx-1', 'documenter-A'),
+        useProtocolHighlight(CanvasNodeKind.CONTEXT, 'ctx-1', 'workforce-A'),
       )
       const { result: doc } = renderHook(() =>
-        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-1', 'documenter-B'),
+        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-1', 'workforce-B'),
       )
 
       act(() => {
-        canvasStore.selectSteps(['documenter-B'])
+        canvasStore.selectSteps(['workforce-B'])
       })
 
       expect(doc.current).toBe(HighlightMode.SELECT)
@@ -244,14 +244,14 @@ describe('useProtocolHighlight', () => {
 
     it('context node does not hover when a different protocol is hovered', () => {
       const { result: context } = renderHook(() =>
-        useProtocolHighlight(CanvasNodeKind.CONTEXT, 'ctx-1', 'documenter-A'),
+        useProtocolHighlight(CanvasNodeKind.CONTEXT, 'ctx-1', 'workforce-A'),
       )
       const { result: doc } = renderHook(() =>
-        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-1', 'documenter-B'),
+        useProtocolHighlight(CanvasNodeKind.DOCUMENT, 'doc-1', 'workforce-B'),
       )
 
       act(() => {
-        canvasStore.setHoveredStep('documenter-B', 'documenter-B')
+        canvasStore.setHoveredStep('workforce-B', 'workforce-B')
       })
 
       expect(doc.current).toBe(HighlightMode.HOVER)

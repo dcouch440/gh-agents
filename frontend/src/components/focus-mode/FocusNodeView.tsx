@@ -91,7 +91,13 @@ function FocusNodeView({
     },
   ]
 
-  if (archetype === Archetype.DOCUMENTER) {
+  if (archetype === Archetype.WORKFORCE) {
+    tabs.push({
+      id: 'agents',
+      icon: GroupsOutlined,
+      tooltip: 'Agent Roster',
+      content: <AgentRosterTab stepId={stepId} />,
+    })
     tabs.push({
       id: 'documents',
       icon: DescriptionOutlined,
@@ -106,13 +112,6 @@ function FocusNodeView({
           onRemove={handleRemoveDocument}
         />
       ),
-    })
-  } else if (archetype === Archetype.TASK_FORCE) {
-    tabs.push({
-      id: 'agents',
-      icon: GroupsOutlined,
-      tooltip: 'Agent Roster',
-      content: <AgentRosterTab stepId={stepId} />,
     })
   } else if (archetype === Archetype.ROOM) {
     tabs.push({
@@ -140,10 +139,10 @@ function FocusNodeView({
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0]
 
   const subtitle = (() => {
-    if (archetype === Archetype.DOCUMENTER && documentDefs.length > 0)
-      return documentDefs.map((d) => d.name).join(' \u00b7 ')
-    if (archetype === Archetype.TASK_FORCE && rosterAgents.length > 0)
-      return rosterAgents.map((a) => a.name).join(' \u00b7 ')
+    if (archetype === Archetype.WORKFORCE) {
+      const parts = [...rosterAgents.map((a) => a.name), ...documentDefs.map((d) => d.name)]
+      return parts.length > 0 ? parts.join(' \u00b7 ') : null
+    }
     if (archetype === Archetype.ROOM && roomStepMembers.length > 0)
       return roomStepMembers.map((m) => m.name).join(' \u00b7 ')
     return null

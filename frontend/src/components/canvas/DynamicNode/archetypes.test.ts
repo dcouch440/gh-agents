@@ -4,8 +4,7 @@ import type { ProtocolStepInfo } from '../mappers'
 
 describe('Archetype', () => {
   it('has all expected values', () => {
-    expect(Archetype.DOCUMENTER).toBe('documenter')
-    expect(Archetype.TASK_FORCE).toBe('task_force')
+    expect(Archetype.WORKFORCE).toBe('workforce')
     expect(Archetype.ROOM).toBe('room')
     expect(Archetype.BLANK).toBe('blank')
   })
@@ -22,8 +21,8 @@ describe('ARCHETYPE_CONFIGS', () => {
     }
   })
 
-  it('documenter uses orange', () => {
-    expect(ARCHETYPE_CONFIGS.documenter.color).toBe('#D4793E')
+  it('workforce uses blue', () => {
+    expect(ARCHETYPE_CONFIGS.workforce.color).toBe('#3b82f6')
   })
 
   it('room uses purple', () => {
@@ -34,23 +33,12 @@ describe('ARCHETYPE_CONFIGS', () => {
 describe('resolveArchetype', () => {
   const emptyProtocols: ReadonlyMap<string, ProtocolStepInfo> = new Map()
 
-  it('returns DOCUMENTER for execution_mode documenter', () => {
-    expect(resolveArchetype({ execution_mode: 'documenter' }, emptyProtocols)).toBe(Archetype.DOCUMENTER)
-  })
-
-  it('returns DOCUMENTER when protocol_type is documenter', () => {
-    const protocols = new Map<string, ProtocolStepInfo>([
-      ['step-1', { protocol_type: 'documenter', name: 'Docs', portNames: [] }],
-    ])
-    expect(resolveArchetype({ execution_mode: 'single' }, protocols, 'step-1')).toBe(Archetype.DOCUMENTER)
+  it('returns WORKFORCE for execution_mode workforce', () => {
+    expect(resolveArchetype({ execution_mode: 'workforce' }, emptyProtocols)).toBe(Archetype.WORKFORCE)
   })
 
   it('returns ROOM for execution_mode room', () => {
     expect(resolveArchetype({ execution_mode: 'room' }, emptyProtocols)).toBe(Archetype.ROOM)
-  })
-
-  it('returns TASK_FORCE for execution_mode task_force', () => {
-    expect(resolveArchetype({ execution_mode: 'task_force' }, emptyProtocols)).toBe(Archetype.TASK_FORCE)
   })
 
   it('returns BLANK for execution_mode single', () => {

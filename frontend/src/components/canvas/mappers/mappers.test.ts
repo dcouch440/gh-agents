@@ -170,16 +170,16 @@ describe('toRFEdges', () => {
 
   it('resolves sourceColor from protocol step type', () => {
     const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
-      ['step-001', { protocol_type: 'documenter', name: 'Doc', portNames: [] }],
+      ['step-001', { protocol_type: 'workforce', name: 'Doc', portNames: [] }],
     ])
     const edges = toRFEdges([edge1], emptyGroups, protocols, [step1, step2])
-    expect(edges[0]?.data?.sourceColor).toBe('#D4793E')
+    expect(edges[0]?.data?.sourceColor).toBe('#3b82f6')
     expect(edges[0]?.data?.isProtocolEdge).toBe(true)
   })
 
   it('marks isProtocolEdge when target is a protocol step', () => {
     const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
-      ['step-002', { protocol_type: 'documenter', name: 'Doc', portNames: [] }],
+      ['step-002', { protocol_type: 'workforce', name: 'Doc', portNames: [] }],
     ])
     const edges = toRFEdges([edge1], emptyGroups, protocols, [step1, step2])
     expect(edges[0]?.data?.sourceColor).toBe('#3b82f6')
@@ -188,7 +188,7 @@ describe('toRFEdges', () => {
 
   it('uses intrinsic step color even when in a protocol group', () => {
     const groups = new Map([
-      ['step-001', { protocolColor: '#D4793E', protocolStepId: 'proto-1' }],
+      ['step-001', { protocolColor: '#3b82f6', protocolStepId: 'proto-1' }],
     ])
     const edges = toRFEdges([edge1], groups, emptyProtocols, [step1, step2])
     // Source is a 'single' step → uses its own step type color, not the group color
@@ -196,12 +196,12 @@ describe('toRFEdges', () => {
     expect(edges[0]?.data?.isProtocolEdge).toBe(true)
   })
 
-  it('resolves sourceColor for documenter steps by execution_mode', () => {
-    const documenterA: WorkflowStep = { ...step1, id: 'doc-a', execution_mode: 'documenter' }
-    const documenterB: WorkflowStep = { ...step1, id: 'doc-b', execution_mode: 'documenter' }
+  it('resolves sourceColor for workforce steps by execution_mode', () => {
+    const workforceA: WorkflowStep = { ...step1, id: 'doc-a', execution_mode: 'workforce' }
+    const workforceB: WorkflowStep = { ...step1, id: 'doc-b', execution_mode: 'workforce' }
     const edge: WorkflowStepEdge = { id: 'edge-doc', from_step_id: 'doc-a', to_step_id: 'doc-b' }
-    const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [documenterA, documenterB])
-    expect(edges[0]?.data?.sourceColor).toBe('#D4793E')
+    const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [workforceA, workforceB])
+    expect(edges[0]?.data?.sourceColor).toBe('#3b82f6')
     expect(edges[0]?.data?.isProtocolEdge).toBe(true)
   })
 
@@ -300,33 +300,33 @@ describe('computeProtocolGroups', () => {
   })
 
   it('assigns protocol color to directly connected nodes', () => {
-    const steps = [makeStep('proto', 'documenter'), makeStep('s1')]
+    const steps = [makeStep('proto', 'workforce'), makeStep('s1')]
     const edges = [{ from_step_id: 's1', to_step_id: 'proto' }]
     const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
-      ['proto', { protocol_type: 'documenter', name: 'Doc', portNames: [] }],
+      ['proto', { protocol_type: 'workforce', name: 'Doc', portNames: [] }],
     ])
     const result = computeProtocolGroups(steps, edges, protocols)
-    expect(result.get('s1')).toEqual({ protocolColor: '#D4793E', protocolStepId: 'proto' })
+    expect(result.get('s1')).toEqual({ protocolColor: '#3b82f6', protocolStepId: 'proto' })
   })
 
   it('does not include the protocol step itself in the group', () => {
-    const steps = [makeStep('proto', 'documenter'), makeStep('s1')]
+    const steps = [makeStep('proto', 'workforce'), makeStep('s1')]
     const edges = [{ from_step_id: 's1', to_step_id: 'proto' }]
     const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
-      ['proto', { protocol_type: 'documenter', name: 'Doc', portNames: [] }],
+      ['proto', { protocol_type: 'workforce', name: 'Doc', portNames: [] }],
     ])
     const result = computeProtocolGroups(steps, edges, protocols)
     expect(result.has('proto')).toBe(false)
   })
 
   it('colors nodes reachable through intermediate nodes', () => {
-    const steps = [makeStep('proto', 'documenter'), makeStep('s1'), makeStep('s2')]
+    const steps = [makeStep('proto', 'workforce'), makeStep('s1'), makeStep('s2')]
     const edges = [
       { from_step_id: 's1', to_step_id: 'proto' },
       { from_step_id: 's2', to_step_id: 's1' },
     ]
     const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
-      ['proto', { protocol_type: 'documenter', name: 'Doc', portNames: [] }],
+      ['proto', { protocol_type: 'workforce', name: 'Doc', portNames: [] }],
     ])
     const result = computeProtocolGroups(steps, edges, protocols)
     expect(result.get('s1')?.protocolStepId).toBe('proto')
@@ -334,10 +334,10 @@ describe('computeProtocolGroups', () => {
   })
 
   it('leaves disconnected nodes out of the group', () => {
-    const steps = [makeStep('proto', 'documenter'), makeStep('s1'), makeStep('s2')]
+    const steps = [makeStep('proto', 'workforce'), makeStep('s1'), makeStep('s2')]
     const edges = [{ from_step_id: 's1', to_step_id: 'proto' }]
     const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
-      ['proto', { protocol_type: 'documenter', name: 'Doc', portNames: [] }],
+      ['proto', { protocol_type: 'workforce', name: 'Doc', portNames: [] }],
     ])
     const result = computeProtocolGroups(steps, edges, protocols)
     expect(result.has('s1')).toBe(true)
@@ -345,83 +345,83 @@ describe('computeProtocolGroups', () => {
   })
 
   it('detects protocol by execution_mode even without stepProtocols entry', () => {
-    const steps = [makeStep('proto', 'documenter'), makeStep('s1')]
+    const steps = [makeStep('proto', 'workforce'), makeStep('s1')]
     const edges = [{ from_step_id: 's1', to_step_id: 'proto' }]
     const result = computeProtocolGroups(steps, edges, new Map())
     expect(result.get('s1')?.protocolStepId).toBe('proto')
   })
 
   it('does not traverse through a second protocol into its neighbors', () => {
-    // Context → Documenter A → Documenter B
+    // Context → Workforce A → Workforce B
     // Context should belong to A only, not B
     const steps = [
       makeStep('context-1', 'context'),
-      makeStep('documenter-A', 'documenter'),
-      makeStep('documenter-B', 'documenter'),
+      makeStep('workforce-A', 'workforce'),
+      makeStep('workforce-B', 'workforce'),
     ]
     const edges = [
-      { from_step_id: 'context-1', to_step_id: 'documenter-A' },
-      { from_step_id: 'documenter-A', to_step_id: 'documenter-B' },
+      { from_step_id: 'context-1', to_step_id: 'workforce-A' },
+      { from_step_id: 'workforce-A', to_step_id: 'workforce-B' },
     ]
     const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
-      ['documenter-A', { protocol_type: 'documenter', name: 'Doc A', portNames: [] }],
-      ['documenter-B', { protocol_type: 'documenter', name: 'Doc B', portNames: [] }],
+      ['workforce-A', { protocol_type: 'workforce', name: 'Doc A', portNames: [] }],
+      ['workforce-B', { protocol_type: 'workforce', name: 'Doc B', portNames: [] }],
     ])
     const result = computeProtocolGroups(steps, edges, protocols)
 
-    expect(result.get('context-1')?.protocolStepId).toBe('documenter-A')
+    expect(result.get('context-1')?.protocolStepId).toBe('workforce-A')
   })
 
   it('isolates groups when two protocols share a connected component', () => {
-    // Context → Documenter A ← Step → Documenter B ← External
+    // Context → Workforce A ← Step → Workforce B ← External
     // Context belongs to A, External belongs to B, Step belongs to whichever BFS finds it first
     const steps = [
       makeStep('context-1', 'context'),
-      makeStep('documenter-A', 'documenter'),
+      makeStep('workforce-A', 'workforce'),
       makeStep('step-mid', 'single'),
-      makeStep('documenter-B', 'documenter'),
+      makeStep('workforce-B', 'workforce'),
       makeStep('external', 'single'),
     ]
     const edges = [
-      { from_step_id: 'context-1', to_step_id: 'documenter-A' },
-      { from_step_id: 'step-mid', to_step_id: 'documenter-A' },
-      { from_step_id: 'step-mid', to_step_id: 'documenter-B' },
-      { from_step_id: 'external', to_step_id: 'documenter-B' },
+      { from_step_id: 'context-1', to_step_id: 'workforce-A' },
+      { from_step_id: 'step-mid', to_step_id: 'workforce-A' },
+      { from_step_id: 'step-mid', to_step_id: 'workforce-B' },
+      { from_step_id: 'external', to_step_id: 'workforce-B' },
     ]
     const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
-      ['documenter-A', { protocol_type: 'documenter', name: 'Doc A', portNames: [] }],
-      ['documenter-B', { protocol_type: 'documenter', name: 'Doc B', portNames: [] }],
+      ['workforce-A', { protocol_type: 'workforce', name: 'Doc A', portNames: [] }],
+      ['workforce-B', { protocol_type: 'workforce', name: 'Doc B', portNames: [] }],
     ])
     const result = computeProtocolGroups(steps, edges, protocols)
 
-    expect(result.get('context-1')?.protocolStepId).toBe('documenter-A')
-    expect(result.get('external')?.protocolStepId).toBe('documenter-B')
+    expect(result.get('context-1')?.protocolStepId).toBe('workforce-A')
+    expect(result.get('external')?.protocolStepId).toBe('workforce-B')
   })
 
   it('does not let BFS from protocol B overwrite nodes belonging to protocol A', () => {
-    // Context → Documenter A → Step → Documenter B
+    // Context → Workforce A → Step → Workforce B
     // Without boundary fix, BFS from B would walk through A and claim Context
     const steps = [
       makeStep('context-1', 'context'),
-      makeStep('documenter-A', 'documenter'),
+      makeStep('workforce-A', 'workforce'),
       makeStep('step-between', 'single'),
-      makeStep('documenter-B', 'documenter'),
+      makeStep('workforce-B', 'workforce'),
     ]
     const edges = [
-      { from_step_id: 'context-1', to_step_id: 'documenter-A' },
-      { from_step_id: 'documenter-A', to_step_id: 'step-between' },
-      { from_step_id: 'step-between', to_step_id: 'documenter-B' },
+      { from_step_id: 'context-1', to_step_id: 'workforce-A' },
+      { from_step_id: 'workforce-A', to_step_id: 'step-between' },
+      { from_step_id: 'step-between', to_step_id: 'workforce-B' },
     ]
     const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
-      ['documenter-A', { protocol_type: 'documenter', name: 'Doc A', portNames: [] }],
-      ['documenter-B', { protocol_type: 'documenter', name: 'Doc B', portNames: [] }],
+      ['workforce-A', { protocol_type: 'workforce', name: 'Doc A', portNames: [] }],
+      ['workforce-B', { protocol_type: 'workforce', name: 'Doc B', portNames: [] }],
     ])
     const result = computeProtocolGroups(steps, edges, protocols)
 
-    expect(result.get('context-1')?.protocolStepId).toBe('documenter-A')
+    expect(result.get('context-1')?.protocolStepId).toBe('workforce-A')
     expect(result.get('step-between')?.protocolStepId).not.toBe(undefined)
-    expect(result.has('documenter-A')).toBe(false)
-    expect(result.has('documenter-B')).toBe(false)
+    expect(result.has('workforce-A')).toBe(false)
+    expect(result.has('workforce-B')).toBe(false)
   })
 })
 
@@ -549,10 +549,10 @@ describe('toRFNodes — input nodes', () => {
 })
 
 describe('toRFNodes — document nodes', () => {
-  const documenterStep: WorkflowStep = {
+  const workforceStep: WorkflowStep = {
     ...step1,
     id: 'doc-step',
-    execution_mode: 'documenter',
+    execution_mode: 'workforce',
     position_x: 200,
     position_y: 300,
   }
@@ -566,9 +566,9 @@ describe('toRFNodes — document nodes', () => {
         ],
       },
       documentContentByDefId: { 'def-1': '# Generated README' },
-      protocolsByStep: new Map([['doc-step', { protocol_type: 'documenter', name: 'Doc', portNames: [] }]]),
+      protocolsByStep: new Map([['doc-step', { protocol_type: 'workforce', name: 'Doc', portNames: [] }]]),
     }
-    const nodes = toRFNodes([documenterStep], lookups)
+    const nodes = toRFNodes([workforceStep], lookups)
     const docNode = nodes.find((n) => n.id === 'doc-artifact-def-1')
     expect(docNode).toBeDefined()
     expect(docNode?.type).toBe('documentNode')
@@ -583,9 +583,9 @@ describe('toRFNodes — document nodes', () => {
           { id: 'def-2', step_id: 'doc-step', name: 'CHANGELOG', description: '', target_length: 2000, display_order: 0, created_at: '2025-01-01', document_id: null },
         ],
       },
-      protocolsByStep: new Map([['doc-step', { protocol_type: 'documenter', name: 'Doc', portNames: [] }]]),
+      protocolsByStep: new Map([['doc-step', { protocol_type: 'workforce', name: 'Doc', portNames: [] }]]),
     }
-    const nodes = toRFNodes([documenterStep], lookups)
+    const nodes = toRFNodes([workforceStep], lookups)
     const docNode = nodes.find((n) => n.id === 'doc-artifact-def-2')
     expect(docNode).toBeDefined()
     expect(docNode?.data.content).toBe('')

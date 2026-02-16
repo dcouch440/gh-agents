@@ -117,7 +117,7 @@ describe('useCanvasLookups', () => {
     const protocols: Readonly<Record<string, StepProtocolLink>> = {
       'step-1': {
         protocolId: 'proto-1',
-        protocolType: 'documenter',
+        protocolType: 'workforce',
         protocolName: 'Doc Protocol',
         portNames: ['input', 'output'],
       },
@@ -128,7 +128,7 @@ describe('useCanvasLookups', () => {
 
     const info = result.current.protocolsByStepLookup.get('step-1')
     expect(info).toEqual({
-      protocol_type: 'documenter',
+      protocol_type: 'workforce',
       name: 'Doc Protocol',
       portNames: ['input', 'output'],
     })

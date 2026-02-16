@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => {
       kind: 'document',
       color: '#D4793E',
       chipKey: 'doc',
-      entity: { kind: 'document', id: 's1::doc::d1', name: 'Design Spec', summary: 'Document', data: { documenterName: 'Node', description: '' } },
+      entity: { kind: 'document', id: 's1::doc::d1', name: 'Design Spec', summary: 'Document', data: { parentStepName: 'Node', description: '' } },
     },
   ]
 

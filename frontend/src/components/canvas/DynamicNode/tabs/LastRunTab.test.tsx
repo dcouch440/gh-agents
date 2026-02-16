@@ -124,7 +124,7 @@ describe('LastRunTab', () => {
     expect(screen.getByText('$0.03')).toBeInTheDocument()
   })
 
-  it('renders output section for non-documenter steps', async () => {
+  it('renders output section for steps without phases', async () => {
     mockGetStepLastRun.mockResolvedValueOnce(mockLastRun)
     render(<LastRunTab stepId="step-1" />)
 
@@ -133,7 +133,7 @@ describe('LastRunTab', () => {
     })
   })
 
-  it('renders pipeline phases for documenter steps', async () => {
+  it('renders pipeline phases for steps with phases', async () => {
     mockGetStepLastRun.mockResolvedValueOnce(mockLastRunWithPhases)
     render(<LastRunTab stepId="step-1" />)
 

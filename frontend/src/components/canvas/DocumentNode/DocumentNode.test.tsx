@@ -34,7 +34,7 @@ const baseProps = {
   data: {
     kind: 'document' as const,
     label: 'API Specification',
-    documenterName: 'Doc Writer',
+    parentStepName: 'Doc Writer',
     content: '# API\n\nEndpoint details.',
     protocolStepId: 'step-001',
   },
@@ -63,7 +63,7 @@ describe('DocumentNode', () => {
     expect(screen.getByText('API Specification')).toBeInTheDocument()
   })
 
-  it('renders documenter name in header', () => {
+  it('renders parent step name in header', () => {
     render(<DocumentNode {...baseProps} />)
     expect(screen.getByText('Doc Writer')).toBeInTheDocument()
   })

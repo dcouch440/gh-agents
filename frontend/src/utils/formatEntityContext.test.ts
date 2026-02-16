@@ -40,18 +40,18 @@ describe('formatEntityContext', () => {
     it('formats with description', () => {
       const entity = makeEntity('document', 'README', {
         description: 'Project readme file',
-        documenterName: 'DocWriter',
+        parentStepName: 'DocWriter',
       })
       expect(formatEntityContext(entity)).toBe('Document "README": Project readme file')
     })
 
     it('formats without description', () => {
-      const entity = makeEntity('document', 'README', { documenterName: 'DocWriter' })
+      const entity = makeEntity('document', 'README', { parentStepName: 'DocWriter' })
       expect(formatEntityContext(entity)).toBe('Document "README"')
     })
 
     it('formats with empty description', () => {
-      const entity = makeEntity('document', 'README', { description: '', documenterName: 'DocWriter' })
+      const entity = makeEntity('document', 'README', { description: '', parentStepName: 'DocWriter' })
       expect(formatEntityContext(entity)).toBe('Document "README"')
     })
   })

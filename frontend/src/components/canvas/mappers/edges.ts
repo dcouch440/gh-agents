@@ -4,7 +4,7 @@ import { Collections } from '@/utils/collections'
 import { STEP_TYPE_COLORS, GREYSCALE_ACCENT } from '../constants'
 import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from '../DynamicNode/archetypes'
 import type { ProtocolStepInfo, ProtocolGroupEntry, StepNodeLookups, StepEdgeData } from './types'
-import { isDocumenterStep } from './protocolGroups'
+import { isWorkforceStep } from './protocolGroups'
 
 /** Resolve the intrinsic color for a step based on its archetype or execution mode. */
 const resolveStepColor = (
@@ -31,13 +31,13 @@ const toRFEdges = (
       ? resolveStepColor(sourceStep, protocolsByStep)
       : GREYSCALE_ACCENT
 
-    // Edge is protocol-connected if either end is a protocol step, in a protocol group, or a documenter
+    // Edge is protocol-connected if either end is a protocol step, in a protocol group, or a workforce step
     const isProtocolEdge =
       protocolsByStep.has(edge.from_step_id) ||
       protocolsByStep.has(edge.to_step_id) ||
       protocolGroups.has(edge.from_step_id) ||
       protocolGroups.has(edge.to_step_id) ||
-      (sourceStep?.execution_mode === 'documenter') === true
+      (sourceStep?.execution_mode === 'workforce') === true
 
     const data: StepEdgeData = { sourceColor, isProtocolEdge }
     return {
@@ -53,7 +53,7 @@ const toRFEdges = (
 const toDocumentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] => {
   const edges: Edge[] = []
   for (const step of steps) {
-    if (!isDocumenterStep(step, lookups.protocolsByStep)) continue
+    if (!isWorkforceStep(step, lookups.protocolsByStep)) continue
 
     const defs = lookups.documentDefsByStep[step.id] ?? []
     for (const def of defs) {
