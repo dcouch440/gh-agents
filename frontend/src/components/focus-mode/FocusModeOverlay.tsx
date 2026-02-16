@@ -23,8 +23,7 @@ import { ArtifactDetailPanel } from './ArtifactDetailPanel'
 
 const executionModeLabel = (mode: string): string => {
   switch (mode) {
-    case 'task_force': return 'Workforce'
-    case 'documenter': return 'Documenter'
+    case 'workforce': return 'Workforce'
     case 'room': return 'Room'
     case 'single': return 'Agent'
     case 'for_each': return 'Pipeline'
@@ -163,27 +162,19 @@ function FocusModeOverlay() {
 
       // Add protocol's own children
       switch (step.execution_mode) {
-        case 'task_force': {
+        case 'workforce': {
           const roster = rosterByStep[id] ?? []
-          if (roster.length > 0) {
-            for (let j = 0; j < roster.length; j++) {
-              const agent = roster[j]!
-              cards.push({ id: agent.id, name: agent.name, subtitle: agent.role_description, accentOverride: null, artifactKind: 'roster-agent' })
-            }
-          } else {
-            cards.push({ id, name: stepName, subtitle: 'No agents', accentOverride: null, artifactKind: 'task-force' })
+          for (let j = 0; j < roster.length; j++) {
+            const agent = roster[j]!
+            cards.push({ id: agent.id, name: agent.name, subtitle: agent.role_description, accentOverride: null, artifactKind: 'roster-agent' })
           }
-          break
-        }
-        case 'documenter': {
           const docs = documentDefsByStep[id] ?? []
-          if (docs.length > 0) {
-            for (let j = 0; j < docs.length; j++) {
-              const d = docs[j]!
-              cards.push({ id: d.id, name: d.name, subtitle: `~${d.target_length} chars`, accentOverride: null, artifactKind: 'document' })
-            }
-          } else {
-            cards.push({ id, name: stepName, subtitle: 'No documents', accentOverride: null, artifactKind: 'document' })
+          for (let j = 0; j < docs.length; j++) {
+            const d = docs[j]!
+            cards.push({ id: d.id, name: d.name, subtitle: `~${d.target_length} chars`, accentOverride: null, artifactKind: 'document' })
+          }
+          if (roster.length === 0 && docs.length === 0) {
+            cards.push({ id, name: stepName, subtitle: 'No agents or documents', accentOverride: null, artifactKind: 'workforce' as ArtifactKind })
           }
           break
         }

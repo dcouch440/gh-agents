@@ -25,12 +25,12 @@ export const PROTOCOL_TYPE_COLORS: Record<string, string> = {
   route: '#a78bfa',
   review: '#f85149',
   transform: '#2dd4bf',
-  documenter: '#D4793E',
+  workforce: '#3b82f6',
   default: '#7d8590',
 }
 
 export const PROTOCOL_LABELS: Record<string, string> = {
-  documenter: 'Documenter',
+  workforce: 'Workforce',
 }
 
 /** Shared styling constants for context menus and picker panels. */

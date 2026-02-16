@@ -19,7 +19,7 @@ function DocumentEdgeComponent(props: EdgeProps) {
   return (
     <PipeEdgePath
       edgePath={edgePath}
-      color={PROTOCOL_TYPE_COLORS['documenter']}
+      color={PROTOCOL_TYPE_COLORS['workforce']}
       selected={false}
       isProtocol={true}
       interactionWidth={PIPE.INTERACTION_WIDTH}

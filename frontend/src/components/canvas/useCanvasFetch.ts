@@ -6,8 +6,7 @@ import type { WorkflowStep } from '@/types/workflow'
 /**
  * Manages lazy data-fetching for the canvas:
  * - Tools for each agent (once per agent)
- * - Document defs for documenter steps (once per step)
- * - Roster for task_force steps (once per step)
+ * - Document defs + roster for workforce steps (once per step)
  * - Protocol catalog (once on mount)
  */
 const useCanvasFetch = (
@@ -30,19 +29,21 @@ const useCanvasFetch = (
     }
   }, [agents])
 
-  // Fetch document defs and rosters for relevant step types
+  // Fetch document defs, rosters, and room members for relevant step types
   useEffect(() => {
     for (let i = 0; i < steps.length; i++) {
       const step = steps[i]!
-      if (step.execution_mode === 'documenter' && !fetchedDocDefStepIds.current.has(step.id)) {
-        fetchedDocDefStepIds.current.add(step.id)
-        void workflowStore.fetchDocumentDefs(step.id).then(() => {
-          void workflowStore.fetchDocumentContent(step.id)
-        })
-      }
-      if (step.execution_mode === 'task_force' && !fetchedRosterStepIds.current.has(step.id)) {
-        fetchedRosterStepIds.current.add(step.id)
-        void workflowStore.fetchRoster(step.id)
+      if (step.execution_mode === 'workforce') {
+        if (!fetchedDocDefStepIds.current.has(step.id)) {
+          fetchedDocDefStepIds.current.add(step.id)
+          void workflowStore.fetchDocumentDefs(step.id).then(() => {
+            void workflowStore.fetchDocumentContent(step.id)
+          })
+        }
+        if (!fetchedRosterStepIds.current.has(step.id)) {
+          fetchedRosterStepIds.current.add(step.id)
+          void workflowStore.fetchRoster(step.id)
+        }
       }
       if (step.execution_mode === 'room' && !fetchedMemberStepIds.current.has(step.id)) {
         fetchedMemberStepIds.current.add(step.id)

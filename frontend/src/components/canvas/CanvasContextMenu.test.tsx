@@ -10,10 +10,9 @@ const { mockCreateStep, mockDeleteStep, mockLinkStepProtocol, mockEnterShareMode
   mockEnterShareMode: vi.fn(),
 }))
 
-const mockDocumenterProtocol = {
+const mockProtocol = {
   id: 'proto-1',
-  name: 'Documenter',
-  protocol_type: 'documenter',
+  name: 'Workforce',
   agent: { id: 'agent-1' },
   output_schema: { id: 'schema-1' },
   prompt_template: { id: 'template-1', content: 'doc prompt' },
@@ -24,7 +23,7 @@ const mockStep = {
   id: 'step-123',
   name: 'Test Step',
   description: 'A test step',
-  execution_mode: 'documenter',
+  execution_mode: 'workforce',
   prompt_template: '',
 }
 
@@ -49,7 +48,7 @@ vi.mock('@/stores', () => ({
   protocolStore: {
     store: 'protocol',
     selectTypes: () => [],
-    selectAll: () => [mockDocumenterProtocol],
+    selectAll: () => [mockProtocol],
   },
   canvasStore: {
     store: { getState: () => ({ stepProtocols: {} }) },
@@ -87,12 +86,10 @@ describe('CanvasContextMenu', () => {
     expect(screen.getByText('Utilities')).toBeInTheDocument()
   })
 
-  it('renders three archetype options', () => {
+  it('renders archetype options', () => {
     render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
-    expect(screen.getByTestId('ctx-add-documenter')).toBeInTheDocument()
-    expect(screen.getByText('Documenter')).toBeInTheDocument()
-    expect(screen.getByTestId('ctx-add-task_force')).toBeInTheDocument()
-    expect(screen.getByText('Task Force')).toBeInTheDocument()
+    expect(screen.getByTestId('ctx-add-workforce')).toBeInTheDocument()
+    expect(screen.getByText('Workforce')).toBeInTheDocument()
     expect(screen.getByTestId('ctx-add-room')).toBeInTheDocument()
     expect(screen.getByText('Room')).toBeInTheDocument()
   })

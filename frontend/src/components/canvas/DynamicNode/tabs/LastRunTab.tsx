@@ -210,7 +210,7 @@ function LastRunTab({ stepId }: LastRunTabProps) {
             )}
           </Box>
 
-          {/* Output section (non-documenter) */}
+          {/* Output section */}
           {data.output !== null && (
             <Box sx={{ mb: 1.5 }}>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
@@ -228,7 +228,7 @@ function LastRunTab({ stepId }: LastRunTabProps) {
             </Box>
           )}
 
-          {/* Phases section (documenter) */}
+          {/* Phases section */}
           {data.phases !== null && data.phases.length > 0 && (
             <Box>
               <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>

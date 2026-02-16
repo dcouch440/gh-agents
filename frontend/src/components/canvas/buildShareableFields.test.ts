@@ -7,7 +7,7 @@ const makeStep = (overrides: Partial<WorkflowStep> = {}): WorkflowStep => ({
   workflow_id: 'wf-1',
   name: 'Test Node',
   description: 'A test description',
-  execution_mode: 'documenter',
+  execution_mode: 'workforce',
   step_order: 0,
   agent_id: null,
   prompt_template_id: null,
@@ -53,7 +53,7 @@ describe('buildShareableFields', () => {
       const fields = buildShareableFields({
         stepId: 'step-1',
         step: makeStep({ name: 'My Node', description: '', prompt_template: '' }),
-        archetype: 'documenter',
+        archetype: 'workforce',
         documentDefs: [],
         rosterAgents: [],
         roomMembers: [],
@@ -71,7 +71,7 @@ describe('buildShareableFields', () => {
       const fields = buildShareableFields({
         stepId: 'step-1',
         step: makeStep({ description: 'Important info' }),
-        archetype: 'documenter',
+        archetype: 'workforce',
         documentDefs: [],
         rosterAgents: [],
         roomMembers: [],
@@ -87,7 +87,7 @@ describe('buildShareableFields', () => {
       const fields = buildShareableFields({
         stepId: 'step-1',
         step: makeStep({ description: '' }),
-        archetype: 'documenter',
+        archetype: 'workforce',
         documentDefs: [],
         rosterAgents: [],
         roomMembers: [],
@@ -100,7 +100,7 @@ describe('buildShareableFields', () => {
       const fields = buildShareableFields({
         stepId: 'step-1',
         step: makeStep({ prompt_template: 'Do the thing' }),
-        archetype: 'documenter',
+        archetype: 'workforce',
         documentDefs: [],
         rosterAgents: [],
         roomMembers: [],
@@ -117,7 +117,7 @@ describe('buildShareableFields', () => {
       const fields = buildShareableFields({
         stepId: 'step-1',
         step: makeStep({ prompt_template: '' }),
-        archetype: 'documenter',
+        archetype: 'workforce',
         documentDefs: [],
         rosterAgents: [],
         roomMembers: [],
@@ -127,12 +127,12 @@ describe('buildShareableFields', () => {
     })
   })
 
-  describe('DOCUMENTER archetype', () => {
+  describe('WORKFORCE archetype', () => {
     it('includes document defs', () => {
       const fields = buildShareableFields({
         stepId: 'step-1',
         step: makeStep(),
-        archetype: 'documenter',
+        archetype: 'workforce',
         documentDefs: [
           makeDoc('d1', 'README', 'Project readme'),
           makeDoc('d2', 'API Guide', 'API documentation'),
@@ -150,26 +150,24 @@ describe('buildShareableFields', () => {
       expect(docFields[1]!.label).toBe('API Guide')
     })
 
-    it('uses documenter color', () => {
+    it('uses workforce color', () => {
       const fields = buildShareableFields({
         stepId: 'step-1',
         step: makeStep(),
-        archetype: 'documenter',
+        archetype: 'workforce',
         documentDefs: [makeDoc('d1', 'README', 'docs')],
         rosterAgents: [],
         roomMembers: [],
       })
 
-      expect(fields[0]!.color).toBe('#D4793E')
+      expect(fields[0]!.color).toBe('#3b82f6')
     })
-  })
 
-  describe('TASK_FORCE archetype', () => {
     it('includes roster agents', () => {
       const fields = buildShareableFields({
         stepId: 'step-1',
-        step: makeStep({ execution_mode: 'task_force' }),
-        archetype: 'task_force',
+        step: makeStep(),
+        archetype: 'workforce',
         documentDefs: [],
         rosterAgents: [
           makeAgent('a1', 'CodeBot', 'Write code'),

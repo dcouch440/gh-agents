@@ -87,16 +87,16 @@ describe('useCanvasFetch', () => {
     expect(mocks.fetchTools).toHaveBeenCalledTimes(2)
   })
 
-  it('fetches document defs for documenter steps once', () => {
-    const steps = [makeStep('s1', 'documenter')]
+  it('fetches document defs for workforce steps once', () => {
+    const steps = [makeStep('s1', 'workforce')]
     renderHook(() => useCanvasFetch([], steps))
 
     expect(mocks.fetchDocumentDefs).toHaveBeenCalledTimes(1)
     expect(mocks.fetchDocumentDefs).toHaveBeenCalledWith('s1')
   })
 
-  it('chains fetchDocumentContent after fetchDocumentDefs for documenter steps', async () => {
-    const steps = [makeStep('s1', 'documenter')]
+  it('chains fetchDocumentContent after fetchDocumentDefs for workforce steps', async () => {
+    const steps = [makeStep('s1', 'workforce')]
     renderHook(() => useCanvasFetch([], steps))
 
     // Wait for the .then() chain to resolve
@@ -106,8 +106,8 @@ describe('useCanvasFetch', () => {
     })
   })
 
-  it('fetches roster for task_force steps once', () => {
-    const steps = [makeStep('s1', 'task_force')]
+  it('fetches roster for workforce steps once', () => {
+    const steps = [makeStep('s1', 'workforce')]
     renderHook(() => useCanvasFetch([], steps))
 
     expect(mocks.fetchRoster).toHaveBeenCalledTimes(1)

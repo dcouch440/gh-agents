@@ -16,7 +16,7 @@ import { CanvasNodeKind } from '../canvasKinds'
 import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from '../DynamicNode/archetypes'
 import type { DynamicNodeData } from '../DynamicNode/DynamicNode'
 import type { StepNodeLookups } from './types'
-import { isDocumenterStep } from './protocolGroups'
+import { isWorkforceStep } from './protocolGroups'
 import { getStoredDimensions, getStoredPosition } from '../nodeResizeStorage'
 
 const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
@@ -152,10 +152,10 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
     }
   })
 
-  // Auto-generate document nodes for each documenter's document defs
+  // Auto-generate document nodes for workforce steps with document defs
   const documentNodes: Node[] = []
   for (const step of steps) {
-    if (!isDocumenterStep(step, lookups.protocolsByStep)) continue
+    if (!isWorkforceStep(step, lookups.protocolsByStep)) continue
 
     const defs = lookups.documentDefsByStep[step.id] ?? []
     for (let i = 0; i < defs.length; i++) {
@@ -163,7 +163,7 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
       const docData: DocumentNodeData = {
         kind: CanvasNodeKind.DOCUMENT,
         label: def.name,
-        documenterName: step.name ?? 'Documenter',
+        parentStepName: step.name ?? 'Workforce',
         content: lookups.documentContentByDefId[def.id] ?? '',
         protocolStepId: step.id,
         documentId: def.document_id,

@@ -164,7 +164,7 @@ describe('canvasStore', () => {
     it('linkStepProtocol adds a protocol link', () => {
       const link = {
         protocolId: 'proto-1',
-        protocolType: 'documenter',
+        protocolType: 'workforce',
         protocolName: 'Doc Writer',
         portNames: ['input'],
       }
@@ -175,8 +175,8 @@ describe('canvasStore', () => {
     })
 
     it('linkStepProtocol overwrites existing link for same step', () => {
-      const link1 = { protocolId: 'p1', protocolType: 'documenter', protocolName: 'First', portNames: [] }
-      const link2 = { protocolId: 'p2', protocolType: 'documenter', protocolName: 'Second', portNames: ['a'] }
+      const link1 = { protocolId: 'p1', protocolType: 'workforce', protocolName: 'First', portNames: [] }
+      const link2 = { protocolId: 'p2', protocolType: 'workforce', protocolName: 'Second', portNames: ['a'] }
 
       canvasStore.linkStepProtocol('step-1', link1)
       canvasStore.linkStepProtocol('step-1', link2)
@@ -185,7 +185,7 @@ describe('canvasStore', () => {
     })
 
     it('unlinkStepProtocol removes a protocol link', () => {
-      const link = { protocolId: 'p1', protocolType: 'documenter', protocolName: 'Doc', portNames: [] }
+      const link = { protocolId: 'p1', protocolType: 'workforce', protocolName: 'Doc', portNames: [] }
       canvasStore.linkStepProtocol('step-1', link)
 
       canvasStore.unlinkStepProtocol('step-1')
@@ -199,7 +199,7 @@ describe('canvasStore', () => {
     })
 
     it('selectStepProtocols returns current protocols', () => {
-      const link = { protocolId: 'p1', protocolType: 'documenter', protocolName: 'Doc', portNames: [] }
+      const link = { protocolId: 'p1', protocolType: 'workforce', protocolName: 'Doc', portNames: [] }
       canvasStore.linkStepProtocol('step-1', link)
 
       expect(canvasStore.selectStepProtocols(getState())).toEqual({ 'step-1': link })
@@ -208,7 +208,7 @@ describe('canvasStore', () => {
     it('reset clears stepProtocols', () => {
       canvasStore.linkStepProtocol('step-1', {
         protocolId: 'p1',
-        protocolType: 'documenter',
+        protocolType: 'workforce',
         protocolName: 'Doc',
         portNames: [],
       })

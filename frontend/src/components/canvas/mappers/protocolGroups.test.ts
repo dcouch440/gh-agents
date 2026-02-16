@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeProtocolGroups, isDocumenterStep } from './protocolGroups'
+import { computeProtocolGroups, isWorkforceStep } from './protocolGroups'
 import type { ProtocolStepInfo } from './types'
 import type { WorkflowStep } from '@/types/workflow'
 
@@ -25,23 +25,23 @@ const baseStep: WorkflowStep = {
   system_prompt_suffix: null,
 }
 
-describe('isDocumenterStep', () => {
-  it('returns true when execution_mode is documenter', () => {
-    const step = { id: 'step-1', execution_mode: 'documenter' }
-    expect(isDocumenterStep(step, new Map())).toBe(true)
+describe('isWorkforceStep', () => {
+  it('returns true when execution_mode is workforce', () => {
+    const step = { id: 'step-1', execution_mode: 'workforce' }
+    expect(isWorkforceStep(step, new Map())).toBe(true)
   })
 
-  it('returns true when protocol type is documenter', () => {
+  it('returns true when protocol type is workforce', () => {
     const step = { id: 'step-1', execution_mode: 'single' }
     const protocols = new Map<string, ProtocolStepInfo>([
-      ['step-1', { protocol_type: 'documenter', name: 'Doc', portNames: [] }],
+      ['step-1', { protocol_type: 'workforce', name: 'Team', portNames: [] }],
     ])
-    expect(isDocumenterStep(step, protocols)).toBe(true)
+    expect(isWorkforceStep(step, protocols)).toBe(true)
   })
 
-  it('returns false for non-documenter steps', () => {
+  it('returns false for non-workforce steps', () => {
     const step = { id: 'step-1', execution_mode: 'single' }
-    expect(isDocumenterStep(step, new Map())).toBe(false)
+    expect(isWorkforceStep(step, new Map())).toBe(false)
   })
 
   it('returns false for a different protocol type', () => {
@@ -49,7 +49,7 @@ describe('isDocumenterStep', () => {
     const protocols = new Map<string, ProtocolStepInfo>([
       ['step-1', { protocol_type: 'decomp', name: 'Decomp', portNames: [] }],
     ])
-    expect(isDocumenterStep(step, protocols)).toBe(false)
+    expect(isWorkforceStep(step, protocols)).toBe(false)
   })
 })
 
@@ -66,7 +66,7 @@ describe('computeProtocolGroups', () => {
 
   it('assigns connected non-protocol nodes to the protocol group', () => {
     const steps = [
-      { ...baseStep, id: 'proto', execution_mode: 'documenter' },
+      { ...baseStep, id: 'proto', execution_mode: 'workforce' },
       { ...baseStep, id: 'worker-1' },
       { ...baseStep, id: 'worker-2' },
     ]
@@ -84,7 +84,7 @@ describe('computeProtocolGroups', () => {
 
   it('does not include protocol steps themselves in the result', () => {
     const steps = [
-      { ...baseStep, id: 'proto', execution_mode: 'documenter' },
+      { ...baseStep, id: 'proto', execution_mode: 'workforce' },
       { ...baseStep, id: 'worker' },
     ]
     const edges = [{ from_step_id: 'proto', to_step_id: 'worker' }]
@@ -96,7 +96,7 @@ describe('computeProtocolGroups', () => {
 
   it('handles isolated protocol steps with no edges', () => {
     const steps = [
-      { ...baseStep, id: 'proto', execution_mode: 'documenter' },
+      { ...baseStep, id: 'proto', execution_mode: 'workforce' },
     ]
     const result = computeProtocolGroups(steps, [], new Map())
     expect(result.size).toBe(0)
@@ -104,13 +104,13 @@ describe('computeProtocolGroups', () => {
 
   it('uses protocol color from PROTOCOL_TYPE_COLORS', () => {
     const steps = [
-      { ...baseStep, id: 'proto', execution_mode: 'documenter' },
+      { ...baseStep, id: 'proto', execution_mode: 'workforce' },
       { ...baseStep, id: 'worker' },
     ]
     const edges = [{ from_step_id: 'proto', to_step_id: 'worker' }]
     const result = computeProtocolGroups(steps, edges, new Map())
 
-    expect(result.get('worker')!.protocolColor).toBe('#D4793E')
+    expect(result.get('worker')!.protocolColor).toBe('#3b82f6')
   })
 
   it('handles protocolsByStep map for protocol detection', () => {
@@ -131,9 +131,9 @@ describe('computeProtocolGroups', () => {
 
   it('assigns each group independently when protocols are disconnected', () => {
     const steps = [
-      { ...baseStep, id: 'proto-a', execution_mode: 'documenter' },
+      { ...baseStep, id: 'proto-a', execution_mode: 'workforce' },
       { ...baseStep, id: 'worker-a' },
-      { ...baseStep, id: 'proto-b', execution_mode: 'documenter' },
+      { ...baseStep, id: 'proto-b', execution_mode: 'workforce' },
       { ...baseStep, id: 'worker-b' },
     ]
     const edges = [

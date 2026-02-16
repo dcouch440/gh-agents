@@ -6,11 +6,11 @@ import { DOCUMENT_NODE } from './constants'
 
 type DocumentNodeHeaderProps = {
   name: string
-  documenterName: string
+  parentStepName: string
   accentColor?: string
 }
 
-function DocumentNodeHeader({ name, documenterName, accentColor = DOCUMENT_NODE.ACCENT_COLOR }: DocumentNodeHeaderProps) {
+function DocumentNodeHeader({ name, parentStepName, accentColor = DOCUMENT_NODE.ACCENT_COLOR }: DocumentNodeHeaderProps) {
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 1.5, width: '100%' }}>
       <Box
@@ -51,7 +51,7 @@ function DocumentNodeHeader({ name, documenterName, accentColor = DOCUMENT_NODE.
             lineHeight: 1.2,
           }}
         >
-          {documenterName}
+          {parentStepName}
         </Typography>
       </Box>
 

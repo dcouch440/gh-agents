@@ -3,11 +3,11 @@ import { Collections } from '@/utils/collections'
 import { PROTOCOL_TYPE_COLORS, GREYSCALE_ACCENT } from '../constants'
 import type { ProtocolStepInfo, ProtocolGroupEntry } from './types'
 
-const isDocumenterStep = (
+const isWorkforceStep = (
   step: { id: string; execution_mode: string },
   protocolsByStep: ReadonlyMap<string, ProtocolStepInfo>,
 ): boolean =>
-  step.execution_mode === 'documenter' || protocolsByStep.get(step.id)?.protocol_type === 'documenter'
+  step.execution_mode === 'workforce' || protocolsByStep.get(step.id)?.protocol_type === 'workforce'
 
 /**
  * BFS from each protocol step to find all connected non-protocol nodes.
@@ -21,7 +21,7 @@ const computeProtocolGroups = (
   // Identify all protocol step IDs (from stepProtocols map or execution_mode)
   const protocolStepIds = new Set<string>()
   for (const step of steps) {
-    if (protocolsByStep.has(step.id) || isDocumenterStep(step, protocolsByStep)) {
+    if (protocolsByStep.has(step.id) || isWorkforceStep(step, protocolsByStep)) {
       protocolStepIds.add(step.id)
     }
   }
@@ -65,4 +65,4 @@ const computeProtocolGroups = (
   return result
 }
 
-export { computeProtocolGroups, isDocumenterStep }
+export { computeProtocolGroups, isWorkforceStep }
