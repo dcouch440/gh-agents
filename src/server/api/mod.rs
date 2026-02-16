@@ -115,13 +115,13 @@ pub use workflows::{
     get_step_last_run, get_step_run_for_execution, get_step_session, get_template, get_workflow,
     get_workflow_notes, get_workflow_step, get_workshop, list_step_documents, list_templates,
     list_workflow_edges, list_workflow_executions, list_workflow_steps, list_workflows,
-    remove_step_document, remove_workflow_edge, run_workflow, update_workflow,
+    rebase_workshop, remove_step_document, remove_workflow_edge, run_workflow, update_workflow,
     update_workflow_step, CreateStepRequest, CreateTemplateRequest, CreateWorkflowRequest,
-    EdgeRequest, EdgeResponse, RunDetailResponse, RunStepResultResponse, RunTemplateDetailResponse,
-    RunTemplateResponse, RunWorkflowRequest, StepDocumentRequest, StepDocumentResponse,
-    UpdateStepRequest, UpdateWorkflowRequest, WorkflowExecutionResponse, WorkflowResponse,
-    WorkflowRunResponse, WorkflowStepResponse, WorkshopResponse, WorkshopStatusResponse,
-    WorkshopStepResponse,
+    EdgeRequest, EdgeResponse, RebaseResponse, RunDetailResponse, RunStepResultResponse,
+    RunTemplateDetailResponse, RunTemplateResponse, RunWorkflowRequest, StepDocumentRequest,
+    StepDocumentResponse, UpdateStepRequest, UpdateWorkflowRequest, WorkflowExecutionResponse,
+    WorkflowResponse, WorkflowRunResponse, WorkflowStepResponse, WorkshopResponse,
+    WorkshopStatusResponse, WorkshopStepResponse,
 };
 
 // Re-export archetype handlers

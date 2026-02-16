@@ -8,9 +8,11 @@ import IconButton from '@mui/material/IconButton'
 import MuiTooltip from '@mui/material/Tooltip'
 import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
 import RefreshOutlined from '@mui/icons-material/RefreshOutlined'
+import RestoreOutlined from '@mui/icons-material/RestoreOutlined'
 import AssignmentOutlined from '@mui/icons-material/AssignmentOutlined'
 import { FadeIn } from '@/components/animation'
-import { PageHeader, EmptyState } from '@/components/primitives'
+import { PageHeader, EmptyState, ConfirmModal } from '@/components/primitives'
+import { useConfirmModal } from '@/hooks'
 import { StepResultCard } from '@/components/execution/StepResultCard'
 import { api } from '@/api'
 import type { Workflow, RunDetailResponse } from '@/types'
@@ -46,6 +48,23 @@ function RunDetailPage() {
   const [detail, setDetail] = useState<RunDetailResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const confirm = useConfirmModal()
+
+  const handleRebase = useCallback(() => {
+    if (!workflowId || !detail?.execution.template_id) return
+    const templateId = detail.execution.template_id
+    const templateName = detail.template_name ?? 'unknown'
+    confirm.openConfirm({
+      title: 'Rebase Workshop',
+      message: `This will overwrite your current workshop configuration with the template "${templateName}" used for this run. Your current state will be auto-saved as a backup template.`,
+      confirmText: 'Rebase',
+      confirmColor: 'warning',
+      onConfirm: async () => {
+        await api.workflows.rebase(workflowId, { template_id: templateId })
+        void navigate(`/workflows/${workflowId}`)
+      },
+    })
+  }, [workflowId, detail, confirm, navigate])
 
   const fetchData = useCallback(async () => {
     if (!workflowId || !runId) return
@@ -98,6 +117,13 @@ function RunDetailPage() {
                 <RefreshOutlined fontSize="small" />
               </IconButton>
             </MuiTooltip>
+            {detail?.execution.template_id && (
+              <MuiTooltip title="Rebase workshop to this template">
+                <IconButton size="small" onClick={handleRebase}>
+                  <RestoreOutlined fontSize="small" />
+                </IconButton>
+              </MuiTooltip>
+            )}
           </Box>
         </PageHeader>
 
@@ -203,6 +229,18 @@ function RunDetailPage() {
           </Box>
         )}
       </Box>
+      <ConfirmModal
+        open={confirm.open}
+        onClose={confirm.closeConfirm}
+        onConfirm={confirm.handleConfirm}
+        title={confirm.title}
+        message={confirm.message}
+        confirmText={confirm.confirmText}
+        cancelText={confirm.cancelText}
+        confirmColor={confirm.confirmColor}
+        loading={confirm.loading}
+        error={confirm.error}
+      />
     </FadeIn>
   )
 }
