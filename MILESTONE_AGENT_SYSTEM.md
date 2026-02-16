@@ -317,18 +317,26 @@ These are in-flight and should complete before Slice 1.
 
 ### Ticket 5.1: Convention Citation in Agent Output
 
-**Scope:** The Agent Designer instructs agents to cite the conventions they follow.
+**Scope:** The assistant assigns required reading, the designer distributes it with citation instructions.
+
+**Responsibility chain:**
+- **Assistant** is the librarian — it reads documents, understands what matters, and records document IDs in its notes under `## Required Reading`. The assistant has the domain context to know which conventions apply to this node's work.
+- **Designer** is the syllabus printer — it sees Required Reading in the assistant's notes and generates prompts that instruct agents to `read_document(document_id)` before starting, and to cite what they reference.
+- **Agents** are the students — they read the documents at runtime and cite specific sections in their output.
 
 **Work:**
-- This is mostly covered by Ticket 2.1 (`[convention_citation | 0.80]` belief)
+- This is mostly covered by Ticket 2.1 (`[convention_citation | 0.80]` and `[required_reading | 0.85]` beliefs)
 - Additional: when the designer sees Required Reading in the notes, it should generate a specific instruction block:
   ```
   After reading the required documents, reference specific sections
   in your output: "Per [document name] section [X]: [convention] → [what I did]"
   ```
 - Update the designer's `<what_you_produce>` section to mandate citation instructions when required reading exists
+- Enhance the node assistant's `<required_reading_behavior>` so that when the user shares a document, the assistant reads it, confirms understanding, and records it with a note about why it matters for this node
 
 **Acceptance:**
+- Assistant records required reading with context about why each document matters
+- Designer generates prompts that instruct agents to read and cite conventions
 - Task force agents with required reading produce output that cites specific convention sections
 - Citations are traceable to actual document content
 
