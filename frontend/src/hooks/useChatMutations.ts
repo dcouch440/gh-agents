@@ -9,11 +9,17 @@ type SendMessageResponse = {
   status: string
 }
 
+type InFlightInfo = {
+  sessionId: string
+  messageId: string
+}
+
 const useSendSessionMessage = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [streaming, setStreaming] = useState(false)
   const abortRef = useRef<(() => void) | null>(null)
+  const inFlightRef = useRef<InFlightInfo | null>(null)
 
   const send = useCallback(
     async (
@@ -27,6 +33,7 @@ const useSendSessionMessage = () => {
       setError(null)
       try {
         const { message_id } = await api.post<SendMessageResponse>(API.SESSION_CHAT(sessionId), body)
+        inFlightRef.current = { sessionId, messageId: message_id }
 
         if (onEvent) {
           setStreaming(true)
@@ -35,11 +42,13 @@ const useSendSessionMessage = () => {
             onDone: () => {
               setStreaming(false)
               abortRef.current = null
+              inFlightRef.current = null
               onDone?.()
             },
             onError: (e) => {
               setStreaming(false)
               abortRef.current = null
+              inFlightRef.current = null
               if (onError) {
                 onError(e)
               } else {
@@ -67,7 +76,16 @@ const useSendSessionMessage = () => {
     setStreaming(false)
   }, [])
 
-  return { send, abort, loading, streaming, error }
+  const cancelChat = useCallback(() => {
+    abort()
+    const inflight = inFlightRef.current
+    if (inflight) {
+      inFlightRef.current = null
+      void api.sessions.cancelChat(inflight.sessionId, inflight.messageId)
+    }
+  }, [abort])
+
+  return { send, abort, cancelChat, loading, streaming, error }
 }
 
 export { useSendSessionMessage }

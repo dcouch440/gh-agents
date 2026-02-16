@@ -229,6 +229,10 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::SESSION_HISTORY, get(api::get_session_history))
         .route(routes::SESSION_CHAT_STREAM, get(api::session_chat_stream))
         .route(
+            routes::SESSION_CHAT_CANCEL,
+            post(api::cancel_chat_message),
+        )
+        .route(
             routes::SESSION_MESSAGES,
             delete(api::clear_session_messages),
         )

@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Box } from '@mui/material'
+import { Box, IconButton } from '@mui/material'
+import StopCircleIcon from '@mui/icons-material/StopCircle'
 import { useStore, contextMentionStore } from '@/stores'
 import { extractContent } from './contentExtraction'
 import { insertChipAtCursor, removeChipFromDOM } from './chipInsertion'
 
 type RichChatInputProps = {
   onSend: (message: string) => void
+  onCancel?: () => void
   stepId: string
   disabled?: boolean
   placeholder?: string
   focusMode?: boolean
 }
 
-function RichChatInput({ onSend, stepId, disabled, placeholder = 'Type a message...', focusMode }: RichChatInputProps) {
+function RichChatInput({ onSend, onCancel, stepId, disabled, placeholder = 'Type a message...', focusMode }: RichChatInputProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const insertedRef = useRef<Set<string>>(new Set())
   const [isEmpty, setIsEmpty] = useState(true)
@@ -56,6 +58,12 @@ function RichChatInput({ onSend, stepId, disabled, placeholder = 'Type a message
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
+      if (e.key === 'Escape' && disabled && onCancel) {
+        e.preventDefault()
+        onCancel()
+        return
+      }
+
       if (disabled) return
 
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -105,7 +113,7 @@ function RichChatInput({ onSend, stepId, disabled, placeholder = 'Type a message
         }
       }
     },
-    [disabled, mentions, onSend, stepId],
+    [disabled, mentions, onCancel, onSend, stepId],
   )
 
   const handleInput = useCallback(() => {
@@ -192,6 +200,7 @@ function RichChatInput({ onSend, stepId, disabled, placeholder = 'Type a message
           lineHeight: 1.5,
           outline: 'none',
           py: 0.75,
+          pr: disabled && onCancel ? 4 : 0,
           wordBreak: 'break-word',
           whiteSpace: 'pre-wrap',
           color: 'text.primary',
@@ -200,6 +209,25 @@ function RichChatInput({ onSend, stepId, disabled, placeholder = 'Type a message
           },
         }}
       />
+
+      {/* Stop generation button */}
+      {disabled && onCancel ? (
+        <IconButton
+          onClick={onCancel}
+          size="small"
+          aria-label="Stop generation (Esc)"
+          sx={{
+            position: 'absolute',
+            right: focusMode ? 8 : 4,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: 'text.secondary',
+            '&:hover': { color: 'error.main' },
+          }}
+        >
+          <StopCircleIcon fontSize="small" />
+        </IconButton>
+      ) : null}
     </Box>
   )
 }

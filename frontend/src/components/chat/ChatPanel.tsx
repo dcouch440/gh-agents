@@ -8,6 +8,7 @@ import type { ChatMessageData } from './MessageList'
 export type ChatPanelProps = {
   messages: ChatMessageData[]
   onSend: (message: string) => void
+  onCancel?: () => void
   streaming?: boolean
   disabled?: boolean
   className?: string
@@ -19,7 +20,7 @@ export type ChatPanelProps = {
   focusMode?: boolean
 }
 
-function ChatPanel({ messages, onSend, streaming, disabled, emptyMessage, streamingContent, stepId, focusMode }: ChatPanelProps) {
+function ChatPanel({ messages, onSend, onCancel, streaming, disabled, emptyMessage, streamingContent, stepId, focusMode }: ChatPanelProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   return (
@@ -44,7 +45,7 @@ function ChatPanel({ messages, onSend, streaming, disabled, emptyMessage, stream
         focusMode={focusMode}
       />
       {stepId ? (
-        <RichChatInput onSend={onSend} stepId={stepId} disabled={disabled} focusMode={focusMode} />
+        <RichChatInput onSend={onSend} onCancel={onCancel} stepId={stepId} disabled={disabled} focusMode={focusMode} />
       ) : (
         <ChatInput onSend={onSend} disabled={disabled} inputRef={inputRef} />
       )}
