@@ -6,7 +6,7 @@ import { createStore, logger } from './lib'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-type ArtifactKind = 'document' | 'roster-agent' | 'room-member' | 'task-force' | 'room'
+type ArtifactKind = 'document' | 'roster-agent' | 'room-member' | 'task-force' | 'room' | 'input' | 'context'
 
 type FocusModeState = {
   active: boolean
