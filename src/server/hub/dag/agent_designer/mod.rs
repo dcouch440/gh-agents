@@ -143,6 +143,7 @@ pub(crate) async fn run_agent_designer(
     input: DesignerInput,
     phase: &str,
     cancel: Option<&CancellationToken>,
+    protocol_execution_id: Option<Uuid>,
 ) -> Result<DesignerResult, HubError> {
     let designer_cfg = AGENT_DESIGNER.agent("designer");
 
@@ -324,6 +325,7 @@ pub(crate) async fn run_agent_designer(
                 &entry.task_prompt,
                 &entry.reasoning,
                 idx as i32,
+                protocol_execution_id,
             )
             .await;
 

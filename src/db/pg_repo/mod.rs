@@ -2317,12 +2317,14 @@ impl WorkflowRepo for PgRepo {
         generated_task_prompt: &str,
         design_reasoning: &str,
         execution_order: i32,
+        protocol_execution_id: Option<Uuid>,
     ) -> Result<AgentDesignerOutputRow> {
         let row = sqlx::query_as::<_, AgentDesignerOutputRow>(
             "INSERT INTO agent_designer_outputs \
              (designer_run_id, source_entity_id, source_archetype, agent_name, assigned_tools, \
-              generated_system_prompt, generated_task_prompt, design_reasoning, execution_order) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
+              generated_system_prompt, generated_task_prompt, design_reasoning, execution_order, \
+              protocol_execution_id) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
              RETURNING *",
         )
         .bind(designer_run_id)
@@ -2334,6 +2336,7 @@ impl WorkflowRepo for PgRepo {
         .bind(generated_task_prompt)
         .bind(design_reasoning)
         .bind(execution_order)
+        .bind(protocol_execution_id)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -2347,6 +2350,21 @@ impl WorkflowRepo for PgRepo {
             "SELECT * FROM agent_designer_outputs WHERE designer_run_id = $1 ORDER BY execution_order",
         )
         .bind(designer_run_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn list_designer_outputs_by_protocol_execution(
+        &self,
+        protocol_execution_id: Uuid,
+    ) -> Result<Vec<AgentDesignerOutputRow>> {
+        let rows = sqlx::query_as::<_, AgentDesignerOutputRow>(
+            "SELECT * FROM agent_designer_outputs \
+             WHERE protocol_execution_id = $1 \
+             ORDER BY execution_order",
+        )
+        .bind(protocol_execution_id)
         .fetch_all(&self.pool)
         .await?;
         Ok(rows)
@@ -2501,13 +2519,12 @@ impl AgentExecutionRepo for PgRepo {
         parent_agent_execution_id: Option<Uuid>,
         system_prompt_rendered: &str,
         input: &str,
-        selected_mode_id: Option<Uuid>,
         room_session_id: Option<Uuid>,
         speaker_order: Option<i32>,
         workflow_execution_id: Option<Uuid>,
     ) -> Result<AgentExecutionRow> {
         let row = sqlx::query_as::<_, AgentExecutionRow>(
-            "INSERT INTO agent_executions (agent_id, workflow_step_id, is_interactive, parent_agent_execution_id, system_prompt_rendered, input, selected_mode_id, room_session_id, speaker_order, workflow_execution_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *",
+            "INSERT INTO agent_executions (agent_id, workflow_step_id, is_interactive, parent_agent_execution_id, system_prompt_rendered, input, room_session_id, speaker_order, workflow_execution_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *",
         )
         .bind(agent_id)
         .bind(workflow_step_id)
@@ -2515,7 +2532,6 @@ impl AgentExecutionRepo for PgRepo {
         .bind(parent_agent_execution_id)
         .bind(system_prompt_rendered)
         .bind(input)
-        .bind(selected_mode_id)
         .bind(room_session_id)
         .bind(speaker_order)
         .bind(workflow_execution_id)
@@ -3860,11 +3876,14 @@ impl WorkflowCollectionRepo for PgRepo {
         workflow_id: Uuid,
         user_id: Uuid,
     ) -> Result<WorkflowExecutionRow> {
+        let id = Uuid::new_v4();
         let row = sqlx::query_as::<_, WorkflowExecutionRow>(
-            "INSERT INTO workflow_executions (collection_run_id, workflow_id, user_id, status) \
-             VALUES ($1, $2, $3, 'pending') \
+            "INSERT INTO workflow_executions \
+             (id, collection_run_id, workflow_id, user_id, status, root_execution_id, depth) \
+             VALUES ($1, $2, $3, $4, 'pending', $1, 0) \
              RETURNING *",
         )
+        .bind(id)
         .bind(collection_run_id)
         .bind(workflow_id)
         .bind(user_id)
@@ -3944,11 +3963,14 @@ impl WorkflowCollectionRepo for PgRepo {
         workflow_id: Uuid,
         user_id: Uuid,
     ) -> Result<WorkflowExecutionRow> {
+        let id = Uuid::new_v4();
         let row = sqlx::query_as::<_, WorkflowExecutionRow>(
-            "INSERT INTO workflow_executions (workflow_id, user_id, status) \
-             VALUES ($1, $2, 'pending') \
+            "INSERT INTO workflow_executions \
+             (id, workflow_id, user_id, status, root_execution_id, depth) \
+             VALUES ($1, $2, $3, 'pending', $1, 0) \
              RETURNING *",
         )
+        .bind(id)
         .bind(workflow_id)
         .bind(user_id)
         .fetch_one(&self.pool)
@@ -3965,8 +3987,11 @@ impl WorkflowCollectionRepo for PgRepo {
     ) -> Result<WorkflowExecutionRow> {
         let row = sqlx::query_as::<_, WorkflowExecutionRow>(
             "INSERT INTO workflow_executions \
-             (parent_execution_id, workflow_id, user_id, template_id, status, execution_mode) \
-             VALUES ($1, $2, $3, $4, 'pending', 'sub_workflow') \
+             (parent_execution_id, workflow_id, user_id, template_id, status, execution_mode, \
+              root_execution_id, depth) \
+             VALUES ($1, $2, $3, $4, 'pending', 'sub_workflow', \
+                     (SELECT COALESCE(root_execution_id, id) FROM workflow_executions WHERE id = $1), \
+                     (SELECT depth + 1 FROM workflow_executions WHERE id = $1)) \
              RETURNING *",
         )
         .bind(parent_execution_id)
@@ -3993,6 +4018,21 @@ impl WorkflowCollectionRepo for PgRepo {
         Ok(rows)
     }
 
+    async fn list_execution_tree(
+        &self,
+        root_id: Uuid,
+    ) -> Result<Vec<WorkflowExecutionRow>> {
+        let rows = sqlx::query_as::<_, WorkflowExecutionRow>(
+            "SELECT * FROM workflow_executions \
+             WHERE root_execution_id = $1 \
+             ORDER BY depth, started_at",
+        )
+        .bind(root_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
     async fn get_or_create_workshop(
         &self,
         workflow_id: Uuid,
@@ -4013,13 +4053,16 @@ impl WorkflowCollectionRepo for PgRepo {
         }
 
         // Create new workshop (unique index prevents duplicates under races)
+        let id = Uuid::new_v4();
         let row = sqlx::query_as::<_, WorkflowExecutionRow>(
-            "INSERT INTO workflow_executions (workflow_id, user_id, status, execution_mode) \
-             VALUES ($1, $2, 'workshop', 'workshop') \
+            "INSERT INTO workflow_executions \
+             (id, workflow_id, user_id, status, execution_mode, root_execution_id, depth) \
+             VALUES ($1, $2, $3, 'workshop', 'workshop', $1, 0) \
              ON CONFLICT (workflow_id) WHERE execution_mode = 'workshop' \
              DO UPDATE SET workflow_id = EXCLUDED.workflow_id \
              RETURNING *",
         )
+        .bind(id)
         .bind(workflow_id)
         .bind(user_id)
         .fetch_one(&self.pool)

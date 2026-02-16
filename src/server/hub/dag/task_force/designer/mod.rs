@@ -65,6 +65,7 @@ pub(crate) async fn run_agent_designer(
     completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
     steps: &[WorkflowStepRow],
     cancel: Option<&CancellationToken>,
+    protocol_execution_id: Option<Uuid>,
 ) -> Result<(Vec<DesignedAgentPrompt>, DesignerTokenUsage), HubError> {
     // Load assistant notes for the designer
     let assistant_notes = state
@@ -85,7 +86,7 @@ pub(crate) async fn run_agent_designer(
 
     // Delegate to the generic designer
     let result =
-        agent_designer::run_agent_designer(engine, state, ctx, step, input, "", cancel).await?;
+        agent_designer::run_agent_designer(engine, state, ctx, step, input, "", cancel, protocol_execution_id).await?;
 
     // Map generic results back to task-force-specific types
     let mut designed_prompts = Vec::with_capacity(result.prompts.len());

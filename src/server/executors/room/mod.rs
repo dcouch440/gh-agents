@@ -354,7 +354,6 @@ pub async fn execute_room_turn(
                 None,  // parent_agent_execution_id
                 &system_prompt,
                 &user_prompt,
-                None,             // selected_mode_id (unused)
                 Some(session.id), // room_session_id
                 Some(i as i32),   // speaker_order
                 None,             // workflow_execution_id

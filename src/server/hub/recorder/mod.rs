@@ -74,7 +74,6 @@ impl<'a> ExecutionRecorder<'a> {
         parent_agent_execution_id: Option<Uuid>,
         system_prompt: &str,
         user_prompt: &str,
-        selected_mode_id: Option<Uuid>,
         workflow_execution_id: Option<Uuid>,
     ) -> Result<Uuid, HubError> {
         let repo = self
@@ -88,7 +87,6 @@ impl<'a> ExecutionRecorder<'a> {
                 parent_agent_execution_id,
                 system_prompt,
                 user_prompt,
-                selected_mode_id,
                 None,
                 None,
                 workflow_execution_id,

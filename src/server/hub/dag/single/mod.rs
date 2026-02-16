@@ -246,7 +246,6 @@ pub(crate) async fn run_step_via_engine(
             None,
             &system_prompt,
             prompt,
-            None, // selected_mode_id (unused)
             None,
             None,
             Some(ctx.stage_execution_id),

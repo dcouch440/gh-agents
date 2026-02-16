@@ -152,12 +152,25 @@ pub async fn get_step_sub_dag(
         .await
         .unwrap_or_default();
 
-    // Build designer detail from the first (or most recent) run
+    // Build designer detail from the first (or most recent) run.
+    // When a designer phase has a protocol_execution linked, use direct lookup;
+    // otherwise fall back to the designer_run_id path.
     let designer = if let Some(run) = designer_runs.first() {
-        let outputs = workflow_repo
-            .list_designer_outputs(run.id)
-            .await
-            .unwrap_or_default();
+        // Try direct protocol_execution_id lookup first (fast path via index).
+        let designer_phase_exec = step_phases
+            .iter()
+            .find(|p| p.designer_run_id == Some(run.id));
+        let outputs = if let Some(phase) = designer_phase_exec {
+            workflow_repo
+                .list_designer_outputs_by_protocol_execution(phase.id)
+                .await
+                .unwrap_or_default()
+        } else {
+            workflow_repo
+                .list_designer_outputs(run.id)
+                .await
+                .unwrap_or_default()
+        };
 
         Some(DesignerDetail {
             run_id: run.id.to_string(),

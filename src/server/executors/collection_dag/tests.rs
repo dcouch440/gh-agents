@@ -527,10 +527,17 @@ mod tests {
                 _: &str,
                 _: &str,
                 _: i32,
+                _: Option<Uuid>,
             ) -> Result<crate::db::AgentDesignerOutputRow> {
                 unimplemented!()
             }
             async fn list_designer_outputs(
+                &self,
+                _: Uuid,
+            ) -> Result<Vec<crate::db::AgentDesignerOutputRow>> {
+                unimplemented!()
+            }
+            async fn list_designer_outputs_by_protocol_execution(
                 &self,
                 _: Uuid,
             ) -> Result<Vec<crate::db::AgentDesignerOutputRow>> {
@@ -588,8 +595,9 @@ mod tests {
         let workflow_id = Uuid::new_v4();
         let mut completed_workflows = HashMap::new();
 
+        let exec_id = Uuid::new_v4();
         let workflow_exec = WorkflowExecutionRow {
-            id: Uuid::new_v4(),
+            id: exec_id,
             collection_run_id: Some(Uuid::new_v4()),
             workflow_id,
             user_id: Uuid::new_v4(),
@@ -604,6 +612,8 @@ mod tests {
             execution_mode: "full".to_string(),
             template_id: None,
             parent_execution_id: None,
+            root_execution_id: Some(exec_id),
+            depth: 0,
         };
 
         completed_workflows.insert(workflow_id, workflow_exec);

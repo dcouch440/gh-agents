@@ -399,6 +399,7 @@ impl<'a> DocumenterExecutor<'a> {
             input,
             "strategist",
             self.cancel,
+            None,
         )
         .await
         {
@@ -468,6 +469,7 @@ impl<'a> DocumenterExecutor<'a> {
             input,
             "research_write",
             self.cancel,
+            None,
         )
         .await
         {

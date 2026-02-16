@@ -26,7 +26,6 @@ mod tests {
             input: input.to_string(),
             output: Some(output.to_string()),
             structured_output: None,
-            selected_mode_id: None,
             room_session_id: None,
             speaker_order: None,
             status: "completed".into(),
