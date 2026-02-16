@@ -212,6 +212,9 @@ const sessions = freeze({
   getHistory: (id: string, config?: RequestConfig) => baseApi.get<ChatMessage[]>(API.SESSION_HISTORY(id), config),
 
   clearMessages: (id: string, config?: RequestConfig) => baseApi.del<void>(API.SESSION_MESSAGES(id), config),
+
+  cancelChat: (sessionId: string, messageId: string, config?: RequestConfig) =>
+    baseApi.post<{ status: string }>(API.SESSION_CHAT_CANCEL(sessionId, messageId), undefined, config),
 })
 
 const chat = freeze({

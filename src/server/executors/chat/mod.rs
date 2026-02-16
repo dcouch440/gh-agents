@@ -9,7 +9,7 @@ use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
 use crate::llm::{AnthropicClient, LLMProvider, RateLimitedProvider, RetryingProvider};
-
+use crate::server::hub::HubError;
 use crate::server::state::{AppState, ConsumerMessage, StreamChunk};
 
 /// Spawn the chat consumer as a background task.
@@ -83,6 +83,7 @@ async fn handle_message(
     msg: ConsumerMessage,
 ) -> anyhow::Result<()> {
     let message_id = msg.id;
+    let cancel_token = state.register_cancellation(message_id);
 
     // Check if this is a step-scoped session — route to run_step_chat
     if let Some(session_id) = msg.session_id {
@@ -105,20 +106,16 @@ async fn handle_message(
                             message_id,
                             &msg.content,
                             msg.user_id,
-                            None,
+                            Some(&cancel_token),
                         )
                         .await
                         {
                             Ok(_) => {}
                             Err(e) => {
-                                warn!("Step chat error for {}: {}", message_id, e);
-                                state.send_stream_chunk(
-                                    message_id,
-                                    StreamChunk::Error(format!("{}", e)),
-                                );
-                                state.send_stream_chunk(message_id, StreamChunk::Done);
+                                handle_chat_error(state, message_id, e);
                             }
                         }
+                        state.remove_cancellation(message_id);
                         crate::server::hub::schedule_stream_cleanup(state, message_id);
                         return Ok(());
                     }
@@ -139,15 +136,13 @@ async fn handle_message(
             message_id,
             &msg.content,
             msg.user_id,
-            None,
+            Some(&cancel_token),
         )
         .await
         {
             Ok(_) => {}
             Err(e) => {
-                warn!("Chat error for {}: {}", message_id, e);
-                state.send_stream_chunk(message_id, StreamChunk::Error(format!("{}", e)));
-                state.send_stream_chunk(message_id, StreamChunk::Done);
+                handle_chat_error(state, message_id, e);
             }
         },
         None => {
@@ -160,8 +155,28 @@ async fn handle_message(
         }
     }
 
+    state.remove_cancellation(message_id);
     crate::server::hub::schedule_stream_cleanup(state, message_id);
     Ok(())
+}
+
+/// Handle errors from chat execution, with special treatment for cancellation.
+fn handle_chat_error(state: &AppState, message_id: uuid::Uuid, error: HubError) {
+    match error {
+        HubError::Cancelled => {
+            info!("Chat message {} cancelled by user", message_id);
+            state.send_stream_chunk(
+                message_id,
+                StreamChunk::Error("Generation stopped".into()),
+            );
+            state.send_stream_chunk(message_id, StreamChunk::Done);
+        }
+        e => {
+            warn!("Chat error for {}: {}", message_id, e);
+            state.send_stream_chunk(message_id, StreamChunk::Error(format!("{}", e)));
+            state.send_stream_chunk(message_id, StreamChunk::Done);
+        }
+    }
 }
 
 #[cfg(test)]

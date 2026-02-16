@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -18,7 +18,7 @@ type ChatTabProps = {
 
 function ChatTab({ stepId, archetype, focusMode }: ChatTabProps) {
   const workflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
-  const { messages, streamingSegments, isLoading, error, streaming, activePanel, sendMessage, clearHistory, dismissPanel, submitPanelSelections } = useAssistantSession(workflowId, stepId)
+  const { messages, streamingSegments, isLoading, error, streaming, activePanel, sendMessage, cancelGeneration, clearHistory, dismissPanel, submitPanelSelections } = useAssistantSession(workflowId, stepId)
 
   const handleClear = useCallback(() => {
     if (window.confirm('Clear chat history?')) {
@@ -33,6 +33,19 @@ function ChatTab({ stepId, archetype, focusMode }: ChatTabProps) {
     },
     [sendMessage, stepId],
   )
+
+  // Document-level Escape to cancel when input doesn't have focus
+  useEffect(() => {
+    if (!streaming) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        cancelGeneration()
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [streaming, cancelGeneration])
 
   if (!workflowId) return null
 
@@ -65,6 +78,7 @@ function ChatTab({ stepId, archetype, focusMode }: ChatTabProps) {
       <ChatPanel
         messages={messages}
         onSend={handleSend}
+        onCancel={streaming ? cancelGeneration : undefined}
         streaming={streaming}
         disabled={streaming}
         streamingContent={streamingContent}

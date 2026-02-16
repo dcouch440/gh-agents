@@ -108,6 +108,7 @@ export const API = {
   SESSION_CHAT: (id: string) => `/sessions/${id}/chat`,
   SESSION_HISTORY: (id: string) => `/sessions/${id}/history`,
   SESSION_CHAT_STREAM: (sessionId: string, messageId: string) => `/sessions/${sessionId}/chat/${messageId}/stream`,
+  SESSION_CHAT_CANCEL: (sessionId: string, messageId: string) => `/sessions/${sessionId}/chat/${messageId}/cancel`,
   SESSION_MESSAGES: (id: string) => `/sessions/${id}/messages`,
 
   // Chat

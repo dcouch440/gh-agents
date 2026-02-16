@@ -24,6 +24,7 @@ type UseAssistantSessionReturn = {
   streaming: boolean
   activePanel: PanelState | null
   sendMessage: (content: string) => void
+  cancelGeneration: () => void
   clearHistory: () => void
   dismissPanel: () => void
   submitPanelSelections: (selections: string) => void
@@ -39,7 +40,7 @@ const useAssistantSession = (
   const error = useStore(assistantSessionStore.store, assistantSessionStore.selectError(stepId))
   const activePanel = useStore(assistantSessionStore.store, assistantSessionStore.selectPanel(stepId))
 
-  const { send, abort, streaming } = useSendSessionMessage()
+  const { send, abort, cancelChat, streaming } = useSendSessionMessage()
   const receivedLengthRef = useRef(0)
   const retriedRef = useRef(false)
   const retryAbortRef = useRef<(() => void) | null>(null)
@@ -155,6 +156,13 @@ const useAssistantSession = (
     [workflowId, stepId, send],
   )
 
+  const cancelGeneration = useCallback(() => {
+    cancelChat()
+    retryAbortRef.current?.()
+    retryAbortRef.current = null
+    assistantSessionStore.finalizeStream(stepId)
+  }, [cancelChat, stepId])
+
   const dismissPanel = useCallback(() => {
     assistantSessionStore.dismissPanel(stepId)
   }, [stepId])
@@ -180,6 +188,7 @@ const useAssistantSession = (
     streaming,
     activePanel,
     sendMessage,
+    cancelGeneration,
     clearHistory,
     dismissPanel,
     submitPanelSelections,

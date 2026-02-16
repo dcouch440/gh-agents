@@ -204,8 +204,8 @@ pub use system_config::{
 // Re-export health handler and type
 pub use health::{health_check, HealthResponse};
 
-// Re-export cancellation handler
-pub use cancellation::cancel_agent_execution;
+// Re-export cancellation handlers
+pub use cancellation::{cancel_agent_execution, cancel_chat_message};
 
 // Re-export protocol handlers and types
 pub mod protocols;
