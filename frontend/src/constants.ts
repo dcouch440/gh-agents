@@ -284,6 +284,9 @@ export const FOCUS_MODE = {
   CARD_WIDTH: 112,
   CARD_HEIGHT: 68,
   Z_INDEX: 1400,
+  CONTENT_MAX_WIDTH: 960,
+  HEADER_HEIGHT: 80,
+  TAB_STRIP_HEIGHT: 40,
 } as const
 
 // Auto-save

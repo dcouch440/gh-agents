@@ -13,9 +13,10 @@ import { PanelOverlay } from './panel'
 type ChatTabProps = {
   stepId: string
   archetype: Archetype
+  focusMode?: boolean
 }
 
-function ChatTab({ stepId, archetype }: ChatTabProps) {
+function ChatTab({ stepId, archetype, focusMode }: ChatTabProps) {
   const workflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
   const { messages, streamingSegments, isLoading, error, streaming, activePanel, sendMessage, clearHistory, dismissPanel, submitPanelSelections } = useAssistantSession(workflowId, stepId)
 
@@ -60,7 +61,7 @@ function ChatTab({ stepId, archetype }: ChatTabProps) {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
-      <ChatHeader onClear={handleClear} disabled={streaming || messages.length === 0} />
+      {!focusMode && <ChatHeader onClear={handleClear} disabled={streaming || messages.length === 0} />}
       <ChatPanel
         messages={messages}
         onSend={handleSend}
@@ -69,6 +70,7 @@ function ChatTab({ stepId, archetype }: ChatTabProps) {
         streamingContent={streamingContent}
         emptyMessage={ARCHETYPE_CONFIGS[archetype].chatEmptyMessage}
         stepId={stepId}
+        focusMode={focusMode}
       />
       {activePanel ? (
         <PanelOverlay

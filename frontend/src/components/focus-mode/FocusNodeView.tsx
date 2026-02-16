@@ -9,9 +9,8 @@ import ForumOutlined from '@mui/icons-material/ForumOutlined'
 import BugReportOutlined from '@mui/icons-material/BugReportOutlined'
 import HistoryOutlined from '@mui/icons-material/HistoryOutlined'
 import { useStore, workflowStore } from '@/stores'
-import { FormTabStrip } from '@/components/canvas/CanvasFormNode'
+import { FOCUS_MODE } from '@/constants'
 import type { CanvasFormTab } from '@/components/canvas/CanvasFormNode'
-import { DynamicNodeHeader } from '@/components/canvas/DynamicNode/DynamicNodeHeader'
 import { Archetype, ARCHETYPE_CONFIGS } from '@/components/canvas/DynamicNode/archetypes'
 import type { Archetype as ArchetypeType } from '@/components/canvas/DynamicNode/archetypes'
 import { ChatTab } from '@/components/canvas/DynamicNode/tabs/ChatTab'
@@ -22,6 +21,8 @@ import { RoomMembersTab } from '@/components/canvas/DynamicNode/tabs/RoomMembers
 import { DebugLogTab } from '@/components/canvas/DynamicNode/tabs/DebugLogTab'
 import { LastRunTab } from '@/components/canvas/DynamicNode/tabs/LastRunTab'
 import type { CreateDocumentDefRequest } from '@/types/workflow'
+import { FocusHeader } from './FocusHeader'
+import { FocusTabStrip } from './FocusTabStrip'
 
 type FocusNodeViewProps = {
   stepId: string
@@ -80,7 +81,7 @@ function FocusNodeView({
       id: 'chat',
       icon: AutoAwesomeOutlined,
       tooltip: 'Chat',
-      content: <ChatTab stepId={stepId} archetype={archetype} />,
+      content: <ChatTab stepId={stepId} archetype={archetype} focusMode />,
     },
     {
       id: 'io',
@@ -157,47 +158,47 @@ function FocusNodeView({
         backgroundColor: theme.palette.background.default,
       }}
     >
-      {/* Header */}
+      {/* Centered content column */}
       <Box
         sx={{
-          height: 60,
           display: 'flex',
-          alignItems: 'center',
-          borderBottom: 1,
-          borderColor: 'divider',
-          backgroundColor: theme.palette.custom.bgHeader,
-          flexShrink: 0,
+          flexDirection: 'column',
+          height: '100%',
+          maxWidth: FOCUS_MODE.CONTENT_MAX_WIDTH,
+          width: '100%',
+          mx: 'auto',
         }}
       >
-        <DynamicNodeHeader
+        {/* Header */}
+        <FocusHeader
           name={stepName}
           archetype={archetype}
           subtitle={subtitle}
           issueCount={stepIssues.length}
           issueDescriptions={stepIssues.map((i) => i.description)}
         />
-      </Box>
 
-      {/* Tab strip */}
-      <FormTabStrip
-        tabs={tabs}
-        activeTabId={activeTabId}
-        onTabChange={onTabChange}
-        accentColor={accentColor}
-      />
+        {/* Tab strip */}
+        <FocusTabStrip
+          tabs={tabs}
+          activeTabId={activeTabId}
+          onTabChange={onTabChange}
+          accentColor={accentColor}
+        />
 
-      {/* Content */}
-      <Box
-        sx={{
-          flex: 1,
-          minHeight: 0,
-          overflow: 'hidden',
-          position: 'relative',
-          cursor: 'text',
-          userSelect: 'text',
-        }}
-      >
-        {activeTab?.content}
+        {/* Content */}
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            overflow: 'hidden',
+            position: 'relative',
+            cursor: 'text',
+            userSelect: 'text',
+          }}
+        >
+          {activeTab?.content}
+        </Box>
       </Box>
     </Box>
   )

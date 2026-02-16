@@ -15,9 +15,11 @@ export type ChatPanelProps = {
   streamingContent?: ReactNode
   /** When provided, renders RichChatInput with mention chip support */
   stepId?: string
+  /** When true, uses more generous spacing for fullscreen focus mode */
+  focusMode?: boolean
 }
 
-function ChatPanel({ messages, onSend, streaming, disabled, emptyMessage, streamingContent, stepId }: ChatPanelProps) {
+function ChatPanel({ messages, onSend, streaming, disabled, emptyMessage, streamingContent, stepId, focusMode }: ChatPanelProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   return (
@@ -39,9 +41,10 @@ function ChatPanel({ messages, onSend, streaming, disabled, emptyMessage, stream
         emptyMessage={emptyMessage}
         streamingContent={streamingContent}
         streaming={streaming}
+        focusMode={focusMode}
       />
       {stepId ? (
-        <RichChatInput onSend={onSend} stepId={stepId} disabled={disabled} />
+        <RichChatInput onSend={onSend} stepId={stepId} disabled={disabled} focusMode={focusMode} />
       ) : (
         <ChatInput onSend={onSend} disabled={disabled} inputRef={inputRef} />
       )}
