@@ -13,9 +13,10 @@ export type MessageListProps = {
   emptyMessage?: string
   streamingContent?: ReactNode
   streaming?: boolean
+  focusMode?: boolean
 }
 
-function MessageList({ messages, emptyMessage, streamingContent, streaming }: MessageListProps) {
+function MessageList({ messages, emptyMessage, streamingContent, streaming, focusMode }: MessageListProps) {
   const messagesRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -37,9 +38,9 @@ function MessageList({ messages, emptyMessage, streamingContent, streaming }: Me
         overflowY: 'auto',
         scrollbarWidth: 'none',
         '&::-webkit-scrollbar': { display: 'none' },
-        px: 1.5,
-        pt: 1.5,
-        pb: 1,
+        px: focusMode ? 3 : 1.5,
+        pt: focusMode ? 2.5 : 1.5,
+        pb: focusMode ? 1.5 : 1,
         display: 'flex',
         flexDirection: 'column',
         gap: 0,

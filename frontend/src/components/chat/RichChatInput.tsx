@@ -9,9 +9,10 @@ type RichChatInputProps = {
   stepId: string
   disabled?: boolean
   placeholder?: string
+  focusMode?: boolean
 }
 
-function RichChatInput({ onSend, stepId, disabled, placeholder = 'Type a message...' }: RichChatInputProps) {
+function RichChatInput({ onSend, stepId, disabled, placeholder = 'Type a message...', focusMode }: RichChatInputProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const insertedRef = useRef<Set<string>>(new Set())
   const [isEmpty, setIsEmpty] = useState(true)
@@ -134,9 +135,17 @@ function RichChatInput({ onSend, stepId, disabled, placeholder = 'Type a message
     <Box
       sx={{
         position: 'relative',
-        px: 1.5,
-        py: 1,
+        px: focusMode ? 2 : 1.5,
+        py: focusMode ? 1.5 : 1,
         cursor: 'text',
+        ...(focusMode && {
+          mx: 3,
+          mb: 2,
+          borderRadius: '8px',
+          border: 1,
+          borderColor: 'divider',
+          backgroundColor: (t) => t.palette.custom.bgPanel,
+        }),
       }}
       onClick={() => {
         containerRef.current?.focus()
