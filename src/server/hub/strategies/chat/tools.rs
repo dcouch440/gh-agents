@@ -52,6 +52,17 @@ pub(crate) fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
             "set_max_turns",
             "set_interaction_mode",
         ],
+        "workforce" => &[
+            "set_task",
+            "add_agent",
+            "update_agent",
+            "remove_agent",
+            "set_capabilities",
+            "set_failure_mode",
+            "add_deliverable",
+            "update_deliverable",
+            "remove_deliverable",
+        ],
         _ => &[],
     };
     UNIVERSAL_TOOLS
@@ -193,6 +204,34 @@ pub(super) async fn dispatch_step_tool(
                     step_id: ctx.step_id,
                 };
                 let result = crate::server::tools::room_config::execute_room_config_tool(
+                    name,
+                    input,
+                    state.repos().workflows.as_ref(),
+                    &tool_ctx,
+                )
+                .await;
+                return Some(result);
+            }
+            None
+        }
+        "workforce" => {
+            const WORKFORCE_TOOLS: &[&str] = &[
+                "set_task",
+                "add_agent",
+                "update_agent",
+                "remove_agent",
+                "set_capabilities",
+                "set_failure_mode",
+                "add_deliverable",
+                "update_deliverable",
+                "remove_deliverable",
+            ];
+            if WORKFORCE_TOOLS.contains(&name) {
+                let tool_ctx = crate::server::tools::workforce::WorkforceToolContext {
+                    workflow_id: ctx.workflow_id,
+                    step_id: ctx.step_id,
+                };
+                let result = crate::server::tools::workforce::execute_workforce_tool(
                     name,
                     input,
                     state.repos().workflows.as_ref(),

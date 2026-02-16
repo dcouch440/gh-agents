@@ -19,6 +19,7 @@ mod tests {
                 capabilities: vec!["file_read".to_string(), "grep".to_string()],
                 execution_order: 0,
                 created_at: Utc::now(),
+                child_step_id: None,
             },
             crate::db::TaskAgentRosterRow {
                 id: Uuid::new_v4(),
@@ -28,6 +29,7 @@ mod tests {
                 capabilities: vec![],
                 execution_order: 1,
                 created_at: Utc::now(),
+                child_step_id: None,
             },
         ];
 
@@ -180,6 +182,7 @@ mod tests {
                 capabilities: vec!["file_read".to_string(), "grep".to_string()],
                 execution_order: 0,
                 created_at: Utc::now(),
+                child_step_id: None,
             },
             crate::db::TaskAgentRosterRow {
                 id: Uuid::new_v4(),
@@ -189,6 +192,7 @@ mod tests {
                 capabilities: vec![],
                 execution_order: 1,
                 created_at: Utc::now(),
+                child_step_id: None,
             },
         ];
 

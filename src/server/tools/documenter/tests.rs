@@ -50,6 +50,8 @@ mod tests {
             goal_summary: String::new(),
             goal_summary_updated_at: None,
             sub_workflow_template_id: None,
+            child_workflow_id: None,
+            is_designer_step: false,
         }
     }
 
@@ -64,6 +66,7 @@ mod tests {
             created_at: Utc::now(),
             protocol_id: None,
             document_id: None,
+            agent_roster_entry_id: None,
         }
     }
 
@@ -162,6 +165,7 @@ mod tests {
                     created_at: Utc::now(),
                     protocol_id: None,
                     document_id: None,
+                    agent_roster_entry_id: None,
                 })
             });
 

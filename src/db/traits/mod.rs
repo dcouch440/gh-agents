@@ -650,6 +650,13 @@ pub trait WorkflowRepo: Send + Sync {
     /// Remove a roster agent by ID.
     async fn remove_roster_agent(&self, agent_id: Uuid) -> Result<()>;
 
+    /// Link a roster agent to its corresponding child workflow step.
+    async fn link_roster_agent_to_child_step(
+        &self,
+        agent_id: Uuid,
+        child_step_id: Option<Uuid>,
+    ) -> Result<()>;
+
     // --- Belief Capture (Extraction Plans) ---
 
     /// Get the extraction plan for a step, if any.

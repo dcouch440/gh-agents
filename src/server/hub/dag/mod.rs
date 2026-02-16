@@ -128,6 +128,7 @@ pub(crate) mod staging;
 pub(crate) mod sub_workflow;
 pub(crate) mod task_force;
 pub mod templates;
+pub(crate) mod workforce;
 pub(crate) mod utils;
 pub(crate) mod versioning;
 
@@ -157,6 +158,7 @@ use room_step::execute_room_step;
 use single::execute_single_step;
 use sub_workflow::execute_sub_workflow_step;
 use task_force::execute_task_force_step;
+use workforce::execute_workforce_step;
 
 // ── Routing Context ─────────────────────────────────────────────────────────
 
@@ -411,6 +413,20 @@ async fn run_dag_loop(
         // Sub-workflow steps — execute child workflow from template, no agent needed
         if step.execution_mode == "sub_workflow" {
             let step_result = execute_sub_workflow_step(
+                engine, state, ctx, step, steps, edges, dag_state, port_meta, cancel,
+            )
+            .await;
+
+            if let Err(ref e) = step_result {
+                broadcast_step_failure_if_real(state, ctx, workflow_id, step, e);
+            }
+            step_result?;
+            continue;
+        }
+
+        // Workforce steps — designer + sequential agent execution with deliverables
+        if step.execution_mode == "workforce" {
+            let step_result = execute_workforce_step(
                 engine, state, ctx, step, steps, edges, dag_state, port_meta, cancel,
             )
             .await;

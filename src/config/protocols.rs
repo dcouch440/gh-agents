@@ -285,6 +285,10 @@ pub mod roles {
     pub const NODE_ASSISTANT_ROOM_BLOCK: &str =
         include_str!("../../config/protocols/node_assistant/room/block.md");
 
+    /// Workforce archetype block, injected via `{{.System.archetype_block}}`.
+    pub const NODE_ASSISTANT_WORKFORCE_BLOCK: &str =
+        include_str!("../../config/protocols/node_assistant/workforce/block.md");
+
     /// Task force runtime agent prompt template.
     pub static TASK_FORCE_AGENT: RoleDefinition = RoleDefinition {
         system: include_str!("../../config/protocols/task_force/agent/system.md"),
@@ -466,6 +470,7 @@ mod tests {
         assert!(!roles::NODE_ASSISTANT_TASK_FORCE_BLOCK.is_empty());
         assert!(!roles::NODE_ASSISTANT_BELIEF_CAPTURE_BLOCK.is_empty());
         assert!(!roles::NODE_ASSISTANT_ROOM_BLOCK.is_empty());
+        assert!(!roles::NODE_ASSISTANT_WORKFORCE_BLOCK.is_empty());
 
         assert!(!roles::TASK_FORCE_AGENT.system.is_empty());
         assert!(!roles::TASK_FORCE_AGENT.prompt.is_empty());

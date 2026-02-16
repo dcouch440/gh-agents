@@ -47,6 +47,8 @@ pub struct ProtocolDocumentDefRow {
     pub created_at: DateTime<Utc>,
     pub protocol_id: Option<Uuid>,
     pub document_id: Option<Uuid>,
+    /// Agent roster entry that produces this deliverable (workforce archetype).
+    pub agent_roster_entry_id: Option<Uuid>,
 }
 
 /// Row type for protocol execution audit trail (documenter hidden phases).
@@ -209,6 +211,10 @@ pub struct WorkflowStepRow {
     pub goal_summary_updated_at: Option<DateTime<Utc>>,
     /// Template to execute as a child workflow (sub_workflow execution mode).
     pub sub_workflow_template_id: Option<Uuid>,
+    /// Live child workflow for workforce steps (edited at design time, snapshotted at execution).
+    pub child_workflow_id: Option<Uuid>,
+    /// Marks the auto-managed Designer step within a workforce child workflow.
+    pub is_designer_step: bool,
 }
 
 /// Row type for a workflow step edge (DAG edge).
@@ -674,6 +680,8 @@ pub struct TaskAgentRosterRow {
     pub capabilities: Vec<String>,
     pub execution_order: i32,
     pub created_at: DateTime<Utc>,
+    /// Corresponding visual step in the workforce child workflow.
+    pub child_step_id: Option<Uuid>,
 }
 
 // ============================================================================

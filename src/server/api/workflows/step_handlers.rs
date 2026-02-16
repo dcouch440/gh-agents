@@ -121,6 +121,8 @@ pub async fn create_workflow_step(
         goal_summary: String::new(),
         goal_summary_updated_at: None,
         sub_workflow_template_id: req.sub_workflow_template_id,
+        child_workflow_id: None,
+        is_designer_step: false,
     };
     let row = repo.create_step(step).await?;
     Ok((StatusCode::CREATED, Json(step_response(row))))
@@ -274,6 +276,8 @@ pub async fn update_workflow_step(
         sub_workflow_template_id: req
             .sub_workflow_template_id
             .or(existing.sub_workflow_template_id),
+        child_workflow_id: existing.child_workflow_id,
+        is_designer_step: existing.is_designer_step,
     };
     let row = repo.update_step(step).await?;
     Ok(Json(step_response(row)))

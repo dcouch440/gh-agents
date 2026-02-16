@@ -33,6 +33,7 @@ mod tests {
                 capabilities: vec!["file_read".to_string(), "grep".to_string()],
                 execution_order: 0,
                 created_at: Utc::now(),
+                child_step_id: None,
             },
             TaskAgentRosterRow {
                 id: Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap(),
@@ -42,6 +43,7 @@ mod tests {
                 capabilities: vec!["file_read".to_string()],
                 execution_order: 1,
                 created_at: Utc::now(),
+                child_step_id: None,
             },
         ]
     }

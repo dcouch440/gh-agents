@@ -93,6 +93,8 @@ mod tests {
             goal_summary: String::new(),
             goal_summary_updated_at: None,
             sub_workflow_template_id: None,
+            child_workflow_id: None,
+            is_designer_step: false,
         };
         repo.create_step(step).await.unwrap()
     }
@@ -2309,6 +2311,8 @@ mod tests {
             goal_summary: String::new(),
             goal_summary_updated_at: None,
             sub_workflow_template_id: None,
+            child_workflow_id: None,
+            is_designer_step: false,
         };
         let step_a = repo.create_step(step_a.clone()).await.unwrap();
 

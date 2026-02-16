@@ -16,6 +16,7 @@ mod tests {
             capabilities: vec!["planning".to_string(), "analysis".to_string()],
             execution_order: 1,
             created_at: now,
+            child_step_id: None,
         };
 
         let resp = RosterAgentResponse::from_row(row);

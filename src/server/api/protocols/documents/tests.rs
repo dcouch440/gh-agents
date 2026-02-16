@@ -61,6 +61,7 @@ mod tests {
             created_at: chrono::Utc::now(),
             protocol_id: Some(uuid::Uuid::new_v4()),
             document_id: None,
+            agent_roster_entry_id: None,
         };
         let protocol_id = row.protocol_id.unwrap();
         let resp = ProtocolDocDefResponse::from_row(row);

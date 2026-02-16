@@ -399,6 +399,13 @@ mod tests {
             async fn remove_roster_agent(&self, _: Uuid) -> Result<()> {
                 unimplemented!()
             }
+            async fn link_roster_agent_to_child_step(
+                &self,
+                _: Uuid,
+                _: Option<Uuid>,
+            ) -> Result<()> {
+                unimplemented!()
+            }
             async fn get_extraction_plan(
                 &self,
                 _: Uuid,

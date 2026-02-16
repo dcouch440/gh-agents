@@ -17,6 +17,7 @@ mod tests {
             created_at: Utc::now(),
             protocol_id: None,
             document_id: None,
+            agent_roster_entry_id: None,
         }
     }
 

@@ -124,6 +124,7 @@ pub async fn create_protocol_document_def(
         created_at: chrono::Utc::now(),
         protocol_id: Some(id),
         document_id: None,
+        agent_roster_entry_id: None,
     };
 
     let row = state
