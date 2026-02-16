@@ -69,3 +69,10 @@ The assistant is the all knowing expert for how the information will be handles 
 USE MORE SIMPLE LANGUAGE.
 
 Make Documents stick to template instead of re-generated.
+
+
+ 1. Event broadcast buffer — Ring buffer is 2,048. A workforce node with a Designer + 5 agents, nested inside a parent
+  DAG, could generate enough events to overflow. Bump to 16,384. One-line change.
+
+  2. Port resolution scans all edges per step — O(V × E). Fine for typical workflows (< 200 edges). If a workforce node's
+  sub-DAG grows large, build an adjacency index at DAG start. Not urgent but worth noting. 
