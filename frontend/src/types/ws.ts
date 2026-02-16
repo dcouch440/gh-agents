@@ -85,6 +85,9 @@ export const WORKFLOW_EVENT = {
   ASSISTANT_NOTES_UPDATED: 'assistant_notes_updated',
   DOCUMENT_CONTENT_UPDATED: 'document_content_updated',
   CONSISTENCY_ISSUES: 'consistency_issues',
+  SUB_WORKFLOW_STARTED: 'sub_workflow_started',
+  SUB_WORKFLOW_COMPLETED: 'sub_workflow_completed',
+  SUB_WORKFLOW_STEP_PROGRESS: 'sub_workflow_step_progress',
 } as const
 
 export type WorkflowStartedData = { workflow_id: string; total_steps: number }
@@ -128,6 +131,13 @@ export type ConsistencyIssue = {
   deleted_item_type: string
 }
 export type ConsistencyIssuesData = { workflow_id: string; issues: ConsistencyIssue[] }
+export type SubWorkflowStartedData = { workflow_id: string; parent_step_id: string; child_execution_id: string; total_steps: number }
+export type SubWorkflowCompletedData = { workflow_id: string; parent_step_id: string; child_execution_id: string; status: string }
+export type SubWorkflowStepProgressData = {
+  workflow_id: string; parent_step_id: string; child_execution_id: string
+  child_step_id: string; child_step_name: string; status: string
+  input_tokens: number | null; output_tokens: number | null; duration_ms: number | null; error: string | null
+}
 
 // ============================================================================
 // Room Events

@@ -15,6 +15,7 @@ const CanvasNodeKind = {
   NOTES: 'notes',
   PROTOCOL: 'protocol',
   STEP: 'step',
+  SUB_WORKFLOW: 'sub_workflow',
 } as const
 
 type CanvasNodeKind = (typeof CanvasNodeKind)[keyof typeof CanvasNodeKind]

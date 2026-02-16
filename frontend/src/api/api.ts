@@ -87,6 +87,7 @@ import type {
   RunDetailResponse,
   RebaseRequest,
   RebaseResponse,
+  RunTemplate,
 } from '@/types'
 
 // ============================================================================
@@ -375,6 +376,9 @@ const workflows = freeze({
 
   rebase: (workflowId: string, body: RebaseRequest, config?: RequestConfig) =>
     baseApi.post<RebaseResponse>(API.WORKFLOW_REBASE(workflowId), body, config),
+
+  listTemplates: (workflowId: string, config?: RequestConfig) =>
+    baseApi.get<RunTemplate[]>(API.WORKFLOW_TEMPLATES(workflowId), config),
 })
 
 const contextResponse = freeze({
