@@ -556,6 +556,322 @@ These are in-flight and should complete before Slice 1.
 
 ---
 
+## Slice 9: Workflow Query Tools
+
+**Goal:** Give execution-time agents (task force members, room participants, documenter phases) pull-based access to the DAG's runtime state — beliefs, upstream outputs, workflow topology, execution history, and team roster.
+
+**Why:** Right now agents receive static context at prompt injection time. Port resolution handles planned data flow, but agents are blind to everything that wasn't explicitly wired. This slice adds ad-hoc discovery through tools whose **descriptions are the primary interface** — self-contained, example-rich, and clear enough that an agent knows exactly when and how to use each one without any system prompt coaching (per PROMPT_RESEARCH.md Section 12-13: tool descriptions roughly doubled correct selection vs system message references; 1-5 examples per tool improved accuracy from 72% to 90%).
+
+### Ticket 9.1: Workflow Query Tools — Tool Definitions, Dispatch, and Handlers
+
+**Scope:** Add 5 read-only, run-scoped query tools to the tool registry with rich self-documenting descriptions. Wire dispatch through `DagStepStrategy::execute_tool()`. Implement handlers against existing database tables and in-memory DAG state. Add a `"workflow_query"` capability so the Agent Designer can assign these tools to agents that need runtime discovery.
+
+**The tools (descriptions written as the agent will see them):**
+
+#### 1. `query_beliefs`
+
+```
+Tool name: query_beliefs
+
+Description:
+Search beliefs extracted during the current workflow execution. Beliefs are
+structured facts, decisions, and observations captured from agent outputs and
+user conversations throughout the run. Use this when you need to understand
+what happened in other parts of the workflow — what was decided, what was
+discovered, what the user said — without having it explicitly wired to your
+step through ports.
+
+Each belief has a confidence level (high = directly stated or produced,
+medium = implied or inferred from context, low = speculative). Filter by
+confidence to control signal quality. Each belief has semantic tags from a
+controlled vocabulary set by the workflow designer — use tags to narrow
+results to your domain.
+
+Returns beliefs sorted by relevance (tag match score + confidence weight),
+not chronological order. Results are summaries — content and reasoning
+only, not the full source material that produced them.
+
+Parameters:
+  tags (string[], optional):
+    Filter by semantic tags. Only beliefs tagged with at least one of these
+    tags are returned. Tags are domain-specific and set by the belief capture
+    node's tag vocabulary (e.g., ["vulnerability", "severity", "fix"],
+    ["requirement", "constraint", "preference"]).
+    When omitted, all beliefs for the current run are searched.
+
+  min_confidence (string, optional, default "low"):
+    Minimum confidence threshold. One of "low", "medium", "high".
+    "low" returns everything. "medium" filters out speculative beliefs.
+    "high" returns only beliefs with strong direct evidence.
+
+  source_step (string, optional):
+    Filter beliefs to those extracted from a specific step, matched by step
+    name (case-insensitive partial match). Use this when you know which part
+    of the workflow produced the information you need.
+
+  query (string, optional):
+    Free-text search within belief content. Matched against the belief's
+    content and reasoning fields. Use this when you're looking for a specific
+    topic but don't know which tags cover it.
+
+  limit (integer, optional, default 10):
+    Maximum number of beliefs to return. Keep this low (5-10) to avoid
+    flooding your context. You can always make a second, more specific query.
+
+Returns: Array of objects, each containing:
+  - content: The belief statement
+  - reasoning: Why this belief was extracted (evidence chain)
+  - confidence: "low" | "medium" | "high"
+  - tags: string[] of semantic tags
+  - source_step_name: Which step produced the source material
+  - source_type: "execution" (from agent output) or "chat" (from user conversation)
+
+Examples:
+
+  Find all high-confidence security findings:
+  {"tags": ["vulnerability", "severity"], "min_confidence": "high", "limit": 5}
+
+  Search for what the user said about authentication:
+  {"query": "authentication", "source_type": "chat", "min_confidence": "medium"}
+
+  Get everything from the code scanner step:
+  {"source_step": "code scanner", "limit": 10}
+```
+
+#### 2. `get_step_output`
+
+```
+Tool name: get_step_output
+
+Description:
+Read the output from a completed step in the current workflow run. Every step
+that has finished executing produces an output envelope containing structured
+data, execution status, and metadata. Use this when you need to reference
+work done by another step that wasn't explicitly connected to yours through
+port wiring.
+
+This is different from port-resolved inputs (which you receive automatically).
+This tool lets you reach into any completed step's output on demand — useful
+when you discover mid-task that you need information from a step the workflow
+designer didn't anticipate you'd need.
+
+Returns a summary of the step's output, not the raw envelope. If the output
+is large, use json_path to extract the specific field you need rather than
+pulling the entire result into your context.
+
+Parameters:
+  step_name (string, required):
+    The display name of the step whose output you want to read.
+    Case-insensitive partial match. If multiple steps match, returns the
+    first completed match in execution order. Use list_workflow_steps first
+    if you're unsure of the exact name.
+
+  json_path (string, optional):
+    A dot-notation path to extract a specific field from the step's output
+    data. For example, "findings[0].severity" or "summary". When omitted,
+    returns the full output data (which may be large — prefer using a path
+    when you know what you need).
+
+Returns: Object containing:
+  - step_name: Exact name of the matched step
+  - status: "success" or "error"
+  - data: The output data (full or extracted via json_path)
+  - agent_name: Which agent produced this output
+  - tokens_used: Total tokens consumed by this step
+  - error: Error message if status is "error", null otherwise
+
+Examples:
+
+  Get the full output of the security scan step:
+  {"step_name": "security scan"}
+
+  Extract just the summary from the research phase:
+  {"step_name": "research", "json_path": "summary"}
+
+  Get the first finding's severity:
+  {"step_name": "code review", "json_path": "findings[0].severity"}
+```
+
+#### 3. `list_workflow_steps`
+
+```
+Tool name: list_workflow_steps
+
+Description:
+List all steps in the current workflow with their execution status, archetype,
+and position in the DAG. Use this to understand where you are in the workflow,
+what ran before you, what runs after you, and what's available to query.
+
+This is your map of the workflow. Call this first if you need to discover step
+names for use with get_step_output, or to understand the overall execution
+flow before making decisions that depend on workflow structure.
+
+Steps are returned in topological execution order (the order they run in),
+not canvas layout order.
+
+Parameters:
+  status_filter (string, optional, default "all"):
+    Filter by execution status. One of:
+    - "completed": Only steps that have finished executing
+    - "running": Only the currently executing step(s)
+    - "pending": Only steps that haven't started yet
+    - "all": All steps regardless of status
+
+Returns: Array of objects, each containing:
+  - step_name: Display name of the step
+  - archetype: Execution mode ("single", "for_each", "documenter", "task_force", "room", "belief_capture", "sub_workflow")
+  - status: "completed" | "running" | "pending" | "skipped"
+  - agent_name: The agent assigned to this step (null for multi-agent archetypes)
+  - description: The step's description from the workflow designer
+  - position: Integer indicating execution order (0-based)
+
+Examples:
+
+  See what already ran:
+  {"status_filter": "completed"}
+
+  Get the full workflow map:
+  {}
+```
+
+#### 4. `get_run_history`
+
+```
+Tool name: get_run_history
+
+Description:
+Query results from previous executions of this same workflow. Use this to
+learn from past runs — what succeeded, what failed, what patterns emerged
+over time. This is your institutional memory for this workflow.
+
+Returns high-level summaries of past runs, not full output data. Each run
+summary includes per-step status so you can identify which steps tend to
+fail or produce low-quality output. Results are ordered most recent first.
+
+Only returns runs from the same workflow (not other workflows on the board).
+Only returns completed runs (not in-progress ones).
+
+Parameters:
+  limit (integer, optional, default 3):
+    Number of past runs to return. Keep this small (3-5) unless you're
+    specifically investigating a trend. Each run includes per-step summaries
+    which can be verbose.
+
+  step_name (string, optional):
+    Filter to show only a specific step's results across past runs. Useful
+    for investigating whether a particular step has recurring issues.
+    Case-insensitive partial match on step display name.
+
+  outcome_filter (string, optional):
+    Filter runs by their overall outcome. One of "success", "failure",
+    "partial", "all" (default "all"). Use "failure" to study what went
+    wrong in past attempts.
+
+Returns: Array of objects, each containing:
+  - run_id: UUID of the execution
+  - started_at: ISO timestamp
+  - completed_at: ISO timestamp
+  - status: "completed" | "failed" | "cancelled"
+  - total_steps: Number of steps in the run
+  - steps_succeeded: Number of steps that completed successfully
+  - step_summaries: Array of { step_name, status, tokens_used, duration_ms }
+  - reflection: The system's learning from this run (if episodic memory is enabled, null otherwise)
+
+Examples:
+
+  Check the last 3 runs:
+  {}
+
+  Investigate failures in the "code review" step:
+  {"step_name": "code review", "outcome_filter": "failure", "limit": 5}
+
+  See if the last run succeeded:
+  {"limit": 1}
+```
+
+#### 5. `list_team_roster`
+
+```
+Tool name: list_team_roster
+
+Description:
+List the other agents on your team in the current task force or room. Use
+this to understand who you're working with, what they're responsible for,
+what tools they have access to, and in what order they execute.
+
+This gives you structured access to your team composition. Use it when you
+need to make handoff decisions (what to include for the next agent), when
+you want to avoid duplicating another agent's work, or when you need to
+understand what capabilities are available across the team.
+
+Only available in task_force and room execution contexts. Returns an empty
+array if called from a single-step or documenter context.
+
+Parameters: None
+
+Returns: Array of objects, each containing:
+  - agent_name: The agent's display name
+  - role: What this agent does on the team
+  - capabilities: string[] of tool capabilities assigned to this agent
+  - execution_order: Integer position in the execution sequence (task_force only, null for rooms)
+  - is_current: Boolean, true if this is YOU (the calling agent)
+  - perspective: The agent's assigned perspective (room members only, null for task_force)
+
+Examples:
+
+  See your team:
+  {}
+```
+
+**Implementation work:**
+
+1. **Tool registry** (`src/tools/registry/mod.rs`):
+   - Add 5 new functions (`query_beliefs_tool()`, `get_step_output_tool()`, `list_workflow_steps_tool()`, `get_run_history_tool()`, `list_team_roster_tool()`)
+   - Add match arms in `get_tool_definition()`
+   - Add comment block: `// Workflow query tools (5)`
+   - Tool descriptions must match the detailed descriptions above verbatim — the description IS the interface
+
+2. **Tool dispatch** (`src/server/hub/strategies/dag_step/mod.rs`):
+   - Add match arms in `DagStepStrategy::execute_tool()` for each of the 5 tools
+   - All 5 need access to `&self.state` (AppState) and `&self.config` (run_id, workflow_id, step_id)
+   - `list_team_roster` additionally needs `self.config.execution_mode` context and agent roster
+
+3. **Tool handlers** (new module `src/server/tools/workflow_query/mod.rs`):
+   - `execute_query_beliefs(input, state, workflow_id, run_id)` → queries `beliefs` table using existing GIN index on `semantic_tags`, filters by confidence/source_step/query, orders by relevance
+   - `execute_get_step_output(input, state, dag_state, run_id)` → looks up `dag_state.completed_envelopes` by step name (in-memory), falls back to `content_versions` table if envelope not in memory, applies json_path extraction
+   - `execute_list_workflow_steps(input, state, workflow_id, dag_state)` → queries `workflow_steps` table for topology, merges with `dag_state` for runtime status
+   - `execute_get_run_history(input, state, workflow_id)` → queries `workflow_executions` table filtered by workflow_id, joins `content_versions` for per-step summaries, joins `run_reflections` for episodic memory (if Slice 4 is complete, null otherwise)
+   - `execute_list_team_roster(input, state, step_id)` → queries `persisted_agents` for the current step's agent roster, includes capabilities from `agent_tools`
+
+4. **DagStepConfig extension**:
+   - Add `dag_state: Arc<RwLock<DagExecutionState>>` to `DagStepConfig` (or pass as parameter) so `get_step_output` can read completed envelopes without a database round-trip
+   - Add `workflow_id: Uuid` to `DagStepConfig` if not already present
+
+5. **Capability registration**:
+   - Add `"workflow_query"` as a recognized capability in the Agent Designer's allowed capabilities list
+   - When an agent has `"workflow_query"` capability, the designer can assign any of the 5 tools
+   - Update `config/protocols/agent_designer/designer/system.md` to list `workflow_query` in the available capabilities with a one-line description: "Enables the agent to query beliefs, step outputs, workflow topology, execution history, and team roster from the current run"
+
+6. **Tests** (`src/server/tools/workflow_query/tests.rs`):
+   - Test each handler with mock data (beliefs, envelopes, steps, executions)
+   - Test scoping: verify queries are restricted to the current workflow/run
+   - Test json_path extraction in `get_step_output`
+   - Test partial name matching in `get_step_output` and `list_workflow_steps`
+   - Test empty results (no beliefs, no history, no team) return clean empty arrays
+   - Test `list_team_roster` returns empty in non-team contexts
+
+**Acceptance:**
+- All 5 tools are registered, dispatchable, and return structured JSON results
+- Tool descriptions are self-documenting — an agent can determine when and how to use each tool from the description alone, without any system prompt coaching
+- Each tool is scoped to the current workflow and run — agents cannot query other workflows
+- `query_beliefs` uses the existing GIN index for efficient tag-based filtering
+- `get_step_output` reads from in-memory DAG state first, DB fallback second
+- `get_run_history` gracefully handles the case where Slice 4 (episodic memory) isn't deployed yet (reflection field is null)
+- Agent Designer can assign `workflow_query` capability to agents that need runtime discovery
+- Tests: `cargo test server::tools::workflow_query::tests`
+
+---
+
 ## Slice Summary
 
 | Slice | Tickets | Backend | Frontend | Config | Depends On |
@@ -568,6 +884,7 @@ These are in-flight and should complete before Slice 1.
 | **6. Belief Pipeline** | 3 | None | Belief explorer dashboard | Chat + runtime extractor prompts | None |
 | **7. Assistant Observation** | 4 | Observation tools + polling | Run indicator + grading UI | Notes structure | Slices 1-6 (benefits from all) |
 | **8. Decision Tracing** | 3 | Migration + extraction | Trace view + debugging | None | Slice 3 (agents must produce reasoning) |
+| **9. Workflow Query Tools** | 1 | Tool registry + dispatch + handlers | None | Designer capability | None (benefits from Slices 4, 6) |
 
 ### Recommended Execution Order
 
@@ -579,6 +896,8 @@ Slice 1 (Sub-DAG) ────────────────────�
 Slice 4 (Episodic Memory) ───────────────────────────┤
                                                       │
 Slice 6 (Belief Pipeline) ───────────────────────────┤
+                                                      │
+Slice 9 (Query Tools) ─────────────────────────────┤
                                                       ↓
                                                Slice 7 (Assistant)
                                                       │
@@ -586,7 +905,7 @@ Slice 6 (Belief Pipeline) ──────────────────
                                                Slice 8 (Tracing)
 ```
 
-Slices 1, 2, 4, and 6 can start in parallel. Slice 3 depends on 2. Slice 5 depends on 2+3. Slice 7 benefits from everything. Slice 8 depends on agents producing reasoning (Slice 3).
+Slices 1, 2, 4, 6, and 9 can start in parallel. Slice 3 depends on 2. Slice 5 depends on 2+3. Slice 7 benefits from everything. Slice 8 depends on agents producing reasoning (Slice 3). Slice 9 has no hard dependencies but its `get_run_history` tool returns richer results after Slice 4 (episodic memory) and `query_beliefs` is more useful after Slice 6 (belief pipeline).
 
 ---
 
@@ -607,3 +926,5 @@ When this milestone is complete:
 6. **Sub-DAGs compose** — complex tasks decompose into reusable template-backed sub-workflows. The designer can create micro-pipelines. The user stays in control of the execution shape.
 
 7. **Decisions are traceable** — every agent choice traces back to its reasoning, its inputs, and the conventions that guided it. "Why did it do that?" is always answerable.
+
+8. **Agents discover what they need** — workflow query tools give agents pull-based access to beliefs, upstream outputs, workflow topology, execution history, and team composition. The tool descriptions are the interface — self-contained, example-rich, and clear enough that agents use them correctly without system prompt coaching.
