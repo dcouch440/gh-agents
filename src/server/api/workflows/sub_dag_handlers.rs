@@ -21,7 +21,7 @@ use crate::server::state::AppState;
 
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct SubDagResponse {
-    /// The protocol archetype (e.g. "task_force", "documenter").
+    /// The protocol archetype (e.g. "workforce").
     pub archetype: Option<String>,
     /// Designer run details (if a designer was involved).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -140,8 +140,8 @@ pub async fn get_step_sub_dag(
         .or_else(|| {
             // Fallback: infer from execution_mode
             match step.execution_mode.as_str() {
-                "task_force" => Some("task_force".to_string()),
-                "documenter" => Some("documenter".to_string()),
+                "workforce" => Some("workforce".to_string()),
+                // documenter removed — workforce is the only protocol archetype
                 _ => None,
             }
         });

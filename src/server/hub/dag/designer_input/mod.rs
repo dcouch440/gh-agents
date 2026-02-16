@@ -4,11 +4,9 @@
 //! that converts its domain-specific configuration into a generic `DesignerInput`.
 //! The Agent Designer consumes `DesignerInput` to generate optimized prompt pairs.
 
-pub mod documenter;
 pub mod room;
-pub mod task_force;
-pub mod workforce;
 mod tests;
+pub mod workforce;
 
 use std::collections::{HashMap, HashSet};
 

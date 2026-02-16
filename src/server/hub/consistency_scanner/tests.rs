@@ -25,7 +25,7 @@ mod tests {
         let notes = vec![(
             step_id,
             Some("Builder".to_string()),
-            "task_force".to_string(),
+            "workforce".to_string(),
             "Required Reading: API Specifications".to_string(),
         )];
 

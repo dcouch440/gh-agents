@@ -44,7 +44,7 @@ pub async fn create_workflow_step(
         return Err(AppError::not_found("Workflow"));
     }
 
-    // Auto-wire entry/documenter: resolve agent, schema, and reasoning
+    // Auto-wire entry: resolve agent, schema, and reasoning
     let execution_mode = req.execution_mode.unwrap_or_else(|| "single".to_string());
 
     // Enforce single-input constraint: only one input step per workflow
@@ -60,22 +60,6 @@ pub async fn create_workflow_step(
     let (resolved_agent_id, resolved_schema_id, resolved_reasoning): (Option<Uuid>, _, _) =
         if execution_mode == "context" || execution_mode == "input" {
             (None, None, false)
-        } else if execution_mode == "documenter" {
-            let proto = state
-                .repos()
-                .protocols
-                .get_protocol_by_type("documenter")
-                .await
-                .ok()
-                .flatten();
-            match proto {
-                Some(p) => (
-                    None, // documenter steps are agent-less
-                    p.output_schema_id,
-                    true, // documenter always reasons
-                ),
-                None => (None, None, false),
-            }
         } else {
             (
                 Some(req.agent_id.unwrap_or(crate::constants::DEFAULT_AGENT_ID)),
@@ -305,29 +289,9 @@ pub async fn get_step_config(
         return Err(AppError::not_found("Step"));
     }
 
-    let config = match step.execution_mode.as_str() {
-        "documenter" => {
-            let doc_defs = repo.list_document_defs(p.1).await?;
-            let documents: Vec<serde_json::Value> = doc_defs
-                .into_iter()
-                .map(|d| {
-                    serde_json::json!({
-                        "id": d.id.to_string(),
-                        "name": d.name,
-                        "description": d.description,
-                        "target_length": d.target_length,
-                    })
-                })
-                .collect();
-            serde_json::json!({
-                "archetype": "documenter",
-                "documents": documents,
-            })
-        }
-        _ => serde_json::json!({
-            "archetype": serde_json::Value::Null,
-        }),
-    };
+    let config = serde_json::json!({
+        "archetype": serde_json::Value::Null,
+    });
 
     Ok(Json(config))
 }

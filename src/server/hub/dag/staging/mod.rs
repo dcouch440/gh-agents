@@ -22,13 +22,12 @@ use super::belief_capture::execute_belief_capture_step;
 use super::dag_state::{
     resolve_output_key, wrap_in_agentless_envelope, DagExecutionState, PortMetadata,
 };
-use super::documenter::execute_documenter_step;
 use super::for_each::execute_for_each_step;
 use super::room_step::execute_room_step;
 use super::single::execute_single_step;
-use super::task_force::execute_task_force_step;
 use super::utils::{check_step_readiness, StepOutput, StepReadiness, WorkflowExecutionContext};
 use super::versioning;
+use super::workforce::execute_workforce_step;
 
 mod tests;
 
@@ -211,29 +210,20 @@ pub(crate) async fn execute_staged_step(
     }
 
     // Agentless modes — dispatch to existing executors
-    if matches!(
-        step.execution_mode.as_str(),
-        "documenter" | "task_force" | "belief_capture"
-    ) {
+    if matches!(step.execution_mode.as_str(), "belief_capture" | "workforce") {
         let pre_tokens_in = dag_state.total_input_tokens;
         let pre_tokens_out = dag_state.total_output_tokens;
         let pre_cost = dag_state.total_cost_usd;
 
         match step.execution_mode.as_str() {
-            "documenter" => {
-                execute_documenter_step(
-                    &engine, state, ctx, step, steps, edges, dag_state, port_meta, None,
-                )
-                .await?
-            }
-            "task_force" => {
-                execute_task_force_step(
-                    &engine, state, ctx, step, steps, edges, dag_state, port_meta, None,
-                )
-                .await?
-            }
             "belief_capture" => {
                 execute_belief_capture_step(
+                    &engine, state, ctx, step, steps, edges, dag_state, port_meta, None,
+                )
+                .await?
+            }
+            "workforce" => {
+                execute_workforce_step(
                     &engine, state, ctx, step, steps, edges, dag_state, port_meta, None,
                 )
                 .await?

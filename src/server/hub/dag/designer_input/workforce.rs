@@ -34,10 +34,7 @@ pub fn build_workforce_designer_input(
 
     for def in doc_defs {
         if let Some(agent_id) = def.agent_roster_entry_id {
-            deliverables_by_agent
-                .entry(agent_id)
-                .or_default()
-                .push(def);
+            deliverables_by_agent.entry(agent_id).or_default().push(def);
         } else {
             unassigned.push(def);
         }
@@ -89,7 +86,12 @@ pub fn build_workforce_designer_input(
     if !unassigned.is_empty() {
         let unassigned_list: Vec<String> = unassigned
             .iter()
-            .map(|d| format!("- {} (~{} words): {}", d.name, d.target_length, d.description))
+            .map(|d| {
+                format!(
+                    "- {} (~{} words): {}",
+                    d.name, d.target_length, d.description
+                )
+            })
             .collect();
         guidance.push_str(&format!(
             "\n\nUnassigned deliverables (assign to appropriate agents):\n{}",

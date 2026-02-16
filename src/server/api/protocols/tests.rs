@@ -4,10 +4,10 @@ mod tests {
 
     #[test]
     fn create_protocol_request_deserializes_required_fields() {
-        let json = r#"{"name": "Doc Generator", "protocol_type": "documenter"}"#;
+        let json = r#"{"name": "Doc Generator", "protocol_type": "test_type"}"#;
         let req: CreateProtocolRequest = serde_json::from_str(json).unwrap();
         assert_eq!(req.name, "Doc Generator");
-        assert_eq!(req.protocol_type, "documenter");
+        assert_eq!(req.protocol_type, "test_type");
         assert!(req.description.is_none());
         assert!(req.config.is_none());
         assert!(req.agent_id.is_none());
@@ -20,7 +20,7 @@ mod tests {
         let json = r#"{
             "name": "Project Documenter",
             "description": "Generate project documentation",
-            "protocol_type": "documenter",
+            "protocol_type": "test_type",
             "config": {},
             "agent_id": "00000000-0000-0000-0000-000000000001",
             "output_schema_id": "00000000-0000-0000-0000-000000000002",
@@ -32,7 +32,7 @@ mod tests {
             req.description.as_deref(),
             Some("Generate project documentation")
         );
-        assert_eq!(req.protocol_type, "documenter");
+        assert_eq!(req.protocol_type, "test_type");
         assert!(req.config.is_some());
         assert!(req.agent_id.is_some());
         assert!(req.output_schema_id.is_some());
@@ -112,7 +112,7 @@ mod tests {
             id: uuid::Uuid::nil(),
             name: "Test Protocol".to_string(),
             description: "A test".to_string(),
-            protocol_type: "documenter".to_string(),
+            protocol_type: "test_type".to_string(),
             config: serde_json::json!({}),
             version: 1,
             ports: vec![ProtocolPortResponse {
@@ -138,7 +138,7 @@ mod tests {
         };
         let json = serde_json::to_value(&resp).unwrap();
         assert_eq!(json["name"], "Test Protocol");
-        assert_eq!(json["protocol_type"], "documenter");
+        assert_eq!(json["protocol_type"], "test_type");
         assert_eq!(json["version"], 1);
         assert_eq!(json["ports"][0]["port_name"], "frontend");
         assert!(json["agent"].is_object());
@@ -154,7 +154,7 @@ mod tests {
             id: uuid::Uuid::nil(),
             name: "Minimal".to_string(),
             description: String::new(),
-            protocol_type: "documenter".to_string(),
+            protocol_type: "test_type".to_string(),
             config: serde_json::json!({}),
             version: 1,
             ports: vec![],
@@ -172,13 +172,13 @@ mod tests {
     fn protocol_types_response_serializes() {
         let resp = ProtocolTypesResponse {
             types: vec![ProtocolTypeInfo {
-                name: "documenter".to_string(),
+                name: "test_type".to_string(),
                 description: "Document generation pipeline".to_string(),
             }],
         };
         let json = serde_json::to_value(&resp).unwrap();
         assert_eq!(json["types"].as_array().unwrap().len(), 1);
-        assert_eq!(json["types"][0]["name"], "documenter");
+        assert_eq!(json["types"][0]["name"], "test_type");
     }
 
     #[test]

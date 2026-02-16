@@ -214,15 +214,8 @@ pub enum WorkflowEventKind {
         completed: usize,
         total: usize,
     },
-    DocumenterPhaseProgress {
-        step_id: Uuid,
-        phase: String,
-        completed: usize,
-        total: usize,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        document_name: Option<String>,
-    },
-    TaskForceAgentProgress {
+    /// Workforce agent execution progress (started, completed, failed).
+    WorkforceAgentProgress {
         step_id: Uuid,
         agent_name: String,
         agent_index: usize,
@@ -345,8 +338,7 @@ impl WorkflowEvent {
             WorkflowEventKind::StepFailed { .. } => "step_failed",
             WorkflowEventKind::StepPaused { .. } => "step_paused",
             WorkflowEventKind::ForEachProgress { .. } => "for_each_progress",
-            WorkflowEventKind::DocumenterPhaseProgress { .. } => "documenter_phase_progress",
-            WorkflowEventKind::TaskForceAgentProgress { .. } => "task_force_agent_progress",
+            WorkflowEventKind::WorkforceAgentProgress { .. } => "workforce_agent_progress",
             WorkflowEventKind::WorkforceDesignerProgress { .. } => "workforce_designer_progress",
             WorkflowEventKind::BeliefExtractionProgress { .. } => "belief_extraction_progress",
             WorkflowEventKind::Completed { .. } => "completed",

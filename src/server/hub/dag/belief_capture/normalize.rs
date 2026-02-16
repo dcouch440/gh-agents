@@ -1,7 +1,7 @@
 //! Upstream content normalization for belief extraction.
 //!
 //! Collects and normalizes content from all upstream steps, adapting to
-//! each step's execution mode (context, documenter, task_force, room, etc.).
+//! each step's execution mode (context, workforce, room, etc.).
 
 use std::collections::HashMap;
 
@@ -43,7 +43,7 @@ pub async fn collect_upstream_sources(
     edges: &[crate::db::WorkflowStepEdgeRow],
     steps: &[WorkflowStepRow],
     completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
-    state: &AppState,
+    _state: &AppState,
 ) -> Vec<UpstreamSource> {
     let step_map: HashMap<Uuid, &WorkflowStepRow> = steps.iter().map(|s| (s.id, s)).collect();
     let parent_ids = get_parent_steps(step.id, edges);
@@ -84,51 +84,7 @@ pub async fn collect_upstream_sources(
                     }
                 }
             }
-            "documenter" => {
-                // Try to load actual document content from DB
-                let doc_defs = state
-                    .repos()
-                    .workflows
-                    .list_document_defs(parent_id)
-                    .await
-                    .unwrap_or_default();
-
-                let mut found_docs = false;
-                for def in &doc_defs {
-                    if let Some(doc_id) = def.document_id {
-                        if let Ok(Some(doc)) = state.repos().documents.get_document(doc_id).await {
-                            if !doc.content.is_empty() {
-                                found_docs = true;
-                                sources.push(UpstreamSource {
-                                    title: format!("{} > {}", step_name, doc.title),
-                                    source_type: "documenter".to_string(),
-                                    content: truncate(&doc.content),
-                                    source_step_id: parent_id,
-                                    source_step_name: step_name.clone(),
-                                    source_document_def_id: Some(def.id),
-                                    source_document_title: Some(doc.title.clone()),
-                                });
-                            }
-                        }
-                    }
-                }
-                // Fallback: use envelope data if no documents loaded
-                if !found_docs {
-                    let content = serde_json::to_string_pretty(data).unwrap_or_default();
-                    if !content.is_empty() {
-                        sources.push(UpstreamSource {
-                            title: step_name.clone(),
-                            source_type: "documenter".to_string(),
-                            content: truncate(&content),
-                            source_step_id: parent_id,
-                            source_step_name: step_name,
-                            source_document_def_id: None,
-                            source_document_title: None,
-                        });
-                    }
-                }
-            }
-            "task_force" => {
+            "workforce" => {
                 // Iterate JSON object keys — one source per agent
                 if let serde_json::Value::Object(map) = data {
                     for (agent_key, agent_output) in map {
@@ -139,7 +95,7 @@ pub async fn collect_upstream_sources(
                         if !content.is_empty() {
                             sources.push(UpstreamSource {
                                 title: format!("{} > {}", step_name, agent_key),
-                                source_type: "task_force".to_string(),
+                                source_type: "workforce".to_string(),
                                 content: truncate(&content),
                                 source_step_id: parent_id,
                                 source_step_name: step_name.clone(),

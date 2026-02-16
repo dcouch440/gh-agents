@@ -1,2 +1,2 @@
-pub mod documenter;
-pub use documenter::DocumenterCompiler;
+// Protocol compilers — currently empty after documenter removal.
+// Future protocol types will register their compilers here.

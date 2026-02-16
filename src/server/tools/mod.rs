@@ -5,14 +5,12 @@
 //! focused sub-modules: `exploration`, `documents`, and `haiku`.
 
 pub mod belief_capture;
-pub mod documenter;
 pub mod documents;
 mod exploration;
 pub mod haiku;
 pub mod node_assistant;
 pub mod room_config;
 pub mod shared;
-pub mod task_force;
 pub mod workforce;
 
 use serde_json::{json, Value};

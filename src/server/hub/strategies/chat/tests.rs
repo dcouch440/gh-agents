@@ -173,25 +173,6 @@ mod tests {
     // ========================================================================
 
     #[test]
-    fn resolve_step_tools_documenter_includes_universal_and_archetype() {
-        let tools = super::super::resolve_step_tools("documenter");
-        let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
-
-        // Universal tools
-        assert!(names.contains(&"set_node_name"));
-        assert!(names.contains(&"set_node_description"));
-        assert!(names.contains(&"think"));
-        assert!(names.contains(&"update_notes"));
-        assert!(!names.contains(&"set_node_archetype"));
-
-        // Documenter-specific tools
-        assert!(names.contains(&"create_doc_def"));
-        assert!(names.contains(&"update_doc_def"));
-        assert!(names.contains(&"delete_doc_def"));
-        assert!(names.contains(&"update_config"));
-    }
-
-    #[test]
     fn resolve_step_tools_blank_returns_universal_only() {
         let tools = super::super::resolve_step_tools("");
         let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
@@ -252,14 +233,7 @@ mod tests {
 
     #[test]
     fn resolve_step_tools_includes_update_notes_for_all_archetypes() {
-        for mode in &[
-            "documenter",
-            "task_force",
-            "belief_capture",
-            "room",
-            "single",
-            "",
-        ] {
+        for mode in &["workforce", "belief_capture", "room", "single", ""] {
             let tools = super::super::resolve_step_tools(mode);
             let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
             assert!(
@@ -298,9 +272,9 @@ mod tests {
             },
         );
 
-        let input = serde_json::json!({ "archetype": "documenter" });
+        let input = serde_json::json!({ "archetype": "workforce" });
         let result = serde_json::json!({
-            "archetype": "documenter",
+            "archetype": "workforce",
             "step_id": step_id.to_string(),
         });
 
@@ -311,7 +285,7 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&envelope.json).unwrap();
         assert_eq!(value["event"], "archetype_changed");
         assert_eq!(value["data"]["step_id"], step_id.to_string());
-        assert_eq!(value["data"]["archetype"], "documenter");
+        assert_eq!(value["data"]["archetype"], "workforce");
     }
 
     #[test]

@@ -24,20 +24,6 @@ const NODE_ASSISTANT_TOOLS: &[&str] = &["set_node_name", "set_node_description",
 /// Always includes universal tools alongside archetype-specific ones.
 pub(crate) fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
     let archetype_specific: &[&str] = match execution_mode {
-        "documenter" => &[
-            "create_doc_def",
-            "update_doc_def",
-            "delete_doc_def",
-            "update_config",
-        ],
-        "task_force" => &[
-            "set_task",
-            "add_agent",
-            "update_agent",
-            "remove_agent",
-            "set_capabilities",
-            "set_failure_mode",
-        ],
         "belief_capture" => &[
             "set_extraction_focus",
             "set_tag_vocabulary",
@@ -118,54 +104,6 @@ pub(super) async fn dispatch_step_tool(
 
     // Archetype-specific dispatch
     match ctx.execution_mode.as_str() {
-        "documenter" => {
-            const DOCUMENTER_TOOLS: &[&str] = &[
-                "create_doc_def",
-                "update_doc_def",
-                "delete_doc_def",
-                "update_config",
-            ];
-            if DOCUMENTER_TOOLS.contains(&name) {
-                let tool_ctx = crate::server::tools::documenter::DocumenterToolContext {
-                    workflow_id: ctx.workflow_id,
-                    step_id: ctx.step_id,
-                };
-                let result = crate::server::tools::documenter::execute_documenter_tool(
-                    name,
-                    input,
-                    state.repos().workflows.as_ref(),
-                    &tool_ctx,
-                )
-                .await;
-                return Some(result);
-            }
-            None
-        }
-        "task_force" => {
-            const TASK_FORCE_TOOLS: &[&str] = &[
-                "set_task",
-                "add_agent",
-                "update_agent",
-                "remove_agent",
-                "set_capabilities",
-                "set_failure_mode",
-            ];
-            if TASK_FORCE_TOOLS.contains(&name) {
-                let tool_ctx = crate::server::tools::task_force::TaskForceToolContext {
-                    workflow_id: ctx.workflow_id,
-                    step_id: ctx.step_id,
-                };
-                let result = crate::server::tools::task_force::execute_task_force_tool(
-                    name,
-                    input,
-                    state.repos().workflows.as_ref(),
-                    &tool_ctx,
-                )
-                .await;
-                return Some(result);
-            }
-            None
-        }
         "belief_capture" => {
             const BELIEF_CAPTURE_TOOLS: &[&str] = &[
                 "set_extraction_focus",

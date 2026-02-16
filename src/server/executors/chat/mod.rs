@@ -165,10 +165,7 @@ fn handle_chat_error(state: &AppState, message_id: uuid::Uuid, error: HubError) 
     match error {
         HubError::Cancelled => {
             info!("Chat message {} cancelled by user", message_id);
-            state.send_stream_chunk(
-                message_id,
-                StreamChunk::Error("Generation stopped".into()),
-            );
+            state.send_stream_chunk(message_id, StreamChunk::Error("Generation stopped".into()));
             state.send_stream_chunk(message_id, StreamChunk::Done);
         }
         e => {

@@ -82,7 +82,7 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "set_max_turns" => Some(set_max_turns_tool()),
         "set_interaction_mode" => Some(set_interaction_mode_tool()),
 
-        // Workforce archetype tools (3 unique — reuses task_force + adds deliverables)
+        // Workforce archetype tools (3 unique deliverable tools)
         "add_deliverable" => Some(add_deliverable_tool()),
         "update_deliverable" => Some(update_deliverable_tool()),
         "remove_deliverable" => Some(remove_deliverable_tool()),
@@ -646,7 +646,7 @@ fn set_node_archetype_tool() -> Tool {
             "properties": {
                 "archetype": {
                     "type": "string",
-                    "enum": ["documenter", "task_force", "belief_capture", "room", "workforce"],
+                    "enum": ["belief_capture", "room", "workforce"],
                     "description": "The archetype to apply to this node"
                 }
             },

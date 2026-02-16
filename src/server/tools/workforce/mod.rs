@@ -206,9 +206,7 @@ fn build_agent_child_step(
         prompt_template_id: None,
         prompt_template: String::new(),
         output_schema_id: None,
-        output_variable_name: Some(
-            crate::server::hub::dag::dag_state::to_snake_case(name),
-        ),
+        output_variable_name: Some(crate::server::hub::dag::dag_state::to_snake_case(name)),
         interactive_agent_id: None,
         for_each_label_field: None,
         room_id: None,
@@ -260,7 +258,13 @@ async fn execute_set_task(
     };
 
     match repo
-        .upsert_mission_brief(ctx.step_id, description, &capabilities, &failure_mode, downstream_context)
+        .upsert_mission_brief(
+            ctx.step_id,
+            description,
+            &capabilities,
+            &failure_mode,
+            downstream_context,
+        )
         .await
     {
         Ok(brief) => json!({
@@ -318,8 +322,7 @@ async fn execute_add_agent(
     };
 
     // Create child workflow step for the agent
-    let child_step =
-        build_agent_child_step(child_workflow_id, name, role, next_order + 1);
+    let child_step = build_agent_child_step(child_workflow_id, name, role, next_order + 1);
     let child_step = match repo.create_step(child_step).await {
         Ok(s) => s,
         Err(e) => return json!({ "error": format!("Failed to create child step: {}", e) }),
@@ -414,9 +417,8 @@ async fn execute_update_agent(
             if let Ok(Some(mut child_step)) = repo.get_step(child_step_id).await {
                 if let Some(ref new_name) = name {
                     child_step.name = Some(new_name.clone());
-                    child_step.output_variable_name = Some(
-                        crate::server::hub::dag::dag_state::to_snake_case(new_name),
-                    );
+                    child_step.output_variable_name =
+                        Some(crate::server::hub::dag::dag_state::to_snake_case(new_name));
                 }
                 if let Some(ref new_role) = role {
                     child_step.description = new_role.clone();
@@ -479,9 +481,7 @@ async fn execute_remove_agent(
                 // Remove edges involving this step
                 for edge in &edges {
                     if edge.from_step_id == child_step_id || edge.to_step_id == child_step_id {
-                        let _ = repo
-                            .remove_edge(edge.from_step_id, edge.to_step_id)
-                            .await;
+                        let _ = repo.remove_edge(edge.from_step_id, edge.to_step_id).await;
                     }
                 }
 
@@ -594,7 +594,13 @@ async fn execute_set_failure_mode(
     };
 
     match repo
-        .upsert_mission_brief(ctx.step_id, &task_description, &capabilities, mode, downstream_context)
+        .upsert_mission_brief(
+            ctx.step_id,
+            &task_description,
+            &capabilities,
+            mode,
+            downstream_context,
+        )
         .await
     {
         Ok(brief) => json!({

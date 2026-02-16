@@ -291,8 +291,7 @@ pub mod routes {
     pub const WORKFLOW_STEP_CHAT_DEBUG: &str = "/workflows/:wid/steps/:sid/chat/debug";
     pub const WORKFLOW_STEP_CONFIG: &str = "/workflows/:wid/steps/:sid/config";
     pub const WORKFLOW_STEP_LAST_RUN: &str = "/workflows/:wid/steps/:sid/last-run";
-    pub const WORKFLOW_STEP_SUB_DAG: &str =
-        "/workflows/:wid/steps/:sid/executions/:eid/sub-dag";
+    pub const WORKFLOW_STEP_SUB_DAG: &str = "/workflows/:wid/steps/:sid/executions/:eid/sub-dag";
     pub const WORKFLOW_NOTES: &str = "/workflows/:id/notes";
 
     // Workshop (node-by-node execution)

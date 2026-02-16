@@ -1422,10 +1422,7 @@ pub trait WorkflowCollectionRepo: Send + Sync {
     ) -> Result<Vec<WorkflowExecutionRow>>;
 
     /// List the full execution tree rooted at `root_id` (O(1) via root_execution_id index).
-    async fn list_execution_tree(
-        &self,
-        root_id: Uuid,
-    ) -> Result<Vec<WorkflowExecutionRow>>;
+    async fn list_execution_tree(&self, root_id: Uuid) -> Result<Vec<WorkflowExecutionRow>>;
 
     // --- Workshop (persistent per-workflow execution context) ---
     async fn get_or_create_workshop(
