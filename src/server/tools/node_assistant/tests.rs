@@ -66,14 +66,14 @@ mod tests {
             .withf(move |id| *id == step_id)
             .returning(move |_| Ok(Some(step_clone.clone())));
         repo.expect_update_step().returning(|step| {
-            assert_eq!(step.execution_mode, "documenter");
+            assert_eq!(step.execution_mode, "workforce");
             Ok(step)
         });
 
-        let input = json!({ "archetype": "documenter" });
+        let input = json!({ "archetype": "workforce" });
         let result = execute_node_assistant_tool("set_node_archetype", &input, &repo, &ctx).await;
 
-        assert_eq!(result["archetype"], "documenter");
+        assert_eq!(result["archetype"], "workforce");
         assert!(result.get("error").is_none());
     }
 
@@ -193,7 +193,7 @@ mod tests {
 
     #[tokio::test]
     async fn all_valid_archetypes_accepted() {
-        for archetype in &["documenter", "task_force", "belief_capture", "room"] {
+        for archetype in &["belief_capture", "room", "workforce"] {
             let ctx = make_ctx();
             let step = make_step(ctx.step_id, ctx.workflow_id);
             let step_id = ctx.step_id;

@@ -119,18 +119,16 @@ pub(crate) mod belief_capture;
 pub(crate) mod container;
 pub(crate) mod dag_state;
 pub(crate) mod designer_input;
-pub(crate) mod documenter;
 pub(crate) mod for_each;
 pub(crate) mod resume;
 pub(crate) mod room_step;
 pub(crate) mod single;
 pub(crate) mod staging;
 pub(crate) mod sub_workflow;
-pub(crate) mod task_force;
 pub mod templates;
-pub(crate) mod workforce;
 pub(crate) mod utils;
 pub(crate) mod versioning;
+pub(crate) mod workforce;
 
 pub(crate) use dag_state::{
     broadcast_step_failure_if_real, prefetch_port_metadata, resolve_output_key,
@@ -152,12 +150,11 @@ pub use resume::{resume_dag_from_approval, resume_workflow_via_engine};
 
 // Internal imports for the main orchestration loop
 use belief_capture::execute_belief_capture_step;
-use documenter::execute_documenter_step;
+
 use for_each::{detect_for_each_chains, execute_for_each_chain, execute_for_each_step};
 use room_step::execute_room_step;
 use single::execute_single_step;
 use sub_workflow::execute_sub_workflow_step;
-use task_force::execute_task_force_step;
 use workforce::execute_workforce_step;
 
 // ── Routing Context ─────────────────────────────────────────────────────────
@@ -365,34 +362,6 @@ async fn run_dag_loop(
             );
 
             info!(step_id = %step.id, "Context step pass-through completed");
-            continue;
-        }
-
-        // Documenter steps — phased pipeline, no agent needed
-        if step.execution_mode == "documenter" {
-            let step_result = execute_documenter_step(
-                engine, state, ctx, step, steps, edges, dag_state, port_meta, cancel,
-            )
-            .await;
-
-            if let Err(ref e) = step_result {
-                broadcast_step_failure_if_real(state, ctx, workflow_id, step, e);
-            }
-            step_result?;
-            continue;
-        }
-
-        // Task force steps — sequential multi-agent pipeline, no agent_id needed
-        if step.execution_mode == "task_force" {
-            let step_result = execute_task_force_step(
-                engine, state, ctx, step, steps, edges, dag_state, port_meta, cancel,
-            )
-            .await;
-
-            if let Err(ref e) = step_result {
-                broadcast_step_failure_if_real(state, ctx, workflow_id, step, e);
-            }
-            step_result?;
             continue;
         }
 

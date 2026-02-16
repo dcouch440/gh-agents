@@ -242,34 +242,6 @@ pub async fn build_step_system_prompt(
 
     // 2. Build archetype block + config snapshot based on execution mode
     let (archetype_block, config_snapshot) = match execution_mode {
-        "documenter" => {
-            let ctx = crate::server::tools::documenter::DocumenterToolContext {
-                workflow_id,
-                step_id,
-            };
-            let snapshot = crate::server::tools::documenter::build_config_snapshot(
-                state.repos().workflows.as_ref(),
-                &ctx,
-            )
-            .await
-            .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
-
-            (roles::NODE_ASSISTANT_DOCUMENTER_BLOCK.to_string(), snapshot)
-        }
-        "task_force" => {
-            let ctx = crate::server::tools::task_force::TaskForceToolContext {
-                workflow_id,
-                step_id,
-            };
-            let snapshot = crate::server::tools::task_force::build_config_snapshot(
-                state.repos().workflows.as_ref(),
-                &ctx,
-            )
-            .await
-            .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
-
-            (roles::NODE_ASSISTANT_TASK_FORCE_BLOCK.to_string(), snapshot)
-        }
         "belief_capture" => {
             let ctx = crate::server::tools::belief_capture::BeliefCaptureToolContext {
                 workflow_id,
@@ -317,7 +289,7 @@ pub async fn build_step_system_prompt(
         }
         _ => {
             return Err(HubError::Internal(anyhow::anyhow!(
-                "Step {} has unsupported execution_mode '{}'. Expected: documenter, task_force, belief_capture, room, or workforce.",
+                "Step {} has unsupported execution_mode '{}'. Expected: belief_capture, room, or workforce.",
                 step_id, execution_mode
             )));
         }

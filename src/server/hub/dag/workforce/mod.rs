@@ -14,7 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::config::protocols::{roles, vars, TASK_FORCE};
+use crate::config::protocols::{roles, vars, WORKFORCE};
 use crate::db::{ProtocolDocumentDefRow, TaskAgentRosterRow, TaskMissionBriefRow};
 use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::server::hub::capability_resolver::resolve_capabilities_to_tools;
@@ -23,7 +23,9 @@ use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::execution_recorder::ProtocolExecutionRecorder;
 use crate::server::hub::recorder::ExecutionRecorder;
 use crate::server::hub::strategies::compute_cost;
-use crate::server::hub::strategies::task_force::{TaskForceAgentConfig, TaskForceAgentStrategy};
+use crate::server::hub::strategies::workforce_agent::{
+    WorkforceAgentConfig, WorkforceAgentStrategy,
+};
 use crate::server::hub::streaming::NullSink;
 use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
@@ -35,12 +37,35 @@ use super::agent_designer::{self, normalize_agent_name};
 use super::container::{create_optional_container, destroy_optional_container};
 use super::dag_state::DagExecutionState;
 use super::designer_input::workforce::build_workforce_designer_input;
-use super::task_force::designer;
 use super::utils::collect_upstream_context_data;
 use super::{
     broadcast_workflow_event, compose_prompt, resolve_output_key, resolve_step_port_inputs,
     step_display_name, PortMetadata, StepOutput, WorkflowExecutionContext,
 };
+
+// ── Workforce-owned types ─────────────────────────────────────────────────
+
+/// Output from the Agent Designer — one prompt pair + tool assignment per agent.
+#[derive(Debug, Clone)]
+pub(crate) struct DesignedAgentPrompt {
+    pub agent_roster_entry_id: Uuid,
+    pub agent_name: String,
+    pub tools: Vec<String>,
+    pub system_prompt: String,
+    pub task_prompt: String,
+    pub reasoning: String,
+    pub execution_order: i32,
+    pub receives_from: Vec<String>,
+}
+
+/// Token usage from the designer call, for accumulating into step totals.
+pub(crate) struct DesignerTokenUsage {
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cost_usd: f32,
+    /// The designer run ID for linking agent phases back to their designer.
+    pub run_id: Uuid,
+}
 
 /// Execute a workforce step within the DAG.
 ///
@@ -210,7 +235,7 @@ pub(super) async fn execute_workforce_step(
             // Map generic results to task-force-compatible prompts
             let prompts = map_designer_results(&result, &roster)?;
 
-            let usage = designer::DesignerTokenUsage {
+            let usage = DesignerTokenUsage {
                 input_tokens: result.input_tokens,
                 output_tokens: result.output_tokens,
                 cost_usd: result.cost_usd,
@@ -231,7 +256,16 @@ pub(super) async fn execute_workforce_step(
         }
         Err(e) => {
             recorder
-                .update_phase(designer_phase.id, "failed", None, Some(&e.to_string()), 0, 0, 0.0, None)
+                .update_phase(
+                    designer_phase.id,
+                    "failed",
+                    None,
+                    Some(&e.to_string()),
+                    0,
+                    0,
+                    0.0,
+                    None,
+                )
                 .await;
 
             broadcast_workflow_event(
@@ -250,7 +284,7 @@ pub(super) async fn execute_workforce_step(
                 "Workforce designer failed, using static prompts"
             );
             let fallback = build_static_fallback_prompts(&brief, &roster, &doc_defs, &prompt);
-            let usage = designer::DesignerTokenUsage {
+            let usage = DesignerTokenUsage {
                 input_tokens: 0,
                 output_tokens: 0,
                 cost_usd: 0.0,
@@ -289,7 +323,7 @@ pub(super) async fn execute_workforce_step(
     let mut step_out_tokens: i64 = designer_usage.output_tokens;
     let mut step_cost: f32 = designer_usage.cost_usd;
     let total_agents = designed_prompts.len();
-    let agent_cfg = TASK_FORCE.agent("agent");
+    let agent_cfg = WORKFORCE.agent("agent");
 
     for (idx, designed) in designed_prompts.iter().enumerate() {
         // Check cancellation
@@ -303,7 +337,7 @@ pub(super) async fn execute_workforce_step(
             state,
             ctx,
             step.workflow_id,
-            WorkflowEventKind::TaskForceAgentProgress {
+            WorkflowEventKind::WorkforceAgentProgress {
                 step_id: step.id,
                 agent_name: designed.agent_name.clone(),
                 agent_index: idx,
@@ -356,7 +390,7 @@ pub(super) async fn execute_workforce_step(
         }
 
         // Build strategy
-        let strategy = TaskForceAgentStrategy::new(TaskForceAgentConfig {
+        let strategy = WorkforceAgentStrategy::new(WorkforceAgentConfig {
             system_prompt: designed.system_prompt.clone(),
             model_id: agent_cfg.model_id.clone(),
             temperature: agent_cfg.temperature,
@@ -415,7 +449,7 @@ pub(super) async fn execute_workforce_step(
                     state,
                     ctx,
                     step.workflow_id,
-                    WorkflowEventKind::TaskForceAgentProgress {
+                    WorkflowEventKind::WorkforceAgentProgress {
                         step_id: step.id,
                         agent_name: designed.agent_name.clone(),
                         agent_index: idx,
@@ -443,7 +477,7 @@ pub(super) async fn execute_workforce_step(
                     state,
                     ctx,
                     step.workflow_id,
-                    WorkflowEventKind::TaskForceAgentProgress {
+                    WorkflowEventKind::WorkforceAgentProgress {
                         step_id: step.id,
                         agent_name: designed.agent_name.clone(),
                         agent_index: idx,
@@ -553,11 +587,11 @@ pub(super) async fn execute_workforce_step(
 
 // ── Helper functions ─────────────────────────────────────────────────────
 
-/// Map generic designer results to task-force-compatible `DesignedAgentPrompt`s.
+/// Map generic designer results to workforce `DesignedAgentPrompt`s.
 fn map_designer_results(
     result: &agent_designer::DesignerResult,
     roster: &[TaskAgentRosterRow],
-) -> Result<Vec<designer::DesignedAgentPrompt>, HubError> {
+) -> Result<Vec<DesignedAgentPrompt>, HubError> {
     let mut prompts = Vec::with_capacity(result.prompts.len());
 
     for entry in &result.prompts {
@@ -571,7 +605,7 @@ fn map_designer_results(
                 ))
             })?;
 
-        prompts.push(designer::DesignedAgentPrompt {
+        prompts.push(DesignedAgentPrompt {
             agent_roster_entry_id: roster_entry.id,
             agent_name: entry.agent_name.clone(),
             tools: entry.tools.clone(),
@@ -593,29 +627,29 @@ fn build_static_fallback_prompts(
     roster: &[TaskAgentRosterRow],
     doc_defs: &[ProtocolDocumentDefRow],
     base_prompt: &str,
-) -> Vec<designer::DesignedAgentPrompt> {
+) -> Vec<DesignedAgentPrompt> {
     let team_roster = build_team_roster_string(roster, doc_defs);
 
     roster
         .iter()
         .map(|entry| {
             let mut v = std::collections::HashMap::new();
-            v.insert(vars::task_force::AGENT_NAME.into(), entry.name.clone());
+            v.insert(vars::workforce::AGENT_NAME.into(), entry.name.clone());
             v.insert(
-                vars::task_force::ROLE_DESCRIPTION.into(),
+                vars::workforce::ROLE_DESCRIPTION.into(),
                 entry.role_description.clone(),
             );
             v.insert(
-                vars::task_force::TASK_DESCRIPTION.into(),
+                vars::workforce::TASK_DESCRIPTION.into(),
                 brief.task_description.clone(),
             );
-            v.insert(vars::task_force::TEAM_ROSTER.into(), team_roster.clone());
-            v.insert(vars::task_force::PREVIOUS_OUTPUTS.into(), String::new());
+            v.insert(vars::workforce::TEAM_ROSTER.into(), team_roster.clone());
+            v.insert(vars::workforce::PREVIOUS_OUTPUTS.into(), String::new());
             v.insert(vars::user::PROMPT.into(), base_prompt.to_string());
 
-            let role_ctx = roles::TASK_FORCE_AGENT.resolve(&v);
+            let role_ctx = roles::WORKFORCE_AGENT.resolve(&v);
 
-            designer::DesignedAgentPrompt {
+            DesignedAgentPrompt {
                 agent_roster_entry_id: entry.id,
                 agent_name: entry.name.clone(),
                 tools: entry.capabilities.clone(),

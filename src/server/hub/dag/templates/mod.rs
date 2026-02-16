@@ -79,14 +79,6 @@ pub(crate) async fn capture_workflow_snapshot(
             }
         }
 
-        // Document definitions (for documenter steps)
-        if step.execution_mode == "documenter" {
-            let defs = wf_repo.list_document_defs(step.id).await?;
-            if !defs.is_empty() {
-                document_defs.insert(step.id, defs);
-            }
-        }
-
         // Protocol linkage
         if let Ok(Some(proto)) = state.repos().protocols.get_step_protocol(step.id).await {
             protocols.insert(step.id, proto);
@@ -105,7 +97,7 @@ pub(crate) async fn capture_workflow_snapshot(
         }
 
         // Task force configs
-        if step.execution_mode == "task_force" || step.execution_mode == "workforce" {
+        if step.execution_mode == "workforce" {
             if let Ok(Some(brief)) = wf_repo.get_mission_brief(step.id).await {
                 if let Ok(roster) = wf_repo.list_agent_roster(brief.id).await {
                     if !roster.is_empty() {

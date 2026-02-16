@@ -4037,10 +4037,7 @@ impl WorkflowCollectionRepo for PgRepo {
         Ok(rows)
     }
 
-    async fn list_execution_tree(
-        &self,
-        root_id: Uuid,
-    ) -> Result<Vec<WorkflowExecutionRow>> {
+    async fn list_execution_tree(&self, root_id: Uuid) -> Result<Vec<WorkflowExecutionRow>> {
         let rows = sqlx::query_as::<_, WorkflowExecutionRow>(
             "SELECT * FROM workflow_executions \
              WHERE root_execution_id = $1 \

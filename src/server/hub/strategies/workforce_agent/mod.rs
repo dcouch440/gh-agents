@@ -1,8 +1,10 @@
-//! DocumenterResearchStrategy — Phase 2: research gathering.
+//! WorkforceAgentStrategy — executes a single roster agent within a workforce.
 //!
-//! Multi-round tool-using strategy. The LLM uses capability-resolved tools
-//! to gather information for a single document. Supports both execution-context
-//! tools (filesystem, git) and context-free tools (web research).
+//! Each roster agent in a workforce step gets its own strategy instance with
+//! capability-resolved tools. Supports 3-way tool dispatch: container (if
+//! available) → local execution context → context-free tools.
+
+mod tests;
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -10,16 +12,16 @@ use tracing::info;
 use uuid::Uuid;
 
 use crate::agents::execution_tools;
-use crate::execution::ExecutionContext;
+use crate::execution::{ContainerHandle, ExecutionContext};
 use crate::llm::{Message, Tool};
 use crate::server::hub::error::HubError;
 use crate::server::hub::strategy::ExecutionStrategy;
 use crate::server::state::AppState;
 use crate::types::UserId;
 
-/// Configuration for the documenter research phase.
-pub struct DocumenterResearchConfig {
-    /// Research-oriented system prompt with document context.
+/// Configuration for a single workforce agent execution.
+pub struct WorkforceAgentConfig {
+    /// System prompt with agent identity, mission context, and previous outputs.
     pub system_prompt: String,
     /// Model to use.
     pub model_id: String,
@@ -35,25 +37,30 @@ pub struct DocumenterResearchConfig {
     pub tool_names: Vec<String>,
     /// Optional execution context for filesystem/git tools.
     pub execution_context: Option<ExecutionContext>,
+    /// Optional container handle for containerized execution.
+    pub container_handle: Option<ContainerHandle>,
     /// Optional state for token ledger writes.
     pub state: Option<AppState>,
     /// Optional user ID for token ledger attribution.
     pub user_id: Option<UserId>,
 }
 
-/// Phase 2 strategy: use tools to research a single document.
-pub struct DocumenterResearchStrategy {
-    config: DocumenterResearchConfig,
+/// Strategy for executing a single agent within a workforce roster.
+///
+/// Supports 3-way tool dispatch (container → local → context-free) and
+/// logs token usage via the default `on_complete` implementation.
+pub struct WorkforceAgentStrategy {
+    config: WorkforceAgentConfig,
 }
 
-impl DocumenterResearchStrategy {
-    pub fn new(config: DocumenterResearchConfig) -> Self {
+impl WorkforceAgentStrategy {
+    pub fn new(config: WorkforceAgentConfig) -> Self {
         Self { config }
     }
 }
 
 #[async_trait]
-impl ExecutionStrategy for DocumenterResearchStrategy {
+impl ExecutionStrategy for WorkforceAgentStrategy {
     fn system_prompt(&self) -> &str {
         &self.config.system_prompt
     }
@@ -95,19 +102,37 @@ impl ExecutionStrategy for DocumenterResearchStrategy {
             return json!({ "error": "Document reading not available in this context" });
         }
 
+        // Container mode: route through docker exec
+        if let Some(ref handle) = self.config.container_handle {
+            info!(
+                tool = %name,
+                container = %handle.container_name(),
+                "Workforce agent tool call (container)"
+            );
+            return execution_tools::execute_tool_in_container(
+                name,
+                input,
+                handle,
+                Some(&self.config.tool_names),
+            )
+            .await;
+        }
+
+        // Local mode: use host execution context
         match &self.config.execution_context {
-            Some(ctx) => {
-                info!(tool = %name, "Documenter research tool call");
+            Some(exec_ctx) => {
+                info!(tool = %name, "Workforce agent tool call");
                 execution_tools::execute_execution_tool(
                     name,
                     input,
-                    ctx,
+                    exec_ctx,
                     Some(&self.config.tool_names),
                 )
                 .await
             }
             None => {
-                info!(tool = %name, "Documenter research tool call (context-free)");
+                // No local execution context — try context-free tools
+                info!(tool = %name, "Workforce agent tool call (context-free)");
                 execution_tools::execute_context_free_tool(
                     name,
                     input,

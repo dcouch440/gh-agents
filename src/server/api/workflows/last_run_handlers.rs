@@ -36,7 +36,7 @@ pub struct StepLastRunResponse {
     pub output_tokens: Option<i64>,
     pub cost_usd: Option<f64>,
     pub error: Option<String>,
-    /// Present for protocol steps (documenter, task_force).
+    /// Present for protocol steps (workforce).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub phases: Option<Vec<PhaseExecution>>,
     /// Present only for sub_workflow steps.
@@ -61,7 +61,7 @@ pub struct PhaseExecution {
     pub started_at: String,
     pub completed_at: Option<String>,
     pub error_message: Option<String>,
-    /// Human-readable agent name (e.g. "Scanner") for task_force agent phases.
+    /// Human-readable agent name (e.g. "Scanner") for workforce agent phases.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_name: Option<String>,
     /// Protocol archetype that produced this phase.
@@ -140,106 +140,14 @@ pub async fn get_step_last_run(
 /// Build a `StepLastRunResponse` for a given step + execution pair.
 ///
 /// Shared by `get_step_last_run` (latest run) and the run-detail endpoints
-/// (specific historical run). Handles both documenter and non-documenter steps.
+/// (specific historical run). Handles workforce, sub_workflow, and standard steps.
 pub(super) async fn build_step_run_response(
     state: &AppState,
     step: &WorkflowStepRow,
     execution_id: Uuid,
 ) -> Result<StepLastRunResponse, AppError> {
-    let workflow_repo = &state.repos().workflows;
-
-    if step.execution_mode == "documenter" {
-        // Documenter: use protocol_executions for phase-level detail
-        let all_phases = state
-            .repos()
-            .protocols
-            .list_protocol_executions_by_run(execution_id)
-            .await?;
-
-        let step_phases: Vec<_> = all_phases
-            .into_iter()
-            .filter(|p| p.protocol_step_id == step.id)
-            .collect();
-
-        // Build doc-def name lookup
-        let doc_defs = workflow_repo.list_document_defs(step.id).await?;
-        let def_names: std::collections::HashMap<Uuid, String> =
-            doc_defs.into_iter().map(|d| (d.id, d.name)).collect();
-
-        // Aggregate totals across phases
-        let total_tokens_in: i64 = step_phases
-            .iter()
-            .filter_map(|p| p.tokens_in.map(i64::from))
-            .sum();
-        let total_tokens_out: i64 = step_phases
-            .iter()
-            .filter_map(|p| p.tokens_out.map(i64::from))
-            .sum();
-        let total_cost: f64 = step_phases.iter().filter_map(|p| p.cost_usd).sum();
-
-        // Determine overall status
-        let has_error = step_phases.iter().any(|p| p.status == "failed");
-        let all_complete = step_phases.iter().all(|p| p.status == "complete");
-        let overall_status = if has_error {
-            "failed"
-        } else if all_complete {
-            "completed"
-        } else {
-            "running"
-        };
-
-        // Duration from first to last timestamp
-        let earliest = step_phases.iter().map(|p| p.created_at).min();
-        let latest_completed = step_phases.iter().filter_map(|p| p.completed_at).max();
-        let duration_ms = match (earliest, latest_completed) {
-            (Some(start), Some(end)) => Some((end - start).num_milliseconds().unsigned_abs()),
-            _ => None,
-        };
-
-        let phases: Vec<PhaseExecution> = step_phases
-            .into_iter()
-            .map(|p| {
-                let doc_name = p
-                    .document_def_id
-                    .and_then(|did| def_names.get(&did).cloned());
-                PhaseExecution {
-                    id: p.id.to_string(),
-                    phase: p.phase,
-                    document_name: doc_name,
-                    status: p.status,
-                    output_content: p.output_content,
-                    input_tokens: p.tokens_in,
-                    output_tokens: p.tokens_out,
-                    cost_usd: p.cost_usd,
-                    model: p.model,
-                    started_at: p.created_at.to_rfc3339(),
-                    completed_at: p.completed_at.map(|t| t.to_rfc3339()),
-                    error_message: p.error_message,
-                    agent_name: p.agent_name,
-                    archetype: p.archetype,
-                }
-            })
-            .collect();
-
-        Ok(StepLastRunResponse {
-            execution_id: execution_id.to_string(),
-            workflow_execution_id: execution_id.to_string(),
-            status: overall_status.to_string(),
-            started_at: earliest.map(|t| t.to_rfc3339()),
-            completed_at: latest_completed.map(|t| t.to_rfc3339()),
-            duration_ms,
-            output: None,
-            structured_output: None,
-            input_tokens: Some(total_tokens_in),
-            output_tokens: Some(total_tokens_out),
-            cost_usd: Some(total_cost),
-            error: None,
-            phases: Some(phases),
-            child_execution_id: None,
-            child_steps: None,
-        })
-    } else if step.execution_mode == "task_force" {
-        // Task force: use protocol_executions for phase-level detail (designer + agents)
+    if step.execution_mode == "workforce" {
+        // Workforce: use protocol_executions for phase-level detail (designer + agents)
         let all_phases = state
             .repos()
             .protocols
@@ -442,7 +350,7 @@ pub(super) async fn build_step_run_response(
             )),
         }
     } else {
-        // Non-documenter: use agent_executions
+        // Standard steps: use agent_executions
         let agent_execs = state
             .repos()
             .agent_executions

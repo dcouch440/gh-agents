@@ -230,33 +230,29 @@ mod tests {
                     board_overview_summary: String::new(),
                 })
             });
-        repo.expect_update_step()
-            .returning(|s| Ok(s));
+        repo.expect_update_step().returning(|s| Ok(s));
 
         // list_agent_roster: empty (first agent)
         repo.expect_list_agent_roster().returning(|_| Ok(vec![]));
 
         // create_designer_step + create agent step
-        repo.expect_create_step()
-            .times(2)
-            .returning(|s| Ok(s));
+        repo.expect_create_step().times(2).returning(|s| Ok(s));
 
         // Wire Designer → agent edge
-        repo.expect_add_edge()
-            .returning(|wid, from, to| {
-                Ok(WorkflowStepEdgeRow {
-                    id: Uuid::new_v4(),
-                    from_step_id: from,
-                    to_step_id: to,
-                    from_output_port: None,
-                    to_input_port: None,
-                    transform_jsonpath: None,
-                    condition_type: None,
-                    condition_value: None,
-                    edge_label: None,
-                    workflow_id: wid,
-                })
-            });
+        repo.expect_add_edge().returning(|wid, from, to| {
+            Ok(WorkflowStepEdgeRow {
+                id: Uuid::new_v4(),
+                from_step_id: from,
+                to_step_id: to,
+                from_output_port: None,
+                to_input_port: None,
+                transform_jsonpath: None,
+                condition_type: None,
+                condition_value: None,
+                edge_label: None,
+                workflow_id: wid,
+            })
+        });
 
         // add_roster_agent
         repo.expect_add_roster_agent()
@@ -326,9 +322,7 @@ mod tests {
             .returning(move |_| Ok(vec![existing_agent_clone.clone()]));
 
         // create agent step (no Designer this time)
-        repo.expect_create_step()
-            .times(1)
-            .returning(|s| Ok(s));
+        repo.expect_create_step().times(1).returning(|s| Ok(s));
 
         // Wire from previous agent
         repo.expect_add_edge()
@@ -421,12 +415,11 @@ mod tests {
         repo.expect_get_step()
             .returning(move |_| Ok(Some(child_step_clone.clone())));
 
-        repo.expect_update_step()
-            .returning(|s| {
-                assert_eq!(s.name, Some("Renamed Agent".to_string()));
-                assert_eq!(s.description, "New role");
-                Ok(s)
-            });
+        repo.expect_update_step().returning(|s| {
+            assert_eq!(s.name, Some("Renamed Agent".to_string()));
+            assert_eq!(s.description, "New role");
+            Ok(s)
+        });
 
         let input = json!({
             "agent_id": agent_id.to_string(),
@@ -619,7 +612,10 @@ mod tests {
         let input = json!({ "mode": "explode" });
         let result = execute_workforce_tool("set_failure_mode", &input, &repo, &ctx).await;
 
-        assert!(result["error"].as_str().unwrap().contains("Invalid failure mode"));
+        assert!(result["error"]
+            .as_str()
+            .unwrap()
+            .contains("Invalid failure mode"));
     }
 
     // =========================================================================
@@ -633,14 +629,13 @@ mod tests {
         let agent_id = Uuid::new_v4();
 
         let mut repo = MockWorkflowRepo::new();
-        repo.expect_create_document_def()
-            .returning(move |def| {
-                assert_eq!(def.name, "API Docs");
-                assert_eq!(def.step_id, Some(step_id));
-                assert_eq!(def.agent_roster_entry_id, Some(agent_id));
-                assert_eq!(def.target_length, 2000);
-                Ok(def)
-            });
+        repo.expect_create_document_def().returning(move |def| {
+            assert_eq!(def.name, "API Docs");
+            assert_eq!(def.step_id, Some(step_id));
+            assert_eq!(def.agent_roster_entry_id, Some(agent_id));
+            assert_eq!(def.target_length, 2000);
+            Ok(def)
+        });
 
         let input = json!({
             "name": "API Docs",
@@ -660,11 +655,10 @@ mod tests {
         let ctx = make_ctx();
 
         let mut repo = MockWorkflowRepo::new();
-        repo.expect_create_document_def()
-            .returning(|def| {
-                assert!(def.agent_roster_entry_id.is_none());
-                Ok(def)
-            });
+        repo.expect_create_document_def().returning(|def| {
+            assert!(def.agent_roster_entry_id.is_none());
+            Ok(def)
+        });
 
         let input = json!({ "name": "Overview" });
         let result = execute_workforce_tool("add_deliverable", &input, &repo, &ctx).await;

@@ -118,20 +118,13 @@ pub mod vars {
         pub const GATEKEEPER_INPUT: &str = "User.gatekeeper_input";
     }
 
-    /// Variables flowing between AI agents (upstream → downstream directives).
-    pub mod agent {
-        pub const RESEARCH_STRATEGY: &str = "Agent.research_strategy";
-        pub const WRITER_PROMPT: &str = "Agent.writer_prompt";
-        pub const RESEARCH_CONTENT: &str = "Agent.research_content";
-    }
-
-    /// Variables for task force runtime agent prompts.
-    pub mod task_force {
-        pub const AGENT_NAME: &str = "TaskForce.agent_name";
-        pub const ROLE_DESCRIPTION: &str = "TaskForce.role_description";
-        pub const TASK_DESCRIPTION: &str = "TaskForce.task_description";
-        pub const TEAM_ROSTER: &str = "TaskForce.team_roster";
-        pub const PREVIOUS_OUTPUTS: &str = "TaskForce.previous_outputs";
+    /// Variables for workforce runtime agent prompts.
+    pub mod workforce {
+        pub const AGENT_NAME: &str = "Workforce.agent_name";
+        pub const ROLE_DESCRIPTION: &str = "Workforce.role_description";
+        pub const TASK_DESCRIPTION: &str = "Workforce.task_description";
+        pub const TEAM_ROSTER: &str = "Workforce.team_roster";
+        pub const PREVIOUS_OUTPUTS: &str = "Workforce.previous_outputs";
     }
 
     /// Variables for belief capture runtime extraction prompts.
@@ -182,13 +175,6 @@ pub mod vars {
 // Config statics — parsed once on first access
 // ---------------------------------------------------------------------------
 
-pub static DOCUMENTER: Lazy<ProtocolConfig> = Lazy::new(|| {
-    serde_yaml::from_str(include_str!(
-        "../../config/protocols/documenter/config.yaml"
-    ))
-    .expect("Failed to parse config/protocols/documenter/config.yaml")
-});
-
 pub static MEETING: Lazy<ProtocolConfig> = Lazy::new(|| {
     serde_yaml::from_str(include_str!("../../config/protocols/meeting/config.yaml"))
         .expect("Failed to parse config/protocols/meeting/config.yaml")
@@ -201,18 +187,16 @@ pub static NODE_ASSISTANT: Lazy<ProtocolConfig> = Lazy::new(|| {
     .expect("Failed to parse config/protocols/node_assistant/config.yaml")
 });
 
-pub static TASK_FORCE: Lazy<ProtocolConfig> = Lazy::new(|| {
-    serde_yaml::from_str(include_str!(
-        "../../config/protocols/task_force/config.yaml"
-    ))
-    .expect("Failed to parse config/protocols/task_force/config.yaml")
-});
-
 pub static BELIEF_CAPTURE: Lazy<ProtocolConfig> = Lazy::new(|| {
     serde_yaml::from_str(include_str!(
         "../../config/protocols/belief_capture/config.yaml"
     ))
     .expect("Failed to parse config/protocols/belief_capture/config.yaml")
+});
+
+pub static WORKFORCE: Lazy<ProtocolConfig> = Lazy::new(|| {
+    serde_yaml::from_str(include_str!("../../config/protocols/workforce/config.yaml"))
+        .expect("Failed to parse config/protocols/workforce/config.yaml")
 });
 
 pub static AGENT_DESIGNER: Lazy<ProtocolConfig> = Lazy::new(|| {
@@ -229,32 +213,6 @@ pub static AGENT_DESIGNER: Lazy<ProtocolConfig> = Lazy::new(|| {
 pub mod roles {
     use super::RoleDefinition;
 
-    pub static DOCUMENTER_STRATEGIST: RoleDefinition = RoleDefinition {
-        system: include_str!("../../config/protocols/documenter/strategist/system.md"),
-        prompt: include_str!("../../config/protocols/documenter/strategist/prompt.md"),
-        response: Some(include_str!(
-            "../../config/protocols/documenter/strategist/response.json"
-        )),
-    };
-
-    pub static DOCUMENTER_RESEARCHER: RoleDefinition = RoleDefinition {
-        system: include_str!("../../config/protocols/documenter/researcher/system.md"),
-        prompt: include_str!("../../config/protocols/documenter/researcher/prompt.md"),
-        response: None,
-    };
-
-    pub static DOCUMENTER_WRITER: RoleDefinition = RoleDefinition {
-        system: include_str!("../../config/protocols/documenter/writer/system.md"),
-        prompt: include_str!("../../config/protocols/documenter/writer/prompt.md"),
-        response: None,
-    };
-
-    pub static DOCUMENTER_ASSISTANT: RoleDefinition = RoleDefinition {
-        system: include_str!("../../config/protocols/documenter/assistant/system.md"),
-        prompt: include_str!("../../config/protocols/documenter/assistant/prompt.md"),
-        response: None,
-    };
-
     pub static MEETING_GATEKEEPER: RoleDefinition = RoleDefinition {
         system: include_str!("../../config/protocols/meeting/gatekeeper/system.md"),
         prompt: include_str!("../../config/protocols/meeting/gatekeeper/prompt.md"),
@@ -269,14 +227,6 @@ pub mod roles {
         response: None,
     };
 
-    /// Documenter archetype block, injected via `{{.System.archetype_block}}`.
-    pub const NODE_ASSISTANT_DOCUMENTER_BLOCK: &str =
-        include_str!("../../config/protocols/node_assistant/documenter/block.md");
-
-    /// Task force archetype block, injected via `{{.System.archetype_block}}`.
-    pub const NODE_ASSISTANT_TASK_FORCE_BLOCK: &str =
-        include_str!("../../config/protocols/node_assistant/task_force/block.md");
-
     /// Belief capture archetype block, injected via `{{.System.archetype_block}}`.
     pub const NODE_ASSISTANT_BELIEF_CAPTURE_BLOCK: &str =
         include_str!("../../config/protocols/node_assistant/belief_capture/block.md");
@@ -289,10 +239,10 @@ pub mod roles {
     pub const NODE_ASSISTANT_WORKFORCE_BLOCK: &str =
         include_str!("../../config/protocols/node_assistant/workforce/block.md");
 
-    /// Task force runtime agent prompt template.
-    pub static TASK_FORCE_AGENT: RoleDefinition = RoleDefinition {
-        system: include_str!("../../config/protocols/task_force/agent/system.md"),
-        prompt: include_str!("../../config/protocols/task_force/agent/prompt.md"),
+    /// Workforce runtime agent prompt template.
+    pub static WORKFORCE_AGENT: RoleDefinition = RoleDefinition {
+        system: include_str!("../../config/protocols/workforce/agent/system.md"),
+        prompt: include_str!("../../config/protocols/workforce/agent/prompt.md"),
         response: None,
     };
 
@@ -332,29 +282,6 @@ mod tests {
     // ── Config tests ─────────────────────────────────────────────────────
 
     #[test]
-    fn documenter_config_parses_all_roles() {
-        let cfg = &*DOCUMENTER;
-        assert_eq!(cfg.agents.len(), 4);
-
-        let strategist = cfg.agent("strategist");
-        assert_eq!(strategist.temperature, 0.3);
-        assert_eq!(strategist.max_rounds, 1);
-        assert_eq!(strategist.context_budget, 100_000);
-
-        let researcher = cfg.agent("researcher");
-        assert_eq!(researcher.temperature, 0.2);
-        assert_eq!(researcher.max_rounds, 15);
-        assert_eq!(researcher.context_budget, 480_000);
-
-        let writer = cfg.agent("writer");
-        assert_eq!(writer.temperature, 0.5);
-        assert_eq!(writer.max_tokens, 16384);
-
-        let assistant = cfg.agent("assistant");
-        assert_eq!(assistant.temperature, 0.4);
-    }
-
-    #[test]
     fn meeting_config_parses_gatekeeper() {
         let cfg = &*MEETING;
         let gk = cfg.agent("gatekeeper");
@@ -368,7 +295,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Unknown agent role")]
     fn unknown_role_panics() {
-        DOCUMENTER.agent("nonexistent");
+        MEETING.agent("nonexistent");
     }
 
     // ── RoleDefinition / ProtocolContext tests ───────────────────────────
@@ -395,18 +322,15 @@ mod tests {
     fn resolve_empty_var_collapses_blank_lines() {
         let role = RoleDefinition {
             system: "line1",
-            prompt: "{{.Agent.research_strategy}}\n\n{{.System.selected_context}}",
+            prompt: "{{.Workforce.agent_name}}\n\n{{.System.selected_context}}",
             response: None,
         };
         let mut vars = HashMap::new();
-        vars.insert(
-            "Agent.research_strategy".to_string(),
-            "do research".to_string(),
-        );
+        vars.insert("Workforce.agent_name".to_string(), "Analyst".to_string());
         vars.insert("System.selected_context".to_string(), String::new());
 
         let ctx = role.resolve(&vars);
-        assert_eq!(ctx.user_prompt, "do research");
+        assert_eq!(ctx.user_prompt, "Analyst");
     }
 
     #[test]
@@ -442,22 +366,6 @@ mod tests {
 
     #[test]
     fn all_role_statics_load() {
-        assert!(!roles::DOCUMENTER_STRATEGIST.system.is_empty());
-        assert!(!roles::DOCUMENTER_STRATEGIST.prompt.is_empty());
-        assert!(roles::DOCUMENTER_STRATEGIST.response.is_some());
-
-        assert!(!roles::DOCUMENTER_RESEARCHER.system.is_empty());
-        assert!(!roles::DOCUMENTER_RESEARCHER.prompt.is_empty());
-        assert!(roles::DOCUMENTER_RESEARCHER.response.is_none());
-
-        assert!(!roles::DOCUMENTER_WRITER.system.is_empty());
-        assert!(!roles::DOCUMENTER_WRITER.prompt.is_empty());
-        assert!(roles::DOCUMENTER_WRITER.response.is_none());
-
-        assert!(!roles::DOCUMENTER_ASSISTANT.system.is_empty());
-        assert!(!roles::DOCUMENTER_ASSISTANT.prompt.is_empty());
-        assert!(roles::DOCUMENTER_ASSISTANT.response.is_none());
-
         assert!(!roles::MEETING_GATEKEEPER.system.is_empty());
         assert!(!roles::MEETING_GATEKEEPER.prompt.is_empty());
         assert!(roles::MEETING_GATEKEEPER.response.is_some());
@@ -466,15 +374,13 @@ mod tests {
         assert!(!roles::NODE_ASSISTANT_BASE.prompt.is_empty());
         assert!(roles::NODE_ASSISTANT_BASE.response.is_none());
 
-        assert!(!roles::NODE_ASSISTANT_DOCUMENTER_BLOCK.is_empty());
-        assert!(!roles::NODE_ASSISTANT_TASK_FORCE_BLOCK.is_empty());
         assert!(!roles::NODE_ASSISTANT_BELIEF_CAPTURE_BLOCK.is_empty());
         assert!(!roles::NODE_ASSISTANT_ROOM_BLOCK.is_empty());
         assert!(!roles::NODE_ASSISTANT_WORKFORCE_BLOCK.is_empty());
 
-        assert!(!roles::TASK_FORCE_AGENT.system.is_empty());
-        assert!(!roles::TASK_FORCE_AGENT.prompt.is_empty());
-        assert!(roles::TASK_FORCE_AGENT.response.is_none());
+        assert!(!roles::WORKFORCE_AGENT.system.is_empty());
+        assert!(!roles::WORKFORCE_AGENT.prompt.is_empty());
+        assert!(roles::WORKFORCE_AGENT.response.is_none());
 
         assert!(!roles::BELIEF_CAPTURE_EXTRACTOR.system.is_empty());
         assert!(!roles::BELIEF_CAPTURE_EXTRACTOR.prompt.is_empty());
@@ -499,8 +405,8 @@ mod tests {
     }
 
     #[test]
-    fn task_force_config_parses() {
-        let cfg = &*TASK_FORCE;
+    fn workforce_config_parses() {
+        let cfg = &*WORKFORCE;
         let agent = cfg.agent("agent");
         assert_eq!(agent.temperature, 0.3);
         assert_eq!(agent.max_rounds, 15);
@@ -536,7 +442,7 @@ mod tests {
         );
         vars.insert(
             vars::system::ARCHETYPE_BLOCK.to_string(),
-            roles::NODE_ASSISTANT_DOCUMENTER_BLOCK.to_string(),
+            roles::NODE_ASSISTANT_WORKFORCE_BLOCK.to_string(),
         );
         vars.insert(vars::system::CURRENT_CONFIG.to_string(), String::new());
 
@@ -551,17 +457,8 @@ mod tests {
         );
         assert!(
             ctx.system_prompt.contains("archetype_context"),
-            "should contain documenter block"
+            "should contain workforce block"
         );
-    }
-
-    #[test]
-    fn strategist_response_json_parses_directly() {
-        let raw = roles::DOCUMENTER_STRATEGIST.response.unwrap();
-        let schema: serde_json::Value =
-            serde_json::from_str(raw).expect("strategist response.json should be valid JSON");
-        assert_eq!(schema["type"], "object");
-        assert!(schema["properties"]["document_plans"].is_object());
     }
 
     #[test]
@@ -573,98 +470,6 @@ mod tests {
         assert!(schema["properties"]["speakers"].is_object());
     }
 
-    // ── Assistant resolution with realistic context ────────────────────
-
-    #[test]
-    fn assistant_resolves_with_prd_context() {
-        let config_snapshot = "\
-Name: Technical Spec Generator
-Description: Transforms product requirements into engineering specs and architecture docs
-Prompt: You are generating TECHNICAL SPECIFICATION DOCUMENTS from a product requirements \
-document. Break down high-level product goals into concrete engineering requirements, \
-API contracts, data models, and implementation guidance.
-
-Documents:
-  - API Contract Specification (id: a1b2c3d4-0000-0000-0000-000000000001, target: ~3000 words) \
-— Complete REST API specification with endpoints, request/response schemas, auth flows, \
-and error handling contracts
-  - Data Model & Schema Design (id: a1b2c3d4-0000-0000-0000-000000000002, target: ~2000 words) \
-— Database schema, entity relationships, migration strategy, and indexing requirements
-  - Implementation Roadmap (id: a1b2c3d4-0000-0000-0000-000000000003, target: ~1500 words) \
-— Phased delivery plan with dependencies, risk areas, and milestone criteria
-
-Incoming Context:
-  - Product Requirements Document (context) — populated
-    Description: Q2 2026 product requirements for the notifications platform
-    Preview (820 words): ## Notifications Platform PRD\\n\\n### Problem Statement\\n\\n\
-Users currently miss critical updates because our notification system is fragmented across \
-email, in-app, and push channels with no unified preference management. Support tickets \
-related to missed notifications increased 34% last quarter.\\n\\n### Goals\\n\\n\
-1. Unified notification preferences API — single endpoint for all channel preferences\\n\
-2. Real-time delivery tracking — users can see delivery status per notification\\n\
-3. Digest mode — batch low-priority notifications into daily/weekly summaries\\n\
-4. Template system — product teams self-serve notification content without eng deploys\\n\\n\
-### Non-Goals\\n\\n- SMS channel (deferred to Q3)\\n- Analytics dashboard (separate workstream)\\n\\n\
-### Success Metrics\\n\\n- Reduce missed-notification support tickets by 60%\\n\
-- Notification preference adoption > 40% of MAU within 8 weeks\\n\
-- P95 delivery latency < 500ms for real-time channel
-  - Engineering Constraints (context) — populated
-    Description: Technical constraints and existing system boundaries
-    Preview (210 words): Current stack: Node.js 20, PostgreSQL 15, Redis 7, RabbitMQ. \
-Auth via JWT with 1h expiry. Rate limit: 1000 req/min per user. Existing notification \
-table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APNs.
-  - Design Mockups (context) — empty";
-
-        let mut vars = HashMap::new();
-        vars.insert(
-            vars::system::CURRENT_CONFIG.to_string(),
-            config_snapshot.to_string(),
-        );
-        let ctx = roles::DOCUMENTER_ASSISTANT.resolve(&vars);
-
-        // Config file content is present (from system.md)
-        assert!(
-            ctx.system_prompt.contains("document planning assistant"),
-            "should use system.md role definition, not hardcoded prompt"
-        );
-        assert!(
-            ctx.system_prompt
-                .contains("reference material generated for AI agents"),
-            "should explain documents are for agent consumption"
-        );
-        assert!(
-            ctx.system_prompt.contains("populated"),
-            "should explain context status types"
-        );
-        assert!(
-            ctx.system_prompt.contains("pending"),
-            "should explain pending status"
-        );
-        assert!(
-            ctx.system_prompt
-                .contains("actual content generation happens later"),
-            "should include scope boundary from system.md"
-        );
-
-        // Injected config snapshot is present
-        assert!(ctx.system_prompt.contains("Technical Spec Generator"));
-        assert!(ctx.system_prompt.contains("API Contract Specification"));
-        assert!(ctx.system_prompt.contains("Notifications Platform PRD"));
-        assert!(ctx
-            .system_prompt
-            .contains("Engineering Constraints (context)"));
-        assert!(ctx
-            .system_prompt
-            .contains("Design Mockups (context) — empty"));
-
-        // Old hardcoded prompt is NOT present
-        assert!(
-            !ctx.system_prompt
-                .contains("Always explain what you're doing"),
-            "should not contain old hardcoded prompt text"
-        );
-    }
-
     // ── Template variable validation ─────────────────────────────────────
 
     #[test]
@@ -674,9 +479,6 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
         let known: HashSet<&str> = HashSet::from([
             vars::user::PROMPT,
             vars::user::GATEKEEPER_INPUT,
-            vars::agent::RESEARCH_STRATEGY,
-            vars::agent::WRITER_PROMPT,
-            vars::agent::RESEARCH_CONTENT,
             vars::system::DOC_NAME,
             vars::system::SELECTED_CONTEXT,
             vars::system::REQUESTED_DOCUMENTS,
@@ -688,11 +490,11 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
             vars::system::ARCHETYPE_BLOCK,
             vars::system::ASSISTANT_NOTES,
             vars::system::BOARD_OVERVIEW,
-            vars::task_force::AGENT_NAME,
-            vars::task_force::ROLE_DESCRIPTION,
-            vars::task_force::TASK_DESCRIPTION,
-            vars::task_force::TEAM_ROSTER,
-            vars::task_force::PREVIOUS_OUTPUTS,
+            vars::workforce::AGENT_NAME,
+            vars::workforce::ROLE_DESCRIPTION,
+            vars::workforce::TASK_DESCRIPTION,
+            vars::workforce::TEAM_ROSTER,
+            vars::workforce::PREVIOUS_OUTPUTS,
             vars::belief_capture::EXTRACTION_FOCUS,
             vars::belief_capture::TAG_VOCABULARY,
             vars::belief_capture::CONTRADICTION_HANDLING,
@@ -712,13 +514,9 @@ table has 2.3B rows — migration must be zero-downtime. Mobile push via FCM/APN
         ]);
 
         let all_roles: &[(&str, &RoleDefinition)] = &[
-            ("strategist", &roles::DOCUMENTER_STRATEGIST),
-            ("researcher", &roles::DOCUMENTER_RESEARCHER),
-            ("writer", &roles::DOCUMENTER_WRITER),
-            ("assistant", &roles::DOCUMENTER_ASSISTANT),
             ("gatekeeper", &roles::MEETING_GATEKEEPER),
             ("node_assistant", &roles::NODE_ASSISTANT_BASE),
-            ("task_force_agent", &roles::TASK_FORCE_AGENT),
+            ("workforce_agent", &roles::WORKFORCE_AGENT),
             ("belief_capture_extractor", &roles::BELIEF_CAPTURE_EXTRACTOR),
             ("chat_belief_extractor", &roles::CHAT_BELIEF_EXTRACTOR),
             ("agent_designer", &roles::AGENT_DESIGNER_DESIGNER),

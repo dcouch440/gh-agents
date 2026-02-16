@@ -168,9 +168,14 @@ fn schedule_consistency_scan_if_deletion(
     result: &Value,
 ) {
     let (item_type, id_field) = match tool_name {
-        "delete_doc_def" | "remove_deliverable" => {
-            (DeletedItemType::DocumentDef, if tool_name == "delete_doc_def" { "doc_def_id" } else { "deliverable_id" })
-        }
+        "delete_doc_def" | "remove_deliverable" => (
+            DeletedItemType::DocumentDef,
+            if tool_name == "delete_doc_def" {
+                "doc_def_id"
+            } else {
+                "deliverable_id"
+            },
+        ),
         "remove_agent" => (DeletedItemType::RosterAgent, "agent_id"),
         _ => return,
     };

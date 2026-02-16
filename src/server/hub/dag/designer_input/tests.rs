@@ -5,10 +5,7 @@ mod tests {
     use chrono::Utc;
     use uuid::Uuid;
 
-    use crate::db::{
-        BeliefRow, ProtocolDocumentDefRow, TaskAgentRosterRow, TaskMissionBriefRow, WorkflowStepRow,
-    };
-    use crate::server::hub::dag::documenter::types::DocumentPlan;
+    use crate::db::{BeliefRow, TaskAgentRosterRow, TaskMissionBriefRow, WorkflowStepRow};
     use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
 
     use super::super::*;
@@ -72,7 +69,7 @@ mod tests {
             id: Uuid::new_v4(),
             workflow_id: Uuid::new_v4(),
             agent_id: None,
-            execution_mode: "documenter".to_string(),
+            execution_mode: "workforce".to_string(),
             agent_execution_mode: None,
             for_each_ref: None,
             prompt_template_id: None,
@@ -103,31 +100,6 @@ mod tests {
             sub_workflow_template_id: None,
             child_workflow_id: None,
             is_designer_step: false,
-        }
-    }
-
-    fn make_doc_def(name: &str, target_length: i32) -> ProtocolDocumentDefRow {
-        ProtocolDocumentDefRow {
-            id: Uuid::new_v4(),
-            step_id: Some(Uuid::new_v4()),
-            name: name.to_string(),
-            description: format!("Description for {}", name),
-            target_length,
-            display_order: 0,
-            created_at: Utc::now(),
-            protocol_id: None,
-            document_id: None,
-            agent_roster_entry_id: None,
-        }
-    }
-
-    fn make_document_plan(name: &str, strategy: &str, writer: &str) -> DocumentPlan {
-        DocumentPlan {
-            document_name: name.to_string(),
-            research_strategy: strategy.to_string(),
-            required_capabilities: vec!["file_read".to_string(), "grep".to_string()],
-            writer_prompt: writer.to_string(),
-            context_document_ids: vec![],
         }
     }
 
@@ -232,195 +204,6 @@ mod tests {
         assert!(truncated.is_char_boundary(truncated.len()));
     }
 
-    // ── Task force formatter tests ───────────────────────────────────────────
-
-    #[test]
-    fn test_task_force_input_basic() {
-        let brief = make_brief(
-            "Audit codebase for security issues",
-            vec!["file_read".to_string(), "grep".to_string()],
-        );
-        let roster = vec![
-            make_roster_entry("Scanner", "Search for vulnerabilities", 0),
-            make_roster_entry("Analyzer", "Evaluate findings", 1),
-            make_roster_entry("Reporter", "Write audit report", 2),
-        ];
-
-        let input = task_force::build_task_force_designer_input(
-            &brief,
-            &roster,
-            &HashMap::new(),
-            &[],
-            None,
-        );
-
-        assert_eq!(input.archetype, "task_force");
-        assert_eq!(input.agents.len(), 3);
-        assert_eq!(input.agents[0].name, "Scanner");
-        assert_eq!(input.agents[1].name, "Analyzer");
-        assert_eq!(input.agents[2].name, "Reporter");
-        assert_eq!(input.available_tools.len(), 2);
-        assert!(input.archetype_guidance.contains("fail_fast"));
-        assert!(input.archetype_guidance.contains("Engineering lead"));
-    }
-
-    #[test]
-    fn test_task_force_input_no_upstream() {
-        let brief = make_brief("Test task", vec![]);
-        let roster = vec![make_roster_entry("Agent", "Do stuff", 0)];
-
-        let input = task_force::build_task_force_designer_input(
-            &brief,
-            &roster,
-            &HashMap::new(),
-            &[],
-            None,
-        );
-
-        assert_eq!(input.upstream.len(), 1);
-        assert!(input.upstream[0].content.contains("No upstream"));
-    }
-
-    #[test]
-    fn test_task_force_input_preserves_execution_order() {
-        let brief = make_brief("Test", vec![]);
-        let roster = vec![
-            make_roster_entry("Third", "role", 2),
-            make_roster_entry("First", "role", 0),
-            make_roster_entry("Second", "role", 1),
-        ];
-
-        let input = task_force::build_task_force_designer_input(
-            &brief,
-            &roster,
-            &HashMap::new(),
-            &[],
-            None,
-        );
-
-        assert_eq!(input.agents[0].execution_order, 2);
-        assert_eq!(input.agents[1].execution_order, 0);
-        assert_eq!(input.agents[2].execution_order, 1);
-    }
-
-    // ── Documenter formatter tests ───────────────────────────────────────────
-
-    #[test]
-    fn test_strategist_input_single_agent() {
-        let step = make_step();
-        let doc_defs = vec![
-            make_doc_def("API Reference", 3000),
-            make_doc_def("Data Model", 1500),
-        ];
-
-        let input = documenter::build_strategist_designer_input(
-            &step,
-            &doc_defs,
-            &HashMap::new(),
-            &["file_read".to_string()],
-            &[],
-            None,
-        );
-
-        assert_eq!(input.archetype, "documenter");
-        assert_eq!(input.agents.len(), 1);
-        assert_eq!(input.agents[0].name, "Document Strategist");
-        assert!(input.agents[0].capabilities.is_empty());
-        assert!(input.agents[0].additional_context.contains("API Reference"));
-        assert!(input.agents[0].additional_context.contains("Data Model"));
-        assert!(input.archetype_guidance.contains("Phase 1"));
-        assert!(input.context_description.contains("2 reference documents"));
-    }
-
-    #[test]
-    fn test_research_write_input_creates_2n_agents() {
-        let step = make_step();
-        let plans = vec![
-            make_document_plan(
-                "API Reference",
-                "Search for endpoints",
-                "Write in reference style",
-            ),
-            make_document_plan(
-                "Data Model",
-                "Examine schema files",
-                "Write entity descriptions",
-            ),
-        ];
-
-        let input = documenter::build_research_write_designer_input(
-            &step,
-            &plans,
-            &HashMap::new(),
-            &["file_read".to_string(), "grep".to_string()],
-            &[],
-            None,
-        );
-
-        assert_eq!(input.agents.len(), 4);
-
-        // Researchers first
-        assert_eq!(input.agents[0].id, "researcher:API Reference");
-        assert_eq!(input.agents[0].execution_order, 0);
-        assert_eq!(input.agents[1].id, "researcher:Data Model");
-        assert_eq!(input.agents[1].execution_order, 1);
-
-        // Writers after
-        assert_eq!(input.agents[2].id, "writer:API Reference");
-        assert_eq!(input.agents[2].execution_order, 2);
-        assert_eq!(input.agents[3].id, "writer:Data Model");
-        assert_eq!(input.agents[3].execution_order, 3);
-    }
-
-    #[test]
-    fn test_research_write_input_researcher_gets_capabilities() {
-        let step = make_step();
-        let plans = vec![make_document_plan("Doc", "Research it", "Write it")];
-
-        let input = documenter::build_research_write_designer_input(
-            &step,
-            &plans,
-            &HashMap::new(),
-            &["file_read".to_string()],
-            &[],
-            None,
-        );
-
-        // Researcher has capabilities from the plan
-        assert_eq!(
-            input.agents[0].capabilities,
-            vec!["file_read".to_string(), "grep".to_string()]
-        );
-        // Writer has no capabilities
-        assert!(input.agents[1].capabilities.is_empty());
-    }
-
-    #[test]
-    fn test_research_write_input_includes_strategist_guidance() {
-        let step = make_step();
-        let plans = vec![make_document_plan(
-            "API Reference",
-            "Search for all REST endpoints in src/api/",
-            "Write comprehensive endpoint documentation",
-        )];
-
-        let input = documenter::build_research_write_designer_input(
-            &step,
-            &plans,
-            &HashMap::new(),
-            &[],
-            &[],
-            None,
-        );
-
-        assert!(input.agents[0]
-            .additional_context
-            .contains("Search for all REST endpoints"));
-        assert!(input.agents[1]
-            .additional_context
-            .contains("Write comprehensive endpoint documentation"));
-    }
-
     // ── Room formatter tests ─────────────────────────────────────────────────
 
     #[test]
@@ -521,48 +304,6 @@ mod tests {
     }
 
     // ── Assistant notes injection tests ─────────────────────────────────────
-
-    #[test]
-    fn test_task_force_input_includes_assistant_notes() {
-        let brief = make_brief("Test task", vec![]);
-        let roster = vec![make_roster_entry("Agent", "Do stuff", 0)];
-
-        let input = task_force::build_task_force_designer_input(
-            &brief,
-            &roster,
-            &HashMap::new(),
-            &[],
-            Some("## Direction\n- Build auth system"),
-        );
-
-        let notes_entry = input
-            .upstream
-            .iter()
-            .find(|u| u.source_type == "agent_notes");
-        assert!(notes_entry.is_some());
-        let entry = notes_entry.unwrap();
-        assert_eq!(entry.source_name, "Assistant's Notes");
-        assert!(entry.content.contains("Build auth system"));
-    }
-
-    #[test]
-    fn test_task_force_input_skips_empty_notes() {
-        let brief = make_brief("Test task", vec![]);
-        let roster = vec![make_roster_entry("Agent", "Do stuff", 0)];
-
-        let input = task_force::build_task_force_designer_input(
-            &brief,
-            &roster,
-            &HashMap::new(),
-            &[],
-            Some(""),
-        );
-
-        assert!(!input
-            .upstream
-            .iter()
-            .any(|u| u.source_type == "agent_notes"));
-    }
 
     #[test]
     fn test_room_input_includes_perspectives() {

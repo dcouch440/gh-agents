@@ -7,46 +7,11 @@ mod tests {
     use crate::server::hub::protocols::types::ProtocolConfig;
     use crate::server::hub::protocols::ProtocolEngine;
 
-    fn make_documenter_config() -> ProtocolConfig {
-        ProtocolConfig {
-            protocol_type: "documenter".to_string(),
-            config: serde_json::json!({
-                "document_defs": [
-                    {"name": "API Reference", "description": "REST API docs", "target_length": 5000},
-                    {"name": "Architecture Guide", "description": "System overview", "target_length": 3000},
-                ]
-            }),
-            ports: vec![],
-        }
-    }
-
     #[test]
-    fn engine_registers_documenter() {
+    fn engine_has_no_registered_types() {
         let engine = ProtocolEngine::new();
         let types = engine.list_types();
-        let type_names: Vec<&str> = types.iter().map(|(t, _)| *t).collect();
-        assert!(type_names.contains(&"documenter"));
-        assert_eq!(type_names.len(), 1);
-    }
-
-    #[test]
-    fn engine_expands_documenter() {
-        let engine = ProtocolEngine::new();
-        let config = make_documenter_config();
-        let expansion = engine.expand(&config).unwrap();
-
-        // Documenter produces no downstream steps or edges
-        assert!(expansion.steps.is_empty());
-        assert!(expansion.edges.is_empty());
-
-        // Output schema should have document_plans
-        assert_eq!(expansion.output_schema["type"], "object");
-        assert!(expansion.output_schema["properties"]["document_plans"].is_object());
-
-        // Prompt injection should mention documents
-        assert!(expansion.prompt_injection.contains("API Reference"));
-        assert!(expansion.prompt_injection.contains("Architecture Guide"));
-        assert!(expansion.prompt_injection.contains("Document Strategist"));
+        assert!(types.is_empty());
     }
 
     #[test]
@@ -93,7 +58,7 @@ mod tests {
         let agent_tools = HashMap::new();
         let agent_schemas = HashMap::new();
         let config = engine.build_config(
-            "documenter",
+            "test_type",
             serde_json::json!({}),
             &ports,
             &agent_names,
@@ -145,7 +110,7 @@ mod tests {
         // agent_id_2 intentionally has no schema
 
         let config = engine.build_config(
-            "documenter",
+            "test_type",
             serde_json::json!({}),
             &ports,
             &agent_names,

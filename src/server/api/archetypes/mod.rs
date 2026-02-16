@@ -20,18 +20,10 @@ pub struct ArchetypeInfo {
 
 const ARCHETYPES: &[ArchetypeInfo] = &[
     ArchetypeInfo {
-        id: "documenter",
-        name: "Documenter",
+        id: "workforce",
+        name: "Workforce",
         description:
-            "Research-and-write pipeline that produces structured documents from incoming context.",
-        icon: "file-text",
-        color: "#4A90D9",
-    },
-    ArchetypeInfo {
-        id: "task_force",
-        name: "Task Force",
-        description:
-            "Team of agents that executes a multi-step mission with planning and deliverables.",
+            "Team of agents that executes a mission with configurable deliverables and agent roles.",
         icon: "users",
         color: "#E67E22",
     },

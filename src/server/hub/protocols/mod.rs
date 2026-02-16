@@ -117,9 +117,8 @@ impl ProtocolEngine {
 
     /// Register all built-in protocol compilers.
     fn register_builtins(&mut self) {
-        use compilers::DocumenterCompiler;
-
-        self.register(Arc::new(DocumenterCompiler));
+        // No built-in compilers — documenter was removed in favor of workforce.
+        // Future protocol types will register their compilers here.
     }
 }
 

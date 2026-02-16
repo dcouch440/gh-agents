@@ -16,9 +16,9 @@ use uuid::Uuid;
 use crate::db::{AgentRow, StepOutputRow, WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::execution::ContainerHandle;
 use crate::server::hub::engine::filters::{
-    AgentGuidanceFilter, DebateVerificationFilter, DocumenterPromptFilter, ExecutionFilter,
-    FewShotFilter, FilterContext, PartialJsonRecoveryFilter, ReasoningTraceFilter,
-    SchemaEnhancementFilter, SchemaValidationRetryFilter,
+    AgentGuidanceFilter, DebateVerificationFilter, ExecutionFilter, FewShotFilter, FilterContext,
+    PartialJsonRecoveryFilter, ReasoningTraceFilter, SchemaEnhancementFilter,
+    SchemaValidationRetryFilter,
 };
 use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
@@ -308,13 +308,6 @@ pub(crate) async fn run_step_via_engine(
 
     if let Some(ae_repo) = state.agent_execution_repo() {
         filters.push(Arc::new(FewShotFilter::new(ae_repo)));
-    }
-
-    // Documenter: inject document definitions into system prompt
-    if step.execution_mode == "documenter" {
-        filters.push(Arc::new(DocumenterPromptFilter::new(
-            state.repos().workflows.clone(),
-        )));
     }
 
     if let Some(schema_val) = output_schema_value {
