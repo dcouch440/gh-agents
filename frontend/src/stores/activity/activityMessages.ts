@@ -42,6 +42,17 @@ const messages: MessageMap = {
 
   [ACTIVITY.WORKFLOW_RESUMED]: (e) => `Workflow resumed at step ${e.stepId}`,
 
+  [ACTIVITY.WORKFLOW_SUB_WORKFLOW_STARTED]: (e) =>
+    `Sub-workflow started for step ${e.parentStepId} (${plural(e.totalSteps, 'step')})`,
+
+  [ACTIVITY.WORKFLOW_SUB_WORKFLOW_COMPLETED]: (e) =>
+    `Sub-workflow ${e.status} for step ${e.parentStepId}`,
+
+  [ACTIVITY.WORKFLOW_SUB_WORKFLOW_STEP_PROGRESS]: (e) =>
+    e.status === 'failed'
+      ? `Child step "${e.childStepName}" FAILED: ${e.error ?? 'unknown error'}`
+      : `Child step "${e.childStepName}" ${e.status}`,
+
   [ACTIVITY.ROOM_SPEAKER_START]: (e) => `${e.agentName} started speaking (turn ${e.turnNumber})`,
 
   [ACTIVITY.ROOM_SPEAKER_TOKEN]: (e) => `${e.agentName}: ${e.content}`,

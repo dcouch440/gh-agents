@@ -437,6 +437,167 @@ describe('workflowExecutionStore', () => {
     })
   })
 
+  describe('sub-workflow events', () => {
+    it('SUB_WORKFLOW_STARTED initializes subWorkflowProgress on parent step', () => {
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 2 }))
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 'parent-1', step_name: 'Sub Step', agent_id: null, execution_id: null }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.SUB_WORKFLOW_STARTED, {
+          workflow_id: 'w1',
+          parent_step_id: 'parent-1',
+          child_execution_id: 'child-exec-1',
+          total_steps: 3,
+        }),
+      )
+
+      const step = getState().stepStates['parent-1']
+      expect(step.subWorkflowProgress).toBeDefined()
+      expect(step.subWorkflowProgress!.childExecutionId).toBe('child-exec-1')
+      expect(step.subWorkflowProgress!.totalSteps).toBe(3)
+      expect(step.subWorkflowProgress!.completedSteps).toBe(0)
+      expect(step.subWorkflowProgress!.status).toBe('running')
+      expect(step.subWorkflowProgress!.childSteps).toEqual([])
+    })
+
+    it('SUB_WORKFLOW_STEP_PROGRESS adds child step on started status', () => {
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 1 }))
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 'p1', step_name: 'Sub', agent_id: null, execution_id: null }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.SUB_WORKFLOW_STARTED, { workflow_id: 'w1', parent_step_id: 'p1', child_execution_id: 'ce1', total_steps: 2 }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.SUB_WORKFLOW_STEP_PROGRESS, {
+          workflow_id: 'w1',
+          parent_step_id: 'p1',
+          child_execution_id: 'ce1',
+          child_step_id: 'cs1',
+          child_step_name: 'Designer',
+          status: 'started',
+        }),
+      )
+
+      const progress = getState().stepStates['p1'].subWorkflowProgress!
+      expect(progress.childSteps).toHaveLength(1)
+      expect(progress.childSteps[0].childStepId).toBe('cs1')
+      expect(progress.childSteps[0].childStepName).toBe('Designer')
+      expect(progress.childSteps[0].status).toBe('running')
+      expect(progress.completedSteps).toBe(0)
+    })
+
+    it('SUB_WORKFLOW_STEP_PROGRESS updates existing child on completed', () => {
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 1 }))
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 'p1', step_name: 'Sub', agent_id: null, execution_id: null }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.SUB_WORKFLOW_STARTED, { workflow_id: 'w1', parent_step_id: 'p1', child_execution_id: 'ce1', total_steps: 2 }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.SUB_WORKFLOW_STEP_PROGRESS, {
+          workflow_id: 'w1', parent_step_id: 'p1', child_execution_id: 'ce1',
+          child_step_id: 'cs1', child_step_name: 'Designer', status: 'started',
+        }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.SUB_WORKFLOW_STEP_PROGRESS, {
+          workflow_id: 'w1', parent_step_id: 'p1', child_execution_id: 'ce1',
+          child_step_id: 'cs1', child_step_name: 'Designer', status: 'completed',
+          input_tokens: 200, output_tokens: 100, duration_ms: 3000,
+        }),
+      )
+
+      const progress = getState().stepStates['p1'].subWorkflowProgress!
+      expect(progress.childSteps).toHaveLength(1)
+      expect(progress.childSteps[0].status).toBe('success')
+      expect(progress.childSteps[0].inputTokens).toBe(200)
+      expect(progress.childSteps[0].outputTokens).toBe(100)
+      expect(progress.childSteps[0].durationMs).toBe(3000)
+      expect(progress.completedSteps).toBe(1)
+    })
+
+    it('SUB_WORKFLOW_STEP_PROGRESS handles failed child step', () => {
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 1 }))
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 'p1', step_name: 'Sub', agent_id: null, execution_id: null }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.SUB_WORKFLOW_STARTED, { workflow_id: 'w1', parent_step_id: 'p1', child_execution_id: 'ce1', total_steps: 2 }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.SUB_WORKFLOW_STEP_PROGRESS, {
+          workflow_id: 'w1', parent_step_id: 'p1', child_execution_id: 'ce1',
+          child_step_id: 'cs1', child_step_name: 'Agent 1', status: 'started',
+        }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.SUB_WORKFLOW_STEP_PROGRESS, {
+          workflow_id: 'w1', parent_step_id: 'p1', child_execution_id: 'ce1',
+          child_step_id: 'cs1', child_step_name: 'Agent 1', status: 'failed',
+          error: 'LLM timeout',
+        }),
+      )
+
+      const progress = getState().stepStates['p1'].subWorkflowProgress!
+      expect(progress.childSteps[0].status).toBe('error')
+      expect(progress.childSteps[0].error).toBe('LLM timeout')
+      expect(progress.completedSteps).toBe(1)
+    })
+
+    it('SUB_WORKFLOW_COMPLETED marks sub-workflow as completed', () => {
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 1 }))
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 'p1', step_name: 'Sub', agent_id: null, execution_id: null }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.SUB_WORKFLOW_STARTED, { workflow_id: 'w1', parent_step_id: 'p1', child_execution_id: 'ce1', total_steps: 1 }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.SUB_WORKFLOW_COMPLETED, {
+          workflow_id: 'w1', parent_step_id: 'p1', child_execution_id: 'ce1', status: 'completed',
+        }),
+      )
+
+      expect(getState().stepStates['p1'].subWorkflowProgress!.status).toBe('completed')
+    })
+
+    it('SUB_WORKFLOW_COMPLETED marks sub-workflow as failed', () => {
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 1 }))
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 'p1', step_name: 'Sub', agent_id: null, execution_id: null }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.SUB_WORKFLOW_STARTED, { workflow_id: 'w1', parent_step_id: 'p1', child_execution_id: 'ce1', total_steps: 1 }),
+      )
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.SUB_WORKFLOW_COMPLETED, {
+          workflow_id: 'w1', parent_step_id: 'p1', child_execution_id: 'ce1', status: 'failed',
+        }),
+      )
+
+      expect(getState().stepStates['p1'].subWorkflowProgress!.status).toBe('failed')
+    })
+
+    it('SUB_WORKFLOW_STEP_PROGRESS no-ops if subWorkflowProgress is null', () => {
+      workflowExecutionStore.handleWsEvent(makeMsg(WORKFLOW_EVENT.STARTED, { workflow_id: 'w1', total_steps: 1 }))
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.STEP_STARTED, { workflow_id: 'w1', step_id: 'p1', step_name: 'Sub', agent_id: null, execution_id: null }),
+      )
+      // No SUB_WORKFLOW_STARTED — subWorkflowProgress is null
+      workflowExecutionStore.handleWsEvent(
+        makeMsg(WORKFLOW_EVENT.SUB_WORKFLOW_STEP_PROGRESS, {
+          workflow_id: 'w1', parent_step_id: 'p1', child_execution_id: 'ce1',
+          child_step_id: 'cs1', child_step_name: 'Agent', status: 'started',
+        }),
+      )
+
+      expect(getState().stepStates['p1'].subWorkflowProgress).toBeNull()
+    })
+  })
+
   describe('selectors', () => {
     it('selectStepState returns step or undefined', () => {
       workflowExecutionStore.handleWsEvent(

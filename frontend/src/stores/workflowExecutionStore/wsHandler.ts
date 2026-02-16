@@ -10,8 +10,11 @@ import type {
   WorkflowCompletedData,
   WorkflowFailedData,
   WorkflowResumedData,
+  SubWorkflowStartedData,
+  SubWorkflowCompletedData,
+  SubWorkflowStepProgressData,
 } from '@/types/ws'
-import type { StepTimelineEvent } from './types'
+import type { StepTimelineEvent, ChildStepState } from './types'
 import { store, updateStep } from './_store'
 import { fetchRuns } from './history'
 
@@ -136,6 +139,82 @@ const handleWsEvent = (msg: WsWireMessage): void => {
           }),
           eventLog: appendEvent(s.eventLog, { stepId: d.step_id, stepName: s.stepStates[d.step_id]?.stepName ?? null, eventType: 'resumed', ts: msg.ts }),
         }))
+        break
+      }
+      case WORKFLOW_EVENT.SUB_WORKFLOW_STARTED: {
+        const d = msg.data as SubWorkflowStartedData
+        store.setState((s) => ({
+          stepStates: updateStep(s.stepStates, d.parent_step_id, {
+            subWorkflowProgress: {
+              childExecutionId: d.child_execution_id,
+              totalSteps: d.total_steps,
+              completedSteps: 0,
+              status: 'running',
+              childSteps: [],
+            },
+          }),
+        }))
+        break
+      }
+      case WORKFLOW_EVENT.SUB_WORKFLOW_STEP_PROGRESS: {
+        const d = msg.data as SubWorkflowStepProgressData
+        store.setState((s) => {
+          const parentStep = s.stepStates[d.parent_step_id]
+          if (!parentStep?.subWorkflowProgress) return {}
+
+          const prev = parentStep.subWorkflowProgress
+          const existingIdx = prev.childSteps.findIndex((cs) => cs.childStepId === d.child_step_id)
+
+          const childStatus: ChildStepState['status'] =
+            d.status === 'completed' ? 'success'
+              : d.status === 'failed' ? 'error'
+                : 'running'
+
+          const updatedChild: ChildStepState = {
+            childStepId: d.child_step_id,
+            childStepName: d.child_step_name,
+            status: childStatus,
+            inputTokens: d.input_tokens ?? null,
+            outputTokens: d.output_tokens ?? null,
+            durationMs: d.duration_ms ?? null,
+            error: d.error ?? null,
+          }
+
+          const nextChildren = existingIdx >= 0
+            ? prev.childSteps.map((cs, i) => (i === existingIdx ? updatedChild : cs))
+            : [...prev.childSteps, updatedChild]
+
+          const isTerminal = childStatus === 'success' || childStatus === 'error'
+          const wasRunning = existingIdx >= 0 && prev.childSteps[existingIdx].status === 'running'
+          const completedDelta = isTerminal && (existingIdx < 0 || wasRunning) ? 1 : 0
+
+          return {
+            stepStates: updateStep(s.stepStates, d.parent_step_id, {
+              subWorkflowProgress: {
+                ...prev,
+                completedSteps: prev.completedSteps + completedDelta,
+                childSteps: nextChildren,
+              },
+            }),
+          }
+        })
+        break
+      }
+      case WORKFLOW_EVENT.SUB_WORKFLOW_COMPLETED: {
+        const d = msg.data as SubWorkflowCompletedData
+        store.setState((s) => {
+          const parentStep = s.stepStates[d.parent_step_id]
+          if (!parentStep?.subWorkflowProgress) return {}
+
+          return {
+            stepStates: updateStep(s.stepStates, d.parent_step_id, {
+              subWorkflowProgress: {
+                ...parentStep.subWorkflowProgress,
+                status: d.status === 'completed' ? 'completed' : 'failed',
+              },
+            }),
+          }
+        })
         break
       }
     }
