@@ -184,6 +184,86 @@ describe('parseWsEvent', () => {
       expect(result).toEqual({ type: 'workflow:resumed', workflowId: 'wf-1', stepId: 's-1' })
     })
 
+    it('parses sub_workflow_started', () => {
+      const result = parseWsEvent(
+        makeMsg('workflow', 'sub_workflow_started', {
+          workflow_id: 'wf-1',
+          parent_step_id: 'ps-1',
+          child_execution_id: 'ce-1',
+          total_steps: 3,
+        }),
+      )
+      expect(result).toEqual({
+        type: 'workflow:sub_workflow_started',
+        workflowId: 'wf-1',
+        parentStepId: 'ps-1',
+        childExecutionId: 'ce-1',
+        totalSteps: 3,
+      })
+    })
+
+    it('parses sub_workflow_completed', () => {
+      const result = parseWsEvent(
+        makeMsg('workflow', 'sub_workflow_completed', {
+          workflow_id: 'wf-1',
+          parent_step_id: 'ps-1',
+          child_execution_id: 'ce-1',
+          status: 'completed',
+        }),
+      )
+      expect(result).toEqual({
+        type: 'workflow:sub_workflow_completed',
+        workflowId: 'wf-1',
+        parentStepId: 'ps-1',
+        childExecutionId: 'ce-1',
+        status: 'completed',
+      })
+    })
+
+    it('parses sub_workflow_step_progress', () => {
+      const result = parseWsEvent(
+        makeMsg('workflow', 'sub_workflow_step_progress', {
+          workflow_id: 'wf-1',
+          parent_step_id: 'ps-1',
+          child_execution_id: 'ce-1',
+          child_step_id: 'cs-1',
+          child_step_name: 'Designer',
+          status: 'completed',
+          input_tokens: 100,
+          output_tokens: 50,
+          duration_ms: 2000,
+          error: null,
+        }),
+      )
+      expect(result).toEqual({
+        type: 'workflow:sub_workflow_step_progress',
+        workflowId: 'wf-1',
+        parentStepId: 'ps-1',
+        childExecutionId: 'ce-1',
+        childStepId: 'cs-1',
+        childStepName: 'Designer',
+        status: 'completed',
+        inputTokens: 100,
+        outputTokens: 50,
+        durationMs: 2000,
+        error: null,
+      })
+    })
+
+    it('parses sub_workflow_step_progress with null optionals', () => {
+      const result = parseWsEvent(
+        makeMsg('workflow', 'sub_workflow_step_progress', {
+          workflow_id: 'wf-1',
+          parent_step_id: 'ps-1',
+          child_execution_id: 'ce-1',
+          child_step_id: 'cs-1',
+          child_step_name: 'Agent',
+          status: 'started',
+        }),
+      )
+      expect(result).toMatchObject({ inputTokens: null, outputTokens: null, durationMs: null, error: null })
+    })
+
     it('returns null for unknown workflow event', () => {
       expect(parseWsEvent(makeMsg('workflow', 'unknown_event', {}))).toBeNull()
     })

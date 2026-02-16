@@ -19,6 +19,9 @@ import type {
   WorkflowCompletedData,
   WorkflowFailedData,
   WorkflowResumedData,
+  SubWorkflowStartedData,
+  SubWorkflowCompletedData,
+  SubWorkflowStepProgressData,
   SpeakerStartData,
   SpeakerTokenData,
   SpeakerEndData,
@@ -117,6 +120,42 @@ const parseWorkflowEvent = (msg: WsWireMessage): ActivityEvent | null => {
     case WORKFLOW_EVENT.RESUMED: {
       const d = msg.data as WorkflowResumedData
       return { type: ACTIVITY.WORKFLOW_RESUMED, workflowId: d.workflow_id, stepId: d.step_id }
+    }
+    case WORKFLOW_EVENT.SUB_WORKFLOW_STARTED: {
+      const d = msg.data as SubWorkflowStartedData
+      return {
+        type: ACTIVITY.WORKFLOW_SUB_WORKFLOW_STARTED,
+        workflowId: d.workflow_id,
+        parentStepId: d.parent_step_id,
+        childExecutionId: d.child_execution_id,
+        totalSteps: d.total_steps,
+      }
+    }
+    case WORKFLOW_EVENT.SUB_WORKFLOW_COMPLETED: {
+      const d = msg.data as SubWorkflowCompletedData
+      return {
+        type: ACTIVITY.WORKFLOW_SUB_WORKFLOW_COMPLETED,
+        workflowId: d.workflow_id,
+        parentStepId: d.parent_step_id,
+        childExecutionId: d.child_execution_id,
+        status: d.status,
+      }
+    }
+    case WORKFLOW_EVENT.SUB_WORKFLOW_STEP_PROGRESS: {
+      const d = msg.data as SubWorkflowStepProgressData
+      return {
+        type: ACTIVITY.WORKFLOW_SUB_WORKFLOW_STEP_PROGRESS,
+        workflowId: d.workflow_id,
+        parentStepId: d.parent_step_id,
+        childExecutionId: d.child_execution_id,
+        childStepId: d.child_step_id,
+        childStepName: d.child_step_name,
+        status: d.status,
+        inputTokens: d.input_tokens ?? null,
+        outputTokens: d.output_tokens ?? null,
+        durationMs: d.duration_ms ?? null,
+        error: d.error ?? null,
+      }
     }
     default:
       return null

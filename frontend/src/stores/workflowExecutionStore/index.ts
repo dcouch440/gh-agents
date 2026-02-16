@@ -49,4 +49,4 @@ export const workflowExecutionStore = {
   reset,
 }
 
-export type { WorkflowExecutionState, StepExecutionState, StepExecutionStatus, StepTimelineEvent, ViewMode } from './types'
+export type { WorkflowExecutionState, StepExecutionState, StepExecutionStatus, StepTimelineEvent, ViewMode, ChildStepState, SubWorkflowProgress } from './types'

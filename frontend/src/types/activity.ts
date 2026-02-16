@@ -19,6 +19,10 @@ export const ACTIVITY = {
   WORKFLOW_COMPLETED: 'workflow:completed',
   WORKFLOW_FAILED: 'workflow:failed',
   WORKFLOW_RESUMED: 'workflow:resumed',
+  // Sub-workflow
+  WORKFLOW_SUB_WORKFLOW_STARTED: 'workflow:sub_workflow_started',
+  WORKFLOW_SUB_WORKFLOW_COMPLETED: 'workflow:sub_workflow_completed',
+  WORKFLOW_SUB_WORKFLOW_STEP_PROGRESS: 'workflow:sub_workflow_step_progress',
   // Room
   ROOM_SPEAKER_START: 'room:speaker_start',
   ROOM_SPEAKER_TOKEN: 'room:speaker_token',
@@ -102,6 +106,38 @@ type WorkflowResumedEvent = {
   stepId: string
 }
 
+// ── Sub-workflow variants ────────────────────────────────────────────────────
+
+type WorkflowSubWorkflowStartedEvent = {
+  type: typeof ACTIVITY.WORKFLOW_SUB_WORKFLOW_STARTED
+  workflowId: string
+  parentStepId: string
+  childExecutionId: string
+  totalSteps: number
+}
+
+type WorkflowSubWorkflowCompletedEvent = {
+  type: typeof ACTIVITY.WORKFLOW_SUB_WORKFLOW_COMPLETED
+  workflowId: string
+  parentStepId: string
+  childExecutionId: string
+  status: string
+}
+
+type WorkflowSubWorkflowStepProgressEvent = {
+  type: typeof ACTIVITY.WORKFLOW_SUB_WORKFLOW_STEP_PROGRESS
+  workflowId: string
+  parentStepId: string
+  childExecutionId: string
+  childStepId: string
+  childStepName: string
+  status: string
+  inputTokens: number | null
+  outputTokens: number | null
+  durationMs: number | null
+  error: string | null
+}
+
 // ── Room variants ────────────────────────────────────────────────────────────
 
 type RoomSpeakerStartEvent = {
@@ -178,6 +214,9 @@ type ActivityEvent =
   | WorkflowCompletedEvent
   | WorkflowFailedEvent
   | WorkflowResumedEvent
+  | WorkflowSubWorkflowStartedEvent
+  | WorkflowSubWorkflowCompletedEvent
+  | WorkflowSubWorkflowStepProgressEvent
   | RoomSpeakerStartEvent
   | RoomSpeakerTokenEvent
   | RoomSpeakerEndEvent
@@ -212,6 +251,9 @@ export type {
   WorkflowCompletedEvent,
   WorkflowFailedEvent,
   WorkflowResumedEvent,
+  WorkflowSubWorkflowStartedEvent,
+  WorkflowSubWorkflowCompletedEvent,
+  WorkflowSubWorkflowStepProgressEvent,
   RoomSpeakerStartEvent,
   RoomSpeakerTokenEvent,
   RoomSpeakerEndEvent,

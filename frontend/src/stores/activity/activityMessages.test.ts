@@ -101,6 +101,78 @@ describe('activityMessage', () => {
     expect(activityMessage(event)).toContain('resumed')
   })
 
+  // ── Sub-workflow ────────────────────────────────────────────────────
+
+  it('workflow:sub_workflow_started', () => {
+    const event: ActivityEvent = {
+      type: 'workflow:sub_workflow_started',
+      workflowId: 'wf-1',
+      parentStepId: 'ps-1',
+      childExecutionId: 'ce-1',
+      totalSteps: 3,
+    }
+    expect(activityMessage(event)).toContain('Sub-workflow started')
+    expect(activityMessage(event)).toContain('3 steps')
+  })
+
+  it('workflow:sub_workflow_started singular', () => {
+    const event: ActivityEvent = {
+      type: 'workflow:sub_workflow_started',
+      workflowId: 'wf-1',
+      parentStepId: 'ps-1',
+      childExecutionId: 'ce-1',
+      totalSteps: 1,
+    }
+    expect(activityMessage(event)).toContain('1 step)')
+  })
+
+  it('workflow:sub_workflow_completed', () => {
+    const event: ActivityEvent = {
+      type: 'workflow:sub_workflow_completed',
+      workflowId: 'wf-1',
+      parentStepId: 'ps-1',
+      childExecutionId: 'ce-1',
+      status: 'completed',
+    }
+    expect(activityMessage(event)).toContain('completed')
+  })
+
+  it('workflow:sub_workflow_step_progress started', () => {
+    const event: ActivityEvent = {
+      type: 'workflow:sub_workflow_step_progress',
+      workflowId: 'wf-1',
+      parentStepId: 'ps-1',
+      childExecutionId: 'ce-1',
+      childStepId: 'cs-1',
+      childStepName: 'Designer',
+      status: 'started',
+      inputTokens: null,
+      outputTokens: null,
+      durationMs: null,
+      error: null,
+    }
+    expect(activityMessage(event)).toContain('Designer')
+    expect(activityMessage(event)).toContain('started')
+  })
+
+  it('workflow:sub_workflow_step_progress failed', () => {
+    const event: ActivityEvent = {
+      type: 'workflow:sub_workflow_step_progress',
+      workflowId: 'wf-1',
+      parentStepId: 'ps-1',
+      childExecutionId: 'ce-1',
+      childStepId: 'cs-1',
+      childStepName: 'Agent 1',
+      status: 'failed',
+      inputTokens: null,
+      outputTokens: null,
+      durationMs: null,
+      error: 'LLM timeout',
+    }
+    expect(activityMessage(event)).toContain('FAILED')
+    expect(activityMessage(event)).toContain('LLM timeout')
+  })
+
   // ── Room ──────────────────────────────────────────────────────────────
 
   it('room:speaker_start', () => {
