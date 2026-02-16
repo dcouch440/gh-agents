@@ -85,6 +85,8 @@ import type {
   StepChatDebugResponse,
   StepLastRunResponse,
   RunDetailResponse,
+  RebaseRequest,
+  RebaseResponse,
 } from '@/types'
 
 // ============================================================================
@@ -370,6 +372,9 @@ const workflows = freeze({
 
   getAllNotes: (workflowId: string, config?: RequestConfig) =>
     baseApi.get<Array<{ step_id: string; content: string }>>(API.WORKFLOW_NOTES(workflowId), config),
+
+  rebase: (workflowId: string, body: RebaseRequest, config?: RequestConfig) =>
+    baseApi.post<RebaseResponse>(API.WORKFLOW_REBASE(workflowId), body, config),
 })
 
 const contextResponse = freeze({

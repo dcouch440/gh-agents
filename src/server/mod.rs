@@ -331,6 +331,7 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::WORKFLOW_TEMPLATE,
             get(api::get_template).delete(api::delete_template),
         )
+        .route(routes::WORKFLOW_REBASE, post(api::rebase_workshop))
         .route(
             routes::WORKFLOW_EXECUTIONS,
             get(api::list_workflow_executions),

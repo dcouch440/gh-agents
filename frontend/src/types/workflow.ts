@@ -221,6 +221,15 @@ type RunDetailResponse = {
   template_name: string | null
 }
 
+type RebaseRequest = {
+  template_id: string
+}
+
+type RebaseResponse = {
+  backup_template_id: string
+  template_id: string
+}
+
 export type {
   Workflow,
   WorkflowStep,
@@ -245,4 +254,6 @@ export type {
   StepLastRunResponse,
   RunStepResult,
   RunDetailResponse,
+  RebaseRequest,
+  RebaseResponse,
 }

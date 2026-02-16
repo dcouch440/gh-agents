@@ -8,11 +8,14 @@ use uuid::Uuid;
 
 use crate::server::api::AppError;
 use crate::server::auth as auth_utils;
-use crate::server::hub::dag::templates::capture_workflow_snapshot;
+use crate::server::hub::dag::templates::{
+    capture_workflow_snapshot, restore::restore_workflow_from_snapshot, WorkflowSnapshot,
+};
 use crate::server::state::AppState;
 
 use super::types::{
-    CreateTemplateRequest, RunTemplateDetailResponse, RunTemplateResponse, TemplatePath,
+    CreateTemplateRequest, RebaseRequest, RebaseResponse, RunTemplateDetailResponse,
+    RunTemplateResponse, TemplatePath,
 };
 
 /// POST /api/workflows/:id/templates - Promote current workflow state to a frozen run template.
@@ -211,4 +214,97 @@ pub async fn delete_template(
     workflow_repo.delete_template(path.template_id).await?;
 
     Ok(())
+}
+
+/// POST /api/workflows/:id/rebase - Restore workshop from a frozen template snapshot.
+///
+/// Auto-creates a backup template of the current state before overwriting.
+#[utoipa::path(
+    post,
+    path = "/api/workflows/{id}/rebase",
+    tag = "Workflows",
+    security(("bearer_auth" = [])),
+    params(("id" = Uuid, Path, description = "Workflow ID")),
+    request_body(content = RebaseRequest, content_type = "application/json"),
+    responses(
+        (status = 200, description = "Workshop rebased", body = RebaseResponse),
+        (status = 404, description = "Workflow or template not found")
+    )
+)]
+pub async fn rebase_workshop(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(id): Path<Uuid>,
+    Json(body): Json<RebaseRequest>,
+) -> Result<Json<RebaseResponse>, AppError> {
+    let workflow_repo = &state.repos().workflows;
+
+    // Verify workflow exists and user owns it
+    let workflow = workflow_repo
+        .get_workflow(id)
+        .await?
+        .ok_or(AppError::not_found("Workflow"))?;
+    if workflow.user_id != auth.user_id.0 {
+        return Err(AppError::not_found("Workflow"));
+    }
+
+    // Load the target template and verify it belongs to this workflow
+    let template = workflow_repo
+        .get_template(body.template_id)
+        .await?
+        .ok_or(AppError::not_found("Template"))?;
+    if template.workflow_id != id {
+        return Err(AppError::not_found("Template"));
+    }
+
+    // Deserialize the frozen snapshot
+    let snapshot: WorkflowSnapshot = serde_json::from_value(template.snapshot)
+        .map_err(|e| AppError::Internal(format!("Failed to deserialize snapshot: {e}")))?;
+
+    // Safety: auto-backup current state before overwriting
+    let backup_snapshot = capture_workflow_snapshot(&state, id)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to capture backup: {e}")))?;
+
+    let backup_json = serde_json::to_value(&backup_snapshot)
+        .map_err(|e| AppError::Internal(format!("Failed to serialize backup: {e}")))?;
+
+    let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC");
+    let backup_template = workflow_repo
+        .create_template(
+            id,
+            auth.user_id.0,
+            &format!("Pre-rebase backup {timestamp}"),
+            Some(format!(
+                "Auto-created before rebase from template \"{}\"",
+                template.name
+            )),
+            backup_json,
+        )
+        .await?;
+
+    // Get PgPool for transaction-based restore
+    let pool = state
+        .db()
+        .ok_or(AppError::Internal("No database pool".to_string()))?;
+
+    // Restore the workflow from the snapshot
+    restore_workflow_from_snapshot(pool, id, &snapshot)
+        .await
+        .map_err(|e| AppError::Internal(format!("Rebase failed: {e}")))?;
+
+    // Mark old workshop as rebased so a new one can be created
+    sqlx::query(
+        "UPDATE workflow_executions SET execution_mode = 'workshop_rebased' \
+         WHERE workflow_id = $1 AND execution_mode = 'workshop'",
+    )
+    .bind(id)
+    .execute(pool)
+    .await
+    .map_err(|e| AppError::Internal(format!("Failed to reset workshop: {e}")))?;
+
+    Ok(Json(RebaseResponse {
+        backup_template_id: backup_template.id,
+        template_id: body.template_id,
+    }))
 }

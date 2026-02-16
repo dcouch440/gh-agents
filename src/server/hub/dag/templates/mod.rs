@@ -167,5 +167,7 @@ pub(crate) fn port_metadata_from_snapshot(snapshot: &WorkflowSnapshot) -> PortMe
     )
 }
 
+pub(crate) mod restore;
+
 #[cfg(test)]
 mod tests;

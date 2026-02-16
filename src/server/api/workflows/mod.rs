@@ -29,13 +29,16 @@ pub use step_handlers::{
     create_workflow_step, delete_workflow_step, get_step_config, get_workflow_notes,
     get_workflow_step, list_workflow_steps, update_workflow_step,
 };
-pub use template_handlers::{create_template, delete_template, get_template, list_templates};
+pub use template_handlers::{
+    create_template, delete_template, get_template, list_templates, rebase_workshop,
+};
 pub use types::{
     CreateStepRequest, CreateTemplateRequest, CreateWorkflowRequest, EdgeRequest, EdgeResponse,
-    RunDetailResponse, RunStepResultResponse, RunTemplateDetailResponse, RunTemplateResponse,
-    RunWorkflowRequest, StepDocumentRequest, StepDocumentResponse, UpdateStepRequest,
-    UpdateWorkflowRequest, WorkflowExecutionResponse, WorkflowResponse, WorkflowRunResponse,
-    WorkflowStepResponse, WorkshopResponse, WorkshopStatusResponse, WorkshopStepResponse,
+    RebaseResponse, RunDetailResponse, RunStepResultResponse, RunTemplateDetailResponse,
+    RunTemplateResponse, RunWorkflowRequest, StepDocumentRequest, StepDocumentResponse,
+    UpdateStepRequest, UpdateWorkflowRequest, WorkflowExecutionResponse, WorkflowResponse,
+    WorkflowRunResponse, WorkflowStepResponse, WorkshopResponse, WorkshopStatusResponse,
+    WorkshopStepResponse,
 };
 pub use workflow_handlers::{
     create_workflow, delete_workflow, get_workflow, list_workflows, update_workflow,

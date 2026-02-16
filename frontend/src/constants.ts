@@ -158,6 +158,7 @@ export const API = {
   WORKFLOW_EXECUTION_STEPS: (wid: string, eid: string) => `/workflows/${wid}/executions/${eid}/steps`,
   WORKFLOW_EXECUTION_STEP: (wid: string, eid: string, sid: string) => `/workflows/${wid}/executions/${eid}/steps/${sid}`,
   WORKFLOW_NOTES: (id: string) => `/workflows/${id}/notes`,
+  WORKFLOW_REBASE: (id: string) => `/workflows/${id}/rebase`,
 
   // Pipeline Stage Members
   STAGE_MEMBERS: (pid: string, num: number) => `/pipelines/${pid}/stages/${num}/members`,

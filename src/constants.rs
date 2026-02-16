@@ -304,6 +304,7 @@ pub mod routes {
     // Run Templates (frozen workflow snapshots)
     pub const WORKFLOW_TEMPLATES: &str = "/workflows/:id/templates";
     pub const WORKFLOW_TEMPLATE: &str = "/workflows/:id/templates/:template_id";
+    pub const WORKFLOW_REBASE: &str = "/workflows/:id/rebase";
 
     // Workflow Collections
     pub const COLLECTIONS: &str = "/collections";

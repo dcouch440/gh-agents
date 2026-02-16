@@ -202,6 +202,21 @@ pub struct TemplatePath {
     pub template_id: Uuid,
 }
 
+// ============================================================================
+// Rebase Types
+// ============================================================================
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct RebaseRequest {
+    pub template_id: Uuid,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct RebaseResponse {
+    pub backup_template_id: Uuid,
+    pub template_id: Uuid,
+}
+
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct WorkflowRunResponse {
     pub execution_id: Uuid,

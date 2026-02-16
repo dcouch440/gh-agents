@@ -49,6 +49,8 @@ export type {
   StepLastRunResponse,
   RunStepResult,
   RunDetailResponse,
+  RebaseRequest,
+  RebaseResponse,
 } from './workflow'
 export type {
   AgentExecution,
