@@ -4,6 +4,7 @@ import { DynamicNode } from './DynamicNode'
 import { ContextNode } from './ContextNode'
 import { InputNode } from './InputNode'
 import { DocumentNode } from './DocumentNode'
+import { AgentNode } from './AgentNode'
 import { NotesNode } from './NotesNode'
 import { SubWorkflowNode } from './SubWorkflowNode'
 
@@ -13,6 +14,7 @@ const nodeTypes: NodeTypes = {
   contextNode: ContextNode,
   inputNode: InputNode,
   documentNode: DocumentNode,
+  agentNode: AgentNode,
   notesNode: NotesNode,
   subWorkflowNode: SubWorkflowNode,
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toRFNodes, toRFEdges, toNotesEdges, nodeDataEqual, computeProtocolGroups } from '.'
+import { toRFNodes, toRFEdges, toNotesEdges, toAgentEdges, nodeDataEqual, computeProtocolGroups } from '.'
 import type { StepNodeLookups, ProtocolStepInfo } from '.'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 
@@ -645,5 +645,158 @@ describe('toNotesEdges', () => {
     const edges = toNotesEdges([step1, step2], lookups)
     expect(edges).toHaveLength(1)
     expect(edges[0]?.source).toBe('step-002')
+  })
+})
+
+describe('toRFNodes — agent nodes', () => {
+  const workforceStep: WorkflowStep = {
+    ...step1,
+    id: 'wf-step',
+    execution_mode: 'workforce',
+    position_x: 200,
+    position_y: 300,
+  }
+
+  it('generates agent nodes for workforce steps with roster agents', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      rosterByStep: {
+        'wf-step': [
+          { id: 'agent-1', name: 'Researcher', child_step_id: 'cs-1', role_description: 'Does research', depends_on: [] },
+          { id: 'agent-2', name: 'Writer', child_step_id: 'cs-2', role_description: 'Writes docs', depends_on: ['agent-1'] },
+        ],
+      },
+      protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
+    }
+    const nodes = toRFNodes([workforceStep], lookups)
+    const agentNode1 = nodes.find((n) => n.id === 'agent-artifact-agent-1')
+    const agentNode2 = nodes.find((n) => n.id === 'agent-artifact-agent-2')
+
+    expect(agentNode1).toBeDefined()
+    expect(agentNode1?.type).toBe('agentNode')
+    expect(agentNode1?.data.kind).toBe('agent')
+    expect(agentNode1?.data.label).toBe('Researcher')
+    expect(agentNode1?.data.roleDescription).toBe('Does research')
+    expect(agentNode1?.data.protocolStepId).toBe('wf-step')
+    expect(agentNode1?.connectable).toBe(false)
+    expect(agentNode1?.draggable).toBe(true)
+
+    expect(agentNode2).toBeDefined()
+    expect(agentNode2?.data.label).toBe('Writer')
+  })
+
+  it('skips agents without child_step_id', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      rosterByStep: {
+        'wf-step': [
+          { id: 'agent-1', name: 'Old Agent', child_step_id: null, role_description: '', depends_on: [] },
+        ],
+      },
+      protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
+    }
+    const nodes = toRFNodes([workforceStep], lookups)
+    const agentNode = nodes.find((n) => n.id === 'agent-artifact-agent-1')
+    expect(agentNode).toBeUndefined()
+  })
+
+  it('does not generate agent nodes for non-workforce steps', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      rosterByStep: {
+        'step-001': [
+          { id: 'agent-1', name: 'Agent', child_step_id: 'cs-1', role_description: '', depends_on: [] },
+        ],
+      },
+    }
+    const nodes = toRFNodes([step1], lookups)
+    const agentNode = nodes.find((n) => n.id === 'agent-artifact-agent-1')
+    expect(agentNode).toBeUndefined()
+  })
+})
+
+describe('toAgentEdges', () => {
+  const workforceStep: WorkflowStep = {
+    ...step1,
+    id: 'wf-step',
+    execution_mode: 'workforce',
+  }
+
+  it('generates protocol-to-agent edges for roster agents', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      rosterByStep: {
+        'wf-step': [
+          { id: 'agent-1', name: 'Researcher', child_step_id: 'cs-1', role_description: '', depends_on: [] },
+        ],
+      },
+      protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
+    }
+    const edges = toAgentEdges([workforceStep], lookups)
+    expect(edges).toHaveLength(1)
+    expect(edges[0]).toEqual({
+      id: 'agent-edge-agent-1',
+      type: 'agentEdge',
+      source: 'wf-step',
+      sourceHandle: 'agents',
+      target: 'agent-artifact-agent-1',
+      targetHandle: 'agent-input',
+      selectable: false,
+      deletable: false,
+    })
+  })
+
+  it('generates agent-to-agent dependency edges from depends_on', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      rosterByStep: {
+        'wf-step': [
+          { id: 'agent-1', name: 'Researcher', child_step_id: 'cs-1', role_description: '', depends_on: [] },
+          { id: 'agent-2', name: 'Writer', child_step_id: 'cs-2', role_description: '', depends_on: ['agent-1'] },
+        ],
+      },
+      protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
+    }
+    const edges = toAgentEdges([workforceStep], lookups)
+    // 2 protocol-to-agent + 1 dependency
+    expect(edges).toHaveLength(3)
+    const depEdge = edges.find((e) => e.id === 'agent-dep-agent-1-agent-2')
+    expect(depEdge).toEqual({
+      id: 'agent-dep-agent-1-agent-2',
+      type: 'agentEdge',
+      source: 'agent-artifact-agent-1',
+      sourceHandle: 'agent-output',
+      target: 'agent-artifact-agent-2',
+      targetHandle: 'agent-input',
+      selectable: false,
+      deletable: false,
+    })
+  })
+
+  it('skips agents without child_step_id', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      rosterByStep: {
+        'wf-step': [
+          { id: 'agent-1', name: 'Old', child_step_id: null, role_description: '', depends_on: [] },
+        ],
+      },
+      protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
+    }
+    const edges = toAgentEdges([workforceStep], lookups)
+    expect(edges).toEqual([])
+  })
+
+  it('returns empty for non-workforce steps', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      rosterByStep: {
+        'step-001': [
+          { id: 'agent-1', name: 'Agent', child_step_id: 'cs-1', role_description: '', depends_on: [] },
+        ],
+      },
+    }
+    const edges = toAgentEdges([step1], lookups)
+    expect(edges).toEqual([])
   })
 })

@@ -142,6 +142,8 @@ type RosterAgent = {
   capabilities: string[]
   execution_order: number
   created_at: string
+  child_step_id: string | null
+  depends_on: string[]
 }
 
 type CreateRosterAgentRequest = {

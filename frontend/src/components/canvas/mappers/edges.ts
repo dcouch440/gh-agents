@@ -93,4 +93,43 @@ const toNotesEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] =
   return edges
 }
 
-export { toRFEdges, toDocumentEdges, toNotesEdges }
+const toAgentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] => {
+  const edges: Edge[] = []
+  for (const step of steps) {
+    if (!isWorkforceStep(step, lookups.protocolsByStep)) continue
+
+    const roster = lookups.rosterByStep[step.id] ?? []
+    for (const agent of roster) {
+      if (!agent.child_step_id) continue
+
+      // Protocol-to-agent edge
+      edges.push({
+        id: `agent-edge-${agent.id}`,
+        type: 'agentEdge',
+        source: step.id,
+        sourceHandle: 'agents',
+        target: `agent-artifact-${agent.id}`,
+        targetHandle: 'agent-input',
+        selectable: false,
+        deletable: false,
+      })
+
+      // Agent-to-agent dependency edges
+      for (const depId of agent.depends_on) {
+        edges.push({
+          id: `agent-dep-${depId}-${agent.id}`,
+          type: 'agentEdge',
+          source: `agent-artifact-${depId}`,
+          sourceHandle: 'agent-output',
+          target: `agent-artifact-${agent.id}`,
+          targetHandle: 'agent-input',
+          selectable: false,
+          deletable: false,
+        })
+      }
+    }
+  }
+  return edges
+}
+
+export { toRFEdges, toDocumentEdges, toAgentEdges, toNotesEdges }

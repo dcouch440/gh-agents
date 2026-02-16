@@ -86,6 +86,8 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "add_deliverable" => Some(add_deliverable_tool()),
         "update_deliverable" => Some(update_deliverable_tool()),
         "remove_deliverable" => Some(remove_deliverable_tool()),
+        "set_dependency" => Some(set_dependency_tool()),
+        "remove_dependency" => Some(remove_dependency_tool()),
 
         _ => None,
     }
@@ -1162,6 +1164,48 @@ fn remove_deliverable_tool() -> Tool {
                 }
             },
             "required": ["deliverable_id"]
+        }),
+    }
+}
+
+fn set_dependency_tool() -> Tool {
+    Tool {
+        name: "set_dependency".into(),
+        description: "Create a dependency between two agents. The to_agent will receive the output of from_agent before executing.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "from_agent": {
+                    "type": "string",
+                    "description": "Name of the upstream agent (produces output)"
+                },
+                "to_agent": {
+                    "type": "string",
+                    "description": "Name of the downstream agent (depends on from_agent's output)"
+                }
+            },
+            "required": ["from_agent", "to_agent"]
+        }),
+    }
+}
+
+fn remove_dependency_tool() -> Tool {
+    Tool {
+        name: "remove_dependency".into(),
+        description: "Remove a dependency between two agents.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "from_agent": {
+                    "type": "string",
+                    "description": "Name of the upstream agent"
+                },
+                "to_agent": {
+                    "type": "string",
+                    "description": "Name of the downstream agent"
+                }
+            },
+            "required": ["from_agent", "to_agent"]
         }),
     }
 }

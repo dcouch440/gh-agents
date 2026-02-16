@@ -6,7 +6,7 @@ import '@xyflow/react/dist/style.css'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { useStore, batch, workflowStore, canvasStore, agentStore, outputSchemaStore, shareStore, focusModeStore } from '@/stores'
-import { toRFNodes, toRFEdges, toDocumentEdges, toNotesEdges } from './mappers'
+import { toRFNodes, toRFEdges, toDocumentEdges, toAgentEdges, toNotesEdges } from './mappers'
 import { Collections } from '@/utils/collections'
 import { nodeTypes } from './nodeTypes'
 import { edgeTypes } from './edgeTypes'
@@ -64,7 +64,7 @@ function WorkflowCanvasInner() {
 
   // Map store data to RF format
   const rfNodes = useMemo(() => toRFNodes(steps, lookups), [steps, lookups])
-  const rfEdges = useMemo(() => [...toRFEdges(edges, protocolGroups, protocolsByStepLookup, steps), ...toDocumentEdges(steps, lookups), ...toNotesEdges(steps, lookups)], [edges, protocolGroups, protocolsByStepLookup, steps, lookups])
+  const rfEdges = useMemo(() => [...toRFEdges(edges, protocolGroups, protocolsByStepLookup, steps), ...toDocumentEdges(steps, lookups), ...toAgentEdges(steps, lookups), ...toNotesEdges(steps, lookups)], [edges, protocolGroups, protocolsByStepLookup, steps, lookups])
 
   // Push store updates into RF — only touch data + position, never clobber selection
   useCanvasSync(rfNodes, rfEdges, setNodes, setEdges)
@@ -95,7 +95,7 @@ function WorkflowCanvasInner() {
   // Edge validation — context nodes are source-only, no self-loops
   const isValidConnection = useCallback(
     (connection: Connection) => {
-      if (connection.sourceHandle === 'documents' || connection.sourceHandle === 'notes') return false
+      if (connection.sourceHandle === 'documents' || connection.sourceHandle === 'agents' || connection.sourceHandle === 'notes') return false
       const targetStep = connection.target ? stepsById.get(connection.target) : undefined
       if (!targetStep) return false
       if (targetStep.execution_mode === 'context' || targetStep.execution_mode === 'input') return false
@@ -131,7 +131,7 @@ function WorkflowCanvasInner() {
   // Node deletion
   const onNodesDelete: OnNodesDelete = useCallback((deleted) => {
     for (const node of deleted) {
-      if (node.id.startsWith('doc-artifact-') || node.id.startsWith('notes-')) continue
+      if (node.id.startsWith('doc-artifact-') || node.id.startsWith('agent-artifact-') || node.id.startsWith('notes-')) continue
       void workflowStore.deleteStep(node.id)
     }
   }, [])
@@ -139,7 +139,7 @@ function WorkflowCanvasInner() {
   // Edge deletion
   const onEdgesDelete: OnEdgesDelete = useCallback((deleted) => {
     for (const edge of deleted) {
-      if (edge.id.startsWith('doc-edge-') || edge.id.startsWith('notes-edge-')) continue
+      if (edge.id.startsWith('doc-edge-') || edge.id.startsWith('agent-edge-') || edge.id.startsWith('agent-dep-') || edge.id.startsWith('notes-edge-')) continue
       void workflowStore.removeEdge(edge.id)
     }
   }, [])
@@ -187,7 +187,7 @@ function WorkflowCanvasInner() {
 
   const onNodeClick = useCallback((_event: React.MouseEvent, node: { id: string }) => {
     if (shareStore.store.getState().active) {
-      if (node.id.startsWith('doc-artifact-') || node.id.startsWith('notes-')) return
+      if (node.id.startsWith('doc-artifact-') || node.id.startsWith('agent-artifact-') || node.id.startsWith('notes-')) return
       shareStore.commitShare(node.id)
       return
     }
