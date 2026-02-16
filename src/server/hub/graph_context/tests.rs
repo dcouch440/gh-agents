@@ -41,6 +41,8 @@ mod tests {
             goal_summary: String::new(),
             goal_summary_updated_at: None,
             sub_workflow_template_id: None,
+            child_workflow_id: None,
+            is_designer_step: false,
         }
     }
 

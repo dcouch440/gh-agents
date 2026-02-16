@@ -105,7 +105,7 @@ pub(crate) async fn capture_workflow_snapshot(
         }
 
         // Task force configs
-        if step.execution_mode == "task_force" {
+        if step.execution_mode == "task_force" || step.execution_mode == "workforce" {
             if let Ok(Some(brief)) = wf_repo.get_mission_brief(step.id).await {
                 if let Ok(roster) = wf_repo.list_agent_roster(brief.id).await {
                     if !roster.is_empty() {
@@ -113,6 +113,14 @@ pub(crate) async fn capture_workflow_snapshot(
                     }
                 }
                 mission_briefs.insert(step.id, brief);
+            }
+        }
+
+        // Workforce deliverables (document definitions)
+        if step.execution_mode == "workforce" {
+            let defs = wf_repo.list_document_defs(step.id).await?;
+            if !defs.is_empty() {
+                document_defs.insert(step.id, defs);
             }
         }
 

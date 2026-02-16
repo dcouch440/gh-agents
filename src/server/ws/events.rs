@@ -229,6 +229,11 @@ pub enum WorkflowEventKind {
         total_agents: usize,
         status: String,
     },
+    /// Workforce designer pre-phase progress (started, completed, failed).
+    WorkforceDesignerProgress {
+        step_id: Uuid,
+        status: String,
+    },
     BeliefExtractionProgress {
         step_id: Uuid,
         source_step_name: String,
@@ -342,6 +347,7 @@ impl WorkflowEvent {
             WorkflowEventKind::ForEachProgress { .. } => "for_each_progress",
             WorkflowEventKind::DocumenterPhaseProgress { .. } => "documenter_phase_progress",
             WorkflowEventKind::TaskForceAgentProgress { .. } => "task_force_agent_progress",
+            WorkflowEventKind::WorkforceDesignerProgress { .. } => "workforce_designer_progress",
             WorkflowEventKind::BeliefExtractionProgress { .. } => "belief_extraction_progress",
             WorkflowEventKind::Completed { .. } => "completed",
             WorkflowEventKind::Failed { .. } => "failed",

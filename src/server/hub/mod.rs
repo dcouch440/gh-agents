@@ -301,9 +301,23 @@ pub async fn build_step_system_prompt(
 
             (roles::NODE_ASSISTANT_ROOM_BLOCK.to_string(), snapshot)
         }
+        "workforce" => {
+            let ctx = crate::server::tools::workforce::WorkforceToolContext {
+                workflow_id,
+                step_id,
+            };
+            let snapshot = crate::server::tools::workforce::build_config_snapshot(
+                state.repos().workflows.as_ref(),
+                &ctx,
+            )
+            .await
+            .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
+
+            (roles::NODE_ASSISTANT_WORKFORCE_BLOCK.to_string(), snapshot)
+        }
         _ => {
             return Err(HubError::Internal(anyhow::anyhow!(
-                "Step {} has unsupported execution_mode '{}'. Expected: documenter, task_force, belief_capture, or room.",
+                "Step {} has unsupported execution_mode '{}'. Expected: documenter, task_force, belief_capture, room, or workforce.",
                 step_id, execution_mode
             )));
         }

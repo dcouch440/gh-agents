@@ -73,6 +73,7 @@ async fn execute_create_doc_def(
         created_at: Utc::now(),
         protocol_id: None,
         document_id: None,
+        agent_roster_entry_id: None,
     };
 
     match repo.create_document_def(def).await {

@@ -54,6 +54,8 @@ mod tests {
             goal_summary: String::new(),
             goal_summary_updated_at: None,
             sub_workflow_template_id: None,
+            child_workflow_id: None,
+            is_designer_step: false,
         }
     }
 
@@ -79,6 +81,7 @@ mod tests {
             capabilities: vec!["code_gen".to_string()],
             execution_order: order,
             created_at: Utc::now(),
+            child_step_id: None,
         }
     }
 
@@ -206,6 +209,7 @@ mod tests {
                     capabilities: caps.to_vec(),
                     execution_order: order,
                     created_at: Utc::now(),
+                    child_step_id: None,
                 })
             });
 
@@ -245,6 +249,7 @@ mod tests {
                     capabilities: caps.to_vec(),
                     execution_order: order,
                     created_at: Utc::now(),
+                    child_step_id: None,
                 })
             });
 
@@ -292,6 +297,7 @@ mod tests {
                     capabilities: vec![],
                     execution_order: 0,
                     created_at: Utc::now(),
+                    child_step_id: None,
                 })
             });
 

@@ -13,6 +13,7 @@ pub mod node_assistant;
 pub mod room_config;
 pub mod shared;
 pub mod task_force;
+pub mod workforce;
 
 use serde_json::{json, Value};
 

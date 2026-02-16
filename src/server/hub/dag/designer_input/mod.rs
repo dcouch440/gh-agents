@@ -7,6 +7,7 @@
 pub mod documenter;
 pub mod room;
 pub mod task_force;
+pub mod workforce;
 mod tests;
 
 use std::collections::{HashMap, HashSet};

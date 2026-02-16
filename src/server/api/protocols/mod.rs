@@ -696,6 +696,7 @@ pub async fn apply_protocol(
                 created_at: chrono::Utc::now(),
                 protocol_id: None,
                 document_id: Some(doc.id),
+                agent_roster_entry_id: None,
             };
             wf_repo
                 .create_document_def(step_scoped_def)
@@ -752,6 +753,8 @@ pub async fn apply_protocol(
             goal_summary: String::new(),
             goal_summary_updated_at: None,
             sub_workflow_template_id: None,
+            child_workflow_id: None,
+            is_designer_step: false,
         };
 
         let created = wf_repo
