@@ -69,6 +69,12 @@ pub struct ProtocolExecutionRow {
     pub capabilities_used: Option<Vec<String>>,
     pub created_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
+    /// Human-readable agent name (e.g. "Scanner") for task_force agent phases.
+    pub agent_name: Option<String>,
+    /// Protocol archetype that produced this phase (e.g. "task_force", "documenter").
+    pub archetype: Option<String>,
+    /// Links agent phases back to the designer run that created them.
+    pub designer_run_id: Option<Uuid>,
 }
 
 /// Row type for agent guidance (distilled feedback / learned instructions).

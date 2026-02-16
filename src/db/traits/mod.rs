@@ -791,6 +791,13 @@ pub trait WorkflowRepo: Send + Sync {
         designer_run_id: Uuid,
     ) -> Result<Vec<AgentDesignerOutputRow>>;
 
+    /// List designer runs for a step within a specific workflow execution.
+    async fn list_designer_runs_for_step(
+        &self,
+        step_id: Uuid,
+        workflow_execution_id: Uuid,
+    ) -> Result<Vec<AgentDesignerRunRow>>;
+
     // --- Assistant Notes ---
 
     /// Get a single step's assistant notes content. Returns None if no notes exist.

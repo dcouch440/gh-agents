@@ -13,6 +13,7 @@ use anyhow::anyhow;
 use serde_json::Value as JsonValue;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
+use uuid::Uuid;
 
 use crate::config::protocols::{roles, vars, TASK_FORCE};
 use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow};
@@ -140,6 +141,11 @@ pub(super) async fn execute_task_force_step(
     .await?;
 
     // 8. Run Agent Designer pre-lifecycle to generate optimized prompts
+    //    Record a "designer" phase in protocol_executions for visibility
+    let designer_phase = recorder
+        .create_phase_with_context("designer", None, None, None, Some("task_force"), None)
+        .await?;
+
     let (designed_prompts, designer_usage) = match designer::run_agent_designer(
         engine,
         state,
@@ -153,8 +159,25 @@ pub(super) async fn execute_task_force_step(
     )
     .await
     {
-        Ok(result) => result,
+        Ok(result) => {
+            recorder
+                .update_phase(
+                    designer_phase.id,
+                    "complete",
+                    None,
+                    None,
+                    result.1.input_tokens,
+                    result.1.output_tokens,
+                    result.1.cost_usd,
+                    Some("claude-sonnet-4-5-20250929"),
+                )
+                .await;
+            result
+        }
         Err(e) => {
+            recorder
+                .update_phase(designer_phase.id, "failed", None, Some(&e.to_string()), 0, 0, 0.0, None)
+                .await;
             warn!(
                 step_id = %step.id,
                 error = %e,
@@ -165,6 +188,7 @@ pub(super) async fn execute_task_force_step(
                 input_tokens: 0,
                 output_tokens: 0,
                 cost_usd: 0.0,
+                run_id: Uuid::nil(),
             };
             (fallback, usage)
         }
@@ -222,9 +246,21 @@ pub(super) async fn execute_task_force_step(
             },
         );
 
-        // Create protocol execution row
+        // Create protocol execution row with agent context
+        let designer_run_id = if designer_usage.run_id.is_nil() {
+            None
+        } else {
+            Some(designer_usage.run_id)
+        };
         let exec_row = recorder
-            .create_phase(&format!("agent_{}", idx), None, Some(&prompt))
+            .create_phase_with_context(
+                &format!("agent_{}", idx),
+                None,
+                Some(&prompt),
+                Some(&designed.agent_name),
+                Some("task_force"),
+                designer_run_id,
+            )
             .await?;
 
         // Resolve capabilities from designer-assigned tools

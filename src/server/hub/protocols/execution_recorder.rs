@@ -20,6 +20,8 @@ pub struct ProtocolExecutionRecorder<'a> {
     protocol_repo: &'a dyn ProtocolRepo,
     step_id: Uuid,
     run_id: Uuid,
+    /// Default archetype label applied to all phases created by this recorder.
+    default_archetype: Option<String>,
 }
 
 impl<'a> ProtocolExecutionRecorder<'a> {
@@ -28,7 +30,14 @@ impl<'a> ProtocolExecutionRecorder<'a> {
             protocol_repo,
             step_id,
             run_id,
+            default_archetype: None,
         }
+    }
+
+    /// Set a default archetype that will be applied to all phases.
+    pub fn with_archetype(mut self, archetype: &str) -> Self {
+        self.default_archetype = Some(archetype.to_string());
+        self
     }
 
     /// Create a new execution row for a protocol phase.
@@ -58,6 +67,50 @@ impl<'a> ProtocolExecutionRecorder<'a> {
             capabilities_used: None,
             created_at: Utc::now(),
             completed_at: None,
+            agent_name: None,
+            archetype: self.default_archetype.clone(),
+            designer_run_id: None,
+        };
+
+        self.protocol_repo
+            .create_protocol_execution(row)
+            .await
+            .map_err(|e| HubError::Internal(anyhow!("failed to create execution row: {}", e)))
+    }
+
+    /// Create a new execution row with extended context (agent name, archetype, designer link).
+    ///
+    /// Used by task_force and other protocols that need to track agent-level phases.
+    pub async fn create_phase_with_context(
+        &self,
+        phase: &str,
+        document_def_id: Option<Uuid>,
+        input_prompt: Option<&str>,
+        agent_name: Option<&str>,
+        archetype: Option<&str>,
+        designer_run_id: Option<Uuid>,
+    ) -> Result<ProtocolExecutionRow, HubError> {
+        let row = ProtocolExecutionRow {
+            id: Uuid::new_v4(),
+            protocol_step_id: self.step_id,
+            workflow_run_id: Some(self.run_id),
+            phase: phase.to_string(),
+            document_def_id,
+            agent_id: None,
+            input_prompt: input_prompt.map(String::from),
+            output_content: None,
+            status: "running".to_string(),
+            error_message: None,
+            tokens_in: None,
+            tokens_out: None,
+            cost_usd: None,
+            model: None,
+            capabilities_used: None,
+            created_at: Utc::now(),
+            completed_at: None,
+            agent_name: agent_name.map(String::from),
+            archetype: archetype.map(String::from),
+            designer_run_id,
         };
 
         self.protocol_repo

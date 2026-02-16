@@ -43,6 +43,8 @@ pub struct DesignerTokenUsage {
     pub input_tokens: i64,
     pub output_tokens: i64,
     pub cost_usd: f32,
+    /// The designer run ID for linking agent phases back to their designer.
+    pub run_id: Uuid,
 }
 
 // ── Main execution function ─────────────────────────────────────────────────
@@ -119,6 +121,7 @@ pub(crate) async fn run_agent_designer(
         input_tokens: result.input_tokens,
         output_tokens: result.output_tokens,
         cost_usd: result.cost_usd,
+        run_id: result.run_id,
     };
 
     Ok((designed_prompts, token_usage))

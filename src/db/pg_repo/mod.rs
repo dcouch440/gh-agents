@@ -2352,6 +2352,23 @@ impl WorkflowRepo for PgRepo {
         Ok(rows)
     }
 
+    async fn list_designer_runs_for_step(
+        &self,
+        step_id: Uuid,
+        workflow_execution_id: Uuid,
+    ) -> Result<Vec<AgentDesignerRunRow>> {
+        let rows = sqlx::query_as::<_, AgentDesignerRunRow>(
+            "SELECT * FROM agent_designer_runs \
+             WHERE step_id = $1 AND workflow_execution_id = $2 \
+             ORDER BY created_at",
+        )
+        .bind(step_id)
+        .bind(workflow_execution_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
     // --- Assistant Notes ---
 
     async fn get_assistant_notes(&self, step_id: Uuid) -> Result<Option<String>> {
@@ -4722,8 +4739,10 @@ impl ProtocolRepo for PgRepo {
             "INSERT INTO protocol_executions \
              (id, protocol_step_id, workflow_run_id, phase, document_def_id, agent_id, \
               input_prompt, output_content, status, error_message, \
-              tokens_in, tokens_out, cost_usd, model, capabilities_used, created_at, completed_at) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) \
+              tokens_in, tokens_out, cost_usd, model, capabilities_used, created_at, completed_at, \
+              agent_name, archetype, designer_run_id) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, \
+                     $18, $19, $20) \
              RETURNING *",
         )
         .bind(row.id)
@@ -4743,6 +4762,9 @@ impl ProtocolRepo for PgRepo {
         .bind(&row.capabilities_used)
         .bind(row.created_at)
         .bind(row.completed_at)
+        .bind(&row.agent_name)
+        .bind(&row.archetype)
+        .bind(row.designer_run_id)
         .fetch_one(&self.pool)
         .await?;
         Ok(result)
