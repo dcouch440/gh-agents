@@ -2,7 +2,6 @@
 
 Practical application of research findings to each nexor protocol. This document bridges theory to implementation — what each protocol's prompts should look like, how they connect, and where the research applies.
 
-Required Reading: AGENT_PERSONALITY.md, PROMPT_RESEARCH.md, AGENT_GOVERNANCE.md, AGENT_EXECUTION_PATTERNS.md
 
 ---
 
