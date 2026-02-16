@@ -39,6 +39,8 @@ pub async fn execute_workforce_tool(
         "add_deliverable" => execute_add_deliverable(input, repo, ctx).await,
         "update_deliverable" => execute_update_deliverable(input, repo, ctx).await,
         "remove_deliverable" => execute_remove_deliverable(input, repo, ctx).await,
+        "set_dependency" => execute_set_dependency(input, repo, ctx).await,
+        "remove_dependency" => execute_remove_dependency(input, repo, ctx).await,
         _ => json!({ "error": format!("Unknown workforce tool: {}", name) }),
     }
 }
@@ -328,30 +330,24 @@ async fn execute_add_agent(
         Err(e) => return json!({ "error": format!("Failed to create child step: {}", e) }),
     };
 
-    // Wire edges in the child workflow
-    if let Some(ref designer) = designer_step {
-        // First agent: Designer → agent
-        if let Err(e) = repo
-            .add_edge(child_workflow_id, designer.id, child_step.id)
-            .await
-        {
-            return json!({ "error": format!("Failed to wire Designer edge: {}", e) });
-        }
+    // Wire edge: Designer → new agent (fan-out, not linear chain)
+    let designer_id = if let Some(ref designer) = designer_step {
+        designer.id
     } else {
-        // Subsequent agent: wire from the last roster entry's child step
-        let prev_child_step_id = roster
-            .iter()
-            .max_by_key(|a| a.execution_order)
-            .and_then(|a| a.child_step_id);
-
-        if let Some(prev_step_id) = prev_child_step_id {
-            if let Err(e) = repo
-                .add_edge(child_workflow_id, prev_step_id, child_step.id)
-                .await
-            {
-                return json!({ "error": format!("Failed to wire agent edge: {}", e) });
+        // Find existing Designer step in child workflow
+        let child_steps = repo.list_steps(child_workflow_id).await.unwrap_or_default();
+        match child_steps.iter().find(|s| s.is_designer_step) {
+            Some(s) => s.id,
+            None => {
+                return json!({ "error": "Designer step not found in child workflow" });
             }
         }
+    };
+    if let Err(e) = repo
+        .add_edge(child_workflow_id, designer_id, child_step.id)
+        .await
+    {
+        return json!({ "error": format!("Failed to wire Designer edge: {}", e) });
     }
 
     // Create roster entry
@@ -462,35 +458,19 @@ async fn execute_remove_agent(
     };
     let agent_name = target.name.clone();
 
-    // Remove the child step and rewire edges
+    // Remove the child step and all its edges (no bridging — fan-in/fan-out topology)
     if let Some(child_step_id) = target.child_step_id {
         let step = repo.get_step(ctx.step_id).await.ok().flatten();
         if let Some(ref step) = step {
             if let Some(child_workflow_id) = step.child_workflow_id {
                 let edges = repo.list_edges(child_workflow_id).await.unwrap_or_default();
 
-                let predecessor = edges
-                    .iter()
-                    .find(|e| e.to_step_id == child_step_id)
-                    .map(|e| e.from_step_id);
-                let successor = edges
-                    .iter()
-                    .find(|e| e.from_step_id == child_step_id)
-                    .map(|e| e.to_step_id);
-
-                // Remove edges involving this step
                 for edge in &edges {
                     if edge.from_step_id == child_step_id || edge.to_step_id == child_step_id {
                         let _ = repo.remove_edge(edge.from_step_id, edge.to_step_id).await;
                     }
                 }
 
-                // Rewire: predecessor → successor
-                if let (Some(pred), Some(succ)) = (predecessor, successor) {
-                    let _ = repo.add_edge(child_workflow_id, pred, succ).await;
-                }
-
-                // Delete the child step
                 let _ = repo.delete_step(child_step_id).await;
             }
         }
@@ -736,6 +716,179 @@ async fn execute_remove_deliverable(
         }),
         Err(e) => json!({ "error": e.to_string() }),
     }
+}
+
+// =========================================================================
+// Tool Handlers — Agent Dependencies
+// =========================================================================
+
+/// Normalize an agent name for matching (case-insensitive, strip separators).
+fn normalize_name(name: &str) -> String {
+    name.chars()
+        .filter(|c| *c != ' ' && *c != '_' && *c != '-')
+        .flat_map(|c| c.to_lowercase())
+        .collect()
+}
+
+/// Find a roster agent by normalized name match.
+fn find_agent_by_name<'a>(
+    roster: &'a [crate::db::TaskAgentRosterRow],
+    name: &str,
+) -> Option<&'a crate::db::TaskAgentRosterRow> {
+    let normalized = normalize_name(name);
+    roster
+        .iter()
+        .find(|a| normalize_name(&a.name) == normalized)
+}
+
+async fn execute_set_dependency(
+    input: &Value,
+    repo: &dyn WorkflowRepo,
+    ctx: &WorkforceToolContext,
+) -> Value {
+    let Some(from_name) = input["from_agent"].as_str() else {
+        return json!({ "error": "Missing required parameter: from_agent" });
+    };
+    let Some(to_name) = input["to_agent"].as_str() else {
+        return json!({ "error": "Missing required parameter: to_agent" });
+    };
+
+    // Load brief + roster
+    let brief = match repo.get_mission_brief(ctx.step_id).await {
+        Ok(Some(b)) => b,
+        Ok(None) => return json!({ "error": "No mission brief found" }),
+        Err(e) => return json!({ "error": e.to_string() }),
+    };
+    let roster = repo.list_agent_roster(brief.id).await.unwrap_or_default();
+
+    // Resolve agent names
+    let from_agent = match find_agent_by_name(&roster, from_name) {
+        Some(a) => a,
+        None => {
+            return json!({ "error": format!("Agent '{}' not found in roster", from_name) })
+        }
+    };
+    let to_agent = match find_agent_by_name(&roster, to_name) {
+        Some(a) => a,
+        None => return json!({ "error": format!("Agent '{}' not found in roster", to_name) }),
+    };
+
+    // Validate: no self-edges
+    if from_agent.id == to_agent.id {
+        return json!({ "error": "Cannot create a dependency from an agent to itself" });
+    }
+
+    // Both must have child_step_id
+    let from_child_step_id = match from_agent.child_step_id {
+        Some(id) => id,
+        None => {
+            return json!({ "error": format!("Agent '{}' has no child step", from_agent.name) })
+        }
+    };
+    let to_child_step_id = match to_agent.child_step_id {
+        Some(id) => id,
+        None => {
+            return json!({ "error": format!("Agent '{}' has no child step", to_agent.name) })
+        }
+    };
+
+    // Get child workflow
+    let step = match repo.get_step(ctx.step_id).await {
+        Ok(Some(s)) => s,
+        Ok(None) => return json!({ "error": "Step not found" }),
+        Err(e) => return json!({ "error": e.to_string() }),
+    };
+    let child_workflow_id = match step.child_workflow_id {
+        Some(id) => id,
+        None => return json!({ "error": "No child workflow exists" }),
+    };
+
+    // Check for duplicate edge
+    let edges = repo.list_edges(child_workflow_id).await.unwrap_or_default();
+    if edges
+        .iter()
+        .any(|e| e.from_step_id == from_child_step_id && e.to_step_id == to_child_step_id)
+    {
+        return json!({
+            "already_exists": true,
+            "from": from_agent.name,
+            "to": to_agent.name,
+        });
+    }
+
+    // Create the edge
+    if let Err(e) = repo
+        .add_edge(child_workflow_id, from_child_step_id, to_child_step_id)
+        .await
+    {
+        return json!({ "error": format!("Failed to create dependency: {}", e) });
+    }
+
+    json!({
+        "created": true,
+        "from": from_agent.name,
+        "to": to_agent.name,
+    })
+}
+
+async fn execute_remove_dependency(
+    input: &Value,
+    repo: &dyn WorkflowRepo,
+    ctx: &WorkforceToolContext,
+) -> Value {
+    let Some(from_name) = input["from_agent"].as_str() else {
+        return json!({ "error": "Missing required parameter: from_agent" });
+    };
+    let Some(to_name) = input["to_agent"].as_str() else {
+        return json!({ "error": "Missing required parameter: to_agent" });
+    };
+
+    // Load brief + roster
+    let brief = match repo.get_mission_brief(ctx.step_id).await {
+        Ok(Some(b)) => b,
+        Ok(None) => return json!({ "error": "No mission brief found" }),
+        Err(e) => return json!({ "error": e.to_string() }),
+    };
+    let roster = repo.list_agent_roster(brief.id).await.unwrap_or_default();
+
+    // Resolve agent names
+    let from_agent = match find_agent_by_name(&roster, from_name) {
+        Some(a) => a,
+        None => {
+            return json!({ "error": format!("Agent '{}' not found in roster", from_name) })
+        }
+    };
+    let to_agent = match find_agent_by_name(&roster, to_name) {
+        Some(a) => a,
+        None => return json!({ "error": format!("Agent '{}' not found in roster", to_name) }),
+    };
+
+    let from_child_step_id = match from_agent.child_step_id {
+        Some(id) => id,
+        None => {
+            return json!({ "error": format!("Agent '{}' has no child step", from_agent.name) })
+        }
+    };
+    let to_child_step_id = match to_agent.child_step_id {
+        Some(id) => id,
+        None => {
+            return json!({ "error": format!("Agent '{}' has no child step", to_agent.name) })
+        }
+    };
+
+    // Remove the edge
+    if let Err(e) = repo
+        .remove_edge(from_child_step_id, to_child_step_id)
+        .await
+    {
+        return json!({ "error": format!("Failed to remove dependency: {}", e) });
+    }
+
+    json!({
+        "removed": true,
+        "from": from_agent.name,
+        "to": to_agent.name,
+    })
 }
 
 // =========================================================================

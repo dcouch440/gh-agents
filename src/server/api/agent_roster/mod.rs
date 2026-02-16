@@ -38,17 +38,21 @@ pub struct RosterAgentResponse {
     pub capabilities: Vec<String>,
     pub execution_order: i32,
     pub created_at: String,
+    pub child_step_id: Option<String>,
+    pub depends_on: Vec<String>,
 }
 
 impl RosterAgentResponse {
-    fn from_row(row: crate::db::TaskAgentRosterRow) -> Self {
+    fn from_row(row: crate::db::TaskAgentRosterRow, depends_on: Vec<String>) -> Self {
         Self {
             id: row.id.to_string(),
+            child_step_id: row.child_step_id.map(|id| id.to_string()),
             name: row.name,
             role_description: row.role_description,
             capabilities: row.capabilities,
             execution_order: row.execution_order,
             created_at: row.created_at.to_rfc3339(),
+            depends_on,
         }
     }
 }
@@ -115,12 +119,42 @@ pub async fn list_roster_agents(
         None => vec![],
     };
 
-    Ok(Json(
-        agents
-            .into_iter()
-            .map(RosterAgentResponse::from_row)
-            .collect(),
-    ))
+    // Build depends_on from child workflow edges
+    let step = repo.get_step(sid).await?;
+    let child_edges = match step.and_then(|s| s.child_workflow_id) {
+        Some(child_wf_id) => repo.list_edges(child_wf_id).await.unwrap_or_default(),
+        None => vec![],
+    };
+
+    // Map child_step_id → roster agent ID for reverse lookup
+    let child_step_to_agent: std::collections::HashMap<Uuid, Uuid> = agents
+        .iter()
+        .filter_map(|a| a.child_step_id.map(|csid| (csid, a.id)))
+        .collect();
+
+    // For each agent, find which roster agents' child_steps have edges pointing to this
+    // agent's child_step (excluding Designer edges — Designer steps aren't in the roster)
+    let compute_depends_on = |agent: &crate::db::TaskAgentRosterRow| -> Vec<String> {
+        let Some(child_step_id) = agent.child_step_id else {
+            return vec![];
+        };
+        child_edges
+            .iter()
+            .filter(|e| e.to_step_id == child_step_id)
+            .filter_map(|e| child_step_to_agent.get(&e.from_step_id))
+            .map(|id| id.to_string())
+            .collect()
+    };
+
+    let responses: Vec<RosterAgentResponse> = agents
+        .into_iter()
+        .map(|a| {
+            let deps = compute_depends_on(&a);
+            RosterAgentResponse::from_row(a, deps)
+        })
+        .collect();
+
+    Ok(Json(responses))
 }
 
 /// POST /api/workflows/:wid/steps/:sid/agent-roster
@@ -166,7 +200,7 @@ pub async fn create_roster_agent(
 
     Ok((
         StatusCode::CREATED,
-        Json(RosterAgentResponse::from_row(row)),
+        Json(RosterAgentResponse::from_row(row, vec![])),
     ))
 }
 

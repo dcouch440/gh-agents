@@ -2,6 +2,8 @@ import type { Node } from '@xyflow/react'
 import type { WorkflowStep } from '@/types/workflow'
 import { Collections } from '@/utils/collections'
 import { FORM_NODE } from '../CanvasFormNode'
+import { AGENT_NODE } from '../AgentNode'
+import type { AgentNodeData } from '../AgentNode'
 import { CONTEXT_NODE } from '../ContextNode'
 import type { ContextNodeData } from '../ContextNode'
 import { DOCUMENT_NODE } from '../DocumentNode'
@@ -189,6 +191,46 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
     }
   }
 
+  // Auto-generate agent nodes for workforce steps with roster agents
+  const agentNodes: Node[] = []
+  for (const step of steps) {
+    if (!isWorkforceStep(step, lookups.protocolsByStep)) continue
+
+    const roster = lookups.rosterByStep[step.id] ?? []
+    for (let i = 0; i < roster.length; i++) {
+      const agent = roster[i]!
+      if (!agent.child_step_id) continue
+
+      const agentData: AgentNodeData = {
+        kind: CanvasNodeKind.AGENT,
+        label: agent.name,
+        roleDescription: agent.role_description,
+        parentStepName: step.name ?? 'Workforce',
+        protocolStepId: step.id,
+        rosterAgentId: agent.id,
+        capabilities: [],
+      }
+      const agentNodeId = `agent-artifact-${agent.id}`
+      const agentDims = getStoredDimensions(agentNodeId)
+      const agentPos = getStoredPosition(agentNodeId)
+      agentNodes.push({
+        id: agentNodeId,
+        type: 'agentNode',
+        position: agentPos ?? {
+          x: (step.position_x ?? 0) + i * (AGENT_NODE.DEFAULT_WIDTH + 20),
+          y: (step.position_y ?? 0) - AGENT_NODE.DEFAULT_HEIGHT - 40,
+        },
+        style: {
+          width: agentDims?.width ?? AGENT_NODE.DEFAULT_WIDTH,
+          height: agentDims?.height ?? AGENT_NODE.DEFAULT_HEIGHT,
+        },
+        draggable: true,
+        connectable: false,
+        data: agentData,
+      })
+    }
+  }
+
   // Auto-generate notes nodes for steps that have assistant notes
   const notesNodes: Node[] = []
   for (const step of steps) {
@@ -223,7 +265,7 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
     })
   }
 
-  return [...stepNodes, ...documentNodes, ...notesNodes]
+  return [...stepNodes, ...documentNodes, ...agentNodes, ...notesNodes]
 }
 
 export { toRFNodes }

@@ -40,6 +40,9 @@ type DocumentDefInfo = {
 type RosterAgentInfo = {
   id: string
   name: string
+  child_step_id: string | null
+  role_description: string
+  depends_on: string[]
 }
 
 type StepNodeLookups = {

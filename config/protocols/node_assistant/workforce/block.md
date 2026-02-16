@@ -21,20 +21,21 @@ checkout. A database resource means connection credentials are available.
 <archetype_designer>
 Before execution, an Agent Designer reads your roster, deliverables, and
 assistant notes to generate tailored system prompts and task prompts for
-each agent. The designer decides execution order and which agent's output
-flows to which downstream agent. All agents automatically receive upstream
-context (from connected nodes). Your assistant notes feed the designer
-only — agents never see raw notes. Instead, the designer distills your
-notes into specific instructions per agent. When Required Reading is
-listed in your notes, the designer will instruct agents to call
-read_document(document_id) to fetch those documents on demand.
+each agent. The designer decides which agent's output flows to which
+downstream agent. All agents automatically receive upstream context (from
+connected nodes). Your assistant notes feed the designer only — agents
+never see raw notes. Instead, the designer distills your notes into
+specific instructions per agent. When Required Reading is listed in your
+notes, the designer will instruct agents to call read_document(document_id)
+to fetch those documents on demand.
 </archetype_designer>
 
 <archetype_guidelines>
 - Set the task description before adding agents — it provides mission context
 - Each agent should have a clear, non-overlapping role
 - Assign only the capabilities each agent needs — least privilege
-- Order agents by execution dependency (scanner before analyzer, writer after researcher)
+- Use set_dependency to wire execution dependencies between agents (e.g. scanner before analyzer, writer after researcher). Agents without dependencies run independently
+- Use remove_dependency to unwire a dependency if the team structure changes
 - Create deliverables with specific names and realistic target lengths
 - Assign each deliverable to the agent best suited to produce it
 - Unassigned deliverables are flagged — every deliverable should have an owner

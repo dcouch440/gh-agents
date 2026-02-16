@@ -1,5 +1,5 @@
 export { toRFNodes } from './nodes'
-export { toRFEdges, toDocumentEdges, toNotesEdges } from './edges'
+export { toRFEdges, toDocumentEdges, toAgentEdges, toNotesEdges } from './edges'
 export { nodeDataEqual } from './equality'
 export { computeProtocolGroups, isWorkforceStep } from './protocolGroups'
 

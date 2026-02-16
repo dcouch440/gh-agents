@@ -218,7 +218,10 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
         <CanvasHandle type="target" position={Position.Left} color={accentColor} />
         <CanvasHandle type="source" position={Position.Right} color={accentColor} />
         {nodeData.archetype === Archetype.WORKFORCE && (
-          <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
+          <>
+            <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
+            <CanvasHandle type="source" position={Position.Top} id="agents" color={accentColor} />
+          </>
         )}
         <CanvasHandle type="source" position={Position.Bottom} id="notes" color="#f85149" variant="passive" />
       </Box>
@@ -251,7 +254,10 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
         extraHandles={
           <>
             {nodeData.archetype === Archetype.WORKFORCE && (
-              <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
+              <>
+                <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
+                <CanvasHandle type="source" position={Position.Top} id="agents" color={accentColor} />
+              </>
             )}
             <CanvasHandle type="source" position={Position.Bottom} id="notes" color="#f85149" variant="passive" />
           </>
