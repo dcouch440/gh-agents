@@ -48,6 +48,7 @@ pub(crate) mod resume;
 pub(crate) mod room_step;
 pub(crate) mod single;
 pub(crate) mod staging;
+pub(crate) mod sub_workflow;
 pub(crate) mod task_force;
 pub mod templates;
 pub(crate) mod utils;
@@ -77,6 +78,7 @@ use documenter::execute_documenter_step;
 use for_each::{detect_for_each_chains, execute_for_each_chain, execute_for_each_step};
 use room_step::execute_room_step;
 use single::execute_single_step;
+use sub_workflow::execute_sub_workflow_step;
 use task_force::execute_task_force_step;
 
 // ── Routing Context ─────────────────────────────────────────────────────────
@@ -318,6 +320,20 @@ async fn run_dag_loop(
         // Belief capture steps — per-source LLM extraction, no agent_id needed
         if step.execution_mode == "belief_capture" {
             let step_result = execute_belief_capture_step(
+                engine, state, ctx, step, steps, edges, dag_state, port_meta, cancel,
+            )
+            .await;
+
+            if let Err(ref e) = step_result {
+                broadcast_step_failure_if_real(state, ctx, workflow_id, step, e);
+            }
+            step_result?;
+            continue;
+        }
+
+        // Sub-workflow steps — execute child workflow from template, no agent needed
+        if step.execution_mode == "sub_workflow" {
+            let step_result = execute_sub_workflow_step(
                 engine, state, ctx, step, steps, edges, dag_state, port_meta, cancel,
             )
             .await;

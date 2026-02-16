@@ -3939,6 +3939,28 @@ impl WorkflowCollectionRepo for PgRepo {
         Ok(row)
     }
 
+    async fn create_child_workflow_execution(
+        &self,
+        parent_execution_id: Uuid,
+        workflow_id: Uuid,
+        user_id: Uuid,
+        template_id: Uuid,
+    ) -> Result<WorkflowExecutionRow> {
+        let row = sqlx::query_as::<_, WorkflowExecutionRow>(
+            "INSERT INTO workflow_executions \
+             (parent_execution_id, workflow_id, user_id, template_id, status, execution_mode) \
+             VALUES ($1, $2, $3, $4, 'pending', 'sub_workflow') \
+             RETURNING *",
+        )
+        .bind(parent_execution_id)
+        .bind(workflow_id)
+        .bind(user_id)
+        .bind(template_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
     async fn get_or_create_workshop(
         &self,
         workflow_id: Uuid,

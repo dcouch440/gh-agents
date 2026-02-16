@@ -42,6 +42,9 @@ pub struct ExecutionMetadata {
     pub room_session_id: Option<Uuid>,
     pub room_id: Option<Uuid>,
     pub total_rounds: Option<i32>,
+
+    // For sub-workflow steps
+    pub child_workflow_execution_id: Option<Uuid>,
 }
 
 impl ExecutionMetadata {
@@ -63,6 +66,7 @@ impl ExecutionMetadata {
             room_session_id: None,
             room_id: None,
             total_rounds: None,
+            child_workflow_execution_id: None,
         }
     }
 }

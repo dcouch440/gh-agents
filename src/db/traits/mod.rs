@@ -1387,6 +1387,15 @@ pub trait WorkflowCollectionRepo: Send + Sync {
         user_id: Uuid,
     ) -> Result<WorkflowExecutionRow>;
 
+    // --- Child Workflow Execution (sub-workflow nesting) ---
+    async fn create_child_workflow_execution(
+        &self,
+        parent_execution_id: Uuid,
+        workflow_id: Uuid,
+        user_id: Uuid,
+        template_id: Uuid,
+    ) -> Result<WorkflowExecutionRow>;
+
     // --- Workshop (persistent per-workflow execution context) ---
     async fn get_or_create_workshop(
         &self,
