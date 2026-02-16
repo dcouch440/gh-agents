@@ -39,3 +39,10 @@ Final Output
  Designer                     Designer
  |                            |
  Protocol ------------------> Protocol
+
+
+We should have meta data loading connectors. Agent to agent or Document to agent.
+Instead of putting it as context in the agents memory. It should be a task the designer requires of the agent.
+"Simply put, designer sees: Connected Document ID(123) requires investigation by agent before his or her work start"
+
+Designer assigns task to agent via ID and agent reads document by simply calling their tools and receiving the output.
