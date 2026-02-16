@@ -10,6 +10,7 @@ pub mod run_detail_handlers;
 pub mod run_handlers;
 pub mod step_chat_handlers;
 pub mod step_handlers;
+pub mod sub_dag_handlers;
 pub mod template_handlers;
 pub mod workflow_handlers;
 pub mod workshop_handlers;
@@ -43,6 +44,7 @@ pub use types::{
 pub use workflow_handlers::{
     create_workflow, delete_workflow, get_workflow, list_workflows, update_workflow,
 };
+pub use sub_dag_handlers::get_step_sub_dag;
 pub use workshop_handlers::{execute_workshop_step, get_or_create_workshop, get_workshop};
 
 #[cfg(test)]

@@ -536,6 +536,13 @@ mod tests {
             ) -> Result<Vec<crate::db::AgentDesignerOutputRow>> {
                 unimplemented!()
             }
+            async fn list_designer_runs_for_step(
+                &self,
+                _: Uuid,
+                _: Uuid,
+            ) -> Result<Vec<crate::db::AgentDesignerRunRow>> {
+                unimplemented!()
+            }
             // Assistant Notes stubs
             async fn get_assistant_notes(&self, _: Uuid) -> Result<Option<String>> {
                 unimplemented!()

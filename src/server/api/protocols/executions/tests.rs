@@ -30,6 +30,9 @@ mod tests {
             capabilities_used: Some(vec!["web_search".to_string()]),
             created_at: now,
             completed_at: Some(now),
+            agent_name: None,
+            archetype: None,
+            designer_run_id: None,
         };
 
         let resp = ProtocolExecutionResponse::from_row(row);
@@ -62,6 +65,9 @@ mod tests {
             capabilities_used: None,
             created_at: Utc::now(),
             completed_at: None,
+            agent_name: None,
+            archetype: None,
+            designer_run_id: None,
         };
 
         let resp = ProtocolExecutionResponse::from_row(row);

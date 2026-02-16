@@ -96,7 +96,8 @@ impl<'a> DocumenterExecutor<'a> {
         steps: &'a [WorkflowStepRow],
     ) -> Self {
         let recorder =
-            ProtocolExecutionRecorder::new(&*state.repos().protocols, step.id, ctx.run_id);
+            ProtocolExecutionRecorder::new(&*state.repos().protocols, step.id, ctx.run_id)
+                .with_archetype("documenter");
         Self {
             engine,
             state,
@@ -137,18 +138,37 @@ impl<'a> DocumenterExecutor<'a> {
         }
 
         // ── Agent Designer: Strategist ──────────────────────────────────
+        let designer_phase_1 = self
+            .recorder
+            .create_phase("designer_strategist", None, None)
+            .await?;
         let strategist_designed = self.run_designer_for_strategist(&doc_defs).await;
         let (strategy_system, strategy_task) = match strategist_designed {
-            Some(result) if !result.prompts.is_empty() => {
+            Some(ref result) if !result.prompts.is_empty() => {
                 total_in += result.input_tokens;
                 total_out += result.output_tokens;
                 total_cost += result.cost_usd;
+                self.recorder
+                    .update_phase(
+                        designer_phase_1.id,
+                        "complete",
+                        None,
+                        None,
+                        result.input_tokens,
+                        result.output_tokens,
+                        result.cost_usd,
+                        Some("claude-sonnet-4-5-20250929"),
+                    )
+                    .await;
                 (
                     result.prompts[0].system_prompt.clone(),
                     result.prompts[0].task_prompt.clone(),
                 )
             }
             _ => {
+                self.recorder
+                    .update_phase(designer_phase_1.id, "complete", None, None, 0, 0, 0.0, None)
+                    .await;
                 let role_ctx = self.resolve_strategist_from_config(&doc_defs);
                 (role_ctx.system_prompt, role_ctx.user_prompt)
             }
@@ -176,6 +196,10 @@ impl<'a> DocumenterExecutor<'a> {
         let context_docs = self.load_context_documents().await;
 
         // ── Agent Designer: Researchers + Writers ────────────────────────
+        let designer_phase_2 = self
+            .recorder
+            .create_phase("designer_research_write", None, None)
+            .await?;
         let designed_lookup: HashMap<String, super::agent_designer::DesignedAgentPrompt> =
             match self
                 .run_designer_for_research_write(&strategy_output.plans)
@@ -185,13 +209,39 @@ impl<'a> DocumenterExecutor<'a> {
                     total_in += result.input_tokens;
                     total_out += result.output_tokens;
                     total_cost += result.cost_usd;
+                    self.recorder
+                        .update_phase(
+                            designer_phase_2.id,
+                            "complete",
+                            None,
+                            None,
+                            result.input_tokens,
+                            result.output_tokens,
+                            result.cost_usd,
+                            Some("claude-sonnet-4-5-20250929"),
+                        )
+                        .await;
                     result
                         .prompts
                         .into_iter()
                         .map(|p| (p.agent_id.clone(), p))
                         .collect()
                 }
-                None => HashMap::new(),
+                None => {
+                    self.recorder
+                        .update_phase(
+                            designer_phase_2.id,
+                            "complete",
+                            None,
+                            None,
+                            0,
+                            0,
+                            0.0,
+                            None,
+                        )
+                        .await;
+                    HashMap::new()
+                }
             };
 
         // ── Phase 2: Research (parallel per document) ────────────────────

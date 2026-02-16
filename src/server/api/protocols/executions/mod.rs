@@ -39,6 +39,12 @@ pub struct ProtocolExecutionResponse {
     pub capabilities_used: Option<Vec<String>>,
     pub created_at: String,
     pub completed_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archetype: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub designer_run_id: Option<String>,
 }
 
 impl ProtocolExecutionResponse {
@@ -61,6 +67,9 @@ impl ProtocolExecutionResponse {
             capabilities_used: row.capabilities_used,
             created_at: row.created_at.to_rfc3339(),
             completed_at: row.completed_at.map(|t| t.to_rfc3339()),
+            agent_name: row.agent_name,
+            archetype: row.archetype,
+            designer_run_id: row.designer_run_id.map(|id| id.to_string()),
         }
     }
 }
