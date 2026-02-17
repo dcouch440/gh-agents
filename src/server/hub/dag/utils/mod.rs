@@ -19,7 +19,8 @@ pub use graph::{find_entry_steps, get_child_steps, get_parent_steps, topological
 pub use ports::{
     collect_upstream_context_data, resolve_dot_path, resolve_port_inputs, PortResolutionError,
 };
-pub use prompts::{build_routing_instruction_block, compose_prompt};
+pub use prompts::build_routing_instruction_block;
+pub(crate) use prompts::{compose_prompt, PromptRepos};
 pub use types::{
     ContainerExecutionConfig, DagPaused, StepOutput, StepReadiness, SubWorkflowParentContext,
     WorkflowExecutionContext, WorkflowExecutionResult,

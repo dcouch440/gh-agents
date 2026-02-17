@@ -10,22 +10,19 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde_json::Value as JsonValue;
-use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::db::{AgentRow, StepOutputRow, WorkflowStepEdgeRow, WorkflowStepRow};
+use crate::db::{AgentRow, WorkflowStepRow};
 use crate::execution::ContainerHandle;
 use crate::server::hub::engine::filters::{
     AgentGuidanceFilter, DebateVerificationFilter, ExecutionFilter, FewShotFilter, FilterContext,
     PartialJsonRecoveryFilter, ReasoningTraceFilter, SchemaEnhancementFilter,
     SchemaValidationRetryFilter,
 };
-use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
 use crate::server::hub::recorder::ExecutionRecorder;
 use crate::server::hub::strategies::dag_step::{compute_cost, DagStepConfig, DagStepStrategy};
 use crate::server::hub::streaming::NullSink;
-use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
 
 use super::container::{
@@ -35,28 +32,22 @@ use super::dag_state::DagExecutionState;
 use super::{
     broadcast_workflow_event, build_routing_instruction_block, compose_prompt,
     gather_downstream_routing_context, resolve_output_key, resolve_step_port_inputs,
-    step_display_name, wrap_in_envelope, PortMetadata, StepOutput, WorkflowExecutionContext,
+    step_display_name, wrap_in_envelope, DagContext, PromptRepos, StepOutput,
 };
 
 /// Execute a single (non-for-each) step through the engine.
 pub(super) async fn execute_single_step(
-    engine: &ExecutionEngine,
-    state: &AppState,
-    ctx: &WorkflowExecutionContext,
+    dag: &DagContext<'_>,
     step: &WorkflowStepRow,
     agent: &AgentRow,
-    steps: &[WorkflowStepRow],
-    edges: &[WorkflowStepEdgeRow],
     dag_state: &mut DagExecutionState,
-    port_meta: &PortMetadata,
-    cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
     let step_start = std::time::Instant::now();
 
     // Broadcast: step started
     broadcast_workflow_event(
-        state,
-        ctx,
+        dag.state,
+        dag.ctx,
         step.workflow_id,
         WorkflowEventKind::StepStarted {
             step_id: step.id,
@@ -67,17 +58,27 @@ pub(super) async fn execute_single_step(
     );
 
     // Resolve port inputs if this step has input ports defined
-    let port_inputs =
-        resolve_step_port_inputs(step, edges, port_meta, &dag_state.completed_envelopes);
+    let port_inputs = resolve_step_port_inputs(
+        step,
+        dag.edges,
+        dag.port_meta,
+        &dag_state.completed_envelopes,
+    );
 
+    let pt_repo = dag.state.prompt_template_repo();
+    let doc_repo = dag.state.doc_repo();
+    let wf_repo = dag.state.workflow_repo();
+    let repos = PromptRepos {
+        prompt_template_repo: pt_repo.as_deref(),
+        doc_repo: doc_repo.as_deref(),
+        workflow_repo: wf_repo.as_deref(),
+        server_repo: &**dag.state.repo(),
+    };
     let prompt = compose_prompt(
         step,
-        state.prompt_template_repo().as_deref(),
-        state.doc_repo().as_deref(),
-        state.workflow_repo().as_deref(),
-        &**state.repo(),
+        &repos,
         &dag_state.var_outputs,
-        &ctx.prior_outputs,
+        &dag.ctx.prior_outputs,
         None,
         port_inputs.as_ref(),
     )
@@ -85,8 +86,8 @@ pub(super) async fn execute_single_step(
 
     // Snapshot composed user prompt for run history
     let _ = super::versioning::snapshot_content(
-        &*state.repos().content_versions,
-        ctx.run_id,
+        &*dag.state.repos().content_versions,
+        dag.ctx.run_id,
         step.id,
         step.id,
         super::versioning::content_types::PROMPT,
@@ -97,17 +98,24 @@ pub(super) async fn execute_single_step(
 
     // Phase 6: Inject downstream routing context into the prompt
     let mut prompt = prompt;
-    let local_step_map: HashMap<Uuid, &WorkflowStepRow> = steps.iter().map(|s| (s.id, s)).collect();
-    let downstream_contexts =
-        gather_downstream_routing_context(step.id, edges, &local_step_map, port_meta, state).await;
+    let local_step_map: HashMap<Uuid, &WorkflowStepRow> =
+        dag.steps.iter().map(|s| (s.id, s)).collect();
+    let downstream_contexts = gather_downstream_routing_context(
+        step.id,
+        dag.edges,
+        &local_step_map,
+        dag.port_meta,
+        dag.state,
+    )
+    .await;
     for routing_ctx in &downstream_contexts {
         prompt.push_str(&build_routing_instruction_block(routing_ctx));
     }
 
     // Create container if configured (with optional VPN sidecar)
     let managed_container = create_optional_container(
-        ctx.container_config.as_ref(),
-        ctx.wg_client.as_deref(),
+        dag.ctx.container_config.as_ref(),
+        dag.ctx.wg_client.as_deref(),
         "step",
     )
     .await?;
@@ -115,20 +123,16 @@ pub(super) async fn execute_single_step(
     let result = run_with_vpn_watchdog(
         &managed_container,
         run_step_via_engine(
-            engine,
-            state,
-            ctx,
+            dag,
             step,
             agent,
             &prompt,
-            &port_meta.step_outputs,
-            cancel,
             managed_container.as_ref().map(|mc| &mc.agent_handle),
         ),
     )
     .await;
 
-    destroy_optional_container(&managed_container, ctx.wg_client.as_deref()).await;
+    destroy_optional_container(&managed_container, dag.ctx.wg_client.as_deref()).await;
 
     let (output, in_tok, out_tok, cost) = result?;
 
@@ -141,8 +145,8 @@ pub(super) async fn execute_single_step(
     let envelope_json = serde_json::to_string(&envelope).unwrap_or_default();
     dag_state.record_step_output(step.id, output, envelope);
     let _ = super::versioning::snapshot_content(
-        &*state.repos().content_versions,
-        ctx.run_id,
+        &*dag.state.repos().content_versions,
+        dag.ctx.run_id,
         step.id,
         step.id,
         super::versioning::content_types::ENVELOPE,
@@ -153,8 +157,8 @@ pub(super) async fn execute_single_step(
 
     // Broadcast: step completed
     broadcast_workflow_event(
-        state,
-        ctx,
+        dag.state,
+        dag.ctx,
         step.workflow_id,
         WorkflowEventKind::StepCompleted {
             step_id: step.id,
@@ -175,25 +179,22 @@ pub(super) async fn execute_single_step(
 /// Creates the agent_execution record, builds a DagStepStrategy, and
 /// calls `engine.execute()`. Returns (StepOutput, input_tokens, output_tokens, cost).
 pub(crate) async fn run_step_via_engine(
-    engine: &ExecutionEngine,
-    state: &AppState,
-    ctx: &WorkflowExecutionContext,
+    dag: &DagContext<'_>,
     step: &WorkflowStepRow,
     agent: &AgentRow,
     prompt: &str,
-    step_outputs: &HashMap<Uuid, Vec<StepOutputRow>>,
-    cancel: Option<&CancellationToken>,
     container_handle: Option<&ContainerHandle>,
 ) -> Result<(StepOutput, i64, i64, f32), HubError> {
-    let ae_repo = state
+    let ae_repo = dag
+        .state
         .agent_execution_repo()
         .ok_or_else(|| anyhow::anyhow!("agent_execution_repo not configured"))?;
 
     // Load agent tools (from snapshot if template-based, else from live DB)
-    let agent_tool_rows = if let Some(snap) = &ctx.snapshot {
+    let agent_tool_rows = if let Some(snap) = &dag.ctx.snapshot {
         snap.agent_tools.get(&agent.id).cloned().unwrap_or_default()
     } else {
-        state
+        dag.state
             .repo()
             .get_agent_tools(agent.id)
             .await
@@ -215,7 +216,7 @@ pub(crate) async fn run_step_via_engine(
     }
     let mut output_schema_value: Option<JsonValue> = None;
     if let Some(schema_id) = step.output_schema_id {
-        let os_repo = &state.repos().output_schemas;
+        let os_repo = &dag.state.repos().output_schemas;
         if let Ok(Some(schema)) = os_repo.get_output_schema(schema_id).await {
             system_prompt.push_str(&format!(
                 "\n\n<schema>\nYour response is parsed directly by a JSON parser. Respond with a valid JSON object matching this schema:\n```json\n{}\n```\n</schema>",
@@ -227,8 +228,8 @@ pub(crate) async fn run_step_via_engine(
 
     // Snapshot system prompt for run history
     let _ = super::versioning::snapshot_content(
-        &*state.repos().content_versions,
-        ctx.run_id,
+        &*dag.state.repos().content_versions,
+        dag.ctx.run_id,
         step.id,
         step.id,
         super::versioning::content_types::SYSTEM_PROMPT,
@@ -248,7 +249,7 @@ pub(crate) async fn run_step_via_engine(
             prompt,
             None,
             None,
-            Some(ctx.stage_execution_id),
+            Some(dag.ctx.stage_execution_id),
         )
         .await
         .map_err(|e| anyhow::anyhow!("failed to create agent execution: {}", e))?;
@@ -270,19 +271,19 @@ pub(crate) async fn run_step_via_engine(
         tools,
         tool_names,
         temperature: agent.model_temperature,
-        execution_context: ctx.execution_context.clone(),
+        execution_context: dag.ctx.execution_context.clone(),
         container_handle: container_handle.cloned(),
-        run_id: ctx.run_id,
-        user_id: ctx.user_id,
+        run_id: dag.ctx.run_id,
+        user_id: dag.ctx.user_id,
         agent_execution_id: ae_row.id,
     };
-    let strategy = DagStepStrategy::new(config, state.clone());
+    let strategy = DagStepStrategy::new(config, dag.state.clone());
 
     // Build recorder (strategy handles its own recording in on_complete)
-    let ae_repo = state.agent_execution_repo();
-    let tl_repo = state.token_ledger_repo();
+    let ae_repo = dag.state.agent_execution_repo();
+    let tl_repo = dag.state.token_ledger_repo();
     let recorder = ExecutionRecorder::new(
-        state.repo().as_ref(),
+        dag.state.repo().as_ref(),
         ae_repo.as_deref(),
         tl_repo.as_deref(),
     );
@@ -295,18 +296,19 @@ pub(crate) async fn run_step_via_engine(
         "agent_execution_id".into(),
         serde_json::to_value(ae_row.id).unwrap(),
     );
-    filter_ctx
-        .metadata
-        .insert("user_id".into(), serde_json::to_value(ctx.user_id).unwrap());
+    filter_ctx.metadata.insert(
+        "user_id".into(),
+        serde_json::to_value(dag.ctx.user_id).unwrap(),
+    );
     filter_ctx.metadata.insert(
         "workflow_execution_id".into(),
-        serde_json::to_value(ctx.stage_execution_id).unwrap(),
+        serde_json::to_value(dag.ctx.stage_execution_id).unwrap(),
     );
 
     let mut filters: Vec<Arc<dyn ExecutionFilter>> =
-        vec![Arc::new(AgentGuidanceFilter::new(state.repo().clone()))];
+        vec![Arc::new(AgentGuidanceFilter::new(dag.state.repo().clone()))];
 
-    if let Some(ae_repo) = state.agent_execution_repo() {
+    if let Some(ae_repo) = dag.state.agent_execution_repo() {
         filters.push(Arc::new(FewShotFilter::new(ae_repo)));
     }
 
@@ -329,25 +331,26 @@ pub(crate) async fn run_step_via_engine(
         .unwrap_or_default();
 
     if !verification_ids.is_empty() {
-        if let Some(provider) = state.provider() {
+        if let Some(provider) = dag.state.provider() {
             filters.push(Arc::new(DebateVerificationFilter::new(
                 provider.clone(),
-                state.repo().clone(),
+                dag.state.repo().clone(),
                 verification_ids,
-                state.agent_execution_repo(),
-                state.token_ledger_repo(),
+                dag.state.agent_execution_repo(),
+                dag.state.token_ledger_repo(),
             )));
         }
     }
 
-    let filtered_engine = engine
+    let filtered_engine = dag
+        .engine
         .clone_with_provider()
         .with_filters(filters)
         .with_filter_context(filter_ctx);
 
     // Execute
     let result = filtered_engine
-        .execute(&strategy, prompt, &sink, &recorder, cancel)
+        .execute(&strategy, prompt, &sink, &recorder, dag.cancel)
         .await?;
 
     let cost = compute_cost(
@@ -356,7 +359,7 @@ pub(crate) async fn run_step_via_engine(
         result.output_tokens as i64,
     );
 
-    let variable_name = resolve_output_key(step, step_outputs);
+    let variable_name = resolve_output_key(step, &dag.port_meta.step_outputs);
     let structured =
         crate::server::hub::strategies::dag_step::DagStepStrategy::parse_output(&result.content);
 

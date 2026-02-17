@@ -10,24 +10,23 @@ mod tests;
 
 use anyhow::anyhow;
 use serde_json::Value as JsonValue;
-use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::config::protocols::{roles, vars, WORKFORCE};
+use crate::db::WorkflowStepRow;
 use crate::db::{ProtocolDocumentDefRow, TaskAgentRosterRow, TaskMissionBriefRow};
-use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::server::hub::capability_resolver::resolve_capabilities_to_tools;
-use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
-use crate::server::hub::protocols::execution_recorder::ProtocolExecutionRecorder;
+use crate::server::hub::protocols::execution_recorder::{
+    PhaseCompletion, ProtocolExecutionRecorder,
+};
 use crate::server::hub::recorder::ExecutionRecorder;
 use crate::server::hub::strategies::compute_cost;
 use crate::server::hub::strategies::workforce_agent::{
     WorkforceAgentConfig, WorkforceAgentStrategy,
 };
 use crate::server::hub::streaming::DagStreamSink;
-use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
 use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope, UserId};
 
@@ -40,7 +39,7 @@ use super::designer_input::workforce::build_workforce_designer_input;
 use super::utils::collect_upstream_context_data;
 use super::{
     broadcast_workflow_event, compose_prompt, resolve_output_key, resolve_step_port_inputs,
-    step_display_name, PortMetadata, StepOutput, WorkflowExecutionContext,
+    step_display_name, DagContext, PromptRepos, StepOutput,
 };
 
 // ── Workforce-owned types ─────────────────────────────────────────────────
@@ -53,7 +52,6 @@ pub(crate) struct DesignedAgentPrompt {
     pub tools: Vec<String>,
     pub system_prompt: String,
     pub task_prompt: String,
-    pub reasoning: String,
     pub execution_order: i32,
     pub receives_from: Vec<String>,
 }
@@ -72,24 +70,17 @@ pub(crate) struct DesignerTokenUsage {
 /// Loads the mission brief, agent roster, and deliverables, runs the Agent
 /// Designer pre-lifecycle, then executes each roster agent sequentially.
 /// The combined output includes agent results and deliverable metadata.
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn execute_workforce_step(
-    engine: &ExecutionEngine,
-    state: &AppState,
-    ctx: &WorkflowExecutionContext,
+    dag: &DagContext<'_>,
     step: &WorkflowStepRow,
-    steps: &[WorkflowStepRow],
-    edges: &[WorkflowStepEdgeRow],
     dag_state: &mut DagExecutionState,
-    port_meta: &PortMetadata,
-    cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
     let step_start = std::time::Instant::now();
 
     // 1. Broadcast step started
     broadcast_workflow_event(
-        state,
-        ctx,
+        dag.state,
+        dag.ctx,
         step.workflow_id,
         WorkflowEventKind::StepStarted {
             step_id: step.id,
@@ -100,7 +91,8 @@ pub(super) async fn execute_workforce_step(
     );
 
     // 2. Load mission brief
-    let brief = state
+    let brief = dag
+        .state
         .repos()
         .workflows
         .get_mission_brief(step.id)
@@ -111,7 +103,8 @@ pub(super) async fn execute_workforce_step(
         })?;
 
     // 3. Load agent roster (sorted by execution_order)
-    let roster = state
+    let roster = dag
+        .state
         .repos()
         .workflows
         .list_agent_roster(brief.id)
@@ -126,7 +119,8 @@ pub(super) async fn execute_workforce_step(
     }
 
     // 4. Load deliverables (document definitions for this step)
-    let doc_defs = state
+    let doc_defs = dag
+        .state
         .repos()
         .workflows
         .list_document_defs(step.id)
@@ -143,34 +137,49 @@ pub(super) async fn execute_workforce_step(
     );
 
     // 5. Resolve port inputs
-    let port_inputs =
-        resolve_step_port_inputs(step, edges, port_meta, &dag_state.completed_envelopes);
+    let port_inputs = resolve_step_port_inputs(
+        step,
+        dag.edges,
+        dag.port_meta,
+        &dag_state.completed_envelopes,
+    );
 
     // 5b. Collect upstream context from context nodes
-    let upstream_context =
-        collect_upstream_context_data(step.id, edges, steps, &dag_state.completed_envelopes);
+    let upstream_context = collect_upstream_context_data(
+        step.id,
+        dag.edges,
+        dag.steps,
+        &dag_state.completed_envelopes,
+    );
 
     // 6. Compose base prompt
+    let pt_repo = dag.state.prompt_template_repo();
+    let doc_repo = dag.state.doc_repo();
+    let wf_repo = dag.state.workflow_repo();
+    let repos = PromptRepos {
+        prompt_template_repo: pt_repo.as_deref(),
+        doc_repo: doc_repo.as_deref(),
+        workflow_repo: wf_repo.as_deref(),
+        server_repo: &**dag.state.repo(),
+    };
     let prompt = compose_prompt(
         step,
-        state.prompt_template_repo().as_deref(),
-        state.doc_repo().as_deref(),
-        state.workflow_repo().as_deref(),
-        &**state.repo(),
+        &repos,
         &dag_state.var_outputs,
-        &ctx.prior_outputs,
+        &dag.ctx.prior_outputs,
         None,
         port_inputs.as_ref(),
     )
     .await;
 
     // 7. Create protocol execution recorder
-    let recorder = ProtocolExecutionRecorder::new(&*state.repos().protocols, step.id, ctx.run_id);
+    let recorder =
+        ProtocolExecutionRecorder::new(&*dag.state.repos().protocols, step.id, dag.ctx.run_id);
 
     // 8. Create optional container
     let managed_container = create_optional_container(
-        ctx.container_config.as_ref(),
-        ctx.wg_client.as_deref(),
+        dag.ctx.container_config.as_ref(),
+        dag.ctx.wg_client.as_deref(),
         "workforce",
     )
     .await?;
@@ -182,8 +191,8 @@ pub(super) async fn execute_workforce_step(
 
     // Broadcast designer started
     broadcast_workflow_event(
-        state,
-        ctx,
+        dag.state,
+        dag.ctx,
         step.workflow_id,
         WorkflowEventKind::WorkforceDesignerProgress {
             step_id: step.id,
@@ -196,8 +205,8 @@ pub(super) async fn execute_workforce_step(
         &roster,
         &doc_defs,
         &dag_state.completed_envelopes,
-        steps,
-        state
+        dag.steps,
+        dag.state
             .repos()
             .workflows
             .get_assistant_notes(step.id)
@@ -207,13 +216,13 @@ pub(super) async fn execute_workforce_step(
     );
 
     let (designed_prompts, designer_usage) = match agent_designer::run_agent_designer(
-        engine,
-        state,
-        ctx,
+        dag.engine,
+        dag.state,
+        dag.ctx,
         step,
         designer_input,
         "",
-        cancel,
+        dag.cancel,
         Some(designer_phase.id),
     )
     .await
@@ -222,13 +231,15 @@ pub(super) async fn execute_workforce_step(
             recorder
                 .update_phase(
                     designer_phase.id,
-                    "complete",
-                    None,
-                    None,
-                    result.input_tokens,
-                    result.output_tokens,
-                    result.cost_usd,
-                    Some("claude-sonnet-4-5-20250929"),
+                    PhaseCompletion {
+                        status: "complete",
+                        output_content: None,
+                        error_message: None,
+                        tokens_in: result.input_tokens,
+                        tokens_out: result.output_tokens,
+                        cost_usd: result.cost_usd,
+                        model: Some("claude-sonnet-4-5-20250929"),
+                    },
                 )
                 .await;
 
@@ -243,8 +254,8 @@ pub(super) async fn execute_workforce_step(
             };
 
             broadcast_workflow_event(
-                state,
-                ctx,
+                dag.state,
+                dag.ctx,
                 step.workflow_id,
                 WorkflowEventKind::WorkforceDesignerProgress {
                     step_id: step.id,
@@ -258,19 +269,21 @@ pub(super) async fn execute_workforce_step(
             recorder
                 .update_phase(
                     designer_phase.id,
-                    "failed",
-                    None,
-                    Some(&e.to_string()),
-                    0,
-                    0,
-                    0.0,
-                    None,
+                    PhaseCompletion {
+                        status: "failed",
+                        output_content: None,
+                        error_message: Some(&e.to_string()),
+                        tokens_in: 0,
+                        tokens_out: 0,
+                        cost_usd: 0.0,
+                        model: None,
+                    },
                 )
                 .await;
 
             broadcast_workflow_event(
-                state,
-                ctx,
+                dag.state,
+                dag.ctx,
                 step.workflow_id,
                 WorkflowEventKind::WorkforceDesignerProgress {
                     step_id: step.id,
@@ -327,15 +340,15 @@ pub(super) async fn execute_workforce_step(
 
     for (idx, designed) in designed_prompts.iter().enumerate() {
         // Check cancellation
-        if cancel.is_some_and(|t| t.is_cancelled()) {
-            destroy_optional_container(&managed_container, ctx.wg_client.as_deref()).await;
+        if dag.cancel.is_some_and(|t| t.is_cancelled()) {
+            destroy_optional_container(&managed_container, dag.ctx.wg_client.as_deref()).await;
             return Err(HubError::Cancelled);
         }
 
         // Broadcast agent progress
         broadcast_workflow_event(
-            state,
-            ctx,
+            dag.state,
+            dag.ctx,
             step.workflow_id,
             WorkflowEventKind::WorkforceAgentProgress {
                 step_id: step.id,
@@ -366,7 +379,7 @@ pub(super) async fn execute_workforce_step(
 
         // Resolve capabilities
         let (tools, tool_names) =
-            resolve_capabilities_to_tools(&designed.tools, &*state.repos().tool_capabilities)
+            resolve_capabilities_to_tools(&designed.tools, &*dag.state.repos().tool_capabilities)
                 .await
                 .unwrap_or_else(|e| {
                     warn!(agent = %designed.agent_name, "Capability resolution failed: {}", e);
@@ -399,25 +412,26 @@ pub(super) async fn execute_workforce_step(
             context_budget: agent_cfg.context_budget,
             tools,
             tool_names,
-            execution_context: ctx.execution_context.clone(),
+            execution_context: dag.ctx.execution_context.clone(),
             container_handle: managed_container.as_ref().map(|mc| mc.agent_handle.clone()),
-            state: Some(state.clone()),
-            user_id: Some(UserId(ctx.user_id)),
+            state: Some(dag.state.clone()),
+            user_id: Some(UserId(dag.ctx.user_id)),
         });
 
         // Execute with live streaming sink
-        let inner_recorder = ExecutionRecorder::new(&**state.repo(), None, None);
+        let inner_recorder = ExecutionRecorder::new(&**dag.state.repo(), None, None);
         let sink = DagStreamSink::new(
-            state.clone(),
-            ctx.clone(),
+            dag.state.clone(),
+            dag.ctx.clone(),
             step.workflow_id,
             step.id,
             designed.agent_roster_entry_id,
             designed.agent_name.clone(),
         );
-        let result = engine
+        let result = dag
+            .engine
             .clone_with_provider()
-            .execute(&strategy, &task_prompt, &sink, &inner_recorder, cancel)
+            .execute(&strategy, &task_prompt, &sink, &inner_recorder, dag.cancel)
             .await;
 
         match result {
@@ -436,13 +450,15 @@ pub(super) async fn execute_workforce_step(
                 recorder
                     .update_phase(
                         exec_row.id,
-                        "complete",
-                        Some(&exec_result.content),
-                        None,
-                        exec_result.input_tokens as i64,
-                        exec_result.output_tokens as i64,
-                        cost,
-                        Some(&agent_cfg.model_id),
+                        PhaseCompletion {
+                            status: "complete",
+                            output_content: Some(&exec_result.content),
+                            error_message: None,
+                            tokens_in: exec_result.input_tokens as i64,
+                            tokens_out: exec_result.output_tokens as i64,
+                            cost_usd: cost,
+                            model: Some(&agent_cfg.model_id),
+                        },
                     )
                     .await;
 
@@ -455,8 +471,8 @@ pub(super) async fn execute_workforce_step(
                 );
 
                 broadcast_workflow_event(
-                    state,
-                    ctx,
+                    dag.state,
+                    dag.ctx,
                     step.workflow_id,
                     WorkflowEventKind::WorkforceAgentProgress {
                         step_id: step.id,
@@ -473,19 +489,21 @@ pub(super) async fn execute_workforce_step(
                 recorder
                     .update_phase(
                         exec_row.id,
-                        "failed",
-                        None,
-                        Some(&err_msg),
-                        0,
-                        0,
-                        0.0,
-                        Some(&agent_cfg.model_id),
+                        PhaseCompletion {
+                            status: "failed",
+                            output_content: None,
+                            error_message: Some(&err_msg),
+                            tokens_in: 0,
+                            tokens_out: 0,
+                            cost_usd: 0.0,
+                            model: Some(&agent_cfg.model_id),
+                        },
                     )
                     .await;
 
                 broadcast_workflow_event(
-                    state,
-                    ctx,
+                    dag.state,
+                    dag.ctx,
                     step.workflow_id,
                     WorkflowEventKind::WorkforceAgentProgress {
                         step_id: step.id,
@@ -504,8 +522,11 @@ pub(super) async fn execute_workforce_step(
                             error = %err_msg,
                             "Workforce agent failed (fail_fast)"
                         );
-                        destroy_optional_container(&managed_container, ctx.wg_client.as_deref())
-                            .await;
+                        destroy_optional_container(
+                            &managed_container,
+                            dag.ctx.wg_client.as_deref(),
+                        )
+                        .await;
                         return Err(e);
                     }
                     _ => {
@@ -525,11 +546,11 @@ pub(super) async fn execute_workforce_step(
     }
 
     // 11. Destroy optional container
-    destroy_optional_container(&managed_container, ctx.wg_client.as_deref()).await;
+    destroy_optional_container(&managed_container, dag.ctx.wg_client.as_deref()).await;
 
     // 12. Compose combined output (agents + deliverable metadata)
     let combined_data = compose_workforce_output(&agent_outputs, &roster, &doc_defs);
-    let output_key = resolve_output_key(step, &port_meta.step_outputs);
+    let output_key = resolve_output_key(step, &dag.port_meta.step_outputs);
 
     // 13. Store results
     dag_state.accumulate_tokens(step_in_tokens, step_out_tokens, step_cost);
@@ -557,8 +578,8 @@ pub(super) async fn execute_workforce_step(
     let envelope_json = serde_json::to_string(&envelope).unwrap_or_default();
     dag_state.record_step_output(step.id, output, envelope);
     let _ = super::versioning::snapshot_content(
-        &*state.repos().content_versions,
-        ctx.run_id,
+        &*dag.state.repos().content_versions,
+        dag.ctx.run_id,
         step.id,
         step.id,
         super::versioning::content_types::ENVELOPE,
@@ -569,8 +590,8 @@ pub(super) async fn execute_workforce_step(
 
     // 14. Broadcast step completed
     broadcast_workflow_event(
-        state,
-        ctx,
+        dag.state,
+        dag.ctx,
         step.workflow_id,
         WorkflowEventKind::StepCompleted {
             step_id: step.id,
@@ -622,7 +643,6 @@ fn map_designer_results(
             tools: entry.tools.clone(),
             system_prompt: entry.system_prompt.clone(),
             task_prompt: entry.task_prompt.clone(),
-            reasoning: entry.reasoning.clone(),
             execution_order: roster_entry.execution_order,
             receives_from: entry.receives_from.clone(),
         });
@@ -666,7 +686,6 @@ fn build_static_fallback_prompts(
                 tools: entry.capabilities.clone(),
                 system_prompt: role_ctx.system_prompt,
                 task_prompt: role_ctx.user_prompt,
-                reasoning: "Static fallback — Agent Designer unavailable".to_string(),
                 execution_order: entry.execution_order,
                 receives_from: vec![],
             }

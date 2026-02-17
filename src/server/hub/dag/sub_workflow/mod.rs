@@ -11,14 +11,12 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use serde_json::Value as JsonValue;
-use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::WorkflowCollectionRepo;
-use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
-use crate::server::hub::engine::ExecutionEngine;
+use crate::db::WorkflowStepRow;
 use crate::server::hub::error::HubError;
 use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
@@ -31,7 +29,7 @@ use super::utils::{
 };
 use super::{
     broadcast_workflow_event, execute_workflow_via_engine, resolve_output_key,
-    resolve_step_port_inputs, step_display_name, PortMetadata,
+    resolve_step_port_inputs, step_display_name, DagContext,
 };
 
 mod tests;
@@ -41,17 +39,10 @@ mod tests;
 /// Loads the referenced template snapshot, maps parent port inputs to child
 /// workflow initial context, creates a child execution record, and executes
 /// the child workflow. Returns the child's outputs wrapped in an envelope.
-#[allow(clippy::too_many_arguments)]
 pub(super) async fn execute_sub_workflow_step(
-    engine: &ExecutionEngine,
-    state: &AppState,
-    ctx: &WorkflowExecutionContext,
+    dag: &DagContext<'_>,
     step: &WorkflowStepRow,
-    _steps: &[WorkflowStepRow],
-    edges: &[WorkflowStepEdgeRow],
     dag_state: &mut DagExecutionState,
-    port_meta: &PortMetadata,
-    cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
     let step_start = std::time::Instant::now();
 
@@ -65,8 +56,8 @@ pub(super) async fn execute_sub_workflow_step(
 
     // 2. Broadcast step started (agentless)
     broadcast_workflow_event(
-        state,
-        ctx,
+        dag.state,
+        dag.ctx,
         step.workflow_id,
         WorkflowEventKind::StepStarted {
             step_id: step.id,
@@ -77,7 +68,8 @@ pub(super) async fn execute_sub_workflow_step(
     );
 
     // 3. Load template snapshot
-    let template = state
+    let template = dag
+        .state
         .repos()
         .workflows
         .get_template(template_id)
@@ -99,8 +91,12 @@ pub(super) async fn execute_sub_workflow_step(
     }
 
     // 4. Resolve port inputs from parent step
-    let port_inputs =
-        resolve_step_port_inputs(step, edges, port_meta, &dag_state.completed_envelopes);
+    let port_inputs = resolve_step_port_inputs(
+        step,
+        dag.edges,
+        dag.port_meta,
+        &dag_state.completed_envelopes,
+    );
 
     // 5. Map port inputs to child workflow context
     let child_prior_outputs: HashMap<String, JsonValue> = port_inputs.unwrap_or_default();
@@ -117,14 +113,20 @@ pub(super) async fn execute_sub_workflow_step(
     // 6. Create child workflow execution record
     let child_workflow_id = snapshot.steps[0].workflow_id;
 
-    let db = state
+    let db = dag
+        .state
         .db()
         .ok_or_else(|| HubError::Internal(anyhow!("database not available")))?
         .clone();
     let collection_repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
 
     let child_execution = collection_repo
-        .create_child_workflow_execution(ctx.run_id, child_workflow_id, ctx.user_id, template_id)
+        .create_child_workflow_execution(
+            dag.ctx.run_id,
+            child_workflow_id,
+            dag.ctx.user_id,
+            template_id,
+        )
         .await
         .map_err(|e| HubError::Internal(anyhow!("failed to create child execution: {}", e)))?;
 
@@ -143,8 +145,8 @@ pub(super) async fn execute_sub_workflow_step(
 
     // 8. Broadcast SubWorkflowStarted on parent's channel
     broadcast_workflow_event(
-        state,
-        ctx,
+        dag.state,
+        dag.ctx,
         step.workflow_id,
         WorkflowEventKind::SubWorkflowStarted {
             parent_step_id: step.id,
@@ -157,16 +159,16 @@ pub(super) async fn execute_sub_workflow_step(
     let child_ctx = WorkflowExecutionContext {
         stage_execution_id: child_execution.id,
         run_id: child_execution.id,
-        user_id: ctx.user_id,
+        user_id: dag.ctx.user_id,
         initial_input: child_initial_input,
         prior_outputs: child_prior_outputs,
-        execution_context: ctx.execution_context.clone(),
-        container_config: ctx.container_config.clone(),
-        wg_client: ctx.wg_client.clone(),
+        execution_context: dag.ctx.execution_context.clone(),
+        container_config: dag.ctx.container_config.clone(),
+        wg_client: dag.ctx.wg_client.clone(),
         snapshot: Some(Arc::new(snapshot.clone())),
         parent_context: Some(SubWorkflowParentContext {
             parent_step_id: step.id,
-            parent_run_id: ctx.run_id,
+            parent_run_id: dag.ctx.run_id,
             parent_workflow_id: step.workflow_id,
         }),
     };
@@ -175,12 +177,12 @@ pub(super) async fn execute_sub_workflow_step(
     // Box::pin is required because this creates async recursion:
     // execute_sub_workflow_step → execute_workflow_via_engine → run_dag_loop → execute_sub_workflow_step
     let child_result = Box::pin(execute_workflow_via_engine(
-        engine,
-        state,
+        dag.engine,
+        dag.state,
         &child_ctx,
         &snapshot.steps,
         &snapshot.edges,
-        cancel,
+        dag.cancel,
     ))
     .await;
 
@@ -188,7 +190,7 @@ pub(super) async fn execute_sub_workflow_step(
 
     // 11. Handle result
     let (envelope, final_status) = build_result_envelope(
-        state,
+        dag.state,
         &collection_repo,
         &child_execution.id,
         child_result,
@@ -205,8 +207,8 @@ pub(super) async fn execute_sub_workflow_step(
 
     // 13. Broadcast SubWorkflowCompleted on parent's channel
     broadcast_workflow_event(
-        state,
-        ctx,
+        dag.state,
+        dag.ctx,
         step.workflow_id,
         WorkflowEventKind::SubWorkflowCompleted {
             parent_step_id: step.id,
@@ -216,7 +218,7 @@ pub(super) async fn execute_sub_workflow_step(
     );
 
     // 14. Record output in parent's DAG state
-    let output_key = resolve_output_key(step, &port_meta.step_outputs);
+    let output_key = resolve_output_key(step, &dag.port_meta.step_outputs);
     let output = StepOutput {
         variable_name: output_key,
         structured_output: envelope.data.clone(),
@@ -230,8 +232,8 @@ pub(super) async fn execute_sub_workflow_step(
     let envelope_json = serde_json::to_string(&envelope).unwrap_or_default();
     dag_state.record_step_output(step.id, output, envelope.clone());
     let _ = super::versioning::snapshot_content(
-        &*state.repos().content_versions,
-        ctx.run_id,
+        &*dag.state.repos().content_versions,
+        dag.ctx.run_id,
         step.id,
         step.id,
         super::versioning::content_types::ENVELOPE,
@@ -243,8 +245,8 @@ pub(super) async fn execute_sub_workflow_step(
     // 15. Broadcast parent step completed or failed
     if envelope.status == ExecutionStatus::Success {
         broadcast_workflow_event(
-            state,
-            ctx,
+            dag.state,
+            dag.ctx,
             step.workflow_id,
             WorkflowEventKind::StepCompleted {
                 step_id: step.id,

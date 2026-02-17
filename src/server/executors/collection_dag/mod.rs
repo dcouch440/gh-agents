@@ -265,6 +265,7 @@ where
     }
 
     /// Spawn a workflow execution task that cascades to dependent workflows upon completion.
+    #[allow(clippy::too_many_arguments)] // Concurrency primitives + IDs, no natural grouping
     fn spawn_workflow_with_cascade(
         &self,
         run_id: Uuid,

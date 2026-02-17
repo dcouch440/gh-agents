@@ -6,11 +6,10 @@
 use std::collections::HashMap;
 
 use serde_json::Value as JsonValue;
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
-use crate::db::{AgentRow, WorkflowStepEdgeRow, WorkflowStepRow};
+use crate::db::{AgentRow, WorkflowStepRow};
 use crate::server::hub::dag::container::{
     create_optional_container, destroy_optional_container, run_with_vpn_watchdog,
 };
@@ -18,45 +17,37 @@ use crate::server::hub::dag::dag_state::DagExecutionState;
 use crate::server::hub::dag::single::run_step_via_engine;
 use crate::server::hub::dag::{
     broadcast_workflow_event, compose_prompt, extract_for_each_label, resolve_for_each_array,
-    resolve_output_key, step_display_name, wrap_in_envelope, PortMetadata, StepOutput,
-    WorkflowExecutionContext,
+    resolve_output_key, step_display_name, wrap_in_envelope, DagContext, PromptRepos, StepOutput,
 };
-use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
-use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
 
 /// Execute a for-each step: expand into N iterations, run sequentially.
 pub(in crate::server::hub::dag) async fn execute_for_each_step(
-    engine: &ExecutionEngine,
-    state: &AppState,
-    ctx: &WorkflowExecutionContext,
+    dag: &DagContext<'_>,
     step: &WorkflowStepRow,
     agent: &AgentRow,
-    _steps: &[WorkflowStepRow],
-    _edges: &[WorkflowStepEdgeRow],
     dag_state: &mut DagExecutionState,
-    port_meta: &PortMetadata,
-    cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
     let for_each_ref = step
         .for_each_ref
         .as_deref()
         .ok_or_else(|| anyhow::anyhow!("for_each step {} missing for_each_ref", step.id))?;
 
-    let array = resolve_for_each_array(for_each_ref, &dag_state.var_outputs, &ctx.prior_outputs)
-        .ok_or_else(|| HubError::ForEachNotArray {
-            reference: for_each_ref.to_string(),
-        })?;
+    let array =
+        resolve_for_each_array(for_each_ref, &dag_state.var_outputs, &dag.ctx.prior_outputs)
+            .ok_or_else(|| HubError::ForEachNotArray {
+                reference: for_each_ref.to_string(),
+            })?;
 
     let label_field = step.for_each_label_field.as_deref();
-    let routing_rules = port_meta.routing_rules.get(&step.id);
+    let routing_rules = dag.port_meta.routing_rules.get(&step.id);
     let is_label_routing = step.routing_mode.as_deref() == Some("label") && routing_rules.is_some();
 
     // Broadcast: step started (for-each)
     broadcast_workflow_event(
-        state,
-        ctx,
+        dag.state,
+        dag.ctx,
         step.workflow_id,
         WorkflowEventKind::StepStarted {
             step_id: step.id,
@@ -80,7 +71,7 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
     agent_cache.insert(agent.id, agent.clone());
 
     for (idx, element) in array.iter().enumerate() {
-        if cancel.is_some_and(|t| t.is_cancelled()) {
+        if dag.cancel.is_some_and(|t| t.is_cancelled()) {
             return Err(HubError::Cancelled);
         }
         let label = extract_for_each_label(element, label_field);
@@ -102,7 +93,7 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
                     cached
                 } else {
                     // Load routed agent from DB
-                    match state.repo().get_persisted_agent(routed_id).await {
+                    match dag.state.repo().get_persisted_agent(routed_id).await {
                         Ok(Some(routed_agent)) => {
                             agent_cache.insert(routed_id, routed_agent);
                             agent_cache.get(&routed_id).expect("just inserted")
@@ -124,14 +115,20 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
             agent
         };
 
+        let pt_repo = dag.state.prompt_template_repo();
+        let doc_repo = dag.state.doc_repo();
+        let wf_repo = dag.state.workflow_repo();
+        let repos = PromptRepos {
+            prompt_template_repo: pt_repo.as_deref(),
+            doc_repo: doc_repo.as_deref(),
+            workflow_repo: wf_repo.as_deref(),
+            server_repo: &**dag.state.repo(),
+        };
         let prompt = compose_prompt(
             step,
-            state.prompt_template_repo().as_deref(),
-            state.doc_repo().as_deref(),
-            state.workflow_repo().as_deref(),
-            &**state.repo(),
+            &repos,
             &dag_state.var_outputs,
-            &ctx.prior_outputs,
+            &dag.ctx.prior_outputs,
             Some(element),
             None,
         )
@@ -139,8 +136,8 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
 
         // Create container for this iteration if configured (with optional VPN sidecar)
         let iter_container = create_optional_container(
-            ctx.container_config.as_ref(),
-            ctx.wg_client.as_deref(),
+            dag.ctx.container_config.as_ref(),
+            dag.ctx.wg_client.as_deref(),
             "for-each-iter",
         )
         .await?;
@@ -148,20 +145,16 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
         let result = run_with_vpn_watchdog(
             &iter_container,
             run_step_via_engine(
-                engine,
-                state,
-                ctx,
+                dag,
                 step,
                 iteration_agent,
                 &prompt,
-                &port_meta.step_outputs,
-                cancel,
                 iter_container.as_ref().map(|mc| &mc.agent_handle),
             ),
         )
         .await;
 
-        destroy_optional_container(&iter_container, ctx.wg_client.as_deref()).await;
+        destroy_optional_container(&iter_container, dag.ctx.wg_client.as_deref()).await;
 
         match result {
             Ok((output, in_tok, out_tok, cost)) => {
@@ -170,8 +163,8 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
 
                 // Broadcast: for-each progress
                 broadcast_workflow_event(
-                    state,
-                    ctx,
+                    dag.state,
+                    dag.ctx,
                     step.workflow_id,
                     WorkflowEventKind::ForEachProgress {
                         step_id: step.id,
@@ -195,7 +188,7 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
 
     // Aggregate outputs as array
     let aggregated = JsonValue::Array(iteration_outputs.into_iter().flatten().collect());
-    let variable_name = resolve_output_key(step, &port_meta.step_outputs);
+    let variable_name = resolve_output_key(step, &dag.port_meta.step_outputs);
 
     let output = StepOutput {
         variable_name: variable_name.clone(),
@@ -209,8 +202,8 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
 
     // Broadcast: step completed (for-each)
     broadcast_workflow_event(
-        state,
-        ctx,
+        dag.state,
+        dag.ctx,
         step.workflow_id,
         WorkflowEventKind::StepCompleted {
             step_id: step.id,

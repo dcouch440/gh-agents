@@ -133,20 +133,20 @@ pub(crate) mod workforce;
 pub(crate) use dag_state::{
     broadcast_step_failure_if_real, prefetch_port_metadata, resolve_output_key,
     resolve_step_port_inputs, step_display_name, wrap_in_agentless_envelope, wrap_in_envelope,
-    DagExecutionState, PortMetadata,
+    DagContext, DagExecutionState, PortMetadata,
 };
 
 pub use utils::{
     build_routing_instruction_block, check_step_readiness, collect_upstream_context_data,
-    compose_prompt, evaluate_edge_condition, extract_for_each_label, find_entry_steps,
-    get_child_steps, get_parent_steps, resolve_dot_path, resolve_for_each_array,
-    resolve_port_inputs, resolve_variables, topological_sort, ContainerExecutionConfig, DagPaused,
-    PortResolutionError, StepOutput, StepReadiness, WorkflowExecutionContext,
-    WorkflowExecutionResult,
+    evaluate_edge_condition, extract_for_each_label, find_entry_steps, get_child_steps,
+    get_parent_steps, resolve_dot_path, resolve_for_each_array, resolve_port_inputs,
+    resolve_variables, topological_sort, ContainerExecutionConfig, DagPaused, PortResolutionError,
+    StepOutput, StepReadiness, WorkflowExecutionContext, WorkflowExecutionResult,
 };
+pub(crate) use utils::{compose_prompt, PromptRepos};
 
 // Re-export public functions from submodules
-pub use resume::{resume_dag_from_approval, resume_workflow_via_engine};
+pub use resume::{resume_dag_from_approval, resume_workflow_via_engine, ResumeState};
 
 // Internal imports for the main orchestration loop
 use belief_capture::execute_belief_capture_step;
@@ -234,21 +234,19 @@ async fn gather_downstream_routing_context(
 /// mode. Handles cancellation, conditional edges, for-each chains, and
 /// provider resolution for non-default LLM providers.
 async fn run_dag_loop(
-    engine: &ExecutionEngine,
-    state: &AppState,
-    ctx: &WorkflowExecutionContext,
-    steps: &[WorkflowStepRow],
-    edges: &[WorkflowStepEdgeRow],
+    dag: &DagContext<'_>,
     dag_state: &mut DagExecutionState,
-    port_meta: &PortMetadata,
-    cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
-    let sorted = topological_sort(steps, edges).map_err(|_| HubError::DagCycle)?;
-    let step_map: HashMap<Uuid, &WorkflowStepRow> = steps.iter().map(|s| (s.id, s)).collect();
-    let workflow_id = steps.first().map(|s| s.workflow_id).unwrap_or(Uuid::nil());
+    let sorted = topological_sort(dag.steps, dag.edges).map_err(|_| HubError::DagCycle)?;
+    let step_map: HashMap<Uuid, &WorkflowStepRow> = dag.steps.iter().map(|s| (s.id, s)).collect();
+    let workflow_id = dag
+        .steps
+        .first()
+        .map(|s| s.workflow_id)
+        .unwrap_or(Uuid::nil());
 
     // Phase 6B: Detect chained for-each pipelines
-    let chains = detect_for_each_chains(steps, edges);
+    let chains = detect_for_each_chains(dag.steps, dag.edges);
     let chain_member_set: HashSet<Uuid> = chains
         .iter()
         .flat_map(|c| c.step_ids.iter().copied())
@@ -274,14 +272,14 @@ async fn run_dag_loop(
         };
 
         // Check cancellation before each step
-        if cancel.is_some_and(|t| t.is_cancelled()) {
+        if dag.cancel.is_some_and(|t| t.is_cancelled()) {
             return Err(HubError::Cancelled);
         }
 
         // Check step readiness (handles conditional edges)
         match check_step_readiness(
             *step_id,
-            edges,
+            dag.edges,
             &dag_state.completed,
             &dag_state.completed_envelopes,
         ) {
@@ -301,10 +299,7 @@ async fn run_dag_loop(
 
         // Phase 6B: If this is the head of a for-each chain, execute the whole chain
         if let Some(chain) = chain_by_head.get(step_id) {
-            execute_for_each_chain(
-                engine, state, ctx, chain, &step_map, edges, dag_state, port_meta, cancel,
-            )
-            .await?;
+            execute_for_each_chain(dag, chain, &step_map, dag_state).await?;
             continue;
         }
 
@@ -316,9 +311,9 @@ async fn run_dag_loop(
         // Context / input steps pass through their prompt_template as output — no LLM call
         if step.execution_mode == "context" || step.execution_mode == "input" {
             let step_start = std::time::Instant::now();
-            let output_key = resolve_output_key(step, &port_meta.step_outputs);
+            let output_key = resolve_output_key(step, &dag.port_meta.step_outputs);
             let content = if step.prompt_template.is_empty() {
-                ctx.initial_input.clone()
+                dag.ctx.initial_input.clone()
             } else {
                 step.prompt_template.clone()
             };
@@ -336,8 +331,8 @@ async fn run_dag_loop(
             let envelope_json = serde_json::to_string(&envelope).unwrap_or_default();
             dag_state.record_step_output(step.id, output, envelope);
             let _ = versioning::snapshot_content(
-                &*state.repos().content_versions,
-                ctx.run_id,
+                &*dag.state.repos().content_versions,
+                dag.ctx.run_id,
                 step.id,
                 step.id,
                 versioning::content_types::ENVELOPE,
@@ -347,8 +342,8 @@ async fn run_dag_loop(
             .await;
 
             broadcast_workflow_event(
-                state,
-                ctx,
+                dag.state,
+                dag.ctx,
                 step.workflow_id,
                 WorkflowEventKind::StepCompleted {
                     step_id: step.id,
@@ -367,13 +362,10 @@ async fn run_dag_loop(
 
         // Belief capture steps — per-source LLM extraction, no agent_id needed
         if step.execution_mode == "belief_capture" {
-            let step_result = execute_belief_capture_step(
-                engine, state, ctx, step, steps, edges, dag_state, port_meta, cancel,
-            )
-            .await;
+            let step_result = execute_belief_capture_step(dag, step, dag_state).await;
 
             if let Err(ref e) = step_result {
-                broadcast_step_failure_if_real(state, ctx, workflow_id, step, e);
+                broadcast_step_failure_if_real(dag.state, dag.ctx, workflow_id, step, e);
             }
             step_result?;
             continue;
@@ -381,13 +373,10 @@ async fn run_dag_loop(
 
         // Sub-workflow steps — execute child workflow from template, no agent needed
         if step.execution_mode == "sub_workflow" {
-            let step_result = execute_sub_workflow_step(
-                engine, state, ctx, step, steps, edges, dag_state, port_meta, cancel,
-            )
-            .await;
+            let step_result = execute_sub_workflow_step(dag, step, dag_state).await;
 
             if let Err(ref e) = step_result {
-                broadcast_step_failure_if_real(state, ctx, workflow_id, step, e);
+                broadcast_step_failure_if_real(dag.state, dag.ctx, workflow_id, step, e);
             }
             step_result?;
             continue;
@@ -395,13 +384,10 @@ async fn run_dag_loop(
 
         // Workforce steps — designer + sequential agent execution with deliverables
         if step.execution_mode == "workforce" {
-            let step_result = execute_workforce_step(
-                engine, state, ctx, step, steps, edges, dag_state, port_meta, cancel,
-            )
-            .await;
+            let step_result = execute_workforce_step(dag, step, dag_state).await;
 
             if let Err(ref e) = step_result {
-                broadcast_step_failure_if_real(state, ctx, workflow_id, step, e);
+                broadcast_step_failure_if_real(dag.state, dag.ctx, workflow_id, step, e);
             }
             step_result?;
             continue;
@@ -415,7 +401,7 @@ async fn run_dag_loop(
                 step.execution_mode
             ))
         })?;
-        let agent = if let Some(snap) = &ctx.snapshot {
+        let agent = if let Some(snap) = &dag.ctx.snapshot {
             snap.agents
                 .get(&agent_id)
                 .cloned()
@@ -424,7 +410,7 @@ async fn run_dag_loop(
                     agent_id,
                 })?
         } else {
-            state
+            dag.state
                 .repo()
                 .get_persisted_agent(agent_id)
                 .await
@@ -441,69 +427,41 @@ async fn run_dag_loop(
             None // Use default engine
         } else {
             // Check runtime toggle for non-default providers
-            if agent.model_provider == "ollama" && !state.is_ollama_enabled().await {
+            if agent.model_provider == "ollama" && !dag.state.is_ollama_enabled().await {
                 return Err(HubError::ProviderUnavailable {
                     provider: agent.model_provider.clone(),
                     step_id: *step_id,
                     agent_name: agent.name.clone(),
                 });
             }
-            let provider = state.provider_for(&agent.model_provider).ok_or_else(|| {
-                HubError::ProviderUnavailable {
+            let provider = dag
+                .state
+                .provider_for(&agent.model_provider)
+                .ok_or_else(|| HubError::ProviderUnavailable {
                     provider: agent.model_provider.clone(),
                     step_id: *step_id,
                     agent_name: agent.name.clone(),
-                }
-            })?;
+                })?;
             Some(ExecutionEngine::new(provider))
         };
-        let effective_engine = step_engine.as_ref().unwrap_or(engine);
+        let effective_engine = step_engine.as_ref().unwrap_or(dag.engine);
+
+        // Build a step-local DagContext with the effective engine for provider overrides
+        let step_dag = DagContext {
+            engine: effective_engine,
+            ..*dag
+        };
 
         let step_result = if step.execution_mode == "room" {
-            execute_room_step(
-                effective_engine,
-                state,
-                ctx,
-                step,
-                steps,
-                edges,
-                dag_state,
-                port_meta,
-                cancel,
-            )
-            .await
+            execute_room_step(&step_dag, step, dag_state).await
         } else if step.execution_mode == "for_each" {
-            execute_for_each_step(
-                effective_engine,
-                state,
-                ctx,
-                step,
-                &agent,
-                steps,
-                edges,
-                dag_state,
-                port_meta,
-                cancel,
-            )
-            .await
+            execute_for_each_step(&step_dag, step, &agent, dag_state).await
         } else {
-            execute_single_step(
-                effective_engine,
-                state,
-                ctx,
-                step,
-                &agent,
-                steps,
-                edges,
-                dag_state,
-                port_meta,
-                cancel,
-            )
-            .await
+            execute_single_step(&step_dag, step, &agent, dag_state).await
         };
 
         if let Err(ref e) = step_result {
-            broadcast_step_failure_if_real(state, ctx, workflow_id, step, e);
+            broadcast_step_failure_if_real(dag.state, dag.ctx, workflow_id, step, e);
         }
         step_result?;
     }
@@ -553,17 +511,16 @@ pub async fn execute_workflow_via_engine(
         },
     );
 
-    run_dag_loop(
+    let dag = DagContext {
         engine,
         state,
         ctx,
         steps,
         edges,
-        &mut dag_state,
-        &port_meta,
+        port_meta: &port_meta,
         cancel,
-    )
-    .await?;
+    };
+    run_dag_loop(&dag, &mut dag_state).await?;
 
     let duration_ms = start_time.elapsed().as_millis() as u64;
 

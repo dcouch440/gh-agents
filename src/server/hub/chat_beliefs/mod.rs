@@ -183,12 +183,12 @@ fn format_conversation(messages: &[ChatMessageRow]) -> String {
 // ── Parsing ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Deserialize)]
-struct BeliefExtractionOutput {
+pub(crate) struct BeliefExtractionOutput {
     beliefs: Vec<ExtractedBelief>,
 }
 
 #[derive(Debug, Deserialize)]
-struct ExtractedBelief {
+pub(crate) struct ExtractedBelief {
     content: String,
     reasoning: String,
     belief_type: String,

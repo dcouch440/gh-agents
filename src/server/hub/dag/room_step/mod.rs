@@ -9,11 +9,9 @@ use std::collections::HashMap;
 
 use anyhow::anyhow;
 use serde_json::Value as JsonValue;
-use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::db::WorkflowStepEdgeRow;
 use crate::db::WorkflowStepRow;
 use crate::server::executors::room::{
     build_dag_room_prompt, execute_room_turn, RoomMemberWithAgent, SpeakerResult,
@@ -21,10 +19,8 @@ use crate::server::executors::room::{
 use crate::server::hub::dag::agent_designer::{self, DesignedAgentPrompt};
 use crate::server::hub::dag::designer_input::room::build_room_designer_input;
 use crate::server::hub::dag::designer_input::RoomDesignerMember;
-use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::context::{build_context_block, ContextDocument};
-use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
 use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
 
@@ -32,7 +28,7 @@ use super::dag_state::DagExecutionState;
 use super::utils::collect_upstream_context_data;
 use super::{
     broadcast_workflow_event, compose_prompt, resolve_output_key, resolve_step_port_inputs,
-    step_display_name, PortMetadata, StepOutput, WorkflowExecutionContext,
+    step_display_name, DagContext, PromptRepos, StepOutput,
 };
 
 /// Execute a room step within the DAG.
@@ -45,15 +41,9 @@ use super::{
 ///
 /// Produces a composite envelope with per-agent outputs: `{"agent:<uuid>": output, ...}`.
 pub(super) async fn execute_room_step(
-    engine: &ExecutionEngine,
-    state: &AppState,
-    ctx: &WorkflowExecutionContext,
+    dag: &DagContext<'_>,
     step: &WorkflowStepRow,
-    steps: &[WorkflowStepRow],
-    edges: &[WorkflowStepEdgeRow],
     dag_state: &mut DagExecutionState,
-    port_meta: &PortMetadata,
-    cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
     // 1. Extract room_id
     let room_id = step.room_id.ok_or_else(|| {
@@ -72,7 +62,7 @@ pub(super) async fn execute_room_step(
                     structured.get("room_session_id").and_then(|v| v.as_str())
                 {
                     if let Ok(session_id) = session_id_str.parse::<Uuid>() {
-                        let room_repo = &state.repos().rooms;
+                        let room_repo = &dag.state.repos().rooms;
                         if let Ok(Some(session)) = room_repo.get_room_session(session_id).await {
                             if session.status == "completed" {
                                 // Session completed — extract outputs from transcript
@@ -87,7 +77,7 @@ pub(super) async fn execute_room_step(
                                     .unwrap_or_default();
 
                                 let resolved_key =
-                                    resolve_output_key(step, &port_meta.step_outputs);
+                                    resolve_output_key(step, &dag.port_meta.step_outputs);
                                 let key_ref = if resolved_key.is_empty() {
                                     None
                                 } else {
@@ -112,8 +102,8 @@ pub(super) async fn execute_room_step(
                                     serde_json::to_string(&envelope).unwrap_or_default();
                                 dag_state.record_step_output(step.id, output, envelope);
                                 let _ = super::versioning::snapshot_content(
-                                    &*state.repos().content_versions,
-                                    ctx.run_id,
+                                    &*dag.state.repos().content_versions,
+                                    dag.ctx.run_id,
                                     step.id,
                                     step.id,
                                     super::versioning::content_types::ENVELOPE,
@@ -131,7 +121,7 @@ pub(super) async fn execute_room_step(
     }
 
     // 3. Load room configuration
-    let room_repo = &state.repos().rooms;
+    let room_repo = &dag.state.repos().rooms;
     let room = room_repo
         .get_room(room_id)
         .await
@@ -146,7 +136,8 @@ pub(super) async fn execute_room_step(
 
     let mut members_with_agents: Vec<RoomMemberWithAgent> = Vec::new();
     for member in members {
-        let agent = state
+        let agent = dag
+            .state
             .repo()
             .get_persisted_agent(member.agent_id)
             .await
@@ -160,14 +151,14 @@ pub(super) async fn execute_room_step(
 
     // 4b. Run Agent Designer pre-lifecycle (if design-time config exists)
     let designed_prompts: Option<HashMap<Uuid, DesignedAgentPrompt>> = {
-        let wf_repo = &state.repos().workflows;
+        let wf_repo = &dag.state.repos().workflows;
         let room_step_config = wf_repo.get_room_step_config(step.id).await.ok().flatten();
         let room_step_members = wf_repo
             .list_room_step_members(step.id)
             .await
             .unwrap_or_default();
         let beliefs = wf_repo
-            .list_beliefs_for_execution(ctx.run_id)
+            .list_beliefs_for_execution(dag.ctx.run_id)
             .await
             .unwrap_or_default();
 
@@ -195,7 +186,8 @@ pub(super) async fn execute_room_step(
                 .collect();
 
             // Load assistant notes for the designer
-            let assistant_notes = state
+            let assistant_notes = dag
+                .state
                 .repos()
                 .workflows
                 .get_assistant_notes(step.id)
@@ -209,12 +201,12 @@ pub(super) async fn execute_room_step(
                 &designer_members,
                 &beliefs,
                 &dag_state.completed_envelopes,
-                steps,
+                dag.steps,
                 assistant_notes.as_deref(),
             );
 
             match agent_designer::run_agent_designer(
-                engine, state, ctx, step, input, "room", cancel, None,
+                dag.engine, dag.state, dag.ctx, step, input, "room", dag.cancel, None,
             )
             .await
             {
@@ -248,22 +240,36 @@ pub(super) async fn execute_room_step(
     };
 
     // 5. Resolve port inputs
-    let port_inputs =
-        resolve_step_port_inputs(step, edges, port_meta, &dag_state.completed_envelopes);
+    let port_inputs = resolve_step_port_inputs(
+        step,
+        dag.edges,
+        dag.port_meta,
+        &dag_state.completed_envelopes,
+    );
 
     // 5b. Collect upstream context from context nodes
-    let upstream_context =
-        collect_upstream_context_data(step.id, edges, steps, &dag_state.completed_envelopes);
+    let upstream_context = collect_upstream_context_data(
+        step.id,
+        dag.edges,
+        dag.steps,
+        &dag_state.completed_envelopes,
+    );
 
     // 6. Compose initial prompt
+    let pt_repo = dag.state.prompt_template_repo();
+    let doc_repo = dag.state.doc_repo();
+    let wf_repo = dag.state.workflow_repo();
+    let repos = PromptRepos {
+        prompt_template_repo: pt_repo.as_deref(),
+        doc_repo: doc_repo.as_deref(),
+        workflow_repo: wf_repo.as_deref(),
+        server_repo: &**dag.state.repo(),
+    };
     let mut prompt = compose_prompt(
         step,
-        state.prompt_template_repo().as_deref(),
-        state.doc_repo().as_deref(),
-        state.workflow_repo().as_deref(),
-        &**state.repo(),
+        &repos,
         &dag_state.var_outputs,
-        &ctx.prior_outputs,
+        &dag.ctx.prior_outputs,
         None,
         port_inputs.as_ref(),
     )
@@ -298,8 +304,8 @@ pub(super) async fn execute_room_step(
 
     // Broadcast: step started (room step)
     broadcast_workflow_event(
-        state,
-        ctx,
+        dag.state,
+        dag.ctx,
         step.workflow_id,
         WorkflowEventKind::StepStarted {
             step_id: step.id,
@@ -317,7 +323,7 @@ pub(super) async fn execute_room_step(
     );
 
     // 8. Get LLM provider
-    let provider = engine.provider();
+    let provider = dag.engine.provider();
 
     // 9. Check execution mode
     let interactive = step.agent_execution_mode.as_deref() == Some("interactive");
@@ -327,14 +333,14 @@ pub(super) async fn execute_room_step(
 
         let user_message = build_dag_room_prompt(&prompt, 0, room.max_turns);
         let turn_result = execute_room_turn(
-            state,
+            dag.state,
             provider,
             &room,
             &session,
             &members_with_agents,
             &user_message,
-            ctx.user_id,
-            cancel,
+            dag.ctx.user_id,
+            dag.cancel,
             designed_prompts.as_ref(),
         )
         .await?;
@@ -346,7 +352,7 @@ pub(super) async fn execute_room_step(
 
         // Store partial output for resume detection
         let partial = StepOutput {
-            variable_name: resolve_output_key(step, &port_meta.step_outputs),
+            variable_name: resolve_output_key(step, &dag.port_meta.step_outputs),
             raw_output: format!(
                 "{{\"room_session_id\":\"{}\",\"status\":\"awaiting_room\"}}",
                 session.id
@@ -360,8 +366,8 @@ pub(super) async fn execute_room_step(
 
         // Broadcast: step paused (awaiting user interaction)
         broadcast_workflow_event(
-            state,
-            ctx,
+            dag.state,
+            dag.ctx,
             step.workflow_id,
             WorkflowEventKind::StepPaused {
                 step_id: step.id,
@@ -390,20 +396,20 @@ pub(super) async fn execute_room_step(
     let mut current_session = session.clone();
 
     for round in 0..room.max_turns {
-        if cancel.is_some_and(|t| t.is_cancelled()) {
+        if dag.cancel.is_some_and(|t| t.is_cancelled()) {
             return Err(HubError::Cancelled);
         }
 
         let user_message = build_dag_room_prompt(&prompt, round, room.max_turns);
         let turn_result = execute_room_turn(
-            state,
+            dag.state,
             provider.clone(),
             &room,
             &current_session,
             &members_with_agents,
             &user_message,
-            ctx.user_id,
-            cancel,
+            dag.ctx.user_id,
+            dag.cancel,
             designed_prompts.as_ref(),
         )
         .await?;
@@ -426,7 +432,7 @@ pub(super) async fn execute_room_step(
     }
 
     // 10. Extract per-agent outputs from final turn
-    let room_output_key = resolve_output_key(step, &port_meta.step_outputs);
+    let room_output_key = resolve_output_key(step, &dag.port_meta.step_outputs);
     let room_key_ref = if room_output_key.is_empty() {
         None
     } else {
@@ -468,8 +474,8 @@ pub(super) async fn execute_room_step(
     let envelope_json = serde_json::to_string(&envelope).unwrap_or_default();
     dag_state.record_step_output(step.id, output, envelope);
     let _ = super::versioning::snapshot_content(
-        &*state.repos().content_versions,
-        ctx.run_id,
+        &*dag.state.repos().content_versions,
+        dag.ctx.run_id,
         step.id,
         step.id,
         super::versioning::content_types::ENVELOPE,
@@ -480,8 +486,8 @@ pub(super) async fn execute_room_step(
 
     // Broadcast: step completed (room step)
     broadcast_workflow_event(
-        state,
-        ctx,
+        dag.state,
+        dag.ctx,
         step.workflow_id,
         WorkflowEventKind::StepCompleted {
             step_id: step.id,

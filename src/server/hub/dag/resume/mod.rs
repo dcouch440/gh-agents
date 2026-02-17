@@ -27,9 +27,15 @@ use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
 
 use super::dag_state::{prefetch_port_metadata, resolve_output_key, DagExecutionState};
 use super::{
-    broadcast_workflow_event, run_dag_loop, StepOutput, WorkflowExecutionContext,
+    broadcast_workflow_event, run_dag_loop, DagContext, StepOutput, WorkflowExecutionContext,
     WorkflowExecutionResult,
 };
+
+/// Pre-populated state for resuming a paused workflow.
+pub struct ResumeState {
+    pub pre_completed: HashMap<Uuid, StepOutput>,
+    pub pre_var_outputs: HashMap<String, JsonValue>,
+}
 
 /// Resume a workflow DAG from a paused state after an interactive step is approved.
 ///
@@ -42,13 +48,13 @@ pub async fn resume_workflow_via_engine(
     ctx: &WorkflowExecutionContext,
     steps: &[crate::db::WorkflowStepRow],
     edges: &[crate::db::WorkflowStepEdgeRow],
-    pre_completed: HashMap<Uuid, StepOutput>,
-    pre_var_outputs: HashMap<String, JsonValue>,
+    resume: ResumeState,
     cancel: Option<&CancellationToken>,
 ) -> Result<WorkflowExecutionResult, HubError> {
     let start_time = std::time::Instant::now();
 
-    let mut dag_state = DagExecutionState::with_completed(pre_completed, pre_var_outputs);
+    let mut dag_state =
+        DagExecutionState::with_completed(resume.pre_completed, resume.pre_var_outputs);
 
     // Build synthetic envelopes for pre-completed steps
     let step_ids: Vec<Uuid> = dag_state.completed.keys().copied().collect();
@@ -70,17 +76,16 @@ pub async fn resume_workflow_via_engine(
     // Pre-fetch port metadata
     let port_meta = prefetch_port_metadata(state, steps).await;
 
-    run_dag_loop(
+    let dag = DagContext {
         engine,
         state,
         ctx,
         steps,
         edges,
-        &mut dag_state,
-        &port_meta,
+        port_meta: &port_meta,
         cancel,
-    )
-    .await?;
+    };
+    run_dag_loop(&dag, &mut dag_state).await?;
 
     let final_outputs: HashMap<String, StepOutput> = dag_state
         .completed
@@ -226,8 +231,10 @@ pub async fn resume_dag_from_approval(
         &ctx,
         &steps,
         &edges,
-        completed,
-        var_outputs,
+        ResumeState {
+            pre_completed: completed,
+            pre_var_outputs: var_outputs,
+        },
         None,
     )
     .await;

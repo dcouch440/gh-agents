@@ -749,8 +749,7 @@ mod tests {
         let ctx = make_ctx();
         let repo = MockWorkflowRepo::new();
 
-        let result =
-            execute_workforce_tool("remove_dependency", &json!({}), &repo, &ctx).await;
+        let result = execute_workforce_tool("remove_dependency", &json!({}), &repo, &ctx).await;
 
         assert!(result["error"]
             .as_str()

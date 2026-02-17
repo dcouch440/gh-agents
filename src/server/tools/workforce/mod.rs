@@ -764,9 +764,7 @@ async fn execute_set_dependency(
     // Resolve agent names
     let from_agent = match find_agent_by_name(&roster, from_name) {
         Some(a) => a,
-        None => {
-            return json!({ "error": format!("Agent '{}' not found in roster", from_name) })
-        }
+        None => return json!({ "error": format!("Agent '{}' not found in roster", from_name) }),
     };
     let to_agent = match find_agent_by_name(&roster, to_name) {
         Some(a) => a,
@@ -781,15 +779,11 @@ async fn execute_set_dependency(
     // Both must have child_step_id
     let from_child_step_id = match from_agent.child_step_id {
         Some(id) => id,
-        None => {
-            return json!({ "error": format!("Agent '{}' has no child step", from_agent.name) })
-        }
+        None => return json!({ "error": format!("Agent '{}' has no child step", from_agent.name) }),
     };
     let to_child_step_id = match to_agent.child_step_id {
         Some(id) => id,
-        None => {
-            return json!({ "error": format!("Agent '{}' has no child step", to_agent.name) })
-        }
+        None => return json!({ "error": format!("Agent '{}' has no child step", to_agent.name) }),
     };
 
     // Get child workflow
@@ -854,9 +848,7 @@ async fn execute_remove_dependency(
     // Resolve agent names
     let from_agent = match find_agent_by_name(&roster, from_name) {
         Some(a) => a,
-        None => {
-            return json!({ "error": format!("Agent '{}' not found in roster", from_name) })
-        }
+        None => return json!({ "error": format!("Agent '{}' not found in roster", from_name) }),
     };
     let to_agent = match find_agent_by_name(&roster, to_name) {
         Some(a) => a,
@@ -865,22 +857,15 @@ async fn execute_remove_dependency(
 
     let from_child_step_id = match from_agent.child_step_id {
         Some(id) => id,
-        None => {
-            return json!({ "error": format!("Agent '{}' has no child step", from_agent.name) })
-        }
+        None => return json!({ "error": format!("Agent '{}' has no child step", from_agent.name) }),
     };
     let to_child_step_id = match to_agent.child_step_id {
         Some(id) => id,
-        None => {
-            return json!({ "error": format!("Agent '{}' has no child step", to_agent.name) })
-        }
+        None => return json!({ "error": format!("Agent '{}' has no child step", to_agent.name) }),
     };
 
     // Remove the edge
-    if let Err(e) = repo
-        .remove_edge(from_child_step_id, to_child_step_id)
-        .await
-    {
+    if let Err(e) = repo.remove_edge(from_child_step_id, to_child_step_id).await {
         return json!({ "error": format!("Failed to remove dependency: {}", e) });
     }
 

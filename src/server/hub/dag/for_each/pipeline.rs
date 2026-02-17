@@ -12,17 +12,15 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 use uuid::Uuid;
 
-use crate::db::{
-    AgentRow, StepOutputRow, StepRoutingRuleRow, WorkflowStepEdgeRow, WorkflowStepRow,
-};
+use crate::db::{AgentRow, StepOutputRow, StepRoutingRuleRow, WorkflowStepRow};
 use crate::server::hub::dag::container::{
     create_optional_container, destroy_optional_container, run_with_vpn_watchdog,
 };
-use crate::server::hub::dag::dag_state::DagExecutionState;
+use crate::server::hub::dag::dag_state::{DagExecutionState, PortMetadata};
 use crate::server::hub::dag::single::run_step_via_engine;
 use crate::server::hub::dag::{
     compose_prompt, extract_for_each_label, resolve_for_each_array, resolve_output_key,
-    wrap_in_envelope, PortMetadata, StepOutput, WorkflowExecutionContext,
+    wrap_in_envelope, DagContext, PromptRepos, StepOutput, WorkflowExecutionContext,
 };
 use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
@@ -61,16 +59,15 @@ struct PipelineStageData {
 /// - All N pipelines run concurrently via JoinSet
 /// - Collects results into aggregates for each step in the chain
 pub(in crate::server::hub::dag) async fn execute_for_each_chain(
-    _engine: &ExecutionEngine,
-    state: &AppState,
-    ctx: &WorkflowExecutionContext,
+    dag: &DagContext<'_>,
     chain: &ForEachChain,
     step_map: &HashMap<Uuid, &WorkflowStepRow>,
-    _edges: &[WorkflowStepEdgeRow],
     dag_state: &mut DagExecutionState,
-    port_meta: &PortMetadata,
-    cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
+    let state = dag.state;
+    let ctx = dag.ctx;
+    let port_meta = dag.port_meta;
+    let cancel = dag.cancel;
     // 1. Get the first step and resolve the for-each array
     let first_step = step_map
         .get(&chain.step_ids[0])
@@ -321,12 +318,18 @@ async fn execute_pipeline_item(
         };
 
         // Build prompt with the current element
+        let pt_repo = state.prompt_template_repo();
+        let doc_repo = state.doc_repo();
+        let wf_repo = state.workflow_repo();
+        let repos = PromptRepos {
+            prompt_template_repo: pt_repo.as_deref(),
+            doc_repo: doc_repo.as_deref(),
+            workflow_repo: wf_repo.as_deref(),
+            server_repo: &**state.repo(),
+        };
         let prompt = compose_prompt(
             step,
-            state.prompt_template_repo().as_deref(),
-            state.doc_repo().as_deref(),
-            state.workflow_repo().as_deref(),
-            &**state.repo(),
+            &repos,
             &HashMap::new(), // pipeline items don't use var_outputs
             &ctx.prior_outputs,
             Some(&current_element),
@@ -357,17 +360,28 @@ async fn execute_pipeline_item(
         )
         .await?;
 
+        // Build a temporary DagContext for run_step_via_engine.
+        // Pipeline items run in spawned tasks with owned data, so we construct
+        // a local PortMetadata and DagContext from the available params.
+        let pipeline_port_meta =
+            PortMetadata::new(HashMap::new(), step_outputs.clone(), HashMap::new());
+        let pipeline_dag = DagContext {
+            engine,
+            state,
+            ctx,
+            steps: &[],
+            edges: &[],
+            port_meta: &pipeline_port_meta,
+            cancel,
+        };
+
         let result = run_with_vpn_watchdog(
             &stage_container,
             run_step_via_engine(
-                engine,
-                state,
-                ctx,
+                &pipeline_dag,
                 step,
                 iteration_agent,
                 &prompt,
-                step_outputs,
-                cancel,
                 stage_container.as_ref().map(|mc| &mc.agent_handle),
             ),
         )

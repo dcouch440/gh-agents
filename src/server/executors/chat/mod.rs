@@ -99,13 +99,15 @@ async fn handle_message(
                     ) {
                         match crate::server::hub::run_step_chat(
                             state,
-                            provider,
+                            crate::server::hub::ChatRequest {
+                                provider,
+                                message_id,
+                                content: &msg.content,
+                                user_id: msg.user_id,
+                            },
                             session_id,
                             workflow_id,
                             step_id,
-                            message_id,
-                            &msg.content,
-                            msg.user_id,
                             Some(&cancel_token),
                         )
                         .await
@@ -130,12 +132,14 @@ async fn handle_message(
     match agent_id {
         Some(aid) => match crate::server::hub::run_chat(
             state,
-            provider,
+            crate::server::hub::ChatRequest {
+                provider,
+                message_id,
+                content: &msg.content,
+                user_id: msg.user_id,
+            },
             aid,
             msg.session_id,
-            message_id,
-            &msg.content,
-            msg.user_id,
             Some(&cancel_token),
         )
         .await
