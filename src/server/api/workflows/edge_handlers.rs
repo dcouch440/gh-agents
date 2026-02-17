@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::server::api::AppError;
 use crate::server::auth as auth_utils;
+use crate::server::services::edges;
 use crate::server::state::AppState;
 
 use super::types::{EdgeRequest, EdgeResponse};
@@ -30,15 +31,7 @@ pub async fn list_workflow_edges(
     auth: auth_utils::AuthUser,
     Path(wid): Path<Uuid>,
 ) -> Result<Json<Vec<EdgeResponse>>, AppError> {
-    let repo = &state.repos().workflows;
-    let wf = repo
-        .get_workflow(wid)
-        .await?
-        .ok_or(AppError::not_found("Workflow"))?;
-    if wf.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Workflow"));
-    }
-    let rows = repo.list_edges(wid).await?;
+    let rows = edges::list_edges(state.repos().workflows.as_ref(), auth.user_id.0, wid).await?;
     Ok(Json(
         rows.into_iter()
             .map(|e| EdgeResponse {
@@ -69,26 +62,14 @@ pub async fn add_workflow_edge(
     Path(wid): Path<Uuid>,
     Json(req): Json<EdgeRequest>,
 ) -> Result<(StatusCode, Json<EdgeResponse>), AppError> {
-    let repo = &state.repos().workflows;
-    let wf = repo
-        .get_workflow(wid)
-        .await?
-        .ok_or(AppError::not_found("Workflow"))?;
-    if wf.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Workflow"));
-    }
-    // Context nodes are source-only (cannot be edge targets)
-    let to_step = repo
-        .get_step(req.to_step_id)
-        .await?
-        .ok_or(AppError::not_found("Target step"))?;
-    if to_step.execution_mode == "context" {
-        return Err(AppError::bad_request(
-            "Context nodes cannot receive incoming edges",
-        ));
-    }
-
-    let edge = repo.add_edge(wid, req.from_step_id, req.to_step_id).await?;
+    let edge = edges::add_edge(
+        state.repos().workflows.as_ref(),
+        auth.user_id.0,
+        wid,
+        req.from_step_id,
+        req.to_step_id,
+    )
+    .await?;
     Ok((
         StatusCode::CREATED,
         Json(EdgeResponse {
@@ -118,15 +99,14 @@ pub async fn remove_workflow_edge(
     Path(wid): Path<Uuid>,
     Json(req): Json<EdgeRequest>,
 ) -> Result<StatusCode, AppError> {
-    let repo = &state.repos().workflows;
-    let wf = repo
-        .get_workflow(wid)
-        .await?
-        .ok_or(AppError::not_found("Workflow"))?;
-    if wf.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Workflow"));
-    }
-    repo.remove_edge(req.from_step_id, req.to_step_id).await?;
+    edges::remove_edge(
+        state.repos().workflows.as_ref(),
+        auth.user_id.0,
+        wid,
+        req.from_step_id,
+        req.to_step_id,
+    )
+    .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -150,14 +130,6 @@ pub async fn delete_workflow_edge_by_id(
     auth: auth_utils::AuthUser,
     Path((wid, eid)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
-    let repo = &state.repos().workflows;
-    let wf = repo
-        .get_workflow(wid)
-        .await?
-        .ok_or(AppError::not_found("Workflow"))?;
-    if wf.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Workflow"));
-    }
-    repo.delete_edge_by_id(eid).await?;
+    edges::delete_edge_by_id(state.repos().workflows.as_ref(), auth.user_id.0, wid, eid).await?;
     Ok(StatusCode::NO_CONTENT)
 }

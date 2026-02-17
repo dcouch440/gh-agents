@@ -11,6 +11,7 @@ pub mod executors;
 pub mod hub;
 pub mod openapi;
 pub mod router_service;
+pub mod services;
 pub mod state;
 pub mod tools;
 pub mod ws;
