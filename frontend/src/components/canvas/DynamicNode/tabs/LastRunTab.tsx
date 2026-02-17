@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
@@ -9,9 +9,8 @@ import Collapse from '@mui/material/Collapse'
 import RefreshOutlined from '@mui/icons-material/RefreshOutlined'
 import ExpandMoreOutlined from '@mui/icons-material/ExpandMoreOutlined'
 import ExpandLessOutlined from '@mui/icons-material/ExpandLessOutlined'
-import { useStore, workflowStore } from '@/stores'
-import { api } from '@/api'
-import type { StepLastRunResponse, PhaseExecution } from '@/types'
+import { useStepLastRun } from '@/hooks/useStepLastRun'
+import type { PhaseExecution } from '@/types'
 
 type LastRunTabProps = {
   stepId: string
@@ -114,36 +113,7 @@ function PhaseCard({ phase }: { phase: PhaseExecution }) {
 }
 
 function LastRunTab({ stepId }: LastRunTabProps) {
-  const workflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [data, setData] = useState<StepLastRunResponse | null>(null)
-
-  const fetchData = useCallback(async () => {
-    if (!workflowId) return
-
-    setIsLoading(true)
-    setError(null)
-    try {
-      const result = await api.workflows.getStepLastRun(workflowId, stepId)
-      setData(result)
-    } catch (e) {
-      const is404 = e instanceof Error && e.message.includes('404')
-      if (is404) {
-        setData(null)
-      } else {
-        setError(e instanceof Error ? e.message : 'Failed to load last run data')
-      }
-    } finally {
-      setIsLoading(false)
-    }
-  }, [workflowId, stepId])
-
-  useEffect(() => {
-    void fetchData()
-  }, [fetchData])
-
-  if (!workflowId) return null
+  const { data, isLoading, error, refresh } = useStepLastRun(stepId)
 
   if (isLoading && data === null) {
     return (
@@ -172,7 +142,7 @@ function LastRunTab({ stepId }: LastRunTabProps) {
         </Typography>
         <Tooltip title="Refresh">
           <span>
-            <IconButton size="small" onClick={() => void fetchData()} disabled={isLoading}>
+            <IconButton size="small" onClick={refresh} disabled={isLoading}>
               <RefreshOutlined fontSize="small" />
             </IconButton>
           </span>

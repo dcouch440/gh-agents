@@ -22,6 +22,9 @@ import {
   selectDirtyStepIds,
   selectIssuesByStep,
   selectStepIssues,
+  selectDocumentDefById,
+  selectRosterAgentById,
+  selectRoomMemberById,
   selectIsStale,
 } from './selectors'
 import { fetchAll, fetchIfStale, fetchOne, create, update, remove, loadWorkflow, clearActive, upsert, setDirty } from './workflows'
@@ -64,6 +67,9 @@ export const workflowStore = {
   selectDirtyStepIds,
   selectIssuesByStep,
   selectStepIssues,
+  selectDocumentDefById,
+  selectRosterAgentById,
+  selectRoomMemberById,
   selectIsStale,
   fetchAll,
   fetchIfStale,

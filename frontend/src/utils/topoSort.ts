@@ -1,3 +1,4 @@
+import { Collections } from '@/utils/collections'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 
 type TopoSortOptions = { includeAll?: boolean }
@@ -76,9 +77,10 @@ const topoSortStepIds = (
 
   // Append cycle remnants by display_order
   if (visited.size < navigable.length) {
-    const remaining = navigable
-      .filter((s) => !visited.has(s.id))
-      .sort((a, b) => a.display_order - b.display_order)
+    const remaining = Collections.sortedCopy(
+      Collections.filterMap(navigable, (s) => !visited.has(s.id) ? s : null),
+      (a, b) => a.display_order - b.display_order,
+    )
     for (let i = 0; i < remaining.length; i++) {
       result.push(remaining[i]!.id)
     }
