@@ -3,10 +3,12 @@ import { getBezierPath } from '@xyflow/react'
 import type { EdgeProps } from '@xyflow/react'
 import { PIPE } from './constants'
 import { PipeEdgePath } from './PipeEdgePath'
-import { ARCHETYPE_CONFIGS, Archetype } from './DynamicNode'
 
-function AgentEdgeComponent(props: EdgeProps) {
-  const { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition } = props
+type ArtifactEdgeData = { color: string }
+
+function ArtifactEdgeComponent(props: EdgeProps) {
+  const { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data } = props
+  const color = (data as Partial<ArtifactEdgeData> | undefined)?.color ?? '#7d8590'
 
   const [edgePath] = getBezierPath({
     sourceX,
@@ -20,7 +22,7 @@ function AgentEdgeComponent(props: EdgeProps) {
   return (
     <PipeEdgePath
       edgePath={edgePath}
-      color={ARCHETYPE_CONFIGS[Archetype.AGENT].color}
+      color={color}
       selected={false}
       isProtocol={true}
       interactionWidth={PIPE.INTERACTION_WIDTH}
@@ -28,6 +30,6 @@ function AgentEdgeComponent(props: EdgeProps) {
   )
 }
 
-const AgentEdge = memo(AgentEdgeComponent)
+const ArtifactEdge = memo(ArtifactEdgeComponent)
 
-export { AgentEdge }
+export { ArtifactEdge }

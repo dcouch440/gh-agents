@@ -602,11 +602,12 @@ describe('toNotesEdges', () => {
     expect(edges).toHaveLength(1)
     expect(edges[0]).toEqual({
       id: 'notes-edge-step-001',
-      type: 'notesEdge',
+      type: 'artifactEdge',
       source: 'step-001',
       sourceHandle: 'notes',
       target: 'notes-step-001',
       targetHandle: 'notes-input',
+      data: { color: '#f85149' },
       selectable: false,
       deletable: false,
     })
@@ -736,7 +737,8 @@ describe('toAgentEdges', () => {
     expect(edges).toHaveLength(1)
     expect(edges[0]).toEqual({
       id: 'agent-edge-agent-1',
-      type: 'agentEdge',
+      type: 'artifactEdge',
+      data: { color: '#06b6d4' },
       source: 'wf-step',
       sourceHandle: 'agents',
       target: 'agent-artifact-agent-1',
@@ -762,7 +764,8 @@ describe('toAgentEdges', () => {
     // First agent chains from protocol
     expect(edges[0]).toEqual({
       id: 'agent-edge-agent-1',
-      type: 'agentEdge',
+      type: 'artifactEdge',
+      data: { color: '#06b6d4' },
       source: 'wf-step',
       sourceHandle: 'agents',
       target: 'agent-artifact-agent-1',
@@ -773,7 +776,8 @@ describe('toAgentEdges', () => {
     // Second agent chains from first agent
     expect(edges[1]).toEqual({
       id: 'agent-edge-agent-2',
-      type: 'agentEdge',
+      type: 'artifactEdge',
+      data: { color: '#06b6d4' },
       source: 'agent-artifact-agent-1',
       sourceHandle: 'agent-output',
       target: 'agent-artifact-agent-2',
@@ -925,11 +929,12 @@ describe('toDocumentEdges — agent-sourced', () => {
     expect(edges).toHaveLength(1)
     expect(edges[0]).toEqual({
       id: 'doc-edge-def-1',
-      type: 'documentEdge',
+      type: 'artifactEdge',
       source: 'agent-artifact-agent-1',
       sourceHandle: 'agent-documents',
       target: 'doc-artifact-def-1',
       targetHandle: 'document-input',
+      data: { color: '#3b82f6' },
       selectable: false,
       deletable: false,
     })
