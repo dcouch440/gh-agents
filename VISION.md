@@ -39,3 +39,5 @@ Document: Always left
 
 With that picture painted. You can see that we will need to line the pipes up to run in parallel lines real sleek like.
 
+The main protocol section most likely will always have to be separated.
+
