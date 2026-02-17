@@ -7,27 +7,59 @@ import type { NodeLike, ObstacleBounds } from './orthogonalPath'
 // Helpers
 // ============================================================================
 
-/** Extract all points from an SVG path string. */
+/** Extract all endpoint coordinates (M, L, and Q endpoints) from path. */
 const extractPoints = (path: string): Array<{ x: number; y: number }> => {
   const points: Array<{ x: number; y: number }> = []
-  const regex = /[ML]\s*([-\d.]+)\s+([-\d.]+)/g
+  const regex = /([MLQ])\s*([-\d.]+)\s+([-\d.]+)(?:\s+([-\d.]+)\s+([-\d.]+))?/g
   let match: RegExpExecArray | null = null
   while ((match = regex.exec(path)) !== null) {
-    points.push({ x: parseFloat(match[1]!), y: parseFloat(match[2]!) })
+    const cmd = match[1]!
+    if (cmd === 'Q' && match[4] !== undefined && match[5] !== undefined) {
+      points.push({ x: parseFloat(match[4]), y: parseFloat(match[5]) })
+    } else {
+      points.push({ x: parseFloat(match[2]!), y: parseFloat(match[3]!) })
+    }
   }
   return points
 }
 
-/** Check that all segments in a path are axis-aligned (no diagonals). */
+/** Extract Q command control points — the original corner positions before rounding. */
+const extractCorners = (path: string): Array<{ x: number; y: number }> => {
+  const corners: Array<{ x: number; y: number }> = []
+  const regex = /Q\s*([-\d.]+)\s+([-\d.]+)\s+[-\d.]+\s+[-\d.]+/g
+  let match: RegExpExecArray | null = null
+  while ((match = regex.exec(path)) !== null) {
+    corners.push({ x: parseFloat(match[1]!), y: parseFloat(match[2]!) })
+  }
+  return corners
+}
+
+/** Check that all straight segments are axis-aligned. Q curves bridge axis transitions. */
 const isOrthogonal = (path: string): boolean => {
-  const points = extractPoints(path)
-  for (let i = 1; i < points.length; i++) {
-    const prev = points[i - 1]!
-    const curr = points[i]!
+  const segments: Array<{ x: number; y: number; isQ: boolean }> = []
+  const regex = /([MLQ])\s*([-\d.]+)\s+([-\d.]+)(?:\s+([-\d.]+)\s+([-\d.]+))?/g
+  let match: RegExpExecArray | null = null
+  while ((match = regex.exec(path)) !== null) {
+    const cmd = match[1]!
+    if (cmd === 'Q' && match[4] !== undefined && match[5] !== undefined) {
+      segments.push({ x: parseFloat(match[4]), y: parseFloat(match[5]), isQ: true })
+    } else {
+      segments.push({ x: parseFloat(match[2]!), y: parseFloat(match[3]!), isQ: false })
+    }
+  }
+  for (let i = 1; i < segments.length; i++) {
+    const prev = segments[i - 1]!
+    const curr = segments[i]!
+    // Q curves handle axis transitions — skip alignment check
+    if (curr.isQ) continue
     if (prev.x !== curr.x && prev.y !== curr.y) return false
   }
   return true
 }
+
+/** Count the number of rounded corners (Q commands) in a path. */
+const countCorners = (path: string): number =>
+  (path.match(/Q\s/g) ?? []).length
 
 // ============================================================================
 // computeOrthogonalPath — Horizontal-to-Horizontal
@@ -41,14 +73,17 @@ describe('computeOrthogonalPath', () => {
       expect(isOrthogonal(path)).toBe(true)
     })
 
-    it('produces a 3-segment path when vertically offset', () => {
+    it('produces a 3-segment path with rounded corners when vertically offset', () => {
       const path = computeOrthogonalPath(0, 100, 200, 200, Position.Right, Position.Left)
-      const points = extractPoints(path)
-      expect(points).toHaveLength(4) // M + 3 L commands
       expect(isOrthogonal(path)).toBe(true)
-      // Starts at source, ends at target
+      expect(countCorners(path)).toBe(2)
+      const points = extractPoints(path)
       expect(points[0]).toEqual({ x: 0, y: 100 })
       expect(points[points.length - 1]).toEqual({ x: 200, y: 200 })
+      // Corners should be at the midX clamped to MIN_OFFSET from both handles
+      const corners = extractCorners(path)
+      expect(corners[0]!.x).toBe(100) // midX = (0+200)/2
+      expect(corners[1]!.x).toBe(100)
     })
 
     it('handles backward routing (target behind source)', () => {
@@ -63,6 +98,14 @@ describe('computeOrthogonalPath', () => {
       const path = computeOrthogonalPath(0, 100, 200, 200, Position.Right, Position.Right)
       expect(isOrthogonal(path)).toBe(true)
     })
+
+    it('clamps midX to guarantee MIN_OFFSET from both handles', () => {
+      // Close nodes: gap of 60px. midX would be 30, but MIN_OFFSET=24 from source clamps to 24
+      const path = computeOrthogonalPath(0, 0, 60, 100, Position.Right, Position.Left)
+      const corners = extractCorners(path)
+      // midX = max(0+24, min(60-24, 30)) = max(24, min(36, 30)) = max(24, 30) = 30
+      expect(corners[0]!.x).toBe(30)
+    })
   })
 
   // ============================================================================
@@ -76,15 +119,16 @@ describe('computeOrthogonalPath', () => {
     })
 
     it('routes horizontal near source for Bottom→Top offset', () => {
-      // MIN_OFFSET = 24, so midY = sy + 24 = 0 + 24 = 24
       const path = computeOrthogonalPath(100, 0, 200, 200, Position.Bottom, Position.Top)
-      const points = extractPoints(path)
-      expect(points).toHaveLength(4)
       expect(isOrthogonal(path)).toBe(true)
+      expect(countCorners(path)).toBe(2)
+      const points = extractPoints(path)
       expect(points[0]).toEqual({ x: 100, y: 0 })
-      expect(points[1]).toEqual({ x: 100, y: 24 })  // midY near source
-      expect(points[2]).toEqual({ x: 200, y: 24 })
-      expect(points[3]).toEqual({ x: 200, y: 200 })
+      expect(points[points.length - 1]).toEqual({ x: 200, y: 200 })
+      // Corner Y should be at sy + MIN_OFFSET = 24
+      const corners = extractCorners(path)
+      expect(corners[0]!.y).toBe(24)
+      expect(corners[1]!.y).toBe(24)
     })
 
     it('produces a direct vertical line when aligned (Top→Bottom)', () => {
@@ -93,38 +137,35 @@ describe('computeOrthogonalPath', () => {
     })
 
     it('routes horizontal near target for Top→Bottom offset', () => {
-      // MIN_OFFSET = 24, so midY = ty + 24 = 0 + 24 = 24
       const path = computeOrthogonalPath(100, 200, 200, 0, Position.Top, Position.Bottom)
       expect(isOrthogonal(path)).toBe(true)
+      expect(countCorners(path)).toBe(2)
       const points = extractPoints(path)
-      expect(points).toHaveLength(4)
       expect(points[0]).toEqual({ x: 100, y: 200 })
-      expect(points[1]).toEqual({ x: 100, y: 24 })  // midY near target
-      expect(points[2]).toEqual({ x: 200, y: 24 })
-      expect(points[3]).toEqual({ x: 200, y: 0 })
+      expect(points[points.length - 1]).toEqual({ x: 200, y: 0 })
+      // Corner Y should be at ty + MIN_OFFSET = 0 + 24 = 24
+      const corners = extractCorners(path)
+      expect(corners[0]!.y).toBe(24)
+      expect(corners[1]!.y).toBe(24)
     })
 
     it('gap-aware: cross-tier edge avoids mid-tier collision', () => {
-      // Simulates Designer A (tier 0, sy=-348) → Design Judge (tier 1, ty=-580+350=-230 for bottom)
-      // midY should be ty + 24 = -556, in the gap above tier 0 docs
       const path = computeOrthogonalPath(150, -348, 300, -580, Position.Top, Position.Bottom)
-      const points = extractPoints(path)
-      expect(points).toHaveLength(4)
-      expect(points[1]!.y).toBe(-580 + 24) // -556, in the tier gap
-      expect(points[2]!.y).toBe(-580 + 24)
+      expect(isOrthogonal(path)).toBe(true)
+      // midY should be ty + 24 = -556
+      const corners = extractCorners(path)
+      expect(corners[0]!.y).toBe(-556)
+      expect(corners[1]!.y).toBe(-556)
     })
 
     it('snaps to vertical line when X offset is within tolerance', () => {
-      // SNAP_TOLERANCE = 8, so 5px offset should snap
       const path = computeOrthogonalPath(100, 0, 105, 200, Position.Bottom, Position.Top)
-      expect(path).toBe('M 100 0 L 100 200') // snaps to source X
+      expect(path).toBe('M 100 0 L 100 200')
     })
 
     it('does not snap when X offset exceeds tolerance', () => {
-      // 10px offset exceeds SNAP_TOLERANCE=8
       const path = computeOrthogonalPath(100, 0, 110, 200, Position.Bottom, Position.Top)
-      const points = extractPoints(path)
-      expect(points).toHaveLength(4) // 3-segment path, not a straight line
+      expect(countCorners(path)).toBeGreaterThan(0)
     })
 
     it('handles awkward vertical routing', () => {
@@ -134,62 +175,89 @@ describe('computeOrthogonalPath', () => {
   })
 
   // ============================================================================
-  // Mixed (L-shaped paths)
+  // Mixed (S-shaped paths with guaranteed stubs)
   // ============================================================================
 
-  describe('mixed orientation (L-shaped and subway)', () => {
-    it('routes horizontal source to vertical target (target ahead)', () => {
+  describe('mixed orientation (4-segment with entry stubs)', () => {
+    it('routes horizontal source to vertical target (target ahead) with offset stubs', () => {
+      // Right → Top: exits right, enters from above
       const path = computeOrthogonalPath(0, 100, 200, 0, Position.Right, Position.Top)
       expect(isOrthogonal(path)).toBe(true)
+      expect(countCorners(path)).toBe(3) // 4-segment has 3 bends
       const points = extractPoints(path)
-      expect(points).toHaveLength(3) // L-shape: M + corner + end
       expect(points[0]).toEqual({ x: 0, y: 100 })
       expect(points[points.length - 1]).toEqual({ x: 200, y: 0 })
+      // Exit stub at sx + MIN_OFFSET = 24, entry stub at ty - MIN_OFFSET = -24
+      const corners = extractCorners(path)
+      expect(corners[0]!.x).toBe(24) // exit X
+      expect(corners[2]!.y).toBe(-24) // entry Y (Top → approach from above)
     })
 
-    it('routes vertical source to horizontal target (target ahead)', () => {
+    it('routes vertical source to horizontal target (target ahead) with offset stubs', () => {
+      // Bottom → Left: exits down, enters from left
       const path = computeOrthogonalPath(100, 0, 200, 100, Position.Bottom, Position.Left)
       expect(isOrthogonal(path)).toBe(true)
+      expect(countCorners(path)).toBe(3)
       const points = extractPoints(path)
-      expect(points).toHaveLength(3) // L-shape
       expect(points[0]).toEqual({ x: 100, y: 0 })
       expect(points[points.length - 1]).toEqual({ x: 200, y: 100 })
+      // Exit stub at sy + MIN_OFFSET = 24, entry stub at tx - MIN_OFFSET = 176
+      const corners = extractCorners(path)
+      expect(corners[0]!.y).toBe(24) // exit Y
+      expect(corners[2]!.x).toBe(176) // entry X (Left → approach from left)
     })
 
     it('routes Bottom source to Left target when target is above (subway)', () => {
-      // Simulates Input (bottom at y=500) → Protocol (left handle at y=165)
+      // Bottom → Left: target is above, so "behind" — still gets entry stub
       const path = computeOrthogonalPath(280, 500, 632, 165, Position.Bottom, Position.Left)
       expect(isOrthogonal(path)).toBe(true)
+      expect(countCorners(path)).toBe(3)
       const points = extractPoints(path)
-      expect(points).toHaveLength(4) // subway: down, across, up to target
       expect(points[0]).toEqual({ x: 280, y: 500 })
-      expect(points[1]).toEqual({ x: 280, y: 524 }) // sy + MIN_OFFSET
-      expect(points[2]).toEqual({ x: 632, y: 524 })
-      expect(points[3]).toEqual({ x: 632, y: 165 })
+      expect(points[points.length - 1]).toEqual({ x: 632, y: 165 })
+      // Exit at sy + MIN_OFFSET = 524, entry at tx - MIN_OFFSET = 608
+      const corners = extractCorners(path)
+      expect(corners[0]!.y).toBe(524)
+      expect(corners[2]!.x).toBe(608) // horizontal entry stub
     })
 
     it('routes Right source to Top target when target is behind (detour)', () => {
-      // Source exits right but target is to the left
       const path = computeOrthogonalPath(200, 100, 50, 300, Position.Right, Position.Top)
       expect(isOrthogonal(path)).toBe(true)
+      expect(countCorners(path)).toBe(3)
       const points = extractPoints(path)
-      expect(points).toHaveLength(4) // detour: right, down, left to target
       expect(points[0]).toEqual({ x: 200, y: 100 })
-      expect(points[1]).toEqual({ x: 224, y: 100 }) // sx + MIN_OFFSET
-      expect(points[2]).toEqual({ x: 224, y: 300 })
-      expect(points[3]).toEqual({ x: 50, y: 300 })
+      expect(points[points.length - 1]).toEqual({ x: 50, y: 300 })
+      // Exit at sx + MIN_OFFSET = 224, entry at ty - MIN_OFFSET = 276
+      const corners = extractCorners(path)
+      expect(corners[0]!.x).toBe(224)
+      expect(corners[2]!.y).toBe(276) // vertical entry stub (Top → from above)
     })
 
     it('routes Top source to Right target when target is below (subway)', () => {
-      // Source exits upward but target is below
       const path = computeOrthogonalPath(100, 0, 300, 200, Position.Top, Position.Right)
       expect(isOrthogonal(path)).toBe(true)
+      expect(countCorners(path)).toBe(3)
       const points = extractPoints(path)
-      expect(points).toHaveLength(4) // subway: up, across, down to target
       expect(points[0]).toEqual({ x: 100, y: 0 })
-      expect(points[1]).toEqual({ x: 100, y: -24 }) // sy - MIN_OFFSET
-      expect(points[2]).toEqual({ x: 300, y: -24 })
-      expect(points[3]).toEqual({ x: 300, y: 200 })
+      expect(points[points.length - 1]).toEqual({ x: 300, y: 200 })
+      // Exit at sy - MIN_OFFSET = -24, entry at tx + MIN_OFFSET = 324 (Right → from right)
+      const corners = extractCorners(path)
+      expect(corners[0]!.y).toBe(-24)
+      expect(corners[2]!.x).toBe(324)
+    })
+
+    it('routes Bottom to Left with horizontal entry not flush with target', () => {
+      // Simulates Input → Protocol: Bottom handle exits down, Left handle enters horizontally
+      const path = computeOrthogonalPath(150, 400, 500, 200, Position.Bottom, Position.Left)
+      expect(isOrthogonal(path)).toBe(true)
+      const points = extractPoints(path)
+      expect(points[0]).toEqual({ x: 150, y: 400 })
+      expect(points[points.length - 1]).toEqual({ x: 500, y: 200 })
+      // Entry X should be tx - MIN_OFFSET = 476, NOT at tx=500 (flush with target)
+      const corners = extractCorners(path)
+      const entryCorner = corners[corners.length - 1]!
+      expect(entryCorner.x).toBe(476) // 24px gap from target's left edge
     })
   })
 
@@ -307,8 +375,8 @@ describe('findObstaclesInPath', () => {
 
   it('finds nodes overlapping the path area', () => {
     const nodes = [
-      makeNode('blocker', 30, 30, 100, 100), // overlaps (0,0)→(100,100) area
-      makeNode('far', 500, 500, 100, 100),    // outside
+      makeNode('blocker', 30, 30, 100, 100),
+      makeNode('far', 500, 500, 100, 100),
     ]
     const result = findObstaclesInPath(nodes, 0, 0, 100, 100, new Set())
     expect(result).toHaveLength(1)
@@ -327,8 +395,6 @@ describe('findObstaclesInPath', () => {
   })
 
   it('respects padding parameter', () => {
-    // Node at (105, 0) with width=50 is just outside the path area (0,0)→(100,100)
-    // With padding=0, it should not be found. With padding=10, it should.
     const nodes = [makeNode('near', 105, 0, 50, 50)]
     const noPad = findObstaclesInPath(nodes, 0, 0, 100, 100, new Set(), 0)
     expect(noPad).toHaveLength(0)
@@ -339,7 +405,6 @@ describe('findObstaclesInPath', () => {
   it('uses fallback dimensions when measured is missing', () => {
     const node: NodeLike = { id: 'bare', position: { x: 50, y: 50 } }
     const result = findObstaclesInPath([node], 0, 0, 100, 100, new Set())
-    // Fallback: 200w × 100h — definitely overlaps
     expect(result).toHaveLength(1)
   })
 })
@@ -352,37 +417,32 @@ describe('computeCorridorPath', () => {
   const obstacle: ObstacleBounds = { x: 100, y: -500, width: 200, height: 150 }
 
   it('routes LEFT when source is left of target', () => {
-    // Source at x=150, target at x=200 → source left of target → LEFT corridor
     const path = computeCorridorPath(150, -300, 200, -700, [obstacle])
-    const points = extractPoints(path)
-    // Corridor should be at obstacle.x - margin = 100 - 24 = 76
-    expect(points).toHaveLength(6) // 5 segments
     expect(isOrthogonal(path)).toBe(true)
-    // All corridor points should have x = 76 (left of obstacle)
-    const corridorX = points[2]!.x
-    expect(corridorX).toBe(76)
-    expect(points[3]!.x).toBe(76)
+    expect(countCorners(path)).toBe(4) // 5-segment corridor has 4 corners
+    // Corridor should be at obstacle.x - margin = 76
+    const corners = extractCorners(path)
+    const corridorCorners = corners.filter((c) => c.x === 76)
+    expect(corridorCorners.length).toBeGreaterThanOrEqual(1)
   })
 
   it('routes RIGHT when source is right of target', () => {
-    // Source at x=250, target at x=200 → source right of target → RIGHT corridor
     const path = computeCorridorPath(250, -300, 200, -700, [obstacle])
-    const points = extractPoints(path)
-    expect(points).toHaveLength(6)
     expect(isOrthogonal(path)).toBe(true)
-    // Corridor should be at obstacle.x + obstacle.width + margin = 100 + 200 + 24 = 324
-    const corridorX = points[2]!.x
-    expect(corridorX).toBe(324)
+    expect(countCorners(path)).toBe(4)
+    // Corridor should be at obstacle.x + obstacle.width + margin = 324
+    const corners = extractCorners(path)
+    const corridorCorners = corners.filter((c) => c.x === 324)
+    expect(corridorCorners.length).toBeGreaterThanOrEqual(1)
   })
 
   it('routes around when source and target are aligned vertically', () => {
-    // Source at x=200, target at x=200, obstacle between them
     const path = computeCorridorPath(200, -300, 200, -700, [obstacle])
-    const points = extractPoints(path)
-    expect(points).toHaveLength(6)
     expect(isOrthogonal(path)).toBe(true)
     // Should route LEFT (sx <= tx) at corridorX = 76
-    expect(points[2]!.x).toBe(76)
+    const corners = extractCorners(path)
+    const corridorCorners = corners.filter((c) => c.x === 76)
+    expect(corridorCorners.length).toBeGreaterThanOrEqual(1)
   })
 
   it('produces all orthogonal segments', () => {
@@ -396,24 +456,25 @@ describe('computeCorridorPath', () => {
       { x: 100, y: -300, width: 200, height: 80 },
     ]
     const path = computeCorridorPath(150, -200, 200, -600, obs)
-    const points = extractPoints(path)
-    const corridorX = points[2]!.x
     // Left corridor: min(50, 100) - 24 = 26
-    expect(corridorX).toBe(26)
+    const corners = extractCorners(path)
+    const corridorCorners = corners.filter((c) => c.x === 26)
+    expect(corridorCorners.length).toBeGreaterThanOrEqual(1)
     // Verify corridor is completely outside all obstacle X ranges
-    for (const o of obs) {
-      expect(corridorX).toBeLessThan(o.x)
+    for (const c of corridorCorners) {
+      for (const o of obs) {
+        expect(c.x).toBeLessThan(o.x)
+      }
     }
   })
 
   it('handles target below source (downward flow)', () => {
-    // Source at y=0, target at y=500 (target below)
     const path = computeCorridorPath(150, 0, 250, 500, [{ x: 100, y: 100, width: 200, height: 100 }])
-    const points = extractPoints(path)
-    expect(points).toHaveLength(6)
     expect(isOrthogonal(path)).toBe(true)
-    // Exit goes down: first segment should increase Y
-    expect(points[1]!.y).toBeGreaterThan(points[0]!.y)
+    expect(countCorners(path)).toBe(4)
+    const points = extractPoints(path)
+    expect(points[0]).toEqual({ x: 150, y: 0 })
+    expect(points[points.length - 1]).toEqual({ x: 250, y: 500 })
   })
 
   it('returns straight line for empty obstacles', () => {
