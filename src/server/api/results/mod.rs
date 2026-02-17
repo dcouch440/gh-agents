@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use super::AppError;
 use crate::server::auth as auth_utils;
+use crate::server::services::results as svc;
 use crate::server::state::AppState;
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -56,12 +57,12 @@ pub async fn list_results(
     auth: auth_utils::AuthUser,
     Query(q): Query<ResultQuery>,
 ) -> Result<Json<Vec<ResultResponse>>, AppError> {
-    let repo = &state.repos().results;
-    let rows = match q.output_schema_id {
-        Some(schema_id) => repo.list_results_by_schema(auth.user_id.0, schema_id).await,
-        None => repo.list_results(auth.user_id.0).await,
-    }
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    let rows = svc::list_results(
+        state.repos().results.as_ref(),
+        auth.user_id.0,
+        q.output_schema_id,
+    )
+    .await?;
     Ok(Json(rows.into_iter().map(ResultResponse::from).collect()))
 }
 
@@ -81,15 +82,7 @@ pub async fn get_result(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ResultResponse>, AppError> {
-    let repo = &state.repos().results;
-    let row = repo
-        .get_result(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or(AppError::not_found("Result"))?;
-    if row.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Result"));
-    }
+    let row = svc::get_result(state.repos().results.as_ref(), auth.user_id.0, id).await?;
     Ok(Json(ResultResponse::from(row)))
 }
 
@@ -109,18 +102,7 @@ pub async fn delete_result(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    let repo = &state.repos().results;
-    let row = repo
-        .get_result(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or(AppError::not_found("Result"))?;
-    if row.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Result"));
-    }
-    repo.delete_result(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    svc::delete_result(state.repos().results.as_ref(), auth.user_id.0, id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

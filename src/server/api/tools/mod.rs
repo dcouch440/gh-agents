@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use super::AppError;
 use crate::server::auth as auth_utils;
+use crate::server::services::tools as svc;
 use crate::server::state::AppState;
 
 /// Response for a single tool
@@ -81,10 +82,8 @@ pub async fn list_tools(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<ToolResponse>>, AppError> {
-    let rows = state.repo().list_tools().await?;
-
-    let tools = rows.into_iter().map(ToolResponse::from_row).collect();
-    Ok(Json(tools))
+    let rows = svc::list_tools(state.repo().as_ref()).await?;
+    Ok(Json(rows.into_iter().map(ToolResponse::from_row).collect()))
 }
 
 /// Create a new tool
@@ -104,27 +103,17 @@ pub async fn create_tool(
     auth: auth_utils::AuthUser,
     Json(request): Json<CreateToolRequest>,
 ) -> Result<(StatusCode, Json<ToolResponse>), AppError> {
-    super::ownership::require_admin(&auth)?;
-
-    if request.name.trim().is_empty() {
-        return Err(AppError::bad_request("Tool name cannot be empty"));
-    }
-
-    let name = request.name.trim().to_string();
-    let display_name = request.display_name.unwrap_or_else(|| name.clone());
-
-    let row = crate::db::ToolRow {
-        id: Uuid::new_v4(),
-        name,
-        display_name,
-        description: request.description.unwrap_or_default(),
-        parameters: request.parameters.unwrap_or_else(|| serde_json::json!({})),
-        created_at: chrono::Utc::now(),
-        version: 1,
-    };
-
-    state.repo().upsert_tool(row.clone()).await?;
-
+    let row = svc::create_tool(
+        state.repo().as_ref(),
+        svc::CreateToolInput {
+            is_admin: auth.claims.is_admin,
+            name: request.name,
+            display_name: request.display_name,
+            description: request.description,
+            parameters: request.parameters,
+        },
+    )
+    .await?;
     Ok((StatusCode::CREATED, Json(ToolResponse::from_row(row))))
 }
 
@@ -145,12 +134,7 @@ pub async fn get_tool(
     _auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ToolResponse>, AppError> {
-    let row = state
-        .repo()
-        .get_tool(id)
-        .await?
-        .ok_or(AppError::not_found("Tool"))?;
-
+    let row = svc::get_tool(state.repo().as_ref(), id).await?;
     Ok(Json(ToolResponse::from_row(row)))
 }
 
@@ -173,27 +157,19 @@ pub async fn update_tool(
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateToolRequest>,
 ) -> Result<Json<ToolResponse>, AppError> {
-    super::ownership::require_admin(&auth)?;
-
-    let existing = state
-        .repo()
-        .get_tool(id)
-        .await?
-        .ok_or(AppError::not_found("Tool"))?;
-
-    let updated = crate::db::ToolRow {
-        id: existing.id,
-        name: request.name.unwrap_or(existing.name),
-        display_name: request.display_name.unwrap_or(existing.display_name),
-        description: request.description.unwrap_or(existing.description),
-        parameters: request.parameters.unwrap_or(existing.parameters),
-        created_at: existing.created_at,
-        version: existing.version,
-    };
-
-    state.repo().upsert_tool(updated.clone()).await?;
-
-    Ok(Json(ToolResponse::from_row(updated)))
+    let row = svc::update_tool(
+        state.repo().as_ref(),
+        svc::UpdateToolInput {
+            is_admin: auth.claims.is_admin,
+            tool_id: id,
+            name: request.name,
+            display_name: request.display_name,
+            description: request.description,
+            parameters: request.parameters,
+        },
+    )
+    .await?;
+    Ok(Json(ToolResponse::from_row(row)))
 }
 
 /// Delete a tool by ID
@@ -213,10 +189,7 @@ pub async fn delete_tool(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    super::ownership::require_admin(&auth)?;
-
-    state.repo().delete_tool(id).await?;
-
+    svc::delete_tool(state.repo().as_ref(), auth.claims.is_admin, id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -236,15 +209,10 @@ pub async fn get_agent_tools(
     auth: auth_utils::AuthUser,
     Path(agent_id): Path<Uuid>,
 ) -> Result<Json<AgentToolsResponse>, AppError> {
-    super::ownership::verify_agent_ownership(state.repo().as_ref(), &auth, agent_id).await?;
-
-    let rows = state.repo().get_agent_tools(agent_id).await?;
-
-    let tools = rows.into_iter().map(ToolResponse::from_row).collect();
-
+    let tools = svc::get_agent_tools(state.repo().as_ref(), auth.user_id.0, agent_id).await?;
     Ok(Json(AgentToolsResponse {
         agent_id: agent_id.to_string(),
-        tools,
+        tools: tools.into_iter().map(ToolResponse::from_row).collect(),
     }))
 }
 
@@ -267,27 +235,20 @@ pub async fn set_agent_tools(
     Path(agent_id): Path<Uuid>,
     Json(request): Json<SetAgentToolsRequest>,
 ) -> Result<Json<AgentToolsResponse>, AppError> {
-    super::ownership::verify_agent_ownership(state.repo().as_ref(), &auth, agent_id).await?;
-
-    let tool_ids: Result<Vec<Uuid>, _> = request
-        .tool_ids
-        .iter()
-        .map(|s| Uuid::parse_str(s))
-        .collect();
-
-    let tool_ids =
-        tool_ids.map_err(|_| AppError::bad_request("Invalid tool ID format, expected UUID"))?;
-
-    state.repo().set_agent_tools(agent_id, tool_ids).await?;
-
-    let rows = state.repo().get_agent_tools(agent_id).await?;
-
-    let tools = rows.into_iter().map(ToolResponse::from_row).collect();
-
+    let tools = svc::set_agent_tools(
+        state.repo().as_ref(),
+        svc::SetAgentToolsInput {
+            user_id: auth.user_id.0,
+            agent_id,
+            tool_ids: request.tool_ids,
+        },
+    )
+    .await?;
     Ok(Json(AgentToolsResponse {
         agent_id: agent_id.to_string(),
-        tools,
+        tools: tools.into_iter().map(ToolResponse::from_row).collect(),
     }))
 }
+
 #[cfg(test)]
 mod tests;

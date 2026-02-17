@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use super::AppError;
 use crate::server::auth as auth_utils;
+use crate::server::services::agent_roster as svc;
 use crate::server::state::AppState;
 
 #[cfg(test)]
@@ -58,34 +59,6 @@ impl RosterAgentResponse {
 }
 
 // ============================================================================
-// Helpers
-// ============================================================================
-
-async fn verify_step_access(
-    state: &AppState,
-    wid: Uuid,
-    sid: Uuid,
-    user_id: Uuid,
-) -> Result<(), AppError> {
-    let repo = &state.repos().workflows;
-    let wf = repo
-        .get_workflow(wid)
-        .await?
-        .ok_or(AppError::not_found("Workflow"))?;
-    if wf.user_id != user_id {
-        return Err(AppError::not_found("Workflow"));
-    }
-    let step = repo
-        .get_step(sid)
-        .await?
-        .ok_or(AppError::not_found("Step"))?;
-    if step.workflow_id != wid {
-        return Err(AppError::not_found("Step"));
-    }
-    Ok(())
-}
-
-// ============================================================================
 // Handlers
 // ============================================================================
 
@@ -109,48 +82,14 @@ pub async fn list_roster_agents(
     auth: auth_utils::AuthUser,
     Path((wid, sid)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<Vec<RosterAgentResponse>>, AppError> {
-    verify_step_access(&state, wid, sid, auth.user_id.0).await?;
-
-    let repo = &state.repos().workflows;
-    let brief = repo.get_mission_brief(sid).await?;
-
-    let agents = match brief {
-        Some(b) => repo.list_agent_roster(b.id).await?,
-        None => vec![],
-    };
-
-    // Build depends_on from child workflow edges
-    let step = repo.get_step(sid).await?;
-    let child_edges = match step.and_then(|s| s.child_workflow_id) {
-        Some(child_wf_id) => repo.list_edges(child_wf_id).await.unwrap_or_default(),
-        None => vec![],
-    };
-
-    // Map child_step_id → roster agent ID for reverse lookup
-    let child_step_to_agent: std::collections::HashMap<Uuid, Uuid> = agents
-        .iter()
-        .filter_map(|a| a.child_step_id.map(|csid| (csid, a.id)))
-        .collect();
-
-    // For each agent, find which roster agents' child_steps have edges pointing to this
-    // agent's child_step (excluding Designer edges — Designer steps aren't in the roster)
-    let compute_depends_on = |agent: &crate::db::TaskAgentRosterRow| -> Vec<String> {
-        let Some(child_step_id) = agent.child_step_id else {
-            return vec![];
-        };
-        child_edges
-            .iter()
-            .filter(|e| e.to_step_id == child_step_id)
-            .filter_map(|e| child_step_to_agent.get(&e.from_step_id))
-            .map(|id| id.to_string())
-            .collect()
-    };
+    let agents =
+        svc::list_roster_agents(state.repos().workflows.as_ref(), auth.user_id.0, wid, sid).await?;
 
     let responses: Vec<RosterAgentResponse> = agents
         .into_iter()
         .map(|a| {
-            let deps = compute_depends_on(&a);
-            RosterAgentResponse::from_row(a, deps)
+            let deps: Vec<String> = a.depends_on.iter().map(|id| id.to_string()).collect();
+            RosterAgentResponse::from_row(a.agent, deps)
         })
         .collect();
 
@@ -179,24 +118,19 @@ pub async fn create_roster_agent(
     Path((wid, sid)): Path<(Uuid, Uuid)>,
     Json(req): Json<CreateRosterAgentRequest>,
 ) -> Result<(StatusCode, Json<RosterAgentResponse>), AppError> {
-    verify_step_access(&state, wid, sid, auth.user_id.0).await?;
-
-    let repo = &state.repos().workflows;
-
-    // Ensure a mission brief exists — upsert with defaults if not
-    let brief = repo
-        .upsert_mission_brief(sid, "", &[], "fail_fast", None)
-        .await?;
-
-    let row = repo
-        .add_roster_agent(
-            brief.id,
-            &req.name,
-            &req.role_description,
-            &req.capabilities,
-            req.execution_order,
-        )
-        .await?;
+    let row = svc::create_roster_agent(
+        state.repos().workflows.as_ref(),
+        svc::CreateRosterAgentInput {
+            user_id: auth.user_id.0,
+            workflow_id: wid,
+            step_id: sid,
+            name: req.name,
+            role_description: req.role_description,
+            capabilities: req.capabilities,
+            execution_order: req.execution_order,
+        },
+    )
+    .await?;
 
     Ok((
         StatusCode::CREATED,
@@ -225,45 +159,25 @@ pub async fn delete_roster_agent(
     auth: auth_utils::AuthUser,
     Path((wid, sid, rid)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
-    verify_step_access(&state, wid, sid, auth.user_id.0).await?;
+    let info = svc::delete_roster_agent(
+        state.repos().workflows.as_ref(),
+        auth.user_id.0,
+        wid,
+        sid,
+        rid,
+    )
+    .await?;
 
-    // Load agent name + step name before deleting (for consistency scanner)
-    let agent_name = if let Ok(Some(brief)) = state.repos().workflows.get_mission_brief(sid).await {
-        state
-            .repos()
-            .workflows
-            .list_agent_roster(brief.id)
-            .await
-            .ok()
-            .and_then(|roster| roster.into_iter().find(|a| a.id == rid))
-            .map(|a| a.name)
-            .unwrap_or_default()
-    } else {
-        String::new()
-    };
-
-    let step_name = state
-        .repos()
-        .workflows
-        .get_step(sid)
-        .await
-        .ok()
-        .flatten()
-        .and_then(|s| s.name)
-        .unwrap_or_default();
-
-    state.repos().workflows.remove_roster_agent(rid).await?;
-
-    // Schedule consistency scan
+    // Schedule consistency scan (requires AppState, so stays in handler)
     crate::server::hub::consistency_scanner::schedule_consistency_scan(
         state.clone(),
         wid,
         crate::server::hub::consistency_scanner::DeletedItem {
             item_type: crate::server::hub::consistency_scanner::DeletedItemType::RosterAgent,
-            name: agent_name,
+            name: info.agent_name,
             id: rid,
             source_step_id: sid,
-            source_step_name: step_name,
+            source_step_name: info.step_name,
         },
     );
 

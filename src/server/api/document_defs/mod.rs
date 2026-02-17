@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use super::AppError;
 use crate::server::auth as auth_utils;
+use crate::server::services::document_defs as svc;
 use crate::server::state::AppState;
 
 #[cfg(test)]
@@ -78,34 +79,6 @@ pub struct DocDefPath {
 }
 
 // ============================================================================
-// Helpers
-// ============================================================================
-
-async fn verify_step_access(
-    state: &AppState,
-    wid: Uuid,
-    sid: Uuid,
-    user_id: Uuid,
-) -> Result<(), AppError> {
-    let repo = &state.repos().workflows;
-    let wf = repo
-        .get_workflow(wid)
-        .await?
-        .ok_or(AppError::not_found("Workflow"))?;
-    if wf.user_id != user_id {
-        return Err(AppError::not_found("Workflow"));
-    }
-    let step = repo
-        .get_step(sid)
-        .await?
-        .ok_or(AppError::not_found("Step"))?;
-    if step.workflow_id != wid {
-        return Err(AppError::not_found("Step"));
-    }
-    Ok(())
-}
-
-// ============================================================================
 // Handlers
 // ============================================================================
 
@@ -129,8 +102,8 @@ pub async fn list_document_defs(
     auth: auth_utils::AuthUser,
     Path((wid, sid)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<Vec<DocumentDefResponse>>, AppError> {
-    verify_step_access(&state, wid, sid, auth.user_id.0).await?;
-    let rows = state.repos().workflows.list_document_defs(sid).await?;
+    let rows =
+        svc::list_document_defs(state.repos().workflows.as_ref(), auth.user_id.0, wid, sid).await?;
     Ok(Json(
         rows.into_iter()
             .map(DocumentDefResponse::from_row)
@@ -160,22 +133,19 @@ pub async fn create_document_def(
     Path((wid, sid)): Path<(Uuid, Uuid)>,
     Json(req): Json<CreateDocumentDefRequest>,
 ) -> Result<(StatusCode, Json<DocumentDefResponse>), AppError> {
-    verify_step_access(&state, wid, sid, auth.user_id.0).await?;
-
-    let def = crate::db::ProtocolDocumentDefRow {
-        id: Uuid::new_v4(),
-        step_id: Some(sid),
-        name: req.name,
-        description: req.description,
-        target_length: req.target_length,
-        display_order: req.display_order,
-        created_at: chrono::Utc::now(),
-        protocol_id: None,
-        document_id: None,
-        agent_roster_entry_id: None,
-    };
-
-    let row = state.repos().workflows.create_document_def(def).await?;
+    let row = svc::create_document_def(
+        state.repos().workflows.as_ref(),
+        svc::CreateDocumentDefInput {
+            user_id: auth.user_id.0,
+            workflow_id: wid,
+            step_id: sid,
+            name: req.name,
+            description: req.description,
+            target_length: req.target_length,
+            display_order: req.display_order,
+        },
+    )
+    .await?;
     Ok((
         StatusCode::CREATED,
         Json(DocumentDefResponse::from_row(row)),
@@ -205,25 +175,19 @@ pub async fn update_document_def(
     Path((wid, sid, did)): Path<(Uuid, Uuid, Uuid)>,
     Json(req): Json<UpdateDocumentDefRequest>,
 ) -> Result<Json<DocumentDefResponse>, AppError> {
-    verify_step_access(&state, wid, sid, auth.user_id.0).await?;
-
-    // Fetch existing to merge partial update
-    let defs = state.repos().workflows.list_document_defs(sid).await?;
-    let existing = defs
-        .into_iter()
-        .find(|d| d.id == did)
-        .ok_or(AppError::not_found("Document Definition"))?;
-
-    let name = req.name.unwrap_or(existing.name);
-    let description = req.description.unwrap_or(existing.description);
-    let target_length = req.target_length.unwrap_or(existing.target_length);
-
-    let row = state
-        .repos()
-        .workflows
-        .update_document_def(did, name, description, target_length)
-        .await?;
-
+    let row = svc::update_document_def(
+        state.repos().workflows.as_ref(),
+        svc::UpdateDocumentDefInput {
+            user_id: auth.user_id.0,
+            workflow_id: wid,
+            step_id: sid,
+            def_id: did,
+            name: req.name,
+            description: req.description,
+            target_length: req.target_length,
+        },
+    )
+    .await?;
     Ok(Json(DocumentDefResponse::from_row(row)))
 }
 
@@ -248,41 +212,25 @@ pub async fn delete_document_def(
     auth: auth_utils::AuthUser,
     Path((wid, sid, did)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
-    verify_step_access(&state, wid, sid, auth.user_id.0).await?;
+    let info = svc::delete_document_def(
+        state.repos().workflows.as_ref(),
+        auth.user_id.0,
+        wid,
+        sid,
+        did,
+    )
+    .await?;
 
-    // Load name + step name before deleting (for consistency scanner)
-    let def_name = state
-        .repos()
-        .workflows
-        .list_document_defs(sid)
-        .await
-        .ok()
-        .and_then(|defs| defs.into_iter().find(|d| d.id == did))
-        .map(|d| d.name)
-        .unwrap_or_default();
-
-    let step_name = state
-        .repos()
-        .workflows
-        .get_step(sid)
-        .await
-        .ok()
-        .flatten()
-        .and_then(|s| s.name)
-        .unwrap_or_default();
-
-    state.repos().workflows.delete_document_def(did).await?;
-
-    // Schedule consistency scan
+    // Schedule consistency scan (requires AppState, so stays in handler)
     crate::server::hub::consistency_scanner::schedule_consistency_scan(
         state.clone(),
         wid,
         crate::server::hub::consistency_scanner::DeletedItem {
             item_type: crate::server::hub::consistency_scanner::DeletedItemType::DocumentDef,
-            name: def_name,
+            name: info.def_name,
             id: did,
             source_step_id: sid,
-            source_step_name: step_name,
+            source_step_name: info.step_name,
         },
     );
 

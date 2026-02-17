@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use super::AppError;
 use crate::server::auth as auth_utils;
+use crate::server::services::system_config as svc;
 use crate::server::state::AppState;
 
 // ============================================================================
@@ -33,6 +34,19 @@ pub struct SystemConfigResponse {
     pub config_value: serde_json::Value,
     pub description: Option<String>,
     pub updated_at: DateTime<Utc>,
+}
+
+impl From<crate::db::SystemConfigRow> for SystemConfigResponse {
+    fn from(r: crate::db::SystemConfigRow) -> Self {
+        Self {
+            id: r.id,
+            config_type: r.config_type,
+            config_key: r.config_key,
+            config_value: r.config_value,
+            description: r.description,
+            updated_at: r.updated_at,
+        }
+    }
 }
 
 #[derive(Deserialize, utoipa::IntoParams)]
@@ -60,19 +74,10 @@ pub async fn list_system_configs(
     _auth: auth_utils::AuthUser,
     Query(query): Query<SystemConfigQuery>,
 ) -> Result<Json<Vec<SystemConfigResponse>>, AppError> {
-    let repo = &state.repos().system_config;
-    let rows = repo.list_system_configs(query.config_type).await?;
+    let rows =
+        svc::list_system_configs(state.repos().system_config.as_ref(), query.config_type).await?;
     Ok(Json(
-        rows.into_iter()
-            .map(|r| SystemConfigResponse {
-                id: r.id,
-                config_type: r.config_type,
-                config_key: r.config_key,
-                config_value: r.config_value,
-                description: r.description,
-                updated_at: r.updated_at,
-            })
-            .collect(),
+        rows.into_iter().map(SystemConfigResponse::from).collect(),
     ))
 }
 
@@ -93,29 +98,18 @@ pub async fn upsert_system_config(
     auth: auth_utils::AuthUser,
     Json(req): Json<CreateSystemConfigRequest>,
 ) -> Result<Json<SystemConfigResponse>, AppError> {
-    if req.config_key.trim().is_empty() || req.config_type.trim().is_empty() {
-        return Err(AppError::bad_request(
-            "Config key and type must not be empty",
-        ));
-    }
-    let repo = &state.repos().system_config;
-    let row = repo
-        .upsert_system_config(
-            &req.config_type,
-            &req.config_key,
-            &req.config_value,
-            req.description,
-            Some(auth.user_id.0),
-        )
-        .await?;
-    Ok(Json(SystemConfigResponse {
-        id: row.id,
-        config_type: row.config_type,
-        config_key: row.config_key,
-        config_value: row.config_value,
-        description: row.description,
-        updated_at: row.updated_at,
-    }))
+    let row = svc::upsert_system_config(
+        state.repos().system_config.as_ref(),
+        svc::UpsertSystemConfigInput {
+            config_type: req.config_type,
+            config_key: req.config_key,
+            config_value: req.config_value,
+            description: req.description,
+            created_by: Some(auth.user_id.0),
+        },
+    )
+    .await?;
+    Ok(Json(SystemConfigResponse::from(row)))
 }
 
 /// DELETE /api/system-config/:key
@@ -134,8 +128,7 @@ pub async fn delete_system_config(
     _auth: auth_utils::AuthUser,
     Path(key): Path<String>,
 ) -> Result<StatusCode, AppError> {
-    let repo = &state.repos().system_config;
-    repo.delete_system_config(&key).await?;
+    svc::delete_system_config(state.repos().system_config.as_ref(), &key).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

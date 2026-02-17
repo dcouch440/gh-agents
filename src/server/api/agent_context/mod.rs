@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use super::AppError;
 use crate::server::auth as auth_utils;
+use crate::server::services::agent_context as svc;
 use crate::server::state::AppState;
 
 use super::documents::DocumentListItem;
@@ -24,6 +25,20 @@ pub struct SetAgentContextRequest {
 pub struct AgentContextResponse {
     pub agent_id: String,
     pub documents: Vec<DocumentListItem>,
+}
+
+fn rows_to_documents(rows: Vec<crate::db::DocumentRow>) -> Vec<DocumentListItem> {
+    rows.into_iter()
+        .map(|row| DocumentListItem {
+            id: row.id,
+            title: row.title,
+            summary: row.summary,
+            ref_tag: row.ref_tag,
+            tags: row.tags,
+            doc_type: row.doc_type,
+            updated_at: row.updated_at,
+        })
+        .collect()
 }
 
 /// Get context documents assigned to an agent
@@ -42,24 +57,10 @@ pub async fn get_agent_context(
     _auth: auth_utils::AuthUser,
     Path(agent_id): Path<Uuid>,
 ) -> Result<Json<AgentContextResponse>, AppError> {
-    let rows = state.repo().get_agent_context(agent_id).await?;
-
-    let documents = rows
-        .into_iter()
-        .map(|row| DocumentListItem {
-            id: row.id,
-            title: row.title,
-            summary: row.summary,
-            ref_tag: row.ref_tag,
-            tags: row.tags,
-            doc_type: row.doc_type,
-            updated_at: row.updated_at,
-        })
-        .collect();
-
+    let rows = svc::get_agent_context(state.repo().as_ref(), agent_id).await?;
     Ok(Json(AgentContextResponse {
         agent_id: agent_id.to_string(),
-        documents,
+        documents: rows_to_documents(rows),
     }))
 }
 
@@ -82,39 +83,19 @@ pub async fn set_agent_context(
     Path(agent_id): Path<Uuid>,
     Json(request): Json<SetAgentContextRequest>,
 ) -> Result<Json<AgentContextResponse>, AppError> {
-    let document_ids: Result<Vec<Uuid>, _> = request
-        .document_ids
-        .iter()
-        .map(|s| Uuid::parse_str(s))
-        .collect();
-
-    let document_ids =
-        document_ids.map_err(|_| AppError::bad_request("Invalid document ID format"))?;
-
-    state
-        .repo()
-        .set_agent_context(agent_id, document_ids)
-        .await?;
-
-    let rows = state.repo().get_agent_context(agent_id).await?;
-
-    let documents = rows
-        .into_iter()
-        .map(|row| DocumentListItem {
-            id: row.id,
-            title: row.title,
-            summary: row.summary,
-            ref_tag: row.ref_tag,
-            tags: row.tags,
-            doc_type: row.doc_type,
-            updated_at: row.updated_at,
-        })
-        .collect();
-
+    let rows = svc::set_agent_context(
+        state.repo().as_ref(),
+        svc::SetAgentContextInput {
+            agent_id,
+            document_ids: request.document_ids,
+        },
+    )
+    .await?;
     Ok(Json(AgentContextResponse {
         agent_id: agent_id.to_string(),
-        documents,
+        documents: rows_to_documents(rows),
     }))
 }
+
 #[cfg(test)]
 mod tests;
