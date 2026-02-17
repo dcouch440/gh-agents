@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useAutoSave } from '@/hooks'
 import { ReactFlow, Background, MiniMap, useReactFlow, ReactFlowProvider, BackgroundVariant } from '@xyflow/react'
 import type { OnSelectionChangeParams, Connection, OnNodesDelete, OnEdgesDelete, Edge } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
-import { useStore, batch, workflowStore, canvasStore, agentStore, outputSchemaStore, shareStore, focusModeStore } from '@/stores'
+import { useStore, batch, workflowStore, canvasStore, agentStore, outputSchemaStore, shareStore } from '@/stores'
 import { toRFNodes, toRFEdges, toDocumentEdges, toAgentEdges, toNotesEdges } from './mappers'
 import { Collections } from '@/utils/collections'
 import { nodeTypes } from './nodeTypes'
@@ -13,7 +13,6 @@ import { edgeTypes } from './edgeTypes'
 import { usePackDrag } from './usePackDrag'
 import { OptionTray } from './OptionTray'
 import { CanvasContextMenu } from './CanvasContextMenu'
-import type { MenuPosition } from './CanvasContextMenu'
 import { CANVAS } from './constants'
 import { computeHighlightedProtocolIds } from './computeHighlightedProtocolIds'
 import { useGroupHoverDelay } from './useGroupHoverDelay'
@@ -23,6 +22,8 @@ import { useCanvasFetch } from './useCanvasFetch'
 import { ShareModeBanner } from './ShareModeBanner'
 import { FocusModeOverlay } from '@/components/focus-mode'
 import { useEnterFocusMode } from './useEnterFocusMode'
+import { useCanvasKeyboard } from './useCanvasKeyboard'
+import { useContextMenuState } from './useContextMenuState'
 
 function WorkflowCanvasInner() {
   const theme = useTheme()
@@ -41,7 +42,7 @@ function WorkflowCanvasInner() {
   const { onNodeDragStart, onNodeDrag, onNodeDragStop } = usePackDrag(getNodes, setNodes)
   const stepsById = useMemo(() => Collections.keyBy(steps, (s) => s.id), [steps])
   const shareActive = useStore(shareStore.store, shareStore.selectActive)
-  const [contextMenu, setContextMenu] = useState<MenuPosition>(null)
+  const { contextMenu, closeMenu, onPaneContextMenu, onNodeContextMenu, onCanvasMouseDown } = useContextMenuState(screenToFlowPosition)
   const initialFitDone = useRef(false)
 
   const autoSave = useAutoSave(true)
@@ -144,46 +145,14 @@ function WorkflowCanvasInner() {
     }
   }, [])
 
-  // Context menu (right-click on pane)
-  const onPaneContextMenu = useCallback(
-    (event: React.MouseEvent | MouseEvent) => {
-      event.preventDefault()
-      if (shareStore.store.getState().active) return
-      const flowPosition = screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      })
-      setContextMenu({
-        x: event.clientX,
-        y: event.clientY,
-        flowX: flowPosition.x,
-        flowY: flowPosition.y,
-      })
-    },
-    [screenToFlowPosition],
-  )
-
-  // Context menu (right-click on node)
-  const onNodeContextMenu = useCallback((event: React.MouseEvent, node: { id: string; position: { x: number; y: number } }) => {
-    event.preventDefault()
-    if (shareStore.store.getState().active) return
-    setContextMenu({
-      x: event.clientX,
-      y: event.clientY,
-      flowX: node.position.x,
-      flowY: node.position.y,
-      nodeId: node.id,
-    })
-  }, [])
-
   // Close context menu on pane or node click — share mode intercepts
   const onPaneClick = useCallback(() => {
     if (shareStore.store.getState().active) {
       shareStore.cancelShare()
       return
     }
-    setContextMenu(null)
-  }, [])
+    closeMenu()
+  }, [closeMenu])
 
   const onNodeClick = useCallback((_event: React.MouseEvent, node: { id: string }) => {
     if (shareStore.store.getState().active) {
@@ -191,45 +160,16 @@ function WorkflowCanvasInner() {
       shareStore.commitShare(node.id)
       return
     }
-    setContextMenu(null)
-  }, [])
+    closeMenu()
+  }, [closeMenu])
 
   // Protocol hover tracking for group highlighting.
   // Self-hover is instant; group hover triggers after a 300ms delay.
   const { onNodeMouseEnter, onNodeMouseLeave } = useGroupHoverDelay()
 
-  // ESC to cancel share mode
-  useEffect(() => {
-    if (!shareActive) return
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        shareStore.cancelShare()
-      }
-    }
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [shareActive])
-
-  // Alt+F to enter focus mode
+  // Global keyboard shortcuts (ESC → cancel share, Alt+F → focus mode)
   const enterFocusMode = useEnterFocusMode()
-  useEffect(() => {
-    const handleFocusKey = (e: KeyboardEvent) => {
-      if (e.altKey && (e.key === 'f' || e.key === 'F') && !focusModeStore.store.getState().active) {
-        e.preventDefault()
-        enterFocusMode()
-      }
-    }
-    document.addEventListener('keydown', handleFocusKey)
-    return () => {
-      document.removeEventListener('keydown', handleFocusKey)
-    }
-  }, [enterFocusMode])
-
-  const onCanvasMouseDown = useCallback(() => {
-    setContextMenu(null)
-  }, [])
+  useCanvasKeyboard(shareActive, enterFocusMode)
 
   return (
     <Box
@@ -315,9 +255,7 @@ function WorkflowCanvasInner() {
       {shareActive && <ShareModeBanner />}
       <CanvasContextMenu
         position={contextMenu}
-        onClose={() => {
-          setContextMenu(null)
-        }}
+        onClose={closeMenu}
       />
       <FocusModeOverlay />
     </Box>

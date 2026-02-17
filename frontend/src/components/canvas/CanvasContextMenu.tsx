@@ -3,43 +3,13 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import type { SxProps, Theme } from '@mui/material/styles'
 import { workflowStore, canvasStore, shareStore } from '@/stores'
-import type { StepProtocolLink } from '@/stores'
-import { Collections } from '@/utils/collections'
 import { DEFAULT_STEP_TYPE_COLOR, STEP_TYPE_COLORS, SECTION_LABEL_SX, COLOR_DOT_SX } from './constants'
 import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from './DynamicNode/archetypes'
 import type { Archetype as ArchetypeType } from './DynamicNode/archetypes'
 import { buildShareableFields } from './buildShareableFields'
-import type { ShareableField } from '@/stores/shareStore'
-import type { DocumentDef } from '@/types/workflow'
+import { parseDocArtifactId, findParentStepForDef, buildProtocolsByStep, buildDocArtifactShareFields } from './canvasContextMenuUtils'
 
 const VIEWPORT_PADDING = 8
-
-const DOC_ARTIFACT_PREFIX = 'doc-artifact-'
-
-const parseDocArtifactId = (nodeId: string): string | null =>
-  nodeId.startsWith(DOC_ARTIFACT_PREFIX) ? nodeId.slice(DOC_ARTIFACT_PREFIX.length) : null
-
-const findParentStepForDef = (
-  documentDefsByStep: Record<string, ReadonlyArray<DocumentDef>>,
-  defId: string,
-): string | null => {
-  for (const [stepId, defs] of Object.entries(documentDefsByStep)) {
-    for (let i = 0; i < defs.length; i++) {
-      if (defs[i]!.id === defId) return stepId
-    }
-  }
-  return null
-}
-
-/** Build a protocol-type lookup from canvas step-protocol links. */
-const buildProtocolsByStep = (
-  stepProtocols: Readonly<Record<string, StepProtocolLink>>,
-): ReadonlyMap<string, { protocol_type: string }> =>
-  Collections.toLookupMap(
-    Object.entries(stepProtocols),
-    ([sid]) => sid,
-    ([, link]) => ({ protocol_type: link.protocolType }),
-  )
 
 type MenuPosition = {
   x: number
@@ -155,27 +125,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
       if (!targetDef) return
 
       const protocolsByStep = buildProtocolsByStep(canvasStore.store.getState().stepProtocols)
-      const archetype = resolveArchetype(parentStep, protocolsByStep, parentStepId)
-      const config = ARCHETYPE_CONFIGS[archetype]
-      const stepName = parentStep.name ?? 'Unnamed'
-
-      const fields: ShareableField[] = [
-        {
-          key: `doc::${targetDef.id}`,
-          label: targetDef.name,
-          category: 'Documents',
-          kind: 'document',
-          color: config.color,
-          chipKey: 'doc',
-          entity: {
-            kind: 'document',
-            id: `${parentStepId}::doc::${targetDef.id}`,
-            name: targetDef.name,
-            summary: `Document from ${stepName}`,
-            data: { parentStepName: stepName, description: targetDef.description },
-          },
-        },
-      ]
+      const fields = buildDocArtifactShareFields(defId, parentStep, parentStepId, targetDef, protocolsByStep)
 
       shareStore.enterShareMode(position.nodeId, fields)
       onClose()
