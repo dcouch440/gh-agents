@@ -11,6 +11,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::agents::gatekeeper::{self, GatekeeperInput, RosterEntry, SpeakerSelection};
+use crate::db::traits::CreateAgentExecutionInput;
 use crate::db::{AgentRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomTranscriptEntry};
 use crate::llm::{LLMProvider, LLMRequest, Message};
 use crate::server::hub::dag::agent_designer::DesignedAgentPrompt;
@@ -347,17 +348,17 @@ pub async fn execute_room_turn(
 
         // Create agent_execution record
         let ae_row = ae_repo
-            .create_agent_execution(
-                selection.agent_id,
-                None,  // workflow_step_id
-                false, // is_interactive
-                None,  // parent_agent_execution_id
-                &system_prompt,
-                &user_prompt,
-                Some(session.id), // room_session_id
-                Some(i as i32),   // speaker_order
-                None,             // workflow_execution_id
-            )
+            .create_agent_execution(CreateAgentExecutionInput {
+                agent_id: selection.agent_id,
+                workflow_step_id: None,
+                is_interactive: false,
+                parent_agent_execution_id: None,
+                system_prompt_rendered: system_prompt.clone(),
+                input: user_prompt.clone(),
+                room_session_id: Some(session.id),
+                speaker_order: Some(i as i32),
+                workflow_execution_id: None,
+            })
             .await
             .map_err(HubError::Internal)?;
 

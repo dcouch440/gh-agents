@@ -6,7 +6,10 @@ mod tests {
 
     use crate::db::pg_repo::PgRepo;
     use crate::db::test_utils::TestDb;
-    use crate::db::traits::{RoomRepo, SystemConfigRepo, ToolCapabilityRepo, WorkflowRepo};
+    use crate::db::traits::{
+        CreateStepInputPort, RoomRepo, SaveRoomExecutionOutputInput, SystemConfigRepo,
+        ToolCapabilityRepo, WorkflowRepo,
+    };
     use crate::db::{
         AgentExecutionRow, AgentRow, RoomRow, RoomSessionRow, WorkflowRow, WorkflowStepRow,
     };
@@ -475,15 +478,15 @@ mod tests {
 
         // Create input port
         let input = repo
-            .create_step_input(
-                step.id,
-                "data",
-                "object",
-                true,
-                None,
-                Some("Input data".to_string()),
-                None,
-            )
+            .create_step_input(CreateStepInputPort {
+                workflow_step_id: step.id,
+                port_name: "data".to_string(),
+                port_type: "object".to_string(),
+                required: true,
+                default_value: None,
+                description: Some("Input data".to_string()),
+                json_schema: None,
+            })
             .await
             .unwrap();
 
@@ -674,17 +677,17 @@ mod tests {
 
         // Save room execution output
         let output = repo
-            .save_room_execution_output(
-                session.id,
-                execution.id,
-                agent.id,
-                0,
-                1,
-                "analysis",
-                &serde_json::json!({"findings": ["item1", "item2"]}),
-                "Raw output text",
-                None,
-            )
+            .save_room_execution_output(SaveRoomExecutionOutputInput {
+                room_session_id: session.id,
+                agent_execution_id: execution.id,
+                agent_id: agent.id,
+                speaker_order: 0,
+                turn_number: 1,
+                output_name: "analysis".to_string(),
+                structured_output: serde_json::json!({"findings": ["item1", "item2"]}),
+                raw_output: "Raw output text".to_string(),
+                schema_id: None,
+            })
             .await
             .unwrap();
 

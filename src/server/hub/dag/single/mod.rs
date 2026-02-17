@@ -12,6 +12,7 @@ use std::sync::Arc;
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
 
+use crate::db::traits::CreateAgentExecutionInput;
 use crate::db::{AgentRow, WorkflowStepRow};
 use crate::execution::ContainerHandle;
 use crate::server::hub::engine::filters::{
@@ -240,17 +241,17 @@ pub(crate) async fn run_step_via_engine(
 
     // Create agent_execution row
     let ae_row = ae_repo
-        .create_agent_execution(
-            agent.id,
-            Some(step.id),
-            false,
-            None,
-            &system_prompt,
-            prompt,
-            None,
-            None,
-            Some(dag.ctx.stage_execution_id),
-        )
+        .create_agent_execution(CreateAgentExecutionInput {
+            agent_id: agent.id,
+            workflow_step_id: Some(step.id),
+            is_interactive: false,
+            parent_agent_execution_id: None,
+            system_prompt_rendered: system_prompt.clone(),
+            input: prompt.to_string(),
+            room_session_id: None,
+            speaker_order: None,
+            workflow_execution_id: Some(dag.ctx.stage_execution_id),
+        })
         .await
         .map_err(|e| anyhow::anyhow!("failed to create agent execution: {}", e))?;
 

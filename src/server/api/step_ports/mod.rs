@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::AppError;
+use crate::db::traits::CreateStepInputPort;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 
@@ -170,15 +171,15 @@ pub async fn create_step_input(
     verify_step_access(&state, wid, sid, auth.user_id.0).await?;
     let repo = &state.repos().workflows;
     let row = repo
-        .create_step_input(
-            sid,
-            &req.port_name,
-            &req.port_type,
-            req.required,
-            req.default_value,
-            req.description,
-            req.json_schema,
-        )
+        .create_step_input(CreateStepInputPort {
+            workflow_step_id: sid,
+            port_name: req.port_name,
+            port_type: req.port_type,
+            required: req.required,
+            default_value: req.default_value,
+            description: req.description,
+            json_schema: req.json_schema,
+        })
         .await?;
     Ok((
         StatusCode::CREATED,

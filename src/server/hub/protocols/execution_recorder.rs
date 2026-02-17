@@ -8,7 +8,7 @@ use anyhow::anyhow;
 use chrono::Utc;
 use uuid::Uuid;
 
-use crate::db::traits::ProtocolRepo;
+use crate::db::traits::{ProtocolRepo, UpdateProtocolExecutionStatusInput};
 use crate::db::ProtocolExecutionRow;
 use crate::server::hub::error::HubError;
 
@@ -134,16 +134,16 @@ impl<'a> ProtocolExecutionRecorder<'a> {
     pub(crate) async fn update_phase(&self, id: Uuid, completion: PhaseCompletion<'_>) {
         let _ = self
             .protocol_repo
-            .update_protocol_execution_status(
+            .update_protocol_execution_status(UpdateProtocolExecutionStatusInput {
                 id,
-                completion.status.to_string(),
-                completion.output_content.map(String::from),
-                completion.error_message.map(String::from),
-                Some(completion.tokens_in as i32),
-                Some(completion.tokens_out as i32),
-                Some(completion.cost_usd as f64),
-                completion.model.map(String::from),
-            )
+                status: completion.status.to_string(),
+                output_content: completion.output_content.map(String::from),
+                error_message: completion.error_message.map(String::from),
+                tokens_in: Some(completion.tokens_in as i32),
+                tokens_out: Some(completion.tokens_out as i32),
+                cost_usd: Some(completion.cost_usd as f64),
+                model: completion.model.map(String::from),
+            })
             .await;
     }
 }

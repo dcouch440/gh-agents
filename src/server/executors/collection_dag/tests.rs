@@ -1,6 +1,10 @@
 #[cfg(test)]
 mod tests {
     use super::super::*;
+    use crate::db::traits::{
+        CreateDesignerOutputGenericInput, CreateDesignerOutputInput, CreateStepInputPort,
+        CreateWorkflowInput, UpdateWorkflowInput,
+    };
 
     #[test]
     fn test_topological_sort_simple() {
@@ -150,31 +154,13 @@ mod tests {
             }
 
             // Stub other methods (not used in test)
-            async fn create_workflow(
-                &self,
-                _: Uuid,
-                _: String,
-                _: String,
-                _: bool,
-                _: Option<String>,
-                _: Option<String>,
-                _: bool,
-            ) -> Result<WorkflowRow> {
+            async fn create_workflow(&self, _: CreateWorkflowInput) -> Result<WorkflowRow> {
                 unimplemented!()
             }
             async fn list_workflows(&self, _: Uuid) -> Result<Vec<WorkflowRow>> {
                 unimplemented!()
             }
-            async fn update_workflow(
-                &self,
-                _: Uuid,
-                _: Option<String>,
-                _: Option<String>,
-                _: Option<bool>,
-                _: Option<Option<String>>,
-                _: Option<Option<String>>,
-                _: Option<bool>,
-            ) -> Result<WorkflowRow> {
+            async fn update_workflow(&self, _: UpdateWorkflowInput) -> Result<WorkflowRow> {
                 unimplemented!()
             }
             async fn delete_workflow(&self, _: Uuid) -> Result<()> {
@@ -260,13 +246,7 @@ mod tests {
             }
             async fn create_step_input(
                 &self,
-                _: Uuid,
-                _: &str,
-                _: &str,
-                _: bool,
-                _: Option<serde_json::Value>,
-                _: Option<String>,
-                _: Option<serde_json::Value>,
+                _: CreateStepInputPort,
             ) -> Result<crate::db::StepInputRow> {
                 unimplemented!()
             }
@@ -501,14 +481,7 @@ mod tests {
             }
             async fn create_designer_output(
                 &self,
-                _: Uuid,
-                _: Uuid,
-                _: &str,
-                _: &[String],
-                _: &str,
-                _: &str,
-                _: &str,
-                _: i32,
+                _: CreateDesignerOutputInput,
             ) -> Result<crate::db::AgentDesignerOutputRow> {
                 unimplemented!()
             }
@@ -525,16 +498,7 @@ mod tests {
             }
             async fn create_designer_output_generic(
                 &self,
-                _: Uuid,
-                _: &str,
-                _: &str,
-                _: &str,
-                _: &[String],
-                _: &str,
-                _: &str,
-                _: &str,
-                _: i32,
-                _: Option<Uuid>,
+                _: CreateDesignerOutputGenericInput,
             ) -> Result<crate::db::AgentDesignerOutputRow> {
                 unimplemented!()
             }

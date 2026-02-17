@@ -6,7 +6,9 @@
 use anyhow::Context;
 use uuid::Uuid;
 
-use crate::db::traits::{AgentExecutionRepo, ServerRepo, TokenLedgerRepo};
+use crate::db::traits::{
+    AgentExecutionRepo, CreateAgentExecutionInput, ServerRepo, TokenLedgerRepo,
+};
 use crate::server::hub::error::HubError;
 use crate::types::UserId;
 
@@ -66,32 +68,15 @@ impl<'a> ExecutionRecorder<'a> {
     }
 
     /// Create an agent execution record for a DAG step.
-    #[allow(clippy::too_many_arguments)] // Thin pass-through to repo trait
     pub async fn record_agent_execution(
         &self,
-        agent_id: Uuid,
-        workflow_step_id: Option<Uuid>,
-        is_interactive: bool,
-        parent_agent_execution_id: Option<Uuid>,
-        system_prompt: &str,
-        user_prompt: &str,
-        workflow_execution_id: Option<Uuid>,
+        input: CreateAgentExecutionInput,
     ) -> Result<Uuid, HubError> {
         let repo = self
             .agent_execution_repo
             .ok_or_else(|| anyhow::anyhow!("agent_execution_repo not configured"))?;
         let row = repo
-            .create_agent_execution(
-                agent_id,
-                workflow_step_id,
-                is_interactive,
-                parent_agent_execution_id,
-                system_prompt,
-                user_prompt,
-                None,
-                None,
-                workflow_execution_id,
-            )
+            .create_agent_execution(input)
             .await
             .context("failed to create agent execution")?;
         Ok(row.id)

@@ -28,21 +28,25 @@ use crate::types::{Task, User, UserId};
 // Merge Queue Repository
 // ============================================================================
 
+/// Input for inserting or updating a merge queue entry.
+#[derive(Debug, Clone)]
+pub struct InsertQueueEntryInput {
+    pub id: Uuid,
+    pub owner: String,
+    pub repo: String,
+    pub pr_number: u32,
+    pub position: u32,
+    pub now: DateTime<Utc>,
+    pub user_id: Uuid,
+}
+
 /// Database operations for the PR merge queue.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait MergeQueueRepo: Send + Sync {
     /// Insert or update a queue entry (upsert).
-    async fn insert_queue_entry(
-        &self,
-        id: Uuid,
-        owner: String,
-        repo: String,
-        pr_number: u32,
-        position: u32,
-        now: DateTime<Utc>,
-        user_id: Uuid,
-    ) -> Result<(), MergeQueueError>;
+    async fn insert_queue_entry(&self, input: InsertQueueEntryInput)
+        -> Result<(), MergeQueueError>;
 
     /// Get the next queue position for a repo.
     async fn get_next_position(&self, owner: String, repo: String) -> Result<u32, MergeQueueError>;
@@ -322,21 +326,24 @@ pub trait UserRepo: Send + Sync {
 // Document Repository
 // ============================================================================
 
+/// Input for creating a new document.
+#[derive(Debug, Clone)]
+pub struct CreateDocumentInput {
+    pub user_id: Uuid,
+    pub session_id: Option<Uuid>,
+    pub title: String,
+    pub content: String,
+    pub doc_type: String,
+    pub ref_tag: String,
+    pub tags: Vec<String>,
+}
+
 /// Database operations for document management.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait DocumentRepo: Send + Sync {
     /// Create a new document.
-    async fn create_document(
-        &self,
-        user_id: Uuid,
-        session_id: Option<Uuid>,
-        title: String,
-        content: String,
-        doc_type: String,
-        ref_tag: String,
-        tags: Vec<String>,
-    ) -> Result<DocumentRow>;
+    async fn create_document(&self, input: CreateDocumentInput) -> Result<DocumentRow>;
 
     /// Create a blank document linked to a workflow for protocol-generated content.
     ///
@@ -458,33 +465,79 @@ pub trait PromptTemplateRepo: Send + Sync {
 // Workflow Repository
 // ============================================================================
 
+/// Input for creating a workflow.
+#[derive(Debug, Clone)]
+pub struct CreateWorkflowInput {
+    pub user_id: Uuid,
+    pub name: String,
+    pub description: String,
+    pub container_enabled: bool,
+    pub target_repo_url: Option<String>,
+    pub target_branch: Option<String>,
+    pub vpn_enabled: bool,
+}
+
+/// Input for updating a workflow.
+#[derive(Debug, Clone)]
+pub struct UpdateWorkflowInput {
+    pub id: Uuid,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub container_enabled: Option<bool>,
+    pub target_repo_url: Option<Option<String>>,
+    pub target_branch: Option<Option<String>>,
+    pub vpn_enabled: Option<bool>,
+}
+
+/// Input for creating a step input port.
+#[derive(Debug, Clone)]
+pub struct CreateStepInputPort {
+    pub workflow_step_id: Uuid,
+    pub port_name: String,
+    pub port_type: String,
+    pub required: bool,
+    pub default_value: Option<serde_json::Value>,
+    pub description: Option<String>,
+    pub json_schema: Option<serde_json::Value>,
+}
+
+/// Input for creating a designer output record.
+#[derive(Debug, Clone)]
+pub struct CreateDesignerOutputInput {
+    pub designer_run_id: Uuid,
+    pub agent_roster_entry_id: Uuid,
+    pub agent_name: String,
+    pub assigned_tools: Vec<String>,
+    pub generated_system_prompt: String,
+    pub generated_task_prompt: String,
+    pub design_reasoning: String,
+    pub execution_order: i32,
+}
+
+/// Input for creating a generic designer output record.
+#[derive(Debug, Clone)]
+pub struct CreateDesignerOutputGenericInput {
+    pub designer_run_id: Uuid,
+    pub source_entity_id: String,
+    pub source_archetype: String,
+    pub agent_name: String,
+    pub assigned_tools: Vec<String>,
+    pub generated_system_prompt: String,
+    pub generated_task_prompt: String,
+    pub design_reasoning: String,
+    pub execution_order: i32,
+    pub protocol_execution_id: Option<Uuid>,
+}
+
 /// Database operations for workflows, steps, edges, and step documents.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait WorkflowRepo: Send + Sync {
     // --- Workflows ---
-    async fn create_workflow(
-        &self,
-        user_id: Uuid,
-        name: String,
-        description: String,
-        container_enabled: bool,
-        target_repo_url: Option<String>,
-        target_branch: Option<String>,
-        vpn_enabled: bool,
-    ) -> Result<WorkflowRow>;
+    async fn create_workflow(&self, input: CreateWorkflowInput) -> Result<WorkflowRow>;
     async fn get_workflow(&self, id: Uuid) -> Result<Option<WorkflowRow>>;
     async fn list_workflows(&self, user_id: Uuid) -> Result<Vec<WorkflowRow>>;
-    async fn update_workflow(
-        &self,
-        id: Uuid,
-        name: Option<String>,
-        description: Option<String>,
-        container_enabled: Option<bool>,
-        target_repo_url: Option<Option<String>>,
-        target_branch: Option<Option<String>>,
-        vpn_enabled: Option<bool>,
-    ) -> Result<WorkflowRow>;
+    async fn update_workflow(&self, input: UpdateWorkflowInput) -> Result<WorkflowRow>;
     async fn delete_workflow(&self, id: Uuid) -> Result<()>;
 
     // --- Steps ---
@@ -549,16 +602,7 @@ pub trait WorkflowRepo: Send + Sync {
     async fn get_step_outputs(&self, workflow_step_id: Uuid) -> Result<Vec<StepOutputRow>>;
 
     /// Create an input port for a workflow step
-    async fn create_step_input(
-        &self,
-        workflow_step_id: Uuid,
-        port_name: &str,
-        port_type: &str,
-        required: bool,
-        default_value: Option<serde_json::Value>,
-        description: Option<String>,
-        json_schema: Option<serde_json::Value>,
-    ) -> Result<StepInputRow>;
+    async fn create_step_input(&self, input: CreateStepInputPort) -> Result<StepInputRow>;
 
     /// Create an output port for a workflow step
     async fn create_step_output(
@@ -768,29 +812,13 @@ pub trait WorkflowRepo: Send + Sync {
     /// Store a designer-generated prompt pair and tool assignment for one agent (task-force-specific).
     async fn create_designer_output(
         &self,
-        designer_run_id: Uuid,
-        agent_roster_entry_id: Uuid,
-        agent_name: &str,
-        assigned_tools: &[String],
-        generated_system_prompt: &str,
-        generated_task_prompt: &str,
-        design_reasoning: &str,
-        execution_order: i32,
+        input: CreateDesignerOutputInput,
     ) -> Result<AgentDesignerOutputRow>;
 
     /// Store a designer-generated prompt pair for any archetype.
     async fn create_designer_output_generic(
         &self,
-        designer_run_id: Uuid,
-        source_entity_id: &str,
-        source_archetype: &str,
-        agent_name: &str,
-        assigned_tools: &[String],
-        generated_system_prompt: &str,
-        generated_task_prompt: &str,
-        design_reasoning: &str,
-        execution_order: i32,
-        protocol_execution_id: Option<Uuid>,
+        input: CreateDesignerOutputGenericInput,
     ) -> Result<AgentDesignerOutputRow>;
 
     /// List all designer outputs for a run, ordered by execution_order.
@@ -861,6 +889,20 @@ pub trait WorkflowRepo: Send + Sync {
 // Agent Execution Repository
 // ============================================================================
 
+/// Input for creating an agent execution record.
+#[derive(Debug, Clone)]
+pub struct CreateAgentExecutionInput {
+    pub agent_id: Uuid,
+    pub workflow_step_id: Option<Uuid>,
+    pub is_interactive: bool,
+    pub parent_agent_execution_id: Option<Uuid>,
+    pub system_prompt_rendered: String,
+    pub input: String,
+    pub room_session_id: Option<Uuid>,
+    pub speaker_order: Option<i32>,
+    pub workflow_execution_id: Option<Uuid>,
+}
+
 /// Database operations for agent executions and execution messages.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
@@ -868,15 +910,7 @@ pub trait AgentExecutionRepo: Send + Sync {
     // --- Agent Executions ---
     async fn create_agent_execution(
         &self,
-        agent_id: Uuid,
-        workflow_step_id: Option<Uuid>,
-        is_interactive: bool,
-        parent_agent_execution_id: Option<Uuid>,
-        system_prompt_rendered: &str,
-        input: &str,
-        room_session_id: Option<Uuid>,
-        speaker_order: Option<i32>,
-        workflow_execution_id: Option<Uuid>,
+        input: CreateAgentExecutionInput,
     ) -> Result<AgentExecutionRow>;
     async fn get_agent_execution(&self, id: Uuid) -> Result<Option<AgentExecutionRow>>;
     async fn update_agent_execution_status(
@@ -1013,6 +1047,36 @@ pub trait ResultRepo: Send + Sync {
 // Tool Router Repository
 // ============================================================================
 
+/// Input for creating a new router mode.
+#[derive(Debug, Clone)]
+pub struct CreateRouterModeInput {
+    pub router_id: Uuid,
+    pub mode_key: String,
+    pub display_name: String,
+    pub description: String,
+    pub system_prompt: String,
+    pub temperature: f32,
+    pub max_tokens: i32,
+    pub append_to_agent_system_prompt: bool,
+    pub append_to_agent_tools: bool,
+    pub display_order: i32,
+}
+
+/// Input for updating a router mode.
+#[derive(Debug, Clone)]
+pub struct UpdateRouterModeInput {
+    pub id: Uuid,
+    pub mode_key: Option<String>,
+    pub display_name: Option<String>,
+    pub description: Option<String>,
+    pub system_prompt: Option<String>,
+    pub temperature: Option<f32>,
+    pub max_tokens: Option<i32>,
+    pub append_to_agent_system_prompt: Option<bool>,
+    pub append_to_agent_tools: Option<bool>,
+    pub display_order: Option<i32>,
+}
+
 /// Database operations for tool router management.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
@@ -1060,33 +1124,9 @@ pub trait ToolRouterRepo: Send + Sync {
         mode_key: &str,
     ) -> Result<Option<ToolRouterModeRow>>;
     /// Create a new router mode.
-    async fn create_router_mode(
-        &self,
-        router_id: Uuid,
-        mode_key: &str,
-        display_name: &str,
-        description: &str,
-        system_prompt: &str,
-        temperature: f32,
-        max_tokens: i32,
-        append_to_agent_system_prompt: bool,
-        append_to_agent_tools: bool,
-        display_order: i32,
-    ) -> Result<ToolRouterModeRow>;
+    async fn create_router_mode(&self, input: CreateRouterModeInput) -> Result<ToolRouterModeRow>;
     /// Update a router mode (all fields optional for partial updates).
-    async fn update_router_mode(
-        &self,
-        id: Uuid,
-        mode_key: Option<String>,
-        display_name: Option<String>,
-        description: Option<String>,
-        system_prompt: Option<String>,
-        temperature: Option<f32>,
-        max_tokens: Option<i32>,
-        append_to_agent_system_prompt: Option<bool>,
-        append_to_agent_tools: Option<bool>,
-        display_order: Option<i32>,
-    ) -> Result<ToolRouterModeRow>;
+    async fn update_router_mode(&self, input: UpdateRouterModeInput) -> Result<ToolRouterModeRow>;
     /// Delete a router mode.
     async fn delete_router_mode(&self, id: Uuid) -> Result<()>;
     /// Get all tools assigned to a mode.
@@ -1129,6 +1169,19 @@ pub trait ContextStoreRepo: Send + Sync {
 // Router Request Repository
 // ============================================================================
 
+/// Input for updating a router request with routing decision and result.
+#[derive(Debug, Clone)]
+pub struct UpdateRouterRequestInput {
+    pub id: Uuid,
+    pub routed_tool: Option<String>,
+    pub routed_args: Option<serde_json::Value>,
+    pub is_async: bool,
+    pub passdown: Option<String>,
+    pub chain: Option<serde_json::Value>,
+    pub status: String,
+    pub result: Option<String>,
+}
+
 /// Database operations for router request logging.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
@@ -1145,14 +1198,7 @@ pub trait RouterRequestRepo: Send + Sync {
     /// Update a router request with routing decision and result.
     async fn update_router_request(
         &self,
-        id: Uuid,
-        routed_tool: Option<String>,
-        routed_args: Option<serde_json::Value>,
-        is_async: bool,
-        passdown: Option<String>,
-        chain: Option<serde_json::Value>,
-        status: &str,
-        result: Option<String>,
+        input: UpdateRouterRequestInput,
     ) -> Result<RouterRequestRow>;
     /// Get a router request by ID.
     async fn get_router_request(&self, id: Uuid) -> Result<Option<RouterRequestRow>>;
@@ -1173,6 +1219,45 @@ pub struct RoomMemberInput {
     pub display_order: i32,
 }
 
+/// Input for creating a new room.
+#[derive(Debug, Clone)]
+pub struct CreateRoomInput {
+    pub user_id: Uuid,
+    pub collection_id: Option<Uuid>,
+    pub name: String,
+    pub gatekeeper_enabled: bool,
+    pub gatekeeper_model_id: String,
+    pub max_speakers_per_turn: i32,
+    pub max_turns: i32,
+    pub tools_enabled: bool,
+}
+
+/// Input for updating a room's configuration.
+#[derive(Debug, Clone)]
+pub struct UpdateRoomInput {
+    pub id: Uuid,
+    pub name: Option<String>,
+    pub gatekeeper_enabled: Option<bool>,
+    pub gatekeeper_model_id: Option<String>,
+    pub max_speakers_per_turn: Option<i32>,
+    pub max_turns: Option<i32>,
+    pub tools_enabled: Option<bool>,
+}
+
+/// Input for saving a room execution output.
+#[derive(Debug, Clone)]
+pub struct SaveRoomExecutionOutputInput {
+    pub room_session_id: Uuid,
+    pub agent_execution_id: Uuid,
+    pub agent_id: Uuid,
+    pub speaker_order: i32,
+    pub turn_number: i32,
+    pub output_name: String,
+    pub structured_output: serde_json::Value,
+    pub raw_output: String,
+    pub schema_id: Option<Uuid>,
+}
+
 /// Database operations for rooms, room members, and room sessions.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
@@ -1180,32 +1265,13 @@ pub trait RoomRepo: Send + Sync {
     // --- Room CRUD ---
 
     /// Create a new room within a collection.
-    async fn create_room(
-        &self,
-        user_id: Uuid,
-        collection_id: Option<Uuid>,
-        name: &str,
-        gatekeeper_enabled: bool,
-        gatekeeper_model_id: &str,
-        max_speakers_per_turn: i32,
-        max_turns: i32,
-        tools_enabled: bool,
-    ) -> Result<RoomRow>;
+    async fn create_room(&self, input: CreateRoomInput) -> Result<RoomRow>;
 
     /// Get a room by ID.
     async fn get_room(&self, id: Uuid) -> Result<Option<RoomRow>>;
 
     /// Update a room's configuration.
-    async fn update_room(
-        &self,
-        id: Uuid,
-        name: Option<String>,
-        gatekeeper_enabled: Option<bool>,
-        gatekeeper_model_id: Option<String>,
-        max_speakers_per_turn: Option<i32>,
-        max_turns: Option<i32>,
-        tools_enabled: Option<bool>,
-    ) -> Result<RoomRow>;
+    async fn update_room(&self, input: UpdateRoomInput) -> Result<RoomRow>;
 
     /// Delete a room by ID.
     async fn delete_room(&self, id: Uuid) -> Result<()>;
@@ -1258,15 +1324,7 @@ pub trait RoomRepo: Send + Sync {
     /// Save a structured output from a room speaker
     async fn save_room_execution_output(
         &self,
-        room_session_id: Uuid,
-        agent_execution_id: Uuid,
-        agent_id: Uuid,
-        speaker_order: i32,
-        turn_number: i32,
-        output_name: &str,
-        structured_output: &serde_json::Value,
-        raw_output: &str,
-        schema_id: Option<Uuid>,
+        input: SaveRoomExecutionOutputInput,
     ) -> Result<RoomExecutionOutputRow>;
 
     /// Get room execution outputs, optionally filtered by turn number
@@ -1569,6 +1627,43 @@ pub trait SystemConfigRepo: Send + Sync {
 // Protocol Repository
 // ============================================================================
 
+/// Input for creating a new protocol.
+#[derive(Debug, Clone)]
+pub struct CreateProtocolInput {
+    pub name: String,
+    pub description: String,
+    pub protocol_type: String,
+    pub config: serde_json::Value,
+    pub agent_id: Option<Uuid>,
+    pub output_schema_id: Option<Uuid>,
+    pub prompt_template_id: Option<Uuid>,
+}
+
+/// Input for updating a protocol.
+#[derive(Debug, Clone)]
+pub struct UpdateProtocolInput {
+    pub id: Uuid,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub config: Option<serde_json::Value>,
+    pub agent_id: Option<Uuid>,
+    pub output_schema_id: Option<Uuid>,
+    pub prompt_template_id: Option<Uuid>,
+}
+
+/// Input for updating a protocol execution's status.
+#[derive(Debug, Clone)]
+pub struct UpdateProtocolExecutionStatusInput {
+    pub id: Uuid,
+    pub status: String,
+    pub output_content: Option<String>,
+    pub error_message: Option<String>,
+    pub tokens_in: Option<i32>,
+    pub tokens_out: Option<i32>,
+    pub cost_usd: Option<f64>,
+    pub model: Option<String>,
+}
+
 /// Database operations for protocol management (reusable execution recipes).
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
@@ -1576,16 +1671,7 @@ pub trait ProtocolRepo: Send + Sync {
     // --- Protocols ---
 
     /// Create a new protocol.
-    async fn create_protocol(
-        &self,
-        name: String,
-        description: String,
-        protocol_type: String,
-        config: serde_json::Value,
-        agent_id: Option<Uuid>,
-        output_schema_id: Option<Uuid>,
-        prompt_template_id: Option<Uuid>,
-    ) -> Result<ProtocolRow>;
+    async fn create_protocol(&self, input: CreateProtocolInput) -> Result<ProtocolRow>;
 
     /// Get a protocol by ID.
     async fn get_protocol(&self, id: Uuid) -> Result<Option<ProtocolRow>>;
@@ -1601,16 +1687,7 @@ pub trait ProtocolRepo: Send + Sync {
     async fn seed_builtin_protocols(&self) -> Result<()>;
 
     /// Update a protocol.
-    async fn update_protocol(
-        &self,
-        id: Uuid,
-        name: Option<String>,
-        description: Option<String>,
-        config: Option<serde_json::Value>,
-        agent_id: Option<Uuid>,
-        output_schema_id: Option<Uuid>,
-        prompt_template_id: Option<Uuid>,
-    ) -> Result<ProtocolRow>;
+    async fn update_protocol(&self, input: UpdateProtocolInput) -> Result<ProtocolRow>;
 
     /// Delete a protocol by ID.
     async fn delete_protocol(&self, id: Uuid) -> Result<()>;
@@ -1699,14 +1776,7 @@ pub trait ProtocolRepo: Send + Sync {
     /// Update a protocol execution's status and output fields.
     async fn update_protocol_execution_status(
         &self,
-        id: Uuid,
-        status: String,
-        output_content: Option<String>,
-        error_message: Option<String>,
-        tokens_in: Option<i32>,
-        tokens_out: Option<i32>,
-        cost_usd: Option<f64>,
-        model: Option<String>,
+        input: UpdateProtocolExecutionStatusInput,
     ) -> Result<ProtocolExecutionRow>;
 
     /// List all protocol executions for a given step.

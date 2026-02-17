@@ -14,6 +14,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::db::traits::{CreateRouterModeInput, UpdateRouterModeInput};
+
 use super::AppError;
 use crate::constants::MAX_DESCRIPTION_LENGTH;
 use crate::server::api::tools::ToolResponse;
@@ -247,18 +249,18 @@ pub async fn create_router_mode(
 
     // Create mode
     let mode = repo
-        .create_router_mode(
+        .create_router_mode(CreateRouterModeInput {
             router_id,
-            &request.mode_key,
-            &request.display_name,
-            &request.description,
-            &request.system_prompt,
-            request.temperature,
-            request.max_tokens,
-            request.append_to_agent_system_prompt,
-            request.append_to_agent_tools,
-            request.display_order,
-        )
+            mode_key: request.mode_key.clone(),
+            display_name: request.display_name.clone(),
+            description: request.description.clone(),
+            system_prompt: request.system_prompt.clone(),
+            temperature: request.temperature,
+            max_tokens: request.max_tokens,
+            append_to_agent_system_prompt: request.append_to_agent_system_prompt,
+            append_to_agent_tools: request.append_to_agent_tools,
+            display_order: request.display_order,
+        })
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
@@ -397,18 +399,18 @@ pub async fn update_router_mode(
 
     // Update
     let updated = repo
-        .update_router_mode(
+        .update_router_mode(UpdateRouterModeInput {
             id,
-            request.mode_key,
-            request.display_name,
-            request.description,
-            request.system_prompt,
-            request.temperature,
-            request.max_tokens,
-            request.append_to_agent_system_prompt,
-            request.append_to_agent_tools,
-            request.display_order,
-        )
+            mode_key: request.mode_key,
+            display_name: request.display_name,
+            description: request.description,
+            system_prompt: request.system_prompt,
+            temperature: request.temperature,
+            max_tokens: request.max_tokens,
+            append_to_agent_system_prompt: request.append_to_agent_system_prompt,
+            append_to_agent_tools: request.append_to_agent_tools,
+            display_order: request.display_order,
+        })
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 

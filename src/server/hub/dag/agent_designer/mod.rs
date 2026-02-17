@@ -20,6 +20,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::config::protocols::{roles, vars, AGENT_DESIGNER};
+use crate::db::traits::CreateDesignerOutputGenericInput;
 use crate::db::WorkflowStepRow;
 use crate::server::hub::engine::filters::{FilterContext, ReasoningTraceFilter};
 use crate::server::hub::engine::ExecutionEngine;
@@ -315,18 +316,18 @@ pub(crate) async fn run_agent_designer(
         let _ = state
             .repos()
             .workflows
-            .create_designer_output_generic(
-                run_row.id,
-                &entry.agent_id,
-                &input.archetype,
-                &entry.agent_name,
-                &valid_tools,
-                &entry.system_prompt,
-                &entry.task_prompt,
-                &entry.reasoning,
-                idx as i32,
+            .create_designer_output_generic(CreateDesignerOutputGenericInput {
+                designer_run_id: run_row.id,
+                source_entity_id: entry.agent_id.clone(),
+                source_archetype: input.archetype.clone(),
+                agent_name: entry.agent_name.clone(),
+                assigned_tools: valid_tools.clone(),
+                generated_system_prompt: entry.system_prompt.clone(),
+                generated_task_prompt: entry.task_prompt.clone(),
+                design_reasoning: entry.reasoning.clone(),
+                execution_order: idx as i32,
                 protocol_execution_id,
-            )
+            })
             .await;
 
         // Validate receives_from against actual agent names
