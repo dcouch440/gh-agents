@@ -26,7 +26,7 @@ use crate::server::hub::strategies::compute_cost;
 use crate::server::hub::strategies::workforce_agent::{
     WorkforceAgentConfig, WorkforceAgentStrategy,
 };
-use crate::server::hub::streaming::NullSink;
+use crate::server::hub::streaming::DagStreamSink;
 use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
 use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope, UserId};
@@ -340,6 +340,7 @@ pub(super) async fn execute_workforce_step(
             WorkflowEventKind::WorkforceAgentProgress {
                 step_id: step.id,
                 agent_name: designed.agent_name.clone(),
+                roster_agent_id: designed.agent_roster_entry_id,
                 agent_index: idx,
                 total_agents,
                 status: "started".to_string(),
@@ -404,11 +405,19 @@ pub(super) async fn execute_workforce_step(
             user_id: Some(UserId(ctx.user_id)),
         });
 
-        // Execute
+        // Execute with live streaming sink
         let inner_recorder = ExecutionRecorder::new(&**state.repo(), None, None);
+        let sink = DagStreamSink::new(
+            state.clone(),
+            ctx.clone(),
+            step.workflow_id,
+            step.id,
+            designed.agent_roster_entry_id,
+            designed.agent_name.clone(),
+        );
         let result = engine
             .clone_with_provider()
-            .execute(&strategy, &task_prompt, &NullSink, &inner_recorder, cancel)
+            .execute(&strategy, &task_prompt, &sink, &inner_recorder, cancel)
             .await;
 
         match result {
@@ -452,6 +461,7 @@ pub(super) async fn execute_workforce_step(
                     WorkflowEventKind::WorkforceAgentProgress {
                         step_id: step.id,
                         agent_name: designed.agent_name.clone(),
+                        roster_agent_id: designed.agent_roster_entry_id,
                         agent_index: idx,
                         total_agents,
                         status: "completed".to_string(),
@@ -480,6 +490,7 @@ pub(super) async fn execute_workforce_step(
                     WorkflowEventKind::WorkforceAgentProgress {
                         step_id: step.id,
                         agent_name: designed.agent_name.clone(),
+                        roster_agent_id: designed.agent_roster_entry_id,
                         agent_index: idx,
                         total_agents,
                         status: "failed".to_string(),

@@ -218,6 +218,7 @@ pub enum WorkflowEventKind {
     WorkforceAgentProgress {
         step_id: Uuid,
         agent_name: String,
+        roster_agent_id: Uuid,
         agent_index: usize,
         total_agents: usize,
         status: String,
@@ -327,6 +328,36 @@ pub enum WorkflowEventKind {
         #[serde(skip_serializing_if = "Option::is_none")]
         error: Option<String>,
     },
+    /// Live text token from a step-scoped execution source (agent, speaker, child step).
+    StepStreamToken {
+        step_id: Uuid,
+        source_id: Uuid,
+        source_name: String,
+        content: String,
+    },
+    /// A step-scoped execution source started a tool call.
+    StepStreamToolStart {
+        step_id: Uuid,
+        source_id: Uuid,
+        source_name: String,
+        tool_name: String,
+        tool_id: String,
+    },
+    /// A step-scoped execution source's tool call completed.
+    StepStreamToolEnd {
+        step_id: Uuid,
+        source_id: Uuid,
+        source_name: String,
+        tool_name: String,
+        tool_id: String,
+    },
+    /// A step-scoped execution source encountered an error.
+    StepStreamError {
+        step_id: Uuid,
+        source_id: Uuid,
+        source_name: String,
+        error: String,
+    },
 }
 
 impl WorkflowEvent {
@@ -358,6 +389,10 @@ impl WorkflowEvent {
             WorkflowEventKind::SubWorkflowStarted { .. } => "sub_workflow_started",
             WorkflowEventKind::SubWorkflowCompleted { .. } => "sub_workflow_completed",
             WorkflowEventKind::SubWorkflowStepProgress { .. } => "sub_workflow_step_progress",
+            WorkflowEventKind::StepStreamToken { .. } => "step_stream_token",
+            WorkflowEventKind::StepStreamToolStart { .. } => "step_stream_tool_start",
+            WorkflowEventKind::StepStreamToolEnd { .. } => "step_stream_tool_end",
+            WorkflowEventKind::StepStreamError { .. } => "step_stream_error",
         }
     }
 

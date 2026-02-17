@@ -55,13 +55,20 @@ const toDocumentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[
   for (const step of steps) {
     if (!isWorkforceStep(step, lookups.protocolsByStep)) continue
 
+    const roster = lookups.rosterByStep[step.id] ?? []
+    const agentHasNode = Collections.toSet(
+      Collections.filterMap(roster, (a) => a.child_step_id ? a.id : null),
+    )
+
     const defs = lookups.documentDefsByStep[step.id] ?? []
     for (const def of defs) {
+      // Wire from assigned agent when it has a canvas node, else from protocol
+      const fromAgent = def.agent_roster_entry_id && agentHasNode.has(def.agent_roster_entry_id)
       edges.push({
         id: `doc-edge-${def.id}`,
         type: 'documentEdge',
-        source: step.id,
-        sourceHandle: 'documents',
+        source: fromAgent ? `agent-artifact-${def.agent_roster_entry_id}` : step.id,
+        sourceHandle: fromAgent ? 'agent-documents' : 'documents',
         target: `doc-artifact-${def.id}`,
         targetHandle: 'document-input',
         selectable: false,
@@ -99,27 +106,29 @@ const toAgentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] =
     if (!isWorkforceStep(step, lookups.protocolsByStep)) continue
 
     const roster = lookups.rosterByStep[step.id] ?? []
-    for (const agent of roster) {
-      if (!agent.child_step_id) continue
+    const active = roster.filter((a) => a.child_step_id !== null)
 
-      // Protocol-to-agent edge
-      edges.push({
-        id: `agent-edge-${agent.id}`,
-        type: 'agentEdge',
-        source: step.id,
-        sourceHandle: 'agents',
-        target: `agent-artifact-${agent.id}`,
-        targetHandle: 'agent-input',
-        selectable: false,
-        deletable: false,
-      })
-
-      // Agent-to-agent dependency edges
-      for (const depId of agent.depends_on) {
+    for (let i = 0; i < active.length; i++) {
+      const agent = active[i]!
+      if (i === 0) {
+        // First agent chains from the protocol node
         edges.push({
-          id: `agent-dep-${depId}-${agent.id}`,
+          id: `agent-edge-${agent.id}`,
           type: 'agentEdge',
-          source: `agent-artifact-${depId}`,
+          source: step.id,
+          sourceHandle: 'agents',
+          target: `agent-artifact-${agent.id}`,
+          targetHandle: 'agent-input',
+          selectable: false,
+          deletable: false,
+        })
+      } else {
+        // Subsequent agents chain from the previous agent
+        const prev = active[i - 1]!
+        edges.push({
+          id: `agent-edge-${agent.id}`,
+          type: 'agentEdge',
+          source: `agent-artifact-${prev.id}`,
           sourceHandle: 'agent-output',
           target: `agent-artifact-${agent.id}`,
           targetHandle: 'agent-input',

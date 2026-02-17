@@ -95,7 +95,7 @@ function WorkflowCanvasInner() {
   // Edge validation — context nodes are source-only, no self-loops
   const isValidConnection = useCallback(
     (connection: Connection) => {
-      if (connection.sourceHandle === 'documents' || connection.sourceHandle === 'agents' || connection.sourceHandle === 'notes') return false
+      if (connection.sourceHandle === 'documents' || connection.sourceHandle === 'agents' || connection.sourceHandle === 'agent-documents' || connection.sourceHandle === 'notes') return false
       const targetStep = connection.target ? stepsById.get(connection.target) : undefined
       if (!targetStep) return false
       if (targetStep.execution_mode === 'context' || targetStep.execution_mode === 'input') return false

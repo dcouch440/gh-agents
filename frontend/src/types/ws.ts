@@ -88,6 +88,14 @@ export const WORKFLOW_EVENT = {
   SUB_WORKFLOW_STARTED: 'sub_workflow_started',
   SUB_WORKFLOW_COMPLETED: 'sub_workflow_completed',
   SUB_WORKFLOW_STEP_PROGRESS: 'sub_workflow_step_progress',
+  // Workforce high-level progress (backend already emits these)
+  WORKFORCE_DESIGNER_PROGRESS: 'workforce_designer_progress',
+  WORKFORCE_AGENT_PROGRESS: 'workforce_agent_progress',
+  // Generic step streaming (token-level events from any execution source)
+  STEP_STREAM_TOKEN: 'step_stream_token',
+  STEP_STREAM_TOOL_START: 'step_stream_tool_start',
+  STEP_STREAM_TOOL_END: 'step_stream_tool_end',
+  STEP_STREAM_ERROR: 'step_stream_error',
 } as const
 
 export type WorkflowStartedData = { workflow_id: string; total_steps: number }
@@ -138,6 +146,20 @@ export type SubWorkflowStepProgressData = {
   child_step_id: string; child_step_name: string; status: string
   input_tokens: number | null; output_tokens: number | null; duration_ms: number | null; error: string | null
 }
+
+// Workforce high-level progress
+export type WorkforceDesignerProgressData = { workflow_id: string; step_id: string; status: string }
+export type WorkforceAgentProgressData = {
+  workflow_id: string; step_id: string
+  agent_name: string; roster_agent_id: string
+  agent_index: number; total_agents: number; status: string
+}
+
+// Generic step streaming
+export type StepStreamTokenData = { workflow_id: string; step_id: string; source_id: string; source_name: string; content: string }
+export type StepStreamToolStartData = { workflow_id: string; step_id: string; source_id: string; source_name: string; tool_name: string; tool_id: string }
+export type StepStreamToolEndData = { workflow_id: string; step_id: string; source_id: string; source_name: string; tool_name: string; tool_id: string }
+export type StepStreamErrorData = { workflow_id: string; step_id: string; source_id: string; source_name: string; error: string }
 
 // ============================================================================
 // Room Events

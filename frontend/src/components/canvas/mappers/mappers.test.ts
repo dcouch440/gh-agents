@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toRFNodes, toRFEdges, toNotesEdges, toAgentEdges, nodeDataEqual, computeProtocolGroups } from '.'
+import { toRFNodes, toRFEdges, toDocumentEdges, toNotesEdges, toAgentEdges, nodeDataEqual, computeProtocolGroups } from '.'
 import type { StepNodeLookups, ProtocolStepInfo } from '.'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 
@@ -562,7 +562,7 @@ describe('toRFNodes — document nodes', () => {
       ...emptyLookups,
       documentDefsByStep: {
         'doc-step': [
-          { id: 'def-1', step_id: 'doc-step', name: 'README', description: '', target_length: 5000, display_order: 0, created_at: '2025-01-01', document_id: 'doc-aaa' },
+          { id: 'def-1', step_id: 'doc-step', name: 'README', description: '', target_length: 5000, display_order: 0, created_at: '2025-01-01', document_id: 'doc-aaa', agent_roster_entry_id: null },
         ],
       },
       documentContentByDefId: { 'def-1': '# Generated README' },
@@ -580,7 +580,7 @@ describe('toRFNodes — document nodes', () => {
       ...emptyLookups,
       documentDefsByStep: {
         'doc-step': [
-          { id: 'def-2', step_id: 'doc-step', name: 'CHANGELOG', description: '', target_length: 2000, display_order: 0, created_at: '2025-01-01', document_id: null },
+          { id: 'def-2', step_id: 'doc-step', name: 'CHANGELOG', description: '', target_length: 2000, display_order: 0, created_at: '2025-01-01', document_id: null, agent_roster_entry_id: null },
         ],
       },
       protocolsByStep: new Map([['doc-step', { protocol_type: 'workforce', name: 'Doc', portNames: [] }]]),
@@ -746,23 +746,33 @@ describe('toAgentEdges', () => {
     })
   })
 
-  it('generates agent-to-agent dependency edges from depends_on', () => {
+  it('chains agents sequentially instead of fan-out', () => {
     const lookups: StepNodeLookups = {
       ...emptyLookups,
       rosterByStep: {
         'wf-step': [
           { id: 'agent-1', name: 'Researcher', child_step_id: 'cs-1', role_description: '', depends_on: [] },
-          { id: 'agent-2', name: 'Writer', child_step_id: 'cs-2', role_description: '', depends_on: ['agent-1'] },
+          { id: 'agent-2', name: 'Writer', child_step_id: 'cs-2', role_description: '', depends_on: [] },
         ],
       },
       protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
     }
     const edges = toAgentEdges([workforceStep], lookups)
-    // 2 protocol-to-agent + 1 dependency
-    expect(edges).toHaveLength(3)
-    const depEdge = edges.find((e) => e.id === 'agent-dep-agent-1-agent-2')
-    expect(depEdge).toEqual({
-      id: 'agent-dep-agent-1-agent-2',
+    expect(edges).toHaveLength(2)
+    // First agent chains from protocol
+    expect(edges[0]).toEqual({
+      id: 'agent-edge-agent-1',
+      type: 'agentEdge',
+      source: 'wf-step',
+      sourceHandle: 'agents',
+      target: 'agent-artifact-agent-1',
+      targetHandle: 'agent-input',
+      selectable: false,
+      deletable: false,
+    })
+    // Second agent chains from first agent
+    expect(edges[1]).toEqual({
+      id: 'agent-edge-agent-2',
       type: 'agentEdge',
       source: 'agent-artifact-agent-1',
       sourceHandle: 'agent-output',
@@ -798,5 +808,172 @@ describe('toAgentEdges', () => {
     }
     const edges = toAgentEdges([step1], lookups)
     expect(edges).toEqual([])
+  })
+})
+
+describe('toRFNodes — agent vertical stacking', () => {
+  const workforceStep: WorkflowStep = {
+    ...step1,
+    id: 'wf-step',
+    execution_mode: 'workforce',
+    position_x: 200,
+    position_y: 300,
+  }
+
+  it('stacks agents vertically above the protocol node', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      rosterByStep: {
+        'wf-step': [
+          { id: 'agent-1', name: 'First', child_step_id: 'cs-1', role_description: '', depends_on: [] },
+          { id: 'agent-2', name: 'Second', child_step_id: 'cs-2', role_description: '', depends_on: [] },
+        ],
+      },
+      protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
+    }
+    const nodes = toRFNodes([workforceStep], lookups)
+    const agent1 = nodes.find((n) => n.id === 'agent-artifact-agent-1')
+    const agent2 = nodes.find((n) => n.id === 'agent-artifact-agent-2')
+
+    // Same x as protocol (vertical column)
+    expect(agent1?.position.x).toBe(200)
+    expect(agent2?.position.x).toBe(200)
+
+    // Stacked above protocol, agent2 higher than agent1
+    expect(agent1?.position.y).toBeLessThan(300)
+    expect(agent2?.position.y).toBeLessThan(agent1!.position.y)
+  })
+})
+
+describe('toRFNodes — document positioned by assigned agent', () => {
+  const workforceStep: WorkflowStep = {
+    ...step1,
+    id: 'wf-step',
+    execution_mode: 'workforce',
+    position_x: 200,
+    position_y: 300,
+  }
+
+  it('places document to the right of its assigned agent', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      rosterByStep: {
+        'wf-step': [
+          { id: 'agent-1', name: 'Writer', child_step_id: 'cs-1', role_description: '', depends_on: [] },
+        ],
+      },
+      documentDefsByStep: {
+        'wf-step': [
+          { id: 'def-1', step_id: 'wf-step', name: 'Report', description: '', target_length: 2000, display_order: 0, created_at: '2025-01-01', document_id: null, agent_roster_entry_id: 'agent-1' },
+        ],
+      },
+      protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
+    }
+    const nodes = toRFNodes([workforceStep], lookups)
+    const agentNode = nodes.find((n) => n.id === 'agent-artifact-agent-1')
+    const docNode = nodes.find((n) => n.id === 'doc-artifact-def-1')
+
+    expect(agentNode).toBeDefined()
+    expect(docNode).toBeDefined()
+    // Document x should be to the right of agent x
+    expect(docNode!.position.x).toBeGreaterThan(agentNode!.position.x)
+    // Document y should match agent y
+    expect(docNode!.position.y).toBe(agentNode!.position.y)
+  })
+
+  it('falls back to protocol-relative position when no agent assigned', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      documentDefsByStep: {
+        'wf-step': [
+          { id: 'def-1', step_id: 'wf-step', name: 'Orphan', description: '', target_length: 2000, display_order: 0, created_at: '2025-01-01', document_id: null, agent_roster_entry_id: null },
+        ],
+      },
+      protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
+    }
+    const nodes = toRFNodes([workforceStep], lookups)
+    const docNode = nodes.find((n) => n.id === 'doc-artifact-def-1')
+    expect(docNode).toBeDefined()
+    // Fallback: positioned above protocol (y < protocol y)
+    expect(docNode!.position.y).toBeLessThan(300)
+  })
+})
+
+describe('toDocumentEdges — agent-sourced', () => {
+  const workforceStep: WorkflowStep = {
+    ...step1,
+    id: 'wf-step',
+    execution_mode: 'workforce',
+  }
+
+  it('sources edge from agent node when document is assigned to an agent', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      rosterByStep: {
+        'wf-step': [
+          { id: 'agent-1', name: 'Writer', child_step_id: 'cs-1', role_description: '', depends_on: [] },
+        ],
+      },
+      documentDefsByStep: {
+        'wf-step': [
+          { id: 'def-1', step_id: 'wf-step', name: 'Report', description: '', target_length: 2000, display_order: 0, created_at: '2025-01-01', document_id: null, agent_roster_entry_id: 'agent-1' },
+        ],
+      },
+      protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
+    }
+    const edges = toDocumentEdges([workforceStep], lookups)
+    expect(edges).toHaveLength(1)
+    expect(edges[0]).toEqual({
+      id: 'doc-edge-def-1',
+      type: 'documentEdge',
+      source: 'agent-artifact-agent-1',
+      sourceHandle: 'agent-documents',
+      target: 'doc-artifact-def-1',
+      targetHandle: 'document-input',
+      selectable: false,
+      deletable: false,
+    })
+  })
+
+  it('falls back to protocol source when no agent assigned', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      rosterByStep: {
+        'wf-step': [
+          { id: 'agent-1', name: 'Writer', child_step_id: 'cs-1', role_description: '', depends_on: [] },
+        ],
+      },
+      documentDefsByStep: {
+        'wf-step': [
+          { id: 'def-1', step_id: 'wf-step', name: 'Orphan', description: '', target_length: 2000, display_order: 0, created_at: '2025-01-01', document_id: null, agent_roster_entry_id: null },
+        ],
+      },
+      protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
+    }
+    const edges = toDocumentEdges([workforceStep], lookups)
+    expect(edges).toHaveLength(1)
+    expect(edges[0]?.source).toBe('wf-step')
+    expect(edges[0]?.sourceHandle).toBe('documents')
+  })
+
+  it('falls back to protocol when assigned agent has no child_step_id', () => {
+    const lookups: StepNodeLookups = {
+      ...emptyLookups,
+      rosterByStep: {
+        'wf-step': [
+          { id: 'agent-1', name: 'Old', child_step_id: null, role_description: '', depends_on: [] },
+        ],
+      },
+      documentDefsByStep: {
+        'wf-step': [
+          { id: 'def-1', step_id: 'wf-step', name: 'Report', description: '', target_length: 2000, display_order: 0, created_at: '2025-01-01', document_id: null, agent_roster_entry_id: 'agent-1' },
+        ],
+      },
+      protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
+    }
+    const edges = toDocumentEdges([workforceStep], lookups)
+    expect(edges).toHaveLength(1)
+    expect(edges[0]?.source).toBe('wf-step')
+    expect(edges[0]?.sourceHandle).toBe('documents')
   })
 })

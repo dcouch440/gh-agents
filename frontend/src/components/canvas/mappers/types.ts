@@ -35,6 +35,7 @@ type DocumentDefInfo = {
   id: string
   name: string
   document_id: string | null
+  agent_roster_entry_id: string | null
 }
 
 type RosterAgentInfo = {

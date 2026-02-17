@@ -24,8 +24,7 @@ Its clear that the application has taken a new direction. The addition of having
 The scope of the assistant is only the workshop they live in.
 This DOES mean, that we may want to convert Documenter to a dynamically created (Designer to agent) node. This is because we want to give the assistant freedom over the execution flow. With the introduction of input routing from the designer, the task can be handles in a multi faceted system that has a mission statement (User Notes), a way to do it (Assistant), a knowledgeable delegator (Designer), and competent workers (Agents). With this, we want to ensure that each protocol consistently follows this demanding concept.
 
-Final Output
- |
+
  Agent
  |
  Agent

@@ -3,10 +3,14 @@
 //! - `SseSink` wraps AppState's BufferedStream for chat SSE clients.
 //! - `NullSink` discards all output for background/non-interactive runs.
 
+pub mod dag;
+
 use async_trait::async_trait;
 use uuid::Uuid;
 
 use crate::server::state::{AppState, StreamChunk};
+
+pub use dag::DagStreamSink;
 
 /// Trait for receiving streaming LLM output.
 ///

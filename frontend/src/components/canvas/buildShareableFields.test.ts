@@ -28,6 +28,8 @@ const makeDoc = (id: string, name: string, description: string): DocumentDef => 
   target_length: 500,
   display_order: 0,
   created_at: '2025-01-01',
+  document_id: null,
+  agent_roster_entry_id: null,
 })
 
 const makeAgent = (id: string, name: string, role: string): RosterAgent => ({
@@ -37,6 +39,8 @@ const makeAgent = (id: string, name: string, role: string): RosterAgent => ({
   capabilities: ['coding', 'testing'],
   execution_order: 0,
   created_at: '2025-01-01',
+  child_step_id: null,
+  depends_on: [],
 })
 
 const makeMember = (id: string, name: string, role: string, perspective: string): RoomStepMember => ({
