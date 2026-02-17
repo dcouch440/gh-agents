@@ -12,6 +12,17 @@ use crate::db::traits::ProtocolRepo;
 use crate::db::ProtocolExecutionRow;
 use crate::server::hub::error::HubError;
 
+/// Completion data for a protocol execution phase.
+pub(crate) struct PhaseCompletion<'a> {
+    pub status: &'a str,
+    pub output_content: Option<&'a str>,
+    pub error_message: Option<&'a str>,
+    pub tokens_in: i64,
+    pub tokens_out: i64,
+    pub cost_usd: f32,
+    pub model: Option<&'a str>,
+}
+
 /// Records protocol execution phases to the database.
 ///
 /// Each protocol executor creates a recorder scoped to a specific step and run,
@@ -120,28 +131,18 @@ impl<'a> ProtocolExecutionRecorder<'a> {
     }
 
     /// Update an execution row with completion data.
-    pub async fn update_phase(
-        &self,
-        id: Uuid,
-        status: &str,
-        output_content: Option<&str>,
-        error_message: Option<&str>,
-        tokens_in: i64,
-        tokens_out: i64,
-        cost_usd: f32,
-        model: Option<&str>,
-    ) {
+    pub(crate) async fn update_phase(&self, id: Uuid, completion: PhaseCompletion<'_>) {
         let _ = self
             .protocol_repo
             .update_protocol_execution_status(
                 id,
-                status.to_string(),
-                output_content.map(String::from),
-                error_message.map(String::from),
-                Some(tokens_in as i32),
-                Some(tokens_out as i32),
-                Some(cost_usd as f64),
-                model.map(String::from),
+                completion.status.to_string(),
+                completion.output_content.map(String::from),
+                completion.error_message.map(String::from),
+                Some(completion.tokens_in as i32),
+                Some(completion.tokens_out as i32),
+                Some(completion.cost_usd as f64),
+                completion.model.map(String::from),
             )
             .await;
     }

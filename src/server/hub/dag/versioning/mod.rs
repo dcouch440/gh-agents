@@ -13,8 +13,6 @@ mod tests;
 
 /// Content type constants for the `content_versions` table.
 pub(crate) mod content_types {
-    pub const DOCUMENT: &str = "document";
-    pub const ASSISTANT_NOTES: &str = "assistant_notes";
     pub const PROMPT: &str = "prompt";
     pub const SYSTEM_PROMPT: &str = "system_prompt";
     pub const ENVELOPE: &str = "envelope";

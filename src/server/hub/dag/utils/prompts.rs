@@ -4,23 +4,28 @@ use std::collections::HashMap;
 
 use serde_json::Value as JsonValue;
 
-use crate::db::traits::{DocumentRepo, WorkflowRepo};
+use crate::db::traits::{DocumentRepo, PromptTemplateRepo, ServerRepo, WorkflowRepo};
 use crate::db::WorkflowStepRow;
 use crate::types::DownstreamRoutingContext;
 
 use super::variables::{resolve_for_each_prompt, resolve_variables};
+
+/// Repository references needed for prompt composition.
+pub(crate) struct PromptRepos<'a> {
+    pub prompt_template_repo: Option<&'a dyn PromptTemplateRepo>,
+    pub doc_repo: Option<&'a dyn DocumentRepo>,
+    pub workflow_repo: Option<&'a dyn WorkflowRepo>,
+    pub server_repo: &'a dyn ServerRepo,
+}
 
 /// Build the full prompt for a step execution.
 ///
 /// Resolves the prompt template, appends attached document content.
 /// If `port_inputs` is provided, port values are injected as structured context
 /// and made available for `{port_name}` variable resolution.
-pub async fn compose_prompt(
+pub(crate) async fn compose_prompt(
     step: &WorkflowStepRow,
-    prompt_template_repo: Option<&dyn crate::db::traits::PromptTemplateRepo>,
-    doc_repo: Option<&dyn DocumentRepo>,
-    workflow_repo: Option<&dyn WorkflowRepo>,
-    server_repo: &dyn crate::db::traits::ServerRepo,
+    repos: &PromptRepos<'_>,
     outputs: &HashMap<String, JsonValue>,
     prior_outputs: &HashMap<String, JsonValue>,
     for_each_element: Option<&JsonValue>,
@@ -28,7 +33,7 @@ pub async fn compose_prompt(
 ) -> String {
     // Get prompt text: prefer saved template, fall back to inline
     let raw_prompt = if let Some(pt_id) = step.prompt_template_id {
-        if let Some(repo) = prompt_template_repo {
+        if let Some(repo) = repos.prompt_template_repo {
             repo.get_prompt_template(pt_id)
                 .await
                 .ok()
@@ -126,9 +131,9 @@ pub async fn compose_prompt(
     }
 
     // Append agent context documents (global to agent)
-    if let Some(_d_repo) = doc_repo {
+    if let Some(_d_repo) = repos.doc_repo {
         if let Some(agent_id) = step.agent_id {
-            if let Ok(agent_docs) = server_repo.get_agent_context(agent_id).await {
+            if let Ok(agent_docs) = repos.server_repo.get_agent_context(agent_id).await {
                 if !agent_docs.is_empty() && !context_opened {
                     full_prompt.push_str("\n\n<context>");
                     context_opened = true;
@@ -145,9 +150,9 @@ pub async fn compose_prompt(
     }
 
     // Append step documents (specific to this workflow step)
-    if let Some(wf_repo) = workflow_repo {
+    if let Some(wf_repo) = repos.workflow_repo {
         if let Ok(step_docs) = wf_repo.list_step_documents(step.id).await {
-            if let Some(d_repo) = doc_repo {
+            if let Some(d_repo) = repos.doc_repo {
                 let mut step_doc_contents = Vec::new();
                 for sd in &step_docs {
                     if let Ok(Some(doc)) = d_repo.get_document(sd.document_id).await {

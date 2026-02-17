@@ -44,18 +44,23 @@ pub use strategies::{
 pub use strategy::ExecutionStrategy;
 pub use streaming::{DagStreamSink, NullSink, StreamSink};
 
+/// Common chat request parameters shared between `run_chat` and `run_step_chat`.
+pub struct ChatRequest<'a> {
+    pub provider: Arc<dyn LLMProvider + Send + Sync>,
+    pub message_id: Uuid,
+    pub content: &'a str,
+    pub user_id: UserId,
+}
+
 /// Run a chat turn for the given agent. Loads config from DB, builds strategy, executes.
 ///
 /// This is the primary entry point for all agent chat interactions. Both the
 /// orchestrator and API handlers call through here.
 pub async fn run_chat(
     state: &AppState,
-    provider: Arc<dyn LLMProvider + Send + Sync>,
+    req: ChatRequest<'_>,
     agent_id: Uuid,
     session_id: Option<Uuid>,
-    message_id: Uuid,
-    content: &str,
-    user_id: UserId,
     cancel: Option<&CancellationToken>,
 ) -> Result<ExecutionResult, HubError> {
     // Load agent from DB
@@ -99,12 +104,18 @@ pub async fn run_chat(
     };
 
     // Create strategy, engine, sink, recorder
-    let strategy = ChatStrategy::new(chat_config, state.clone(), user_id, session_id, message_id);
-    let mut engine = ExecutionEngine::new(provider);
+    let strategy = ChatStrategy::new(
+        chat_config,
+        state.clone(),
+        req.user_id,
+        session_id,
+        req.message_id,
+    );
+    let mut engine = ExecutionEngine::new(req.provider);
     if let Some((filter_ctx, filters)) = schema_filters {
         engine = engine.with_filter_context(filter_ctx).with_filters(filters);
     }
-    let sink = streaming::SseSink::new(state.clone(), message_id);
+    let sink = streaming::SseSink::new(state.clone(), req.message_id);
     let ae_repo = state.agent_execution_repo();
     let tl_repo = state.token_ledger_repo();
     let recorder = ExecutionRecorder::new(
@@ -114,7 +125,7 @@ pub async fn run_chat(
     );
 
     engine
-        .execute(&strategy, content, &sink, &recorder, cancel)
+        .execute(&strategy, req.content, &sink, &recorder, cancel)
         .await
 }
 
@@ -124,13 +135,10 @@ pub async fn run_chat(
 /// Called by the chat consumer when a session has step_id in its draft_config.
 pub async fn run_step_chat(
     state: &AppState,
-    provider: Arc<dyn LLMProvider + Send + Sync>,
+    req: ChatRequest<'_>,
     session_id: Uuid,
     workflow_id: Uuid,
     step_id: Uuid,
-    message_id: Uuid,
-    content: &str,
-    user_id: UserId,
     cancel: Option<&CancellationToken>,
 ) -> Result<ExecutionResult, HubError> {
     // Load step to determine execution_mode
@@ -166,15 +174,15 @@ pub async fn run_step_chat(
     let strategy = ChatStrategy::with_step_context(
         chat_config,
         state.clone(),
-        user_id,
+        req.user_id,
         Some(session_id),
-        message_id,
+        req.message_id,
         step_context,
     );
 
     // Execute
-    let engine = ExecutionEngine::new(provider);
-    let sink = streaming::SseSink::new(state.clone(), message_id);
+    let engine = ExecutionEngine::new(req.provider);
+    let sink = streaming::SseSink::new(state.clone(), req.message_id);
     let ae_repo = state.agent_execution_repo();
     let tl_repo = state.token_ledger_repo();
     let recorder = ExecutionRecorder::new(
@@ -184,7 +192,7 @@ pub async fn run_step_chat(
     );
 
     engine
-        .execute(&strategy, content, &sink, &recorder, cancel)
+        .execute(&strategy, req.content, &sink, &recorder, cancel)
         .await
 }
 

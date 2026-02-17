@@ -66,6 +66,7 @@ impl<'a> ExecutionRecorder<'a> {
     }
 
     /// Create an agent execution record for a DAG step.
+    #[allow(clippy::too_many_arguments)] // Thin pass-through to repo trait
     pub async fn record_agent_execution(
         &self,
         agent_id: Uuid,

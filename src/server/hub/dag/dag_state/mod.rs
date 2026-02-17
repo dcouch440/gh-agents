@@ -10,9 +10,12 @@ use serde_json::Value as JsonValue;
 use tracing::{debug, warn};
 use uuid::Uuid;
 
+use tokio_util::sync::CancellationToken;
+
 use crate::db::{
     AgentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, WorkflowStepEdgeRow, WorkflowStepRow,
 };
+use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
 use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
@@ -22,6 +25,23 @@ use super::broadcast_workflow_event;
 use super::utils::{resolve_port_inputs, StepOutput, WorkflowExecutionContext};
 
 mod tests;
+
+// ── DagContext ──────────────────────────────────────────────────────────────
+
+/// Immutable execution context threaded through all DAG step executors.
+///
+/// Bundles the read-only references that every step needs. The mutable
+/// `DagExecutionState` is passed separately to satisfy the borrow checker.
+#[derive(Clone, Copy)]
+pub(crate) struct DagContext<'a> {
+    pub engine: &'a ExecutionEngine,
+    pub state: &'a AppState,
+    pub ctx: &'a WorkflowExecutionContext,
+    pub steps: &'a [WorkflowStepRow],
+    pub edges: &'a [WorkflowStepEdgeRow],
+    pub port_meta: &'a PortMetadata,
+    pub cancel: Option<&'a CancellationToken>,
+}
 
 // ── DagExecutionState ────────────────────────────────────────────────────────
 

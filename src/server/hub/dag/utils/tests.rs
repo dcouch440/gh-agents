@@ -1631,7 +1631,7 @@ mod tests {
     // =========================================================================
 
     use crate::db::traits::MockServerRepo;
-    use crate::server::hub::dag::utils::compose_prompt;
+    use crate::server::hub::dag::utils::{compose_prompt, PromptRepos};
     use std::sync::Arc;
 
     fn mock_server_repo() -> Arc<MockServerRepo> {
@@ -1644,13 +1644,16 @@ mod tests {
     async fn compose_prompt_wraps_task_in_xml() {
         let step = make_step(Uuid::new_v4(), 0);
         let repo = mock_server_repo();
+        let repos = PromptRepos {
+            prompt_template_repo: None,
+            doc_repo: None,
+            workflow_repo: None,
+            server_repo: &*repo,
+        };
         let outputs = HashMap::new();
         let prior = HashMap::new();
 
-        let result = compose_prompt(
-            &step, None, None, None, &*repo, &outputs, &prior, None, None,
-        )
-        .await;
+        let result = compose_prompt(&step, &repos, &outputs, &prior, None, None).await;
 
         assert!(result.starts_with("<task>\n"));
         assert!(result.contains("</task>"));
@@ -1661,23 +1664,18 @@ mod tests {
     async fn compose_prompt_wraps_context_with_port_inputs() {
         let step = make_step(Uuid::new_v4(), 0);
         let repo = mock_server_repo();
+        let repos = PromptRepos {
+            prompt_template_repo: None,
+            doc_repo: None,
+            workflow_repo: None,
+            server_repo: &*repo,
+        };
         let outputs = HashMap::new();
         let prior = HashMap::new();
         let mut ports = HashMap::new();
         ports.insert("task_data".to_string(), serde_json::json!({"key": "value"}));
 
-        let result = compose_prompt(
-            &step,
-            None,
-            None,
-            None,
-            &*repo,
-            &outputs,
-            &prior,
-            None,
-            Some(&ports),
-        )
-        .await;
+        let result = compose_prompt(&step, &repos, &outputs, &prior, None, Some(&ports)).await;
 
         assert!(result.contains("<task>"));
         assert!(result.contains("</task>"));
@@ -1692,13 +1690,16 @@ mod tests {
     async fn compose_prompt_omits_context_when_empty() {
         let step = make_step(Uuid::new_v4(), 0);
         let repo = mock_server_repo();
+        let repos = PromptRepos {
+            prompt_template_repo: None,
+            doc_repo: None,
+            workflow_repo: None,
+            server_repo: &*repo,
+        };
         let outputs = HashMap::new();
         let prior = HashMap::new();
 
-        let result = compose_prompt(
-            &step, None, None, None, &*repo, &outputs, &prior, None, None,
-        )
-        .await;
+        let result = compose_prompt(&step, &repos, &outputs, &prior, None, None).await;
 
         assert!(!result.contains("<context>"));
         assert!(!result.contains("</context>"));
@@ -1711,23 +1712,18 @@ mod tests {
         let mut step = make_step(Uuid::new_v4(), 0);
         step.prompt_template = "Process this: {task_data}".to_string();
         let repo = mock_server_repo();
+        let repos = PromptRepos {
+            prompt_template_repo: None,
+            doc_repo: None,
+            workflow_repo: None,
+            server_repo: &*repo,
+        };
         let outputs = HashMap::new();
         let prior = HashMap::new();
         let mut ports = HashMap::new();
         ports.insert("task_data".to_string(), serde_json::json!("inline_value"));
 
-        let result = compose_prompt(
-            &step,
-            None,
-            None,
-            None,
-            &*repo,
-            &outputs,
-            &prior,
-            None,
-            Some(&ports),
-        )
-        .await;
+        let result = compose_prompt(&step, &repos, &outputs, &prior, None, Some(&ports)).await;
 
         // The port data is inlined in the task, not in a separate context block
         assert!(!result.contains("<context>"));
@@ -1846,13 +1842,16 @@ mod tests {
         step.prompt_template =
             "Analyze this task\n\n## Task Decomposition Protocol\nDecompose into ports: frontend, backend".to_string();
         let repo = mock_server_repo();
+        let repos = PromptRepos {
+            prompt_template_repo: None,
+            doc_repo: None,
+            workflow_repo: None,
+            server_repo: &*repo,
+        };
         let outputs = HashMap::new();
         let prior = HashMap::new();
 
-        let result = compose_prompt(
-            &step, None, None, None, &*repo, &outputs, &prior, None, None,
-        )
-        .await;
+        let result = compose_prompt(&step, &repos, &outputs, &prior, None, None).await;
 
         // Both the task and protocol injection are inside <task>
         assert!(result.starts_with("<task>\n"));

@@ -13,15 +13,15 @@ use std::collections::HashMap;
 use anyhow::anyhow;
 use chrono::Utc;
 use serde::Deserialize;
-use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::config::protocols::{roles, vars, BELIEF_CAPTURE};
-use crate::db::{BeliefExtractionPlanRow, BeliefRow, WorkflowStepEdgeRow, WorkflowStepRow};
-use crate::server::hub::engine::ExecutionEngine;
+use crate::db::{BeliefExtractionPlanRow, BeliefRow, WorkflowStepRow};
 use crate::server::hub::error::HubError;
-use crate::server::hub::protocols::execution_recorder::ProtocolExecutionRecorder;
+use crate::server::hub::protocols::execution_recorder::{
+    PhaseCompletion, ProtocolExecutionRecorder,
+};
 use crate::server::hub::protocols::json_utils::parse_structured_output;
 use crate::server::hub::recorder::ExecutionRecorder;
 use crate::server::hub::strategies::belief_capture::{
@@ -29,14 +29,12 @@ use crate::server::hub::strategies::belief_capture::{
 };
 use crate::server::hub::strategies::compute_cost;
 use crate::server::hub::streaming::NullSink;
-use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
 use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope, UserId};
 
 use super::dag_state::DagExecutionState;
 use super::{
-    broadcast_workflow_event, resolve_output_key, step_display_name, PortMetadata, StepOutput,
-    WorkflowExecutionContext,
+    broadcast_workflow_event, resolve_output_key, step_display_name, DagContext, StepOutput,
 };
 
 /// Execute a belief capture step within the DAG.
@@ -44,22 +42,16 @@ use super::{
 /// Loads the extraction plan, collects upstream content, runs per-source
 /// LLM extraction, applies confidence filtering, and stores beliefs in DB.
 pub(super) async fn execute_belief_capture_step(
-    engine: &ExecutionEngine,
-    state: &AppState,
-    ctx: &WorkflowExecutionContext,
+    dag: &DagContext<'_>,
     step: &WorkflowStepRow,
-    steps: &[WorkflowStepRow],
-    edges: &[WorkflowStepEdgeRow],
     dag_state: &mut DagExecutionState,
-    port_meta: &PortMetadata,
-    cancel: Option<&CancellationToken>,
 ) -> Result<(), HubError> {
     let step_start = std::time::Instant::now();
 
     // 1. Broadcast step started
     broadcast_workflow_event(
-        state,
-        ctx,
+        dag.state,
+        dag.ctx,
         step.workflow_id,
         WorkflowEventKind::StepStarted {
             step_id: step.id,
@@ -70,7 +62,8 @@ pub(super) async fn execute_belief_capture_step(
     );
 
     // 2. Load extraction plan (use defaults if none configured)
-    let plan = state
+    let plan = dag
+        .state
         .repos()
         .workflows
         .get_extraction_plan(step.id)
@@ -91,10 +84,10 @@ pub(super) async fn execute_belief_capture_step(
     // 3. Collect upstream sources
     let sources = normalize::collect_upstream_sources(
         step,
-        edges,
-        steps,
+        dag.edges,
+        dag.steps,
         &dag_state.completed_envelopes,
-        state,
+        dag.state,
     )
     .await;
 
@@ -113,7 +106,8 @@ pub(super) async fn execute_belief_capture_step(
     );
 
     // 4. Create protocol execution recorder
-    let recorder = ProtocolExecutionRecorder::new(&*state.repos().protocols, step.id, ctx.run_id);
+    let recorder =
+        ProtocolExecutionRecorder::new(&*dag.state.repos().protocols, step.id, dag.ctx.run_id);
 
     let extractor_cfg = BELIEF_CAPTURE.agent("extractor");
     let total_sources = sources.len();
@@ -125,14 +119,14 @@ pub(super) async fn execute_belief_capture_step(
     // 5. Per-source extraction loop
     for (idx, source) in sources.iter().enumerate() {
         // Check cancellation
-        if cancel.is_some_and(|t| t.is_cancelled()) {
+        if dag.cancel.is_some_and(|t| t.is_cancelled()) {
             return Err(HubError::Cancelled);
         }
 
         // Broadcast progress
         broadcast_workflow_event(
-            state,
-            ctx,
+            dag.state,
+            dag.ctx,
             step.workflow_id,
             WorkflowEventKind::BeliefExtractionProgress {
                 step_id: step.id,
@@ -198,20 +192,21 @@ pub(super) async fn execute_belief_capture_step(
             temperature: extractor_cfg.temperature,
             max_rounds: extractor_cfg.max_rounds,
             context_budget: extractor_cfg.context_budget,
-            state: Some(state.clone()),
-            user_id: Some(UserId(ctx.user_id)),
+            state: Some(dag.state.clone()),
+            user_id: Some(UserId(dag.ctx.user_id)),
         });
 
         // Execute via engine
-        let inner_recorder = ExecutionRecorder::new(&**state.repo(), None, None);
-        let result = engine
+        let inner_recorder = ExecutionRecorder::new(&**dag.state.repo(), None, None);
+        let result = dag
+            .engine
             .clone_with_provider()
             .execute(
                 &strategy,
                 &protocol_ctx.user_prompt,
                 &NullSink,
                 &inner_recorder,
-                cancel,
+                dag.cancel,
             )
             .await;
 
@@ -242,7 +237,7 @@ pub(super) async fn execute_belief_capture_step(
                     let belief_row = BeliefRow {
                         id: Uuid::new_v4(),
                         workflow_id: step.workflow_id,
-                        workflow_execution_id: Some(ctx.run_id),
+                        workflow_execution_id: Some(dag.ctx.run_id),
                         source_step_id: source.source_step_id,
                         source_document_title: source.source_document_title.clone(),
                         source_document_def_id: source.source_document_def_id,
@@ -262,7 +257,7 @@ pub(super) async fn execute_belief_capture_step(
                         created_at: Utc::now(),
                     };
 
-                    if let Err(e) = state.repos().workflows.insert_belief(&belief_row).await {
+                    if let Err(e) = dag.state.repos().workflows.insert_belief(&belief_row).await {
                         warn!(
                             step_id = %step.id,
                             source = %source.title,
@@ -277,13 +272,15 @@ pub(super) async fn execute_belief_capture_step(
                 recorder
                     .update_phase(
                         exec_row.id,
-                        "complete",
-                        Some(&exec_result.content),
-                        None,
-                        exec_result.input_tokens as i64,
-                        exec_result.output_tokens as i64,
-                        cost,
-                        Some(&extractor_cfg.model_id),
+                        PhaseCompletion {
+                            status: "complete",
+                            output_content: Some(&exec_result.content),
+                            error_message: None,
+                            tokens_in: exec_result.input_tokens as i64,
+                            tokens_out: exec_result.output_tokens as i64,
+                            cost_usd: cost,
+                            model: Some(&extractor_cfg.model_id),
+                        },
                     )
                     .await;
 
@@ -301,13 +298,15 @@ pub(super) async fn execute_belief_capture_step(
                 recorder
                     .update_phase(
                         exec_row.id,
-                        "failed",
-                        None,
-                        Some(&err_msg),
-                        0,
-                        0,
-                        0.0,
-                        Some(&extractor_cfg.model_id),
+                        PhaseCompletion {
+                            status: "failed",
+                            output_content: None,
+                            error_message: Some(&err_msg),
+                            tokens_in: 0,
+                            tokens_out: 0,
+                            cost_usd: 0.0,
+                            model: Some(&extractor_cfg.model_id),
+                        },
                     )
                     .await;
 
@@ -338,7 +337,7 @@ pub(super) async fn execute_belief_capture_step(
     // 7. Store results
     dag_state.accumulate_tokens(step_in_tokens, step_out_tokens, step_cost);
 
-    let output_key = resolve_output_key(step, &port_meta.step_outputs);
+    let output_key = resolve_output_key(step, &dag.port_meta.step_outputs);
     let output = StepOutput {
         variable_name: output_key,
         raw_output: serde_json::to_string_pretty(&summary).unwrap_or_default(),
@@ -362,8 +361,8 @@ pub(super) async fn execute_belief_capture_step(
     let envelope_json = serde_json::to_string(&envelope).unwrap_or_default();
     dag_state.record_step_output(step.id, output, envelope);
     let _ = super::versioning::snapshot_content(
-        &*state.repos().content_versions,
-        ctx.run_id,
+        &*dag.state.repos().content_versions,
+        dag.ctx.run_id,
         step.id,
         step.id,
         super::versioning::content_types::ENVELOPE,
@@ -374,8 +373,8 @@ pub(super) async fn execute_belief_capture_step(
 
     // 8. Broadcast step completed
     broadcast_workflow_event(
-        state,
-        ctx,
+        dag.state,
+        dag.ctx,
         step.workflow_id,
         WorkflowEventKind::BeliefExtractionProgress {
             step_id: step.id,
@@ -387,8 +386,8 @@ pub(super) async fn execute_belief_capture_step(
     );
 
     broadcast_workflow_event(
-        state,
-        ctx,
+        dag.state,
+        dag.ctx,
         step.workflow_id,
         WorkflowEventKind::StepCompleted {
             step_id: step.id,

@@ -19,6 +19,7 @@ use super::{format_envelopes_as_upstream, AgentDefinition, DesignerInput, RoomDe
 /// design-time preview and runtime execution. The caller constructs
 /// `RoomDesignerMember` from whatever source it has (design-time rows or
 /// runtime room members + agents).
+#[allow(clippy::too_many_arguments)] // All distinct domain primitives, no natural grouping
 pub fn build_room_designer_input(
     meeting_purpose: &str,
     interaction_mode: &str,

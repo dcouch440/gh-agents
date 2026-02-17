@@ -20,7 +20,7 @@ use crate::types::StepExecutionEnvelope;
 
 use super::belief_capture::execute_belief_capture_step;
 use super::dag_state::{
-    resolve_output_key, wrap_in_agentless_envelope, DagExecutionState, PortMetadata,
+    resolve_output_key, wrap_in_agentless_envelope, DagContext, DagExecutionState, PortMetadata,
 };
 use super::for_each::execute_for_each_step;
 use super::room_step::execute_room_step;
@@ -209,6 +209,17 @@ pub(crate) async fn execute_staged_step(
         });
     }
 
+    // Build DagContext for step executors
+    let dag = DagContext {
+        engine: &engine,
+        state,
+        ctx,
+        steps,
+        edges,
+        port_meta,
+        cancel: None,
+    };
+
     // Agentless modes — dispatch to existing executors
     if matches!(step.execution_mode.as_str(), "belief_capture" | "workforce") {
         let pre_tokens_in = dag_state.total_input_tokens;
@@ -216,18 +227,8 @@ pub(crate) async fn execute_staged_step(
         let pre_cost = dag_state.total_cost_usd;
 
         match step.execution_mode.as_str() {
-            "belief_capture" => {
-                execute_belief_capture_step(
-                    &engine, state, ctx, step, steps, edges, dag_state, port_meta, None,
-                )
-                .await?
-            }
-            "workforce" => {
-                execute_workforce_step(
-                    &engine, state, ctx, step, steps, edges, dag_state, port_meta, None,
-                )
-                .await?
-            }
+            "belief_capture" => execute_belief_capture_step(&dag, step, dag_state).await?,
+            "workforce" => execute_workforce_step(&dag, step, dag_state).await?,
             _ => unreachable!(),
         };
 
@@ -280,51 +281,21 @@ pub(crate) async fn execute_staged_step(
     };
     let effective_engine = step_engine.as_ref().unwrap_or(&engine);
 
+    let step_dag = DagContext {
+        engine: effective_engine,
+        ..dag
+    };
+
     let pre_tokens_in = dag_state.total_input_tokens;
     let pre_tokens_out = dag_state.total_output_tokens;
     let pre_cost = dag_state.total_cost_usd;
 
     if step.execution_mode == "room" {
-        execute_room_step(
-            effective_engine,
-            state,
-            ctx,
-            step,
-            steps,
-            edges,
-            dag_state,
-            port_meta,
-            None,
-        )
-        .await?;
+        execute_room_step(&step_dag, step, dag_state).await?;
     } else if step.execution_mode == "for_each" {
-        execute_for_each_step(
-            effective_engine,
-            state,
-            ctx,
-            step,
-            &agent,
-            steps,
-            edges,
-            dag_state,
-            port_meta,
-            None,
-        )
-        .await?;
+        execute_for_each_step(&step_dag, step, &agent, dag_state).await?;
     } else {
-        execute_single_step(
-            effective_engine,
-            state,
-            ctx,
-            step,
-            &agent,
-            steps,
-            edges,
-            dag_state,
-            port_meta,
-            None,
-        )
-        .await?;
+        execute_single_step(&step_dag, step, &agent, dag_state).await?;
     }
 
     let output = dag_state
