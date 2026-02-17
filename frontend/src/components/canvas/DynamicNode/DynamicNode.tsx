@@ -10,12 +10,11 @@ import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import OpenInFullOutlined from '@mui/icons-material/OpenInFullOutlined'
 import StreamOutlined from '@mui/icons-material/StreamOutlined'
-import { useStore, workflowStore, canvasStore, shareStore, focusModeStore } from '@/stores'
-import { topoSortStepIds } from '@/utils/topoSort'
+import { useStore, canvasStore, shareStore } from '@/stores'
 import { CanvasFormNode } from '../CanvasFormNode'
 import { CanvasHandle } from '../CanvasHandle'
 import { DOCUMENT_NODE } from '../DocumentNode'
-import { DetailLevel } from '../constants'
+import { DetailLevel, NOTES_ACCENT } from '../constants'
 import { nodeDataEqual } from '../mappers'
 import { HighlightMode, CanvasNodeKind } from '../canvasKinds'
 import { getNodeHighlightStyles } from '../nodeHighlightStyles'
@@ -23,6 +22,7 @@ import { useProtocolHighlight } from '../useProtocolHighlight'
 import { useCanvasLOD } from '../useCanvasLOD'
 import { MinimalNodeShell } from '../MinimalNodeShell'
 import { ProtocolBadge } from '../ProtocolBadge'
+import { useEnterFocusMode } from '../useEnterFocusMode'
 import { NodeHeader, ExecutionStatusBadge } from '../execution'
 import { SharePickerPanel } from '../SharePickerPanel'
 import { Archetype, ARCHETYPE_CONFIGS, AGENT_CONSTRAINTS } from './archetypes'
@@ -132,15 +132,29 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     parentStepName: nodeData.parentStepName,
   })
 
-  const handleEnterFocusMode = useCallback(() => {
-    const allSteps = workflowStore.store.getState()
-    const stepsArr = [...allSteps.steps.byId.values()]
-    const edgesArr = [...allSteps.edges.byId.values()]
-    const ordered = topoSortStepIds(stepsArr, edgesArr)
-    if (ordered.length > 0) {
-      focusModeStore.enter(ordered, id)
-    }
-  }, [id])
+  const enterFocusMode = useEnterFocusMode()
+  const handleEnterFocusMode = useCallback(() => { enterFocusMode(id) }, [enterFocusMode, id])
+
+  // --- Handles (shared between MINIMAL and full render) ---
+  const agentHandles = (
+    <>
+      <CanvasHandle type="target" position={Position.Bottom} id="agent-input" color={accentColor} variant="passive" />
+      <CanvasHandle type="source" position={Position.Top} id="agent-output" color={accentColor} variant="passive" />
+      <CanvasHandle type="source" position={Position.Right} id="agent-documents" color={DOCUMENT_NODE.ACCENT_COLOR} variant="passive" />
+    </>
+  )
+
+  const stepExtraHandles = (
+    <>
+      {nodeData.archetype === Archetype.WORKFORCE && (
+        <>
+          <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
+          <CanvasHandle type="source" position={Position.Top} id="agents" color={accentColor} />
+        </>
+      )}
+      <CanvasHandle type="source" position={Position.Bottom} id="notes" color={NOTES_ACCENT} variant="passive" />
+    </>
+  )
 
   // --- Minimal LOD ---
   if (detailLevel === DetailLevel.MINIMAL) {
@@ -154,23 +168,11 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     return (
       <Box sx={{ width: '100%', height: '100%' }}>
         <MinimalNodeShell label={nodeData.label} accentColor={accentColor} borderColor={highlight.borderColor} boxShadow={highlight.boxShadow} />
-        {isAgent ? (
-          <>
-            <CanvasHandle type="target" position={Position.Bottom} id="agent-input" color={accentColor} variant="passive" />
-            <CanvasHandle type="source" position={Position.Top} id="agent-output" color={accentColor} variant="passive" />
-            <CanvasHandle type="source" position={Position.Right} id="agent-documents" color={DOCUMENT_NODE.ACCENT_COLOR} variant="passive" />
-          </>
-        ) : (
+        {isAgent ? agentHandles : (
           <>
             <CanvasHandle type="target" position={Position.Left} color={accentColor} />
             <CanvasHandle type="source" position={Position.Right} color={accentColor} />
-            {nodeData.archetype === Archetype.WORKFORCE && (
-              <>
-                <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
-                <CanvasHandle type="source" position={Position.Top} id="agents" color={accentColor} />
-              </>
-            )}
-            <CanvasHandle type="source" position={Position.Bottom} id="notes" color="#f85149" variant="passive" />
+            {stepExtraHandles}
           </>
         )}
       </Box>
@@ -178,7 +180,6 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   }
 
   // --- Header badge ---
-  const ISSUE_COLOR = '#f85149'
   const headerBadge = isExecuting ? (
     <ExecutionStatusBadge status={resolvedExecStatus} />
   ) : stepIssues.length > 0 ? (
@@ -194,7 +195,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
       placement="top"
     >
       <span>
-        <ProtocolBadge color={ISSUE_COLOR} label={`${stepIssues.length} Issue${stepIssues.length > 1 ? 's' : ''}`} animated />
+        <ProtocolBadge color={NOTES_ACCENT} label={`${stepIssues.length} Issue${stepIssues.length > 1 ? 's' : ''}`} animated />
       </span>
     </Tooltip>
   ) : nodeData.archetype !== Archetype.BLANK ? (
@@ -218,27 +219,6 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
       badge={headerBadge}
       actions={headerActions}
     />
-  )
-
-  // --- Handles ---
-  const agentHandles = (
-    <>
-      <CanvasHandle type="target" position={Position.Bottom} id="agent-input" color={accentColor} variant="passive" />
-      <CanvasHandle type="source" position={Position.Top} id="agent-output" color={accentColor} variant="passive" />
-      <CanvasHandle type="source" position={Position.Right} id="agent-documents" color={DOCUMENT_NODE.ACCENT_COLOR} variant="passive" />
-    </>
-  )
-
-  const stepExtraHandles = (
-    <>
-      {nodeData.archetype === Archetype.WORKFORCE && (
-        <>
-          <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
-          <CanvasHandle type="source" position={Position.Top} id="agents" color={accentColor} />
-        </>
-      )}
-      <CanvasHandle type="source" position={Position.Bottom} id="notes" color="#f85149" variant="passive" />
-    </>
   )
 
   return (

@@ -22,7 +22,7 @@ import { useCanvasLookups } from './useCanvasLookups'
 import { useCanvasFetch } from './useCanvasFetch'
 import { ShareModeBanner } from './ShareModeBanner'
 import { FocusModeOverlay } from '@/components/focus-mode'
-import { topoSortStepIds } from '@/utils/topoSort'
+import { useEnterFocusMode } from './useEnterFocusMode'
 
 function WorkflowCanvasInner() {
   const theme = useTheme()
@@ -213,22 +213,19 @@ function WorkflowCanvasInner() {
   }, [shareActive])
 
   // Alt+F to enter focus mode
+  const enterFocusMode = useEnterFocusMode()
   useEffect(() => {
     const handleFocusKey = (e: KeyboardEvent) => {
       if (e.altKey && (e.key === 'f' || e.key === 'F') && !focusModeStore.store.getState().active) {
         e.preventDefault()
-        const ordered = topoSortStepIds(steps, edges)
-        if (ordered.length === 0) return
-        const selectedIds = canvasStore.store.getState().selectedStepIds
-        const initialId = ordered.find((id) => selectedIds.has(id))
-        focusModeStore.enter(ordered, initialId)
+        enterFocusMode()
       }
     }
     document.addEventListener('keydown', handleFocusKey)
     return () => {
       document.removeEventListener('keydown', handleFocusKey)
     }
-  }, [steps, edges])
+  }, [enterFocusMode])
 
   const onCanvasMouseDown = useCallback(() => {
     setContextMenu(null)

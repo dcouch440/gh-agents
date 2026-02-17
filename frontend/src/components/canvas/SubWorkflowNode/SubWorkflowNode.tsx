@@ -25,7 +25,7 @@ function SubWorkflowNodeComponent({ data, selected }: NodeProps) {
     accentColor,
     highlightMode: 'none',
     themeMode: theme.palette.mode,
-    variant: 'default',
+    variant: 'step',
   })
 
   if (detailLevel === DetailLevel.MINIMAL) {

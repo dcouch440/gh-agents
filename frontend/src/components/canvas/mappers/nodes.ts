@@ -4,25 +4,22 @@ import { Collections } from '@/utils/collections'
 import { FORM_NODE } from '../CanvasFormNode'
 import { CONTEXT_NODE } from '../ContextNode'
 import type { ContextNodeData } from '../ContextNode'
-import { DOCUMENT_NODE } from '../DocumentNode'
-import type { DocumentNodeData } from '../DocumentNode'
 import { INPUT_NODE } from '../InputNode'
 import type { InputNodeData } from '../InputNode'
-import { NOTES_NODE } from '../NotesNode'
-import type { NotesNodeData } from '../NotesNode'
 import { SUB_WORKFLOW_NODE } from '../SubWorkflowNode'
 import type { SubWorkflowNodeData } from '../SubWorkflowNode'
 import { CanvasNodeKind } from '../canvasKinds'
-import { Archetype, ARCHETYPE_CONFIGS, AGENT_DEFAULTS, resolveArchetype } from '../DynamicNode/archetypes'
+import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from '../DynamicNode/archetypes'
 import type { DynamicNodeData } from '../DynamicNode/DynamicNode'
 import type { StepNodeLookups } from './types'
-import { isWorkforceStep } from './protocolGroups'
-import { getStoredDimensions, getStoredPosition } from '../nodeResizeStorage'
+import { toAgentArtifactNodes } from './agentArtifactNodes'
+import { toDocumentArtifactNodes } from './documentArtifactNodes'
+import { toNotesArtifactNodes } from './notesArtifactNodes'
 
-const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
+const toStepNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
   const edgesByTarget = Collections.groupBy(lookups.edges, (e) => e.to_step_id)
 
-  const stepNodes = Collections.mapBy(steps, (step): Node => {
+  return Collections.mapBy(steps, (step): Node => {
     // Context nodes
     if (step.execution_mode === 'context') {
       const groupEntry = lookups.protocolGroups.get(step.id)
@@ -156,139 +153,14 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
       },
     }
   })
+}
 
-  // Auto-generate agent nodes for workforce steps (vertical stack above protocol)
-  const agentNodes: Node[] = []
-  const agentPositionByRosterId = new Map<string, { x: number; y: number }>()
-  for (const step of steps) {
-    if (!isWorkforceStep(step, lookups.protocolsByStep)) continue
-
-    const roster = lookups.rosterByStep[step.id] ?? []
-    for (let i = 0; i < roster.length; i++) {
-      const agent = roster[i]!
-      if (!agent.child_step_id) continue
-
-      const agentData: DynamicNodeData = {
-        kind: CanvasNodeKind.AGENT,
-        archetype: Archetype.AGENT,
-        label: agent.name,
-        description: '',
-        documentNames: [],
-        rosterNames: [],
-        roomId: null,
-        upstreamStepNames: [],
-        promptValue: '',
-        modelId: null,
-        agentName: null,
-        rosterAgentId: agent.id,
-        roleDescription: agent.role_description,
-        capabilities: [],
-        parentStepName: step.name ?? 'Workforce',
-        protocolStepId: step.id,
-      }
-      const agentNodeId = `agent-artifact-${agent.id}`
-      const agentDims = getStoredDimensions(agentNodeId)
-      const agentPos = getStoredPosition(agentNodeId)
-      const defaultPos = {
-        x: (step.position_x ?? 0),
-        y: (step.position_y ?? 0) - (i + 1) * (AGENT_DEFAULTS.DEFAULT_HEIGHT + 20),
-      }
-      const position = agentPos ?? defaultPos
-      agentPositionByRosterId.set(agent.id, position)
-      agentNodes.push({
-        id: agentNodeId,
-        type: 'dynamicNode',
-        position,
-        style: {
-          width: agentDims?.width ?? AGENT_DEFAULTS.DEFAULT_WIDTH,
-          height: agentDims?.height ?? AGENT_DEFAULTS.DEFAULT_HEIGHT,
-        },
-        draggable: true,
-        connectable: false,
-        data: agentData,
-      })
-    }
-  }
-
-  // Auto-generate document nodes — position relative to assigned agent when available
-  const documentNodes: Node[] = []
-  for (const step of steps) {
-    if (!isWorkforceStep(step, lookups.protocolsByStep)) continue
-
-    const defs = lookups.documentDefsByStep[step.id] ?? []
-    let unassignedIdx = 0
-    for (const def of defs) {
-      const docData: DocumentNodeData = {
-        kind: CanvasNodeKind.DOCUMENT,
-        label: def.name,
-        parentStepName: step.name ?? 'Workforce',
-        content: lookups.documentContentByDefId[def.id] ?? '',
-        protocolStepId: step.id,
-        documentId: def.document_id,
-      }
-      const docNodeId = `doc-artifact-${def.id}`
-      const docDims = getStoredDimensions(docNodeId)
-      const docPos = getStoredPosition(docNodeId)
-
-      // Position to the right of the assigned agent, or fall back to above the protocol
-      const assignedAgentPos = def.agent_roster_entry_id
-        ? agentPositionByRosterId.get(def.agent_roster_entry_id)
-        : undefined
-      const defaultDocPos = assignedAgentPos
-        ? { x: assignedAgentPos.x + AGENT_DEFAULTS.DEFAULT_WIDTH + 40, y: assignedAgentPos.y }
-        : { x: (step.position_x ?? 0) + unassignedIdx * (DOCUMENT_NODE.DEFAULT_WIDTH + 20), y: (step.position_y ?? 0) - DOCUMENT_NODE.DEFAULT_HEIGHT - 40 }
-      if (!assignedAgentPos) unassignedIdx++
-
-      documentNodes.push({
-        id: docNodeId,
-        type: 'documentNode',
-        position: docPos ?? defaultDocPos,
-        style: {
-          width: docDims?.width ?? DOCUMENT_NODE.DEFAULT_WIDTH,
-          height: docDims?.height ?? DOCUMENT_NODE.DEFAULT_HEIGHT,
-        },
-        draggable: true,
-        connectable: false,
-        data: docData,
-      })
-    }
-  }
-
-  // Auto-generate notes nodes for steps that have assistant notes
-  const notesNodes: Node[] = []
-  for (const step of steps) {
-    if (step.execution_mode === 'context' || step.execution_mode === 'input') continue
-    const content = lookups.notesByStep[step.id]
-    if (!content) continue
-
-    const notesData: NotesNodeData = {
-      kind: CanvasNodeKind.NOTES,
-      label: 'Agent Notes',
-      stepName: step.name ?? step.execution_mode,
-      content,
-      protocolStepId: step.id,
-    }
-    const notesNodeId = `notes-${step.id}`
-    const notesDims = getStoredDimensions(notesNodeId)
-    const notesPos = getStoredPosition(notesNodeId)
-    notesNodes.push({
-      id: notesNodeId,
-      type: 'notesNode',
-      position: notesPos ?? {
-        x: (step.position_x ?? 0),
-        y: (step.position_y ?? 0) + NOTES_NODE.DEFAULT_HEIGHT + 40,
-      },
-      style: {
-        width: notesDims?.width ?? NOTES_NODE.DEFAULT_WIDTH,
-        height: notesDims?.height ?? NOTES_NODE.DEFAULT_HEIGHT,
-      },
-      draggable: true,
-      connectable: false,
-      data: notesData,
-    })
-  }
-
-  return [...stepNodes, ...documentNodes, ...agentNodes, ...notesNodes]
+const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
+  const stepNodes = toStepNodes(steps, lookups)
+  const { nodes: agentNodes, agentPositionByRosterId } = toAgentArtifactNodes(steps, lookups)
+  const documentNodes = toDocumentArtifactNodes(steps, lookups, agentPositionByRosterId)
+  const notesNodes = toNotesArtifactNodes(steps, lookups)
+  return [...stepNodes, ...agentNodes, ...documentNodes, ...notesNodes]
 }
 
 export { toRFNodes }

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useMemo } from 'react'
 import MuiButton from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Tooltip from '@mui/material/Tooltip'
@@ -8,16 +8,14 @@ import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined'
 import ErrorOutline from '@mui/icons-material/ErrorOutline'
 import { useTheme } from '@mui/material/styles'
 import { useStore, workflowStore } from '@/stores'
-import { api } from '@/api'
+import { useWorkflowRun } from '../useWorkflowRun'
 import { TRAY_BUTTON_CONTAINED_SX } from './constants'
-
-type RunStatus = 'idle' | 'running' | 'completed' | 'error'
 
 function RunButton() {
   const theme = useTheme()
   const activeWorkflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
-  const [runStatus, setRunStatus] = useState<RunStatus>('idle')
+
   // Prefer input step over context step as entry point — single .find() on small array
   const entryStep = useMemo(() => {
     const inputStep = steps.find((s) => s.execution_mode === 'input')
@@ -25,58 +23,33 @@ function RunButton() {
     return steps.find((s) => s.execution_mode === 'context') ?? null
   }, [steps])
 
-  const handleRun = useCallback(async () => {
-    if (!activeWorkflowId || runStatus === 'running') return
-    setRunStatus('running')
-    try {
-      const input = entryStep?.prompt_template.trim()
-      const body = input ? { initial_input: input } : undefined
-      await api.workflows.run(activeWorkflowId, body)
-      setRunStatus('completed')
-      setTimeout(() => {
-        setRunStatus('idle')
-      }, 3000)
-    } catch {
-      setRunStatus('error')
-      setTimeout(() => {
-        setRunStatus('idle')
-      }, 3000)
-    }
-  }, [activeWorkflowId, runStatus, entryStep])
+  const { status, handleRun, tooltipText } = useWorkflowRun(entryStep?.prompt_template ?? '')
 
   if (!activeWorkflowId) return null
 
   const runIcon =
-    runStatus === 'completed' ? (
+    status === 'completed' ? (
       <CheckCircleOutline sx={{ fontSize: 16 }} />
-    ) : runStatus === 'error' ? (
+    ) : status === 'error' ? (
       <ErrorOutline sx={{ fontSize: 16 }} />
     ) : (
       <PlayArrowOutlined sx={{ fontSize: 16 }} />
     )
 
   const runLabel =
-    runStatus === 'running' ? 'Running...' : runStatus === 'completed' ? 'Started!' : runStatus === 'error' ? 'Failed' : 'Run'
+    status === 'running' ? 'Running...' : status === 'completed' ? 'Started!' : status === 'error' ? 'Failed' : 'Run'
 
   const chromeBg = theme.palette.custom.chromeBg
   const statusBg =
-    runStatus === 'completed'
+    status === 'completed'
       ? theme.palette.success.main
-      : runStatus === 'error'
+      : status === 'error'
         ? theme.palette.error.main
         : chromeBg
 
   return (
     <Tooltip
-      title={
-        runStatus === 'running'
-          ? 'Workflow is running...'
-          : runStatus === 'completed'
-            ? 'Execution started successfully'
-            : runStatus === 'error'
-              ? 'Execution failed to start'
-              : 'Run this workflow'
-      }
+      title={tooltipText}
       TransitionComponent={Fade}
       enterDelay={500}
       placement="top"
@@ -85,11 +58,9 @@ function RunButton() {
         <MuiButton
           size="small"
           variant="contained"
-          startIcon={runStatus === 'running' ? <CircularProgress size={14} thickness={5} color="inherit" /> : runIcon}
-          onClick={() => {
-            void handleRun()
-          }}
-          disabled={runStatus === 'running'}
+          startIcon={status === 'running' ? <CircularProgress size={14} thickness={5} color="inherit" /> : runIcon}
+          onClick={handleRun}
+          disabled={status === 'running'}
           sx={{
             ...TRAY_BUTTON_CONTAINED_SX,
             minWidth: 80,
