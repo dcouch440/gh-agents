@@ -3,16 +3,21 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { StepEdge } from './StepEdge'
 
-const mockGetBezierPath = vi.fn(() => ['M 0 0 C 50 0, 50 100, 100 100', 50, 50])
 const mockDeleteElements = vi.fn(() => Promise.resolve())
+const mockComputeOrthogonalPath = vi.fn(() => 'M 0 0 L 50 0 L 50 100 L 100 100')
+const mockComputeOrthogonalLabel = vi.fn(() => ({ labelX: 50, labelY: 50 }))
 
 vi.mock('@xyflow/react', () => ({
   EdgeLabelRenderer: ({ children }: { children: React.ReactNode }) => <div data-testid="edge-label">{children}</div>,
-  getBezierPath: (...args: unknown[]) => mockGetBezierPath(...args),
   useReactFlow: () => ({
     deleteElements: mockDeleteElements,
   }),
   Position: { Left: 'left', Right: 'right' },
+}))
+
+vi.mock('./edges/orthogonalPath', () => ({
+  computeOrthogonalPath: (...args: unknown[]) => mockComputeOrthogonalPath(...args),
+  computeOrthogonalLabel: (...args: unknown[]) => mockComputeOrthogonalLabel(...args),
 }))
 
 vi.mock('./useCanvasLOD', () => ({ useCanvasLOD: () => 'full' }))
@@ -97,20 +102,13 @@ describe('StepEdge', () => {
     expect(pipe).toHaveAttribute('data-selected', 'true')
   })
 
-  it('calls getBezierPath with source/target coordinates', () => {
+  it('calls computeOrthogonalPath with source/target coordinates', () => {
     render(
       <svg>
         <StepEdge {...baseProps} />
       </svg>,
     )
-    expect(mockGetBezierPath).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sourceX: 0,
-        sourceY: 0,
-        targetX: 100,
-        targetY: 100,
-      }),
-    )
+    expect(mockComputeOrthogonalPath).toHaveBeenCalledWith(0, 0, 100, 100, 'right', 'left')
   })
 
   it('renders delete button', () => {

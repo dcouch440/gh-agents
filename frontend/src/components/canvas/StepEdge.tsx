@@ -1,11 +1,12 @@
 import { memo } from 'react'
-import { EdgeLabelRenderer, getBezierPath, useReactFlow } from '@xyflow/react'
+import { EdgeLabelRenderer, useReactFlow } from '@xyflow/react'
 import type { EdgeProps } from '@xyflow/react'
 import CloseIcon from '@mui/icons-material/Close'
 import IconButton from '@mui/material/IconButton'
 import { useTheme } from '@mui/material/styles'
 import { PIPE } from './constants'
 import { PipeEdgePath } from './PipeEdgePath'
+import { computeOrthogonalPath, computeOrthogonalLabel } from './edges/orthogonalPath'
 
 type StepEdgeNodeData = {
   sourceColor: string
@@ -21,14 +22,8 @@ function StepEdgeComponent(props: EdgeProps) {
   const theme = useTheme()
   const { deleteElements } = useReactFlow()
 
-  const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    sourcePosition,
-    targetPosition,
-  })
+  const edgePath = computeOrthogonalPath(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition)
+  const { labelX, labelY } = computeOrthogonalLabel(sourceX, sourceY, targetX, targetY)
 
   const color = selected
     ? theme.palette.primary.main

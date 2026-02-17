@@ -36,7 +36,8 @@ vi.mock('framer-motion', () => ({
 }))
 
 const mockFlush = vi.fn()
-const renderTray = () => render(<OptionTray autoSaveFlush={mockFlush} autoSaveSaving={false} />)
+const mockAutoLayout = vi.fn()
+const renderTray = () => render(<OptionTray autoSaveFlush={mockFlush} autoSaveSaving={false} onAutoLayout={mockAutoLayout} />)
 
 beforeEach(() => {
   vi.clearAllMocks()

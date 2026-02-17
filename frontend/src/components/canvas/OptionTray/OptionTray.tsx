@@ -5,14 +5,16 @@ import { TrayToggle } from './TrayToggle'
 import { RunButton } from './RunButton'
 import { SaveDiscardGroup } from './SaveDiscardGroup'
 import { FocusModeButton } from './FocusModeButton'
+import { AutoLayoutButton } from './AutoLayoutButton'
 import { useEnterFocusMode } from '../useEnterFocusMode'
 
 type OptionTrayProps = {
   autoSaveFlush: () => void
   autoSaveSaving: boolean
+  onAutoLayout: () => void
 }
 
-function OptionTray({ autoSaveFlush, autoSaveSaving }: OptionTrayProps) {
+function OptionTray({ autoSaveFlush, autoSaveSaving, onAutoLayout }: OptionTrayProps) {
   const dirty = useStore(workflowStore.store, workflowStore.selectDirty)
   const activeWorkflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
   const [open, setOpen] = useState(false)
@@ -44,6 +46,7 @@ function OptionTray({ autoSaveFlush, autoSaveSaving }: OptionTrayProps) {
       <TrayPanel visible={open} dirty={dirty}>
         <SaveDiscardGroup autoSaveFlush={autoSaveFlush} autoSaveSaving={autoSaveSaving} />
         <RunButton />
+        <AutoLayoutButton onClick={onAutoLayout} />
         <FocusModeButton onClick={handleEnterFocusMode} />
       </TrayPanel>
       <TrayToggle open={open} onClick={handleToggle} />

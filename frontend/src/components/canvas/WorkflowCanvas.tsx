@@ -24,6 +24,7 @@ import { FocusModeOverlay } from '@/components/focus-mode'
 import { useEnterFocusMode } from './useEnterFocusMode'
 import { useCanvasKeyboard } from './useCanvasKeyboard'
 import { useContextMenuState } from './useContextMenuState'
+import { useAutoLayout } from './useAutoLayout'
 
 function WorkflowCanvasInner() {
   const theme = useTheme()
@@ -69,6 +70,10 @@ function WorkflowCanvasInner() {
 
   // Push store updates into RF — only touch data + position, never clobber selection
   useCanvasSync(rfNodes, rfEdges, setNodes, setEdges)
+
+  // Auto-layout engine — wrap fitView to satisfy void return type (fitView returns Promise<boolean>)
+  const fitViewVoid = useCallback((options?: { padding?: number }) => { void fitView(options) }, [fitView])
+  const { applyAutoLayout } = useAutoLayout(steps, edges, lookups, getNodes, setNodes, fitViewVoid)
 
   // Fit to view on initial load
   useEffect(() => {
@@ -251,7 +256,7 @@ function WorkflowCanvasInner() {
           />
         )}
       </ReactFlow>
-      <OptionTray autoSaveFlush={autoSave.flush} autoSaveSaving={autoSave.saving} />
+      <OptionTray autoSaveFlush={autoSave.flush} autoSaveSaving={autoSave.saving} onAutoLayout={applyAutoLayout} />
       {shareActive && <ShareModeBanner />}
       <CanvasContextMenu
         position={contextMenu}
