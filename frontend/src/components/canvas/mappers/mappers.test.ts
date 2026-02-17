@@ -786,11 +786,11 @@ describe('toAgentEdges', () => {
       selectable: false,
       deletable: false,
     })
-    // Judge depends on both agents
+    // Judge depends on both agents — dependency edges include avoidObstacles
     expect(edges[2]).toEqual({
       id: 'agent-dep-agent-1-agent-3',
       type: 'artifactEdge',
-      data: { color: '#06b6d4' },
+      data: { color: '#06b6d4', avoidObstacles: true },
       source: 'agent-artifact-agent-1',
       sourceHandle: 'agent-output',
       target: 'agent-artifact-agent-3',
@@ -801,7 +801,7 @@ describe('toAgentEdges', () => {
     expect(edges[3]).toEqual({
       id: 'agent-dep-agent-2-agent-3',
       type: 'artifactEdge',
-      data: { color: '#06b6d4' },
+      data: { color: '#06b6d4', avoidObstacles: true },
       source: 'agent-artifact-agent-2',
       sourceHandle: 'agent-output',
       target: 'agent-artifact-agent-3',

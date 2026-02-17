@@ -1,16 +1,32 @@
 import { memo } from 'react'
+import { useReactFlow } from '@xyflow/react'
 import type { EdgeProps } from '@xyflow/react'
 import { PIPE, GREYSCALE_ACCENT } from './constants'
 import { PipeEdgePath } from './PipeEdgePath'
-import { computeOrthogonalPath } from './edges/orthogonalPath'
+import { computeOrthogonalPath, findObstaclesInPath, computeCorridorPath } from './edges/orthogonalPath'
 
-type ArtifactEdgeData = { color: string }
+type ArtifactEdgeData = {
+  color: string
+  avoidObstacles?: boolean
+}
 
 function ArtifactEdgeComponent(props: EdgeProps) {
-  const { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data } = props
-  const color = (data as Partial<ArtifactEdgeData> | undefined)?.color ?? GREYSCALE_ACCENT
+  const { source, target, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data } = props
+  const rawData = data as Partial<ArtifactEdgeData> | undefined
+  const color = rawData?.color ?? GREYSCALE_ACCENT
+  const { getNodes } = useReactFlow()
 
-  const edgePath = computeOrthogonalPath(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition)
+  let edgePath: string
+  if (rawData?.avoidObstacles) {
+    const nodes = getNodes()
+    const excludeIds = new Set([source, target])
+    const obstacles = findObstaclesInPath(nodes, sourceX, sourceY, targetX, targetY, excludeIds)
+    edgePath = obstacles.length > 0
+      ? computeCorridorPath(sourceX, sourceY, targetX, targetY, obstacles)
+      : computeOrthogonalPath(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition)
+  } else {
+    edgePath = computeOrthogonalPath(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition)
+  }
 
   return (
     <PipeEdgePath

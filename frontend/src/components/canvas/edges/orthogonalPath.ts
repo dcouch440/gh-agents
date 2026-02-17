@@ -97,8 +97,8 @@ const routeVerticalToVertical = (
       // Direct vertical line
       return `M ${sx} ${sy} L ${tx} ${ty}`
     }
-    // 3-segment: vertical → horizontal → vertical
-    const midY = (sy + ty) / 2
+    // 3-segment: route horizontal near source to stay in the gap between tiers
+    const midY = sy + MIN_OFFSET
     return `M ${sx} ${sy} L ${sx} ${midY} L ${tx} ${midY} L ${tx} ${ty}`
   }
 
@@ -107,7 +107,8 @@ const routeVerticalToVertical = (
     if (sx === tx) {
       return `M ${sx} ${sy} L ${tx} ${ty}`
     }
-    const midY = (sy + ty) / 2
+    // 3-segment: route horizontal near target to stay in the gap between tiers
+    const midY = ty + MIN_OFFSET
     return `M ${sx} ${sy} L ${sx} ${midY} L ${tx} ${midY} L ${tx} ${ty}`
   }
 
@@ -179,4 +180,96 @@ const assignParallelTracks = (
   return offsets
 }
 
-export { computeOrthogonalPath, computeOrthogonalLabel, assignParallelTracks }
+// ============================================================================
+// Obstacle-Aware Corridor Routing
+// ============================================================================
+
+type ObstacleBounds = { x: number; y: number; width: number; height: number }
+
+/** Minimal node shape used for obstacle detection. */
+type NodeLike = {
+  id: string
+  position: { x: number; y: number }
+  measured?: { width?: number; height?: number }
+  width?: number
+  height?: number
+}
+
+/**
+ * Find nodes whose bounding boxes overlap the rectangular area between
+ * source and target handle positions. Used to detect obstacles for
+ * corridor routing.
+ */
+const findObstaclesInPath = (
+  nodes: ReadonlyArray<NodeLike>,
+  sx: number, sy: number,
+  tx: number, ty: number,
+  excludeIds: ReadonlySet<string>,
+  padding: number = 8,
+): ObstacleBounds[] => {
+  const minX = Math.min(sx, tx) - padding
+  const maxX = Math.max(sx, tx) + padding
+  const minY = Math.min(sy, ty) - padding
+  const maxY = Math.max(sy, ty) + padding
+
+  const obstacles: ObstacleBounds[] = []
+  for (const node of nodes) {
+    if (excludeIds.has(node.id)) continue
+    const nx = node.position.x
+    const ny = node.position.y
+    const nw = node.measured?.width ?? node.width ?? 200
+    const nh = node.measured?.height ?? node.height ?? 100
+
+    // AABB overlap check
+    if (nx + nw > minX && nx < maxX && ny + nh > minY && ny < maxY) {
+      obstacles.push({ x: nx, y: ny, width: nw, height: nh })
+    }
+  }
+  return obstacles
+}
+
+/**
+ * Compute a 5-segment corridor path that routes around obstacles.
+ *
+ * The path exits the source vertically, moves horizontally to a corridor
+ * outside the obstacle bounding box, travels vertically through the corridor,
+ * then re-enters horizontally to reach the target.
+ *
+ * Corridor side heuristic: source left of target → LEFT corridor,
+ * source right of target → RIGHT corridor.
+ */
+const computeCorridorPath = (
+  sx: number, sy: number,
+  tx: number, ty: number,
+  obstacles: readonly ObstacleBounds[],
+  margin: number = MIN_OFFSET,
+): string => {
+  if (obstacles.length === 0) {
+    // No obstacles — straight line or simple bend
+    return `M ${sx} ${sy} L ${tx} ${ty}`
+  }
+
+  // Compute obstacle bounding box
+  let obsMinX = Infinity
+  let obsMaxX = -Infinity
+  for (const obs of obstacles) {
+    obsMinX = Math.min(obsMinX, obs.x)
+    obsMaxX = Math.max(obsMaxX, obs.x + obs.width)
+  }
+
+  // Choose corridor side: LEFT if source is left of or equal to target, RIGHT otherwise
+  const useLeft = sx <= tx
+  const corridorX = useLeft ? obsMinX - margin : obsMaxX + margin
+
+  // Determine vertical direction (target above or below source)
+  const goingUp = ty < sy // target above source in screen coords
+
+  // Exit/enter offsets maintain handle direction
+  const exitY = goingUp ? sy - margin : sy + margin
+  const enterY = goingUp ? ty + margin : ty - margin
+
+  return `M ${sx} ${sy} L ${sx} ${exitY} L ${corridorX} ${exitY} L ${corridorX} ${enterY} L ${tx} ${enterY} L ${tx} ${ty}`
+}
+
+export { computeOrthogonalPath, computeOrthogonalLabel, assignParallelTracks, findObstaclesInPath, computeCorridorPath }
+export type { ObstacleBounds, NodeLike }
