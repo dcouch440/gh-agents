@@ -2,12 +2,15 @@ import type { SvgIconComponent } from '@mui/icons-material'
 import GroupsOutlined from '@mui/icons-material/GroupsOutlined'
 import ForumOutlined from '@mui/icons-material/ForumOutlined'
 import RadioButtonUncheckedOutlined from '@mui/icons-material/RadioButtonUncheckedOutlined'
+import SmartToyOutlined from '@mui/icons-material/SmartToyOutlined'
+import type { ResizeSizeConstraints } from '../CanvasFormNode'
 import type { ProtocolStepInfo } from '../mappers'
 
 const Archetype = {
   WORKFORCE: 'workforce',
   ROOM: 'room',
   BLANK: 'blank',
+  AGENT: 'agent',
 } as const
 
 type Archetype = (typeof Archetype)[keyof typeof Archetype]
@@ -46,6 +49,27 @@ const ARCHETYPE_CONFIGS: Record<Archetype, ArchetypeConfig> = {
     archetypeTabLabel: '',
     chatEmptyMessage: 'Tell me what you\'d like this node to do.',
   },
+  [Archetype.AGENT]: {
+    label: 'Agent',
+    color: '#06b6d4',
+    executionMode: 'agent',
+    icon: SmartToyOutlined,
+    archetypeTabLabel: 'Info',
+    chatEmptyMessage: '',
+  },
+}
+
+/** Sizing constants for agent archetype nodes (smaller than FORM_NODE defaults). */
+const AGENT_DEFAULTS = {
+  DEFAULT_WIDTH: 420,
+  DEFAULT_HEIGHT: 360,
+} as const
+
+const AGENT_CONSTRAINTS: ResizeSizeConstraints = {
+  minWidth: 360,
+  minHeight: 300,
+  maxWidth: 1200,
+  maxHeight: 1000,
 }
 
 const resolveArchetype = (
@@ -58,5 +82,5 @@ const resolveArchetype = (
   return Archetype.BLANK
 }
 
-export { Archetype, ARCHETYPE_CONFIGS, resolveArchetype }
+export { Archetype, ARCHETYPE_CONFIGS, AGENT_DEFAULTS, AGENT_CONSTRAINTS, resolveArchetype }
 export type { ArchetypeConfig }

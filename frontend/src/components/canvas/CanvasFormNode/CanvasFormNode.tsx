@@ -22,6 +22,8 @@ function CanvasFormNodeComponent({
   highlightMode = HighlightMode.NONE,
   extraHandles,
   overlay,
+  constraints: constraintsProp,
+  handles: handlesProp,
 }: CanvasFormNodeProps) {
   const theme = useTheme()
   const resolvedAccent = accentColor ?? theme.palette.primary.main
@@ -40,13 +42,15 @@ function CanvasFormNodeComponent({
       selected={selected}
       accentColor={resolvedAccent}
       highlight={highlight}
-      constraints={toConstraints(FORM_NODE)}
+      constraints={constraintsProp ?? toConstraints(FORM_NODE)}
       handles={
-        <>
-          <CanvasHandle type="target" position={Position.Left} color={resolvedAccent} />
-          <CanvasHandle type="source" position={Position.Right} color={resolvedAccent} />
-          {extraHandles}
-        </>
+        handlesProp ?? (
+          <>
+            <CanvasHandle type="target" position={Position.Left} color={resolvedAccent} />
+            <CanvasHandle type="source" position={Position.Right} color={resolvedAccent} />
+            {extraHandles}
+          </>
+        )
       }
     >
       {/* Header slot — draggable area */}

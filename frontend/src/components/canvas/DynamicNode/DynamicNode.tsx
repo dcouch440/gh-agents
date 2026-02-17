@@ -6,25 +6,28 @@ import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import AutoAwesomeOutlined from '@mui/icons-material/AutoAwesomeOutlined'
 import InputOutlined from '@mui/icons-material/InputOutlined'
+import InfoOutlined from '@mui/icons-material/InfoOutlined'
 import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import GroupsOutlined from '@mui/icons-material/GroupsOutlined'
 import ForumOutlined from '@mui/icons-material/ForumOutlined'
 import BugReportOutlined from '@mui/icons-material/BugReportOutlined'
 import HistoryOutlined from '@mui/icons-material/HistoryOutlined'
-import { useStore, workflowStore, canvasStore, shareStore, focusModeStore, workflowExecutionStore } from '@/stores'
+import { useStore, workflowStore, canvasStore, shareStore, focusModeStore, workflowExecutionStore, stepStreamStore } from '@/stores'
 import { topoSortStepIds } from '@/utils/topoSort'
 import type { CreateDocumentDefRequest } from '@/types/workflow'
 import { CanvasFormNode } from '../CanvasFormNode'
 import type { CanvasFormTab } from '../CanvasFormNode'
 import { CanvasHandle } from '../CanvasHandle'
+import { DOCUMENT_NODE } from '../DocumentNode'
 import { DetailLevel } from '../constants'
 import { nodeDataEqual } from '../mappers'
 import { HighlightMode } from '../canvasKinds'
-import type { CanvasNodeKind } from '../canvasKinds'
+import { CanvasNodeKind } from '../canvasKinds'
 import { getNodeHighlightStyles } from '../nodeHighlightStyles'
+import { useProtocolHighlight } from '../useProtocolHighlight'
 import { useCanvasLOD } from '../useCanvasLOD'
 import { MinimalNodeShell } from '../MinimalNodeShell'
-import { Archetype, ARCHETYPE_CONFIGS } from './archetypes'
+import { Archetype, ARCHETYPE_CONFIGS, AGENT_CONSTRAINTS } from './archetypes'
 import type { Archetype as ArchetypeType } from './archetypes'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
@@ -40,6 +43,8 @@ import { RoomMembersTab } from './tabs/RoomMembersTab'
 import { DebugLogTab } from './tabs/DebugLogTab'
 import { LastRunTab } from './tabs/LastRunTab'
 import { LiveStreamTab } from './tabs/LiveStreamTab'
+import { AgentStreamTab } from './tabs/AgentStreamTab'
+import { AgentInfoTab } from './tabs/AgentInfoTab'
 import StreamOutlined from '@mui/icons-material/StreamOutlined'
 import { SharePickerPanel } from '../SharePickerPanel'
 
@@ -55,36 +60,65 @@ type DynamicNodeData = {
   promptValue: string
   modelId: string | null
   agentName: string | null
+  // Agent-specific (archetype === 'agent')
+  rosterAgentId: string | null
+  roleDescription: string | null
+  capabilities: string[]
+  parentStepName: string | null
+  protocolStepId: string | null
 }
 
 function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
-  const [activeTabId, setActiveTabId] = useState('chat')
-  const [adding, setAdding] = useState(false)
   const detailLevel = useCanvasLOD()
   const nodeData = data as DynamicNodeData
+  const isAgent = nodeData.archetype === Archetype.AGENT
 
   const config = ARCHETYPE_CONFIGS[nodeData.archetype]
   const accentColor = config.color
 
-  // Execution state
+  const [activeTabId, setActiveTabId] = useState(isAgent ? 'info' : 'chat')
+  const [adding, setAdding] = useState(false)
+
+  // --- Execution state ---
+  // Step-level execution (workforce/room/blank steps)
   const stepExec = useStore(workflowExecutionStore.store, workflowExecutionStore.selectStepState(id))
   const execStatus = toExecutionStatus(stepExec?.status)
-  const isExecuting = execStatus !== 'idle'
 
+  // Agent-level execution (stream status for individual agent)
+  const agentSourceStatus = useStore(
+    stepStreamStore.store,
+    isAgent
+      ? (s) => s.sources[nodeData.rosterAgentId ?? '']?.status ?? 'idle'
+      : () => 'idle' as const,
+  )
+
+  const isExecuting = isAgent ? agentSourceStatus !== 'idle' : execStatus !== 'idle'
+  const resolvedExecStatus = isAgent
+    ? toExecutionStatus(agentSourceStatus)
+    : execStatus
+
+  // Step-level store subscriptions — for agent nodes these return empty (agent IDs don't match step IDs)
   const documentDefs = useStore(workflowStore.store, workflowStore.selectStepDocumentDefs(id))
   const roomStepMembers = useStore(workflowStore.store, workflowStore.selectRoomStepMembers(id))
   const stepIssues = useStore(workflowStore.store, workflowStore.selectStepIssues(id))
 
+  // --- Highlight ---
+  const protocolHighlight = useProtocolHighlight(
+    isAgent ? CanvasNodeKind.AGENT : CanvasNodeKind.PROTOCOL,
+    id,
+    nodeData.protocolStepId,
+  )
   const selfHighlight = useStore(canvasStore.store, (s): HighlightMode => {
     if (s.hoveredStepId === id) return HighlightMode.HOVER
     return HighlightMode.NONE
   })
+  const baseHighlight = isAgent ? protocolHighlight : selfHighlight
 
-  // Share mode subscriptions
-  const shareActive = useStore(shareStore.store, shareStore.selectActive)
-  const shareSourceId = useStore(shareStore.store, shareStore.selectSourceStepId)
-  const pendingChatFocus = useStore(shareStore.store, shareStore.selectPendingChatFocus)
+  // --- Share mode (steps only) ---
+  const shareActive = useStore(shareStore.store, isAgent ? () => false : shareStore.selectActive)
+  const shareSourceId = useStore(shareStore.store, isAgent ? () => null : shareStore.selectSourceStepId)
+  const pendingChatFocus = useStore(shareStore.store, isAgent ? () => null : shareStore.selectPendingChatFocus)
   const isShareSource = shareActive && shareSourceId === id
 
   // Force tab switch when this node is a share target
@@ -97,19 +131,19 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     }
   }, [pendingChatFocus, id])
 
-  // Auto-switch to live tab when execution starts
+  // Auto-switch tab when execution starts
   useEffect(() => {
-    if (execStatus === 'running') {
-      queueMicrotask(() => {
-        setActiveTabId('live')
-      })
+    if (isAgent && agentSourceStatus === 'running') {
+      queueMicrotask(() => { setActiveTabId('stream') })
+    } else if (!isAgent && execStatus === 'running') {
+      queueMicrotask(() => { setActiveTabId('live') })
     }
-  }, [execStatus])
+  }, [isAgent, agentSourceStatus, execStatus])
 
-  // Overlay for share source, highlight for potential targets
   const shareOverlay = isShareSource ? <SharePickerPanel stepId={id} /> : undefined
-  const effectiveHighlight = shareActive && !isShareSource ? HighlightMode.HOVER : selfHighlight
+  const effectiveHighlight = shareActive && !isShareSource ? HighlightMode.HOVER : baseHighlight
 
+  // --- Document callbacks (steps only) ---
   const handleAddDocument = useCallback(() => {
     setAdding(true)
   }, [])
@@ -133,78 +167,97 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     [id],
   )
 
-  // Build tabs
-  const tabs: CanvasFormTab[] = [
-    {
-      id: 'chat',
-      icon: AutoAwesomeOutlined,
-      tooltip: 'Chat',
-      content: <ChatTab stepId={id} archetype={nodeData.archetype} />,
-    },
-    {
-      id: 'live',
-      icon: StreamOutlined,
-      tooltip: 'Live Stream',
-      content: <LiveStreamTab stepId={id} />,
-    },
-    {
-      id: 'io',
-      icon: InputOutlined,
-      tooltip: 'Inputs / Outputs',
-      content: <InputsOutputsTab upstreamStepNames={nodeData.upstreamStepNames} />,
-    },
-  ]
+  // --- Build tabs ---
+  let tabs: CanvasFormTab[]
 
-  // Archetype-specific tab
-  if (nodeData.archetype === Archetype.WORKFORCE) {
+  if (isAgent) {
+    tabs = [
+      {
+        id: 'stream',
+        icon: StreamOutlined,
+        tooltip: 'Live Stream',
+        content: <AgentStreamTab rosterAgentId={nodeData.rosterAgentId ?? ''} />,
+      },
+      {
+        id: 'info',
+        icon: InfoOutlined,
+        tooltip: 'Info',
+        content: <AgentInfoTab roleDescription={nodeData.roleDescription ?? ''} capabilities={nodeData.capabilities} />,
+      },
+    ]
+  } else {
+    tabs = [
+      {
+        id: 'chat',
+        icon: AutoAwesomeOutlined,
+        tooltip: 'Chat',
+        content: <ChatTab stepId={id} archetype={nodeData.archetype} />,
+      },
+      {
+        id: 'live',
+        icon: StreamOutlined,
+        tooltip: 'Live Stream',
+        content: <LiveStreamTab stepId={id} />,
+      },
+      {
+        id: 'io',
+        icon: InputOutlined,
+        tooltip: 'Inputs / Outputs',
+        content: <InputsOutputsTab upstreamStepNames={nodeData.upstreamStepNames} />,
+      },
+    ]
+
+    if (nodeData.archetype === Archetype.WORKFORCE) {
+      tabs.push({
+        id: 'agents',
+        icon: GroupsOutlined,
+        tooltip: 'Agent Roster',
+        content: <AgentRosterTab stepId={id} />,
+      })
+      tabs.push({
+        id: 'documents',
+        icon: DescriptionOutlined,
+        tooltip: 'Documents',
+        content: (
+          <DocumentsTab
+            documents={documentDefs}
+            adding={adding}
+            onAdd={handleAddDocument}
+            onSubmitNew={handleSubmitNew}
+            onCancelAdd={handleCancelAdd}
+            onRemove={handleRemoveDocument}
+          />
+        ),
+      })
+    } else if (nodeData.archetype === Archetype.ROOM) {
+      tabs.push({
+        id: 'members',
+        icon: ForumOutlined,
+        tooltip: 'Members',
+        content: <RoomMembersTab stepId={id} />,
+      })
+    }
+
+    // Last Run tab
     tabs.push({
-      id: 'agents',
-      icon: GroupsOutlined,
-      tooltip: 'Agent Roster',
-      content: <AgentRosterTab stepId={id} />,
+      id: 'lastrun',
+      icon: HistoryOutlined,
+      tooltip: 'Last Run',
+      content: <LastRunTab stepId={id} />,
     })
+
+    // Debug tab always last
     tabs.push({
-      id: 'documents',
-      icon: DescriptionOutlined,
-      tooltip: 'Documents',
-      content: (
-        <DocumentsTab
-          documents={documentDefs}
-          adding={adding}
-          onAdd={handleAddDocument}
-          onSubmitNew={handleSubmitNew}
-          onCancelAdd={handleCancelAdd}
-          onRemove={handleRemoveDocument}
-        />
-      ),
-    })
-  } else if (nodeData.archetype === Archetype.ROOM) {
-    tabs.push({
-      id: 'members',
-      icon: ForumOutlined,
-      tooltip: 'Members',
-      content: <RoomMembersTab stepId={id} />,
+      id: 'debug',
+      icon: BugReportOutlined,
+      tooltip: 'Debug Log',
+      content: <DebugLogTab stepId={id} />,
     })
   }
 
-  // Last Run tab
-  tabs.push({
-    id: 'lastrun',
-    icon: HistoryOutlined,
-    tooltip: 'Last Run',
-    content: <LastRunTab stepId={id} />,
-  })
-
-  // Debug tab always last
-  tabs.push({
-    id: 'debug',
-    icon: BugReportOutlined,
-    tooltip: 'Debug Log',
-    content: <DebugLogTab stepId={id} />,
-  })
-
-  // Header subtitle
+  // --- Header subtitle ---
   const subtitle = (() => {
+    if (isAgent) return nodeData.parentStepName
     if (nodeData.archetype === Archetype.WORKFORCE) {
       const parts = [...nodeData.rosterNames, ...nodeData.documentNames]
       return parts.length > 0 ? parts.join(' \u00b7 ') : null
@@ -224,8 +277,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     }
   }, [id])
 
-  const issueDescriptions = stepIssues.map((issue) => issue.description)
-
+  // --- Minimal LOD ---
   if (detailLevel === DetailLevel.MINIMAL) {
     const highlight = getNodeHighlightStyles({
       selected: selected === true,
@@ -242,24 +294,36 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
           borderColor={highlight.borderColor}
           boxShadow={highlight.boxShadow}
         />
-        <CanvasHandle type="target" position={Position.Left} color={accentColor} />
-        <CanvasHandle type="source" position={Position.Right} color={accentColor} />
-        {nodeData.archetype === Archetype.WORKFORCE && (
+        {isAgent ? (
           <>
-            <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
-            <CanvasHandle type="source" position={Position.Top} id="agents" color={accentColor} />
+            <CanvasHandle type="target" position={Position.Bottom} id="agent-input" color={accentColor} variant="passive" />
+            <CanvasHandle type="source" position={Position.Top} id="agent-output" color={accentColor} variant="passive" />
+            <CanvasHandle type="source" position={Position.Right} id="agent-documents" color={DOCUMENT_NODE.ACCENT_COLOR} variant="passive" />
+          </>
+        ) : (
+          <>
+            <CanvasHandle type="target" position={Position.Left} color={accentColor} />
+            <CanvasHandle type="source" position={Position.Right} color={accentColor} />
+            {nodeData.archetype === Archetype.WORKFORCE && (
+              <>
+                <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
+                <CanvasHandle type="source" position={Position.Top} id="agents" color={accentColor} />
+              </>
+            )}
+            <CanvasHandle type="source" position={Position.Bottom} id="notes" color="#f85149" variant="passive" />
           </>
         )}
-        <CanvasHandle type="source" position={Position.Bottom} id="notes" color="#f85149" variant="passive" />
       </Box>
     )
   }
 
+  // --- Header badge ---
+  const issueDescriptions = stepIssues.map((issue) => issue.description)
   const hasIssues = stepIssues.length > 0
   const ISSUE_COLOR = '#f85149'
 
   const headerBadge = isExecuting ? (
-    <ExecutionStatusBadge status={execStatus} />
+    <ExecutionStatusBadge status={resolvedExecStatus} />
   ) : hasIssues ? (
     <Tooltip
       title={
@@ -282,7 +346,8 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     <ProtocolBadge color={config.color} label={config.label} animated />
   ) : undefined
 
-  const headerActions = (
+  // --- Header actions (steps only) ---
+  const headerActions = isAgent ? undefined : (
     <IconButton
       className="nodrag"
       onClick={handleEnterFocusMode}
@@ -302,14 +367,36 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   const IconComponent = config.icon
   const headerElement = (
     <NodeHeader
-      icon={<IconComponent sx={{ fontSize: 20, color: config.color }} />}
+      icon={<IconComponent sx={{ fontSize: isAgent ? 18 : 20, color: config.color }} />}
       title={nodeData.label}
       subtitle={subtitle}
       accentColor={config.color}
-      size="large"
+      size={isAgent ? 'standard' : 'large'}
       badge={headerBadge}
       actions={headerActions}
     />
+  )
+
+  // --- Agent handles ---
+  const agentHandles = (
+    <>
+      <CanvasHandle type="target" position={Position.Bottom} id="agent-input" color={accentColor} variant="passive" />
+      <CanvasHandle type="source" position={Position.Top} id="agent-output" color={accentColor} variant="passive" />
+      <CanvasHandle type="source" position={Position.Right} id="agent-documents" color={DOCUMENT_NODE.ACCENT_COLOR} variant="passive" />
+    </>
+  )
+
+  // --- Step handles ---
+  const stepExtraHandles = (
+    <>
+      {nodeData.archetype === Archetype.WORKFORCE && (
+        <>
+          <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
+          <CanvasHandle type="source" position={Position.Top} id="agents" color={accentColor} />
+        </>
+      )}
+      <CanvasHandle type="source" position={Position.Bottom} id="notes" color="#f85149" variant="passive" />
+    </>
   )
 
   return (
@@ -317,6 +404,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
       <CanvasFormNode
         nodeId={id}
         header={headerElement}
+        headerHeight={isAgent ? 52 : undefined}
         tabs={tabs}
         activeTabId={activeTabId}
         onTabChange={setActiveTabId}
@@ -324,17 +412,10 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
         accentColor={accentColor}
         highlightMode={effectiveHighlight}
         overlay={shareOverlay}
-        extraHandles={
-          <>
-            {nodeData.archetype === Archetype.WORKFORCE && (
-              <>
-                <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
-                <CanvasHandle type="source" position={Position.Top} id="agents" color={accentColor} />
-              </>
-            )}
-            <CanvasHandle type="source" position={Position.Bottom} id="notes" color="#f85149" variant="passive" />
-          </>
-        }
+        {...(isAgent
+          ? { handles: agentHandles, constraints: AGENT_CONSTRAINTS }
+          : { extraHandles: stepExtraHandles }
+        )}
       />
     </>
   )
