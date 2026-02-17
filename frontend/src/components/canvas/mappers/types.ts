@@ -60,6 +60,8 @@ type StepNodeLookups = {
   protocolGroups: ReadonlyMap<string, ProtocolGroupEntry>
 }
 
+type AgentPositionMap = ReadonlyMap<string, { x: number; y: number }>
+
 type StepEdgeData = {
   sourceColor: string
   isProtocolEdge: boolean
@@ -72,5 +74,6 @@ export type {
   DocumentDefInfo,
   RosterAgentInfo,
   StepNodeLookups,
+  AgentPositionMap,
   StepEdgeData,
 }

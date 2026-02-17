@@ -1,11 +1,11 @@
 import { useState, useCallback } from 'react'
-import { useStore, workflowStore, canvasStore, focusModeStore } from '@/stores'
+import { useStore, workflowStore } from '@/stores'
 import { TrayPanel } from './TrayPanel'
 import { TrayToggle } from './TrayToggle'
 import { RunButton } from './RunButton'
 import { SaveDiscardGroup } from './SaveDiscardGroup'
 import { FocusModeButton } from './FocusModeButton'
-import { topoSortStepIds } from '@/utils/topoSort'
+import { useEnterFocusMode } from '../useEnterFocusMode'
 
 type OptionTrayProps = {
   autoSaveFlush: () => void
@@ -15,13 +15,12 @@ type OptionTrayProps = {
 function OptionTray({ autoSaveFlush, autoSaveSaving }: OptionTrayProps) {
   const dirty = useStore(workflowStore.store, workflowStore.selectDirty)
   const activeWorkflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
-  const steps = useStore(workflowStore.store, workflowStore.selectSteps)
-  const edges = useStore(workflowStore.store, workflowStore.selectEdges)
   const [open, setOpen] = useState(false)
   const [lockedOpen, setLockedOpen] = useState(false)
   const [prevDirty, setPrevDirty] = useState(dirty)
 
   // Auto-open tray when dirty, auto-close only if user hasn't locked it open
+  // (React-endorsed render-time derived state pattern)
   if (prevDirty !== dirty) {
     setPrevDirty(dirty)
     if (dirty) setOpen(true)
@@ -36,13 +35,7 @@ function OptionTray({ autoSaveFlush, autoSaveSaving }: OptionTrayProps) {
     })
   }, [])
 
-  const handleEnterFocusMode = useCallback(() => {
-    const ordered = topoSortStepIds(steps, edges)
-    if (ordered.length === 0) return
-    const selectedIds = canvasStore.store.getState().selectedStepIds
-    const initialId = ordered.find((id) => selectedIds.has(id))
-    focusModeStore.enter(ordered, initialId)
-  }, [steps, edges])
+  const handleEnterFocusMode = useEnterFocusMode()
 
   if (!activeWorkflowId) return null
 

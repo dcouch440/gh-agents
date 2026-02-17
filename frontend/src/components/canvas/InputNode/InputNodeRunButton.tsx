@@ -1,4 +1,3 @@
-import { useState, useCallback } from 'react'
 import IconButton from '@mui/material/IconButton'
 import CircularProgress from '@mui/material/CircularProgress'
 import Tooltip from '@mui/material/Tooltip'
@@ -7,10 +6,8 @@ import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined'
 import CheckCircleOutline from '@mui/icons-material/CheckCircleOutline'
 import ErrorOutline from '@mui/icons-material/ErrorOutline'
 import { useStore, workflowStore } from '@/stores'
-import { api } from '@/api'
+import { useWorkflowRun } from '../useWorkflowRun'
 import { INPUT_NODE } from './constants'
-
-type RunStatus = 'idle' | 'running' | 'completed' | 'error'
 
 type InputNodeRunButtonProps = {
   stepId: string
@@ -20,26 +17,8 @@ function InputNodeRunButton({ stepId }: InputNodeRunButtonProps) {
   const activeWorkflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
   const step = useStore(workflowStore.store, workflowStore.selectStepById(stepId))
   const promptTemplate = step?.prompt_template ?? ''
-  const [status, setStatus] = useState<RunStatus>('idle')
 
-  const handleRun = useCallback(async () => {
-    if (!activeWorkflowId || status === 'running') return
-    setStatus('running')
-    try {
-      const input = promptTemplate.trim()
-      const body = input ? { initial_input: input } : undefined
-      await api.workflows.run(activeWorkflowId, body)
-      setStatus('completed')
-      setTimeout(() => {
-        setStatus('idle')
-      }, 3000)
-    } catch {
-      setStatus('error')
-      setTimeout(() => {
-        setStatus('idle')
-      }, 3000)
-    }
-  }, [activeWorkflowId, status, promptTemplate])
+  const { status, handleRun, tooltipText } = useWorkflowRun(promptTemplate)
 
   if (!activeWorkflowId) return null
 
@@ -54,15 +33,6 @@ function InputNodeRunButton({ stepId }: InputNodeRunButtonProps) {
       <PlayArrowOutlined sx={{ fontSize: 16 }} />
     )
 
-  const tooltipText =
-    status === 'running'
-      ? 'Workflow is running...'
-      : status === 'completed'
-        ? 'Execution started successfully'
-        : status === 'error'
-          ? 'Execution failed to start'
-          : 'Run workflow'
-
   const bgColor =
     status === 'completed'
       ? '#22c55e'
@@ -74,9 +44,7 @@ function InputNodeRunButton({ stepId }: InputNodeRunButtonProps) {
     <Tooltip title={tooltipText} TransitionComponent={Fade} enterDelay={300} placement="top">
       <IconButton
         size="small"
-        onClick={() => {
-          void handleRun()
-        }}
+        onClick={handleRun}
         disabled={status === 'running'}
         sx={{
           width: 28,

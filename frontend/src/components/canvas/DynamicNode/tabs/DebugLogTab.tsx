@@ -43,22 +43,7 @@ function DebugLogTab({ stepId }: DebugLogTabProps) {
 
       setMessages(debugMessages)
     } catch (e) {
-      const is404 = e instanceof Error && e.message.includes('404')
-      if (is404) {
-        // No session yet — show system prompt only
-        try {
-          const data = await api.workflows.getStepChatDebug(workflowId, stepId)
-          setMessages([{
-            id: 'system-prompt',
-            role: 'system',
-            content: data.system_prompt,
-          }])
-        } catch {
-          setError(e instanceof Error ? e.message : 'Failed to load debug data')
-        }
-      } else {
-        setError(e instanceof Error ? e.message : 'Failed to load debug data')
-      }
+      setError(e instanceof Error ? e.message : 'Failed to load debug data')
     } finally {
       setIsLoading(false)
     }
