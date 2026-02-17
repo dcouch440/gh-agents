@@ -10,9 +10,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::AppError;
-use crate::constants::{MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH};
-use crate::db::traits::CreateDocumentInput;
 use crate::server::auth as auth_utils;
+use crate::server::services::documents;
 use crate::server::state::AppState;
 
 /// List item for documents (excludes content).
@@ -66,6 +65,21 @@ pub struct DocumentSearchQuery {
     pub q: String,
 }
 
+fn document_response(doc: crate::db::DocumentRow) -> DocumentResponse {
+    DocumentResponse {
+        id: doc.id,
+        title: doc.title,
+        content: doc.content,
+        summary: doc.summary,
+        ref_tag: doc.ref_tag,
+        tags: doc.tags,
+        doc_type: doc.doc_type,
+        session_id: doc.session_id,
+        created_at: doc.created_at,
+        updated_at: doc.updated_at,
+    }
+}
+
 /// GET /api/documents - List all documents for the authenticated user.
 #[utoipa::path(
     get,
@@ -80,9 +94,7 @@ pub async fn list_documents(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<DocumentListItem>>, AppError> {
-    let doc_repo = &state.repos().documents;
-    let docs = doc_repo.list_documents(auth.user_id.0).await?;
-
+    let docs = documents::list_documents(state.repos().documents.as_ref(), auth.user_id.0).await?;
     let items: Vec<DocumentListItem> = docs
         .into_iter()
         .map(|d| DocumentListItem {
@@ -95,7 +107,6 @@ pub async fn list_documents(
             updated_at: d.updated_at,
         })
         .collect();
-
     Ok(Json(items))
 }
 
@@ -115,9 +126,9 @@ pub async fn search_documents(
     auth: auth_utils::AuthUser,
     Query(query): Query<DocumentSearchQuery>,
 ) -> Result<Json<Vec<crate::db::DocumentSearchResult>>, AppError> {
-    let doc_repo = &state.repos().documents;
-    let results = doc_repo.search_documents(auth.user_id.0, &query.q).await?;
-
+    let results =
+        documents::search_documents(state.repos().documents.as_ref(), auth.user_id.0, &query.q)
+            .await?;
     Ok(Json(results))
 }
 
@@ -138,29 +149,9 @@ pub async fn get_document(
     auth: auth_utils::AuthUser,
     Path(doc_id): Path<Uuid>,
 ) -> Result<Json<DocumentResponse>, AppError> {
-    let doc_repo = &state.repos().documents;
-    let doc = doc_repo
-        .get_document(doc_id)
-        .await?
-        .ok_or(AppError::not_found("Document"))?;
-
-    // Verify ownership
-    if doc.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Document"));
-    }
-
-    Ok(Json(DocumentResponse {
-        id: doc.id,
-        title: doc.title,
-        content: doc.content,
-        summary: doc.summary,
-        ref_tag: doc.ref_tag,
-        tags: doc.tags,
-        doc_type: doc.doc_type,
-        session_id: doc.session_id,
-        created_at: doc.created_at,
-        updated_at: doc.updated_at,
-    }))
+    let doc =
+        documents::get_document(state.repos().documents.as_ref(), auth.user_id.0, doc_id).await?;
+    Ok(Json(document_response(doc)))
 }
 
 /// POST /api/documents - Create a new document.
@@ -180,45 +171,19 @@ pub async fn create_document(
     auth: auth_utils::AuthUser,
     Json(request): Json<CreateDocumentRequest>,
 ) -> Result<(StatusCode, Json<DocumentResponse>), AppError> {
-    if request.title.trim().is_empty() || request.title.len() > MAX_TITLE_LENGTH {
-        return Err(AppError::bad_request(
-            "Title must be non-empty and within length limit",
-        ));
-    }
-    if request.content.len() > MAX_DESCRIPTION_LENGTH {
-        return Err(AppError::bad_request("Content exceeds maximum length"));
-    }
-
-    let doc_repo = &state.repos().documents;
-    let doc = doc_repo
-        .create_document(CreateDocumentInput {
+    let doc = documents::create_document(
+        state.repos().documents.as_ref(),
+        documents::CreateDocumentInput {
             user_id: auth.user_id.0,
-            session_id: request.session_id,
             title: request.title,
             content: request.content,
-            doc_type: request
-                .doc_type
-                .unwrap_or_else(|| "architecture".to_string()),
-            ref_tag: String::new(),
-            tags: request.tags.unwrap_or_default(),
-        })
-        .await?;
-
-    Ok((
-        StatusCode::CREATED,
-        Json(DocumentResponse {
-            id: doc.id,
-            title: doc.title,
-            content: doc.content,
-            summary: doc.summary,
-            ref_tag: doc.ref_tag,
-            tags: doc.tags,
-            doc_type: doc.doc_type,
-            session_id: doc.session_id,
-            created_at: doc.created_at,
-            updated_at: doc.updated_at,
-        }),
-    ))
+            doc_type: request.doc_type,
+            session_id: request.session_id,
+            tags: request.tags,
+        },
+    )
+    .await?;
+    Ok((StatusCode::CREATED, Json(document_response(doc))))
 }
 
 /// PATCH /api/documents/:id - Update a document.
@@ -240,34 +205,18 @@ pub async fn update_document(
     Path(doc_id): Path<Uuid>,
     Json(request): Json<UpdateDocumentRequest>,
 ) -> Result<Json<DocumentResponse>, AppError> {
-    let doc_repo = &state.repos().documents;
-
-    // Verify ownership
-    let existing = doc_repo
-        .get_document(doc_id)
-        .await?
-        .ok_or(AppError::not_found("Document"))?;
-
-    if existing.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Document"));
-    }
-
-    let doc = doc_repo
-        .update_document(doc_id, request.content, request.title, request.tags)
-        .await?;
-
-    Ok(Json(DocumentResponse {
-        id: doc.id,
-        title: doc.title,
-        content: doc.content,
-        summary: doc.summary,
-        ref_tag: doc.ref_tag,
-        tags: doc.tags,
-        doc_type: doc.doc_type,
-        session_id: doc.session_id,
-        created_at: doc.created_at,
-        updated_at: doc.updated_at,
-    }))
+    let doc = documents::update_document(
+        state.repos().documents.as_ref(),
+        auth.user_id.0,
+        doc_id,
+        documents::UpdateDocumentInput {
+            content: request.content,
+            title: request.title,
+            tags: request.tags,
+        },
+    )
+    .await?;
+    Ok(Json(document_response(doc)))
 }
 
 /// DELETE /api/documents/:id - Delete a document.
@@ -287,20 +236,7 @@ pub async fn delete_document(
     auth: auth_utils::AuthUser,
     Path(doc_id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    let doc_repo = &state.repos().documents;
-
-    // Verify ownership
-    let existing = doc_repo
-        .get_document(doc_id)
-        .await?
-        .ok_or(AppError::not_found("Document"))?;
-
-    if existing.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Document"));
-    }
-
-    doc_repo.delete_document(doc_id).await?;
-
+    documents::delete_document(state.repos().documents.as_ref(), auth.user_id.0, doc_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 #[cfg(test)]

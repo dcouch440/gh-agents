@@ -10,8 +10,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::AppError;
-use crate::constants::MAX_TITLE_LENGTH;
 use crate::server::auth as auth_utils;
+use crate::server::services::output_schemas;
 use crate::server::state::AppState;
 
 /// Response for a single output schema.
@@ -37,6 +37,15 @@ pub struct UpdateOutputSchemaRequest {
     pub schema: Option<serde_json::Value>,
 }
 
+fn schema_response(row: crate::db::OutputSchemaRow) -> OutputSchemaResponse {
+    OutputSchemaResponse {
+        id: row.id,
+        name: row.name,
+        schema: row.schema,
+        created_at: row.created_at,
+    }
+}
+
 /// GET /api/output-schemas - List all output schemas for the authenticated user.
 #[utoipa::path(
     get,
@@ -51,22 +60,10 @@ pub async fn list_output_schemas(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<OutputSchemaResponse>>, AppError> {
-    let rows = state
-        .repos()
-        .output_schemas
-        .list_output_schemas(auth.user_id.0)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    let items = rows
-        .into_iter()
-        .map(|r| OutputSchemaResponse {
-            id: r.id,
-            name: r.name,
-            schema: r.schema,
-            created_at: r.created_at,
-        })
-        .collect();
-    Ok(Json(items))
+    let rows =
+        output_schemas::list_output_schemas(state.repos().output_schemas.as_ref(), auth.user_id.0)
+            .await?;
+    Ok(Json(rows.into_iter().map(schema_response).collect()))
 }
 
 /// POST /api/output-schemas - Create a new output schema.
@@ -86,25 +83,14 @@ pub async fn create_output_schema(
     auth: auth_utils::AuthUser,
     Json(request): Json<CreateOutputSchemaRequest>,
 ) -> Result<(StatusCode, Json<OutputSchemaResponse>), AppError> {
-    if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
-        return Err(AppError::bad_request(
-            "Schema name is empty or exceeds maximum length",
-        ));
-    }
-    let repo = &state.repos().output_schemas;
-    let row = repo
-        .create_output_schema(Some(auth.user_id.0), request.name, request.schema)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    Ok((
-        StatusCode::CREATED,
-        Json(OutputSchemaResponse {
-            id: row.id,
-            name: row.name,
-            schema: row.schema,
-            created_at: row.created_at,
-        }),
-    ))
+    let row = output_schemas::create_output_schema(
+        state.repos().output_schemas.as_ref(),
+        auth.user_id.0,
+        request.name,
+        request.schema,
+    )
+    .await?;
+    Ok((StatusCode::CREATED, Json(schema_response(row))))
 }
 
 /// GET /api/output-schemas/:id - Get an output schema by ID.
@@ -124,23 +110,13 @@ pub async fn get_output_schema(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<OutputSchemaResponse>, AppError> {
-    let repo = &state.repos().output_schemas;
-    let row = repo
-        .get_output_schema(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or(AppError::not_found("Output schema"))?;
-    if let Some(owner) = row.user_id {
-        if owner != auth.user_id.0 {
-            return Err(AppError::not_found("Output schema"));
-        }
-    }
-    Ok(Json(OutputSchemaResponse {
-        id: row.id,
-        name: row.name,
-        schema: row.schema,
-        created_at: row.created_at,
-    }))
+    let row = output_schemas::get_output_schema(
+        state.repos().output_schemas.as_ref(),
+        auth.user_id.0,
+        id,
+    )
+    .await?;
+    Ok(Json(schema_response(row)))
 }
 
 /// PUT /api/output-schemas/:id - Update an output schema.
@@ -162,38 +138,15 @@ pub async fn update_output_schema(
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateOutputSchemaRequest>,
 ) -> Result<Json<OutputSchemaResponse>, AppError> {
-    let repo = &state.repos().output_schemas;
-    let existing = repo
-        .get_output_schema(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or(AppError::not_found("Output schema"))?;
-    match existing.user_id {
-        Some(owner) if owner != auth.user_id.0 => {
-            return Err(AppError::not_found("Output schema"));
-        }
-        None => {
-            return Err(AppError::not_found("Output schema"));
-        }
-        _ => {}
-    }
-    if let Some(ref name) = request.name {
-        if name.trim().is_empty() || name.len() > MAX_TITLE_LENGTH {
-            return Err(AppError::bad_request(
-                "Schema name is empty or exceeds maximum length",
-            ));
-        }
-    }
-    let row = repo
-        .update_output_schema(id, request.name, request.schema)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    Ok(Json(OutputSchemaResponse {
-        id: row.id,
-        name: row.name,
-        schema: row.schema,
-        created_at: row.created_at,
-    }))
+    let row = output_schemas::update_output_schema(
+        state.repos().output_schemas.as_ref(),
+        auth.user_id.0,
+        id,
+        request.name,
+        request.schema,
+    )
+    .await?;
+    Ok(Json(schema_response(row)))
 }
 
 /// DELETE /api/output-schemas/:id - Delete an output schema.
@@ -213,24 +166,8 @@ pub async fn delete_output_schema(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    let repo = &state.repos().output_schemas;
-    let existing = repo
-        .get_output_schema(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or(AppError::not_found("Output schema"))?;
-    match existing.user_id {
-        Some(owner) if owner != auth.user_id.0 => {
-            return Err(AppError::not_found("Output schema"));
-        }
-        None => {
-            return Err(AppError::not_found("Output schema"));
-        }
-        _ => {}
-    }
-    repo.delete_output_schema(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    output_schemas::delete_output_schema(state.repos().output_schemas.as_ref(), auth.user_id.0, id)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

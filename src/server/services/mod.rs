@@ -5,9 +5,17 @@
 //! parsing HTTP requests; the background planner calls them directly.
 
 pub mod agents;
+pub mod collections;
+pub mod documents;
 pub mod edges;
 pub mod error;
+pub mod output_schemas;
+pub mod prompt_templates;
+pub mod protocols;
+pub mod rooms;
+pub mod sessions;
 pub mod steps;
+pub mod tool_routers;
 pub mod validation;
 pub mod workflows;
 

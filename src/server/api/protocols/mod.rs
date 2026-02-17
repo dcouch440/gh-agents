@@ -1,28 +1,19 @@
 //! Protocol management endpoints — CRUD, port management, preview, and apply.
 
-use std::collections::HashMap;
-
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     Json,
 };
-use once_cell::sync::Lazy;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::AppError;
-use crate::db::traits::{CreateProtocolInput, UpdateProtocolInput};
+use crate::db::traits::UpdateProtocolInput;
 use crate::server::auth as auth_utils;
 use crate::server::hub::protocols::types::ProtocolExpansion;
+use crate::server::services::protocols as protocol_svc;
 use crate::server::state::AppState;
-
-/// Valid port name pattern: lowercase alphanumeric + underscores, starting with a letter.
-static PORT_NAME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[a-z][a-z0-9_]*$").unwrap());
-
-/// Maximum allowed port name length.
-const MAX_PORT_NAME_LEN: usize = 50;
 
 pub mod documents;
 pub mod executions;
@@ -150,6 +141,73 @@ pub struct ProtocolTypeInfo {
 }
 
 // ============================================================================
+// Mapping helpers (domain types → response types)
+// ============================================================================
+
+fn map_agent_response(agent: crate::db::AgentRow) -> ProtocolAgentResponse {
+    ProtocolAgentResponse {
+        id: agent.id,
+        name: agent.name,
+        system_prompt: agent.system_prompt,
+        model_provider: agent.model_provider,
+        model_id: agent.model_id,
+    }
+}
+
+fn map_schema_response(schema: crate::db::OutputSchemaRow) -> ProtocolSchemaResponse {
+    ProtocolSchemaResponse {
+        id: schema.id,
+        name: schema.name,
+        schema: schema.schema,
+    }
+}
+
+fn map_template_response(template: crate::db::PromptTemplateRow) -> ProtocolTemplateResponse {
+    ProtocolTemplateResponse {
+        id: template.id,
+        name: template.name,
+        content: template.content,
+    }
+}
+
+fn map_port_response(port: crate::db::ProtocolPortRow) -> ProtocolPortResponse {
+    ProtocolPortResponse {
+        id: port.id,
+        port_name: port.port_name,
+        description: port.description,
+        agent_id: port.agent_id,
+        display_order: port.display_order,
+    }
+}
+
+/// Resolve protocol associations via the service and map to response types.
+async fn resolve_and_map_associations(
+    state: &AppState,
+    row: &crate::db::ProtocolRow,
+) -> Result<
+    (
+        Option<ProtocolAgentResponse>,
+        Option<ProtocolSchemaResponse>,
+        Option<ProtocolTemplateResponse>,
+    ),
+    AppError,
+> {
+    let (agent, schema, template) = protocol_svc::resolve_protocol_associations(
+        state.repo().as_ref(),
+        state.repos().output_schemas.as_ref(),
+        state.repos().prompt_templates.as_ref(),
+        row,
+    )
+    .await?;
+
+    Ok((
+        agent.map(map_agent_response),
+        schema.map(map_schema_response),
+        template.map(map_template_response),
+    ))
+}
+
+// ============================================================================
 // Handlers
 // ============================================================================
 
@@ -173,20 +231,14 @@ pub async fn list_protocol_types(
 pub async fn list_protocols(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<ProtocolResponse>>, AppError> {
-    let repo = &state.repos().protocols;
-    let rows = repo
-        .list_protocols()
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let proto_repo = state.repos().protocols.as_ref();
+    let rows = protocol_svc::list_protocols(proto_repo).await?;
 
     let mut responses = Vec::with_capacity(rows.len());
     for row in rows {
-        let ports = repo
-            .list_protocol_ports(row.id)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let ports = protocol_svc::list_protocol_ports(proto_repo, row.id).await?;
         let (agent, output_schema, prompt_template) =
-            resolve_protocol_associations(&state, &row).await?;
+            resolve_and_map_associations(&state, &row).await?;
         responses.push(ProtocolResponse {
             id: row.id,
             name: row.name,
@@ -194,16 +246,7 @@ pub async fn list_protocols(
             protocol_type: row.protocol_type,
             config: row.config,
             version: row.version,
-            ports: ports
-                .into_iter()
-                .map(|p| ProtocolPortResponse {
-                    id: p.id,
-                    port_name: p.port_name,
-                    description: p.description,
-                    agent_id: p.agent_id,
-                    display_order: p.display_order,
-                })
-                .collect(),
+            ports: ports.into_iter().map(map_port_response).collect(),
             agent,
             output_schema,
             prompt_template,
@@ -218,37 +261,23 @@ pub async fn create_protocol(
     State(state): State<AppState>,
     Json(request): Json<CreateProtocolRequest>,
 ) -> Result<(StatusCode, Json<ProtocolResponse>), AppError> {
-    // Validate protocol type is known
-    let engine = state.protocol_engine();
-    let known_types: Vec<String> = engine
-        .list_types()
-        .into_iter()
-        .map(|(t, _)| t.to_string())
-        .collect();
-    if !known_types.contains(&request.protocol_type) {
-        return Err(AppError::bad_request(format!(
-            "Unknown protocol type: {}. Valid types: {}",
-            request.protocol_type,
-            known_types.join(", ")
-        )));
-    }
-
-    let repo = &state.repos().protocols;
-    let row = repo
-        .create_protocol(CreateProtocolInput {
+    let row = protocol_svc::create_protocol(
+        state.repos().protocols.as_ref(),
+        state.protocol_engine(),
+        protocol_svc::CreateProtocolServiceInput {
             name: request.name,
-            description: request.description.unwrap_or_default(),
+            description: request.description,
             protocol_type: request.protocol_type,
-            config: request.config.unwrap_or(serde_json::json!({})),
+            config: request.config,
             agent_id: request.agent_id,
             output_schema_id: request.output_schema_id,
             prompt_template_id: request.prompt_template_id,
-        })
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+        },
+    )
+    .await?;
 
     let (agent, output_schema, prompt_template) =
-        resolve_protocol_associations(&state, &row).await?;
+        resolve_and_map_associations(&state, &row).await?;
 
     Ok((
         StatusCode::CREATED,
@@ -272,20 +301,11 @@ pub async fn get_protocol(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ProtocolResponse>, AppError> {
-    let repo = &state.repos().protocols;
-    let row = repo
-        .get_protocol(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or_else(|| AppError::not_found("protocol"))?;
-
-    let ports = repo
-        .list_protocol_ports(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let proto_repo = state.repos().protocols.as_ref();
+    let (row, ports) = protocol_svc::get_protocol(proto_repo, id).await?;
 
     let (agent, output_schema, prompt_template) =
-        resolve_protocol_associations(&state, &row).await?;
+        resolve_and_map_associations(&state, &row).await?;
 
     Ok(Json(ProtocolResponse {
         id: row.id,
@@ -294,16 +314,7 @@ pub async fn get_protocol(
         protocol_type: row.protocol_type,
         config: row.config,
         version: row.version,
-        ports: ports
-            .into_iter()
-            .map(|p| ProtocolPortResponse {
-                id: p.id,
-                port_name: p.port_name,
-                description: p.description,
-                agent_id: p.agent_id,
-                display_order: p.display_order,
-            })
-            .collect(),
+        ports: ports.into_iter().map(map_port_response).collect(),
         agent,
         output_schema,
         prompt_template,
@@ -316,16 +327,12 @@ pub async fn update_protocol(
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateProtocolRequest>,
 ) -> Result<Json<ProtocolResponse>, AppError> {
-    let repo = &state.repos().protocols;
+    let proto_repo = state.repos().protocols.as_ref();
 
-    // Verify exists
-    repo.get_protocol(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or_else(|| AppError::not_found("protocol"))?;
-
-    let row = repo
-        .update_protocol(UpdateProtocolInput {
+    let row = protocol_svc::update_protocol(
+        proto_repo,
+        id,
+        UpdateProtocolInput {
             id,
             name: request.name,
             description: request.description,
@@ -333,17 +340,14 @@ pub async fn update_protocol(
             agent_id: request.agent_id,
             output_schema_id: request.output_schema_id,
             prompt_template_id: request.prompt_template_id,
-        })
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+        },
+    )
+    .await?;
 
-    let ports = repo
-        .list_protocol_ports(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let ports = protocol_svc::list_protocol_ports(proto_repo, id).await?;
 
     let (agent, output_schema, prompt_template) =
-        resolve_protocol_associations(&state, &row).await?;
+        resolve_and_map_associations(&state, &row).await?;
 
     Ok(Json(ProtocolResponse {
         id: row.id,
@@ -352,16 +356,7 @@ pub async fn update_protocol(
         protocol_type: row.protocol_type,
         config: row.config,
         version: row.version,
-        ports: ports
-            .into_iter()
-            .map(|p| ProtocolPortResponse {
-                id: p.id,
-                port_name: p.port_name,
-                description: p.description,
-                agent_id: p.agent_id,
-                display_order: p.display_order,
-            })
-            .collect(),
+        ports: ports.into_iter().map(map_port_response).collect(),
         agent,
         output_schema,
         prompt_template,
@@ -373,16 +368,7 @@ pub async fn delete_protocol(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    let repo = &state.repos().protocols;
-    repo.get_protocol(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or_else(|| AppError::not_found("protocol"))?;
-
-    repo.delete_protocol(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-
+    protocol_svc::delete_protocol(state.repos().protocols.as_ref(), id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -396,46 +382,17 @@ pub async fn create_port(
     Path(protocol_id): Path<Uuid>,
     Json(request): Json<CreatePortRequest>,
 ) -> Result<(StatusCode, Json<ProtocolPortResponse>), AppError> {
-    // Validate port name format
-    if request.port_name.is_empty()
-        || request.port_name.len() > MAX_PORT_NAME_LEN
-        || !PORT_NAME_REGEX.is_match(&request.port_name)
-    {
-        return Err(AppError::bad_request(format!(
-            "Invalid port name \"{}\": must match [a-z][a-z0-9_]* and be at most {} characters",
-            request.port_name, MAX_PORT_NAME_LEN
-        )));
-    }
+    let port = protocol_svc::create_port(
+        state.repos().protocols.as_ref(),
+        protocol_id,
+        request.port_name,
+        request.description,
+        request.agent_id,
+        request.display_order,
+    )
+    .await?;
 
-    let repo = &state.repos().protocols;
-
-    // Verify protocol exists
-    repo.get_protocol(protocol_id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or_else(|| AppError::not_found("protocol"))?;
-
-    let port = repo
-        .create_protocol_port(
-            protocol_id,
-            request.port_name,
-            request.description.unwrap_or_default(),
-            request.agent_id,
-            request.display_order.unwrap_or(0),
-        )
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-
-    Ok((
-        StatusCode::CREATED,
-        Json(ProtocolPortResponse {
-            id: port.id,
-            port_name: port.port_name,
-            description: port.description,
-            agent_id: port.agent_id,
-            display_order: port.display_order,
-        }),
-    ))
+    Ok((StatusCode::CREATED, Json(map_port_response(port))))
 }
 
 /// PUT /api/protocols/:protocol_id/ports/:port_id — Update a port.
@@ -444,35 +401,17 @@ pub async fn update_port(
     Path((_, port_id)): Path<(Uuid, Uuid)>,
     Json(request): Json<UpdatePortRequest>,
 ) -> Result<Json<ProtocolPortResponse>, AppError> {
-    // Validate port name if being updated
-    if let Some(ref name) = request.port_name {
-        if name.is_empty() || name.len() > MAX_PORT_NAME_LEN || !PORT_NAME_REGEX.is_match(name) {
-            return Err(AppError::bad_request(format!(
-                "Invalid port name \"{}\": must match [a-z][a-z0-9_]* and be at most {} characters",
-                name, MAX_PORT_NAME_LEN
-            )));
-        }
-    }
+    let port = protocol_svc::update_port(
+        state.repos().protocols.as_ref(),
+        port_id,
+        request.port_name,
+        request.description,
+        request.agent_id,
+        request.display_order,
+    )
+    .await?;
 
-    let repo = &state.repos().protocols;
-    let port = repo
-        .update_protocol_port(
-            port_id,
-            request.port_name,
-            request.description,
-            request.agent_id,
-            request.display_order,
-        )
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-
-    Ok(Json(ProtocolPortResponse {
-        id: port.id,
-        port_name: port.port_name,
-        description: port.description,
-        agent_id: port.agent_id,
-        display_order: port.display_order,
-    }))
+    Ok(Json(map_port_response(port)))
 }
 
 /// DELETE /api/protocols/:protocol_id/ports/:port_id — Delete a port.
@@ -480,10 +419,7 @@ pub async fn delete_port(
     State(state): State<AppState>,
     Path((_, port_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
-    let repo = &state.repos().protocols;
-    repo.delete_protocol_port(port_id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    protocol_svc::delete_port(state.repos().protocols.as_ref(), port_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -496,36 +432,14 @@ pub async fn preview_expansion(
     State(state): State<AppState>,
     Path(protocol_id): Path<Uuid>,
 ) -> Result<Json<PreviewResponse>, AppError> {
-    let repo = &state.repos().protocols;
-    let protocol = repo
-        .get_protocol(protocol_id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or_else(|| AppError::not_found("protocol"))?;
-
-    let ports = repo
-        .list_protocol_ports(protocol_id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-
-    // Resolve agent names, tools, and content schemas for prompt injection
-    let agent_names = resolve_agent_names(&state, &ports).await?;
-    let agent_tools = resolve_agent_tools(&state, &ports).await?;
-    let agent_schemas = resolve_agent_schemas(&state, &ports).await?;
-
-    let engine = state.protocol_engine();
-    let config = engine.build_config(
-        &protocol.protocol_type,
-        protocol.config,
-        &ports,
-        &agent_names,
-        &agent_tools,
-        &agent_schemas,
-    );
-
-    let expansion = engine
-        .preview(&config)
-        .map_err(|e| AppError::bad_request(e.to_string()))?;
+    let expansion = protocol_svc::preview_expansion(
+        state.repos().protocols.as_ref(),
+        state.repo().as_ref(),
+        state.repos().output_schemas.as_ref(),
+        state.protocol_engine(),
+        protocol_id,
+    )
+    .await?;
 
     Ok(Json(PreviewResponse { expansion }))
 }
@@ -537,199 +451,31 @@ pub async fn apply_protocol(
     Path((protocol_id, step_id)): Path<(Uuid, Uuid)>,
     Json(_request): Json<ApplyProtocolRequest>,
 ) -> Result<(StatusCode, Json<ApplyResponse>), AppError> {
-    let proto_repo = &state.repos().protocols;
-    let wf_repo = &state.repos().workflows;
-    let os_repo = &state.repos().output_schemas;
-
-    // Load protocol + ports
-    let protocol = proto_repo
-        .get_protocol(protocol_id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or_else(|| AppError::not_found("protocol"))?;
-
-    let ports = proto_repo
-        .list_protocol_ports(protocol_id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-
-    // Verify the target step exists
-    let anchor_step = wf_repo
-        .get_step(step_id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or_else(|| AppError::not_found("workflow step"))?;
-
-    // Resolve agent names, tools, and content schemas
-    let agent_names = resolve_agent_names(&state, &ports).await?;
-    let agent_tools = resolve_agent_tools(&state, &ports).await?;
-    let agent_schemas = resolve_agent_schemas(&state, &ports).await?;
-
-    let protocol_config_json = protocol.config.clone();
-
-    // Expand
-    let engine = state.protocol_engine();
-    let config = engine.build_config(
-        &protocol.protocol_type,
-        protocol_config_json,
-        &ports,
-        &agent_names,
-        &agent_tools,
-        &agent_schemas,
-    );
-    let expansion = engine
-        .expand(&config)
-        .map_err(|e| AppError::bad_request(e.to_string()))?;
-
-    // 1. Create output schema
-    let schema_name = format!("{} — auto-generated", protocol.name);
-    let schema_row = os_repo
-        .create_output_schema(
-            Some(auth.user_id.0),
-            schema_name,
-            expansion.output_schema.clone(),
-        )
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-
-    // 2. Update anchor step with output schema and prompt injection.
-    // Resolve the anchor's output variable name for for_each_ref resolution.
-    let anchor_output_var = anchor_step
-        .output_variable_name
-        .clone()
-        .unwrap_or_else(|| format!("protocol_{}", protocol_id));
-    let mut updated_step = anchor_step.clone();
-    updated_step.output_schema_id = Some(schema_row.id);
-    updated_step.output_variable_name = Some(anchor_output_var.clone());
-    if !expansion.prompt_injection.is_empty() {
-        updated_step.prompt_template = format!(
-            "{}\n\n{}",
-            anchor_step.prompt_template, expansion.prompt_injection
-        );
-    }
-    wf_repo
-        .update_step(updated_step)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-
-    // 3. Create downstream steps, routing rules, and edges
-    let mut created_steps = Vec::new();
-    for step_def in &expansion.steps {
-        // Resolve the {anchor_output} sentinel in for_each_ref
-        let resolved_for_each_ref = step_def.for_each_ref.as_ref().map(|r| {
-            if r == "{anchor_output}" {
-                anchor_output_var.clone()
-            } else {
-                r.clone()
-            }
-        });
-
-        let new_step = crate::db::WorkflowStepRow {
-            id: Uuid::new_v4(),
-            workflow_id: anchor_step.workflow_id,
-            agent_id: step_def.agent_id,
-            execution_mode: step_def.execution_mode.clone(),
-            agent_execution_mode: None,
-            for_each_ref: resolved_for_each_ref,
-            prompt_template_id: None,
-            prompt_template: step_def
-                .prompt_template
-                .clone()
-                .unwrap_or_else(|| "{task_input}".to_string()),
-            output_schema_id: None,
-            output_variable_name: Some(step_def.port_name.clone()),
-            interactive_agent_id: None,
-            for_each_label_field: step_def.for_each_label_field.clone(),
-            room_id: None,
-            routing_mode: step_def.routing_mode.clone(),
-            routing_field: step_def.routing_field.clone(),
-            display_order: created_steps.len() as i32 + anchor_step.display_order + 1,
-            version: 1,
-            reasoning_trace: false,
-            verification_agent_ids: None,
-            position_x: None,
-            position_y: None,
-            width: None,
-            height: None,
-            name: None,
-            system_prompt_suffix: None,
-            visible: true,
-            description: String::new(),
-            board_context_cache: String::new(),
-            board_context_updated_at: None,
-            goal_summary: String::new(),
-            goal_summary_updated_at: None,
-            sub_workflow_template_id: None,
-            child_workflow_id: None,
-            is_designer_step: false,
-        };
-
-        let created = wf_repo
-            .create_step(new_step)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-
-        // Create routing rules for label-routed steps
-        for rule in &step_def.routing_rules {
-            wf_repo
-                .create_routing_rule(
-                    created.id,
-                    &rule.label_value,
-                    rule.agent_id,
-                    rule.description.clone(),
-                    rule.display_order,
-                )
-                .await
-                .map_err(|e| AppError::Internal(e.to_string()))?;
-        }
-
-        created_steps.push(CreatedStepResponse {
-            port_name: step_def.port_name.clone(),
-            step_id: created.id,
-            agent_id: step_def.agent_id,
-        });
-    }
-
-    // 4. Create edges from anchor → downstream steps
-    let mut all_edges = wf_repo
-        .list_edges(anchor_step.workflow_id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-
-    // Wire edges from anchor → newly created downstream steps (if any).
-    for (edge_def, created) in expansion.edges.iter().zip(created_steps.iter()) {
-        all_edges.push(crate::db::WorkflowStepEdgeRow {
-            id: Uuid::new_v4(),
-            from_step_id: step_id,
-            to_step_id: created.step_id,
-            from_output_port: Some(edge_def.from_output_port.clone()),
-            to_input_port: Some(edge_def.to_input_port.clone()),
-            transform_jsonpath: None,
-            condition_type: edge_def.condition_type.clone(),
-            condition_value: edge_def.condition_value.clone(),
-            edge_label: Some(edge_def.target_port_name.clone()),
-            workflow_id: anchor_step.workflow_id,
-        });
-    }
-
-    wf_repo
-        .set_edges(anchor_step.workflow_id, all_edges)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-
-    // 5. Store protocol linkage snapshot
-    let snapshot =
-        serde_json::to_value(&expansion).map_err(|e| AppError::Internal(e.to_string()))?;
-    proto_repo
-        .create_step_protocol(step_id, protocol_id, snapshot)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let result = protocol_svc::apply_protocol(
+        state.repos().protocols.as_ref(),
+        state.repos().workflows.as_ref(),
+        state.repos().output_schemas.as_ref(),
+        state.repo().as_ref(),
+        state.protocol_engine(),
+        auth.user_id.0,
+        protocol_id,
+        step_id,
+    )
+    .await?;
 
     Ok((
         StatusCode::CREATED,
         Json(ApplyResponse {
-            output_schema_id: schema_row.id,
-            created_steps,
+            output_schema_id: result.output_schema_id,
+            created_steps: result
+                .created_steps
+                .into_iter()
+                .map(|s| CreatedStepResponse {
+                    port_name: s.port_name,
+                    step_id: s.step_id,
+                    agent_id: s.agent_id,
+                })
+                .collect(),
         }),
     ))
 }
@@ -739,157 +485,9 @@ pub async fn unapply_protocol(
     State(state): State<AppState>,
     Path((_, step_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
-    let repo = &state.repos().protocols;
+    let repo = state.repos().protocols.as_ref();
     repo.delete_step_protocol(step_id)
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
     Ok(StatusCode::NO_CONTENT)
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/// Resolve the associated agent, output schema, and prompt template for a protocol row.
-async fn resolve_protocol_associations(
-    state: &AppState,
-    row: &crate::db::ProtocolRow,
-) -> Result<
-    (
-        Option<ProtocolAgentResponse>,
-        Option<ProtocolSchemaResponse>,
-        Option<ProtocolTemplateResponse>,
-    ),
-    AppError,
-> {
-    let agent = if let Some(agent_id) = row.agent_id {
-        state
-            .repo()
-            .get_persisted_agent(agent_id)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?
-            .map(|a| ProtocolAgentResponse {
-                id: a.id,
-                name: a.name,
-                system_prompt: a.system_prompt,
-                model_provider: a.model_provider,
-                model_id: a.model_id,
-            })
-    } else {
-        None
-    };
-
-    let output_schema = if let Some(schema_id) = row.output_schema_id {
-        state
-            .repos()
-            .output_schemas
-            .get_output_schema(schema_id)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?
-            .map(|s| ProtocolSchemaResponse {
-                id: s.id,
-                name: s.name,
-                schema: s.schema,
-            })
-    } else {
-        None
-    };
-
-    let prompt_template = if let Some(template_id) = row.prompt_template_id {
-        state
-            .repos()
-            .prompt_templates
-            .get_prompt_template(template_id)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?
-            .map(|t| ProtocolTemplateResponse {
-                id: t.id,
-                name: t.name,
-                content: t.content,
-            })
-    } else {
-        None
-    };
-
-    Ok((agent, output_schema, prompt_template))
-}
-
-/// Resolve agent names from agent IDs in the port rows.
-async fn resolve_agent_names(
-    state: &AppState,
-    ports: &[crate::db::ProtocolPortRow],
-) -> Result<HashMap<Uuid, String>, AppError> {
-    let mut names = HashMap::new();
-    for port in ports {
-        if names.contains_key(&port.agent_id) {
-            continue;
-        }
-        let agent = state
-            .repo()
-            .get_persisted_agent(port.agent_id)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?
-            .ok_or_else(|| {
-                AppError::bad_request(format!(
-                    "Agent {} not found for port {}",
-                    port.agent_id, port.port_name
-                ))
-            })?;
-        names.insert(port.agent_id, agent.name);
-    }
-    Ok(names)
-}
-
-/// Resolve agent output schemas from agent IDs in the port rows.
-/// Only includes agents that have an `output_schema_id` set.
-async fn resolve_agent_schemas(
-    state: &AppState,
-    ports: &[crate::db::ProtocolPortRow],
-) -> Result<HashMap<Uuid, serde_json::Value>, AppError> {
-    let mut schemas = HashMap::new();
-    for port in ports {
-        if schemas.contains_key(&port.agent_id) {
-            continue;
-        }
-        let agent = state
-            .repo()
-            .get_persisted_agent(port.agent_id)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-        if let Some(agent) = agent {
-            if let Some(schema_id) = agent.output_schema_id {
-                let schema_row = state
-                    .repos()
-                    .output_schemas
-                    .get_output_schema(schema_id)
-                    .await
-                    .map_err(|e| AppError::Internal(e.to_string()))?;
-                if let Some(row) = schema_row {
-                    schemas.insert(port.agent_id, row.schema);
-                }
-            }
-        }
-    }
-    Ok(schemas)
-}
-
-/// Resolve agent tool names from agent IDs in the port rows.
-async fn resolve_agent_tools(
-    state: &AppState,
-    ports: &[crate::db::ProtocolPortRow],
-) -> Result<HashMap<Uuid, Vec<String>>, AppError> {
-    let mut tools_map = HashMap::new();
-    for port in ports {
-        if tools_map.contains_key(&port.agent_id) {
-            continue;
-        }
-        let tools = state
-            .repo()
-            .get_agent_tools(port.agent_id)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-        let tool_names: Vec<String> = tools.into_iter().map(|t| t.name).collect();
-        tools_map.insert(port.agent_id, tool_names);
-    }
-    Ok(tools_map)
 }
