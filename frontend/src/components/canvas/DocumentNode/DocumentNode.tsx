@@ -8,7 +8,9 @@ import { CanvasHandle } from '../CanvasHandle'
 import { SharePickerPanel } from '../SharePickerPanel'
 import { DetailLevel } from '../constants'
 import { DOCUMENT_NODE } from './constants'
-import { DocumentNodeHeader } from './DocumentNodeHeader'
+import { ContextNodeIcon as DocumentNodeIcon } from '../Icons/ContextNodeIcon'
+import { ProtocolBadge } from '../ProtocolBadge'
+import { NodeHeader } from '../execution'
 import { DocumentNodeContent } from './DocumentNodeContent'
 import type { DocumentNodeData } from './types'
 import { nodeDataEqual } from '../mappers'
@@ -72,7 +74,13 @@ function DocumentNodeComponent({ id, data, selected }: NodeProps) {
           '&:active': { cursor: 'grabbing' },
         }}
       >
-        <DocumentNodeHeader name={nodeData.label} parentStepName={nodeData.parentStepName} accentColor={accentColor} />
+        <NodeHeader
+          icon={<DocumentNodeIcon color={accentColor} size={18} />}
+          title={nodeData.label}
+          subtitle={nodeData.parentStepName}
+          accentColor={accentColor}
+          badge={<ProtocolBadge color={accentColor} label="Document" />}
+        />
       </Box>
 
       {/* Content area — read-only or share overlay */}

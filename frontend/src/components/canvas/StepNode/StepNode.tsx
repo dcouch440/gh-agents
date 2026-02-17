@@ -4,6 +4,7 @@ import type { NodeProps } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import { useTheme } from '@mui/material/styles'
+import { useStore, workflowExecutionStore } from '@/stores'
 import type { StepNodeData } from '../mappers'
 import { nodeDataEqual } from '../mappers'
 import { CanvasHandle } from '../CanvasHandle'
@@ -13,6 +14,7 @@ import { useProtocolHighlight } from '../useProtocolHighlight'
 import { getNodeHighlightStyles } from '../nodeHighlightStyles'
 import { useCanvasLOD } from '../useCanvasLOD'
 import { MinimalNodeShell } from '../MinimalNodeShell'
+import { NodeHeader, ExecutionStatusBadge, ExecutionProgress, toExecutionStatus } from '../execution'
 import { SectionLabel } from './SectionLabel'
 import { BadgeList } from './BadgeList'
 import { STEP_TYPE_ICONS, DEFAULT_STEP_TYPE_ICON } from './constants'
@@ -24,6 +26,11 @@ function StepNodeComponent({ id, data, selected }: NodeProps) {
   const highlightMode = useProtocolHighlight(CanvasNodeKind.STEP, id, nodeData.protocolStepId)
   const accentColor = STEP_TYPE_COLORS[nodeData.stepType] ?? GREYSCALE_ACCENT
   const IconComponent = STEP_TYPE_ICONS[nodeData.stepType] ?? DEFAULT_STEP_TYPE_ICON
+
+  // Execution state
+  const stepExec = useStore(workflowExecutionStore.store, workflowExecutionStore.selectStepState(id))
+  const execStatus = toExecutionStatus(stepExec?.status)
+  const isExecuting = execStatus !== 'idle'
   const highlight = getNodeHighlightStyles({
     selected: selected === true,
     accentColor,
@@ -72,95 +79,74 @@ function StepNodeComponent({ id, data, selected }: NodeProps) {
       {/* Header */}
       <Box
         sx={{
-          px: 1.5,
+          px: 0,
           py: 1,
           backgroundColor: theme.palette.custom.bgHeader,
           borderBottom: hasBody ? 1 : 0,
           borderColor: 'divider',
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Box
-            sx={{
-              width: 24,
-              height: 24,
-              borderRadius: '6px',
-              backgroundColor: `${accentColor}25`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
-            <IconComponent sx={{ fontSize: 14, color: accentColor }} />
-          </Box>
-          <Typography
-            sx={{
-              fontSize: 12,
-              fontWeight: 600,
-              flex: 1,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              color: 'text.primary',
-            }}
-          >
-            {nodeData.label}
-          </Typography>
-          {nodeData.protocolType !== null ? (
-            <Box
-              sx={{
-                px: 0.75,
-                py: 0.25,
-                borderRadius: '4px',
-                backgroundColor: `${PROTOCOL_TYPE_COLORS[nodeData.protocolType] ?? DEFAULT_STEP_TYPE_COLOR}20`,
-                flexShrink: 0,
-              }}
-            >
-              <Typography
+        <NodeHeader
+          icon={<IconComponent sx={{ fontSize: 14, color: accentColor }} />}
+          title={nodeData.label}
+          subtitle={subtitle}
+          accentColor={accentColor}
+          size="compact"
+          badge={
+            isExecuting ? (
+              <ExecutionStatusBadge status={execStatus} />
+            ) : nodeData.protocolType !== null ? (
+              <Box
                 sx={{
-                  fontSize: 8,
-                  textTransform: 'uppercase',
-                  color: PROTOCOL_TYPE_COLORS[nodeData.protocolType] ?? DEFAULT_STEP_TYPE_COLOR,
-                  letterSpacing: '0.06em',
-                  fontWeight: 700,
-                  lineHeight: 1,
+                  px: 0.75,
+                  py: 0.25,
+                  borderRadius: '4px',
+                  backgroundColor: `${PROTOCOL_TYPE_COLORS[nodeData.protocolType] ?? DEFAULT_STEP_TYPE_COLOR}20`,
+                  flexShrink: 0,
                 }}
               >
-                {nodeData.protocolType}
+                <Typography
+                  sx={{
+                    fontSize: 8,
+                    textTransform: 'uppercase',
+                    color: PROTOCOL_TYPE_COLORS[nodeData.protocolType] ?? DEFAULT_STEP_TYPE_COLOR,
+                    letterSpacing: '0.06em',
+                    fontWeight: 700,
+                    lineHeight: 1,
+                  }}
+                >
+                  {nodeData.protocolType}
+                </Typography>
+              </Box>
+            ) : (
+              <Typography
+                sx={{
+                  fontSize: 9,
+                  textTransform: 'uppercase',
+                  color: 'text.secondary',
+                  letterSpacing: '0.05em',
+                  fontWeight: 600,
+                  flexShrink: 0,
+                }}
+              >
+                {nodeData.stepType}
               </Typography>
-            </Box>
-          ) : (
-            <Typography
-              sx={{
-                fontSize: 9,
-                textTransform: 'uppercase',
-                color: 'text.secondary',
-                letterSpacing: '0.05em',
-                fontWeight: 600,
-                flexShrink: 0,
-              }}
-            >
-              {nodeData.stepType}
-            </Typography>
-          )}
-        </Box>
-        {subtitle !== null && (
-          <Typography
-            sx={{
-              fontSize: 10,
-              color: 'text.secondary',
-              mt: 0.25,
-              pl: 4,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {subtitle}
-          </Typography>
-        )}
+            )
+          }
+        />
       </Box>
+
+      {/* For-each progress */}
+      {stepExec?.forEachProgress !== null && stepExec?.forEachProgress !== undefined && (
+        <Box sx={{ px: 1.5, py: 0.5, borderBottom: 1, borderColor: 'divider' }}>
+          <ExecutionProgress
+            completed={stepExec.forEachProgress.completed}
+            total={stepExec.forEachProgress.total}
+            label="Items"
+            accentColor={accentColor}
+          />
+        </Box>
+      )}
 
       {/* Body — conditional */}
       {hasBody && (

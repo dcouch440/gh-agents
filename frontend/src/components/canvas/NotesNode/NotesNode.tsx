@@ -6,7 +6,9 @@ import { useTheme } from '@mui/material/styles'
 import { CanvasHandle } from '../CanvasHandle'
 import { DetailLevel } from '../constants'
 import { NOTES_NODE } from './constants'
-import { NotesNodeHeader } from './NotesNodeHeader'
+import { NotesIcon } from '../Icons/NotesIcon'
+import { ProtocolBadge } from '../ProtocolBadge'
+import { NodeHeader } from '../execution'
 import { NotesNodeContent } from './NotesNodeContent'
 import type { NotesNodeData } from './types'
 import { nodeDataEqual } from '../mappers'
@@ -68,7 +70,13 @@ function NotesNodeComponent({ id, data, selected }: NodeProps) {
           '&:active': { cursor: 'grabbing' },
         }}
       >
-        <NotesNodeHeader name={nodeData.label} stepName={nodeData.stepName} accentColor={accentColor} />
+        <NodeHeader
+          icon={<NotesIcon color={accentColor} size={18} />}
+          title={nodeData.label}
+          subtitle={nodeData.stepName}
+          accentColor={accentColor}
+          badge={<ProtocolBadge color={accentColor} label="Notes" />}
+        />
       </Box>
 
       <Box className="nowheel nodrag nopan" sx={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative' }}>

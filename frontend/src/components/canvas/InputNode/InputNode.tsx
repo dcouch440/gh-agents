@@ -8,7 +8,10 @@ import { SharePickerPanel } from '../SharePickerPanel'
 import { CanvasHandle } from '../CanvasHandle'
 import { STEP_TYPE_COLORS, GREYSCALE_ACCENT, DetailLevel } from '../constants'
 import { INPUT_NODE } from './constants'
-import { InputNodeHeader } from './InputNodeHeader'
+import { InputNodeIcon } from '../Icons/InputNodeIcon'
+import { ProtocolBadge } from '../ProtocolBadge'
+import { NodeHeader } from '../execution'
+import { InputNodeRunButton } from './InputNodeRunButton'
 import { ContextNodeContent } from '../ContextNode/ContextNodeContent'
 import type { InputNodeData } from './types'
 import { nodeDataEqual } from '../mappers'
@@ -79,7 +82,14 @@ function InputNodeComponent({ id, data, selected }: NodeProps) {
           '&:active': { cursor: 'grabbing' },
         }}
       >
-        <InputNodeHeader stepId={id} name={nodeData.label} accentColor={accentColor} />
+        <NodeHeader
+          icon={<InputNodeIcon color={accentColor} size={18} />}
+          title={nodeData.label}
+          subtitle="Editable input for each run"
+          accentColor={accentColor}
+          actions={<Box className="nodrag"><InputNodeRunButton stepId={id} /></Box>}
+          badge={<ProtocolBadge color={accentColor} label="Input" animated />}
+        />
       </Box>
 
       {/* Content area — interactive, no drag */}
