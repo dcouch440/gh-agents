@@ -1,43 +1,22 @@
-# Auto Block UI
+# Smarter Assistant
 
-A block of conversations.
+A layered system
 
-              Agent
-              |
-              Agent
-              |
-              Agent -> Document     ...
-              |                     |
-              Agent -> Document     Agent
-              |                     |
-              Agent                 Agent
-              |                     |
-              Designer              Designer
-              |                     |
-Input-Context-Protocol -----------> Protocol
-(Instead of wires, we have auto piping between gaps, like hard pipes)
+# About
 
-## About
+The assistant needs a few upgrades as he seems to be fairly busy with his job to add agents one by one. This results in the UI displaying tool uses and ultamatly cutting off the the tool use and leaving the chat empty.
 
-I was noticing the board would look great if every single block was the same size and lined up next to each other. Imagine for a second if we had a special algorithm, coded with precision. The algorithm would make the blocks "notch" to their size. Additionally, when blocks get close to each other they stick. Pipes run a special piping algorithm that can weave them in between pathways. This is a profound concept and may require online research into algorithms. How it would be accomplished etc... We want to ensure that our code is the best in the business while using our Collections static primitive methods.
+Heres what we should do instead:
+Assistant dispatches what he needs planned in a detailed description right into a tool.
+The tool responds with a message notifying the assistant it is being worked on so conversation can continue.
+A tool display shows that gives the activity of what is happening. The user should be able to cancel the tool use at any moment by canceling the stream.
+Users can continue to talk to the assistant as the changes are being made.
+The assistant can dispatch NEW information DURING the update as well, so it dynamically changes with a new destiny.
 
-The "pipes" can be auto snapped at time of attachment. I think it would be cool to have pipes that linen up next to each other nice and unified. The user is not always going to want to have things the default size so we want to be smart about how we approach the alignment.
+The assistant should know about capabilities (small one line key and value) to know "whats possible".
 
-We have a pretty nice store already in the front end so we should be able to build off that and maybe refactor one of the UI sections to have a truly effective system that routes events only to the subscribing functions so we do not have a lot of renders.
+The second layer will have all the capabilities information (detailed) and a single planning agent builds the plan based on what we already have and then makes updates.
 
-Theres another issue to consider. What happens when some one resizes a block ON TOP of another one. Do we shove the other ones out of the way and break the sleek seem? It almost seems like we might be able to resize many nodes on the way over to "perfect the block". Like automatic resizing. Very cool...
+The goal of the assistant is to create a detailed task description to the second tiered agent.
 
-This also means the need to be mindful of the ports on the end of the block. We must ensure the pipes are coming out of the right ones.
-
-Assistants notes: Always top
-Protocol: All sides (Left: input, context), (Top: Agents), (Right: Next protocol), (Bottom: Notes)
-Users Notes (context): Always Left
-Input: Always Left (one use only)
-Agent (Dynamic Node): All sides (Left: Possible parallel agent), (Right: Document), (Top: Agent), (Bottom: Protocol, Agent)
-Document: Always left
-
-
-With that picture painted. You can see that we will need to line the pipes up to run in parallel lines real sleek like.
-
-The main protocol section most likely will always have to be separated.
-
+This would keep the conversation roleing.
