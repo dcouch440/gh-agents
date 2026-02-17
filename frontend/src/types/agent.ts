@@ -16,7 +16,6 @@ type Agent = {
   model_temperature: number
   status: string
   output_schema_id: string | null
-  router_id: string | null
   version: number
 }
 

@@ -5,10 +5,9 @@
 use std::sync::Arc;
 
 use crate::db::traits::{
-    MockAgentExecutionRepo, MockContentVersionRepo, MockContextStoreRepo, MockDocumentRepo,
-    MockOutputSchemaRepo, MockPromptTemplateRepo, MockProtocolRepo, MockResultRepo, MockRoomRepo,
-    MockRouterRequestRepo, MockSystemConfigRepo, MockTokenLedgerRepo, MockToolCapabilityRepo,
-    MockToolRouterRepo, MockUserRepo, MockWorkflowRepo,
+    MockAgentExecutionRepo, MockContentVersionRepo, MockDocumentRepo, MockOutputSchemaRepo,
+    MockPromptTemplateRepo, MockProtocolRepo, MockResultRepo, MockRoomRepo, MockSystemConfigRepo,
+    MockTokenLedgerRepo, MockToolCapabilityRepo, MockUserRepo, MockWorkflowRepo,
 };
 
 use super::Repos;
@@ -27,9 +26,6 @@ pub fn default_mock_repos() -> Repos {
         Arc::new(MockAgentExecutionRepo::new()),
         Arc::new(MockTokenLedgerRepo::new()),
         Arc::new(MockResultRepo::new()),
-        Arc::new(MockToolRouterRepo::new()),
-        Arc::new(MockContextStoreRepo::new()),
-        Arc::new(MockRouterRequestRepo::new()),
         Arc::new(MockRoomRepo::new()),
         Arc::new(MockToolCapabilityRepo::new()),
         Arc::new(MockSystemConfigRepo::new()),
@@ -108,30 +104,6 @@ impl MockReposBuilder {
     /// Override the results repository.
     pub fn with_results(mut self, repo: Arc<dyn crate::db::traits::ResultRepo>) -> Self {
         self.repos.results = repo;
-        self
-    }
-
-    /// Override the tool routers repository.
-    pub fn with_tool_routers(mut self, repo: Arc<dyn crate::db::traits::ToolRouterRepo>) -> Self {
-        self.repos.tool_routers = repo;
-        self
-    }
-
-    /// Override the context store repository.
-    pub fn with_context_store(
-        mut self,
-        repo: Arc<dyn crate::db::traits::ContextStoreRepo>,
-    ) -> Self {
-        self.repos.context_store = repo;
-        self
-    }
-
-    /// Override the router requests repository.
-    pub fn with_router_requests(
-        mut self,
-        repo: Arc<dyn crate::db::traits::RouterRequestRepo>,
-    ) -> Self {
-        self.repos.router_requests = repo;
         self
     }
 

@@ -37,8 +37,6 @@ use utoipa::OpenApi;
         (name = "Agent Executions", description = "Individual agent execution records"),
         (name = "Costs", description = "Token usage and cost tracking"),
         (name = "Results", description = "Saved structured outputs"),
-        (name = "Tool Routers", description = "Intelligent tool routing agents"),
-        (name = "Session Context", description = "Context store and router requests for sessions"),
         (name = "Step Ports", description = "Input and output port definitions for workflow steps"),
         (name = "Routing Rules", description = "Label-based routing rules for for-each steps"),
         (name = "Room Outputs", description = "Structured outputs from room sessions"),
@@ -139,17 +137,6 @@ use utoipa::OpenApi;
         super::api::results::list_results,
         super::api::results::get_result,
         super::api::results::delete_result,
-        // Tool Routers
-        super::api::tool_routers::list_tool_routers,
-        super::api::tool_routers::create_tool_router,
-        super::api::tool_routers::get_tool_router,
-        super::api::tool_routers::update_tool_router,
-        super::api::tool_routers::delete_tool_router,
-        super::api::tool_routers::get_router_tools,
-        super::api::tool_routers::set_router_tools,
-        // Session Context
-        super::api::session_context::get_session_context,
-        super::api::session_context::list_session_requests,
         // Step Ports
         super::api::step_ports::list_step_inputs,
         super::api::step_ports::create_step_input,
@@ -233,9 +220,6 @@ use utoipa::OpenApi;
         super::api::workflows::EdgeResponse,
         super::api::workflows::StepDocumentRequest,
         super::api::workflows::StepDocumentResponse,
-        super::api::tool_routers::CreateToolRouterRequest,
-        super::api::tool_routers::UpdateToolRouterRequest,
-        super::api::tool_routers::SetRouterToolsRequest,
         // Step Ports
         super::api::step_ports::CreateStepInputRequest,
         super::api::step_ports::CreateStepOutputRequest,
@@ -252,9 +236,6 @@ use utoipa::OpenApi;
         super::api::system_config::SystemConfigResponse,
         // DB types used directly in responses
         crate::db::DocumentSearchResult,
-        crate::db::ToolRouterRow,
-        crate::db::ContextStoreRow,
-        crate::db::RouterRequestRow,
         crate::db::traits::ModelSpendRow,
         // Domain types
         crate::types::Task,

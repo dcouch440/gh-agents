@@ -43,17 +43,9 @@ import type {
   UpdateStepRequest,
   WorkflowStepEdge,
   EdgeRequest,
-  RouterMode,
-  CreateRouterModeRequest,
-  UpdateRouterModeRequest,
-  SetModeToolsRequest,
   SendExecutionMessageRequest,
   ApproveExecutionRequest,
   SendMessageResponse,
-  ToolRouter,
-  CreateToolRouterRequest,
-  UpdateToolRouterRequest,
-  SetRouterToolsRequest,
   Room,
   RoomMember,
   RoomSession,
@@ -392,39 +384,6 @@ const modes = freeze({
   list: (config?: RequestConfig) => baseApi.get<unknown>(API.MODES, config),
 })
 
-const toolRouters = freeze({
-  list: (config?: RequestConfig) => baseApi.get<ToolRouter[]>(API.TOOL_ROUTERS, config),
-
-  get: (id: string, config?: RequestConfig) => baseApi.get<ToolRouter>(API.TOOL_ROUTER(id), config),
-
-  create: (body: CreateToolRouterRequest, config?: RequestConfig) => baseApi.post<ToolRouter>(API.TOOL_ROUTERS, body, config),
-
-  update: (id: string, body: UpdateToolRouterRequest, config?: RequestConfig) => baseApi.put<ToolRouter>(API.TOOL_ROUTER(id), body, config),
-
-  delete: (id: string, config?: RequestConfig) => baseApi.del<void>(API.TOOL_ROUTER(id), config),
-
-  getTools: (id: string, config?: RequestConfig) => baseApi.get<Tool[]>(API.TOOL_ROUTER_TOOLS(id), config),
-
-  setTools: (id: string, body: SetRouterToolsRequest, config?: RequestConfig) => baseApi.put<void>(API.TOOL_ROUTER_TOOLS(id), body, config),
-})
-
-const routerModes = freeze({
-  listByRouter: (routerId: string, config?: RequestConfig) => baseApi.get<RouterMode[]>(API.ROUTER_MODES_BY_ROUTER(routerId), config),
-
-  createForRouter: (routerId: string, body: CreateRouterModeRequest, config?: RequestConfig) =>
-    baseApi.post<RouterMode>(API.ROUTER_MODES_BY_ROUTER(routerId), body, config),
-
-  get: (id: string, config?: RequestConfig) => baseApi.get<RouterMode>(API.ROUTER_MODE(id), config),
-
-  update: (id: string, body: UpdateRouterModeRequest, config?: RequestConfig) => baseApi.put<RouterMode>(API.ROUTER_MODE(id), body, config),
-
-  delete: (id: string, config?: RequestConfig) => baseApi.del<void>(API.ROUTER_MODE(id), config),
-
-  getTools: (id: string, config?: RequestConfig) => baseApi.get<Tool[]>(API.MODE_TOOLS(id), config),
-
-  setTools: (id: string, body: SetModeToolsRequest, config?: RequestConfig) => baseApi.put<void>(API.MODE_TOOLS(id), body, config),
-})
-
 const rooms = freeze({
   get: (id: string, config?: RequestConfig) => baseApi.get<Room>(API.ROOM(id), config),
 
@@ -526,8 +485,6 @@ export const api = Object.freeze({
   workflows,
   contextResponse,
   modes,
-  toolRouters,
-  routerModes,
   rooms,
   roomSessions,
   collections,

@@ -39,9 +39,9 @@ pub(crate) async fn restore_workflow_from_snapshot(
     for agent in snapshot.agents.values() {
         sqlx::query(
             r#"INSERT INTO agents (id, user_id, name, system_prompt, persona_style, model_provider,
-                model_id, model_max_tokens, model_temperature, status, router_mode,
+                model_id, model_max_tokens, model_temperature, status,
                 output_schema_id, default_reasoning_trace, is_system)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             ON CONFLICT (id) DO UPDATE SET
                 name = EXCLUDED.name,
                 system_prompt = EXCLUDED.system_prompt,
@@ -51,7 +51,6 @@ pub(crate) async fn restore_workflow_from_snapshot(
                 model_max_tokens = EXCLUDED.model_max_tokens,
                 model_temperature = EXCLUDED.model_temperature,
                 status = EXCLUDED.status,
-                router_mode = EXCLUDED.router_mode,
                 output_schema_id = EXCLUDED.output_schema_id,
                 default_reasoning_trace = EXCLUDED.default_reasoning_trace,
                 is_system = EXCLUDED.is_system,
@@ -67,7 +66,6 @@ pub(crate) async fn restore_workflow_from_snapshot(
         .bind(agent.model_max_tokens)
         .bind(agent.model_temperature)
         .bind(&agent.status)
-        .bind(agent.router_mode)
         .bind(agent.output_schema_id)
         .bind(agent.default_reasoning_trace)
         .bind(agent.is_system)

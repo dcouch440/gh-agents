@@ -67,8 +67,6 @@ export type { OutputSchema, CreateOutputSchemaRequest, UpdateOutputSchemaRequest
 export type { PromptTemplate, CreatePromptTemplateRequest, UpdatePromptTemplateRequest } from './template'
 export type { Result } from './result'
 export type { CostResponse, ModelSpendRow } from './cost'
-export type { RouterMode, CreateRouterModeRequest, UpdateRouterModeRequest, SetModeToolsRequest } from './router'
-export type { ToolRouter, CreateToolRouterRequest, UpdateToolRouterRequest, SetRouterToolsRequest } from './toolRouter'
 export type {
   Room,
   RoomMember,

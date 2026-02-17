@@ -11,15 +11,15 @@ use uuid::Uuid;
 use crate::db::{
     AgentDesignerOutputRow, AgentDesignerRunRow, AgentExecutionRow, AgentGuidanceRow, AgentRow,
     BeliefExtractionPlanRow, BeliefRow, ChatMessageRow, CollectionRunRow,
-    CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContentVersionRow, ContextStoreRow,
-    DocumentRow, DocumentSearchResult, EnvelopeSnapshotRow, ExecutionMessageRow, OutputSchemaRow,
+    CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContentVersionRow, DocumentRow,
+    DocumentSearchResult, EnvelopeSnapshotRow, ExecutionMessageRow, OutputSchemaRow,
     PromptTemplateRow, ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow,
     ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomStepConfigRow,
-    RoomStepMemberRow, RoomTranscriptEntry, RouterRequestRow, RunSnapshotRow, RunTemplateRow,
-    SessionRow, StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow,
-    TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow, ToolRouterModeRow,
-    ToolRouterRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow,
-    WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
+    RoomStepMemberRow, RoomTranscriptEntry, RunSnapshotRow, RunTemplateRow, SessionRow,
+    StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow,
+    TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow, ToolRow,
+    WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
+    WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
 };
 use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
 use crate::types::{Task, User, UserId};
@@ -1041,169 +1041,6 @@ pub trait ResultRepo: Send + Sync {
         output_schema_id: Uuid,
     ) -> Result<Vec<ResultRow>>;
     async fn delete_result(&self, id: Uuid) -> Result<()>;
-}
-
-// ============================================================================
-// Tool Router Repository
-// ============================================================================
-
-/// Input for creating a new router mode.
-#[derive(Debug, Clone)]
-pub struct CreateRouterModeInput {
-    pub router_id: Uuid,
-    pub mode_key: String,
-    pub display_name: String,
-    pub description: String,
-    pub system_prompt: String,
-    pub temperature: f32,
-    pub max_tokens: i32,
-    pub append_to_agent_system_prompt: bool,
-    pub append_to_agent_tools: bool,
-    pub display_order: i32,
-}
-
-/// Input for updating a router mode.
-#[derive(Debug, Clone)]
-pub struct UpdateRouterModeInput {
-    pub id: Uuid,
-    pub mode_key: Option<String>,
-    pub display_name: Option<String>,
-    pub description: Option<String>,
-    pub system_prompt: Option<String>,
-    pub temperature: Option<f32>,
-    pub max_tokens: Option<i32>,
-    pub append_to_agent_system_prompt: Option<bool>,
-    pub append_to_agent_tools: Option<bool>,
-    pub display_order: Option<i32>,
-}
-
-/// Database operations for tool router management.
-#[cfg_attr(test, mockall::automock)]
-#[async_trait]
-pub trait ToolRouterRepo: Send + Sync {
-    /// List all tool routers for a user.
-    async fn list_tool_routers(&self, user_id: Uuid) -> Result<Vec<ToolRouterRow>>;
-    /// Get a tool router by ID.
-    async fn get_tool_router(&self, id: Uuid) -> Result<Option<ToolRouterRow>>;
-    /// Create a new tool router.
-    async fn create_tool_router(
-        &self,
-        user_id: Uuid,
-        name: &str,
-        description: Option<String>,
-        system_prompt: &str,
-        model_id: &str,
-    ) -> Result<ToolRouterRow>;
-    /// Update a tool router.
-    async fn update_tool_router(
-        &self,
-        id: Uuid,
-        name: Option<String>,
-        description: Option<String>,
-        system_prompt: Option<String>,
-        model_id: Option<String>,
-        is_active: Option<bool>,
-    ) -> Result<ToolRouterRow>;
-    /// Delete a tool router.
-    async fn delete_tool_router(&self, id: Uuid) -> Result<()>;
-    /// Get all tools assigned to a router.
-    async fn get_router_tools(&self, router_id: Uuid) -> Result<Vec<ToolRow>>;
-    /// Set the full tool list for a router (replaces existing).
-    async fn set_router_tools(&self, router_id: Uuid, tool_ids: &[Uuid]) -> Result<()>;
-
-    // --- Router Modes ---
-
-    /// List all modes for a router, ordered by display_order.
-    async fn list_router_modes(&self, router_id: Uuid) -> Result<Vec<ToolRouterModeRow>>;
-    /// Get a router mode by ID.
-    async fn get_router_mode(&self, id: Uuid) -> Result<Option<ToolRouterModeRow>>;
-    /// Get a router mode by its key within a router.
-    async fn get_router_mode_by_key(
-        &self,
-        router_id: Uuid,
-        mode_key: &str,
-    ) -> Result<Option<ToolRouterModeRow>>;
-    /// Create a new router mode.
-    async fn create_router_mode(&self, input: CreateRouterModeInput) -> Result<ToolRouterModeRow>;
-    /// Update a router mode (all fields optional for partial updates).
-    async fn update_router_mode(&self, input: UpdateRouterModeInput) -> Result<ToolRouterModeRow>;
-    /// Delete a router mode.
-    async fn delete_router_mode(&self, id: Uuid) -> Result<()>;
-    /// Get all tools assigned to a mode.
-    async fn get_mode_tools(&self, mode_id: Uuid) -> Result<Vec<ToolRow>>;
-    /// Set the full tool list for a mode (replaces existing).
-    async fn set_mode_tools(&self, mode_id: Uuid, tool_ids: &[Uuid]) -> Result<()>;
-}
-
-// ============================================================================
-// Context Store Repository
-// ============================================================================
-
-/// Database operations for the per-session context store.
-#[cfg_attr(test, mockall::automock)]
-#[async_trait]
-pub trait ContextStoreRepo: Send + Sync {
-    /// Add a context entry to a session.
-    async fn add_context(
-        &self,
-        session_id: Uuid,
-        source: &str,
-        priority: f32,
-        content: &str,
-        metadata: Option<serde_json::Value>,
-        expires_at: Option<DateTime<Utc>>,
-    ) -> Result<ContextStoreRow>;
-    /// Get active context for a session, ordered by priority descending.
-    async fn get_active_context(
-        &self,
-        session_id: Uuid,
-        limit: u32,
-    ) -> Result<Vec<ContextStoreRow>>;
-    /// Update the status of a context entry.
-    async fn update_context_status(&self, id: Uuid, status: &str) -> Result<()>;
-    /// Expire stale context entries (past expires_at). Returns count expired.
-    async fn expire_stale_context(&self, session_id: Uuid) -> Result<u32>;
-}
-
-// ============================================================================
-// Router Request Repository
-// ============================================================================
-
-/// Input for updating a router request with routing decision and result.
-#[derive(Debug, Clone)]
-pub struct UpdateRouterRequestInput {
-    pub id: Uuid,
-    pub routed_tool: Option<String>,
-    pub routed_args: Option<serde_json::Value>,
-    pub is_async: bool,
-    pub passdown: Option<String>,
-    pub chain: Option<serde_json::Value>,
-    pub status: String,
-    pub result: Option<String>,
-}
-
-/// Database operations for router request logging.
-#[cfg_attr(test, mockall::automock)]
-#[async_trait]
-pub trait RouterRequestRepo: Send + Sync {
-    /// Create a new router request log entry.
-    async fn create_router_request(
-        &self,
-        session_id: Uuid,
-        agent_execution_id: Option<Uuid>,
-        intent: &str,
-        priority: &str,
-        callback_hint: Option<String>,
-    ) -> Result<RouterRequestRow>;
-    /// Update a router request with routing decision and result.
-    async fn update_router_request(
-        &self,
-        input: UpdateRouterRequestInput,
-    ) -> Result<RouterRequestRow>;
-    /// Get a router request by ID.
-    async fn get_router_request(&self, id: Uuid) -> Result<Option<RouterRequestRow>>;
-    /// List all router requests for a session.
-    async fn list_session_requests(&self, session_id: Uuid) -> Result<Vec<RouterRequestRow>>;
 }
 
 // ============================================================================

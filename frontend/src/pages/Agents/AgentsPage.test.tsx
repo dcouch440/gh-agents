@@ -25,7 +25,6 @@ const mockAgents: Agent[] = [
     model_temperature: 0.7,
     status: 'idle',
     output_schema_id: null,
-    router_id: null,
     version: 1,
   },
   {
@@ -38,7 +37,6 @@ const mockAgents: Agent[] = [
     model_temperature: 0.5,
     status: 'working',
     output_schema_id: null,
-    router_id: null,
     version: 1,
   },
 ]

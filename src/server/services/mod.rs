@@ -15,7 +15,6 @@ pub mod protocols;
 pub mod rooms;
 pub mod sessions;
 pub mod steps;
-pub mod tool_routers;
 pub mod validation;
 pub mod workflows;
 

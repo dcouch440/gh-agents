@@ -26,7 +26,6 @@ pub struct AgentResponse {
     pub model_temperature: f32,
     pub status: String,
     pub output_schema_id: Option<String>,
-    pub router_id: Option<String>,
     pub version: i32,
     pub default_reasoning_trace: bool,
     pub is_system: bool,
@@ -52,7 +51,6 @@ impl AgentResponse {
             model_temperature: row.model_temperature,
             status: row.status.unwrap_or_else(|| "idle".to_string()),
             output_schema_id: row.output_schema_id.map(|id| id.to_string()),
-            router_id: row.router_id.map(|id| id.to_string()),
             version: row.version,
             default_reasoning_trace: row.default_reasoning_trace.unwrap_or(false),
             is_system: row.is_system,
@@ -101,8 +99,6 @@ pub struct UpdateAgentRequest {
     pub model_temperature: Option<f32>,
     #[serde(default)]
     pub output_schema_id: Option<Uuid>,
-    #[serde(default)]
-    pub router_id: Option<Uuid>,
 }
 
 /// List all agents and their status
@@ -232,7 +228,6 @@ pub async fn update_agent(
             model_max_tokens: request.model_max_tokens,
             model_temperature: request.model_temperature,
             output_schema_id: request.output_schema_id,
-            router_id: request.router_id,
         },
     )
     .await?;

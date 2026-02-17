@@ -337,20 +337,6 @@ pub mod routes {
     // Stats
     pub const STATS: &str = "/stats";
 
-    // Tool routers
-    pub const TOOL_ROUTERS: &str = "/tool-routers";
-    pub const TOOL_ROUTER: &str = "/tool-routers/:id";
-    pub const TOOL_ROUTER_TOOLS: &str = "/tool-routers/:id/tools";
-
-    // Router modes
-    pub const ROUTER_MODES: &str = "/tool-routers/:router_id/modes";
-    pub const ROUTER_MODE: &str = "/router-modes/:id";
-    pub const ROUTER_MODE_TOOLS: &str = "/router-modes/:id/tools";
-
-    // Session context & requests
-    pub const SESSION_CONTEXT: &str = "/sessions/:session_id/context";
-    pub const SESSION_REQUESTS: &str = "/sessions/:session_id/requests";
-
     // Context response
     pub const CONTEXT_RESPONSE: &str = "/context-response";
 

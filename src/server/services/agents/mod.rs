@@ -32,7 +32,6 @@ pub struct UpdateAgentInput {
     pub model_max_tokens: Option<i32>,
     pub model_temperature: Option<f32>,
     pub output_schema_id: Option<Uuid>,
-    pub router_id: Option<Uuid>,
 }
 
 /// Verify the caller owns this agent. System agents (user_id = NULL) are
@@ -79,8 +78,6 @@ pub async fn create_agent(
         model_max_tokens: input.model_max_tokens.unwrap_or(4096),
         model_temperature: input.model_temperature.unwrap_or(0.7),
         status: Some("idle".to_string()),
-        router_mode: Some(false),
-        router_id: None,
         output_schema_id: input.output_schema_id,
         version: 1,
         default_reasoning_trace: None,
@@ -135,8 +132,6 @@ pub async fn update_agent(
             .model_temperature
             .unwrap_or(existing.model_temperature),
         status: existing.status,
-        router_mode: existing.router_mode,
-        router_id: input.router_id.or(existing.router_id),
         output_schema_id: input.output_schema_id.or(existing.output_schema_id),
         version: existing.version,
         default_reasoning_trace: existing.default_reasoning_trace,
