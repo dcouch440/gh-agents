@@ -45,6 +45,12 @@ vi.mock('@/stores', () => ({
     store: 'workflow',
     selectSteps: () => _steps.value,
     selectEdges: () => _edges.value,
+    selectStepById: () => () => undefined,
+    selectDocumentDefsByStep: () => ({}),
+    selectRosterByStep: () => ({}),
+    selectNotesByStep: () => ({}),
+    selectDocumentContentByDefId: () => ({}),
+    selectRoomMembersByStep: () => ({}),
     addEdge: mockAddEdge,
     deleteStep: mockDeleteStep,
     removeEdge: mockRemoveEdge,
@@ -87,6 +93,10 @@ vi.mock('@/stores', () => ({
     selectActive: () => false,
     cancelShare: vi.fn(),
     commitShare: vi.fn(),
+  },
+  focusModeStore: {
+    store: { getState: () => ({ active: false }) },
+    selectActive: () => false,
   },
   batch: vi.fn((fn: () => void) => fn()),
 }))
@@ -141,6 +151,7 @@ vi.mock('@xyflow/react', () => {
 vi.mock('@xyflow/react/dist/style.css', () => ({}))
 
 vi.mock('./useCanvasLOD', () => ({ useCanvasLOD: () => 'full' }))
+vi.mock('@/components/focus-mode', () => ({ FocusModeOverlay: () => null }))
 
 beforeEach(() => {
   vi.clearAllMocks()
