@@ -1,8 +1,9 @@
 import type { Edge } from '@xyflow/react'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 import { Collections } from '@/utils/collections'
-import { STEP_TYPE_COLORS, GREYSCALE_ACCENT } from '../constants'
+import { STEP_TYPE_COLORS, GREYSCALE_ACCENT, PROTOCOL_TYPE_COLORS } from '../constants'
 import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from '../DynamicNode/archetypes'
+import { NOTES_NODE } from '../NotesNode'
 import type { ProtocolStepInfo, ProtocolGroupEntry, StepNodeLookups, StepEdgeData } from './types'
 import { isWorkforceStep } from './protocolGroups'
 
@@ -66,11 +67,12 @@ const toDocumentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[
       const fromAgent = def.agent_roster_entry_id && agentHasNode.has(def.agent_roster_entry_id)
       edges.push({
         id: `doc-edge-${def.id}`,
-        type: 'documentEdge',
+        type: 'artifactEdge',
         source: fromAgent ? `agent-artifact-${def.agent_roster_entry_id}` : step.id,
         sourceHandle: fromAgent ? 'agent-documents' : 'documents',
         target: `doc-artifact-${def.id}`,
         targetHandle: 'document-input',
+        data: { color: PROTOCOL_TYPE_COLORS['workforce'] },
         selectable: false,
         deletable: false,
       })
@@ -88,11 +90,12 @@ const toNotesEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] =
 
     edges.push({
       id: `notes-edge-${step.id}`,
-      type: 'notesEdge',
+      type: 'artifactEdge',
       source: step.id,
       sourceHandle: 'notes',
       target: `notes-${step.id}`,
       targetHandle: 'notes-input',
+      data: { color: NOTES_NODE.ACCENT_COLOR },
       selectable: false,
       deletable: false,
     })
@@ -114,7 +117,8 @@ const toAgentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] =
         // First agent chains from the protocol node
         edges.push({
           id: `agent-edge-${agent.id}`,
-          type: 'agentEdge',
+          type: 'artifactEdge',
+          data: { color: ARCHETYPE_CONFIGS[Archetype.AGENT].color },
           source: step.id,
           sourceHandle: 'agents',
           target: `agent-artifact-${agent.id}`,
@@ -127,7 +131,8 @@ const toAgentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] =
         const prev = active[i - 1]!
         edges.push({
           id: `agent-edge-${agent.id}`,
-          type: 'agentEdge',
+          type: 'artifactEdge',
+          data: { color: ARCHETYPE_CONFIGS[Archetype.AGENT].color },
           source: `agent-artifact-${prev.id}`,
           sourceHandle: 'agent-output',
           target: `agent-artifact-${agent.id}`,
