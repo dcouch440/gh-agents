@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { computeAutoLayout, classifyStep, topologicalSort, buildTower } from './autoLayout'
-import type { NodeRole, TowerEntry } from './autoLayout'
+import { computeAutoLayout, classifyStep, topologicalSort, buildTieredTower, computeAgentTiers } from './autoLayout'
+import type { NodeRole } from './autoLayout'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
-import type { StepNodeLookups } from '../mappers/types'
+import type { StepNodeLookups, RosterAgentInfo } from '../mappers/types'
 import { AUTO_LAYOUT } from './autoLayoutConfig'
 import { NODE_DIMENSIONS } from '../nodeDimensions'
 import { CanvasNodeKind } from '../canvasKinds'
@@ -44,6 +44,14 @@ const makeEdge = (from: string, to: string): WorkflowStepEdge => ({
   id: `edge-${from}-${to}`,
   from_step_id: from,
   to_step_id: to,
+})
+
+const makeAgent = (id: string, name: string, depsOn: string[] = []): RosterAgentInfo => ({
+  id,
+  name,
+  child_step_id: `cs-${id}`,
+  role_description: '',
+  depends_on: depsOn,
 })
 
 const emptyLookups = (overrides?: Partial<StepNodeLookups>): StepNodeLookups => ({
@@ -142,33 +150,124 @@ describe('topologicalSort', () => {
 })
 
 // ============================================================================
-// buildTower
+// computeAgentTiers
 // ============================================================================
 
-describe('buildTower', () => {
-  it('returns empty for step with no roster', () => {
-    const lookups = emptyLookups()
-    expect(buildTower('s1', lookups)).toEqual([])
+describe('computeAgentTiers', () => {
+  it('assigns tier 0 to agents with no dependencies', () => {
+    const roster: RosterAgentInfo[] = [
+      makeAgent('r1', 'Agent A'),
+      makeAgent('r2', 'Agent B'),
+    ]
+    const tierMap = computeAgentTiers(roster)
+    expect(tierMap.get('r1')).toBe(0)
+    expect(tierMap.get('r2')).toBe(0)
   })
 
-  it('builds entries for agents with child steps', () => {
+  it('assigns tier 1 to agents depending on tier-0 agents', () => {
+    const roster: RosterAgentInfo[] = [
+      makeAgent('r1', 'Designer A'),
+      makeAgent('r2', 'Designer B'),
+      makeAgent('r3', 'Judge', ['r1', 'r2']),
+    ]
+    const tierMap = computeAgentTiers(roster)
+    expect(tierMap.get('r1')).toBe(0)
+    expect(tierMap.get('r2')).toBe(0)
+    expect(tierMap.get('r3')).toBe(1)
+  })
+
+  it('handles linear chain: A → B → C', () => {
+    const roster: RosterAgentInfo[] = [
+      makeAgent('r1', 'A'),
+      makeAgent('r2', 'B', ['r1']),
+      makeAgent('r3', 'C', ['r2']),
+    ]
+    const tierMap = computeAgentTiers(roster)
+    expect(tierMap.get('r1')).toBe(0)
+    expect(tierMap.get('r2')).toBe(1)
+    expect(tierMap.get('r3')).toBe(2)
+  })
+
+  it('ignores depends_on references to inactive agents', () => {
+    const roster: RosterAgentInfo[] = [
+      { id: 'r1', name: 'A', child_step_id: null, role_description: '', depends_on: [] },
+      makeAgent('r2', 'B', ['r1']),
+    ]
+    const tierMap = computeAgentTiers(roster)
+    // r1 is inactive (no child_step_id), so r2 has no active deps → tier 0
+    expect(tierMap.get('r2')).toBe(0)
+    expect(tierMap.has('r1')).toBe(false)
+  })
+
+  it('handles diamond: 2 parallel → 1 dependent', () => {
+    const roster: RosterAgentInfo[] = [
+      makeAgent('r1', 'A'),
+      makeAgent('r2', 'B'),
+      makeAgent('r3', 'C', ['r1', 'r2']),
+      makeAgent('r4', 'D', ['r3']),
+    ]
+    const tierMap = computeAgentTiers(roster)
+    expect(tierMap.get('r1')).toBe(0)
+    expect(tierMap.get('r2')).toBe(0)
+    expect(tierMap.get('r3')).toBe(1)
+    expect(tierMap.get('r4')).toBe(2)
+  })
+})
+
+// ============================================================================
+// buildTieredTower
+// ============================================================================
+
+describe('buildTieredTower', () => {
+  it('returns empty for step with no roster', () => {
+    const lookups = emptyLookups()
+    expect(buildTieredTower('s1', lookups)).toEqual([])
+  })
+
+  it('groups parallel agents into tier 0', () => {
     const lookups = emptyLookups({
       rosterByStep: {
         's1': [
-          { id: 'r1', name: 'Agent A', child_step_id: 'cs1', role_description: '', depends_on: [] },
-          { id: 'r2', name: 'Agent B', child_step_id: 'cs2', role_description: '', depends_on: [] },
-        ],
-      },
-      documentDefsByStep: {
-        's1': [
-          { id: 'd1', name: 'Doc A', document_id: null, agent_roster_entry_id: 'r1' },
+          makeAgent('r1', 'Agent A'),
+          makeAgent('r2', 'Agent B'),
         ],
       },
     })
-    const tower = buildTower('s1', lookups)
-    expect(tower).toHaveLength(2)
-    expect(tower[0]).toEqual({ agentNodeId: 'agent-artifact-r1', documentNodeId: 'doc-artifact-d1' } satisfies TowerEntry)
-    expect(tower[1]).toEqual({ agentNodeId: 'agent-artifact-r2', documentNodeId: null } satisfies TowerEntry)
+    const tiers = buildTieredTower('s1', lookups)
+    expect(tiers).toHaveLength(1)
+    expect(tiers[0]!.tier).toBe(0)
+    expect(tiers[0]!.entries).toHaveLength(2)
+  })
+
+  it('separates dependent agents into different tiers', () => {
+    const lookups = emptyLookups({
+      rosterByStep: {
+        's1': [
+          makeAgent('r1', 'Designer A'),
+          makeAgent('r2', 'Designer B'),
+          makeAgent('r3', 'Judge', ['r1', 'r2']),
+        ],
+      },
+    })
+    const tiers = buildTieredTower('s1', lookups)
+    expect(tiers).toHaveLength(2)
+    expect(tiers[0]!.tier).toBe(0)
+    expect(tiers[0]!.entries).toHaveLength(2)
+    expect(tiers[1]!.tier).toBe(1)
+    expect(tiers[1]!.entries).toHaveLength(1)
+  })
+
+  it('pairs agents with their documents', () => {
+    const lookups = emptyLookups({
+      rosterByStep: {
+        's1': [makeAgent('r1', 'Agent A')],
+      },
+      documentDefsByStep: {
+        's1': [{ id: 'd1', name: 'Doc A', document_id: null, agent_roster_entry_id: 'r1' }],
+      },
+    })
+    const tiers = buildTieredTower('s1', lookups)
+    expect(tiers[0]!.entries[0]!.documentNodeId).toBe('doc-artifact-d1')
   })
 
   it('skips agents without child_step_id', () => {
@@ -179,22 +278,20 @@ describe('buildTower', () => {
         ],
       },
     })
-    expect(buildTower('s1', lookups)).toEqual([])
+    expect(buildTieredTower('s1', lookups)).toEqual([])
   })
 
-  it('includes unassigned documents', () => {
+  it('includes unassigned documents in tier 0', () => {
     const lookups = emptyLookups({
       rosterByStep: { 's1': [] },
       documentDefsByStep: {
-        's1': [
-          { id: 'd1', name: 'Orphan Doc', document_id: null, agent_roster_entry_id: null },
-        ],
+        's1': [{ id: 'd1', name: 'Orphan Doc', document_id: null, agent_roster_entry_id: null }],
       },
     })
-    const tower = buildTower('s1', lookups)
-    expect(tower).toHaveLength(1)
-    expect(tower[0]!.agentNodeId).toBe('')
-    expect(tower[0]!.documentNodeId).toBe('doc-artifact-d1')
+    const tiers = buildTieredTower('s1', lookups)
+    expect(tiers).toHaveLength(1)
+    expect(tiers[0]!.entries[0]!.agentNodeId).toBe('')
+    expect(tiers[0]!.entries[0]!.documentNodeId).toBe('doc-artifact-d1')
   })
 })
 
@@ -244,53 +341,139 @@ describe('computeAutoLayout', () => {
     expect(p1Pos.y).toBe(AUTO_LAYOUT.SPINE_Y)
   })
 
-  it('positions agents in tower above protocol', () => {
+  it('places parallel agents side-by-side in same tier', () => {
     const steps = [makeStep({ id: 'p1', execution_mode: 'workforce' })]
     const lookups = emptyLookups({
       protocolsByStep: new Map([['p1', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
       rosterByStep: {
         'p1': [
-          { id: 'r1', name: 'Agent A', child_step_id: 'cs1', role_description: '', depends_on: [] },
-          { id: 'r2', name: 'Agent B', child_step_id: 'cs2', role_description: '', depends_on: [] },
-          { id: 'r3', name: 'Agent C', child_step_id: 'cs3', role_description: '', depends_on: [] },
+          makeAgent('r1', 'Agent A'),
+          makeAgent('r2', 'Agent B'),
+          makeAgent('r3', 'Agent C'),
         ],
       },
     })
 
     const result = computeAutoLayout(steps, [], lookups)
 
+    const agent1 = result.get('agent-artifact-r1')!
+    const agent2 = result.get('agent-artifact-r2')!
+    const agent3 = result.get('agent-artifact-r3')!
+
+    // All at same Y (same tier)
+    expect(agent1.y).toBe(agent2.y)
+    expect(agent2.y).toBe(agent3.y)
+
+    // Spread horizontally
+    expect(agent1.x).toBeLessThan(agent2.x)
+    expect(agent2.x).toBeLessThan(agent3.x)
+
+    // All above protocol
     const protocolY = result.get('p1')!.y
-    const agent1 = result.get('agent-artifact-r1')
-    const agent2 = result.get('agent-artifact-r2')
-    const agent3 = result.get('agent-artifact-r3')
-
-    expect(agent1).toBeDefined()
-    expect(agent2).toBeDefined()
-    expect(agent3).toBeDefined()
-
-    // All agents above protocol
-    expect(agent1!.y).toBeLessThan(protocolY)
-    expect(agent2!.y).toBeLessThan(protocolY)
-    expect(agent3!.y).toBeLessThan(protocolY)
-
-    // Agents stack upward (each further from protocol)
-    expect(agent2!.y).toBeLessThan(agent1!.y)
-    expect(agent3!.y).toBeLessThan(agent2!.y)
+    expect(agent1.y).toBeLessThan(protocolY)
   })
 
-  it('positions documents to the right of their agents', () => {
+  it('places dependent agent in higher tier (further from protocol)', () => {
     const steps = [makeStep({ id: 'p1', execution_mode: 'workforce' })]
     const lookups = emptyLookups({
       protocolsByStep: new Map([['p1', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
       rosterByStep: {
         'p1': [
-          { id: 'r1', name: 'Agent A', child_step_id: 'cs1', role_description: '', depends_on: [] },
+          makeAgent('r1', 'Designer A'),
+          makeAgent('r2', 'Designer B'),
+          makeAgent('r3', 'Judge', ['r1', 'r2']),
+        ],
+      },
+    })
+
+    const result = computeAutoLayout(steps, [], lookups)
+
+    const designerA = result.get('agent-artifact-r1')!
+    const designerB = result.get('agent-artifact-r2')!
+    const judge = result.get('agent-artifact-r3')!
+
+    // Designers are at same Y (tier 0)
+    expect(designerA.y).toBe(designerB.y)
+    // Judge is further from protocol (higher tier → more negative Y)
+    expect(judge.y).toBeLessThan(designerA.y)
+
+    // Designers side by side
+    expect(designerA.x).toBeLessThan(designerB.x)
+  })
+
+  it('handles diamond pattern: 2 parallel → 1 judge', () => {
+    const steps = [makeStep({ id: 'p1', execution_mode: 'workforce' })]
+    const lookups = emptyLookups({
+      protocolsByStep: new Map([['p1', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
+      rosterByStep: {
+        'p1': [
+          makeAgent('r1', 'A'),
+          makeAgent('r2', 'B'),
+          makeAgent('r3', 'C', ['r1', 'r2']),
         ],
       },
       documentDefsByStep: {
         'p1': [
           { id: 'd1', name: 'Doc A', document_id: null, agent_roster_entry_id: 'r1' },
+          { id: 'd3', name: 'Doc C', document_id: null, agent_roster_entry_id: 'r3' },
         ],
+      },
+    })
+
+    const result = computeAutoLayout(steps, [], lookups)
+
+    const agentA = result.get('agent-artifact-r1')!
+    const agentB = result.get('agent-artifact-r2')!
+    const agentC = result.get('agent-artifact-r3')!
+    const docA = result.get('doc-artifact-d1')!
+    const docC = result.get('doc-artifact-d3')!
+
+    // A and B at same tier
+    expect(agentA.y).toBe(agentB.y)
+    // C at higher tier
+    expect(agentC.y).toBeLessThan(agentA.y)
+
+    // Docs above their agents
+    expect(docA.y).toBeLessThan(agentA.y)
+    expect(docC.y).toBeLessThan(agentC.y)
+
+    // Doc A same x as agent A (both same width)
+    expect(docA.x).toBe(agentA.x)
+  })
+
+  it('handles linear chain: A → B → C', () => {
+    const steps = [makeStep({ id: 'p1', execution_mode: 'workforce' })]
+    const lookups = emptyLookups({
+      protocolsByStep: new Map([['p1', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
+      rosterByStep: {
+        'p1': [
+          makeAgent('r1', 'A'),
+          makeAgent('r2', 'B', ['r1']),
+          makeAgent('r3', 'C', ['r2']),
+        ],
+      },
+    })
+
+    const result = computeAutoLayout(steps, [], lookups)
+
+    const agentA = result.get('agent-artifact-r1')!
+    const agentB = result.get('agent-artifact-r2')!
+    const agentC = result.get('agent-artifact-r3')!
+
+    // Each in a separate tier, stacking upward
+    expect(agentB.y).toBeLessThan(agentA.y)
+    expect(agentC.y).toBeLessThan(agentB.y)
+  })
+
+  it('positions documents above their agents', () => {
+    const steps = [makeStep({ id: 'p1', execution_mode: 'workforce' })]
+    const lookups = emptyLookups({
+      protocolsByStep: new Map([['p1', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
+      rosterByStep: {
+        'p1': [makeAgent('r1', 'Agent A')],
+      },
+      documentDefsByStep: {
+        'p1': [{ id: 'd1', name: 'Doc A', document_id: null, agent_roster_entry_id: 'r1' }],
       },
     })
 
@@ -299,10 +482,11 @@ describe('computeAutoLayout', () => {
     const agentPos = result.get('agent-artifact-r1')!
     const docPos = result.get('doc-artifact-d1')!
 
-    // Document is to the right of agent
-    expect(docPos.x).toBe(agentPos.x + AGENT_DEFAULTS.DEFAULT_WIDTH + AUTO_LAYOUT.DOC_GAP)
-    // Same y-coordinate (same row)
-    expect(docPos.y).toBe(agentPos.y)
+    // Document is above agent
+    expect(docPos.y).toBeLessThan(agentPos.y)
+    expect(docPos.y).toBe(agentPos.y - DOCUMENT_NODE.DEFAULT_HEIGHT - AUTO_LAYOUT.DOC_GAP)
+    // Same x-coordinate (agent and doc are same width)
+    expect(docPos.x).toBe(agentPos.x)
   })
 
   it('positions notes below protocol', () => {
@@ -337,12 +521,12 @@ describe('computeAutoLayout', () => {
       ]),
       rosterByStep: {
         'p1': [
-          { id: 'r1', name: 'Agent A', child_step_id: 'cs1', role_description: '', depends_on: [] },
-          { id: 'r2', name: 'Agent B', child_step_id: 'cs2', role_description: '', depends_on: [] },
-          { id: 'r3', name: 'Agent C', child_step_id: 'cs3', role_description: '', depends_on: [] },
+          makeAgent('r1', 'Agent A'),
+          makeAgent('r2', 'Agent B'),
+          makeAgent('r3', 'Agent C'),
         ],
         'p2': [
-          { id: 'r4', name: 'Agent D', child_step_id: 'cs4', role_description: '', depends_on: [] },
+          makeAgent('r4', 'Agent D'),
         ],
       },
     })
@@ -359,14 +543,14 @@ describe('computeAutoLayout', () => {
     expect(p1Pos.y).toBe(AUTO_LAYOUT.SPINE_Y)
     expect(p2Pos.y).toBe(AUTO_LAYOUT.SPINE_Y)
 
-    // P1 has 3 agents, P2 has 1 — both present
+    // All agents present
     expect(result.has('agent-artifact-r1')).toBe(true)
     expect(result.has('agent-artifact-r2')).toBe(true)
     expect(result.has('agent-artifact-r3')).toBe(true)
     expect(result.has('agent-artifact-r4')).toBe(true)
   })
 
-  it('computes correct column width for protocol with tower', () => {
+  it('computes column width based on widest tier', () => {
     const steps = [
       makeStep({ id: 'input', execution_mode: 'input' }),
       makeStep({ id: 'p1', execution_mode: 'workforce' }),
@@ -376,12 +560,8 @@ describe('computeAutoLayout', () => {
       protocolsByStep: new Map([['p1', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
       rosterByStep: {
         'p1': [
-          { id: 'r1', name: 'Agent A', child_step_id: 'cs1', role_description: '', depends_on: [] },
-        ],
-      },
-      documentDefsByStep: {
-        'p1': [
-          { id: 'd1', name: 'Doc A', document_id: null, agent_roster_entry_id: 'r1' },
+          makeAgent('r1', 'Agent A'),
+          makeAgent('r2', 'Agent B'),
         ],
       },
     })
@@ -391,13 +571,12 @@ describe('computeAutoLayout', () => {
     const inputPos = result.get('input')!
     const p1Pos = result.get('p1')!
 
-    // The input column is INPUT_WIDTH, then SPINE_GAP, then protocol column starts
+    // Column width = widest tier width (2 agents side-by-side)
     const inputWidth = NODE_DIMENSIONS[CanvasNodeKind.INPUT].defaultWidth
-    const towerWidth = AGENT_DEFAULTS.DEFAULT_WIDTH + AUTO_LAYOUT.DOC_GAP + DOCUMENT_NODE.DEFAULT_WIDTH
+    const tierWidth = 2 * AGENT_DEFAULTS.DEFAULT_WIDTH + AUTO_LAYOUT.TIER_AGENT_GAP
     const protocolWidth = NODE_DIMENSIONS[CanvasNodeKind.PROTOCOL].defaultWidth
-    const columnWidth = Math.max(protocolWidth, towerWidth)
+    const columnWidth = Math.max(protocolWidth, tierWidth)
 
-    // Input starts at 0, protocol column starts at inputWidth + SPINE_GAP
     expect(inputPos.x).toBe(0)
     const expectedProtocolX = inputWidth + AUTO_LAYOUT.SPINE_GAP + (columnWidth - protocolWidth) / 2
     expect(p1Pos.x).toBe(expectedProtocolX)
@@ -422,7 +601,6 @@ describe('computeAutoLayout', () => {
 
     const result = computeAutoLayout(steps, [], lookups)
     expect(result.get('p1')).toBeDefined()
-    // Only the protocol node, no agents
     expect(result.size).toBe(1)
   })
 })

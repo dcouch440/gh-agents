@@ -748,20 +748,22 @@ describe('toAgentEdges', () => {
     })
   })
 
-  it('chains agents sequentially instead of fan-out', () => {
+  it('fans out root agents from protocol, uses depends_on for non-roots', () => {
     const lookups: StepNodeLookups = {
       ...emptyLookups,
       rosterByStep: {
         'wf-step': [
           { id: 'agent-1', name: 'Researcher', child_step_id: 'cs-1', role_description: '', depends_on: [] },
           { id: 'agent-2', name: 'Writer', child_step_id: 'cs-2', role_description: '', depends_on: [] },
+          { id: 'agent-3', name: 'Judge', child_step_id: 'cs-3', role_description: '', depends_on: ['agent-1', 'agent-2'] },
         ],
       },
       protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
     }
     const edges = toAgentEdges([workforceStep], lookups)
-    expect(edges).toHaveLength(2)
-    // First agent chains from protocol
+    // 2 root edges + 2 dependency edges = 4
+    expect(edges).toHaveLength(4)
+    // Root agents fan from protocol
     expect(edges[0]).toEqual({
       id: 'agent-edge-agent-1',
       type: 'artifactEdge',
@@ -773,14 +775,36 @@ describe('toAgentEdges', () => {
       selectable: false,
       deletable: false,
     })
-    // Second agent chains from first agent
     expect(edges[1]).toEqual({
       id: 'agent-edge-agent-2',
       type: 'artifactEdge',
       data: { color: '#06b6d4' },
+      source: 'wf-step',
+      sourceHandle: 'agents',
+      target: 'agent-artifact-agent-2',
+      targetHandle: 'agent-input',
+      selectable: false,
+      deletable: false,
+    })
+    // Judge depends on both agents
+    expect(edges[2]).toEqual({
+      id: 'agent-dep-agent-1-agent-3',
+      type: 'artifactEdge',
+      data: { color: '#06b6d4' },
       source: 'agent-artifact-agent-1',
       sourceHandle: 'agent-output',
-      target: 'agent-artifact-agent-2',
+      target: 'agent-artifact-agent-3',
+      targetHandle: 'agent-input',
+      selectable: false,
+      deletable: false,
+    })
+    expect(edges[3]).toEqual({
+      id: 'agent-dep-agent-2-agent-3',
+      type: 'artifactEdge',
+      data: { color: '#06b6d4' },
+      source: 'agent-artifact-agent-2',
+      sourceHandle: 'agent-output',
+      target: 'agent-artifact-agent-3',
       targetHandle: 'agent-input',
       selectable: false,
       deletable: false,

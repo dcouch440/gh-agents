@@ -75,14 +75,81 @@ type TowerEntry = {
   documentNodeId: string | null
 }
 
+// ============================================================================
+// Tiered Tower — agents grouped by dependency depth
+// ============================================================================
+
+type TierLayout = {
+  tier: number
+  entries: TowerEntry[]
+}
+
 /**
- * Build tower entries for a protocol step: each roster agent paired
- * with its assigned document (if any).
+ * Assign agents to tiers based on depends_on relationships.
+ * Tier 0 = root agents (no roster dependencies), tier N = depends on tier N-1.
+ * Returns roster agents grouped by tier, ordered ascending.
  */
-const buildTower = (
+const computeAgentTiers = (
+  roster: readonly RosterAgentInfo[],
+): ReadonlyMap<string, number> => {
+  // Only consider agents with child_step_id (active on canvas)
+  const active = roster.filter((a) => a.child_step_id !== null)
+  const activeIds = new Set(active.map((a) => a.id))
+  const tierMap = new Map<string, number>()
+
+  // Iteratively assign tiers until all agents are placed
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const agent of active) {
+      if (tierMap.has(agent.id)) continue
+
+      // Filter depends_on to only reference active roster agents
+      const deps = agent.depends_on.filter((id) => activeIds.has(id))
+
+      if (deps.length === 0) {
+        tierMap.set(agent.id, 0)
+        changed = true
+        continue
+      }
+
+      // All dependencies must be assigned before we can compute this agent's tier
+      const depTiers: number[] = []
+      let allResolved = true
+      for (const depId of deps) {
+        const t = tierMap.get(depId)
+        if (t === undefined) {
+          allResolved = false
+          break
+        }
+        depTiers.push(t)
+      }
+
+      if (allResolved) {
+        tierMap.set(agent.id, Math.max(...depTiers) + 1)
+        changed = true
+      }
+    }
+  }
+
+  // Any remaining unassigned agents (circular deps or broken refs) → tier 0
+  for (const agent of active) {
+    if (!tierMap.has(agent.id)) {
+      tierMap.set(agent.id, 0)
+    }
+  }
+
+  return tierMap
+}
+
+/**
+ * Build tiered tower for a protocol step: agents grouped by dependency tier,
+ * each paired with its assigned document (if any).
+ */
+const buildTieredTower = (
   stepId: string,
   lookups: StepNodeLookups,
-): TowerEntry[] => {
+): TierLayout[] => {
   const roster: readonly RosterAgentInfo[] = lookups.rosterByStep[stepId] ?? []
   const defs: readonly DocumentDefInfo[] = lookups.documentDefsByStep[stepId] ?? []
 
@@ -94,26 +161,42 @@ const buildTower = (
     }
   }
 
-  const entries: TowerEntry[] = []
+  // Compute tier assignments
+  const tierMap = computeAgentTiers(roster)
+
+  // Group entries by tier
+  const tierEntries = new Map<number, TowerEntry[]>()
   for (const agent of roster) {
     if (!agent.child_step_id) continue
+    const tier = tierMap.get(agent.id) ?? 0
+    const entries = tierEntries.get(tier) ?? []
     entries.push({
       agentNodeId: `agent-artifact-${agent.id}`,
       documentNodeId: docByRosterId.has(agent.id) ? `doc-artifact-${docByRosterId.get(agent.id)!}` : null,
     })
+    tierEntries.set(tier, entries)
   }
 
-  // Also add unassigned documents (not linked to any agent)
+  // Add unassigned documents as tier 0 entries
   for (const def of defs) {
     if (!def.agent_roster_entry_id) {
+      const entries = tierEntries.get(0) ?? []
       entries.push({
-        agentNodeId: '', // no agent — just a floating document
+        agentNodeId: '',
         documentNodeId: `doc-artifact-${def.id}`,
       })
+      tierEntries.set(0, entries)
     }
   }
 
-  return entries
+  // Sort tiers ascending (tier 0 closest to protocol)
+  const tiers: TierLayout[] = []
+  const sortedKeys = [...tierEntries.keys()].sort((a, b) => a - b)
+  for (const tier of sortedKeys) {
+    tiers.push({ tier, entries: tierEntries.get(tier)! })
+  }
+
+  return tiers
 }
 
 // ============================================================================
@@ -168,10 +251,10 @@ const computeAutoLayout = (
     if (!spineOrder.includes(id)) spineOrder.push(id)
   }
 
-  // 3. Build towers for each protocol
-  const towersByStep = new Map<string, TowerEntry[]>()
+  // 3. Build tiered towers for each protocol
+  const towersByStep = new Map<string, TierLayout[]>()
   for (const protocol of protocols) {
-    towersByStep.set(protocol.id, buildTower(protocol.id, lookups))
+    towersByStep.set(protocol.id, buildTieredTower(protocol.id, lookups))
   }
 
   // 4. Compute node dimensions
@@ -182,7 +265,7 @@ const computeAutoLayout = (
   const contextWidth = NODE_DIMENSIONS[CanvasNodeKind.CONTEXT].defaultWidth
   const agentWidth = AGENT_DEFAULTS.DEFAULT_WIDTH
   const agentHeight = AGENT_DEFAULTS.DEFAULT_HEIGHT
-  const docWidth = DOCUMENT_NODE.DEFAULT_WIDTH
+  const docHeight = DOCUMENT_NODE.DEFAULT_HEIGHT
   const stepWidth = NODE_DIMENSIONS[CanvasNodeKind.STEP].defaultWidth
 
   const spineY = AUTO_LAYOUT.SPINE_Y
@@ -197,7 +280,7 @@ const computeAutoLayout = (
     if (!step) continue
 
     const role = classifyStep(step, lookups.protocolsByStep)
-    const tower = towersByStep.get(stepId) ?? []
+    const tiers = towersByStep.get(stepId) ?? []
 
     // Determine this node's width and its column width
     let nodeWidth: number
@@ -222,38 +305,50 @@ const computeAutoLayout = (
         break
     }
 
-    // Column width: max of node width and tower width (agent + gap + doc)
-    const towerWidth = tower.length > 0
-      ? agentWidth + AUTO_LAYOUT.DOC_GAP + docWidth
-      : 0
-    const columnWidth = Math.max(nodeWidth, towerWidth)
+    // Column width: max of node width and widest tier (agents side-by-side)
+    let widestTierWidth = 0
+    for (const tier of tiers) {
+      const tierWidth = tier.entries.length * agentWidth + (tier.entries.length - 1) * AUTO_LAYOUT.TIER_AGENT_GAP
+      if (tierWidth > widestTierWidth) widestTierWidth = tierWidth
+    }
+    const columnWidth = Math.max(nodeWidth, widestTierWidth)
 
     // Center the node in its column
     const nodeX = cursorX + (columnWidth - nodeWidth) / 2
+    const columnCenterX = cursorX + columnWidth / 2
 
     // Place spine node
     positions.set(stepId, { x: nodeX, y: spineY })
 
-    // 6. Stack tower entries upward from spine
-    if (tower.length > 0) {
-      const towerStartX = cursorX + (columnWidth - towerWidth) / 2
+    // 6. Place tiered tower above protocol (docs above agents)
+    if (tiers.length > 0) {
+      // Tier slot height: agent + optional doc above
+      const tierHasDoc = tiers.some((t) => t.entries.some((e) => e.documentNodeId !== null))
+      const tierSlotHeight = agentHeight + (tierHasDoc ? AUTO_LAYOUT.DOC_GAP + docHeight : 0)
 
-      for (let i = 0; i < tower.length; i++) {
-        const entry = tower[i]!
-        const entryY = spineY - AUTO_LAYOUT.TOWER_START_GAP - nodeHeight
-          - i * (agentHeight + AUTO_LAYOUT.TOWER_GAP)
+      for (let tierIdx = 0; tierIdx < tiers.length; tierIdx++) {
+        const tier = tiers[tierIdx]!
+        const agentY = spineY - AUTO_LAYOUT.TOWER_START_GAP - nodeHeight
+          - tierIdx * (tierSlotHeight + AUTO_LAYOUT.TOWER_GAP)
 
-        // Place agent node
-        if (entry.agentNodeId) {
-          positions.set(entry.agentNodeId, { x: towerStartX, y: entryY })
-        }
+        // Spread entries horizontally, centered on column
+        const tierWidth = tier.entries.length * agentWidth + (tier.entries.length - 1) * AUTO_LAYOUT.TIER_AGENT_GAP
+        const startX = columnCenterX - tierWidth / 2
 
-        // Place document node to the right of agent
-        if (entry.documentNodeId) {
-          const docX = entry.agentNodeId
-            ? towerStartX + agentWidth + AUTO_LAYOUT.DOC_GAP
-            : towerStartX
-          positions.set(entry.documentNodeId, { x: docX, y: entryY })
+        for (let j = 0; j < tier.entries.length; j++) {
+          const entry = tier.entries[j]!
+          const entryX = startX + j * (agentWidth + AUTO_LAYOUT.TIER_AGENT_GAP)
+
+          // Place agent node
+          if (entry.agentNodeId) {
+            positions.set(entry.agentNodeId, { x: entryX, y: agentY })
+          }
+
+          // Place document node above agent, centered horizontally
+          if (entry.documentNodeId) {
+            const docX = entry.agentNodeId ? entryX : entryX
+            positions.set(entry.documentNodeId, { x: docX, y: agentY - docHeight - AUTO_LAYOUT.DOC_GAP })
+          }
         }
       }
     }
@@ -275,5 +370,5 @@ const computeAutoLayout = (
   return positions
 }
 
-export { computeAutoLayout, classifyStep, topologicalSort, buildTower }
-export type { NodeRole, TowerEntry }
+export { computeAutoLayout, classifyStep, topologicalSort, buildTieredTower, computeAgentTiers }
+export type { NodeRole, TowerEntry, TierLayout }

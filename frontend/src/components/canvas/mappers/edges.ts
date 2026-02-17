@@ -110,11 +110,14 @@ const toAgentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] =
 
     const roster = lookups.rosterByStep[step.id] ?? []
     const active = roster.filter((a) => a.child_step_id !== null)
+    const activeIds = Collections.toSet(Collections.mapBy(active, (a) => a.id))
 
-    for (let i = 0; i < active.length; i++) {
-      const agent = active[i]!
-      if (i === 0) {
-        // First agent chains from the protocol node
+    for (const agent of active) {
+      // Filter depends_on to only active roster agents
+      const deps = agent.depends_on.filter((id) => activeIds.has(id))
+
+      if (deps.length === 0) {
+        // Root agent → edge from protocol node
         edges.push({
           id: `agent-edge-${agent.id}`,
           type: 'artifactEdge',
@@ -127,19 +130,20 @@ const toAgentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] =
           deletable: false,
         })
       } else {
-        // Subsequent agents chain from the previous agent
-        const prev = active[i - 1]!
-        edges.push({
-          id: `agent-edge-${agent.id}`,
-          type: 'artifactEdge',
-          data: { color: ARCHETYPE_CONFIGS[Archetype.AGENT].color },
-          source: `agent-artifact-${prev.id}`,
-          sourceHandle: 'agent-output',
-          target: `agent-artifact-${agent.id}`,
-          targetHandle: 'agent-input',
-          selectable: false,
-          deletable: false,
-        })
+        // Non-root → edge from each dependency agent
+        for (const depId of deps) {
+          edges.push({
+            id: `agent-dep-${depId}-${agent.id}`,
+            type: 'artifactEdge',
+            data: { color: ARCHETYPE_CONFIGS[Archetype.AGENT].color },
+            source: `agent-artifact-${depId}`,
+            sourceHandle: 'agent-output',
+            target: `agent-artifact-${agent.id}`,
+            targetHandle: 'agent-input',
+            selectable: false,
+            deletable: false,
+          })
+        }
       }
     }
   }
