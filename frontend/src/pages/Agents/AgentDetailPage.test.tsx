@@ -4,13 +4,10 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { AgentDetailPage } from './AgentDetailPage'
 import type { Agent } from '@/types/agent'
 
-const { mockFetchOne, mockFetchContext, mockFetchRouterOne, mockFetchModes, _agentState, _routerState } = vi.hoisted(() => ({
+const { mockFetchOne, mockFetchContext, _agentState } = vi.hoisted(() => ({
   mockFetchOne: vi.fn(),
   mockFetchContext: vi.fn(),
-  mockFetchRouterOne: vi.fn(),
-  mockFetchModes: vi.fn(),
   _agentState: { agent: undefined as Agent | undefined, context: [] as unknown[] },
-  _routerState: { router: undefined as unknown, modes: [] as unknown[] },
 }))
 
 vi.mock('@/stores/agentStore', () => ({
@@ -30,31 +27,6 @@ vi.mock('@/stores/agentStore', () => ({
     create: vi.fn(),
     update: vi.fn(),
     remove: vi.fn(),
-  },
-}))
-
-vi.mock('@/stores/toolRouterStore', () => ({
-  toolRouterStore: {
-    store: {
-      getState: () => ({}),
-      subscribe: () => () => {},
-    },
-    selectById: () => () => _routerState.router,
-    selectLoading: () => false,
-    selectError: () => null,
-    selectModes: () => () => _routerState.modes,
-    fetchOne: mockFetchRouterOne,
-    fetchModes: mockFetchModes,
-    create: vi.fn(),
-    update: vi.fn(),
-    remove: vi.fn(),
-    createMode: vi.fn(),
-    updateMode: vi.fn(),
-    deleteMode: vi.fn(),
-    fetchRouterTools: vi.fn().mockResolvedValue([]),
-    setRouterTools: vi.fn(),
-    fetchModeTools: vi.fn().mockResolvedValue([]),
-    setModeTools: vi.fn(),
   },
 }))
 
@@ -94,8 +66,6 @@ vi.mock('@/api', () => ({
       delete: vi.fn(),
       search: vi.fn(),
     },
-    toolRouters: { list: vi.fn().mockResolvedValue([]), get: vi.fn() },
-    routerModes: { listByRouter: vi.fn().mockResolvedValue([]) },
   },
 }))
 
@@ -109,7 +79,6 @@ const makeAgent = (id: string): Agent => ({
   model_temperature: 0.7,
   status: 'idle',
   output_schema_id: null,
-  router_id: null,
   version: 1,
 })
 
@@ -118,8 +87,6 @@ describe('AgentDetailPage', () => {
     vi.clearAllMocks()
     mockFetchOne.mockResolvedValue(undefined)
     mockFetchContext.mockResolvedValue([])
-    mockFetchRouterOne.mockResolvedValue(undefined)
-    mockFetchModes.mockResolvedValue([])
   })
 
   it('renders agent detail with id from params', async () => {

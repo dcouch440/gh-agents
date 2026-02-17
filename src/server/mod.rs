@@ -10,7 +10,6 @@ pub mod auth;
 pub mod executors;
 pub mod hub;
 pub mod openapi;
-pub mod router_service;
 pub mod services;
 pub mod state;
 pub mod tools;
@@ -383,36 +382,6 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::RESULT,
             get(api::get_result).delete(api::delete_result),
         )
-        .route(
-            routes::TOOL_ROUTERS,
-            get(api::list_tool_routers).post(api::create_tool_router),
-        )
-        .route(
-            routes::TOOL_ROUTER,
-            get(api::get_tool_router)
-                .put(api::update_tool_router)
-                .delete(api::delete_tool_router),
-        )
-        .route(
-            routes::TOOL_ROUTER_TOOLS,
-            get(api::get_router_tools).put(api::set_router_tools),
-        )
-        .route(
-            routes::ROUTER_MODES,
-            get(api::list_router_modes).post(api::create_router_mode),
-        )
-        .route(
-            routes::ROUTER_MODE,
-            get(api::get_router_mode)
-                .put(api::update_router_mode)
-                .delete(api::delete_router_mode),
-        )
-        .route(
-            routes::ROUTER_MODE_TOOLS,
-            get(api::get_mode_tools).put(api::set_mode_tools),
-        )
-        .route(routes::SESSION_CONTEXT, get(api::get_session_context))
-        .route(routes::SESSION_REQUESTS, get(api::list_session_requests))
         .route(routes::ROOMS, post(api::create_room))
         .route(
             routes::ROOM,

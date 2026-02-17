@@ -41,7 +41,6 @@ const agent1 = {
   model_temperature: 0.7,
   status: 'idle',
   output_schema_id: null,
-  router_id: null,
   version: 1,
 }
 const agent2 = {
@@ -54,7 +53,6 @@ const agent2 = {
   model_temperature: 0.7,
   status: 'idle',
   output_schema_id: null,
-  router_id: null,
   version: 1,
 }
 const stats = { total: 2, available: 2, max: 10 }

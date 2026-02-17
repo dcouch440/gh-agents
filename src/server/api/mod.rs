@@ -18,11 +18,8 @@ pub mod ownership;
 pub mod prompt_templates;
 pub mod results;
 pub mod rooms;
-pub mod router_modes;
-pub mod session_context;
 pub mod sessions;
 pub mod tasks;
-pub mod tool_routers;
 pub mod tools;
 pub mod workflows;
 
@@ -133,23 +130,6 @@ pub use collections::{
     list_collections, run_collection, update_collection, CollectionResponse, CollectionRunResponse,
     CreateCollectionRequest, UpdateCollectionRequest,
 };
-
-// Re-export tool router handlers and types
-pub use tool_routers::{
-    create_tool_router, delete_tool_router, get_router_tools, get_tool_router, list_tool_routers,
-    set_router_tools, update_tool_router, CreateToolRouterRequest, SetRouterToolsRequest,
-    UpdateToolRouterRequest,
-};
-
-// Re-export router mode handlers and types
-pub use router_modes::{
-    create_router_mode, delete_router_mode, get_mode_tools, get_router_mode, list_router_modes,
-    set_mode_tools, update_router_mode, CreateRouterModeRequest, RouterModeResponse,
-    SetModeToolsRequest, UpdateRouterModeRequest,
-};
-
-// Re-export session context handlers
-pub use session_context::{get_session_context, list_session_requests};
 
 // Re-export room handlers and types
 pub use rooms::{

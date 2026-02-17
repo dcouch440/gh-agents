@@ -4,8 +4,8 @@ import { api } from './api'
 const NAMESPACE_KEYS = [
   'auth', 'agents', 'tasks', 'tools', 'documents', 'sessions',
   'chat', 'config', 'stats', 'agentExecutions', 'outputSchemas', 'promptTemplates',
-  'costs', 'results', 'workflows', 'contextResponse', 'modes', 'toolRouters',
-  'routerModes', 'rooms', 'roomSessions', 'collections', 'protocols',
+  'costs', 'results', 'workflows', 'contextResponse', 'modes',
+  'rooms', 'roomSessions', 'collections', 'protocols',
 ] as const
 
 describe('api endpoints', () => {

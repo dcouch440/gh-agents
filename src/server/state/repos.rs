@@ -6,9 +6,9 @@
 use std::sync::Arc;
 
 use crate::db::traits::{
-    AgentExecutionRepo, ContentVersionRepo, ContextStoreRepo, DocumentRepo, OutputSchemaRepo,
-    PromptTemplateRepo, ProtocolRepo, ResultRepo, RoomRepo, RouterRequestRepo, SystemConfigRepo,
-    TokenLedgerRepo, ToolCapabilityRepo, ToolRouterRepo, UserRepo, WorkflowRepo,
+    AgentExecutionRepo, ContentVersionRepo, DocumentRepo, OutputSchemaRepo, PromptTemplateRepo,
+    ProtocolRepo, ResultRepo, RoomRepo, SystemConfigRepo, TokenLedgerRepo, ToolCapabilityRepo,
+    UserRepo, WorkflowRepo,
 };
 
 /// All repository trait objects grouped together.
@@ -33,12 +33,6 @@ pub struct Repos {
     pub token_ledger: Arc<dyn TokenLedgerRepo>,
     /// Result storage
     pub results: Arc<dyn ResultRepo>,
-    /// Tool routing management
-    pub tool_routers: Arc<dyn ToolRouterRepo>,
-    /// Context storage
-    pub context_store: Arc<dyn ContextStoreRepo>,
-    /// Router request lifecycle
-    pub router_requests: Arc<dyn RouterRequestRepo>,
     /// Agent room management
     pub rooms: Arc<dyn RoomRepo>,
     /// Tool capability taxonomy and assignments
@@ -63,9 +57,6 @@ impl Repos {
         agent_executions: Arc<dyn AgentExecutionRepo>,
         token_ledger: Arc<dyn TokenLedgerRepo>,
         results: Arc<dyn ResultRepo>,
-        tool_routers: Arc<dyn ToolRouterRepo>,
-        context_store: Arc<dyn ContextStoreRepo>,
-        router_requests: Arc<dyn RouterRequestRepo>,
         rooms: Arc<dyn RoomRepo>,
         tool_capabilities: Arc<dyn ToolCapabilityRepo>,
         system_config: Arc<dyn SystemConfigRepo>,
@@ -81,9 +72,6 @@ impl Repos {
             agent_executions,
             token_ledger,
             results,
-            tool_routers,
-            context_store,
-            router_requests,
             rooms,
             tool_capabilities,
             system_config,

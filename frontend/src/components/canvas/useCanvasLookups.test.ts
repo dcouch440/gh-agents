@@ -44,7 +44,6 @@ const makeAgent = (id: string, name: string): Agent => ({
   model_temperature: 0.7,
   status: 'idle',
   output_schema_id: null,
-  router_id: null,
   version: 1,
 })
 

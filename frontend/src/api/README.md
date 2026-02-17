@@ -419,24 +419,6 @@ All endpoints follow the pattern: `api.<resource>.<method>`
 ### Modes
 - `modes.list(config?)`
 
-### Tool Routers
-- `toolRouters.list(config?)`
-- `toolRouters.get(id, config?)`
-- `toolRouters.create(body, config?)`
-- `toolRouters.update(id, body, config?)`
-- `toolRouters.delete(id, config?)`
-- `toolRouters.getTools(id, config?)`
-- `toolRouters.setTools(id, body, config?)`
-
-### Router Modes
-- `routerModes.listByRouter(routerId, config?)`
-- `routerModes.createForRouter(routerId, body, config?)`
-- `routerModes.get(id, config?)`
-- `routerModes.update(id, body, config?)`
-- `routerModes.delete(id, config?)`
-- `routerModes.getTools(id, config?)`
-- `routerModes.setTools(id, body, config?)`
-
 ### Rooms
 - `rooms.get(id, config?)`
 - `rooms.create(body, config?)`

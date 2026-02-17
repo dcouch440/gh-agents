@@ -27,8 +27,6 @@ pub struct AgentRow {
     pub model_max_tokens: i32,
     pub model_temperature: f32,
     pub status: Option<String>,
-    pub router_mode: Option<bool>,
-    pub router_id: Option<Uuid>,
     pub output_schema_id: Option<Uuid>,
     pub version: i32,
     pub default_reasoning_trace: Option<bool>,
@@ -381,74 +379,6 @@ pub struct TokenLedgerRow {
     pub output_tokens: i64,
     pub cost_usd: f32,
     pub created_at: DateTime<Utc>,
-}
-
-/// Row type for tool router definitions.
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
-pub struct ToolRouterRow {
-    pub id: Uuid,
-    pub user_id: Uuid,
-    pub name: String,
-    pub description: Option<String>,
-    pub system_prompt: String,
-    pub model_id: String,
-    pub is_active: bool,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub parent_router_id: Option<Uuid>,
-    pub level: i32,
-}
-
-/// Row type for tool router mode definitions.
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
-pub struct ToolRouterModeRow {
-    pub id: Uuid,
-    pub router_id: Uuid,
-    pub mode_key: String,
-    pub display_name: String,
-    pub description: String,
-    pub system_prompt: String,
-    pub temperature: f32,
-    pub max_tokens: i32,
-    pub append_to_agent_system_prompt: bool,
-    pub append_to_agent_tools: bool,
-    pub display_order: i32,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
-
-/// Row type for context store entries.
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
-pub struct ContextStoreRow {
-    pub id: Uuid,
-    pub session_id: Uuid,
-    pub source: String,
-    pub priority: f32,
-    pub content: String,
-    pub metadata: Option<serde_json::Value>,
-    pub status: String,
-    pub created_at: DateTime<Utc>,
-    pub expires_at: Option<DateTime<Utc>>,
-}
-
-/// Row type for router request logs.
-#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow, utoipa::ToSchema)]
-pub struct RouterRequestRow {
-    pub id: Uuid,
-    pub session_id: Uuid,
-    pub agent_execution_id: Option<Uuid>,
-    pub intent: String,
-    pub priority: String,
-    pub callback_hint: Option<String>,
-    pub routed_tool: Option<String>,
-    pub routed_args: Option<serde_json::Value>,
-    pub is_async: bool,
-    pub passdown: Option<String>,
-    pub chain: Option<serde_json::Value>,
-    pub status: String,
-    pub result: Option<String>,
-    pub created_at: DateTime<Utc>,
-    pub completed_at: Option<DateTime<Utc>>,
 }
 
 /// Row type for room definitions (pipeline-scoped).

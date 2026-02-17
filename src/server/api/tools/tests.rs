@@ -37,8 +37,7 @@ mod tests {
             model_max_tokens: 4096,
             model_temperature: 0.7,
             status: Some("idle".to_string()),
-            router_mode: None,
-            router_id: None,
+
             output_schema_id: None,
             version: 1,
             default_reasoning_trace: None,

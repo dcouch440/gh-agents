@@ -192,16 +192,6 @@ export const API = {
   RESULTS: '/results',
   RESULT: (id: string) => `/results/${id}`,
 
-  // Tool Routers
-  TOOL_ROUTERS: '/tool-routers',
-  TOOL_ROUTER: (id: string) => `/tool-routers/${id}`,
-  TOOL_ROUTER_TOOLS: (id: string) => `/tool-routers/${id}/tools`,
-
-  // Router Modes
-  ROUTER_MODES_BY_ROUTER: (routerId: string) => `/tool-routers/${routerId}/modes`,
-  ROUTER_MODE: (id: string) => `/router-modes/${id}`,
-  MODE_TOOLS: (id: string) => `/router-modes/${id}/tools`,
-
   // Context Response
   CONTEXT_RESPONSE: '/context-response',
 
