@@ -96,4 +96,7 @@ export const PIPE = {
 
   // Interaction hit area
   INTERACTION_WIDTH: 20,
+
+  // Corner rounding radius (px) for orthogonal pipe bends
+  CORNER_RADIUS: 8,
 } as const

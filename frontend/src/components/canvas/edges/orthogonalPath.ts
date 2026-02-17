@@ -1,4 +1,5 @@
 import { Position } from '@xyflow/react'
+import { roundCorners } from './roundCorners'
 
 // ============================================================================
 // Orthogonal Edge Path — Clean right-angle pipe routing
@@ -40,18 +41,20 @@ const computeOrthogonalPath = (
   const isSourceHorizontal = sourcePosition === Position.Left || sourcePosition === Position.Right
   const isTargetHorizontal = targetPosition === Position.Left || targetPosition === Position.Right
 
+  let path: string
+
   // Both horizontal ports (e.g., right → left): horizontal-first routing
   if (isSourceHorizontal && isTargetHorizontal) {
-    return routeHorizontalToHorizontal(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition)
+    path = routeHorizontalToHorizontal(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition)
+  } else if (!isSourceHorizontal && !isTargetHorizontal) {
+    // Both vertical ports (e.g., top → bottom): vertical-first routing
+    path = routeVerticalToVertical(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition)
+  } else {
+    // Mixed: horizontal source → vertical target (or vice versa)
+    path = routeMixed(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition)
   }
 
-  // Both vertical ports (e.g., top → bottom): vertical-first routing
-  if (!isSourceHorizontal && !isTargetHorizontal) {
-    return routeVerticalToVertical(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition)
-  }
-
-  // Mixed: horizontal source → vertical target (or vice versa)
-  return routeMixed(sourceX, sourceY, targetX, targetY, sourcePosition)
+  return roundCorners(path)
 }
 
 /**
@@ -73,7 +76,8 @@ const routeHorizontalToHorizontal = (
       return `M ${sx} ${sy} L ${tx} ${sy}`
     }
     // 3-segment: horizontal → vertical → horizontal
-    const midX = (sx + tx) / 2
+    // Clamp midX to guarantee MIN_OFFSET from both handles
+    const midX = Math.max(sx + MIN_OFFSET, Math.min(tx - MIN_OFFSET, (sx + tx) / 2))
     return `M ${sx} ${sy} L ${midX} ${sy} L ${midX} ${ty} L ${tx} ${ty}`
   }
 
@@ -128,38 +132,52 @@ const routeVerticalToVertical = (
 
 /**
  * Route between a horizontal port and a vertical port (or vice versa).
- * Produces an L-shaped path when the target is "ahead" of the source
- * (in the source's exit direction), or a 4-segment subway path when
- * the target is "behind" the source.
+ * Ensures the pipe exits in the source handle's direction and enters in
+ * the target handle's direction, with MIN_OFFSET stubs at both ends.
  */
 const routeMixed = (
   sx: number, sy: number,
   tx: number, ty: number,
   sourcePosition: Position,
+  targetPosition: Position,
 ): string => {
   const isSourceHorizontal = sourcePosition === Position.Left || sourcePosition === Position.Right
 
+  // Target entry direction: offset from target handle before the final straight entry
+  const targetEntryDir = targetPosition === Position.Left ? -1
+    : targetPosition === Position.Right ? 1
+    : targetPosition === Position.Top ? -1
+    : 1 // Bottom
+
   if (isSourceHorizontal) {
-    // Source exits horizontally, target enters vertically
+    // Source exits horizontally, target enters vertically (Top/Bottom)
     const goesRight = sourcePosition === Position.Right
     const targetIsAhead = goesRight ? tx >= sx : tx <= sx
+
+    // Vertical entry stub: approach target from MIN_OFFSET above (Top) or below (Bottom)
+    const entryY = ty + targetEntryDir * MIN_OFFSET
+
     if (targetIsAhead) {
-      return `M ${sx} ${sy} L ${tx} ${sy} L ${tx} ${ty}`
+      const exitX = sx + (goesRight ? 1 : -1) * MIN_OFFSET
+      return `M ${sx} ${sy} L ${exitX} ${sy} L ${exitX} ${entryY} L ${tx} ${entryY} L ${tx} ${ty}`
     }
-    // Target behind source — extend in exit direction, then route to target
     const offsetX = sx + (goesRight ? 1 : -1) * MIN_OFFSET
-    return `M ${sx} ${sy} L ${offsetX} ${sy} L ${offsetX} ${ty} L ${tx} ${ty}`
+    return `M ${sx} ${sy} L ${offsetX} ${sy} L ${offsetX} ${entryY} L ${tx} ${entryY} L ${tx} ${ty}`
   }
 
-  // Source exits vertically, target enters horizontally
+  // Source exits vertically, target enters horizontally (Left/Right)
   const goesDown = sourcePosition === Position.Bottom
   const targetIsAhead = goesDown ? ty >= sy : ty <= sy
+
+  // Horizontal entry stub: approach target from MIN_OFFSET left (Left) or right (Right)
+  const entryX = tx + targetEntryDir * MIN_OFFSET
+
   if (targetIsAhead) {
-    return `M ${sx} ${sy} L ${sx} ${ty} L ${tx} ${ty}`
+    const exitY = sy + (goesDown ? 1 : -1) * MIN_OFFSET
+    return `M ${sx} ${sy} L ${sx} ${exitY} L ${entryX} ${exitY} L ${entryX} ${ty} L ${tx} ${ty}`
   }
-  // Target behind source — extend in exit direction, then route to target
   const offsetY = sy + (goesDown ? 1 : -1) * MIN_OFFSET
-  return `M ${sx} ${sy} L ${sx} ${offsetY} L ${tx} ${offsetY} L ${tx} ${ty}`
+  return `M ${sx} ${sy} L ${sx} ${offsetY} L ${entryX} ${offsetY} L ${entryX} ${ty} L ${tx} ${ty}`
 }
 
 // ============================================================================
@@ -293,7 +311,7 @@ const computeCorridorPath = (
   const exitY = goingUp ? sy - margin : sy + margin
   const enterY = goingUp ? ty + margin : ty - margin
 
-  return `M ${sx} ${sy} L ${sx} ${exitY} L ${corridorX} ${exitY} L ${corridorX} ${enterY} L ${tx} ${enterY} L ${tx} ${ty}`
+  return roundCorners(`M ${sx} ${sy} L ${sx} ${exitY} L ${corridorX} ${exitY} L ${corridorX} ${enterY} L ${tx} ${enterY} L ${tx} ${ty}`)
 }
 
 export { computeOrthogonalPath, computeOrthogonalLabel, assignParallelTracks, findObstaclesInPath, computeCorridorPath }
