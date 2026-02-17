@@ -148,8 +148,8 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     <>
       {nodeData.archetype === Archetype.WORKFORCE && (
         <>
-          <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} />
-          <CanvasHandle type="source" position={Position.Top} id="agents" color={accentColor} />
+          <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} variant="passive" />
+          <CanvasHandle type="source" position={Position.Top} id="agents" color={accentColor} variant="passive" />
         </>
       )}
       <CanvasHandle type="source" position={Position.Bottom} id="notes" color={NOTES_ACCENT} variant="passive" />
@@ -159,7 +159,6 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   const protocolHandles = (
     <>
       <CanvasHandle type="target" position={Position.Left} color={accentColor} style={{ top: '33%' }} />
-      <CanvasHandle type="target" position={Position.Left} id="control-in-aux" color={accentColor} style={{ top: '75%' }} variant="passive" />
       <CanvasHandle type="source" position={Position.Right} color={accentColor} />
       {stepExtraHandles}
     </>

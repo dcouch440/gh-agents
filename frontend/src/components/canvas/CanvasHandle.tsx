@@ -28,7 +28,7 @@ function CanvasHandle({ type, position, color, variant = 'standard', id, style: 
         height: size,
         background: color,
         border: `${CANVAS.HANDLE_BORDER_WIDTH}px solid ${theme.palette.custom.bgHeader}`,
-        ...(variant === 'passive' ? { pointerEvents: 'none' as const } : {}),
+        ...(variant === 'passive' ? { pointerEvents: 'none' as const, opacity: 0 } : {}),
         ...styleProp,
       }}
     />

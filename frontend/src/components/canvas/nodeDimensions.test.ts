@@ -31,8 +31,8 @@ describe('nodeDimensions', () => {
 
     it('returns correct values for context node', () => {
       const dims = getNodeDimensions(CanvasNodeKind.CONTEXT)
-      expect(dims.defaultWidth).toBe(420)
-      expect(dims.defaultHeight).toBe(360)
+      expect(dims.defaultWidth).toBe(560)
+      expect(dims.defaultHeight).toBe(500)
       expect(dims.minWidth).toBe(360)
       expect(dims.minHeight).toBe(300)
       expect(dims.maxWidth).toBe(1800)
@@ -51,8 +51,8 @@ describe('nodeDimensions', () => {
 
     it('returns correct values for notes node', () => {
       const dims = getNodeDimensions(CanvasNodeKind.NOTES)
-      expect(dims.defaultWidth).toBe(360)
-      expect(dims.defaultHeight).toBe(300)
+      expect(dims.defaultWidth).toBe(560)
+      expect(dims.defaultHeight).toBe(500)
       expect(dims.minWidth).toBe(300)
       expect(dims.minHeight).toBe(240)
       expect(dims.maxWidth).toBe(1200)
@@ -94,7 +94,7 @@ describe('nodeDimensions', () => {
         height: null,
         data: { kind: CanvasNodeKind.CONTEXT },
       })
-      expect(rect).toEqual({ x: 100, y: 200, width: 420, height: 360 })
+      expect(rect).toEqual({ x: 100, y: 200, width: 560, height: 500 })
     })
 
     it('falls back to defaults when dimensions are undefined', () => {
@@ -102,7 +102,7 @@ describe('nodeDimensions', () => {
         position: { x: 0, y: 0 },
         data: { kind: CanvasNodeKind.NOTES },
       })
-      expect(rect).toEqual({ x: 0, y: 0, width: 360, height: 300 })
+      expect(rect).toEqual({ x: 0, y: 0, width: 560, height: 500 })
     })
 
     it('handles mixed null and explicit dimensions', () => {
