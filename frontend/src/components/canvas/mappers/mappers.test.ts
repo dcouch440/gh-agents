@@ -212,6 +212,22 @@ describe('toRFEdges', () => {
     expect(edges[0]?.data?.sourceColor).toBe('#2dd4bf')
     expect(edges[0]?.data?.isProtocolEdge).toBe(false)
   })
+
+  it('routes Input→Protocol edges to auxiliary target handle', () => {
+    const inputStep: WorkflowStep = { ...step1, id: 'input-1', execution_mode: 'input' }
+    const protocolStep: WorkflowStep = { ...step1, id: 'proto-1', execution_mode: 'workforce' }
+    const edge: WorkflowStepEdge = { id: 'edge-input', from_step_id: 'input-1', to_step_id: 'proto-1' }
+    const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [inputStep, protocolStep])
+    expect(edges[0]?.targetHandle).toBe('control-in-aux')
+  })
+
+  it('does not set targetHandle for Context→Protocol edges', () => {
+    const ctxStep: WorkflowStep = { ...step1, id: 'ctx-1', execution_mode: 'context' }
+    const protocolStep: WorkflowStep = { ...step1, id: 'proto-1', execution_mode: 'workforce' }
+    const edge: WorkflowStepEdge = { id: 'edge-ctx', from_step_id: 'ctx-1', to_step_id: 'proto-1' }
+    const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [ctxStep, protocolStep])
+    expect(edges[0]?.targetHandle).toBeUndefined()
+  })
 })
 
 describe('nodeDataEqual', () => {
