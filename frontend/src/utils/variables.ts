@@ -11,6 +11,8 @@
  * - {items.$.field} → for-each current element (special case)
  */
 
+import { Collections } from '@/utils/collections'
+
 /**
  * Extract unique root variable names from a template string.
  *
@@ -39,7 +41,7 @@ export function extractVariables(template: string): string[] {
     roots.add(rootVar)
   }
 
-  return Array.from(roots).sort()
+  return Collections.sortedCopy(Array.from(roots), (a, b) => a.localeCompare(b))
 }
 
 /**

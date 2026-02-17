@@ -1,3 +1,4 @@
+import { Collections } from '@/utils/collections'
 import type { Point } from '@/utils/geometry'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 import type { StepNodeLookups, RosterAgentInfo, DocumentDefInfo } from '../mappers/types'
@@ -94,7 +95,7 @@ const computeAgentTiers = (
 ): ReadonlyMap<string, number> => {
   // Only consider agents with child_step_id (active on canvas)
   const active = roster.filter((a) => a.child_step_id !== null)
-  const activeIds = new Set(active.map((a) => a.id))
+  const activeIds = Collections.toSetBy(active, (a) => a.id)
   const tierMap = new Map<string, number>()
 
   // Iteratively assign tiers until all agents are placed

@@ -85,6 +85,36 @@ const selectStepIssues =
   (s: WorkflowState): ConsistencyIssue[] =>
     s.issuesByStep[stepId] ?? EMPTY_ISSUES
 
+const selectDocumentDefById =
+  (id: string) =>
+  (s: WorkflowState): DocumentDef | null => {
+    for (const defs of Object.values(s.documentDefsByStep)) {
+      const found = defs.find((d) => d.id === id)
+      if (found) return found
+    }
+    return null
+  }
+
+const selectRosterAgentById =
+  (id: string) =>
+  (s: WorkflowState): RosterAgent | null => {
+    for (const roster of Object.values(s.rosterByStep)) {
+      const found = roster.find((a) => a.id === id)
+      if (found) return found
+    }
+    return null
+  }
+
+const selectRoomMemberById =
+  (id: string) =>
+  (s: WorkflowState): RoomStepMember | null => {
+    for (const members of Object.values(s.roomMembersByStep)) {
+      const found = members.find((m) => m.id === id)
+      if (found) return found
+    }
+    return null
+  }
+
 const selectIsStale = (s: WorkflowState): boolean => s.lastFetched === null || Date.now() - s.lastFetched > STALE_THRESHOLD_MS
 
 export {
@@ -110,5 +140,8 @@ export {
   selectDirtyStepIds,
   selectIssuesByStep,
   selectStepIssues,
+  selectDocumentDefById,
+  selectRosterAgentById,
+  selectRoomMemberById,
   selectIsStale,
 }

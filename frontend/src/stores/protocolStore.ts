@@ -2,6 +2,7 @@
 // protocolStore — Hand-written store for protocols + sub-resources
 // ============================================================================
 
+import { Collections } from '@/utils/collections'
 import { createStore, createNormalizedMap, nmFromArray, nmSet, nmDelete, toArray, nmGet, logger, extractError } from './lib'
 import type { NormalizedMap } from './lib'
 import { api } from '@/api'
@@ -42,7 +43,7 @@ const selectTypes = (s: ProtocolState): ProtocolTypeInfo[] => s.types
 const selectByType =
   (protocolType: string) =>
   (s: ProtocolState): Protocol[] =>
-    toArray(s.items).filter((p) => p.protocol_type === protocolType)
+    Collections.filterMap(toArray(s.items), (p) => p.protocol_type === protocolType ? p : null)
 
 const selectLoading = (s: ProtocolState): boolean => s.loading
 

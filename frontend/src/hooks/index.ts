@@ -17,3 +17,5 @@ export { useAutoSave } from './useAutoSave'
 // Data
 export { useSendSessionMessage } from './useChatMutations'
 export { useWebSocket } from './useWebSocket'
+export { useStepDebugLog } from './useStepDebugLog'
+export { useStepLastRun } from './useStepLastRun'

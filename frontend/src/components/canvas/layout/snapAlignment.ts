@@ -1,3 +1,4 @@
+import { Collections } from '@/utils/collections'
 import type { Rect } from '@/utils/geometry'
 import type { AlignmentGuide, LayoutNode, SnapCandidate, SnapEdge, SnapResult } from './types'
 
@@ -86,9 +87,7 @@ const findSnapCandidates = (
   }
 
   // Sort by distance ascending
-  candidates.sort((a, b) => a.distance - b.distance)
-
-  return candidates
+  return Collections.sortedCopy(candidates, (a, b) => a.distance - b.distance)
 }
 
 /**

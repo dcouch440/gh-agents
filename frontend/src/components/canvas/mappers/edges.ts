@@ -110,7 +110,7 @@ const toAgentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] =
 
     const roster = lookups.rosterByStep[step.id] ?? []
     const active = roster.filter((a) => a.child_step_id !== null)
-    const activeIds = Collections.toSet(Collections.mapBy(active, (a) => a.id))
+    const activeIds = Collections.toSetBy(active, (a) => a.id)
 
     for (const agent of active) {
       // Filter depends_on to only active roster agents

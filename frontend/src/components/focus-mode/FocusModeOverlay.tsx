@@ -87,6 +87,10 @@ function FocusModeOverlay() {
     return resolveArchetype(currentStep, protocolsMap, currentStep.id)
   }, [currentStep, protocolsMap])
 
+  // Pre-compute lookup maps for O(1) access in downstream memos
+  const stepsById = useMemo(() => Collections.keyBy(steps, (s) => s.id), [steps])
+  const edgesByFromId = useMemo(() => Collections.groupBy(edges, (e) => e.from_step_id), [edges])
+
   // Compute step names map for nav bar and upstream resolution
   const stepNamesMap = useMemo(
     () => Collections.toLookupMap(steps, (s) => s.id, (s) => s.name ?? 'Unnamed'),
@@ -111,7 +115,7 @@ function FocusModeOverlay() {
     const colors: string[] = []
     for (let i = 0; i < orderedStepIds.length; i++) {
       const id = orderedStepIds[i]!
-      const step = steps.find((s) => s.id === id)
+      const step = stepsById.get(id)
       if (step) {
         const arch = resolveArchetype(step, protocolsMap, id)
         colors.push(ARCHETYPE_CONFIGS[arch].color)
@@ -120,7 +124,7 @@ function FocusModeOverlay() {
       }
     }
     return colors
-  }, [orderedStepIds, steps, protocolsMap])
+  }, [orderedStepIds, stepsById, protocolsMap])
 
   // Build per-step sections for the artifact bar, grouping input/context into their protocol
   const stepSections = useMemo((): readonly StepSection[] => {
@@ -130,14 +134,12 @@ function FocusModeOverlay() {
       const step = steps[i]!
       if (step.execution_mode !== 'input' && step.execution_mode !== 'context') continue
       const color = STEP_TYPE_COLORS[step.execution_mode] ?? DEFAULT_STEP_TYPE_COLOR
-      for (let j = 0; j < edges.length; j++) {
-        const edge = edges[j]!
-        if (edge.from_step_id === step.id) {
-          const cards = protocolInputCards.get(edge.to_step_id) ?? []
-          cards.push({ id: step.id, name: step.name ?? 'Unnamed', subtitle: null, accentOverride: color, artifactKind: step.execution_mode as ArtifactKind })
-          protocolInputCards.set(edge.to_step_id, cards)
-          break
-        }
+      const outEdges = edgesByFromId.get(step.id) ?? []
+      if (outEdges.length > 0) {
+        const edge = outEdges[0]!
+        const cards = protocolInputCards.get(edge.to_step_id) ?? []
+        cards.push({ id: step.id, name: step.name ?? 'Unnamed', subtitle: null, accentOverride: color, artifactKind: step.execution_mode as ArtifactKind })
+        protocolInputCards.set(edge.to_step_id, cards)
       }
     }
 
@@ -145,7 +147,7 @@ function FocusModeOverlay() {
     const sections: StepSection[] = []
     for (let i = 0; i < orderedStepIds.length; i++) {
       const id = orderedStepIds[i]!
-      const step = steps.find((s) => s.id === id)
+      const step = stepsById.get(id)
       if (!step) continue
 
       const stepName = step.name ?? 'Unnamed'
@@ -198,7 +200,7 @@ function FocusModeOverlay() {
       sections.push({ stepId: id, stepName, sectionLabel: executionModeLabel(step.execution_mode), accentColor: color, cards })
     }
     return sections
-  }, [orderedStepIds, steps, edges, accentColors, rosterByStep, documentDefsByStep, roomMembersByStep])
+  }, [orderedStepIds, steps, stepsById, edgesByFromId, accentColors, rosterByStep, documentDefsByStep, roomMembersByStep])
 
   const handleCardClick = useCallback((stepId: string, cardId: string, kind: ArtifactKind) => {
     const idx = orderedStepIds.indexOf(stepId)
