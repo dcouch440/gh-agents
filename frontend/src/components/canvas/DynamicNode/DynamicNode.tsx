@@ -156,6 +156,15 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     </>
   )
 
+  const protocolHandles = (
+    <>
+      <CanvasHandle type="target" position={Position.Left} color={accentColor} style={{ top: '33%' }} />
+      <CanvasHandle type="target" position={Position.Left} id="control-in-aux" color={accentColor} style={{ top: '75%' }} variant="passive" />
+      <CanvasHandle type="source" position={Position.Right} color={accentColor} />
+      {stepExtraHandles}
+    </>
+  )
+
   // --- Minimal LOD ---
   if (detailLevel === DetailLevel.MINIMAL) {
     const highlight = getNodeHighlightStyles({
@@ -168,7 +177,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     return (
       <Box sx={{ width: '100%', height: '100%' }}>
         <MinimalNodeShell label={nodeData.label} accentColor={accentColor} borderColor={highlight.borderColor} boxShadow={highlight.boxShadow} />
-        {isAgent ? agentHandles : (
+        {isAgent ? agentHandles : nodeData.archetype === Archetype.WORKFORCE ? protocolHandles : (
           <>
             <CanvasHandle type="target" position={Position.Left} color={accentColor} />
             <CanvasHandle type="source" position={Position.Right} color={accentColor} />
@@ -236,7 +245,9 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
         overlay={shareOverlay}
         {...(isAgent
           ? { handles: agentHandles, constraints: AGENT_CONSTRAINTS }
-          : { extraHandles: stepExtraHandles }
+          : nodeData.archetype === Archetype.WORKFORCE
+            ? { handles: protocolHandles }
+            : { extraHandles: stepExtraHandles }
         )}
       />
     </>

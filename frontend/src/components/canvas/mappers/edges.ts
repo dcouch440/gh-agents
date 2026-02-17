@@ -40,12 +40,21 @@ const toRFEdges = (
       protocolGroups.has(edge.to_step_id) ||
       (sourceStep?.execution_mode === 'workforce') === true
 
+    // Input edges targeting a protocol step use the auxiliary bottom-left handle
+    const targetStep = stepsById.get(edge.to_step_id)
+    const isInputToProtocol =
+      sourceStep?.execution_mode === 'input' &&
+      (protocolsByStep.has(edge.to_step_id) ||
+       targetStep?.execution_mode === 'workforce' ||
+       targetStep?.execution_mode === 'room')
+
     const data: StepEdgeData = { sourceColor, isProtocolEdge }
     return {
       id: edge.id,
       type: 'stepEdge',
       source: edge.from_step_id,
       target: edge.to_step_id,
+      ...(isInputToProtocol ? { targetHandle: 'control-in-aux' } : {}),
       data,
     }
   })
