@@ -5,6 +5,7 @@ import { sessionStore } from '@/stores/sessionStore'
 import { roomStore } from '@/stores/roomStore'
 import { workflowExecutionStore } from '@/stores/workflowExecutionStore'
 import { workflowStore } from '@/stores/workflowStore'
+import { stepStreamStore } from '@/stores/stepStreamStore'
 import { activityStore } from '@/stores/activity'
 
 function WsStoreRouter() {
@@ -17,6 +18,7 @@ function WsStoreRouter() {
       subscribe(WS_TOPIC.ROOM, roomStore.handleWsEvent),
       subscribe(WS_TOPIC.WORKFLOW, workflowExecutionStore.handleWsEvent),
       subscribe(WS_TOPIC.WORKFLOW, workflowStore.handleWsEvent),
+      subscribe(WS_TOPIC.WORKFLOW, stepStreamStore.handleWsEvent),
       // Flight recorder — receives ALL topics
       subscribe(WS_TOPIC.SESSION, activityStore.handleWsEvent),
       subscribe(WS_TOPIC.ROOM, activityStore.handleWsEvent),

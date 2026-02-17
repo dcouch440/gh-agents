@@ -55,6 +55,7 @@ const mockDefs: DocumentDef[] = [
     display_order: 0,
     created_at: '2025-01-01T00:00:00Z',
     document_id: null,
+    agent_roster_entry_id: null,
   },
   {
     id: 'def-002',
@@ -65,6 +66,7 @@ const mockDefs: DocumentDef[] = [
     display_order: 1,
     created_at: '2025-01-01T00:00:00Z',
     document_id: null,
+    agent_roster_entry_id: null,
   },
 ]
 

@@ -13,6 +13,8 @@ import type {
   SubWorkflowStartedData,
   SubWorkflowCompletedData,
   SubWorkflowStepProgressData,
+  WorkforceAgentProgressData,
+  WorkforceDesignerProgressData,
 } from '@/types/ws'
 import type { StepTimelineEvent, ChildStepState } from './types'
 import { store, updateStep } from './_store'
@@ -215,6 +217,24 @@ const handleWsEvent = (msg: WsWireMessage): void => {
             }),
           }
         })
+        break
+      }
+      case WORKFLOW_EVENT.WORKFORCE_DESIGNER_PROGRESS: {
+        const d = msg.data as WorkforceDesignerProgressData
+        store.setState((s) => ({
+          stepStates: updateStep(s.stepStates, d.step_id, {
+            status: d.status === 'started' ? 'running' : d.status === 'completed' ? 'running' : 'error',
+          }),
+        }))
+        break
+      }
+      case WORKFLOW_EVENT.WORKFORCE_AGENT_PROGRESS: {
+        const d = msg.data as WorkforceAgentProgressData
+        store.setState((s) => ({
+          stepStates: updateStep(s.stepStates, d.step_id, {
+            forEachProgress: { completed: d.agent_index + (d.status === 'completed' ? 1 : 0), total: d.total_agents },
+          }),
+        }))
         break
       }
     }

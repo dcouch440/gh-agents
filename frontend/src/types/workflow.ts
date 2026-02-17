@@ -120,6 +120,7 @@ type DocumentDef = {
   display_order: number
   created_at: string
   document_id: string | null
+  agent_roster_entry_id: string | null
 }
 
 type CreateDocumentDefRequest = {

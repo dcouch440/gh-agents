@@ -42,7 +42,7 @@ pub use strategies::{
     StepChatContext,
 };
 pub use strategy::ExecutionStrategy;
-pub use streaming::{NullSink, StreamSink};
+pub use streaming::{DagStreamSink, NullSink, StreamSink};
 
 /// Run a chat turn for the given agent. Loads config from DB, builds strategy, executes.
 ///

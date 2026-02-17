@@ -154,45 +154,9 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
     }
   })
 
-  // Auto-generate document nodes for workforce steps with document defs
-  const documentNodes: Node[] = []
-  for (const step of steps) {
-    if (!isWorkforceStep(step, lookups.protocolsByStep)) continue
-
-    const defs = lookups.documentDefsByStep[step.id] ?? []
-    for (let i = 0; i < defs.length; i++) {
-      const def = defs[i]!
-      const docData: DocumentNodeData = {
-        kind: CanvasNodeKind.DOCUMENT,
-        label: def.name,
-        parentStepName: step.name ?? 'Workforce',
-        content: lookups.documentContentByDefId[def.id] ?? '',
-        protocolStepId: step.id,
-        documentId: def.document_id,
-      }
-      const docNodeId = `doc-artifact-${def.id}`
-      const docDims = getStoredDimensions(docNodeId)
-      const docPos = getStoredPosition(docNodeId)
-      documentNodes.push({
-        id: docNodeId,
-        type: 'documentNode',
-        position: docPos ?? {
-          x: (step.position_x ?? 0) + i * (DOCUMENT_NODE.DEFAULT_WIDTH + 20),
-          y: (step.position_y ?? 0) - DOCUMENT_NODE.DEFAULT_HEIGHT - 40,
-        },
-        style: {
-          width: docDims?.width ?? DOCUMENT_NODE.DEFAULT_WIDTH,
-          height: docDims?.height ?? DOCUMENT_NODE.DEFAULT_HEIGHT,
-        },
-        draggable: true,
-        connectable: false,
-        data: docData,
-      })
-    }
-  }
-
-  // Auto-generate agent nodes for workforce steps with roster agents
+  // Auto-generate agent nodes for workforce steps (vertical stack above protocol)
   const agentNodes: Node[] = []
+  const agentPositionByRosterId = new Map<string, { x: number; y: number }>()
   for (const step of steps) {
     if (!isWorkforceStep(step, lookups.protocolsByStep)) continue
 
@@ -213,13 +177,16 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
       const agentNodeId = `agent-artifact-${agent.id}`
       const agentDims = getStoredDimensions(agentNodeId)
       const agentPos = getStoredPosition(agentNodeId)
+      const defaultPos = {
+        x: (step.position_x ?? 0),
+        y: (step.position_y ?? 0) - (i + 1) * (AGENT_NODE.DEFAULT_HEIGHT + 20),
+      }
+      const position = agentPos ?? defaultPos
+      agentPositionByRosterId.set(agent.id, position)
       agentNodes.push({
         id: agentNodeId,
         type: 'agentNode',
-        position: agentPos ?? {
-          x: (step.position_x ?? 0) + i * (AGENT_NODE.DEFAULT_WIDTH + 20),
-          y: (step.position_y ?? 0) - AGENT_NODE.DEFAULT_HEIGHT - 40,
-        },
+        position,
         style: {
           width: agentDims?.width ?? AGENT_NODE.DEFAULT_WIDTH,
           height: agentDims?.height ?? AGENT_NODE.DEFAULT_HEIGHT,
@@ -227,6 +194,50 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
         draggable: true,
         connectable: false,
         data: agentData,
+      })
+    }
+  }
+
+  // Auto-generate document nodes — position relative to assigned agent when available
+  const documentNodes: Node[] = []
+  for (const step of steps) {
+    if (!isWorkforceStep(step, lookups.protocolsByStep)) continue
+
+    const defs = lookups.documentDefsByStep[step.id] ?? []
+    let unassignedIdx = 0
+    for (const def of defs) {
+      const docData: DocumentNodeData = {
+        kind: CanvasNodeKind.DOCUMENT,
+        label: def.name,
+        parentStepName: step.name ?? 'Workforce',
+        content: lookups.documentContentByDefId[def.id] ?? '',
+        protocolStepId: step.id,
+        documentId: def.document_id,
+      }
+      const docNodeId = `doc-artifact-${def.id}`
+      const docDims = getStoredDimensions(docNodeId)
+      const docPos = getStoredPosition(docNodeId)
+
+      // Position to the right of the assigned agent, or fall back to above the protocol
+      const assignedAgentPos = def.agent_roster_entry_id
+        ? agentPositionByRosterId.get(def.agent_roster_entry_id)
+        : undefined
+      const defaultDocPos = assignedAgentPos
+        ? { x: assignedAgentPos.x + AGENT_NODE.DEFAULT_WIDTH + 40, y: assignedAgentPos.y }
+        : { x: (step.position_x ?? 0) + unassignedIdx * (DOCUMENT_NODE.DEFAULT_WIDTH + 20), y: (step.position_y ?? 0) - DOCUMENT_NODE.DEFAULT_HEIGHT - 40 }
+      if (!assignedAgentPos) unassignedIdx++
+
+      documentNodes.push({
+        id: docNodeId,
+        type: 'documentNode',
+        position: docPos ?? defaultDocPos,
+        style: {
+          width: docDims?.width ?? DOCUMENT_NODE.DEFAULT_WIDTH,
+          height: docDims?.height ?? DOCUMENT_NODE.DEFAULT_HEIGHT,
+        },
+        draggable: true,
+        connectable: false,
+        data: docData,
       })
     }
   }

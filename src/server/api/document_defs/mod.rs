@@ -51,6 +51,7 @@ pub struct DocumentDefResponse {
     pub display_order: i32,
     pub created_at: String,
     pub document_id: Option<String>,
+    pub agent_roster_entry_id: Option<String>,
 }
 
 impl DocumentDefResponse {
@@ -64,6 +65,7 @@ impl DocumentDefResponse {
             display_order: row.display_order,
             created_at: row.created_at.to_rfc3339(),
             document_id: row.document_id.map(|id| id.to_string()),
+            agent_roster_entry_id: row.agent_roster_entry_id.map(|id| id.to_string()),
         }
     }
 }

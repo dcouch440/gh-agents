@@ -4,6 +4,7 @@ import type { NodeProps } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { CanvasHandle } from '../CanvasHandle'
+import { DOCUMENT_NODE } from '../DocumentNode'
 import { DetailLevel } from '../constants'
 import { AGENT_NODE } from './constants'
 import { AgentNodeHeader } from './AgentNodeHeader'
@@ -41,6 +42,7 @@ function AgentNodeComponent({ id, data, selected }: NodeProps) {
         />
         <CanvasHandle type="target" position={Position.Bottom} id="agent-input" color={accentColor} variant="passive" />
         <CanvasHandle type="source" position={Position.Top} id="agent-output" color={accentColor} variant="passive" />
+        <CanvasHandle type="source" position={Position.Right} id="agent-documents" color={DOCUMENT_NODE.ACCENT_COLOR} variant="passive" />
       </Box>
     )
   }
@@ -56,6 +58,7 @@ function AgentNodeComponent({ id, data, selected }: NodeProps) {
         <>
           <CanvasHandle type="target" position={Position.Bottom} id="agent-input" color={accentColor} variant="passive" />
           <CanvasHandle type="source" position={Position.Top} id="agent-output" color={accentColor} variant="passive" />
+          <CanvasHandle type="source" position={Position.Right} id="agent-documents" color={DOCUMENT_NODE.ACCENT_COLOR} variant="passive" />
         </>
       }
     >
