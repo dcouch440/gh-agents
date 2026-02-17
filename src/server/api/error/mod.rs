@@ -94,5 +94,18 @@ impl From<anyhow::Error> for AppError {
     }
 }
 
+impl From<crate::server::services::ServiceError> for AppError {
+    fn from(err: crate::server::services::ServiceError) -> Self {
+        use crate::server::services::ServiceError;
+        match err {
+            ServiceError::Validation(msg) => AppError::BadRequest(msg),
+            ServiceError::NotFound(msg) => AppError::NotFound(format!("{msg} not found")),
+            ServiceError::Forbidden(msg) => AppError::Forbidden(msg),
+            ServiceError::Conflict(msg) => AppError::Conflict(msg),
+            ServiceError::Internal(err) => AppError::Internal(err.to_string()),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests;

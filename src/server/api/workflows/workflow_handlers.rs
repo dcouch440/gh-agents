@@ -7,13 +7,25 @@ use axum::{
 };
 use uuid::Uuid;
 
-use crate::constants::MAX_TITLE_LENGTH;
-use crate::db::traits::{CreateWorkflowInput, UpdateWorkflowInput};
 use crate::server::api::AppError;
 use crate::server::auth as auth_utils;
+use crate::server::services::workflows;
 use crate::server::state::AppState;
 
 use super::types::{CreateWorkflowRequest, UpdateWorkflowRequest, WorkflowResponse};
+
+fn workflow_response(row: crate::db::WorkflowRow) -> WorkflowResponse {
+    WorkflowResponse {
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        created_at: row.created_at,
+        container_enabled: row.container_enabled,
+        target_repo_url: row.target_repo_url,
+        target_branch: row.target_branch,
+        vpn_enabled: row.vpn_enabled,
+    }
+}
 
 /// GET /api/workflows
 #[utoipa::path(
@@ -29,22 +41,8 @@ pub async fn list_workflows(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<WorkflowResponse>>, AppError> {
-    let repo = &state.repos().workflows;
-    let rows = repo.list_workflows(auth.user_id.0).await?;
-    let items = rows
-        .into_iter()
-        .map(|r| WorkflowResponse {
-            id: r.id,
-            name: r.name,
-            description: r.description,
-            created_at: r.created_at,
-            container_enabled: r.container_enabled,
-            target_repo_url: r.target_repo_url,
-            target_branch: r.target_branch,
-            vpn_enabled: r.vpn_enabled,
-        })
-        .collect();
-    Ok(Json(items))
+    let rows = workflows::list_workflows(state.repos().workflows.as_ref(), auth.user_id.0).await?;
+    Ok(Json(rows.into_iter().map(workflow_response).collect()))
 }
 
 /// POST /api/workflows
@@ -64,36 +62,18 @@ pub async fn create_workflow(
     auth: auth_utils::AuthUser,
     Json(req): Json<CreateWorkflowRequest>,
 ) -> Result<(StatusCode, Json<WorkflowResponse>), AppError> {
-    if req.name.trim().is_empty() || req.name.len() > MAX_TITLE_LENGTH {
-        return Err(AppError::bad_request(
-            "Workflow name must be non-empty and within length limit",
-        ));
-    }
-    let repo = &state.repos().workflows;
-    let row = repo
-        .create_workflow(CreateWorkflowInput {
-            user_id: auth.user_id.0,
-            name: req.name,
-            description: req.description.unwrap_or_default(),
-            container_enabled: req.container_enabled.unwrap_or(false),
-            target_repo_url: req.target_repo_url,
-            target_branch: req.target_branch,
-            vpn_enabled: req.vpn_enabled.unwrap_or(false),
-        })
-        .await?;
-    Ok((
-        StatusCode::CREATED,
-        Json(WorkflowResponse {
-            id: row.id,
-            name: row.name,
-            description: row.description,
-            created_at: row.created_at,
-            container_enabled: row.container_enabled,
-            target_repo_url: row.target_repo_url,
-            target_branch: row.target_branch,
-            vpn_enabled: row.vpn_enabled,
-        }),
-    ))
+    let row = workflows::create_workflow(
+        state.repos().workflows.as_ref(),
+        auth.user_id.0,
+        req.name,
+        req.description,
+        req.container_enabled,
+        req.target_repo_url,
+        req.target_branch,
+        req.vpn_enabled,
+    )
+    .await?;
+    Ok((StatusCode::CREATED, Json(workflow_response(row))))
 }
 
 /// GET /api/workflows/:id
@@ -113,24 +93,8 @@ pub async fn get_workflow(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<WorkflowResponse>, AppError> {
-    let repo = &state.repos().workflows;
-    let row = repo
-        .get_workflow(id)
-        .await?
-        .ok_or(AppError::not_found("Workflow"))?;
-    if row.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Workflow"));
-    }
-    Ok(Json(WorkflowResponse {
-        id: row.id,
-        name: row.name,
-        description: row.description,
-        created_at: row.created_at,
-        container_enabled: row.container_enabled,
-        target_repo_url: row.target_repo_url,
-        target_branch: row.target_branch,
-        vpn_enabled: row.vpn_enabled,
-    }))
+    let row = workflows::get_workflow(state.repos().workflows.as_ref(), auth.user_id.0, id).await?;
+    Ok(Json(workflow_response(row)))
 }
 
 /// PUT /api/workflows/:id
@@ -152,42 +116,19 @@ pub async fn update_workflow(
     Path(id): Path<Uuid>,
     Json(req): Json<UpdateWorkflowRequest>,
 ) -> Result<Json<WorkflowResponse>, AppError> {
-    let repo = &state.repos().workflows;
-    let existing = repo
-        .get_workflow(id)
-        .await?
-        .ok_or(AppError::not_found("Workflow"))?;
-    if existing.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Workflow"));
-    }
-    if let Some(ref name) = req.name {
-        if name.trim().is_empty() || name.len() > MAX_TITLE_LENGTH {
-            return Err(AppError::bad_request(
-                "Workflow name must be non-empty and within length limit",
-            ));
-        }
-    }
-    let row = repo
-        .update_workflow(UpdateWorkflowInput {
-            id,
-            name: req.name,
-            description: req.description,
-            container_enabled: req.container_enabled,
-            target_repo_url: req.target_repo_url,
-            target_branch: req.target_branch,
-            vpn_enabled: req.vpn_enabled,
-        })
-        .await?;
-    Ok(Json(WorkflowResponse {
-        id: row.id,
-        name: row.name,
-        description: row.description,
-        created_at: row.created_at,
-        container_enabled: row.container_enabled,
-        target_repo_url: row.target_repo_url,
-        target_branch: row.target_branch,
-        vpn_enabled: row.vpn_enabled,
-    }))
+    let row = workflows::update_workflow(
+        state.repos().workflows.as_ref(),
+        auth.user_id.0,
+        id,
+        req.name,
+        req.description,
+        req.container_enabled,
+        req.target_repo_url,
+        req.target_branch,
+        req.vpn_enabled,
+    )
+    .await?;
+    Ok(Json(workflow_response(row)))
 }
 
 /// DELETE /api/workflows/:id
@@ -207,14 +148,6 @@ pub async fn delete_workflow(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    let repo = &state.repos().workflows;
-    let existing = repo
-        .get_workflow(id)
-        .await?
-        .ok_or(AppError::not_found("Workflow"))?;
-    if existing.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Workflow"));
-    }
-    repo.delete_workflow(id).await?;
+    workflows::delete_workflow(state.repos().workflows.as_ref(), auth.user_id.0, id).await?;
     Ok(StatusCode::NO_CONTENT)
 }

@@ -8,8 +8,9 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{AppError, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH};
+use super::AppError;
 use crate::server::auth as auth_utils;
+use crate::server::services::agents;
 use crate::server::state::AppState;
 
 /// Response for a single agent
@@ -122,7 +123,7 @@ pub async fn list_agents(
     let config = state.config().read().await;
     let pool_config = &config.pool;
 
-    let rows = state.repo().list_persisted_agents(auth.user_id).await?;
+    let rows = agents::list_agents(state.repo().as_ref(), auth.user_id).await?;
 
     let agents: Vec<AgentResponse> = rows
         .into_iter()
@@ -159,47 +160,21 @@ pub async fn create_agent(
     auth: auth_utils::AuthUser,
     Json(request): Json<CreateAgentRequest>,
 ) -> Result<(StatusCode, Json<AgentResponse>), AppError> {
-    if request.model_id.trim().is_empty() {
-        return Err(AppError::bad_request("model_id is required"));
-    }
-    if request.name.len() > MAX_TITLE_LENGTH {
-        return Err(AppError::bad_request("Name exceeds maximum length"));
-    }
-    if let Some(ref prompt) = request.system_prompt {
-        if prompt.len() > MAX_PROMPT_LENGTH {
-            return Err(AppError::bad_request(
-                "System prompt exceeds maximum length",
-            ));
-        }
-    }
-
-    let row = crate::db::AgentRow {
-        id: Uuid::new_v4(),
-        user_id: Some(auth.user_id.0),
-        tier: None,
-        name: request.name.trim().to_string(),
-        system_prompt: request.system_prompt.unwrap_or_default(),
-        persona_style: Some(
-            request
-                .persona_style
-                .unwrap_or_else(|| "casual".to_string()),
-        ),
-        model_provider: request
-            .model_provider
-            .unwrap_or_else(|| "anthropic".to_string()),
-        model_id: request.model_id.trim().to_string(),
-        model_max_tokens: request.model_max_tokens.unwrap_or(4096),
-        model_temperature: request.model_temperature.unwrap_or(0.7),
-        status: Some("idle".to_string()),
-        router_mode: Some(false),
-        router_id: None,
-        output_schema_id: request.output_schema_id,
-        version: 1,
-        default_reasoning_trace: None,
-        is_system: false,
-    };
-
-    state.repo().upsert_agent(row.clone()).await?;
+    let row = agents::create_agent(
+        state.repo().as_ref(),
+        agents::CreateAgentInput {
+            user_id: auth.user_id.0,
+            name: request.name,
+            system_prompt: request.system_prompt,
+            persona_style: request.persona_style,
+            model_provider: request.model_provider,
+            model_id: request.model_id,
+            model_max_tokens: request.model_max_tokens,
+            model_temperature: request.model_temperature,
+            output_schema_id: request.output_schema_id,
+        },
+    )
+    .await?;
 
     Ok((StatusCode::CREATED, Json(AgentResponse::from_row(row))))
 }
@@ -221,8 +196,7 @@ pub async fn get_agent(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<AgentResponse>, AppError> {
-    let row = super::ownership::verify_agent_ownership(state.repo().as_ref(), &auth, id).await?;
-
+    let row = agents::get_agent(state.repo().as_ref(), auth.user_id.0, id).await?;
     Ok(Json(AgentResponse::from_row(row)))
 }
 
@@ -245,39 +219,25 @@ pub async fn update_agent(
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateAgentRequest>,
 ) -> Result<Json<AgentResponse>, AppError> {
-    let existing =
-        super::ownership::verify_agent_ownership(state.repo().as_ref(), &auth, id).await?;
+    let row = agents::update_agent(
+        state.repo().as_ref(),
+        auth.user_id.0,
+        id,
+        agents::UpdateAgentInput {
+            name: request.name,
+            system_prompt: request.system_prompt,
+            persona_style: request.persona_style,
+            model_provider: request.model_provider,
+            model_id: request.model_id,
+            model_max_tokens: request.model_max_tokens,
+            model_temperature: request.model_temperature,
+            output_schema_id: request.output_schema_id,
+            router_id: request.router_id,
+        },
+    )
+    .await?;
 
-    let updated = crate::db::AgentRow {
-        id: existing.id,
-        user_id: Some(auth.user_id.0),
-        tier: None,
-        name: request.name.unwrap_or(existing.name),
-        system_prompt: request.system_prompt.unwrap_or(existing.system_prompt),
-        persona_style: request
-            .persona_style
-            .map(Some)
-            .unwrap_or(existing.persona_style),
-        model_provider: request.model_provider.unwrap_or(existing.model_provider),
-        model_id: request.model_id.unwrap_or(existing.model_id),
-        model_max_tokens: request
-            .model_max_tokens
-            .unwrap_or(existing.model_max_tokens),
-        model_temperature: request
-            .model_temperature
-            .unwrap_or(existing.model_temperature),
-        status: existing.status,
-        router_mode: existing.router_mode,
-        router_id: request.router_id.or(existing.router_id),
-        output_schema_id: request.output_schema_id.or(existing.output_schema_id),
-        version: existing.version,
-        default_reasoning_trace: existing.default_reasoning_trace,
-        is_system: existing.is_system,
-    };
-
-    state.repo().upsert_agent(updated.clone()).await?;
-
-    Ok(Json(AgentResponse::from_row(updated)))
+    Ok(Json(AgentResponse::from_row(row)))
 }
 
 /// Delete an agent by ID
@@ -297,14 +257,7 @@ pub async fn delete_agent(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    let agent = super::ownership::verify_agent_ownership(state.repo().as_ref(), &auth, id).await?;
-
-    if agent.is_system {
-        return Err(AppError::bad_request("Cannot delete system agents"));
-    }
-
-    state.repo().delete_persisted_agent(id).await?;
-
+    agents::delete_agent(state.repo().as_ref(), auth.user_id.0, id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 #[cfg(test)]

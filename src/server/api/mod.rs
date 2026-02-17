@@ -219,4 +219,4 @@ pub use protocols::{
     update_protocol,
 };
 
-use crate::constants::{MAX_DESCRIPTION_LENGTH, MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH};
+use crate::constants::{MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH};
