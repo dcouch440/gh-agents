@@ -39,6 +39,16 @@ describe('nodeDimensions', () => {
       expect(dims.maxHeight).toBe(1600)
     })
 
+    it('returns correct values for agent node (matches DynamicNode/archetypes.ts)', () => {
+      const dims = getNodeDimensions(CanvasNodeKind.AGENT)
+      expect(dims.defaultWidth).toBe(420)
+      expect(dims.defaultHeight).toBe(360)
+      expect(dims.minWidth).toBe(360)
+      expect(dims.minHeight).toBe(300)
+      expect(dims.maxWidth).toBe(1200)
+      expect(dims.maxHeight).toBe(1000)
+    })
+
     it('returns correct values for notes node', () => {
       const dims = getNodeDimensions(CanvasNodeKind.NOTES)
       expect(dims.defaultWidth).toBe(360)
