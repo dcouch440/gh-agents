@@ -135,7 +135,7 @@ const toAgentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] =
           edges.push({
             id: `agent-dep-${depId}-${agent.id}`,
             type: 'artifactEdge',
-            data: { color: ARCHETYPE_CONFIGS[Archetype.AGENT].color },
+            data: { color: ARCHETYPE_CONFIGS[Archetype.AGENT].color, avoidObstacles: true },
             source: `agent-artifact-${depId}`,
             sourceHandle: 'agent-output',
             target: `agent-artifact-${agent.id}`,

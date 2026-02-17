@@ -53,7 +53,7 @@ function InputNodeComponent({ id, data, selected }: NodeProps) {
           borderColor={highlight.borderColor}
           boxShadow={highlight.boxShadow}
         />
-        <CanvasHandle type="source" position={Position.Bottom} color={accentColor} />
+        <CanvasHandle type="source" position={Position.Right} color={accentColor} />
       </Box>
     )
   }
@@ -65,7 +65,7 @@ function InputNodeComponent({ id, data, selected }: NodeProps) {
       accentColor={accentColor}
       highlight={highlight}
       constraints={toConstraints(INPUT_NODE)}
-      handles={<CanvasHandle type="source" position={Position.Bottom} color={accentColor} />}
+      handles={<CanvasHandle type="source" position={Position.Right} color={accentColor} />}
     >
       {/* Header — draggable area */}
       <Box

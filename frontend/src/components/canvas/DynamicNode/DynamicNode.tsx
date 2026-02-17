@@ -140,7 +140,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     <>
       <CanvasHandle type="target" position={Position.Bottom} id="agent-input" color={accentColor} variant="passive" />
       <CanvasHandle type="source" position={Position.Top} id="agent-output" color={accentColor} variant="passive" />
-      <CanvasHandle type="source" position={Position.Right} id="agent-documents" color={DOCUMENT_NODE.ACCENT_COLOR} variant="passive" />
+      <CanvasHandle type="source" position={Position.Top} id="agent-documents" color={DOCUMENT_NODE.ACCENT_COLOR} variant="passive" />
     </>
   )
 
