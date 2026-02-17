@@ -673,7 +673,7 @@ describe('toRFNodes — agent nodes', () => {
     const agentNode2 = nodes.find((n) => n.id === 'agent-artifact-agent-2')
 
     expect(agentNode1).toBeDefined()
-    expect(agentNode1?.type).toBe('agentNode')
+    expect(agentNode1?.type).toBe('dynamicNode')
     expect(agentNode1?.data.kind).toBe('agent')
     expect(agentNode1?.data.label).toBe('Researcher')
     expect(agentNode1?.data.roleDescription).toBe('Does research')

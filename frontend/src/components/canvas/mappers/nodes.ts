@@ -2,8 +2,6 @@ import type { Node } from '@xyflow/react'
 import type { WorkflowStep } from '@/types/workflow'
 import { Collections } from '@/utils/collections'
 import { FORM_NODE } from '../CanvasFormNode'
-import { AGENT_NODE } from '../AgentNode'
-import type { AgentNodeData } from '../AgentNode'
 import { CONTEXT_NODE } from '../ContextNode'
 import type { ContextNodeData } from '../ContextNode'
 import { DOCUMENT_NODE } from '../DocumentNode'
@@ -15,7 +13,7 @@ import type { NotesNodeData } from '../NotesNode'
 import { SUB_WORKFLOW_NODE } from '../SubWorkflowNode'
 import type { SubWorkflowNodeData } from '../SubWorkflowNode'
 import { CanvasNodeKind } from '../canvasKinds'
-import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from '../DynamicNode/archetypes'
+import { Archetype, ARCHETYPE_CONFIGS, AGENT_DEFAULTS, resolveArchetype } from '../DynamicNode/archetypes'
 import type { DynamicNodeData } from '../DynamicNode/DynamicNode'
 import type { StepNodeLookups } from './types'
 import { isWorkforceStep } from './protocolGroups'
@@ -113,6 +111,11 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
         promptValue: step.prompt_template,
         modelId: agent?.model_id ?? null,
         agentName: agent?.name ?? null,
+        rosterAgentId: null,
+        roleDescription: null,
+        capabilities: [],
+        parentStepName: null,
+        protocolStepId: null,
       }
       return {
         id: step.id,
@@ -165,31 +168,40 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
       const agent = roster[i]!
       if (!agent.child_step_id) continue
 
-      const agentData: AgentNodeData = {
+      const agentData: DynamicNodeData = {
         kind: CanvasNodeKind.AGENT,
+        archetype: Archetype.AGENT,
         label: agent.name,
+        description: '',
+        documentNames: [],
+        rosterNames: [],
+        roomId: null,
+        upstreamStepNames: [],
+        promptValue: '',
+        modelId: null,
+        agentName: null,
+        rosterAgentId: agent.id,
         roleDescription: agent.role_description,
+        capabilities: [],
         parentStepName: step.name ?? 'Workforce',
         protocolStepId: step.id,
-        rosterAgentId: agent.id,
-        capabilities: [],
       }
       const agentNodeId = `agent-artifact-${agent.id}`
       const agentDims = getStoredDimensions(agentNodeId)
       const agentPos = getStoredPosition(agentNodeId)
       const defaultPos = {
         x: (step.position_x ?? 0),
-        y: (step.position_y ?? 0) - (i + 1) * (AGENT_NODE.DEFAULT_HEIGHT + 20),
+        y: (step.position_y ?? 0) - (i + 1) * (AGENT_DEFAULTS.DEFAULT_HEIGHT + 20),
       }
       const position = agentPos ?? defaultPos
       agentPositionByRosterId.set(agent.id, position)
       agentNodes.push({
         id: agentNodeId,
-        type: 'agentNode',
+        type: 'dynamicNode',
         position,
         style: {
-          width: agentDims?.width ?? AGENT_NODE.DEFAULT_WIDTH,
-          height: agentDims?.height ?? AGENT_NODE.DEFAULT_HEIGHT,
+          width: agentDims?.width ?? AGENT_DEFAULTS.DEFAULT_WIDTH,
+          height: agentDims?.height ?? AGENT_DEFAULTS.DEFAULT_HEIGHT,
         },
         draggable: true,
         connectable: false,
@@ -223,7 +235,7 @@ const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
         ? agentPositionByRosterId.get(def.agent_roster_entry_id)
         : undefined
       const defaultDocPos = assignedAgentPos
-        ? { x: assignedAgentPos.x + AGENT_NODE.DEFAULT_WIDTH + 40, y: assignedAgentPos.y }
+        ? { x: assignedAgentPos.x + AGENT_DEFAULTS.DEFAULT_WIDTH + 40, y: assignedAgentPos.y }
         : { x: (step.position_x ?? 0) + unassignedIdx * (DOCUMENT_NODE.DEFAULT_WIDTH + 20), y: (step.position_y ?? 0) - DOCUMENT_NODE.DEFAULT_HEIGHT - 40 }
       if (!assignedAgentPos) unassignedIdx++
 

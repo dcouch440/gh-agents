@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type SettingsOutlined from '@mui/icons-material/SettingsOutlined'
 import type { HighlightMode } from '../canvasKinds'
+import type { ResizeSizeConstraints } from '../ResizableNodeShell'
 
 /**
  * Configuration for a single tab in the horizontal icon tab strip.
@@ -25,6 +26,10 @@ type CanvasFormNodeProps = {
   highlightMode?: HighlightMode
   extraHandles?: ReactNode
   overlay?: ReactNode
+  /** When set, overrides the default FORM_NODE size constraints. */
+  constraints?: ResizeSizeConstraints
+  /** When set, replaces the default left/right handles entirely. */
+  handles?: ReactNode
 }
 
 export type { CanvasFormTab, CanvasFormNodeProps }
