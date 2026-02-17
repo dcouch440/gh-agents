@@ -9,8 +9,11 @@ export const AUTO_LAYOUT = {
   /** Vertical gap between tower entries — agent+doc pairs (2 grid cells). */
   TOWER_GAP: 48,
 
-  /** Horizontal gap between agent node and its paired document (1 grid cell). */
+  /** Vertical gap between agent node and its document above (1 grid cell). */
   DOC_GAP: 24,
+
+  /** Horizontal gap between agents in the same tier (2 grid cells). */
+  TIER_AGENT_GAP: 48,
 
   /** Vertical gap below the protocol node to the notes node (2 grid cells). */
   NOTES_GAP: 48,
