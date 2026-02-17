@@ -213,15 +213,15 @@ describe('toRFEdges', () => {
     expect(edges[0]?.data?.isProtocolEdge).toBe(false)
   })
 
-  it('routes Input→Protocol edges to auxiliary target handle', () => {
+  it('uses default target handle for Input→Protocol edges', () => {
     const inputStep: WorkflowStep = { ...step1, id: 'input-1', execution_mode: 'input' }
     const protocolStep: WorkflowStep = { ...step1, id: 'proto-1', execution_mode: 'workforce' }
     const edge: WorkflowStepEdge = { id: 'edge-input', from_step_id: 'input-1', to_step_id: 'proto-1' }
     const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [inputStep, protocolStep])
-    expect(edges[0]?.targetHandle).toBe('control-in-aux')
+    expect(edges[0]?.targetHandle).toBeUndefined()
   })
 
-  it('does not set targetHandle for Context→Protocol edges', () => {
+  it('uses default target handle for Context→Protocol edges', () => {
     const ctxStep: WorkflowStep = { ...step1, id: 'ctx-1', execution_mode: 'context' }
     const protocolStep: WorkflowStep = { ...step1, id: 'proto-1', execution_mode: 'workforce' }
     const edge: WorkflowStepEdge = { id: 'edge-ctx', from_step_id: 'ctx-1', to_step_id: 'proto-1' }
@@ -529,7 +529,7 @@ describe('toRFNodes — input nodes', () => {
       id: 'input-001',
       type: 'inputNode',
       position: { x: 50, y: 75 },
-      style: { width: 420, height: 360 },
+      style: { width: 560, height: 500 },
       data: {
         kind: 'input',
         label: 'User Input',
@@ -802,11 +802,11 @@ describe('toAgentEdges', () => {
       selectable: false,
       deletable: false,
     })
-    // Judge depends on both agents — dependency edges include avoidObstacles
+    // Judge depends on both agents — dependency edges
     expect(edges[2]).toEqual({
       id: 'agent-dep-agent-1-agent-3',
       type: 'artifactEdge',
-      data: { color: '#06b6d4', avoidObstacles: true },
+      data: { color: '#06b6d4' },
       source: 'agent-artifact-agent-1',
       sourceHandle: 'agent-output',
       target: 'agent-artifact-agent-3',
@@ -817,7 +817,7 @@ describe('toAgentEdges', () => {
     expect(edges[3]).toEqual({
       id: 'agent-dep-agent-2-agent-3',
       type: 'artifactEdge',
-      data: { color: '#06b6d4', avoidObstacles: true },
+      data: { color: '#06b6d4' },
       source: 'agent-artifact-agent-2',
       sourceHandle: 'agent-output',
       target: 'agent-artifact-agent-3',

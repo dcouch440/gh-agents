@@ -114,6 +114,19 @@ describe('computeOrthogonalPath', () => {
       expect(points[2]!.y).toBe(-580 + 24)
     })
 
+    it('snaps to vertical line when X offset is within tolerance', () => {
+      // SNAP_TOLERANCE = 8, so 5px offset should snap
+      const path = computeOrthogonalPath(100, 0, 105, 200, Position.Bottom, Position.Top)
+      expect(path).toBe('M 100 0 L 100 200') // snaps to source X
+    })
+
+    it('does not snap when X offset exceeds tolerance', () => {
+      // 10px offset exceeds SNAP_TOLERANCE=8
+      const path = computeOrthogonalPath(100, 0, 110, 200, Position.Bottom, Position.Top)
+      const points = extractPoints(path)
+      expect(points).toHaveLength(4) // 3-segment path, not a straight line
+    })
+
     it('handles awkward vertical routing', () => {
       const path = computeOrthogonalPath(100, 0, 200, 200, Position.Top, Position.Top)
       expect(isOrthogonal(path)).toBe(true)
@@ -124,23 +137,59 @@ describe('computeOrthogonalPath', () => {
   // Mixed (L-shaped paths)
   // ============================================================================
 
-  describe('mixed orientation (L-shaped)', () => {
-    it('routes horizontal source to vertical target', () => {
+  describe('mixed orientation (L-shaped and subway)', () => {
+    it('routes horizontal source to vertical target (target ahead)', () => {
       const path = computeOrthogonalPath(0, 100, 200, 0, Position.Right, Position.Top)
       expect(isOrthogonal(path)).toBe(true)
       const points = extractPoints(path)
-      expect(points).toHaveLength(3) // M + corner + end
+      expect(points).toHaveLength(3) // L-shape: M + corner + end
       expect(points[0]).toEqual({ x: 0, y: 100 })
       expect(points[points.length - 1]).toEqual({ x: 200, y: 0 })
     })
 
-    it('routes vertical source to horizontal target', () => {
+    it('routes vertical source to horizontal target (target ahead)', () => {
       const path = computeOrthogonalPath(100, 0, 200, 100, Position.Bottom, Position.Left)
       expect(isOrthogonal(path)).toBe(true)
       const points = extractPoints(path)
-      expect(points).toHaveLength(3)
+      expect(points).toHaveLength(3) // L-shape
       expect(points[0]).toEqual({ x: 100, y: 0 })
       expect(points[points.length - 1]).toEqual({ x: 200, y: 100 })
+    })
+
+    it('routes Bottom source to Left target when target is above (subway)', () => {
+      // Simulates Input (bottom at y=500) → Protocol (left handle at y=165)
+      const path = computeOrthogonalPath(280, 500, 632, 165, Position.Bottom, Position.Left)
+      expect(isOrthogonal(path)).toBe(true)
+      const points = extractPoints(path)
+      expect(points).toHaveLength(4) // subway: down, across, up to target
+      expect(points[0]).toEqual({ x: 280, y: 500 })
+      expect(points[1]).toEqual({ x: 280, y: 524 }) // sy + MIN_OFFSET
+      expect(points[2]).toEqual({ x: 632, y: 524 })
+      expect(points[3]).toEqual({ x: 632, y: 165 })
+    })
+
+    it('routes Right source to Top target when target is behind (detour)', () => {
+      // Source exits right but target is to the left
+      const path = computeOrthogonalPath(200, 100, 50, 300, Position.Right, Position.Top)
+      expect(isOrthogonal(path)).toBe(true)
+      const points = extractPoints(path)
+      expect(points).toHaveLength(4) // detour: right, down, left to target
+      expect(points[0]).toEqual({ x: 200, y: 100 })
+      expect(points[1]).toEqual({ x: 224, y: 100 }) // sx + MIN_OFFSET
+      expect(points[2]).toEqual({ x: 224, y: 300 })
+      expect(points[3]).toEqual({ x: 50, y: 300 })
+    })
+
+    it('routes Top source to Right target when target is below (subway)', () => {
+      // Source exits upward but target is below
+      const path = computeOrthogonalPath(100, 0, 300, 200, Position.Top, Position.Right)
+      expect(isOrthogonal(path)).toBe(true)
+      const points = extractPoints(path)
+      expect(points).toHaveLength(4) // subway: up, across, down to target
+      expect(points[0]).toEqual({ x: 100, y: 0 })
+      expect(points[1]).toEqual({ x: 100, y: -24 }) // sy - MIN_OFFSET
+      expect(points[2]).toEqual({ x: 300, y: -24 })
+      expect(points[3]).toEqual({ x: 300, y: 200 })
     })
   })
 

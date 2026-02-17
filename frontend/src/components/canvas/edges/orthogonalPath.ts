@@ -11,6 +11,12 @@ import { Position } from '@xyflow/react'
 const MIN_OFFSET = 24
 
 /**
+ * Snap threshold (px) — treat handle positions within this range as aligned.
+ * Eliminates visible kinks from sub-pixel rounding or small resize differences.
+ */
+const SNAP_TOLERANCE = 8
+
+/**
  * Compute an SVG path string for an orthogonal (right-angle) edge between
  * source and target positions. Produces clean Manhattan-style routing with
  * at most one intermediate bend pair.
@@ -44,8 +50,8 @@ const computeOrthogonalPath = (
     return routeVerticalToVertical(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition)
   }
 
-  // Mixed: horizontal source → vertical target (or vice versa): L-shaped
-  return routeMixed(sourceX, sourceY, targetX, targetY, isSourceHorizontal)
+  // Mixed: horizontal source → vertical target (or vice versa)
+  return routeMixed(sourceX, sourceY, targetX, targetY, sourcePosition)
 }
 
 /**
@@ -62,9 +68,9 @@ const routeHorizontalToHorizontal = (
 
   // Simple case: source right of left, target left of right, flowing left-to-right
   if (sourcePos === Position.Right && targetPos === Position.Left && tx > sx) {
-    if (sy === ty) {
-      // Direct horizontal line
-      return `M ${sx} ${sy} L ${tx} ${ty}`
+    if (Math.abs(sy - ty) <= SNAP_TOLERANCE) {
+      // Direct horizontal line (within snap tolerance)
+      return `M ${sx} ${sy} L ${tx} ${sy}`
     }
     // 3-segment: horizontal → vertical → horizontal
     const midX = (sx + tx) / 2
@@ -93,9 +99,9 @@ const routeVerticalToVertical = (
 
   // Simple case: source bottom, target top, target below source
   if (sourcePos === Position.Bottom && targetPos === Position.Top && ty > sy) {
-    if (sx === tx) {
-      // Direct vertical line
-      return `M ${sx} ${sy} L ${tx} ${ty}`
+    if (Math.abs(sx - tx) <= SNAP_TOLERANCE) {
+      // Direct vertical line (within snap tolerance)
+      return `M ${sx} ${sy} L ${sx} ${ty}`
     }
     // 3-segment: route horizontal near source to stay in the gap between tiers
     const midY = sy + MIN_OFFSET
@@ -104,8 +110,8 @@ const routeVerticalToVertical = (
 
   // Simple case: source top, target bottom, target above source
   if (sourcePos === Position.Top && targetPos === Position.Bottom && ty < sy) {
-    if (sx === tx) {
-      return `M ${sx} ${sy} L ${tx} ${ty}`
+    if (Math.abs(sx - tx) <= SNAP_TOLERANCE) {
+      return `M ${sx} ${sy} L ${sx} ${ty}`
     }
     // 3-segment: route horizontal near target to stay in the gap between tiers
     const midY = ty + MIN_OFFSET
@@ -122,19 +128,38 @@ const routeVerticalToVertical = (
 
 /**
  * Route between a horizontal port and a vertical port (or vice versa).
- * Produces an L-shaped path — one horizontal segment + one vertical segment.
+ * Produces an L-shaped path when the target is "ahead" of the source
+ * (in the source's exit direction), or a 4-segment subway path when
+ * the target is "behind" the source.
  */
 const routeMixed = (
   sx: number, sy: number,
   tx: number, ty: number,
-  isSourceHorizontal: boolean,
+  sourcePosition: Position,
 ): string => {
+  const isSourceHorizontal = sourcePosition === Position.Left || sourcePosition === Position.Right
+
   if (isSourceHorizontal) {
-    // Source exits horizontally, target enters vertically → corner at (tx, sy)
-    return `M ${sx} ${sy} L ${tx} ${sy} L ${tx} ${ty}`
+    // Source exits horizontally, target enters vertically
+    const goesRight = sourcePosition === Position.Right
+    const targetIsAhead = goesRight ? tx >= sx : tx <= sx
+    if (targetIsAhead) {
+      return `M ${sx} ${sy} L ${tx} ${sy} L ${tx} ${ty}`
+    }
+    // Target behind source — extend in exit direction, then route to target
+    const offsetX = sx + (goesRight ? 1 : -1) * MIN_OFFSET
+    return `M ${sx} ${sy} L ${offsetX} ${sy} L ${offsetX} ${ty} L ${tx} ${ty}`
   }
-  // Source exits vertically, target enters horizontally → corner at (sx, ty)
-  return `M ${sx} ${sy} L ${sx} ${ty} L ${tx} ${ty}`
+
+  // Source exits vertically, target enters horizontally
+  const goesDown = sourcePosition === Position.Bottom
+  const targetIsAhead = goesDown ? ty >= sy : ty <= sy
+  if (targetIsAhead) {
+    return `M ${sx} ${sy} L ${sx} ${ty} L ${tx} ${ty}`
+  }
+  // Target behind source — extend in exit direction, then route to target
+  const offsetY = sy + (goesDown ? 1 : -1) * MIN_OFFSET
+  return `M ${sx} ${sy} L ${sx} ${offsetY} L ${tx} ${offsetY} L ${tx} ${ty}`
 }
 
 // ============================================================================
