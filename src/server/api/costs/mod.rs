@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use super::AppError;
 use crate::server::auth as auth_utils;
+use crate::server::services::costs as svc;
 use crate::server::state::AppState;
 
 #[derive(Deserialize, utoipa::ToSchema, utoipa::IntoParams)]
@@ -37,18 +38,11 @@ pub async fn get_costs(
     auth: auth_utils::AuthUser,
     Query(q): Query<CostQuery>,
 ) -> Result<Json<CostResponse>, AppError> {
-    let repo = &state.repos().token_ledger;
-    let total_spend = repo
-        .get_user_spend(auth.user_id.0, q.since)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-    let models = repo
-        .get_model_breakdown(auth.user_id.0, q.since)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let breakdown =
+        svc::get_costs(state.repos().token_ledger.as_ref(), auth.user_id.0, q.since).await?;
     Ok(Json(CostResponse {
-        total_spend,
-        models,
+        total_spend: breakdown.total_spend,
+        models: breakdown.models,
     }))
 }
 

@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 use super::AppError;
 use crate::server::auth as auth_utils;
+use crate::server::services::routing_rules as svc;
 use crate::server::state::AppState;
 
 // ============================================================================
@@ -49,34 +50,6 @@ pub struct StepRulePath {
 }
 
 // ============================================================================
-// Helpers
-// ============================================================================
-
-async fn verify_step_access(
-    state: &AppState,
-    wid: Uuid,
-    sid: Uuid,
-    user_id: Uuid,
-) -> Result<(), AppError> {
-    let repo = &state.repos().workflows;
-    let wf = repo
-        .get_workflow(wid)
-        .await?
-        .ok_or(AppError::not_found("Routing rule"))?;
-    if wf.user_id != user_id {
-        return Err(AppError::not_found("Routing rule"));
-    }
-    let step = repo
-        .get_step(sid)
-        .await?
-        .ok_or(AppError::not_found("Routing rule"))?;
-    if step.workflow_id != wid {
-        return Err(AppError::not_found("Routing rule"));
-    }
-    Ok(())
-}
-
-// ============================================================================
 // Handlers
 // ============================================================================
 
@@ -100,9 +73,8 @@ pub async fn list_routing_rules(
     auth: auth_utils::AuthUser,
     Path((wid, sid)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<Vec<RoutingRuleResponse>>, AppError> {
-    verify_step_access(&state, wid, sid, auth.user_id.0).await?;
-    let repo = &state.repos().workflows;
-    let rows = repo.get_step_routing_rules(sid).await?;
+    let rows =
+        svc::list_routing_rules(state.repos().workflows.as_ref(), auth.user_id.0, wid, sid).await?;
     Ok(Json(
         rows.into_iter()
             .map(|r| RoutingRuleResponse {
@@ -139,20 +111,19 @@ pub async fn create_routing_rule(
     Path((wid, sid)): Path<(Uuid, Uuid)>,
     Json(req): Json<CreateRoutingRuleRequest>,
 ) -> Result<(StatusCode, Json<RoutingRuleResponse>), AppError> {
-    if req.label_value.trim().is_empty() {
-        return Err(AppError::bad_request("Label value is required"));
-    }
-    verify_step_access(&state, wid, sid, auth.user_id.0).await?;
-    let repo = &state.repos().workflows;
-    let row = repo
-        .create_routing_rule(
-            sid,
-            &req.label_value,
-            req.agent_id,
-            req.description,
-            req.display_order,
-        )
-        .await?;
+    let row = svc::create_routing_rule(
+        state.repos().workflows.as_ref(),
+        svc::CreateRoutingRuleInput {
+            user_id: auth.user_id.0,
+            workflow_id: wid,
+            step_id: sid,
+            label_value: req.label_value,
+            agent_id: req.agent_id,
+            description: req.description,
+            display_order: req.display_order,
+        },
+    )
+    .await?;
     Ok((
         StatusCode::CREATED,
         Json(RoutingRuleResponse {
@@ -188,11 +159,19 @@ pub async fn update_routing_rule(
     Path(p): Path<StepRulePath>,
     Json(req): Json<UpdateRoutingRuleRequest>,
 ) -> Result<Json<RoutingRuleResponse>, AppError> {
-    verify_step_access(&state, p.wid, p.sid, auth.user_id.0).await?;
-    let repo = &state.repos().workflows;
-    let row = repo
-        .update_routing_rule(p.rid, req.agent_id, req.description, req.display_order)
-        .await?;
+    let row = svc::update_routing_rule(
+        state.repos().workflows.as_ref(),
+        svc::UpdateRoutingRuleInput {
+            user_id: auth.user_id.0,
+            workflow_id: p.wid,
+            step_id: p.sid,
+            rule_id: p.rid,
+            agent_id: req.agent_id,
+            description: req.description,
+            display_order: req.display_order,
+        },
+    )
+    .await?;
     Ok(Json(RoutingRuleResponse {
         id: row.id,
         label_value: row.label_value,
@@ -223,9 +202,14 @@ pub async fn delete_routing_rule(
     auth: auth_utils::AuthUser,
     Path(p): Path<StepRulePath>,
 ) -> Result<StatusCode, AppError> {
-    verify_step_access(&state, p.wid, p.sid, auth.user_id.0).await?;
-    let repo = &state.repos().workflows;
-    repo.delete_routing_rule(p.rid).await?;
+    svc::delete_routing_rule(
+        state.repos().workflows.as_ref(),
+        auth.user_id.0,
+        p.wid,
+        p.sid,
+        p.rid,
+    )
+    .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

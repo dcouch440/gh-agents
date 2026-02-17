@@ -17,6 +17,7 @@ use uuid::Uuid;
 use super::AppError;
 use crate::constants::MAX_CHAT_MESSAGE_LENGTH;
 use crate::server::auth as auth_utils;
+use crate::server::services::chat as svc;
 use crate::server::state::{AppState, ConsumerMessage, StreamChunk};
 
 /// Request body for sending a chat message
@@ -68,11 +69,7 @@ pub async fn send_chat(
     auth: auth_utils::AuthUser,
     Json(request): Json<ChatRequest>,
 ) -> Result<(StatusCode, Json<ChatResponse>), AppError> {
-    if request.message.trim().is_empty() || request.message.len() > MAX_CHAT_MESSAGE_LENGTH {
-        return Err(AppError::bad_request(
-            "Message must be non-empty and within the maximum length",
-        ));
-    }
+    svc::validate_message(&request.message, MAX_CHAT_MESSAGE_LENGTH)?;
 
     let message_id = Uuid::new_v4();
 
@@ -81,15 +78,13 @@ pub async fn send_chat(
     state.ensure_response_stream(message_id);
 
     // Store the user message in the database
-    state
-        .repo()
-        .insert_chat_message(
-            auth.user_id,
-            message_id,
-            "user".to_string(),
-            request.message.clone(),
-        )
-        .await?;
+    svc::store_message(
+        state.repo().as_ref(),
+        auth.user_id,
+        message_id,
+        request.message.clone(),
+    )
+    .await?;
 
     // Queue message to chat consumer
     state
@@ -135,10 +130,7 @@ pub async fn get_chat_history(
     let limit = query.limit.unwrap_or(50);
     let offset = query.offset.unwrap_or(0);
 
-    let rows = state
-        .repo()
-        .get_chat_history(auth.user_id, limit, offset)
-        .await?;
+    let rows = svc::get_chat_history(state.repo().as_ref(), auth.user_id, limit, offset).await?;
 
     let messages: Vec<ChatMessage> = rows
         .into_iter()
@@ -304,8 +296,9 @@ pub async fn clear_chat_history(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<StatusCode, AppError> {
-    state.repo().clear_chat_history(auth.user_id).await?;
+    svc::clear_chat_history(state.repo().as_ref(), auth.user_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
+
 #[cfg(test)]
 mod tests;

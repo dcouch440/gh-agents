@@ -150,6 +150,25 @@ pub async fn create_step(
     Ok(row)
 }
 
+/// Verify workflow ownership and step membership.
+/// Returns `Ok(())` if the caller owns the workflow and the step belongs to it.
+pub async fn verify_step_access(
+    repo: &dyn WorkflowRepo,
+    user_id: Uuid,
+    workflow_id: Uuid,
+    step_id: Uuid,
+) -> Result<(), ServiceError> {
+    verify_workflow_ownership(repo, user_id, workflow_id).await?;
+    let step = repo
+        .get_step(step_id)
+        .await?
+        .ok_or_else(|| ServiceError::not_found("Step"))?;
+    if step.workflow_id != workflow_id {
+        return Err(ServiceError::not_found("Step"));
+    }
+    Ok(())
+}
+
 /// Get a workflow step, verifying workflow ownership and step membership.
 pub async fn get_step(
     repo: &dyn WorkflowRepo,

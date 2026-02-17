@@ -17,6 +17,7 @@ use uuid::Uuid;
 use super::AppError;
 use crate::server::auth as auth_utils;
 use crate::server::hub;
+use crate::server::services::agent_executions as svc;
 use crate::server::state::{AppState, StreamChunk};
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -108,13 +109,15 @@ pub async fn list_agent_executions(
     auth: auth_utils::AuthUser,
     Query(query): Query<ListExecutionsQuery>,
 ) -> Result<Json<Vec<AgentExecutionResponse>>, AppError> {
-    let repo = &state.repos().agent_executions;
-    let rows = repo
-        .list_agent_executions(auth.user_id.0, query.status)
-        .await?;
-    let items: Vec<AgentExecutionResponse> =
-        rows.into_iter().map(AgentExecutionResponse::from).collect();
-    Ok(Json(items))
+    let rows = svc::list_agent_executions(
+        state.repos().agent_executions.as_ref(),
+        auth.user_id.0,
+        query.status,
+    )
+    .await?;
+    Ok(Json(
+        rows.into_iter().map(AgentExecutionResponse::from).collect(),
+    ))
 }
 
 #[utoipa::path(
@@ -133,11 +136,7 @@ pub async fn get_agent_execution(
     _auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<AgentExecutionResponse>, AppError> {
-    let repo = &state.repos().agent_executions;
-    let row = repo
-        .get_agent_execution(id)
-        .await?
-        .ok_or(AppError::not_found("Agent execution"))?;
+    let row = svc::get_agent_execution(state.repos().agent_executions.as_ref(), id).await?;
     Ok(Json(AgentExecutionResponse::from(row)))
 }
 
@@ -157,12 +156,7 @@ pub async fn list_execution_messages(
     _auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<ExecutionMessageResponse>>, AppError> {
-    let repo = &state.repos().agent_executions;
-    // Verify execution exists
-    repo.get_agent_execution(id)
-        .await?
-        .ok_or(AppError::not_found("Agent execution"))?;
-    let rows = repo.list_execution_messages(id).await?;
+    let rows = svc::list_execution_messages(state.repos().agent_executions.as_ref(), id).await?;
     Ok(Json(
         rows.into_iter()
             .map(ExecutionMessageResponse::from)
@@ -305,52 +299,32 @@ pub async fn approve_execution(
     Path(id): Path<Uuid>,
     Json(req): Json<ApproveExecutionRequest>,
 ) -> Result<Json<AgentExecutionResponse>, AppError> {
-    let repo = &state.repos().agent_executions;
-    let ae = repo
-        .get_agent_execution(id)
-        .await?
-        .ok_or(AppError::not_found("Agent execution"))?;
+    let result = svc::approve_execution(
+        state.repos().agent_executions.as_ref(),
+        id,
+        req.structured_output,
+    )
+    .await?;
 
-    if !ae.is_interactive || ae.status != "awaiting_user" {
-        return Err(AppError::bad_request(
-            "Execution is not interactive or not awaiting user approval",
-        ));
-    }
-
-    // Update status to completed, optionally with revised structured_output
-    let updated = repo
-        .update_agent_execution_status(id, "completed", ae.output.clone(), req.structured_output)
-        .await?;
-
-    // Check if we should resume the paused DAG
-    if let Some(step_id) = ae.workflow_step_id {
-        let all_approved = match repo.list_interactive_executions_for_step(step_id).await {
-            Ok(interactive_execs) => interactive_execs
-                .iter()
-                .all(|iae| iae.status == "completed" || iae.id == id),
-            Err(_) => false,
+    // If all reviews are done, resume the paused DAG in the background
+    if let Some(step_id) = result.resume_step_id {
+        let step_output = crate::server::hub::dag::StepOutput {
+            variable_name: String::new(),
+            raw_output: result.execution.output.clone().unwrap_or_default(),
+            structured_output: result.execution.structured_output.clone(),
         };
 
-        if all_approved {
-            // Build the step output from the approved execution
-            let step_output = crate::server::hub::dag::StepOutput {
-                variable_name: String::new(), // Filled by resume logic from step metadata
-                raw_output: updated.output.clone().unwrap_or_default(),
-                structured_output: updated.structured_output.clone(),
-            };
-
-            let state_clone = state.clone();
-            tokio::spawn(async move {
-                if let Err(e) =
-                    hub::dag::resume_dag_from_approval(&state_clone, step_id, step_output).await
-                {
-                    error!("DAG resume failed after approval: {}", e);
-                }
-            });
-        }
+        let state_clone = state.clone();
+        tokio::spawn(async move {
+            if let Err(e) =
+                hub::dag::resume_dag_from_approval(&state_clone, step_id, step_output).await
+            {
+                error!("DAG resume failed after approval: {}", e);
+            }
+        });
     }
 
-    Ok(Json(AgentExecutionResponse::from(updated)))
+    Ok(Json(AgentExecutionResponse::from(result.execution)))
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -380,15 +354,13 @@ pub async fn set_exemplary(
     Path(id): Path<Uuid>,
     Json(req): Json<SetExemplaryRequest>,
 ) -> Result<Json<AgentExecutionResponse>, AppError> {
-    let repo = &state.repos().agent_executions;
-    // Verify execution exists
-    repo.get_agent_execution(id)
-        .await?
-        .ok_or(AppError::not_found("Agent execution"))?;
-
-    let updated = repo.set_execution_exemplary(id, req.is_exemplary).await?;
-
-    Ok(Json(AgentExecutionResponse::from(updated)))
+    let row = svc::set_exemplary(
+        state.repos().agent_executions.as_ref(),
+        id,
+        req.is_exemplary,
+    )
+    .await?;
+    Ok(Json(AgentExecutionResponse::from(row)))
 }
 
 #[cfg(test)]
