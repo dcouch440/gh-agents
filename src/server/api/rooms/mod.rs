@@ -12,6 +12,7 @@ use serde::Serialize;
 
 use super::AppError;
 use crate::constants::MAX_TITLE_LENGTH;
+use crate::db::traits::{CreateRoomInput, UpdateRoomInput};
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 
@@ -88,16 +89,16 @@ pub async fn create_room(
     }
     let repo = &state.repos().rooms;
     let row = repo
-        .create_room(
-            auth.user_id.0,
-            request.collection_id,
-            &request.name,
-            request.gatekeeper_enabled,
-            &request.gatekeeper_model_id,
-            request.max_speakers_per_turn,
-            request.max_turns,
-            request.tools_enabled,
-        )
+        .create_room(CreateRoomInput {
+            user_id: auth.user_id.0,
+            collection_id: request.collection_id,
+            name: request.name,
+            gatekeeper_enabled: request.gatekeeper_enabled,
+            gatekeeper_model_id: request.gatekeeper_model_id,
+            max_speakers_per_turn: request.max_speakers_per_turn,
+            max_turns: request.max_turns,
+            tools_enabled: request.tools_enabled,
+        })
         .await?;
     Ok((StatusCode::CREATED, Json(row)))
 }
@@ -142,15 +143,15 @@ pub async fn update_room(
         }
     }
     let row = repo
-        .update_room(
+        .update_room(UpdateRoomInput {
             id,
-            request.name,
-            request.gatekeeper_enabled,
-            request.gatekeeper_model_id,
-            request.max_speakers_per_turn,
-            request.max_turns,
-            request.tools_enabled,
-        )
+            name: request.name,
+            gatekeeper_enabled: request.gatekeeper_enabled,
+            gatekeeper_model_id: request.gatekeeper_model_id,
+            max_speakers_per_turn: request.max_speakers_per_turn,
+            max_turns: request.max_turns,
+            tools_enabled: request.tools_enabled,
+        })
         .await?;
     Ok(Json(row))
 }

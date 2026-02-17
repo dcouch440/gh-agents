@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use super::AppError;
 use crate::constants::{MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH};
+use crate::db::traits::CreateDocumentInput;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 
@@ -190,17 +191,17 @@ pub async fn create_document(
 
     let doc_repo = &state.repos().documents;
     let doc = doc_repo
-        .create_document(
-            auth.user_id.0,
-            request.session_id,
-            request.title,
-            request.content,
-            request
+        .create_document(CreateDocumentInput {
+            user_id: auth.user_id.0,
+            session_id: request.session_id,
+            title: request.title,
+            content: request.content,
+            doc_type: request
                 .doc_type
                 .unwrap_or_else(|| "architecture".to_string()),
-            String::new(),
-            request.tags.unwrap_or_default(),
-        )
+            ref_tag: String::new(),
+            tags: request.tags.unwrap_or_default(),
+        })
         .await?;
 
     Ok((

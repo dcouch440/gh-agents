@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use serde_json::{json, Value};
 
-use crate::db::traits::DocumentRepo;
+use crate::db::traits::{CreateDocumentInput, DocumentRepo};
 use crate::types::UserId;
 
 use super::haiku::haiku_summarize;
@@ -62,15 +62,15 @@ pub(crate) async fn execute_create_doc(input: &Value, state: &AppState, user_id:
     let ref_tag = title_to_ref_tag(title);
 
     match doc_repo
-        .create_document(
-            user_id.0,
-            None, // session_id
-            title.to_string(),
-            content.to_string(),
-            "architecture".to_string(),
-            ref_tag.clone(),
+        .create_document(CreateDocumentInput {
+            user_id: user_id.0,
+            session_id: None,
+            title: title.to_string(),
+            content: content.to_string(),
+            doc_type: "architecture".to_string(),
+            ref_tag: ref_tag.clone(),
             tags,
-        )
+        })
         .await
     {
         Ok(row) => {
@@ -380,15 +380,15 @@ pub(crate) async fn execute_submit_prd(input: &Value, state: &AppState, user_id:
     let ref_tag = title_to_ref_tag(title);
 
     match doc_repo
-        .create_document(
-            user_id.0,
-            None,
-            title.to_string(),
-            md.clone(),
-            "prd".to_string(),
-            ref_tag.clone(),
-            vec!["prd".to_string()],
-        )
+        .create_document(CreateDocumentInput {
+            user_id: user_id.0,
+            session_id: None,
+            title: title.to_string(),
+            content: md.clone(),
+            doc_type: "prd".to_string(),
+            ref_tag: ref_tag.clone(),
+            tags: vec!["prd".to_string()],
+        })
         .await
     {
         Ok(row) => {

@@ -211,25 +211,24 @@ mod tests {
         let wf_clone = parent_wf.clone();
         repo.expect_get_workflow()
             .returning(move |_| Ok(Some(wf_clone.clone())));
-        repo.expect_create_workflow()
-            .returning(move |uid, name, _, _, _, _, _| {
-                assert_eq!(uid, user_id);
-                assert!(name.contains("child"));
-                Ok(WorkflowRow {
-                    id: child_wf_id,
-                    user_id: uid,
-                    name,
-                    description: String::new(),
-                    execution_mode: "sequential".to_string(),
-                    created_at: Utc::now(),
-                    version: 1,
-                    container_enabled: false,
-                    target_repo_url: None,
-                    target_branch: None,
-                    vpn_enabled: false,
-                    board_overview_summary: String::new(),
-                })
-            });
+        repo.expect_create_workflow().returning(move |input| {
+            assert_eq!(input.user_id, user_id);
+            assert!(input.name.contains("child"));
+            Ok(WorkflowRow {
+                id: child_wf_id,
+                user_id: input.user_id,
+                name: input.name,
+                description: String::new(),
+                execution_mode: "sequential".to_string(),
+                created_at: Utc::now(),
+                version: 1,
+                container_enabled: false,
+                target_repo_url: None,
+                target_branch: None,
+                vpn_enabled: false,
+                board_overview_summary: String::new(),
+            })
+        });
         repo.expect_update_step().returning(|s| Ok(s));
 
         // list_agent_roster: empty (first agent)

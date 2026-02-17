@@ -8,7 +8,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::db::pg_repo::PgRepo;
-use crate::db::traits::MergeQueueRepo;
+use crate::db::traits::{InsertQueueEntryInput, MergeQueueRepo};
 use crate::execution::{ConflictResolution, GitOps, MergeResult};
 use crate::github::{GitHubClient, GitHubPullRequest, MergeMethod, MergePrResult};
 use crate::types::{MergeStrategy, PrMergeConfig};
@@ -172,15 +172,15 @@ impl<R: MergeQueueRepo> MergeQueue<R> {
             .await?;
 
         self.repo
-            .insert_queue_entry(
+            .insert_queue_entry(InsertQueueEntryInput {
                 id,
-                owner.to_owned(),
-                repo.to_owned(),
+                owner: owner.to_owned(),
+                repo: repo.to_owned(),
                 pr_number,
-                next_position,
+                position: next_position,
                 now,
                 user_id,
-            )
+            })
             .await?;
 
         tracing::info!(
@@ -1462,8 +1462,7 @@ mod tests {
     async fn add_to_queue_returns_entry() {
         let mut mock = MockMergeQueueRepo::new();
         mock.expect_get_next_position().returning(|_, _| Ok(1));
-        mock.expect_insert_queue_entry()
-            .returning(|_, _, _, _, _, _, _| Ok(()));
+        mock.expect_insert_queue_entry().returning(|_| Ok(()));
         let mq = MergeQueue::new(mock);
 
         let entry = mq
@@ -1487,8 +1486,7 @@ mod tests {
             call_count += 1;
             Ok(call_count)
         });
-        mock.expect_insert_queue_entry()
-            .returning(|_, _, _, _, _, _, _| Ok(()));
+        mock.expect_insert_queue_entry().returning(|_| Ok(()));
         let mq = MergeQueue::new(mock);
 
         let e1 = mq

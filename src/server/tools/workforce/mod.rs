@@ -9,7 +9,7 @@ use chrono::Utc;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::db::traits::WorkflowRepo;
+use crate::db::traits::{CreateWorkflowInput, WorkflowRepo};
 
 mod tests;
 
@@ -91,15 +91,15 @@ async fn ensure_child_workflow(
 
     let step_name = step.name.clone().unwrap_or_else(|| "Workforce".to_string());
     let child_workflow = repo
-        .create_workflow(
-            parent_workflow.user_id,
-            format!("{} (child)", step_name),
-            String::new(),
-            false,
-            None,
-            None,
-            false,
-        )
+        .create_workflow(CreateWorkflowInput {
+            user_id: parent_workflow.user_id,
+            name: format!("{} (child)", step_name),
+            description: String::new(),
+            container_enabled: false,
+            target_repo_url: None,
+            target_branch: None,
+            vpn_enabled: false,
+        })
         .await
         .map_err(|e| json!({ "error": format!("Failed to create child workflow: {}", e) }))?;
 

@@ -2,7 +2,9 @@
 mod tests {
     //! Tests for execution recorder
 
-    use crate::db::traits::{MockAgentExecutionRepo, MockServerRepo, MockTokenLedgerRepo};
+    use crate::db::traits::{
+        CreateAgentExecutionInput, MockAgentExecutionRepo, MockServerRepo, MockTokenLedgerRepo,
+    };
     use crate::server::hub::recorder::ExecutionRecorder;
     use crate::types::UserId;
     use uuid::Uuid;
@@ -97,15 +99,17 @@ mod tests {
         let mock = MockServerRepo::new();
         let recorder = ExecutionRecorder::new(&mock, None, None);
         let result = recorder
-            .record_agent_execution(
-                Uuid::new_v4(),
-                Some(Uuid::new_v4()),
-                false,
-                None,
-                "system prompt",
-                "user prompt",
-                None,
-            )
+            .record_agent_execution(CreateAgentExecutionInput {
+                agent_id: Uuid::new_v4(),
+                workflow_step_id: Some(Uuid::new_v4()),
+                is_interactive: false,
+                parent_agent_execution_id: None,
+                system_prompt_rendered: "system prompt".to_string(),
+                input: "user prompt".to_string(),
+                room_session_id: None,
+                speaker_order: None,
+                workflow_execution_id: None,
+            })
             .await;
         assert!(result.is_err());
     }

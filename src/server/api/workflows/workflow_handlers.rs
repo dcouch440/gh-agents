@@ -8,6 +8,7 @@ use axum::{
 use uuid::Uuid;
 
 use crate::constants::MAX_TITLE_LENGTH;
+use crate::db::traits::{CreateWorkflowInput, UpdateWorkflowInput};
 use crate::server::api::AppError;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
@@ -70,15 +71,15 @@ pub async fn create_workflow(
     }
     let repo = &state.repos().workflows;
     let row = repo
-        .create_workflow(
-            auth.user_id.0,
-            req.name,
-            req.description.unwrap_or_default(),
-            req.container_enabled.unwrap_or(false),
-            req.target_repo_url,
-            req.target_branch,
-            req.vpn_enabled.unwrap_or(false),
-        )
+        .create_workflow(CreateWorkflowInput {
+            user_id: auth.user_id.0,
+            name: req.name,
+            description: req.description.unwrap_or_default(),
+            container_enabled: req.container_enabled.unwrap_or(false),
+            target_repo_url: req.target_repo_url,
+            target_branch: req.target_branch,
+            vpn_enabled: req.vpn_enabled.unwrap_or(false),
+        })
         .await?;
     Ok((
         StatusCode::CREATED,
@@ -167,15 +168,15 @@ pub async fn update_workflow(
         }
     }
     let row = repo
-        .update_workflow(
+        .update_workflow(UpdateWorkflowInput {
             id,
-            req.name,
-            req.description,
-            req.container_enabled,
-            req.target_repo_url,
-            req.target_branch,
-            req.vpn_enabled,
-        )
+            name: req.name,
+            description: req.description,
+            container_enabled: req.container_enabled,
+            target_repo_url: req.target_repo_url,
+            target_branch: req.target_branch,
+            vpn_enabled: req.vpn_enabled,
+        })
         .await?;
     Ok(Json(WorkflowResponse {
         id: row.id,

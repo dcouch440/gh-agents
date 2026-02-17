@@ -22,7 +22,9 @@ use tracing::{debug, warn};
 use uuid::Uuid;
 
 use crate::constants::VERIFICATION_AGENT_TIMEOUT_SECS;
-use crate::db::traits::{AgentExecutionRepo, ServerRepo, TokenLedgerRepo};
+use crate::db::traits::{
+    AgentExecutionRepo, CreateAgentExecutionInput, ServerRepo, TokenLedgerRepo,
+};
 use crate::llm::{LLMProvider, LLMRequest, LLMResponse, Message, Role};
 use crate::server::hub::strategies::compute_cost;
 
@@ -309,17 +311,17 @@ impl ExecutionFilter for DebateVerificationFilter {
                 // Record verification execution (best-effort audit trail).
                 let verification_ae_id = if let Some(ref ae_repo) = ae_repo {
                     match ae_repo
-                        .create_agent_execution(
-                            verifier_id,
-                            step_id,
-                            false,
-                            parent_execution_id,
-                            &verifier_system,
-                            &verifier_user,
-                            None,
-                            None,
+                        .create_agent_execution(CreateAgentExecutionInput {
+                            agent_id: verifier_id,
+                            workflow_step_id: step_id,
+                            is_interactive: false,
+                            parent_agent_execution_id: parent_execution_id,
+                            system_prompt_rendered: verifier_system.clone(),
+                            input: verifier_user.clone(),
+                            room_session_id: None,
+                            speaker_order: None,
                             workflow_execution_id,
-                        )
+                        })
                         .await
                     {
                         Ok(row) => Some(row.id),

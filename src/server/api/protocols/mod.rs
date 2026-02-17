@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::AppError;
+use crate::db::traits::{CreateProtocolInput, UpdateProtocolInput};
 use crate::server::auth as auth_utils;
 use crate::server::hub::protocols::types::ProtocolExpansion;
 use crate::server::state::AppState;
@@ -234,15 +235,15 @@ pub async fn create_protocol(
 
     let repo = &state.repos().protocols;
     let row = repo
-        .create_protocol(
-            request.name,
-            request.description.unwrap_or_default(),
-            request.protocol_type,
-            request.config.unwrap_or(serde_json::json!({})),
-            request.agent_id,
-            request.output_schema_id,
-            request.prompt_template_id,
-        )
+        .create_protocol(CreateProtocolInput {
+            name: request.name,
+            description: request.description.unwrap_or_default(),
+            protocol_type: request.protocol_type,
+            config: request.config.unwrap_or(serde_json::json!({})),
+            agent_id: request.agent_id,
+            output_schema_id: request.output_schema_id,
+            prompt_template_id: request.prompt_template_id,
+        })
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
@@ -324,15 +325,15 @@ pub async fn update_protocol(
         .ok_or_else(|| AppError::not_found("protocol"))?;
 
     let row = repo
-        .update_protocol(
+        .update_protocol(UpdateProtocolInput {
             id,
-            request.name,
-            request.description,
-            request.config,
-            request.agent_id,
-            request.output_schema_id,
-            request.prompt_template_id,
-        )
+            name: request.name,
+            description: request.description,
+            config: request.config,
+            agent_id: request.agent_id,
+            output_schema_id: request.output_schema_id,
+            prompt_template_id: request.prompt_template_id,
+        })
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 

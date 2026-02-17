@@ -537,7 +537,7 @@ mod tests {
         let mut ae_repo = MockAgentExecutionRepo::new();
         ae_repo
             .expect_create_agent_execution()
-            .returning(|_, _, _, _, _, _, _, _, _| Ok(dummy_ae_row()));
+            .returning(|_| Ok(dummy_ae_row()));
         ae_repo
             .expect_create_execution_message()
             .returning(|_, _, _, _, _, _| Ok(dummy_msg_row()));

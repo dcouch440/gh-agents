@@ -5,8 +5,9 @@ mod tests {
     use super::super::*;
     use crate::db::test_utils::TestDb;
     use crate::db::traits::{
-        AgentExecutionRepo, DocumentRepo, RoomRepo, TokenLedgerRepo, WorkflowCollectionRepo,
-        WorkflowRepo,
+        AgentExecutionRepo, CreateAgentExecutionInput, CreateDocumentInput, CreateRoomInput,
+        CreateRouterModeInput, CreateWorkflowInput, DocumentRepo, InsertQueueEntryInput, RoomRepo,
+        TokenLedgerRepo, UpdateRouterModeInput, WorkflowCollectionRepo, WorkflowRepo,
     };
     use crate::types::{Priority, Task, TaskId, TaskStatus, UserId};
 
@@ -46,15 +47,15 @@ mod tests {
     }
 
     async fn create_test_workflow(repo: &PgRepo, user_id: Uuid) -> WorkflowRow {
-        repo.create_workflow(
+        repo.create_workflow(CreateWorkflowInput {
             user_id,
-            format!("test-workflow-{}", Uuid::new_v4().simple()),
-            "Test workflow".to_string(),
-            false,
-            None,
-            None,
-            false,
-        )
+            name: format!("test-workflow-{}", Uuid::new_v4().simple()),
+            description: "Test workflow".to_string(),
+            container_enabled: false,
+            target_repo_url: None,
+            target_branch: None,
+            vpn_enabled: false,
+        })
         .await
         .unwrap()
     }
@@ -124,16 +125,16 @@ mod tests {
     }
 
     async fn create_test_room(repo: &PgRepo, user_id: Uuid) -> RoomRow {
-        repo.create_room(
+        repo.create_room(CreateRoomInput {
             user_id,
-            None,
-            &format!("test-room-{}", Uuid::new_v4().simple()),
-            false,
-            "claude-sonnet-4-5-20250929",
-            3,
-            10,
-            false,
-        )
+            collection_id: None,
+            name: format!("test-room-{}", Uuid::new_v4().simple()),
+            gatekeeper_enabled: false,
+            gatekeeper_model_id: "claude-sonnet-4-5-20250929".to_string(),
+            max_speakers_per_turn: 3,
+            max_turns: 10,
+            tools_enabled: false,
+        })
         .await
         .unwrap()
     }
@@ -153,15 +154,15 @@ mod tests {
         let now = Utc::now();
 
         // Insert entry
-        repo.insert_queue_entry(
+        repo.insert_queue_entry(InsertQueueEntryInput {
             id,
-            owner.clone(),
-            repo_name.clone(),
+            owner: owner.clone(),
+            repo: repo_name.clone(),
             pr_number,
             position,
             now,
             user_id,
-        )
+        })
         .await
         .unwrap();
 
@@ -196,15 +197,15 @@ mod tests {
         assert_eq!(pos1, 1);
 
         // Insert entry at position 1
-        repo.insert_queue_entry(
-            Uuid::new_v4(),
-            owner.clone(),
-            repo_name.clone(),
-            1,
-            1,
+        repo.insert_queue_entry(InsertQueueEntryInput {
+            id: Uuid::new_v4(),
+            owner: owner.clone(),
+            repo: repo_name.clone(),
+            pr_number: 1,
+            position: 1,
             now,
             user_id,
-        )
+        })
         .await
         .unwrap();
 
@@ -231,15 +232,15 @@ mod tests {
         let now = Utc::now();
 
         // Insert entry
-        repo.insert_queue_entry(
-            Uuid::new_v4(),
-            owner.clone(),
-            repo_name.clone(),
+        repo.insert_queue_entry(InsertQueueEntryInput {
+            id: Uuid::new_v4(),
+            owner: owner.clone(),
+            repo: repo_name.clone(),
             pr_number,
-            1,
+            position: 1,
             now,
             user_id,
-        )
+        })
         .await
         .unwrap();
 
@@ -273,15 +274,15 @@ mod tests {
         let now = Utc::now();
 
         // Insert entry
-        repo.insert_queue_entry(
-            Uuid::new_v4(),
-            owner.clone(),
-            repo_name.clone(),
+        repo.insert_queue_entry(InsertQueueEntryInput {
+            id: Uuid::new_v4(),
+            owner: owner.clone(),
+            repo: repo_name.clone(),
             pr_number,
-            1,
+            position: 1,
             now,
             user_id,
-        )
+        })
         .await
         .unwrap();
 
@@ -321,15 +322,15 @@ mod tests {
         let now = Utc::now();
 
         // Insert entries with in_progress status
-        repo.insert_queue_entry(
-            Uuid::new_v4(),
-            owner.clone(),
-            repo_name.clone(),
-            1,
-            1,
+        repo.insert_queue_entry(InsertQueueEntryInput {
+            id: Uuid::new_v4(),
+            owner: owner.clone(),
+            repo: repo_name.clone(),
+            pr_number: 1,
+            position: 1,
             now,
             user_id,
-        )
+        })
         .await
         .unwrap();
         repo.update_entry_status(
@@ -531,15 +532,15 @@ mod tests {
 
         // Create document
         let doc = repo
-            .create_document(
+            .create_document(CreateDocumentInput {
                 user_id,
-                None,
-                title.clone(),
-                content.clone(),
+                session_id: None,
+                title: title.clone(),
+                content: content.clone(),
                 doc_type,
-                ref_tag.clone(),
+                ref_tag: ref_tag.clone(),
                 tags,
-            )
+            })
             .await
             .unwrap();
 
@@ -569,15 +570,15 @@ mod tests {
 
         // Create document
         let doc = repo
-            .create_document(
+            .create_document(CreateDocumentInput {
                 user_id,
-                None,
-                "Original Title".to_string(),
-                "Original Content".to_string(),
-                "note".to_string(),
-                "ref".to_string(),
-                vec![],
-            )
+                session_id: None,
+                title: "Original Title".to_string(),
+                content: "Original Content".to_string(),
+                doc_type: "note".to_string(),
+                ref_tag: "ref".to_string(),
+                tags: vec![],
+            })
             .await
             .unwrap();
 
@@ -608,15 +609,15 @@ mod tests {
 
         // Create document
         let doc = repo
-            .create_document(
+            .create_document(CreateDocumentInput {
                 user_id,
-                None,
-                "Title".to_string(),
-                "Content".to_string(),
-                "note".to_string(),
-                "ref".to_string(),
-                vec![],
-            )
+                session_id: None,
+                title: "Title".to_string(),
+                content: "Content".to_string(),
+                doc_type: "note".to_string(),
+                ref_tag: "ref".to_string(),
+                tags: vec![],
+            })
             .await
             .unwrap();
 
@@ -640,15 +641,15 @@ mod tests {
 
         // Create multiple documents
         for i in 1..=3 {
-            repo.create_document(
+            repo.create_document(CreateDocumentInput {
                 user_id,
-                None,
-                format!("Doc {}", i),
-                "Content".to_string(),
-                "note".to_string(),
-                format!("ref-{}", i),
-                vec![],
-            )
+                session_id: None,
+                title: format!("Doc {}", i),
+                content: "Content".to_string(),
+                doc_type: "note".to_string(),
+                ref_tag: format!("ref-{}", i),
+                tags: vec![],
+            })
             .await
             .unwrap();
         }
@@ -689,18 +690,18 @@ mod tests {
         let router = create_test_router(&repo, user_id).await;
 
         let mode = repo
-            .create_router_mode(
-                router.id,
-                "coding",
-                "Coding Mode",
-                "For software engineering tasks",
-                "You are a precise coding assistant",
-                0.3,
-                8192,
-                false, // append_to_agent_system_prompt
-                true,  // append_to_agent_tools
-                10,
-            )
+            .create_router_mode(CreateRouterModeInput {
+                router_id: router.id,
+                mode_key: "coding".to_string(),
+                display_name: "Coding Mode".to_string(),
+                description: "For software engineering tasks".to_string(),
+                system_prompt: "You are a precise coding assistant".to_string(),
+                temperature: 0.3,
+                max_tokens: 8192,
+                append_to_agent_system_prompt: false,
+                append_to_agent_tools: true,
+                display_order: 10,
+            })
             .await
             .unwrap();
 
@@ -728,18 +729,18 @@ mod tests {
         let router = create_test_router(&repo, user_id).await;
 
         let mode = repo
-            .create_router_mode(
-                router.id,
-                "research",
-                "Research Mode",
-                "For research tasks",
-                "You are a research assistant",
-                0.7,
-                4096,
-                true,
-                true,
-                5,
-            )
+            .create_router_mode(CreateRouterModeInput {
+                router_id: router.id,
+                mode_key: "research".to_string(),
+                display_name: "Research Mode".to_string(),
+                description: "For research tasks".to_string(),
+                system_prompt: "You are a research assistant".to_string(),
+                temperature: 0.7,
+                max_tokens: 4096,
+                append_to_agent_system_prompt: true,
+                append_to_agent_tools: true,
+                display_order: 5,
+            })
             .await
             .unwrap();
 
@@ -771,21 +772,48 @@ mod tests {
         let router = create_test_router(&repo, user_id).await;
 
         // Create modes with different display_order
-        repo.create_router_mode(
-            router.id, "mode_c", "Mode C", "Third", "Prompt C", 0.7, 4096, false, true, 15,
-        )
+        repo.create_router_mode(CreateRouterModeInput {
+            router_id: router.id,
+            mode_key: "mode_c".to_string(),
+            display_name: "Mode C".to_string(),
+            description: "Third".to_string(),
+            system_prompt: "Prompt C".to_string(),
+            temperature: 0.7,
+            max_tokens: 4096,
+            append_to_agent_system_prompt: false,
+            append_to_agent_tools: true,
+            display_order: 15,
+        })
         .await
         .unwrap();
 
-        repo.create_router_mode(
-            router.id, "mode_a", "Mode A", "First", "Prompt A", 0.7, 4096, false, true, 5,
-        )
+        repo.create_router_mode(CreateRouterModeInput {
+            router_id: router.id,
+            mode_key: "mode_a".to_string(),
+            display_name: "Mode A".to_string(),
+            description: "First".to_string(),
+            system_prompt: "Prompt A".to_string(),
+            temperature: 0.7,
+            max_tokens: 4096,
+            append_to_agent_system_prompt: false,
+            append_to_agent_tools: true,
+            display_order: 5,
+        })
         .await
         .unwrap();
 
-        repo.create_router_mode(
-            router.id, "mode_b", "Mode B", "Second", "Prompt B", 0.7, 4096, false, true, 10,
-        )
+        repo.create_router_mode(CreateRouterModeInput {
+            router_id: router.id,
+            mode_key: "mode_b".to_string(),
+            display_name: "Mode B".to_string(),
+            description: "Second".to_string(),
+            system_prompt: "Prompt B".to_string(),
+            temperature: 0.7,
+            max_tokens: 4096,
+            append_to_agent_system_prompt: false,
+            append_to_agent_tools: true,
+            display_order: 10,
+        })
         .await
         .unwrap();
 
@@ -809,35 +837,35 @@ mod tests {
         let router = create_test_router(&repo, user_id).await;
 
         let mode = repo
-            .create_router_mode(
-                router.id,
-                "original",
-                "Original Name",
-                "Original description",
-                "Original prompt",
-                0.5,
-                2048,
-                false,
-                false,
-                20,
-            )
+            .create_router_mode(CreateRouterModeInput {
+                router_id: router.id,
+                mode_key: "original".to_string(),
+                display_name: "Original Name".to_string(),
+                description: "Original description".to_string(),
+                system_prompt: "Original prompt".to_string(),
+                temperature: 0.5,
+                max_tokens: 2048,
+                append_to_agent_system_prompt: false,
+                append_to_agent_tools: false,
+                display_order: 20,
+            })
             .await
             .unwrap();
 
         // Update only display_name and temperature
         let updated = repo
-            .update_router_mode(
-                mode.id,
-                None,                             // mode_key unchanged
-                Some("Updated Name".to_string()), // display_name changed
-                None,                             // description unchanged
-                None,                             // system_prompt unchanged
-                Some(0.9),                        // temperature changed
-                None,                             // max_tokens unchanged
-                None,                             // append_to_agent_system_prompt unchanged
-                None,                             // append_to_agent_tools unchanged
-                None,                             // display_order unchanged
-            )
+            .update_router_mode(UpdateRouterModeInput {
+                id: mode.id,
+                mode_key: None,
+                display_name: Some("Updated Name".to_string()),
+                description: None,
+                system_prompt: None,
+                temperature: Some(0.9),
+                max_tokens: None,
+                append_to_agent_system_prompt: None,
+                append_to_agent_tools: None,
+                display_order: None,
+            })
             .await
             .unwrap();
 
@@ -860,18 +888,18 @@ mod tests {
         let router = create_test_router(&repo, user_id).await;
 
         let mode = repo
-            .create_router_mode(
-                router.id,
-                "delete_me",
-                "Delete Me",
-                "Will be deleted",
-                "Prompt",
-                0.7,
-                4096,
-                false,
-                true,
-                1,
-            )
+            .create_router_mode(CreateRouterModeInput {
+                router_id: router.id,
+                mode_key: "delete_me".to_string(),
+                display_name: "Delete Me".to_string(),
+                description: "Will be deleted".to_string(),
+                system_prompt: "Prompt".to_string(),
+                temperature: 0.7,
+                max_tokens: 4096,
+                append_to_agent_system_prompt: false,
+                append_to_agent_tools: true,
+                display_order: 1,
+            })
             .await
             .unwrap();
 
@@ -934,18 +962,18 @@ mod tests {
 
         // Create mode
         let mode = repo
-            .create_router_mode(
-                router.id,
-                "tool_test",
-                "Tool Test",
-                "Test mode tools",
-                "Prompt",
-                0.7,
-                4096,
-                false,
-                true,
-                1,
-            )
+            .create_router_mode(CreateRouterModeInput {
+                router_id: router.id,
+                mode_key: "tool_test".to_string(),
+                display_name: "Tool Test".to_string(),
+                description: "Test mode tools".to_string(),
+                system_prompt: "Prompt".to_string(),
+                temperature: 0.7,
+                max_tokens: 4096,
+                append_to_agent_system_prompt: false,
+                append_to_agent_tools: true,
+                display_order: 1,
+            })
             .await
             .unwrap();
 
@@ -1021,18 +1049,18 @@ mod tests {
 
         // Create mode
         let mode = repo
-            .create_router_mode(
-                router.id,
-                "replace_test",
-                "Replace Test",
-                "Test replacement",
-                "Prompt",
-                0.7,
-                4096,
-                false,
-                true,
-                1,
-            )
+            .create_router_mode(CreateRouterModeInput {
+                router_id: router.id,
+                mode_key: "replace_test".to_string(),
+                display_name: "Replace Test".to_string(),
+                description: "Test replacement".to_string(),
+                system_prompt: "Prompt".to_string(),
+                temperature: 0.7,
+                max_tokens: 4096,
+                append_to_agent_system_prompt: false,
+                append_to_agent_tools: true,
+                display_order: 1,
+            })
             .await
             .unwrap();
 
@@ -1080,18 +1108,18 @@ mod tests {
 
         // Create mode
         let mode = repo
-            .create_router_mode(
-                router.id,
-                "empty_test",
-                "Empty Test",
-                "Test empty tools",
-                "Prompt",
-                0.7,
-                4096,
-                false,
-                true,
-                1,
-            )
+            .create_router_mode(CreateRouterModeInput {
+                router_id: router.id,
+                mode_key: "empty_test".to_string(),
+                display_name: "Empty Test".to_string(),
+                description: "Test empty tools".to_string(),
+                system_prompt: "Prompt".to_string(),
+                temperature: 0.7,
+                max_tokens: 4096,
+                append_to_agent_system_prompt: false,
+                append_to_agent_tools: true,
+                display_order: 1,
+            })
             .await
             .unwrap();
 
@@ -1119,18 +1147,18 @@ mod tests {
 
         // Create mode with append_to_agent_system_prompt=true, append_to_agent_tools=false
         let mode = repo
-            .create_router_mode(
-                router.id,
-                "bool_test",
-                "Boolean Test",
-                "Test boolean storage",
-                "Prompt",
-                0.7,
-                4096,
-                true,  // append_to_agent_system_prompt
-                false, // append_to_agent_tools
-                1,
-            )
+            .create_router_mode(CreateRouterModeInput {
+                router_id: router.id,
+                mode_key: "bool_test".to_string(),
+                display_name: "Boolean Test".to_string(),
+                description: "Test boolean storage".to_string(),
+                system_prompt: "Prompt".to_string(),
+                temperature: 0.7,
+                max_tokens: 4096,
+                append_to_agent_system_prompt: true,
+                append_to_agent_tools: false,
+                display_order: 1,
+            })
             .await
             .unwrap();
 
@@ -1342,17 +1370,17 @@ mod tests {
         let agent = create_test_agent(&repo, user).await;
 
         let exec = repo
-            .create_agent_execution(
-                agent.id,
-                None,  // workflow_step_id
-                false, // is_interactive
-                None,  // parent_agent_execution_id
-                "You are a test agent.",
-                "What is 2+2?",
-                None, // room_session_id
-                None, // speaker_order
-                None, // workflow_execution_id
-            )
+            .create_agent_execution(CreateAgentExecutionInput {
+                agent_id: agent.id,
+                workflow_step_id: None,
+                is_interactive: false,
+                parent_agent_execution_id: None,
+                system_prompt_rendered: "You are a test agent.".to_string(),
+                input: "What is 2+2?".to_string(),
+                room_session_id: None,
+                speaker_order: None,
+                workflow_execution_id: None,
+            })
             .await
             .unwrap();
 
@@ -1389,9 +1417,17 @@ mod tests {
 
         // --- completed: sets completed_at + stores output ---
         let exec1 = repo
-            .create_agent_execution(
-                agent.id, None, false, None, "sys", "input1", None, None, None,
-            )
+            .create_agent_execution(CreateAgentExecutionInput {
+                agent_id: agent.id,
+                workflow_step_id: None,
+                is_interactive: false,
+                parent_agent_execution_id: None,
+                system_prompt_rendered: "sys".to_string(),
+                input: "input1".to_string(),
+                room_session_id: None,
+                speaker_order: None,
+                workflow_execution_id: None,
+            })
             .await
             .unwrap();
         let updated = repo
@@ -1413,9 +1449,17 @@ mod tests {
 
         // --- failed: sets completed_at ---
         let exec2 = repo
-            .create_agent_execution(
-                agent.id, None, false, None, "sys", "input2", None, None, None,
-            )
+            .create_agent_execution(CreateAgentExecutionInput {
+                agent_id: agent.id,
+                workflow_step_id: None,
+                is_interactive: false,
+                parent_agent_execution_id: None,
+                system_prompt_rendered: "sys".to_string(),
+                input: "input2".to_string(),
+                room_session_id: None,
+                speaker_order: None,
+                workflow_execution_id: None,
+            })
             .await
             .unwrap();
         let failed = repo
@@ -1427,9 +1471,17 @@ mod tests {
 
         // --- COALESCE: passing None preserves previous output ---
         let exec3 = repo
-            .create_agent_execution(
-                agent.id, None, false, None, "sys", "input3", None, None, None,
-            )
+            .create_agent_execution(CreateAgentExecutionInput {
+                agent_id: agent.id,
+                workflow_step_id: None,
+                is_interactive: false,
+                parent_agent_execution_id: None,
+                system_prompt_rendered: "sys".to_string(),
+                input: "input3".to_string(),
+                room_session_id: None,
+                speaker_order: None,
+                workflow_execution_id: None,
+            })
             .await
             .unwrap();
         // First set output
@@ -1464,17 +1516,17 @@ mod tests {
         let mut exec_ids = Vec::new();
         for _ in 0..3 {
             let exec = repo
-                .create_agent_execution(
-                    agent.id,
-                    None,
-                    true,
-                    None,
-                    "sys",
-                    "input",
-                    None,
-                    None,
-                    Some(we_id),
-                )
+                .create_agent_execution(CreateAgentExecutionInput {
+                    agent_id: agent.id,
+                    workflow_step_id: None,
+                    is_interactive: true,
+                    parent_agent_execution_id: None,
+                    system_prompt_rendered: "sys".to_string(),
+                    input: "input".to_string(),
+                    room_session_id: None,
+                    speaker_order: None,
+                    workflow_execution_id: Some(we_id),
+                })
                 .await
                 .unwrap();
             exec_ids.push(exec.id);
@@ -1522,17 +1574,17 @@ mod tests {
 
         // completed + non-interactive (should match)
         let e1 = repo
-            .create_agent_execution(
-                agent.id,
-                Some(step_a.id),
-                false,
-                None,
-                "s",
-                "i",
-                None,
-                None,
-                None,
-            )
+            .create_agent_execution(CreateAgentExecutionInput {
+                agent_id: agent.id,
+                workflow_step_id: Some(step_a.id),
+                is_interactive: false,
+                parent_agent_execution_id: None,
+                system_prompt_rendered: "s".to_string(),
+                input: "i".to_string(),
+                room_session_id: None,
+                speaker_order: None,
+                workflow_execution_id: None,
+            })
             .await
             .unwrap();
         repo.update_agent_execution_status(e1.id, "completed", Some("ok".to_string()), None)
@@ -1540,17 +1592,17 @@ mod tests {
             .unwrap();
 
         let e2 = repo
-            .create_agent_execution(
-                agent.id,
-                Some(step_b.id),
-                false,
-                None,
-                "s",
-                "i",
-                None,
-                None,
-                None,
-            )
+            .create_agent_execution(CreateAgentExecutionInput {
+                agent_id: agent.id,
+                workflow_step_id: Some(step_b.id),
+                is_interactive: false,
+                parent_agent_execution_id: None,
+                system_prompt_rendered: "s".to_string(),
+                input: "i".to_string(),
+                room_session_id: None,
+                speaker_order: None,
+                workflow_execution_id: None,
+            })
             .await
             .unwrap();
         repo.update_agent_execution_status(e2.id, "completed", Some("ok".to_string()), None)
@@ -1558,33 +1610,33 @@ mod tests {
             .unwrap();
 
         // running + non-interactive (should NOT match)
-        repo.create_agent_execution(
-            agent.id,
-            Some(step_a.id),
-            false,
-            None,
-            "s",
-            "i",
-            None,
-            None,
-            None,
-        )
+        repo.create_agent_execution(CreateAgentExecutionInput {
+            agent_id: agent.id,
+            workflow_step_id: Some(step_a.id),
+            is_interactive: false,
+            parent_agent_execution_id: None,
+            system_prompt_rendered: "s".to_string(),
+            input: "i".to_string(),
+            room_session_id: None,
+            speaker_order: None,
+            workflow_execution_id: None,
+        })
         .await
         .unwrap();
 
         // completed + interactive (should NOT match)
         let e4 = repo
-            .create_agent_execution(
-                agent.id,
-                Some(step_a.id),
-                true,
-                None,
-                "s",
-                "i",
-                None,
-                None,
-                None,
-            )
+            .create_agent_execution(CreateAgentExecutionInput {
+                agent_id: agent.id,
+                workflow_step_id: Some(step_a.id),
+                is_interactive: true,
+                parent_agent_execution_id: None,
+                system_prompt_rendered: "s".to_string(),
+                input: "i".to_string(),
+                room_session_id: None,
+                speaker_order: None,
+                workflow_execution_id: None,
+            })
             .await
             .unwrap();
         repo.update_agent_execution_status(e4.id, "completed", Some("ok".to_string()), None)
@@ -1619,17 +1671,17 @@ mod tests {
         let step = create_test_step(&repo, workflow.id, agent.id).await;
 
         let exec = repo
-            .create_agent_execution(
-                agent.id,
-                Some(step.id),
-                false,
-                None,
-                "s",
-                "i",
-                None,
-                None,
-                None,
-            )
+            .create_agent_execution(CreateAgentExecutionInput {
+                agent_id: agent.id,
+                workflow_step_id: Some(step.id),
+                is_interactive: false,
+                parent_agent_execution_id: None,
+                system_prompt_rendered: "s".to_string(),
+                input: "i".to_string(),
+                room_session_id: None,
+                speaker_order: None,
+                workflow_execution_id: None,
+            })
             .await
             .unwrap();
         repo.update_agent_execution_status(exec.id, "completed", Some("ok".to_string()), None)
@@ -1915,27 +1967,27 @@ mod tests {
         let step = create_test_step(&repo, workflow.id, agent.id).await;
 
         let doc1 = repo
-            .create_document(
-                user,
-                None,
-                "Doc 1".to_string(),
-                "Content".to_string(),
-                "note".to_string(),
-                format!("ref-{}", Uuid::new_v4().simple()),
-                vec![],
-            )
+            .create_document(CreateDocumentInput {
+                user_id: user,
+                session_id: None,
+                title: "Doc 1".to_string(),
+                content: "Content".to_string(),
+                doc_type: "note".to_string(),
+                ref_tag: format!("ref-{}", Uuid::new_v4().simple()),
+                tags: vec![],
+            })
             .await
             .unwrap();
         let doc2 = repo
-            .create_document(
-                user,
-                None,
-                "Doc 2".to_string(),
-                "Content".to_string(),
-                "note".to_string(),
-                format!("ref-{}", Uuid::new_v4().simple()),
-                vec![],
-            )
+            .create_document(CreateDocumentInput {
+                user_id: user,
+                session_id: None,
+                title: "Doc 2".to_string(),
+                content: "Content".to_string(),
+                doc_type: "note".to_string(),
+                ref_tag: format!("ref-{}", Uuid::new_v4().simple()),
+                tags: vec![],
+            })
             .await
             .unwrap();
 
@@ -2038,31 +2090,31 @@ mod tests {
 
         // Create executions per agent
         let exec_a = repo
-            .create_agent_execution(
-                agent_a.id,
-                None,
-                false,
-                None,
-                "sys",
-                "input",
-                Some(session.id),
-                Some(1),
-                None,
-            )
+            .create_agent_execution(CreateAgentExecutionInput {
+                agent_id: agent_a.id,
+                workflow_step_id: None,
+                is_interactive: false,
+                parent_agent_execution_id: None,
+                system_prompt_rendered: "sys".to_string(),
+                input: "input".to_string(),
+                room_session_id: Some(session.id),
+                speaker_order: Some(1),
+                workflow_execution_id: None,
+            })
             .await
             .unwrap();
         let exec_b = repo
-            .create_agent_execution(
-                agent_b.id,
-                None,
-                false,
-                None,
-                "sys",
-                "input",
-                Some(session.id),
-                Some(2),
-                None,
-            )
+            .create_agent_execution(CreateAgentExecutionInput {
+                agent_id: agent_b.id,
+                workflow_step_id: None,
+                is_interactive: false,
+                parent_agent_execution_id: None,
+                system_prompt_rendered: "sys".to_string(),
+                input: "input".to_string(),
+                room_session_id: Some(session.id),
+                speaker_order: Some(2),
+                workflow_execution_id: None,
+            })
             .await
             .unwrap();
 
@@ -2126,15 +2178,15 @@ mod tests {
 
         // Add step document
         let doc = repo
-            .create_document(
-                user,
-                None,
-                "Cascade Doc".to_string(),
-                "Content".to_string(),
-                "note".to_string(),
-                format!("ref-{}", Uuid::new_v4().simple()),
-                vec![],
-            )
+            .create_document(CreateDocumentInput {
+                user_id: user,
+                session_id: None,
+                title: "Cascade Doc".to_string(),
+                content: "Content".to_string(),
+                doc_type: "note".to_string(),
+                ref_tag: format!("ref-{}", Uuid::new_v4().simple()),
+                tags: vec![],
+            })
             .await
             .unwrap();
         repo.add_step_document(step_a.id, doc.id).await.unwrap();

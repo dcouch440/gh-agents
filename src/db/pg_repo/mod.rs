@@ -7,10 +7,15 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::traits::{
-    AgentExecutionRepo, ContentVersionRepo, ContextStoreRepo, DocumentRepo, MergeQueueRepo,
-    ModelSpendRow, OutputSchemaRepo, PromptTemplateRepo, ProtocolRepo, ResultRepo, RoomMemberInput,
-    RoomRepo, RouterRequestRepo, ServerRepo, SystemConfigRepo, TokenLedgerRepo, ToolCapabilityRepo,
-    ToolRouterRepo, UserRepo, WorkflowCollectionRepo, WorkflowRepo, WorkflowStepAgentRepo,
+    AgentExecutionRepo, ContentVersionRepo, ContextStoreRepo, CreateAgentExecutionInput,
+    CreateDesignerOutputGenericInput, CreateDesignerOutputInput, CreateDocumentInput,
+    CreateProtocolInput, CreateRoomInput, CreateRouterModeInput, CreateStepInputPort,
+    CreateWorkflowInput, DocumentRepo, InsertQueueEntryInput, MergeQueueRepo, ModelSpendRow,
+    OutputSchemaRepo, PromptTemplateRepo, ProtocolRepo, ResultRepo, RoomMemberInput, RoomRepo,
+    RouterRequestRepo, SaveRoomExecutionOutputInput, ServerRepo, SystemConfigRepo, TokenLedgerRepo,
+    ToolCapabilityRepo, ToolRouterRepo, UpdateProtocolExecutionStatusInput, UpdateProtocolInput,
+    UpdateRoomInput, UpdateRouterModeInput, UpdateRouterRequestInput, UpdateWorkflowInput,
+    UserRepo, WorkflowCollectionRepo, WorkflowRepo, WorkflowStepAgentRepo,
 };
 use crate::db::{
     AgentDesignerOutputRow, AgentDesignerRunRow, AgentExecutionRow, AgentRow,
@@ -119,13 +124,7 @@ impl PgRepo {
 impl MergeQueueRepo for PgRepo {
     async fn insert_queue_entry(
         &self,
-        id: Uuid,
-        owner: String,
-        repo: String,
-        pr_number: u32,
-        position: u32,
-        now: DateTime<Utc>,
-        user_id: Uuid,
+        input: InsertQueueEntryInput,
     ) -> Result<(), MergeQueueError> {
         sqlx::query(
             r#"
@@ -138,15 +137,15 @@ impl MergeQueueRepo for PgRepo {
             DO UPDATE SET updated_at = excluded.updated_at
             "#,
         )
-        .bind(id)
-        .bind(&owner)
-        .bind(&repo)
-        .bind(pr_number as i32)
-        .bind(position as i32)
+        .bind(input.id)
+        .bind(&input.owner)
+        .bind(&input.repo)
+        .bind(input.pr_number as i32)
+        .bind(input.position as i32)
         .bind("pending")
-        .bind(now)
-        .bind(now)
-        .bind(user_id)
+        .bind(input.now)
+        .bind(input.now)
+        .bind(input.user_id)
         .execute(&self.pool)
         .await?;
 
@@ -949,16 +948,7 @@ impl UserRepo for PgRepo {
 
 #[async_trait]
 impl DocumentRepo for PgRepo {
-    async fn create_document(
-        &self,
-        user_id: Uuid,
-        session_id: Option<Uuid>,
-        title: String,
-        content: String,
-        doc_type: String,
-        ref_tag: String,
-        tags: Vec<String>,
-    ) -> Result<DocumentRow> {
+    async fn create_document(&self, input: CreateDocumentInput) -> Result<DocumentRow> {
         let id = Uuid::new_v4();
         let row: DocumentRow = sqlx::query_as(
             r#"
@@ -968,13 +958,13 @@ impl DocumentRepo for PgRepo {
             "#,
         )
         .bind(id)
-        .bind(user_id)
-        .bind(session_id)
-        .bind(&title)
-        .bind(&content)
-        .bind(&doc_type)
-        .bind(&ref_tag)
-        .bind(&tags)
+        .bind(input.user_id)
+        .bind(input.session_id)
+        .bind(&input.title)
+        .bind(&input.content)
+        .bind(&input.doc_type)
+        .bind(&input.ref_tag)
+        .bind(&input.tags)
         .fetch_one(&self.pool)
         .await?;
 
@@ -1262,28 +1252,19 @@ impl PromptTemplateRepo for PgRepo {
 impl WorkflowRepo for PgRepo {
     // --- Workflows ---
 
-    async fn create_workflow(
-        &self,
-        user_id: Uuid,
-        name: String,
-        description: String,
-        container_enabled: bool,
-        target_repo_url: Option<String>,
-        target_branch: Option<String>,
-        vpn_enabled: bool,
-    ) -> Result<WorkflowRow> {
+    async fn create_workflow(&self, input: CreateWorkflowInput) -> Result<WorkflowRow> {
         let row: WorkflowRow = sqlx::query_as(
             "INSERT INTO workflows (user_id, name, description, container_enabled, target_repo_url, target_branch, vpn_enabled) \
              VALUES ($1, $2, $3, $4, $5, $6, $7) \
              RETURNING id, user_id, name, description, execution_mode, created_at, version, container_enabled, target_repo_url, target_branch, vpn_enabled, board_overview_summary",
         )
-        .bind(user_id)
-        .bind(&name)
-        .bind(&description)
-        .bind(container_enabled)
-        .bind(&target_repo_url)
-        .bind(&target_branch)
-        .bind(vpn_enabled)
+        .bind(input.user_id)
+        .bind(&input.name)
+        .bind(&input.description)
+        .bind(input.container_enabled)
+        .bind(&input.target_repo_url)
+        .bind(&input.target_branch)
+        .bind(input.vpn_enabled)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -1311,16 +1292,7 @@ impl WorkflowRepo for PgRepo {
         Ok(rows)
     }
 
-    async fn update_workflow(
-        &self,
-        id: Uuid,
-        name: Option<String>,
-        description: Option<String>,
-        container_enabled: Option<bool>,
-        target_repo_url: Option<Option<String>>,
-        target_branch: Option<Option<String>>,
-        vpn_enabled: Option<bool>,
-    ) -> Result<WorkflowRow> {
+    async fn update_workflow(&self, input: UpdateWorkflowInput) -> Result<WorkflowRow> {
         // Build dynamic SET clauses for optional container fields
         let row: WorkflowRow = sqlx::query_as(
             "UPDATE workflows SET \
@@ -1334,15 +1306,15 @@ impl WorkflowRepo for PgRepo {
              WHERE id = $9 \
              RETURNING id, user_id, name, description, execution_mode, created_at, version, container_enabled, target_repo_url, target_branch, vpn_enabled, board_overview_summary",
         )
-        .bind(name)
-        .bind(description)
-        .bind(container_enabled)
-        .bind(target_repo_url.is_some()) // $4: whether to update target_repo_url
-        .bind(target_repo_url.unwrap_or(None)) // $5: the value (may be None to clear)
-        .bind(target_branch.is_some()) // $6: whether to update target_branch
-        .bind(target_branch.unwrap_or(None)) // $7: the value (may be None to clear)
-        .bind(vpn_enabled)
-        .bind(id)
+        .bind(input.name)
+        .bind(input.description)
+        .bind(input.container_enabled)
+        .bind(input.target_repo_url.is_some()) // $4: whether to update target_repo_url
+        .bind(input.target_repo_url.unwrap_or(None)) // $5: the value (may be None to clear)
+        .bind(input.target_branch.is_some()) // $6: whether to update target_branch
+        .bind(input.target_branch.unwrap_or(None)) // $7: the value (may be None to clear)
+        .bind(input.vpn_enabled)
+        .bind(input.id)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -1669,28 +1641,19 @@ impl WorkflowRepo for PgRepo {
         Ok(rows)
     }
 
-    async fn create_step_input(
-        &self,
-        workflow_step_id: Uuid,
-        port_name: &str,
-        port_type: &str,
-        required: bool,
-        default_value: Option<serde_json::Value>,
-        description: Option<String>,
-        json_schema: Option<serde_json::Value>,
-    ) -> Result<StepInputRow> {
+    async fn create_step_input(&self, input: CreateStepInputPort) -> Result<StepInputRow> {
         let row = sqlx::query_as::<_, StepInputRow>(
             "INSERT INTO step_inputs (workflow_step_id, port_name, port_type, required, default_value, description, json_schema)
              VALUES ($1, $2, $3, $4, $5, $6, $7)
              RETURNING id, workflow_step_id, port_name, port_type, required, default_value, description, json_schema, created_at"
         )
-        .bind(workflow_step_id)
-        .bind(port_name)
-        .bind(port_type)
-        .bind(required)
-        .bind(default_value)
-        .bind(description)
-        .bind(json_schema)
+        .bind(input.workflow_step_id)
+        .bind(&input.port_name)
+        .bind(&input.port_type)
+        .bind(input.required)
+        .bind(input.default_value)
+        .bind(input.description)
+        .bind(input.json_schema)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -2294,14 +2257,7 @@ impl WorkflowRepo for PgRepo {
 
     async fn create_designer_output(
         &self,
-        designer_run_id: Uuid,
-        agent_roster_entry_id: Uuid,
-        agent_name: &str,
-        assigned_tools: &[String],
-        generated_system_prompt: &str,
-        generated_task_prompt: &str,
-        design_reasoning: &str,
-        execution_order: i32,
+        input: CreateDesignerOutputInput,
     ) -> Result<AgentDesignerOutputRow> {
         let row = sqlx::query_as::<_, AgentDesignerOutputRow>(
             "INSERT INTO agent_designer_outputs \
@@ -2311,15 +2267,15 @@ impl WorkflowRepo for PgRepo {
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'task_force') \
              RETURNING *",
         )
-        .bind(designer_run_id)
-        .bind(agent_roster_entry_id)
-        .bind(agent_name)
-        .bind(assigned_tools)
-        .bind(generated_system_prompt)
-        .bind(generated_task_prompt)
-        .bind(design_reasoning)
-        .bind(execution_order)
-        .bind(agent_roster_entry_id.to_string())
+        .bind(input.designer_run_id)
+        .bind(input.agent_roster_entry_id)
+        .bind(&input.agent_name)
+        .bind(&input.assigned_tools)
+        .bind(&input.generated_system_prompt)
+        .bind(&input.generated_task_prompt)
+        .bind(&input.design_reasoning)
+        .bind(input.execution_order)
+        .bind(input.agent_roster_entry_id.to_string())
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -2327,16 +2283,7 @@ impl WorkflowRepo for PgRepo {
 
     async fn create_designer_output_generic(
         &self,
-        designer_run_id: Uuid,
-        source_entity_id: &str,
-        source_archetype: &str,
-        agent_name: &str,
-        assigned_tools: &[String],
-        generated_system_prompt: &str,
-        generated_task_prompt: &str,
-        design_reasoning: &str,
-        execution_order: i32,
-        protocol_execution_id: Option<Uuid>,
+        input: CreateDesignerOutputGenericInput,
     ) -> Result<AgentDesignerOutputRow> {
         let row = sqlx::query_as::<_, AgentDesignerOutputRow>(
             "INSERT INTO agent_designer_outputs \
@@ -2346,16 +2293,16 @@ impl WorkflowRepo for PgRepo {
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
              RETURNING *",
         )
-        .bind(designer_run_id)
-        .bind(source_entity_id)
-        .bind(source_archetype)
-        .bind(agent_name)
-        .bind(assigned_tools)
-        .bind(generated_system_prompt)
-        .bind(generated_task_prompt)
-        .bind(design_reasoning)
-        .bind(execution_order)
-        .bind(protocol_execution_id)
+        .bind(input.designer_run_id)
+        .bind(&input.source_entity_id)
+        .bind(&input.source_archetype)
+        .bind(&input.agent_name)
+        .bind(&input.assigned_tools)
+        .bind(&input.generated_system_prompt)
+        .bind(&input.generated_task_prompt)
+        .bind(&input.design_reasoning)
+        .bind(input.execution_order)
+        .bind(input.protocol_execution_id)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -2532,28 +2479,20 @@ impl WorkflowRepo for PgRepo {
 impl AgentExecutionRepo for PgRepo {
     async fn create_agent_execution(
         &self,
-        agent_id: Uuid,
-        workflow_step_id: Option<Uuid>,
-        is_interactive: bool,
-        parent_agent_execution_id: Option<Uuid>,
-        system_prompt_rendered: &str,
-        input: &str,
-        room_session_id: Option<Uuid>,
-        speaker_order: Option<i32>,
-        workflow_execution_id: Option<Uuid>,
+        input: CreateAgentExecutionInput,
     ) -> Result<AgentExecutionRow> {
         let row = sqlx::query_as::<_, AgentExecutionRow>(
             "INSERT INTO agent_executions (agent_id, workflow_step_id, is_interactive, parent_agent_execution_id, system_prompt_rendered, input, room_session_id, speaker_order, workflow_execution_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *",
         )
-        .bind(agent_id)
-        .bind(workflow_step_id)
-        .bind(is_interactive)
-        .bind(parent_agent_execution_id)
-        .bind(system_prompt_rendered)
-        .bind(input)
-        .bind(room_session_id)
-        .bind(speaker_order)
-        .bind(workflow_execution_id)
+        .bind(input.agent_id)
+        .bind(input.workflow_step_id)
+        .bind(input.is_interactive)
+        .bind(input.parent_agent_execution_id)
+        .bind(&input.system_prompt_rendered)
+        .bind(&input.input)
+        .bind(input.room_session_id)
+        .bind(input.speaker_order)
+        .bind(input.workflow_execution_id)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -3030,19 +2969,7 @@ impl ToolRouterRepo for PgRepo {
         Ok(row)
     }
 
-    async fn create_router_mode(
-        &self,
-        router_id: Uuid,
-        mode_key: &str,
-        display_name: &str,
-        description: &str,
-        system_prompt: &str,
-        temperature: f32,
-        max_tokens: i32,
-        append_to_agent_system_prompt: bool,
-        append_to_agent_tools: bool,
-        display_order: i32,
-    ) -> Result<ToolRouterModeRow> {
+    async fn create_router_mode(&self, input: CreateRouterModeInput) -> Result<ToolRouterModeRow> {
         let row: ToolRouterModeRow = sqlx::query_as(
             r#"INSERT INTO tool_router_modes (
                    router_id, mode_key, display_name, description, system_prompt,
@@ -3054,34 +2981,22 @@ impl ToolRouterRepo for PgRepo {
                          temperature, max_tokens, append_to_agent_system_prompt,
                          append_to_agent_tools, display_order, created_at, updated_at"#,
         )
-        .bind(router_id)
-        .bind(mode_key)
-        .bind(display_name)
-        .bind(description)
-        .bind(system_prompt)
-        .bind(temperature)
-        .bind(max_tokens)
-        .bind(append_to_agent_system_prompt)
-        .bind(append_to_agent_tools)
-        .bind(display_order)
+        .bind(input.router_id)
+        .bind(&input.mode_key)
+        .bind(&input.display_name)
+        .bind(&input.description)
+        .bind(&input.system_prompt)
+        .bind(input.temperature)
+        .bind(input.max_tokens)
+        .bind(input.append_to_agent_system_prompt)
+        .bind(input.append_to_agent_tools)
+        .bind(input.display_order)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
     }
 
-    async fn update_router_mode(
-        &self,
-        id: Uuid,
-        mode_key: Option<String>,
-        display_name: Option<String>,
-        description: Option<String>,
-        system_prompt: Option<String>,
-        temperature: Option<f32>,
-        max_tokens: Option<i32>,
-        append_to_agent_system_prompt: Option<bool>,
-        append_to_agent_tools: Option<bool>,
-        display_order: Option<i32>,
-    ) -> Result<ToolRouterModeRow> {
+    async fn update_router_mode(&self, input: UpdateRouterModeInput) -> Result<ToolRouterModeRow> {
         let row: ToolRouterModeRow = sqlx::query_as(
             r#"UPDATE tool_router_modes SET
                    mode_key = COALESCE($2, mode_key),
@@ -3099,16 +3014,16 @@ impl ToolRouterRepo for PgRepo {
                          temperature, max_tokens, append_to_agent_system_prompt,
                          append_to_agent_tools, display_order, created_at, updated_at"#,
         )
-        .bind(id)
-        .bind(mode_key)
-        .bind(display_name)
-        .bind(description)
-        .bind(system_prompt)
-        .bind(temperature)
-        .bind(max_tokens)
-        .bind(append_to_agent_system_prompt)
-        .bind(append_to_agent_tools)
-        .bind(display_order)
+        .bind(input.id)
+        .bind(input.mode_key)
+        .bind(input.display_name)
+        .bind(input.description)
+        .bind(input.system_prompt)
+        .bind(input.temperature)
+        .bind(input.max_tokens)
+        .bind(input.append_to_agent_system_prompt)
+        .bind(input.append_to_agent_tools)
+        .bind(input.display_order)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -3250,14 +3165,7 @@ impl RouterRequestRepo for PgRepo {
 
     async fn update_router_request(
         &self,
-        id: Uuid,
-        routed_tool: Option<String>,
-        routed_args: Option<serde_json::Value>,
-        is_async: bool,
-        passdown: Option<String>,
-        chain: Option<serde_json::Value>,
-        status: &str,
-        result: Option<String>,
+        input: UpdateRouterRequestInput,
     ) -> Result<RouterRequestRow> {
         let row: RouterRequestRow = sqlx::query_as(
             r#"UPDATE router_requests SET
@@ -3267,14 +3175,14 @@ impl RouterRequestRepo for PgRepo {
             WHERE id = $1
             RETURNING id, session_id, agent_execution_id, intent, priority, callback_hint, routed_tool, routed_args, is_async, passdown, chain, status, result, created_at, completed_at"#,
         )
-        .bind(id)
-        .bind(routed_tool)
-        .bind(routed_args)
-        .bind(is_async)
-        .bind(passdown)
-        .bind(chain)
-        .bind(status)
-        .bind(result)
+        .bind(input.id)
+        .bind(input.routed_tool)
+        .bind(input.routed_args)
+        .bind(input.is_async)
+        .bind(input.passdown)
+        .bind(input.chain)
+        .bind(&input.status)
+        .bind(input.result)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -3307,28 +3215,18 @@ impl RouterRequestRepo for PgRepo {
 
 #[async_trait]
 impl RoomRepo for PgRepo {
-    async fn create_room(
-        &self,
-        user_id: Uuid,
-        collection_id: Option<Uuid>,
-        name: &str,
-        gatekeeper_enabled: bool,
-        gatekeeper_model_id: &str,
-        max_speakers_per_turn: i32,
-        max_turns: i32,
-        tools_enabled: bool,
-    ) -> Result<RoomRow> {
+    async fn create_room(&self, input: CreateRoomInput) -> Result<RoomRow> {
         let row = sqlx::query_as::<_, RoomRow>(
             "INSERT INTO rooms (user_id, collection_id, name, gatekeeper_enabled, gatekeeper_model_id, max_speakers_per_turn, max_turns, tools_enabled) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *",
         )
-        .bind(user_id)
-        .bind(collection_id)
-        .bind(name)
-        .bind(gatekeeper_enabled)
-        .bind(gatekeeper_model_id)
-        .bind(max_speakers_per_turn)
-        .bind(max_turns)
-        .bind(tools_enabled)
+        .bind(input.user_id)
+        .bind(input.collection_id)
+        .bind(&input.name)
+        .bind(input.gatekeeper_enabled)
+        .bind(&input.gatekeeper_model_id)
+        .bind(input.max_speakers_per_turn)
+        .bind(input.max_turns)
+        .bind(input.tools_enabled)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -3342,16 +3240,7 @@ impl RoomRepo for PgRepo {
         Ok(row)
     }
 
-    async fn update_room(
-        &self,
-        id: Uuid,
-        name: Option<String>,
-        gatekeeper_enabled: Option<bool>,
-        gatekeeper_model_id: Option<String>,
-        max_speakers_per_turn: Option<i32>,
-        max_turns: Option<i32>,
-        tools_enabled: Option<bool>,
-    ) -> Result<RoomRow> {
+    async fn update_room(&self, input: UpdateRoomInput) -> Result<RoomRow> {
         let row = sqlx::query_as::<_, RoomRow>(
             "UPDATE rooms SET \
                 name = COALESCE($2, name), \
@@ -3363,13 +3252,13 @@ impl RoomRepo for PgRepo {
                 updated_at = NOW() \
             WHERE id = $1 RETURNING *",
         )
-        .bind(id)
-        .bind(name)
-        .bind(gatekeeper_enabled)
-        .bind(gatekeeper_model_id)
-        .bind(max_speakers_per_turn)
-        .bind(max_turns)
-        .bind(tools_enabled)
+        .bind(input.id)
+        .bind(input.name)
+        .bind(input.gatekeeper_enabled)
+        .bind(input.gatekeeper_model_id)
+        .bind(input.max_speakers_per_turn)
+        .bind(input.max_turns)
+        .bind(input.tools_enabled)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -3524,15 +3413,7 @@ impl RoomRepo for PgRepo {
 
     async fn save_room_execution_output(
         &self,
-        room_session_id: Uuid,
-        agent_execution_id: Uuid,
-        agent_id: Uuid,
-        speaker_order: i32,
-        turn_number: i32,
-        output_name: &str,
-        structured_output: &serde_json::Value,
-        raw_output: &str,
-        schema_id: Option<Uuid>,
+        input: SaveRoomExecutionOutputInput,
     ) -> Result<RoomExecutionOutputRow> {
         let row = sqlx::query_as::<_, RoomExecutionOutputRow>(
             "INSERT INTO room_execution_outputs
@@ -3540,15 +3421,15 @@ impl RoomRepo for PgRepo {
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
              RETURNING id, room_session_id, agent_execution_id, agent_id, speaker_order, turn_number, output_name, structured_output, raw_output, schema_id, created_at"
         )
-        .bind(room_session_id)
-        .bind(agent_execution_id)
-        .bind(agent_id)
-        .bind(speaker_order)
-        .bind(turn_number)
-        .bind(output_name)
-        .bind(structured_output)
-        .bind(raw_output)
-        .bind(schema_id)
+        .bind(input.room_session_id)
+        .bind(input.agent_execution_id)
+        .bind(input.agent_id)
+        .bind(input.speaker_order)
+        .bind(input.turn_number)
+        .bind(&input.output_name)
+        .bind(&input.structured_output)
+        .bind(&input.raw_output)
+        .bind(input.schema_id)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -4478,28 +4359,19 @@ impl SystemConfigRepo for PgRepo {
 
 #[async_trait]
 impl ProtocolRepo for PgRepo {
-    async fn create_protocol(
-        &self,
-        name: String,
-        description: String,
-        protocol_type: String,
-        config: serde_json::Value,
-        agent_id: Option<Uuid>,
-        output_schema_id: Option<Uuid>,
-        prompt_template_id: Option<Uuid>,
-    ) -> Result<ProtocolRow> {
+    async fn create_protocol(&self, input: CreateProtocolInput) -> Result<ProtocolRow> {
         let row = sqlx::query_as::<_, ProtocolRow>(
             "INSERT INTO protocols (name, description, protocol_type, config, agent_id, output_schema_id, prompt_template_id)
              VALUES ($1, $2, $3, $4, $5, $6, $7)
              RETURNING id, name, description, protocol_type, config, version, created_at, updated_at, agent_id, output_schema_id, prompt_template_id",
         )
-        .bind(&name)
-        .bind(&description)
-        .bind(&protocol_type)
-        .bind(&config)
-        .bind(agent_id)
-        .bind(output_schema_id)
-        .bind(prompt_template_id)
+        .bind(&input.name)
+        .bind(&input.description)
+        .bind(&input.protocol_type)
+        .bind(&input.config)
+        .bind(input.agent_id)
+        .bind(input.output_schema_id)
+        .bind(input.prompt_template_id)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -4564,16 +4436,7 @@ impl ProtocolRepo for PgRepo {
         Ok(())
     }
 
-    async fn update_protocol(
-        &self,
-        id: Uuid,
-        name: Option<String>,
-        description: Option<String>,
-        config: Option<serde_json::Value>,
-        agent_id: Option<Uuid>,
-        output_schema_id: Option<Uuid>,
-        prompt_template_id: Option<Uuid>,
-    ) -> Result<ProtocolRow> {
+    async fn update_protocol(&self, input: UpdateProtocolInput) -> Result<ProtocolRow> {
         let row = sqlx::query_as::<_, ProtocolRow>(
             "UPDATE protocols SET
                 name = COALESCE($2, name),
@@ -4587,13 +4450,13 @@ impl ProtocolRepo for PgRepo {
              WHERE id = $1
              RETURNING id, name, description, protocol_type, config, version, created_at, updated_at, agent_id, output_schema_id, prompt_template_id",
         )
-        .bind(id)
-        .bind(name)
-        .bind(description)
-        .bind(config)
-        .bind(agent_id)
-        .bind(output_schema_id)
-        .bind(prompt_template_id)
+        .bind(input.id)
+        .bind(input.name)
+        .bind(input.description)
+        .bind(input.config)
+        .bind(input.agent_id)
+        .bind(input.output_schema_id)
+        .bind(input.prompt_template_id)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -4832,14 +4695,7 @@ impl ProtocolRepo for PgRepo {
 
     async fn update_protocol_execution_status(
         &self,
-        id: Uuid,
-        status: String,
-        output_content: Option<String>,
-        error_message: Option<String>,
-        tokens_in: Option<i32>,
-        tokens_out: Option<i32>,
-        cost_usd: Option<f64>,
-        model: Option<String>,
+        input: UpdateProtocolExecutionStatusInput,
     ) -> Result<ProtocolExecutionRow> {
         let row = sqlx::query_as::<_, ProtocolExecutionRow>(
             "UPDATE protocol_executions \
@@ -4849,14 +4705,14 @@ impl ProtocolRepo for PgRepo {
              WHERE id = $1 \
              RETURNING *",
         )
-        .bind(id)
-        .bind(&status)
-        .bind(&output_content)
-        .bind(&error_message)
-        .bind(tokens_in)
-        .bind(tokens_out)
-        .bind(cost_usd)
-        .bind(&model)
+        .bind(input.id)
+        .bind(&input.status)
+        .bind(&input.output_content)
+        .bind(&input.error_message)
+        .bind(input.tokens_in)
+        .bind(input.tokens_out)
+        .bind(input.cost_usd)
+        .bind(&input.model)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)

@@ -12,7 +12,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::db::traits::{ContextStoreRepo, RouterRequestRepo, ToolRouterRepo};
+use crate::db::traits::{
+    ContextStoreRepo, RouterRequestRepo, ToolRouterRepo, UpdateRouterRequestInput,
+};
 use crate::llm::{LLMProvider, LLMRequest, Message, Tool};
 use crate::server::tools::filtered_tools;
 
@@ -150,16 +152,16 @@ impl RouterService {
             .as_ref()
             .and_then(|c| serde_json::to_value(c).ok());
         self.request_repo
-            .update_router_request(
-                req_row.id,
-                decision.tool.clone(),
-                decision.tool_args.clone(),
-                decision.is_async,
-                decision.passdown.clone(),
-                chain_val,
-                status_str,
-                decision.reason.clone(),
-            )
+            .update_router_request(UpdateRouterRequestInput {
+                id: req_row.id,
+                routed_tool: decision.tool.clone(),
+                routed_args: decision.tool_args.clone(),
+                is_async: decision.is_async,
+                passdown: decision.passdown.clone(),
+                chain: chain_val,
+                status: status_str.to_string(),
+                result: decision.reason.clone(),
+            })
             .await
             .context("failed to update router request")?;
 
@@ -219,16 +221,16 @@ impl RouterService {
 
         // Mark request as completed
         self.request_repo
-            .update_router_request(
-                request_id,
-                None,
-                None,
-                false,
-                None,
-                None,
-                "completed",
-                Some(truncate(result, 1000)),
-            )
+            .update_router_request(UpdateRouterRequestInput {
+                id: request_id,
+                routed_tool: None,
+                routed_args: None,
+                is_async: false,
+                passdown: None,
+                chain: None,
+                status: "completed".to_string(),
+                result: Some(truncate(result, 1000)),
+            })
             .await
             .context("failed to mark request completed")?;
 
