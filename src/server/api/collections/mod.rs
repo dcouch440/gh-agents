@@ -13,8 +13,10 @@ use uuid::Uuid;
 use super::AppError;
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::WorkflowCollectionRepo;
+use crate::db::WorkflowCollectionRow;
 use crate::server::auth as auth_utils;
 use crate::server::executors::collection_dag::CollectionDagExecutor;
+use crate::server::services::collections;
 use crate::server::state::AppState;
 
 // ============================================================================
@@ -31,6 +33,20 @@ pub struct CollectionResponse {
     pub execution_mode: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+impl CollectionResponse {
+    fn from_row(row: WorkflowCollectionRow) -> Self {
+        Self {
+            id: row.id,
+            user_id: row.user_id,
+            name: row.name,
+            description: row.description,
+            execution_mode: row.execution_mode,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+        }
+    }
 }
 
 /// Request body for creating a collection.
@@ -67,6 +83,22 @@ pub struct CollectionRunResponse {
 }
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+/// Construct a `WorkflowCollectionRepo` from AppState.
+///
+/// `Repos` does not include a `WorkflowCollectionRepo` field, so we build one
+/// from the raw `PgPool` in each handler.
+fn collection_repo(state: &AppState) -> Result<Arc<dyn WorkflowCollectionRepo>, AppError> {
+    let db = state
+        .db()
+        .ok_or(AppError::Internal("Database not available".into()))?
+        .clone();
+    Ok(Arc::new(PgRepo::new(db)))
+}
+
+// ============================================================================
 // Collection CRUD Endpoints
 // ============================================================================
 
@@ -84,30 +116,9 @@ pub async fn list_collections(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<CollectionResponse>>, AppError> {
-    let db = state
-        .db()
-        .ok_or(AppError::Internal("Database not available".into()))?
-        .clone();
-    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
-
-    let rows = repo
-        .list_collections(auth.user_id.0)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-
-    let items = rows
-        .into_iter()
-        .map(|r| CollectionResponse {
-            id: r.id,
-            user_id: r.user_id,
-            name: r.name,
-            description: r.description,
-            execution_mode: r.execution_mode,
-            created_at: r.created_at,
-            updated_at: r.updated_at,
-        })
-        .collect();
-
+    let repo = collection_repo(&state)?;
+    let rows = collections::list_collections(repo.as_ref(), auth.user_id.0).await?;
+    let items = rows.into_iter().map(CollectionResponse::from_row).collect();
     Ok(Json(items))
 }
 
@@ -130,32 +141,9 @@ pub async fn get_collection(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<CollectionResponse>, AppError> {
-    let db = state
-        .db()
-        .ok_or(AppError::Internal("Database not available".into()))?
-        .clone();
-    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
-
-    let row = repo
-        .get_collection(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or(AppError::not_found("Collection"))?;
-
-    // Verify ownership
-    if row.user_id != auth.user_id.0 {
-        return Err(AppError::Forbidden("Access denied".into()));
-    }
-
-    Ok(Json(CollectionResponse {
-        id: row.id,
-        user_id: row.user_id,
-        name: row.name,
-        description: row.description,
-        execution_mode: row.execution_mode,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-    }))
+    let repo = collection_repo(&state)?;
+    let row = collections::get_collection(repo.as_ref(), auth.user_id.0, id).await?;
+    Ok(Json(CollectionResponse::from_row(row)))
 }
 
 /// POST /api/collections - Create a new collection.
@@ -175,41 +163,17 @@ pub async fn create_collection(
     auth: auth_utils::AuthUser,
     Json(request): Json<CreateCollectionRequest>,
 ) -> Result<(StatusCode, Json<CollectionResponse>), AppError> {
-    let db = state
-        .db()
-        .ok_or(AppError::Internal("Database not available".into()))?
-        .clone();
-    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
+    let repo = collection_repo(&state)?;
+    let row = collections::create_collection(
+        repo.as_ref(),
+        auth.user_id.0,
+        request.name,
+        request.description,
+        request.execution_mode,
+    )
+    .await?;
 
-    // Validate execution_mode
-    if request.execution_mode != "sequential" && request.execution_mode != "parallel" {
-        return Err(AppError::bad_request(
-            "execution_mode must be 'sequential' or 'parallel'",
-        ));
-    }
-
-    let row = repo
-        .create_collection(
-            auth.user_id.0,
-            request.name,
-            request.description,
-            request.execution_mode,
-        )
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-
-    Ok((
-        StatusCode::CREATED,
-        Json(CollectionResponse {
-            id: row.id,
-            user_id: row.user_id,
-            name: row.name,
-            description: row.description,
-            execution_mode: row.execution_mode,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-        }),
-    ))
+    Ok((StatusCode::CREATED, Json(CollectionResponse::from_row(row))))
 }
 
 /// PUT /api/collections/:id - Update a collection.
@@ -234,51 +198,18 @@ pub async fn update_collection(
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateCollectionRequest>,
 ) -> Result<Json<CollectionResponse>, AppError> {
-    let db = state
-        .db()
-        .ok_or(AppError::Internal("Database not available".into()))?
-        .clone();
-    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
+    let repo = collection_repo(&state)?;
+    let row = collections::update_collection(
+        repo.as_ref(),
+        auth.user_id.0,
+        id,
+        request.name,
+        request.description,
+        request.execution_mode,
+    )
+    .await?;
 
-    // Verify ownership
-    let existing = repo
-        .get_collection(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or(AppError::not_found("Collection"))?;
-
-    if existing.user_id != auth.user_id.0 {
-        return Err(AppError::Forbidden("Access denied".into()));
-    }
-
-    // Validate execution_mode if provided
-    if let Some(ref mode) = request.execution_mode {
-        if mode != "sequential" && mode != "parallel" {
-            return Err(AppError::bad_request(
-                "execution_mode must be 'sequential' or 'parallel'",
-            ));
-        }
-    }
-
-    let row = repo
-        .update_collection(
-            id,
-            request.name,
-            request.description,
-            request.execution_mode,
-        )
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-
-    Ok(Json(CollectionResponse {
-        id: row.id,
-        user_id: row.user_id,
-        name: row.name,
-        description: row.description,
-        execution_mode: row.execution_mode,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-    }))
+    Ok(Json(CollectionResponse::from_row(row)))
 }
 
 /// DELETE /api/collections/:id - Delete a collection.
@@ -300,27 +231,8 @@ pub async fn delete_collection(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    let db = state
-        .db()
-        .ok_or(AppError::Internal("Database not available".into()))?
-        .clone();
-    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
-
-    // Verify ownership
-    let existing = repo
-        .get_collection(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or(AppError::not_found("Collection"))?;
-
-    if existing.user_id != auth.user_id.0 {
-        return Err(AppError::Forbidden("Access denied".into()));
-    }
-
-    repo.delete_collection(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?;
-
+    let repo = collection_repo(&state)?;
+    collections::delete_collection(repo.as_ref(), auth.user_id.0, id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -347,27 +259,22 @@ pub async fn run_collection(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<CollectionRunResponse>), AppError> {
+    let repo = collection_repo(&state)?;
+    let workflow_repo = state.repos().workflows.clone();
+
+    // Verify ownership via the service
+    collections::get_collection(repo.as_ref(), auth.user_id.0, id).await?;
+
+    // CollectionDagExecutor is generic and requires a concrete (Sized) type,
+    // so we construct a PgRepo directly for the executor.
     let db = state
         .db()
         .ok_or(AppError::Internal("Database not available".into()))?
         .clone();
-    let repo = Arc::new(PgRepo::new(db));
-    let workflow_repo = state.repos().workflows.clone();
+    let concrete_repo = Arc::new(PgRepo::new(db));
 
-    // Verify ownership
-    let collection = repo
-        .get_collection(id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or(AppError::not_found("Collection"))?;
-
-    if collection.user_id != auth.user_id.0 {
-        return Err(AppError::Forbidden("Access denied".into()));
-    }
-
-    // Create executor and run collection
     let executor =
-        CollectionDagExecutor::new(Arc::clone(&repo), workflow_repo, Arc::new(state.clone()));
+        CollectionDagExecutor::new(concrete_repo, workflow_repo, Arc::new(state.clone()));
 
     let run = executor
         .execute_collection(id, auth.user_id.0)
@@ -407,22 +314,8 @@ pub async fn get_collection_run_status(
     auth: auth_utils::AuthUser,
     Path(run_id): Path<Uuid>,
 ) -> Result<Json<CollectionRunResponse>, AppError> {
-    let db = state
-        .db()
-        .ok_or(AppError::Internal("Database not available".into()))?
-        .clone();
-    let repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
-
-    let row = repo
-        .get_collection_run(run_id)
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))?
-        .ok_or(AppError::not_found("Collection run"))?;
-
-    // Verify ownership
-    if row.user_id != auth.user_id.0 {
-        return Err(AppError::Forbidden("Access denied".into()));
-    }
+    let repo = collection_repo(&state)?;
+    let row = collections::get_collection_run_status(repo.as_ref(), auth.user_id.0, run_id).await?;
 
     Ok(Json(CollectionRunResponse {
         id: row.id,

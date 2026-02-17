@@ -11,9 +11,9 @@ use uuid::Uuid;
 use serde::Serialize;
 
 use super::AppError;
-use crate::constants::MAX_TITLE_LENGTH;
-use crate::db::traits::{CreateRoomInput, UpdateRoomInput};
+use crate::db::traits::{CreateRoomInput, RoomMemberInput, UpdateRoomInput};
 use crate::server::auth as auth_utils;
+use crate::server::services::rooms;
 use crate::server::state::AppState;
 
 /// Request body for creating a room.
@@ -82,14 +82,10 @@ pub async fn create_room(
     auth: auth_utils::AuthUser,
     Json(request): Json<CreateRoomRequest>,
 ) -> Result<(StatusCode, Json<crate::db::RoomRow>), AppError> {
-    if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
-        return Err(AppError::bad_request(
-            "Room name is empty or exceeds maximum length",
-        ));
-    }
-    let repo = &state.repos().rooms;
-    let row = repo
-        .create_room(CreateRoomInput {
+    let row = rooms::create_room(
+        state.repos().rooms.as_ref(),
+        auth.user_id.0,
+        CreateRoomInput {
             user_id: auth.user_id.0,
             collection_id: request.collection_id,
             name: request.name,
@@ -98,8 +94,9 @@ pub async fn create_room(
             max_speakers_per_turn: request.max_speakers_per_turn,
             max_turns: request.max_turns,
             tools_enabled: request.tools_enabled,
-        })
-        .await?;
+        },
+    )
+    .await?;
     Ok((StatusCode::CREATED, Json(row)))
 }
 
@@ -109,14 +106,7 @@ pub async fn get_room(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<crate::db::RoomRow>, AppError> {
-    let repo = &state.repos().rooms;
-    let row = repo
-        .get_room(id)
-        .await?
-        .ok_or(AppError::not_found("Room"))?;
-    if row.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Room"));
-    }
+    let row = rooms::get_room(state.repos().rooms.as_ref(), auth.user_id.0, id).await?;
     Ok(Json(row))
 }
 
@@ -127,23 +117,11 @@ pub async fn update_room(
     Path(id): Path<Uuid>,
     Json(request): Json<UpdateRoomRequest>,
 ) -> Result<Json<crate::db::RoomRow>, AppError> {
-    let repo = &state.repos().rooms;
-    let existing = repo
-        .get_room(id)
-        .await?
-        .ok_or(AppError::not_found("Room"))?;
-    if existing.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Room"));
-    }
-    if let Some(ref name) = request.name {
-        if name.trim().is_empty() || name.len() > MAX_TITLE_LENGTH {
-            return Err(AppError::bad_request(
-                "Room name is empty or exceeds maximum length",
-            ));
-        }
-    }
-    let row = repo
-        .update_room(UpdateRoomInput {
+    let row = rooms::update_room(
+        state.repos().rooms.as_ref(),
+        auth.user_id.0,
+        id,
+        UpdateRoomInput {
             id,
             name: request.name,
             gatekeeper_enabled: request.gatekeeper_enabled,
@@ -151,8 +129,9 @@ pub async fn update_room(
             max_speakers_per_turn: request.max_speakers_per_turn,
             max_turns: request.max_turns,
             tools_enabled: request.tools_enabled,
-        })
-        .await?;
+        },
+    )
+    .await?;
     Ok(Json(row))
 }
 
@@ -162,15 +141,7 @@ pub async fn delete_room(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    let repo = &state.repos().rooms;
-    let existing = repo
-        .get_room(id)
-        .await?
-        .ok_or(AppError::not_found("Room"))?;
-    if existing.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Room"));
-    }
-    repo.delete_room(id).await?;
+    rooms::delete_room(state.repos().rooms.as_ref(), auth.user_id.0, id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -180,8 +151,7 @@ pub async fn list_room_members(
     _auth: auth_utils::AuthUser,
     Path(room_id): Path<Uuid>,
 ) -> Result<Json<Vec<crate::db::RoomMemberRow>>, AppError> {
-    let repo = &state.repos().rooms;
-    let rows = repo.list_room_members(room_id).await?;
+    let rows = rooms::list_room_members(state.repos().rooms.as_ref(), room_id).await?;
     Ok(Json(rows))
 }
 
@@ -192,8 +162,8 @@ pub async fn add_room_member(
     Path(room_id): Path<Uuid>,
     Json(request): Json<AddRoomMemberRequest>,
 ) -> Result<StatusCode, AppError> {
-    let repo = &state.repos().rooms;
-    repo.add_room_member(
+    rooms::add_room_member(
+        state.repos().rooms.as_ref(),
         room_id,
         request.agent_id,
         request.display_name,
@@ -210,8 +180,7 @@ pub async fn remove_room_member(
     _auth: auth_utils::AuthUser,
     Path((room_id, agent_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
-    let repo = &state.repos().rooms;
-    repo.remove_room_member(room_id, agent_id).await?;
+    rooms::remove_room_member(state.repos().rooms.as_ref(), room_id, agent_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -222,18 +191,17 @@ pub async fn set_room_members(
     Path(room_id): Path<Uuid>,
     Json(request): Json<SetRoomMembersRequest>,
 ) -> Result<StatusCode, AppError> {
-    let repo = &state.repos().rooms;
-    let members: Vec<crate::db::traits::RoomMemberInput> = request
+    let members: Vec<RoomMemberInput> = request
         .members
         .into_iter()
-        .map(|m| crate::db::traits::RoomMemberInput {
+        .map(|m| RoomMemberInput {
             agent_id: m.agent_id,
             display_name: m.display_name,
             role_description: m.role_description,
             display_order: m.display_order,
         })
         .collect();
-    repo.set_room_members(room_id, &members).await?;
+    rooms::set_room_members(state.repos().rooms.as_ref(), room_id, &members).await?;
     Ok(StatusCode::OK)
 }
 
@@ -243,8 +211,7 @@ pub async fn create_room_session(
     _auth: auth_utils::AuthUser,
     Path(room_id): Path<Uuid>,
 ) -> Result<(StatusCode, Json<crate::db::RoomSessionRow>), AppError> {
-    let repo = &state.repos().rooms;
-    let row = repo.create_room_session(room_id).await?;
+    let row = rooms::create_room_session(state.repos().rooms.as_ref(), room_id).await?;
     Ok((StatusCode::CREATED, Json(row)))
 }
 
@@ -254,11 +221,7 @@ pub async fn get_room_session(
     _auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<crate::db::RoomSessionRow>, AppError> {
-    let repo = &state.repos().rooms;
-    let row = repo
-        .get_room_session(id)
-        .await?
-        .ok_or(AppError::not_found("RoomSession"))?;
+    let row = rooms::get_room_session(state.repos().rooms.as_ref(), id).await?;
     Ok(Json(row))
 }
 
@@ -359,14 +322,13 @@ pub async fn get_room_transcript(
     _auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<Vec<crate::db::RoomTranscriptEntry>>, AppError> {
-    let repo = &state.repos().rooms;
-    let entries = repo.get_room_transcript(session_id).await?;
+    let entries = rooms::get_room_transcript(state.repos().rooms.as_ref(), session_id).await?;
     Ok(Json(entries))
 }
 
 /// POST /api/room-sessions/:id/close - Close a room session.
 ///
-/// If the session is linked to a DAG workflow (via step→room), closing it
+/// If the session is linked to a DAG workflow (via step->room), closing it
 /// triggers DAG resume: per-agent outputs are extracted from the room transcript
 /// and the workflow continues from the paused room step.
 pub async fn close_room_session(
@@ -375,10 +337,7 @@ pub async fn close_room_session(
     Path(session_id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
     let repo = &state.repos().rooms;
-    let session = repo
-        .get_room_session(session_id)
-        .await?
-        .ok_or(AppError::not_found("RoomSession"))?;
+    let session = rooms::get_room_session(repo.as_ref(), session_id).await?;
 
     if session.status == "completed" {
         return Err(AppError::Conflict(
@@ -397,7 +356,7 @@ pub async fn close_room_session(
         },
     });
 
-    // Check if this session is DAG-linked via step→room relationship
+    // Check if this session is DAG-linked via step->room relationship
     {
         if let Some(wf_repo) = state.workflow_repo() {
             if let Ok(Some(step)) = wf_repo.find_step_by_room_id(session.room_id).await {
@@ -407,7 +366,7 @@ pub async fn close_room_session(
                     .await
                     .unwrap_or_default();
 
-                let room_output = build_room_step_output(&transcript, &step);
+                let room_output = rooms::build_room_step_output(&transcript, &step);
 
                 // Resume the DAG in the background
                 let state_clone = state.clone();
@@ -433,37 +392,6 @@ pub async fn close_room_session(
     }
 
     Ok(StatusCode::NO_CONTENT)
-}
-
-/// Build a StepOutput from a room transcript for DAG resume.
-///
-/// Groups transcript entries by agent, takes each agent's last message,
-/// and builds a composite JSON object.
-fn build_room_step_output(
-    transcript: &[crate::db::RoomTranscriptEntry],
-    step: &crate::db::WorkflowStepRow,
-) -> crate::server::hub::dag::StepOutput {
-    use std::collections::HashMap;
-
-    let mut last_by_agent: HashMap<String, String> = HashMap::new();
-    for entry in transcript {
-        last_by_agent.insert(entry.agent_name.clone(), entry.content.clone());
-    }
-
-    let mut composite = serde_json::Map::new();
-    for (agent_name, content) in &last_by_agent {
-        let key = agent_name.to_lowercase().replace(' ', "_");
-        let value: serde_json::Value = serde_json::from_str(content)
-            .unwrap_or_else(|_| serde_json::Value::String(content.clone()));
-        composite.insert(key, value);
-    }
-    let envelope_data = serde_json::Value::Object(composite);
-
-    crate::server::hub::dag::StepOutput {
-        variable_name: step.output_variable_name.clone().unwrap_or_default(),
-        raw_output: serde_json::to_string(&envelope_data).unwrap_or_default(),
-        structured_output: Some(envelope_data),
-    }
 }
 
 /// Structured output from a room session member.
@@ -495,12 +423,7 @@ pub async fn list_room_outputs(
     _auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<Vec<RoomOutputResponse>>, AppError> {
-    let repo = &state.repos().rooms;
-    // Verify session exists
-    repo.get_room_session(session_id)
-        .await?
-        .ok_or(AppError::not_found("RoomSession"))?;
-    let rows = repo.get_room_execution_outputs(session_id, None).await?;
+    let rows = rooms::list_room_outputs(state.repos().rooms.as_ref(), session_id).await?;
     Ok(Json(
         rows.into_iter()
             .map(|r| RoomOutputResponse {

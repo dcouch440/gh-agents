@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use super::AppError;
 use crate::server::auth as auth_utils;
+use crate::server::services::sessions::{self, CreateSessionInput};
 use crate::server::state::{AppState, ConsumerMessage};
 use crate::server::ws::events::{SessionEvent, SessionEventKind};
 
@@ -102,44 +103,17 @@ pub async fn create_session(
     auth: auth_utils::AuthUser,
     Json(request): Json<CreateSessionRequest>,
 ) -> Result<(StatusCode, Json<SessionResponse>), AppError> {
-    // Validate agent exists if provided
-    if let Some(aid) = request.agent_id {
-        if state.repo().get_persisted_agent(aid).await?.is_none() {
-            return Err(AppError::bad_request("Agent not found"));
-        }
-    }
-
-    let session_id = Uuid::new_v4();
-    let mode_id = if request.mode_id.is_empty() {
-        "home".to_string()
-    } else {
-        request.mode_id
-    };
-    let title = if request.title.is_empty() {
-        "New session".to_string()
-    } else {
-        request.title
-    };
-
-    state
-        .repo()
-        .create_session(
-            auth.user_id,
-            session_id,
-            &mode_id,
-            &title,
-            request.agent_id,
-            request.draft_config,
-        )
-        .await?;
-
-    let session = state
-        .repo()
-        .get_session(session_id)
-        .await?
-        .ok_or(AppError::Internal(
-            "Session not found after creation".into(),
-        ))?;
+    let session = sessions::create_session(
+        state.repo().as_ref(),
+        CreateSessionInput {
+            user_id: auth.user_id,
+            mode_id: request.mode_id,
+            agent_id: request.agent_id,
+            title: request.title,
+            draft_config: request.draft_config,
+        },
+    )
+    .await?;
 
     state.broadcast_session(SessionEvent {
         session_id: session.id,
@@ -178,9 +152,9 @@ pub async fn list_sessions(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<SessionResponse>>, AppError> {
-    let sessions = state.repo().list_sessions(auth.user_id).await?;
+    let rows = sessions::list_sessions(state.repo().as_ref(), auth.user_id).await?;
 
-    let response: Vec<SessionResponse> = sessions
+    let response: Vec<SessionResponse> = rows
         .into_iter()
         .map(|s| SessionResponse {
             id: s.id,
@@ -213,16 +187,7 @@ pub async fn get_session(
     auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<SessionResponse>, AppError> {
-    let session = state
-        .repo()
-        .get_session(session_id)
-        .await?
-        .ok_or(AppError::not_found("Session"))?;
-
-    // Verify ownership
-    if session.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Session"));
-    }
+    let session = sessions::get_session(state.repo().as_ref(), auth.user_id.0, session_id).await?;
 
     Ok(Json(SessionResponse {
         id: session.id,
@@ -252,18 +217,7 @@ pub async fn delete_session(
     auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    // Verify ownership
-    let session = state
-        .repo()
-        .get_session(session_id)
-        .await?
-        .ok_or(AppError::not_found("Session"))?;
-
-    if session.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Session"));
-    }
-
-    state.repo().delete_session(session_id).await?;
+    sessions::delete_session(state.repo().as_ref(), auth.user_id.0, session_id).await?;
 
     state.broadcast_session(SessionEvent {
         session_id,
@@ -293,26 +247,13 @@ pub async fn update_session(
     Path(session_id): Path<Uuid>,
     Json(request): Json<UpdateSessionRequest>,
 ) -> Result<Json<SessionResponse>, AppError> {
-    let session = state
-        .repo()
-        .get_session(session_id)
-        .await?
-        .ok_or(AppError::not_found("Session"))?;
-
-    if session.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Session"));
-    }
-
-    state
-        .repo()
-        .update_session_title(session_id, &request.title)
-        .await?;
-
-    let updated = state
-        .repo()
-        .get_session(session_id)
-        .await?
-        .ok_or(AppError::Internal("Session not found after update".into()))?;
+    let updated = sessions::update_session(
+        state.repo().as_ref(),
+        auth.user_id.0,
+        session_id,
+        &request.title,
+    )
+    .await?;
 
     state.broadcast_session(SessionEvent {
         session_id: updated.id,
@@ -354,20 +295,13 @@ pub async fn send_session_chat(
     Path(session_id): Path<Uuid>,
     Json(request): Json<ChatRequest>,
 ) -> Result<(StatusCode, Json<ChatResponse>), AppError> {
-    if request.message.trim().is_empty() {
-        return Err(AppError::bad_request("Message cannot be empty"));
-    }
-
-    // Verify session exists and belongs to user
-    let session = state
-        .repo()
-        .get_session(session_id)
-        .await?
-        .ok_or(AppError::not_found("Session"))?;
-
-    if session.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Session"));
-    }
+    let session = sessions::verify_session_chat(
+        state.repo().as_ref(),
+        auth.user_id.0,
+        session_id,
+        &request.message,
+    )
+    .await?;
 
     let message_id = Uuid::new_v4();
 
@@ -429,19 +363,10 @@ pub async fn get_session_history(
     Path(session_id): Path<Uuid>,
     Query(query): Query<HistoryQuery>,
 ) -> Result<Json<Vec<ChatMessage>>, AppError> {
-    // Verify session ownership
-    let session = state
-        .repo()
-        .get_session(session_id)
-        .await?
-        .ok_or(AppError::not_found("Session"))?;
-
-    if session.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Session"));
-    }
-
     let limit = query.limit.unwrap_or(50);
-    let rows = state.repo().get_session_history(session_id, limit).await?;
+    let rows =
+        sessions::get_session_history(state.repo().as_ref(), auth.user_id.0, session_id, limit)
+            .await?;
 
     let messages: Vec<ChatMessage> = rows
         .into_iter()
@@ -473,18 +398,7 @@ pub async fn clear_session_messages(
     auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    // Verify session ownership
-    let session = state
-        .repo()
-        .get_session(session_id)
-        .await?
-        .ok_or(AppError::not_found("Session"))?;
-
-    if session.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Session"));
-    }
-
-    state.repo().clear_session_messages(session_id).await?;
+    sessions::clear_session_messages(state.repo().as_ref(), auth.user_id.0, session_id).await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

@@ -9,11 +9,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::constants::{MAX_PROMPT_LENGTH, MAX_TITLE_LENGTH};
-use crate::server::auth as auth_utils;
-use crate::server::state::AppState;
-
 use super::AppError;
+use crate::server::auth as auth_utils;
+use crate::server::services::prompt_templates;
+use crate::server::state::AppState;
 
 /// Response for a single prompt template.
 #[derive(Serialize, utoipa::ToSchema)]
@@ -38,6 +37,15 @@ pub struct UpdatePromptTemplateRequest {
     pub content: Option<String>,
 }
 
+fn template_response(row: crate::db::PromptTemplateRow) -> PromptTemplateResponse {
+    PromptTemplateResponse {
+        id: row.id,
+        name: row.name,
+        content: row.content,
+        created_at: row.created_at,
+    }
+}
+
 /// GET /api/prompt-templates
 #[utoipa::path(
     get,
@@ -52,21 +60,12 @@ pub async fn list_prompt_templates(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<PromptTemplateResponse>>, AppError> {
-    let rows = state
-        .repos()
-        .prompt_templates
-        .list_prompt_templates(auth.user_id.0)
-        .await?;
-    let items = rows
-        .into_iter()
-        .map(|r| PromptTemplateResponse {
-            id: r.id,
-            name: r.name,
-            content: r.content,
-            created_at: r.created_at,
-        })
-        .collect();
-    Ok(Json(items))
+    let rows = prompt_templates::list_prompt_templates(
+        state.repos().prompt_templates.as_ref(),
+        auth.user_id.0,
+    )
+    .await?;
+    Ok(Json(rows.into_iter().map(template_response).collect()))
 }
 
 /// POST /api/prompt-templates
@@ -86,29 +85,14 @@ pub async fn create_prompt_template(
     auth: auth_utils::AuthUser,
     Json(request): Json<CreatePromptTemplateRequest>,
 ) -> Result<(StatusCode, Json<PromptTemplateResponse>), AppError> {
-    if request.name.trim().is_empty() || request.name.len() > MAX_TITLE_LENGTH {
-        return Err(AppError::bad_request(
-            "Template name is empty or exceeds maximum length",
-        ));
-    }
-    if request.content.len() > MAX_PROMPT_LENGTH {
-        return Err(AppError::bad_request(
-            "Template content exceeds maximum length",
-        ));
-    }
-    let repo = &state.repos().prompt_templates;
-    let row = repo
-        .create_prompt_template(Some(auth.user_id.0), request.name, request.content)
-        .await?;
-    Ok((
-        StatusCode::CREATED,
-        Json(PromptTemplateResponse {
-            id: row.id,
-            name: row.name,
-            content: row.content,
-            created_at: row.created_at,
-        }),
-    ))
+    let row = prompt_templates::create_prompt_template(
+        state.repos().prompt_templates.as_ref(),
+        auth.user_id.0,
+        request.name,
+        request.content,
+    )
+    .await?;
+    Ok((StatusCode::CREATED, Json(template_response(row))))
 }
 
 /// GET /api/prompt-templates/:id
@@ -128,22 +112,13 @@ pub async fn get_prompt_template(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<PromptTemplateResponse>, AppError> {
-    let repo = &state.repos().prompt_templates;
-    let row = repo
-        .get_prompt_template(id)
-        .await?
-        .ok_or(AppError::not_found("Prompt template"))?;
-    if let Some(owner) = row.user_id {
-        if owner != auth.user_id.0 {
-            return Err(AppError::not_found("Prompt template"));
-        }
-    }
-    Ok(Json(PromptTemplateResponse {
-        id: row.id,
-        name: row.name,
-        content: row.content,
-        created_at: row.created_at,
-    }))
+    let row = prompt_templates::get_prompt_template(
+        state.repos().prompt_templates.as_ref(),
+        auth.user_id.0,
+        id,
+    )
+    .await?;
+    Ok(Json(template_response(row)))
 }
 
 /// PUT /api/prompt-templates/:id
@@ -165,43 +140,15 @@ pub async fn update_prompt_template(
     Path(id): Path<Uuid>,
     Json(request): Json<UpdatePromptTemplateRequest>,
 ) -> Result<Json<PromptTemplateResponse>, AppError> {
-    let repo = &state.repos().prompt_templates;
-    let existing = repo
-        .get_prompt_template(id)
-        .await?
-        .ok_or(AppError::not_found("Prompt template"))?;
-    match existing.user_id {
-        Some(owner) if owner != auth.user_id.0 => {
-            return Err(AppError::not_found("Prompt template"));
-        }
-        None => {
-            return Err(AppError::not_found("Prompt template"));
-        }
-        _ => {}
-    }
-    if let Some(ref name) = request.name {
-        if name.trim().is_empty() || name.len() > MAX_TITLE_LENGTH {
-            return Err(AppError::bad_request(
-                "Template name is empty or exceeds maximum length",
-            ));
-        }
-    }
-    if let Some(ref content) = request.content {
-        if content.len() > MAX_PROMPT_LENGTH {
-            return Err(AppError::bad_request(
-                "Template content exceeds maximum length",
-            ));
-        }
-    }
-    let row = repo
-        .update_prompt_template(id, request.name, request.content)
-        .await?;
-    Ok(Json(PromptTemplateResponse {
-        id: row.id,
-        name: row.name,
-        content: row.content,
-        created_at: row.created_at,
-    }))
+    let row = prompt_templates::update_prompt_template(
+        state.repos().prompt_templates.as_ref(),
+        auth.user_id.0,
+        id,
+        request.name,
+        request.content,
+    )
+    .await?;
+    Ok(Json(template_response(row)))
 }
 
 /// DELETE /api/prompt-templates/:id
@@ -221,21 +168,12 @@ pub async fn delete_prompt_template(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    let repo = &state.repos().prompt_templates;
-    let existing = repo
-        .get_prompt_template(id)
-        .await?
-        .ok_or(AppError::not_found("Prompt template"))?;
-    match existing.user_id {
-        Some(owner) if owner != auth.user_id.0 => {
-            return Err(AppError::not_found("Prompt template"));
-        }
-        None => {
-            return Err(AppError::not_found("Prompt template"));
-        }
-        _ => {}
-    }
-    repo.delete_prompt_template(id).await?;
+    prompt_templates::delete_prompt_template(
+        state.repos().prompt_templates.as_ref(),
+        auth.user_id.0,
+        id,
+    )
+    .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
