@@ -1,26 +1,13 @@
-import { useState, useCallback } from 'react'
 import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
-import AutoAwesomeOutlined from '@mui/icons-material/AutoAwesomeOutlined'
-import InputOutlined from '@mui/icons-material/InputOutlined'
-import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
-import GroupsOutlined from '@mui/icons-material/GroupsOutlined'
-import ForumOutlined from '@mui/icons-material/ForumOutlined'
-import BugReportOutlined from '@mui/icons-material/BugReportOutlined'
-import HistoryOutlined from '@mui/icons-material/HistoryOutlined'
 import { useStore, workflowStore } from '@/stores'
 import { FOCUS_MODE } from '@/constants'
-import type { CanvasFormTab } from '@/components/canvas/CanvasFormNode'
-import { Archetype, ARCHETYPE_CONFIGS } from '@/components/canvas/DynamicNode/archetypes'
+import { ARCHETYPE_CONFIGS } from '@/components/canvas/DynamicNode/archetypes'
 import type { Archetype as ArchetypeType } from '@/components/canvas/DynamicNode/archetypes'
-import { ChatTab } from '@/components/canvas/DynamicNode/tabs/ChatTab'
-import { InputsOutputsTab } from '@/components/canvas/DynamicNode/tabs/InputsOutputsTab'
-import { DocumentsTab } from '@/components/canvas/DynamicNode/tabs/DocumentsTab'
-import { AgentRosterTab } from '@/components/canvas/DynamicNode/tabs/AgentRosterTab'
-import { RoomMembersTab } from '@/components/canvas/DynamicNode/tabs/RoomMembersTab'
-import { DebugLogTab } from '@/components/canvas/DynamicNode/tabs/DebugLogTab'
-import { LastRunTab } from '@/components/canvas/DynamicNode/tabs/LastRunTab'
-import type { CreateDocumentDefRequest } from '@/types/workflow'
+import { useStepStoreData } from '@/components/canvas/DynamicNode/useStepStoreData'
+import { useDocumentActions } from '@/components/canvas/DynamicNode/useDocumentActions'
+import { buildStepTabs } from '@/components/canvas/DynamicNode/buildStepTabs'
+import { resolveSubtitle } from '@/components/canvas/DynamicNode/resolveSubtitle'
 import { FocusHeader } from './FocusHeader'
 import { FocusTabStrip } from './FocusTabStrip'
 
@@ -45,108 +32,27 @@ function FocusNodeView({
   const config = ARCHETYPE_CONFIGS[archetype]
   const accentColor = config.color
 
-  const documentDefs = useStore(workflowStore.store, workflowStore.selectStepDocumentDefs(stepId))
+  const { documentDefs, roomStepMembers, stepIssues } = useStepStoreData(stepId)
   const rosterAgents = useStore(workflowStore.store, workflowStore.selectStepRoster(stepId))
-  const roomStepMembers = useStore(workflowStore.store, workflowStore.selectRoomStepMembers(stepId))
-  const stepIssues = useStore(workflowStore.store, workflowStore.selectStepIssues(stepId))
+  const documentActions = useDocumentActions(stepId)
 
-  const [adding, setAdding] = useState(false)
-
-  const handleAddDocument = useCallback(() => {
-    setAdding(true)
-  }, [])
-
-  const handleSubmitNew = useCallback(
-    (body: CreateDocumentDefRequest) => {
-      void workflowStore.createDocumentDef(stepId, body)
-      setAdding(false)
-    },
-    [stepId],
-  )
-
-  const handleCancelAdd = useCallback(() => {
-    setAdding(false)
-  }, [])
-
-  const handleRemoveDocument = useCallback(
-    (defId: string) => {
-      void workflowStore.deleteDocumentDef(stepId, defId)
-    },
-    [stepId],
-  )
-
-  // Build tabs — mirrors DynamicNode.tsx tab construction
-  const tabs: CanvasFormTab[] = [
-    {
-      id: 'chat',
-      icon: AutoAwesomeOutlined,
-      tooltip: 'Chat',
-      content: <ChatTab stepId={stepId} archetype={archetype} focusMode />,
-    },
-    {
-      id: 'io',
-      icon: InputOutlined,
-      tooltip: 'Inputs / Outputs',
-      content: <InputsOutputsTab upstreamStepNames={upstreamStepNames} />,
-    },
-  ]
-
-  if (archetype === Archetype.WORKFORCE) {
-    tabs.push({
-      id: 'agents',
-      icon: GroupsOutlined,
-      tooltip: 'Agent Roster',
-      content: <AgentRosterTab stepId={stepId} />,
-    })
-    tabs.push({
-      id: 'documents',
-      icon: DescriptionOutlined,
-      tooltip: 'Documents',
-      content: (
-        <DocumentsTab
-          documents={documentDefs}
-          adding={adding}
-          onAdd={handleAddDocument}
-          onSubmitNew={handleSubmitNew}
-          onCancelAdd={handleCancelAdd}
-          onRemove={handleRemoveDocument}
-        />
-      ),
-    })
-  } else if (archetype === Archetype.ROOM) {
-    tabs.push({
-      id: 'members',
-      icon: ForumOutlined,
-      tooltip: 'Members',
-      content: <RoomMembersTab stepId={stepId} />,
-    })
-  }
-
-  tabs.push({
-    id: 'lastrun',
-    icon: HistoryOutlined,
-    tooltip: 'Last Run',
-    content: <LastRunTab stepId={stepId} />,
-  })
-
-  tabs.push({
-    id: 'debug',
-    icon: BugReportOutlined,
-    tooltip: 'Debug Log',
-    content: <DebugLogTab stepId={stepId} />,
+  const tabs = buildStepTabs({
+    stepId,
+    archetype,
+    upstreamStepNames,
+    documentDefs,
+    documentActions,
+    focusMode: true,
   })
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0]
 
-  const subtitle = (() => {
-    if (archetype === Archetype.WORKFORCE) {
-      const parts = [...rosterAgents.map((a) => a.name), ...documentDefs.map((d) => d.name)]
-      return parts.length > 0 ? parts.join(' \u00b7 ') : null
-    }
-    if (archetype === Archetype.ROOM && roomStepMembers.length > 0)
-      return roomStepMembers.map((m) => m.name).join(' \u00b7 ')
-    return null
-  })()
+  const subtitle = resolveSubtitle({
+    archetype,
+    rosterNames: rosterAgents.map((a) => a.name),
+    documentNames: documentDefs.map((d) => d.name),
+    roomMemberNames: roomStepMembers.map((m) => m.name),
+  })
 
   return (
     <Box
@@ -157,7 +63,6 @@ function FocusNodeView({
         backgroundColor: theme.palette.background.default,
       }}
     >
-      {/* Centered content column */}
       <Box
         sx={{
           display: 'flex',
@@ -168,7 +73,6 @@ function FocusNodeView({
           mx: 'auto',
         }}
       >
-        {/* Header */}
         <FocusHeader
           name={stepName}
           archetype={archetype}
@@ -177,7 +81,6 @@ function FocusNodeView({
           issueDescriptions={stepIssues.map((i) => i.description)}
         />
 
-        {/* Tab strip */}
         <FocusTabStrip
           tabs={tabs}
           activeTabId={activeTabId}
@@ -185,7 +88,6 @@ function FocusNodeView({
           accentColor={accentColor}
         />
 
-        {/* Content */}
         <Box
           sx={{
             flex: 1,
