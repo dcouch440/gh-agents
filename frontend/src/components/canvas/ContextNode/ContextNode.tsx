@@ -8,7 +8,9 @@ import { SharePickerPanel } from '../SharePickerPanel'
 import { CanvasHandle } from '../CanvasHandle'
 import { STEP_TYPE_COLORS, GREYSCALE_ACCENT, DetailLevel } from '../constants'
 import { CONTEXT_NODE } from './constants'
-import { ContextNodeHeader } from './ContextNodeHeader'
+import { ContextNodeIcon } from '../Icons/ContextNodeIcon'
+import { ProtocolBadge } from '../ProtocolBadge'
+import { NodeHeader } from '../execution'
 import { ContextNodeContent } from './ContextNodeContent'
 import type { ContextNodeData } from './types'
 import { nodeDataEqual } from '../mappers'
@@ -79,7 +81,13 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
           '&:active': { cursor: 'grabbing' },
         }}
       >
-        <ContextNodeHeader name={nodeData.label} accentColor={accentColor} />
+        <NodeHeader
+          icon={<ContextNodeIcon color={accentColor} size={18} />}
+          title={nodeData.label}
+          subtitle="Injected directly in every agent"
+          accentColor={accentColor}
+          badge={<ProtocolBadge color={accentColor} label="Context" animated />}
+        />
       </Box>
 
       {/* Content area — interactive, no drag */}

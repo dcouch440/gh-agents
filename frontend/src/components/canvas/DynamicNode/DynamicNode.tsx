@@ -11,7 +11,7 @@ import GroupsOutlined from '@mui/icons-material/GroupsOutlined'
 import ForumOutlined from '@mui/icons-material/ForumOutlined'
 import BugReportOutlined from '@mui/icons-material/BugReportOutlined'
 import HistoryOutlined from '@mui/icons-material/HistoryOutlined'
-import { useStore, workflowStore, canvasStore, shareStore, focusModeStore } from '@/stores'
+import { useStore, workflowStore, canvasStore, shareStore, focusModeStore, workflowExecutionStore } from '@/stores'
 import { topoSortStepIds } from '@/utils/topoSort'
 import type { CreateDocumentDefRequest } from '@/types/workflow'
 import { CanvasFormNode } from '../CanvasFormNode'
@@ -26,7 +26,12 @@ import { useCanvasLOD } from '../useCanvasLOD'
 import { MinimalNodeShell } from '../MinimalNodeShell'
 import { Archetype, ARCHETYPE_CONFIGS } from './archetypes'
 import type { Archetype as ArchetypeType } from './archetypes'
-import { DynamicNodeHeader } from './DynamicNodeHeader'
+import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
+import Typography from '@mui/material/Typography'
+import OpenInFullOutlined from '@mui/icons-material/OpenInFullOutlined'
+import { ProtocolBadge } from '../ProtocolBadge'
+import { NodeHeader, ExecutionStatusBadge, toExecutionStatus } from '../execution'
 import { ChatTab } from './tabs/ChatTab'
 import { InputsOutputsTab } from './tabs/InputsOutputsTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
@@ -34,6 +39,8 @@ import { AgentRosterTab } from './tabs/AgentRosterTab'
 import { RoomMembersTab } from './tabs/RoomMembersTab'
 import { DebugLogTab } from './tabs/DebugLogTab'
 import { LastRunTab } from './tabs/LastRunTab'
+import { LiveStreamTab } from './tabs/LiveStreamTab'
+import StreamOutlined from '@mui/icons-material/StreamOutlined'
 import { SharePickerPanel } from '../SharePickerPanel'
 
 type DynamicNodeData = {
@@ -60,6 +67,11 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   const config = ARCHETYPE_CONFIGS[nodeData.archetype]
   const accentColor = config.color
 
+  // Execution state
+  const stepExec = useStore(workflowExecutionStore.store, workflowExecutionStore.selectStepState(id))
+  const execStatus = toExecutionStatus(stepExec?.status)
+  const isExecuting = execStatus !== 'idle'
+
   const documentDefs = useStore(workflowStore.store, workflowStore.selectStepDocumentDefs(id))
   const roomStepMembers = useStore(workflowStore.store, workflowStore.selectRoomStepMembers(id))
   const stepIssues = useStore(workflowStore.store, workflowStore.selectStepIssues(id))
@@ -84,6 +96,15 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
       shareStore.clearPendingChatFocus()
     }
   }, [pendingChatFocus, id])
+
+  // Auto-switch to live tab when execution starts
+  useEffect(() => {
+    if (execStatus === 'running') {
+      queueMicrotask(() => {
+        setActiveTabId('live')
+      })
+    }
+  }, [execStatus])
 
   // Overlay for share source, highlight for potential targets
   const shareOverlay = isShareSource ? <SharePickerPanel stepId={id} /> : undefined
@@ -119,6 +140,12 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
       icon: AutoAwesomeOutlined,
       tooltip: 'Chat',
       content: <ChatTab stepId={id} archetype={nodeData.archetype} />,
+    },
+    {
+      id: 'live',
+      icon: StreamOutlined,
+      tooltip: 'Live Stream',
+      content: <LiveStreamTab stepId={id} />,
     },
     {
       id: 'io',
@@ -228,14 +255,60 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     )
   }
 
+  const hasIssues = stepIssues.length > 0
+  const ISSUE_COLOR = '#f85149'
+
+  const headerBadge = isExecuting ? (
+    <ExecutionStatusBadge status={execStatus} />
+  ) : hasIssues ? (
+    <Tooltip
+      title={
+        <Box sx={{ py: 0.5 }}>
+          {issueDescriptions.map((desc, i) => (
+            <Typography key={i} sx={{ fontSize: 12, lineHeight: 1.4 }}>
+              {desc}
+            </Typography>
+          ))}
+        </Box>
+      }
+      arrow
+      placement="top"
+    >
+      <span>
+        <ProtocolBadge color={ISSUE_COLOR} label={`${stepIssues.length} Issue${stepIssues.length > 1 ? 's' : ''}`} animated />
+      </span>
+    </Tooltip>
+  ) : nodeData.archetype !== Archetype.BLANK ? (
+    <ProtocolBadge color={config.color} label={config.label} animated />
+  ) : undefined
+
+  const headerActions = (
+    <IconButton
+      className="nodrag"
+      onClick={handleEnterFocusMode}
+      size="small"
+      sx={{
+        flexShrink: 0,
+        width: 28,
+        height: 28,
+        color: 'text.secondary',
+        '&:hover': { color: 'text.primary' },
+      }}
+    >
+      <OpenInFullOutlined sx={{ fontSize: 16 }} />
+    </IconButton>
+  )
+
+  const IconComponent = config.icon
   const headerElement = (
-    <DynamicNodeHeader
-      name={nodeData.label}
-      archetype={nodeData.archetype}
+    <NodeHeader
+      icon={<IconComponent sx={{ fontSize: 20, color: config.color }} />}
+      title={nodeData.label}
       subtitle={subtitle}
-      issueCount={stepIssues.length}
-      issueDescriptions={issueDescriptions}
-      onExpand={handleEnterFocusMode}
+      accentColor={config.color}
+      size="large"
+      badge={headerBadge}
+      actions={headerActions}
     />
   )
 
