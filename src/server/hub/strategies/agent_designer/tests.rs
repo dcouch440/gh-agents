@@ -12,6 +12,7 @@ mod tests {
             context_budget: 480_000,
             state: None,
             user_id: None,
+            agent_execution_id: None,
         }
     }
 
