@@ -30,9 +30,9 @@ mod messages;
 pub(crate) mod tools;
 
 pub use config::{ChatConfig, StepChatContext};
-// Re-export for test compatibility (tests reference via super::super::resolve_step_tools)
+// Re-export for test compatibility
 #[cfg(test)]
-pub(crate) use tools::resolve_step_tools;
+pub(crate) use tools::{resolve_chat_step_tools, resolve_step_tools};
 
 /// Strategy for interactive chat sessions.
 ///
@@ -105,7 +105,7 @@ impl ExecutionStrategy for ChatStrategy {
 
     fn tools(&self) -> Vec<Tool> {
         if let Some(ref ctx) = self.step_context {
-            return tools::resolve_step_tools(&ctx.execution_mode);
+            return tools::resolve_chat_step_tools(&ctx.execution_mode);
         }
         server_tools::filtered_tools(&self.config.tool_names)
     }

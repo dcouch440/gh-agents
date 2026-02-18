@@ -303,6 +303,9 @@ pub async fn build_step_system_prompt(
         }
     };
 
+    // 2b. Build dispatch task status for this step
+    let dispatch_status = build_dispatch_status(state, step_id);
+
     // 3. Resolve base template with all variables
     let mut vars_map = std::collections::HashMap::new();
     vars_map.insert(vars::system::BOARD_CONTEXT.to_string(), board_context);
@@ -313,10 +316,84 @@ pub async fn build_step_system_prompt(
         board_overview_text,
     );
     vars_map.insert(vars::system::ASSISTANT_NOTES.to_string(), assistant_notes);
+    vars_map.insert(vars::system::DISPATCH_STATUS.to_string(), dispatch_status);
 
     let resolved = roles::NODE_ASSISTANT_BASE.resolve(&vars_map);
 
     Ok(resolved.system_prompt)
+}
+
+/// Build a concise summary of active and recent dispatch tasks for a step.
+///
+/// Injected into the system prompt so the assistant knows what background
+/// work is in flight or recently completed. Returns empty string when no
+/// tasks exist (blank line collapsing removes the placeholder).
+pub(crate) fn build_dispatch_status(state: &AppState, step_id: Uuid) -> String {
+    use crate::server::state::task_registry::TaskStatus;
+
+    let tasks = state.task_registry().list_tasks_for_step(step_id);
+    if tasks.is_empty() {
+        return String::new();
+    }
+
+    let mut lines = Vec::new();
+
+    for task in &tasks {
+        if task.status != TaskStatus::Running {
+            continue;
+        }
+        lines.push(format!(
+            "RUNNING [{}]: {}",
+            &task.execution_id.to_string()[..8],
+            truncate_str(&task.instruction, 120),
+        ));
+    }
+
+    let recent: Vec<_> = tasks
+        .iter()
+        .filter(|t| t.status != TaskStatus::Running)
+        .take(3)
+        .collect();
+
+    for task in &recent {
+        let label = match task.status {
+            TaskStatus::Completed => "DONE",
+            TaskStatus::Failed => "FAILED",
+            TaskStatus::Cancelled => "CANCELLED",
+            TaskStatus::Running => unreachable!(),
+        };
+        let result_suffix = task
+            .result
+            .as_deref()
+            .map(|r| format!(" — {}", truncate_str(r, 80)))
+            .unwrap_or_default();
+        lines.push(format!(
+            "{} [{}]: {}{}",
+            label,
+            &task.execution_id.to_string()[..8],
+            truncate_str(&task.instruction, 120),
+            result_suffix,
+        ));
+    }
+
+    if lines.is_empty() {
+        return String::new();
+    }
+
+    format!(
+        "<dispatch_status>\n{}\n</dispatch_status>",
+        lines.join("\n")
+    )
+}
+
+/// Truncate a string to at most `max` bytes at a char boundary.
+pub(crate) fn truncate_str(s: &str, max: usize) -> &str {
+    if s.len() <= max {
+        s
+    } else {
+        let end = s.floor_char_boundary(max);
+        &s[..end]
+    }
 }
 
 /// Load an output schema and build filter pipeline for schema enforcement.

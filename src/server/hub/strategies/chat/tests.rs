@@ -226,6 +226,59 @@ mod tests {
         );
     }
 
+    // ========================================================================
+    // resolve_chat_step_tools — workforce gets only universal tools
+    // ========================================================================
+
+    #[test]
+    fn resolve_chat_step_tools_workforce_only_universal() {
+        let tools = super::super::resolve_chat_step_tools("workforce");
+        let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
+
+        // Has universal tools
+        assert!(names.contains(&"dispatch"));
+        assert!(names.contains(&"cancel_dispatch"));
+        assert!(names.contains(&"set_node_name"));
+        assert!(names.contains(&"set_node_description"));
+        assert!(names.contains(&"render_panel"));
+        assert!(names.contains(&"think"));
+        assert!(names.contains(&"update_notes"));
+
+        // Does NOT have workforce mutation tools
+        assert!(!names.contains(&"set_task"));
+        assert!(!names.contains(&"add_agent"));
+        assert!(!names.contains(&"update_agent"));
+        assert!(!names.contains(&"remove_agent"));
+        assert!(!names.contains(&"add_deliverable"));
+        assert!(!names.contains(&"update_deliverable"));
+        assert!(!names.contains(&"remove_deliverable"));
+        assert!(!names.contains(&"set_dependency"));
+        assert!(!names.contains(&"remove_dependency"));
+        assert!(!names.contains(&"set_capabilities"));
+        assert!(!names.contains(&"set_failure_mode"));
+    }
+
+    #[test]
+    fn resolve_chat_step_tools_room_keeps_direct_tools() {
+        let tools = super::super::resolve_chat_step_tools("room");
+        let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
+
+        assert!(names.contains(&"set_meeting_purpose"));
+        assert!(names.contains(&"add_member"));
+        assert!(names.contains(&"dispatch"));
+    }
+
+    #[test]
+    fn resolve_step_tools_workforce_still_has_mutation_tools() {
+        // DispatchStrategy uses resolve_step_tools, not resolve_chat_step_tools
+        let tools = super::super::resolve_step_tools("workforce");
+        let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
+
+        assert!(names.contains(&"set_task"));
+        assert!(names.contains(&"add_agent"));
+        assert!(names.contains(&"add_deliverable"));
+    }
+
     #[test]
     fn resolve_step_tools_includes_update_notes_for_all_archetypes() {
         for mode in &["workforce", "belief_capture", "room", "single", ""] {

@@ -21,9 +21,26 @@ const UNIVERSAL_TOOLS: &[&str] = &[
 /// Universal tool names handled by node_assistant.
 const NODE_ASSISTANT_TOOLS: &[&str] = &["set_node_name", "set_node_description", "render_panel"];
 
+/// Resolve tool definitions for step chat sessions.
+///
+/// For workforce mode, returns only universal tools — the assistant dispatches
+/// to the background agent instead of calling mutation tools directly.
+/// For other modes, delegates to `resolve_step_tools()` which includes
+/// both universal and archetype-specific tools.
+pub(crate) fn resolve_chat_step_tools(execution_mode: &str) -> Vec<Tool> {
+    match execution_mode {
+        "workforce" => UNIVERSAL_TOOLS
+            .iter()
+            .filter_map(|name| crate::tools::registry::get_tool_definition(name))
+            .collect(),
+        _ => resolve_step_tools(execution_mode),
+    }
+}
+
 /// Resolve tool definitions by step execution mode.
 ///
 /// Always includes universal tools alongside archetype-specific ones.
+/// Used by DispatchStrategy (background agent) which needs the full tool set.
 pub(crate) fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
     let archetype_specific: &[&str] = match execution_mode {
         "belief_capture" => &[
