@@ -211,7 +211,9 @@ pub(super) async fn execute_workforce_step(
             .await
             .unwrap_or_default()
             .as_deref(),
-    );
+        &*dag.state.repos().tool_capabilities,
+    )
+    .await;
 
     let (designed_prompts, designer_usage) = match agent_designer::run_agent_designer(
         dag.engine,

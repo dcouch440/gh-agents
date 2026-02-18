@@ -98,12 +98,46 @@ impl ExecutionStrategy for WorkforceAgentStrategy {
     }
 
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
-        // Stateful tools that need DB access (AppState)
-        if name == "read_document" {
-            if let Some(ref state) = self.config.state {
-                return crate::server::tools::documents::execute_read_document(input, state).await;
+        // Stateful tools that need DB access (AppState + optionally UserId).
+        // These are intercepted before the container/local cascade because they
+        // operate on the knowledge base, not the filesystem.
+        match name {
+            "read_document" => {
+                if let Some(ref state) = self.config.state {
+                    return crate::server::tools::documents::execute_read_document(input, state)
+                        .await;
+                }
+                return json!({ "error": "Document reading not available in this context" });
             }
-            return json!({ "error": "Document reading not available in this context" });
+            "create_doc" => {
+                if let (Some(ref state), Some(user_id)) =
+                    (&self.config.state, self.config.user_id)
+                {
+                    return crate::server::tools::documents::execute_create_doc(
+                        input, state, user_id,
+                    )
+                    .await;
+                }
+                return json!({ "error": "Document creation not available in this context" });
+            }
+            "update_doc" => {
+                if let Some(ref state) = self.config.state {
+                    return crate::server::tools::documents::execute_update_doc(input, state).await;
+                }
+                return json!({ "error": "Document update not available in this context" });
+            }
+            "search_docs" => {
+                if let (Some(ref state), Some(user_id)) =
+                    (&self.config.state, self.config.user_id)
+                {
+                    return crate::server::tools::documents::execute_search_docs(
+                        input, state, user_id,
+                    )
+                    .await;
+                }
+                return json!({ "error": "Document search not available in this context" });
+            }
+            _ => {}
         }
 
         // Container mode: route through docker exec

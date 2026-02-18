@@ -143,8 +143,8 @@ mod tests {
     fn test_build_tool_descriptions_known_capabilities() {
         let tools = build_tool_descriptions(&[
             "file_read".to_string(),
-            "grep".to_string(),
-            "shell".to_string(),
+            "content_search".to_string(),
+            "shell_execution".to_string(),
         ]);
         assert_eq!(tools.len(), 3);
         assert!(tools[0].description.contains("Read file contents"));

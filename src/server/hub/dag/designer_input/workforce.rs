@@ -8,11 +8,12 @@ use std::collections::HashMap;
 
 use uuid::Uuid;
 
+use crate::db::traits::ToolCapabilityRepo;
 use crate::db::{ProtocolDocumentDefRow, TaskAgentRosterRow, TaskMissionBriefRow, WorkflowStepRow};
 use crate::types::StepExecutionEnvelope;
 
 use super::{
-    build_tool_descriptions, format_envelopes_as_upstream, AgentDefinition, DesignerInput,
+    build_tool_descriptions_from_db, format_envelopes_as_upstream, AgentDefinition, DesignerInput,
 };
 
 /// Build a `DesignerInput` from a workforce configuration.
@@ -20,13 +21,14 @@ use super::{
 /// Includes deliverable assignments for each agent in the `additional_context`
 /// field, so the designer can generate prompts that instruct agents to produce
 /// their assigned documents.
-pub fn build_workforce_designer_input(
+pub async fn build_workforce_designer_input(
     brief: &TaskMissionBriefRow,
     roster: &[TaskAgentRosterRow],
     doc_defs: &[ProtocolDocumentDefRow],
     completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
     steps: &[WorkflowStepRow],
     assistant_notes: Option<&str>,
+    tool_cap_repo: &dyn ToolCapabilityRepo,
 ) -> DesignerInput {
     // Group deliverables by agent roster entry ID
     let mut deliverables_by_agent: HashMap<Uuid, Vec<&ProtocolDocumentDefRow>> = HashMap::new();
@@ -118,7 +120,11 @@ pub fn build_workforce_designer_input(
         ),
         agents,
         upstream,
-        available_tools: build_tool_descriptions(&brief.available_capabilities),
+        available_tools: build_tool_descriptions_from_db(
+            &brief.available_capabilities,
+            tool_cap_repo,
+        )
+        .await,
         archetype_guidance: guidance,
     }
 }

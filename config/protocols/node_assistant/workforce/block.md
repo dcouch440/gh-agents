@@ -13,8 +13,9 @@ The background agent can:
 - Set the step title and description (visible on the canvas)
 - Set or update the mission task description
 - Add, update, or remove agents from the roster
-- Assign capabilities to agents (file_read, file_write, grep, shell,
-  git, github_api, web_search, database_query, document_read)
+- Assign capabilities to agents (file_read, file_write, content_search,
+  shell, git, github_api, web_search, database_query, document_read,
+  document_create, document_update, document_search)
 - Create, update, or remove deliverables and assign them to agents
 - Set execution dependencies between agents
 - Update the assistant notes

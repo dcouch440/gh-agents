@@ -55,10 +55,17 @@ For each agent in the roster, assign tools and generate a system prompt and task
 TOOL ASSIGNMENT:
 - Review the available_capabilities pool and each agent's role description
 - Assign each agent ONLY the tools they need for their specific role
-- An agent that searches needs grep + file_read; one that writes output needs file_write
+- An agent that searches code needs file_read + content_search
+- An agent that modifies code or project files needs file_write
+- An agent that produces document deliverables needs document_create to save output
+  to the knowledge base — do NOT assign file_write for deliverable production.
+  Deliverables are saved to the knowledge base, not written to the filesystem
+- An agent that references existing documents needs document_read, and optionally
+  document_search to find relevant material
 - Consider verification access: agents that evaluate upstream findings benefit from
-  read-only tools (file_read, grep) to spot-check quoted passages, even when upstream
-  output is nominally complete. Unverifiable claims degrade trust in the pipeline.
+  read-only tools (file_read, content_search) to spot-check quoted passages, even
+  when upstream output is nominally complete. Unverifiable claims degrade trust in
+  the pipeline
 - Never assign tools an agent's role doesn't require — unused tools waste context
 
 OUTPUT ROUTING (receives_from):
