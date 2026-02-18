@@ -1,7 +1,7 @@
 import type { Edge } from '@xyflow/react'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 import { Collections } from '@/utils/collections'
-import { STEP_TYPE_COLORS, GREYSCALE_ACCENT, PROTOCOL_TYPE_COLORS } from '../constants'
+import { STEP_TYPE_COLORS, GREYSCALE_ACCENT } from '../constants'
 import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from '../DynamicNode/archetypes'
 import { NOTES_NODE } from '../NotesNode'
 import type { ProtocolStepInfo, ProtocolGroupEntry, StepNodeLookups, StepEdgeData } from './types'
@@ -49,36 +49,6 @@ const toRFEdges = (
       data,
     }
   })
-}
-
-const toDocumentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] => {
-  const edges: Edge[] = []
-  for (const step of steps) {
-    if (!isWorkforceStep(step, lookups.protocolsByStep)) continue
-
-    const roster = lookups.rosterByStep[step.id] ?? []
-    const agentHasNode = Collections.toSet(
-      Collections.filterMap(roster, (a) => a.child_step_id ? a.id : null),
-    )
-
-    const defs = lookups.documentDefsByStep[step.id] ?? []
-    for (const def of defs) {
-      // Wire from assigned agent when it has a canvas node, else from protocol
-      const fromAgent = def.agent_roster_entry_id && agentHasNode.has(def.agent_roster_entry_id)
-      edges.push({
-        id: `doc-edge-${def.id}`,
-        type: 'artifactEdge',
-        source: fromAgent ? `agent-artifact-${def.agent_roster_entry_id}` : step.id,
-        sourceHandle: fromAgent ? 'agent-documents' : 'documents',
-        target: `doc-artifact-${def.id}`,
-        targetHandle: 'document-input',
-        data: { color: PROTOCOL_TYPE_COLORS['workforce'] },
-        selectable: false,
-        deletable: false,
-      })
-    }
-  }
-  return edges
 }
 
 const toNotesEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] => {
@@ -150,4 +120,4 @@ const toAgentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] =
   return edges
 }
 
-export { toRFEdges, toDocumentEdges, toAgentEdges, toNotesEdges }
+export { toRFEdges, toAgentEdges, toNotesEdges }

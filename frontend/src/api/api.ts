@@ -66,9 +66,6 @@ import type {
   CreateProtocolRequest,
   UpdateProtocolRequest,
   CreatePortRequest,
-  DocumentDef,
-  CreateDocumentDefRequest,
-  UpdateDocumentDefRequest,
   RosterAgent,
   CreateRosterAgentRequest,
   RoomStepMember,
@@ -306,18 +303,6 @@ const workflows = freeze({
 
   removeStepDocument: (workflowId: string, stepId: string, docId: string, config?: RequestConfig) =>
     baseApi.del<void>(API.STEP_DOCUMENT(workflowId, stepId, docId), config),
-
-  listDocumentDefs: (workflowId: string, stepId: string, config?: RequestConfig) =>
-    baseApi.get<DocumentDef[]>(API.STEP_DOCUMENT_DEFS(workflowId, stepId), config),
-
-  createDocumentDef: (workflowId: string, stepId: string, body: CreateDocumentDefRequest, config?: RequestConfig) =>
-    baseApi.post<DocumentDef>(API.STEP_DOCUMENT_DEFS(workflowId, stepId), body, config),
-
-  updateDocumentDef: (workflowId: string, stepId: string, defId: string, body: UpdateDocumentDefRequest, config?: RequestConfig) =>
-    baseApi.patch<DocumentDef>(API.STEP_DOCUMENT_DEF(workflowId, stepId, defId), body, config),
-
-  deleteDocumentDef: (workflowId: string, stepId: string, defId: string, config?: RequestConfig) =>
-    baseApi.del<void>(API.STEP_DOCUMENT_DEF(workflowId, stepId, defId), config),
 
   listRosterAgents: (workflowId: string, stepId: string, config?: RequestConfig) =>
     baseApi.get<RosterAgent[]>(API.STEP_AGENT_ROSTER(workflowId, stepId), config),

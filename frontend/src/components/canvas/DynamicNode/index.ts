@@ -1,13 +1,11 @@
 export { DynamicNode } from './DynamicNode'
 export { Archetype, ARCHETYPE_CONFIGS, AGENT_DEFAULTS, AGENT_CONSTRAINTS, resolveArchetype } from './archetypes'
 export { resolveSubtitle } from './resolveSubtitle'
-export { useDocumentActions } from './useDocumentActions'
 export { useStepStoreData } from './useStepStoreData'
 export { buildStepTabs } from './buildStepTabs'
 
 export type { DynamicNodeData } from './DynamicNode'
 export type { Archetype as ArchetypeType, ArchetypeConfig } from './archetypes'
 export type { ResolveSubtitleParams } from './resolveSubtitle'
-export type { DocumentActions } from './useDocumentActions'
 export type { StepStoreData } from './useStepStoreData'
 export type { BuildStepTabsParams } from './buildStepTabs'

@@ -245,23 +245,6 @@ pub enum WorkflowEventKind {
     Resumed {
         step_id: Uuid,
     },
-    /// A document definition was created on a step.
-    DocDefCreated {
-        step_id: Uuid,
-        doc_def_id: Uuid,
-        name: String,
-    },
-    /// A document definition was updated on a step.
-    DocDefUpdated {
-        step_id: Uuid,
-        doc_def_id: Uuid,
-        name: String,
-    },
-    /// A document definition was deleted from a step.
-    DocDefDeleted {
-        step_id: Uuid,
-        doc_def_id: Uuid,
-    },
     /// Agent roster was changed (agent added, updated, or removed).
     RosterChanged {
         step_id: Uuid,
@@ -292,13 +275,6 @@ pub enum WorkflowEventKind {
     /// Consistency issues detected after an entity deletion.
     ConsistencyIssues {
         issues: Vec<crate::server::hub::consistency_scanner::ConsistencyIssue>,
-    },
-    /// A generated document's content was written (live update from documenter pipeline).
-    DocumentContentUpdated {
-        step_id: Uuid,
-        document_def_id: Uuid,
-        document_name: String,
-        content: String,
     },
     /// A sub-workflow execution started within a parent step.
     SubWorkflowStarted {
@@ -377,15 +353,11 @@ impl WorkflowEvent {
             WorkflowEventKind::Resumed { .. } => "resumed",
             WorkflowEventKind::RosterChanged { .. } => "roster_changed",
             WorkflowEventKind::RoomMembersChanged { .. } => "room_members_changed",
-            WorkflowEventKind::DocDefCreated { .. } => "doc_def_created",
-            WorkflowEventKind::DocDefUpdated { .. } => "doc_def_updated",
-            WorkflowEventKind::DocDefDeleted { .. } => "doc_def_deleted",
             WorkflowEventKind::StepConfigUpdated { .. } => "step_config_updated",
             WorkflowEventKind::ArchetypeChanged { .. } => "archetype_changed",
             WorkflowEventKind::StepNameUpdated { .. } => "step_name_updated",
             WorkflowEventKind::AssistantNotesUpdated { .. } => "assistant_notes_updated",
             WorkflowEventKind::ConsistencyIssues { .. } => "consistency_issues",
-            WorkflowEventKind::DocumentContentUpdated { .. } => "document_content_updated",
             WorkflowEventKind::SubWorkflowStarted { .. } => "sub_workflow_started",
             WorkflowEventKind::SubWorkflowCompleted { .. } => "sub_workflow_completed",
             WorkflowEventKind::SubWorkflowStepProgress { .. } => "sub_workflow_step_progress",

@@ -111,31 +111,6 @@ type WorkflowExecutionSummary = {
   template_id: string | null
 }
 
-type DocumentDef = {
-  id: string
-  step_id: string
-  name: string
-  description: string
-  target_length: number
-  display_order: number
-  created_at: string
-  document_id: string | null
-  agent_roster_entry_id: string | null
-}
-
-type CreateDocumentDefRequest = {
-  name: string
-  description?: string
-  target_length?: number
-  display_order?: number
-}
-
-type UpdateDocumentDefRequest = {
-  name?: string
-  description?: string
-  target_length?: number
-}
-
 type RosterAgent = {
   id: string
   name: string
@@ -299,9 +274,6 @@ export type {
   StepDocumentRequest,
   WorkflowRunResponse,
   WorkflowExecutionSummary,
-  DocumentDef,
-  CreateDocumentDefRequest,
-  UpdateDocumentDefRequest,
   RosterAgent,
   CreateRosterAgentRequest,
   RoomStepMember,

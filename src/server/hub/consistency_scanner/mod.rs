@@ -37,7 +37,6 @@ pub struct DeletedItem {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DeletedItemType {
-    DocumentDef,
     RosterAgent,
 }
 
@@ -64,9 +63,9 @@ You receive two sections:
 2. <notes> — assistant notes from every step in the workflow
 
 Your job: identify any notes that still reference a deleted item. A reference can be:
-- An exact name match (e.g. "API Specifications" matching a deleted document named "API Specifications")
-- A UUID match (e.g. document_id: abc-123)
-- A clear semantic reference (e.g. "the security scanner agent" matching deleted agent "Security Scanner")
+- An exact name match (e.g. "Security Scanner" matching a deleted agent named "Security Scanner")
+- A UUID match (e.g. agent_id: abc-123)
+- A clear semantic reference (e.g. "the security scanner" matching deleted agent "Security Scanner")
 
 Return a JSON object:
 ```json
@@ -75,10 +74,10 @@ Return a JSON object:
     {
       "step_id": "uuid-of-step-with-stale-reference",
       "step_name": "Name of the step",
-      "description": "Notes reference deleted document 'API Specifications'",
+      "description": "Notes reference deleted agent 'Security Scanner'",
       "severity": "warning",
-      "deleted_item_name": "API Specifications",
-      "deleted_item_type": "document_def"
+      "deleted_item_name": "Security Scanner",
+      "deleted_item_type": "roster_agent"
     }
   ]
 }
@@ -179,7 +178,6 @@ pub(crate) fn format_scan_input(
     let mut out = String::from("<deletions>\n");
     for item in deleted_items {
         let type_label = match item.item_type {
-            DeletedItemType::DocumentDef => "Document",
             DeletedItemType::RosterAgent => "Agent",
         };
         out.push_str(&format!(

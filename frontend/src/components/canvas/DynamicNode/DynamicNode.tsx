@@ -15,7 +15,6 @@ import StreamOutlined from '@mui/icons-material/StreamOutlined'
 import { useStore, canvasStore, shareStore } from '@/stores'
 import { CanvasFormNode } from '../CanvasFormNode'
 import { CanvasHandle } from '../CanvasHandle'
-import { DOCUMENT_NODE } from '../DocumentNode'
 import { DetailLevel, NOTES_ACCENT } from '../constants'
 import { nodeDataEqual } from '../mappers'
 import { HighlightMode, CanvasNodeKind } from '../canvasKinds'
@@ -32,7 +31,6 @@ import { Archetype, ARCHETYPE_CONFIGS, AGENT_CONSTRAINTS } from './archetypes'
 import type { Archetype as ArchetypeType } from './archetypes'
 import { useDynamicNodeExecution } from './useDynamicNodeExecution'
 import { useStepStoreData } from './useStepStoreData'
-import { useDocumentActions } from './useDocumentActions'
 import { buildStepTabs } from './buildStepTabs'
 import { resolveSubtitle } from './resolveSubtitle'
 import { AgentStreamTab } from './tabs/AgentStreamTab'
@@ -43,7 +41,6 @@ type DynamicNodeData = {
   archetype: ArchetypeType
   label: string
   description: string
-  documentNames: string[]
   rosterNames: string[]
   roomId: string | null
   upstreamStepNames: string[]
@@ -72,8 +69,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   // --- Extracted hooks ---
   const { isExecuting, resolvedExecStatus, agentSourceStatus, stepExecStatus } =
     useDynamicNodeExecution(id, isAgent, nodeData.rosterAgentId, nodeData.protocolStepId)
-  const { documentDefs, roomStepMembers, stepIssues } = useStepStoreData(id)
-  const documentActions = useDocumentActions(id)
+  const { roomStepMembers, stepIssues } = useStepStoreData(id)
 
   // --- Highlight ---
   const protocolHighlight = useProtocolHighlight(
@@ -121,8 +117,6 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
         stepId: id,
         archetype: nodeData.archetype,
         upstreamStepNames: nodeData.upstreamStepNames,
-        documentDefs,
-        documentActions,
         includeLiveStream: true,
       })
 
@@ -130,7 +124,6 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   const subtitle = resolveSubtitle({
     archetype: nodeData.archetype,
     rosterNames: nodeData.rosterNames,
-    documentNames: nodeData.documentNames,
     roomMemberNames: roomStepMembers.map((m) => m.name),
     parentStepName: nodeData.parentStepName,
   })
@@ -144,17 +137,13 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     <>
       <CanvasHandle type="target" position={Position.Bottom} id="agent-input" color={accentColor} variant="passive" />
       <CanvasHandle type="source" position={Position.Top} id="agent-output" color={accentColor} variant="passive" />
-      <CanvasHandle type="source" position={Position.Top} id="agent-documents" color={DOCUMENT_NODE.ACCENT_COLOR} variant="passive" />
     </>
   )
 
   const stepExtraHandles = (
     <>
       {nodeData.archetype === Archetype.WORKFORCE && (
-        <>
-          <CanvasHandle type="source" position={Position.Top} id="documents" color={accentColor} variant="passive" />
-          <CanvasHandle type="source" position={Position.Top} id="agents" color={accentColor} variant="passive" />
-        </>
+        <CanvasHandle type="source" position={Position.Top} id="agents" color={accentColor} variant="passive" />
       )}
       <CanvasHandle type="source" position={Position.Bottom} id="notes" color={NOTES_ACCENT} variant="passive" />
     </>

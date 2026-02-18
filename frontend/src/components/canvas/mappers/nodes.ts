@@ -13,7 +13,6 @@ import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from '../DynamicNode/a
 import type { DynamicNodeData } from '../DynamicNode/DynamicNode'
 import type { StepNodeLookups } from './types'
 import { toAgentArtifactNodes } from './agentArtifactNodes'
-import { toDocumentArtifactNodes } from './documentArtifactNodes'
 import { toNotesArtifactNodes } from './notesArtifactNodes'
 
 const toStepNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
@@ -94,14 +93,12 @@ const toStepNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] =>
     const archetype = resolveArchetype(step, lookups.protocolsByStep, step.id)
     if (archetype !== Archetype.BLANK) {
       const config = ARCHETYPE_CONFIGS[archetype]
-      const docDefs = lookups.documentDefsByStep[step.id] ?? []
       const rosterAgents = lookups.rosterByStep[step.id] ?? []
       const dynamicData: DynamicNodeData = {
         kind: CanvasNodeKind.PROTOCOL,
         archetype,
         label: step.name ?? config.label,
         description: step.description,
-        documentNames: Collections.mapBy(docDefs, (d) => d.name),
         rosterNames: Collections.mapBy(rosterAgents, (a) => a.name),
         roomId: step.room_id ?? null,
         upstreamStepNames,
@@ -157,10 +154,9 @@ const toStepNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] =>
 
 const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
   const stepNodes = toStepNodes(steps, lookups)
-  const { nodes: agentNodes, agentPositionByRosterId } = toAgentArtifactNodes(steps, lookups)
-  const documentNodes = toDocumentArtifactNodes(steps, lookups, agentPositionByRosterId)
+  const { nodes: agentNodes } = toAgentArtifactNodes(steps, lookups)
   const notesNodes = toNotesArtifactNodes(steps, lookups)
-  return [...stepNodes, ...agentNodes, ...documentNodes, ...notesNodes]
+  return [...stepNodes, ...agentNodes, ...notesNodes]
 }
 
 export { toRFNodes }

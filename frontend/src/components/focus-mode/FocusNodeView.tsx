@@ -5,7 +5,6 @@ import { FOCUS_MODE } from '@/constants'
 import { ARCHETYPE_CONFIGS } from '@/components/canvas/DynamicNode/archetypes'
 import type { Archetype as ArchetypeType } from '@/components/canvas/DynamicNode/archetypes'
 import { useStepStoreData } from '@/components/canvas/DynamicNode/useStepStoreData'
-import { useDocumentActions } from '@/components/canvas/DynamicNode/useDocumentActions'
 import { buildStepTabs } from '@/components/canvas/DynamicNode/buildStepTabs'
 import { resolveSubtitle } from '@/components/canvas/DynamicNode/resolveSubtitle'
 import { FocusHeader } from './FocusHeader'
@@ -32,16 +31,13 @@ function FocusNodeView({
   const config = ARCHETYPE_CONFIGS[archetype]
   const accentColor = config.color
 
-  const { documentDefs, roomStepMembers, stepIssues } = useStepStoreData(stepId)
+  const { roomStepMembers, stepIssues } = useStepStoreData(stepId)
   const rosterAgents = useStore(workflowStore.store, workflowStore.selectStepRoster(stepId))
-  const documentActions = useDocumentActions(stepId)
 
   const tabs = buildStepTabs({
     stepId,
     archetype,
     upstreamStepNames,
-    documentDefs,
-    documentActions,
     focusMode: true,
   })
 
@@ -50,7 +46,6 @@ function FocusNodeView({
   const subtitle = resolveSubtitle({
     archetype,
     rosterNames: rosterAgents.map((a) => a.name),
-    documentNames: documentDefs.map((d) => d.name),
     roomMemberNames: roomStepMembers.map((m) => m.name),
   })
 

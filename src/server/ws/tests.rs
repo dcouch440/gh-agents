@@ -838,52 +838,8 @@ mod tests {
     }
 
     // ============================================================================
-    // Doc-def / step-config event wire messages
+    // Step-config event wire messages
     // ============================================================================
-
-    #[test]
-    fn workflow_doc_def_created_wire_message() {
-        let step_id = uuid::Uuid::new_v4();
-        let doc_def_id = uuid::Uuid::new_v4();
-        let wf_id = uuid::Uuid::new_v4();
-        let event = WorkflowEvent {
-            run_id: None,
-            workflow_id: wf_id,
-            user_id: Some(uuid::Uuid::new_v4()),
-            kind: WorkflowEventKind::DocDefCreated {
-                step_id,
-                doc_def_id,
-                name: "API Reference".to_string(),
-            },
-        };
-        let wire = ServerEvent::Workflow(event).into_wire_message();
-        assert_eq!(wire.event, "doc_def_created");
-        assert_eq!(wire.run_id, None);
-        assert_eq!(wire.data["workflow_id"], wf_id.to_string());
-        assert_eq!(wire.data["step_id"], step_id.to_string());
-        assert_eq!(wire.data["doc_def_id"], doc_def_id.to_string());
-        assert_eq!(wire.data["name"], "API Reference");
-    }
-
-    #[test]
-    fn workflow_doc_def_deleted_wire_message() {
-        let step_id = uuid::Uuid::new_v4();
-        let doc_def_id = uuid::Uuid::new_v4();
-        let event = WorkflowEvent {
-            run_id: None,
-            workflow_id: uuid::Uuid::new_v4(),
-            user_id: None,
-            kind: WorkflowEventKind::DocDefDeleted {
-                step_id,
-                doc_def_id,
-            },
-        };
-        let wire = ServerEvent::Workflow(event).into_wire_message();
-        assert_eq!(wire.event, "doc_def_deleted");
-        assert_eq!(wire.run_id, None);
-        assert_eq!(wire.data["step_id"], step_id.to_string());
-        assert_eq!(wire.data["doc_def_id"], doc_def_id.to_string());
-    }
 
     #[test]
     fn workflow_step_config_updated_wire_message() {
@@ -909,10 +865,8 @@ mod tests {
             run_id: None,
             workflow_id: uuid::Uuid::new_v4(),
             user_id: None,
-            kind: WorkflowEventKind::DocDefCreated {
+            kind: WorkflowEventKind::RosterChanged {
                 step_id: uuid::Uuid::new_v4(),
-                doc_def_id: uuid::Uuid::new_v4(),
-                name: "Test".to_string(),
             },
         });
         assert!(event_passes_filters(&evt, &topics, None, &HashSet::new()));
@@ -946,10 +900,8 @@ mod tests {
             run_id: None,
             workflow_id: uuid::Uuid::new_v4(),
             user_id: None,
-            kind: WorkflowEventKind::DocDefCreated {
+            kind: WorkflowEventKind::RosterChanged {
                 step_id: uuid::Uuid::new_v4(),
-                doc_def_id: uuid::Uuid::new_v4(),
-                name: "Test".to_string(),
             },
         });
         let run_subs = HashSet::from([uuid::Uuid::new_v4()]);

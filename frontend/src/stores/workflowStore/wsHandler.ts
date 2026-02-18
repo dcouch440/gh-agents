@@ -2,9 +2,8 @@ import { nmSet } from '../lib'
 import { Collections } from '@/utils/collections'
 import { api } from '@/api'
 import { WORKFLOW_EVENT } from '@/types/ws'
-import type { WsWireMessage, StepConfigUpdatedData, RosterChangedData, RoomMembersChangedData, AssistantNotesUpdatedData, DocumentContentUpdatedData, ConsistencyIssuesData } from '@/types/ws'
+import type { WsWireMessage, StepConfigUpdatedData, RosterChangedData, RoomMembersChangedData, AssistantNotesUpdatedData, ConsistencyIssuesData } from '@/types/ws'
 import { store, getActiveId } from './_store'
-import { fetchDocumentDefs } from './documents'  // still needed for document_content_updated
 import { fetchRoster, fetchRoomStepMembers } from './roster'
 
 /** Fetch a single step from the API and patch it into the store silently.
@@ -54,16 +53,6 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         store.setState((s) => ({
           notesByStep: { ...s.notesByStep, [d.step_id]: d.content },
         }))
-        break
-      }
-      case WORKFLOW_EVENT.DOCUMENT_CONTENT_UPDATED: {
-        const d = msg.data as DocumentContentUpdatedData
-        if (d.workflow_id !== activeId) break
-        store.setState((s) => ({
-          documentContentByDefId: { ...s.documentContentByDefId, [d.document_def_id]: d.content },
-        }))
-        // Refetch defs to pick up the new document_id link
-        void fetchDocumentDefs(d.step_id)
         break
       }
       case WORKFLOW_EVENT.CONSISTENCY_ISSUES: {

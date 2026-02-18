@@ -15,9 +15,6 @@ enum ToolEffect {
     ArchetypeChanged,
     NameUpdated,
     DescriptionUpdated,
-    DocDefCreated,
-    DocDefUpdated,
-    DocDefDeleted,
     ConfigUpdated,
     RosterChanged,
     MembersChanged,
@@ -31,10 +28,6 @@ impl ToolEffect {
             "set_node_archetype" => Some(Self::ArchetypeChanged),
             "set_node_name" => Some(Self::NameUpdated),
             "set_node_description" => Some(Self::DescriptionUpdated),
-
-            "create_doc_def" => Some(Self::DocDefCreated),
-            "update_doc_def" => Some(Self::DocDefUpdated),
-            "delete_doc_def" => Some(Self::DocDefDeleted),
 
             "update_config"
             | "set_task"
@@ -74,33 +67,6 @@ impl ToolEffect {
             }
             Self::DescriptionUpdated | Self::ConfigUpdated => {
                 WorkflowEventKind::StepConfigUpdated { step_id }
-            }
-            Self::DocDefCreated => {
-                let doc_def_id = parse_uuid_field(result, "id").unwrap_or_else(Uuid::new_v4);
-                let name = result["name"].as_str().unwrap_or("Untitled").to_string();
-                WorkflowEventKind::DocDefCreated {
-                    step_id,
-                    doc_def_id,
-                    name,
-                }
-            }
-            Self::DocDefUpdated => {
-                let doc_def_id = parse_uuid_field(result, "id")
-                    .or_else(|| parse_uuid_field(input, "doc_def_id"));
-                let doc_def_id = doc_def_id.unwrap_or_else(Uuid::new_v4);
-                let name = result["name"].as_str().unwrap_or("Untitled").to_string();
-                WorkflowEventKind::DocDefUpdated {
-                    step_id,
-                    doc_def_id,
-                    name,
-                }
-            }
-            Self::DocDefDeleted => {
-                let doc_def_id = parse_uuid_field(input, "doc_def_id").unwrap_or_else(Uuid::new_v4);
-                WorkflowEventKind::DocDefDeleted {
-                    step_id,
-                    doc_def_id,
-                }
             }
             Self::RosterChanged => WorkflowEventKind::RosterChanged { step_id },
             Self::MembersChanged => WorkflowEventKind::RoomMembersChanged { step_id },
@@ -158,7 +124,7 @@ pub(crate) fn broadcast_step_event(
     schedule_consistency_scan_if_deletion(state, ctx, name, input, result);
 }
 
-/// If the tool was a deletion (doc def or roster agent), schedule a
+/// If the tool was a deletion (roster agent), schedule a
 /// debounced consistency scan to detect stale references in other notes.
 fn schedule_consistency_scan_if_deletion(
     state: &AppState,
@@ -168,7 +134,6 @@ fn schedule_consistency_scan_if_deletion(
     result: &Value,
 ) {
     let (item_type, id_field) = match tool_name {
-        "delete_doc_def" => (DeletedItemType::DocumentDef, "doc_def_id"),
         "remove_agent" => (DeletedItemType::RosterAgent, "agent_id"),
         _ => return,
     };

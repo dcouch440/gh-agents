@@ -24,7 +24,7 @@ use axum::{
     http::{header::CACHE_CONTROL, HeaderName, HeaderValue, Request, StatusCode},
     middleware::{self, Next},
     response::Response,
-    routing::{delete, get, patch, post, put},
+    routing::{delete, get, post, put},
     Router,
 };
 use sqlx::PgPool;
@@ -416,15 +416,6 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             get(api::list_step_outputs).post(api::create_step_output),
         )
         .route(routes::STEP_OUTPUT, delete(api::delete_step_output))
-        // Document Definitions
-        .route(
-            routes::STEP_DOCUMENT_DEFS,
-            get(api::list_document_defs).post(api::create_document_def),
-        )
-        .route(
-            routes::STEP_DOCUMENT_DEF,
-            patch(api::update_document_def).delete(api::delete_document_def),
-        )
         // Agent Roster
         .route(
             routes::STEP_AGENT_ROSTER,
@@ -470,14 +461,6 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::PROTOCOL_PREVIEW, post(api::preview_expansion))
         .route(routes::PROTOCOL_APPLY, post(api::apply_protocol))
         .route(routes::PROTOCOL_UNAPPLY, delete(api::unapply_protocol))
-        .route(
-            routes::PROTOCOL_DOCUMENT_DEFS,
-            get(api::list_protocol_document_defs).post(api::create_protocol_document_def),
-        )
-        .route(
-            routes::PROTOCOL_DOCUMENT_DEF,
-            put(api::update_protocol_document_def).delete(api::delete_protocol_document_def),
-        )
         .route(
             routes::PROTOCOL_EXECUTIONS,
             get(api::list_protocol_executions),

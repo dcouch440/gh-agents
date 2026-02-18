@@ -1,31 +1,17 @@
 import { describe, it, expect, vi } from 'vitest'
 import { buildStepTabs } from './buildStepTabs'
 import { Archetype } from './archetypes'
-import type { DocumentDef } from '@/types/workflow'
-import type { DocumentActions } from './useDocumentActions'
-
 vi.mock('./tabs/ChatTab', () => ({ ChatTab: () => null }))
 vi.mock('./tabs/LiveStreamTab', () => ({ LiveStreamTab: () => null }))
 vi.mock('./tabs/InputsOutputsTab', () => ({ InputsOutputsTab: () => null }))
-vi.mock('./tabs/DocumentsTab', () => ({ DocumentsTab: () => null }))
 vi.mock('./tabs/AgentRosterTab', () => ({ AgentRosterTab: () => null }))
 vi.mock('./tabs/RoomMembersTab', () => ({ RoomMembersTab: () => null }))
 vi.mock('./tabs/DebugLogTab', () => ({ DebugLogTab: () => null }))
 vi.mock('./tabs/LastRunTab', () => ({ LastRunTab: () => null }))
 
-const mockDocActions: DocumentActions = {
-  adding: false,
-  onAdd: vi.fn(),
-  onSubmitNew: vi.fn(),
-  onCancelAdd: vi.fn(),
-  onRemove: vi.fn(),
-}
-
 const baseParams = {
   stepId: 'step-1',
   upstreamStepNames: ['Upstream A'] as readonly string[],
-  documentDefs: [] as DocumentDef[],
-  documentActions: mockDocActions,
 }
 
 describe('buildStepTabs', () => {
@@ -55,11 +41,10 @@ describe('buildStepTabs', () => {
   })
 
   describe('WORKFORCE archetype', () => {
-    it('includes agents and documents tabs', () => {
+    it('includes agents tab', () => {
       const tabs = buildStepTabs({ ...baseParams, archetype: Archetype.WORKFORCE })
       const ids = tabs.map((t) => t.id)
       expect(ids).toContain('agents')
-      expect(ids).toContain('documents')
     })
 
     it('does not include members tab', () => {
@@ -97,7 +82,7 @@ describe('buildStepTabs', () => {
   it('tab order: chat > live? > io > archetype-specific > lastrun > debug', () => {
     const tabs = buildStepTabs({ ...baseParams, archetype: Archetype.WORKFORCE, includeLiveStream: true })
     const ids = tabs.map((t) => t.id)
-    expect(ids).toEqual(['chat', 'live', 'io', 'agents', 'documents', 'lastrun', 'debug'])
+    expect(ids).toEqual(['chat', 'live', 'io', 'agents', 'lastrun', 'debug'])
   })
 
   it('every tab has an id, icon, tooltip, and content', () => {

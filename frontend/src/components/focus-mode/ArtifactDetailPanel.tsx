@@ -1,6 +1,5 @@
 import type { ArtifactKind } from '@/stores'
 import { StepContentDetail } from './StepContentDetail'
-import { DocumentDetail } from './DocumentDetail'
 import { AgentDetail } from './AgentDetail'
 import { MemberDetail } from './MemberDetail'
 import { TaskForceDetail } from './TaskForceDetail'
@@ -15,9 +14,6 @@ type ArtifactDetailPanelProps = {
 function ArtifactDetailPanel({ artifactId, artifactKind, onClose }: ArtifactDetailPanelProps) {
   if (artifactKind === 'input' || artifactKind === 'context') {
     return <StepContentDetail stepId={artifactId} kind={artifactKind} onClose={onClose} />
-  }
-  if (artifactKind === 'document') {
-    return <DocumentDetail artifactId={artifactId} onClose={onClose} />
   }
   if (artifactKind === 'roster-agent') {
     return <AgentDetail artifactId={artifactId} onClose={onClose} />

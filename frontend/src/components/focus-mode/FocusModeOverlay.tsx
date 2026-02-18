@@ -65,7 +65,6 @@ function FocusModeOverlay() {
   const edges = useStore(workflowStore.store, workflowStore.selectEdges)
   const rosterByStep = useStore(workflowStore.store, workflowStore.selectRosterByStep)
   const roomMembersByStep = useStore(workflowStore.store, workflowStore.selectRoomMembersByStep)
-  const documentDefsByStep = useStore(workflowStore.store, workflowStore.selectDocumentDefsByStep)
   const protocolsByStep = useStore(canvasStore.store, canvasStore.selectStepProtocols)
 
   // Build a Map<string, ProtocolStepInfo> from the canvas store's Record format
@@ -170,13 +169,8 @@ function FocusModeOverlay() {
             const agent = roster[j]!
             cards.push({ id: agent.id, name: agent.name, subtitle: agent.role_description, accentOverride: null, artifactKind: 'roster-agent' })
           }
-          const docs = documentDefsByStep[id] ?? []
-          for (let j = 0; j < docs.length; j++) {
-            const d = docs[j]!
-            cards.push({ id: d.id, name: d.name, subtitle: `~${d.target_length} chars`, accentOverride: null, artifactKind: 'document' })
-          }
-          if (roster.length === 0 && docs.length === 0) {
-            cards.push({ id, name: stepName, subtitle: 'No agents or documents', accentOverride: null, artifactKind: 'workforce' as ArtifactKind })
+          if (roster.length === 0) {
+            cards.push({ id, name: stepName, subtitle: 'No agents', accentOverride: null, artifactKind: 'workforce' as ArtifactKind })
           }
           break
         }
@@ -200,7 +194,7 @@ function FocusModeOverlay() {
       sections.push({ stepId: id, stepName, sectionLabel: executionModeLabel(step.execution_mode), accentColor: color, cards })
     }
     return sections
-  }, [orderedStepIds, steps, stepsById, edgesByFromId, accentColors, rosterByStep, documentDefsByStep, roomMembersByStep])
+  }, [orderedStepIds, steps, stepsById, edgesByFromId, accentColors, rosterByStep, roomMembersByStep])
 
   const handleCardClick = useCallback((stepId: string, cardId: string, kind: ArtifactKind) => {
     const idx = orderedStepIds.indexOf(stepId)
