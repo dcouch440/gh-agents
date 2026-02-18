@@ -24,7 +24,7 @@ import { FocusModeOverlay } from '@/components/focus-mode'
 import { useEnterFocusMode } from './useEnterFocusMode'
 import { useCanvasKeyboard } from './useCanvasKeyboard'
 import { useContextMenuState } from './useContextMenuState'
-import { useAutoLayout } from './useAutoLayout'
+import { useTowerLayout } from './useTowerLayout'
 
 function WorkflowCanvasInner() {
   const theme = useTheme()
@@ -65,9 +65,8 @@ function WorkflowCanvasInner() {
   // Push store updates into RF — only touch data + position, never clobber selection
   useCanvasSync(rfNodes, rfEdges, setNodes, setEdges)
 
-  // Auto-layout engine — wrap fitView to satisfy void return type (fitView returns Promise<boolean>)
-  const fitViewVoid = useCallback((options?: { padding?: number }) => { void fitView(options) }, [fitView])
-  const { applyAutoLayout } = useAutoLayout(steps, edges, lookups, getNodes, setNodes, fitViewVoid)
+  // Tower layout engine — reactively keeps agent towers stacked above their protocols
+  const { restackTowers } = useTowerLayout(steps, lookups, getNodes, setNodes)
 
   // Fit to view on initial load
   useEffect(() => {
@@ -250,7 +249,7 @@ function WorkflowCanvasInner() {
           />
         )}
       </ReactFlow>
-      <OptionTray autoSaveFlush={autoSave.flush} autoSaveSaving={autoSave.saving} onAutoLayout={applyAutoLayout} />
+      <OptionTray autoSaveFlush={autoSave.flush} autoSaveSaving={autoSave.saving} onAutoLayout={restackTowers} />
       {shareActive && <ShareModeBanner />}
       <CanvasContextMenu
         position={contextMenu}

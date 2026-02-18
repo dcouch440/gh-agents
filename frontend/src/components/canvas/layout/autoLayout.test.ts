@@ -1,49 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { computeAutoLayout, classifyStep, topologicalSort, buildTieredTower, computeAgentTiers } from './autoLayout'
-import type { NodeRole } from './autoLayout'
-import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
+import { computeTowerPositions, computeAllTowerPositions, buildTieredTower, computeAgentTiers } from './autoLayout'
+import type { ProtocolDimensions, NodeDimensions } from './autoLayout'
 import type { StepNodeLookups, RosterAgentInfo } from '../mappers/types'
-import { AUTO_LAYOUT } from './autoLayoutConfig'
-import { NODE_DIMENSIONS } from '../nodeDimensions'
-import { CanvasNodeKind } from '../canvasKinds'
+import { TOWER_LAYOUT } from './autoLayoutConfig'
 import { AGENT_DEFAULTS } from '../DynamicNode/archetypes'
 
 // ============================================================================
 // Helpers
 // ============================================================================
-
-const makeStep = (overrides: Partial<WorkflowStep> & { id: string }): WorkflowStep => ({
-  workflow_id: 'wf-1',
-  agent_id: '',
-  execution_mode: 'single',
-  for_each_ref: null,
-  prompt_template_id: null,
-  prompt_template: '',
-  output_schema_id: null,
-  output_variable_name: null,
-  interactive_agent_id: null,
-  for_each_label_field: null,
-  display_order: 0,
-  version: 1,
-  reasoning_trace: false,
-  verification_agent_ids: [],
-  position_x: null,
-  position_y: null,
-  width: null,
-  height: null,
-  name: null,
-  room_id: null,
-  system_prompt_suffix: null,
-  description: '',
-  sub_workflow_template_id: null,
-  ...overrides,
-})
-
-const makeEdge = (from: string, to: string): WorkflowStepEdge => ({
-  id: `edge-${from}-${to}`,
-  from_step_id: from,
-  to_step_id: to,
-})
 
 const makeAgent = (id: string, name: string, depsOn: string[] = []): RosterAgentInfo => ({
   id,
@@ -65,85 +29,9 @@ const emptyLookups = (overrides?: Partial<StepNodeLookups>): StepNodeLookups => 
   ...overrides,
 })
 
-// ============================================================================
-// classifyStep
-// ============================================================================
+const defaultProtocol: ProtocolDimensions = { x: 0, y: 0, width: 560 }
 
-describe('classifyStep', () => {
-  it('classifies input steps', () => {
-    const step = makeStep({ id: 's1', execution_mode: 'input' })
-    expect(classifyStep(step, new Map())).toBe('input' satisfies NodeRole)
-  })
-
-  it('classifies context steps', () => {
-    const step = makeStep({ id: 's1', execution_mode: 'context' })
-    expect(classifyStep(step, new Map())).toBe('context' satisfies NodeRole)
-  })
-
-  it('classifies workforce steps as protocol', () => {
-    const step = makeStep({ id: 's1', execution_mode: 'workforce' })
-    expect(classifyStep(step, new Map())).toBe('protocol' satisfies NodeRole)
-  })
-
-  it('classifies room steps as protocol', () => {
-    const step = makeStep({ id: 's1', execution_mode: 'room' })
-    expect(classifyStep(step, new Map())).toBe('protocol' satisfies NodeRole)
-  })
-
-  it('classifies steps in protocolsByStep as protocol', () => {
-    const step = makeStep({ id: 's1', execution_mode: 'single' })
-    const protocols = new Map([['s1', { protocol_type: 'decomp', name: 'P1', portNames: [] }]])
-    expect(classifyStep(step, protocols)).toBe('protocol' satisfies NodeRole)
-  })
-
-  it('classifies regular steps', () => {
-    const step = makeStep({ id: 's1', execution_mode: 'single' })
-    expect(classifyStep(step, new Map())).toBe('step' satisfies NodeRole)
-  })
-})
-
-// ============================================================================
-// topologicalSort
-// ============================================================================
-
-describe('topologicalSort', () => {
-  it('returns single node', () => {
-    const result = topologicalSort(new Set(['a']), [])
-    expect(result).toEqual(['a'])
-  })
-
-  it('sorts a simple chain', () => {
-    const ids = new Set(['a', 'b', 'c'])
-    const edges = [makeEdge('a', 'b'), makeEdge('b', 'c')]
-    const result = topologicalSort(ids, edges)
-    expect(result).toEqual(['a', 'b', 'c'])
-  })
-
-  it('handles diamond graph', () => {
-    const ids = new Set(['a', 'b', 'c', 'd'])
-    const edges = [makeEdge('a', 'b'), makeEdge('a', 'c'), makeEdge('b', 'd'), makeEdge('c', 'd')]
-    const result = topologicalSort(ids, edges)
-    expect(result.indexOf('a')).toBeLessThan(result.indexOf('b'))
-    expect(result.indexOf('a')).toBeLessThan(result.indexOf('c'))
-    expect(result.indexOf('b')).toBeLessThan(result.indexOf('d'))
-    expect(result.indexOf('c')).toBeLessThan(result.indexOf('d'))
-  })
-
-  it('ignores edges referencing nodes outside the set', () => {
-    const ids = new Set(['a', 'b'])
-    const edges = [makeEdge('a', 'b'), makeEdge('b', 'z')]
-    const result = topologicalSort(ids, edges)
-    expect(result).toEqual(['a', 'b'])
-  })
-
-  it('handles disconnected nodes', () => {
-    const ids = new Set(['a', 'b'])
-    const result = topologicalSort(ids, [])
-    expect(result).toHaveLength(2)
-    expect(result).toContain('a')
-    expect(result).toContain('b')
-  })
-})
+const emptyMeasured = new Map<string, NodeDimensions>()
 
 // ============================================================================
 // computeAgentTiers
@@ -190,7 +78,6 @@ describe('computeAgentTiers', () => {
       makeAgent('r2', 'B', ['r1']),
     ]
     const tierMap = computeAgentTiers(roster)
-    // r1 is inactive (no child_step_id), so r2 has no active deps → tier 0
     expect(tierMap.get('r2')).toBe(0)
     expect(tierMap.has('r1')).toBe(false)
   })
@@ -263,59 +150,21 @@ describe('buildTieredTower', () => {
     })
     expect(buildTieredTower('s1', lookups)).toEqual([])
   })
-
 })
 
 // ============================================================================
-// computeAutoLayout
+// computeTowerPositions
 // ============================================================================
 
-describe('computeAutoLayout', () => {
-  it('returns empty map for empty workflow', () => {
-    const result = computeAutoLayout([], [], emptyLookups())
+describe('computeTowerPositions', () => {
+  it('returns empty map for protocol with no roster', () => {
+    const lookups = emptyLookups()
+    const result = computeTowerPositions('p1', defaultProtocol, lookups, emptyMeasured)
     expect(result.size).toBe(0)
   })
 
-  it('positions a single protocol on the spine', () => {
-    const steps = [makeStep({ id: 'p1', execution_mode: 'workforce' })]
+  it('places parallel agents side-by-side above protocol', () => {
     const lookups = emptyLookups({
-      protocolsByStep: new Map([['p1', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
-    })
-    const result = computeAutoLayout(steps, [], lookups)
-
-    const pos = result.get('p1')
-    expect(pos).toBeDefined()
-    expect(pos!.y).toBe(AUTO_LAYOUT.SPINE_Y)
-  })
-
-  it('positions input before context before protocol', () => {
-    const steps = [
-      makeStep({ id: 'input', execution_mode: 'input' }),
-      makeStep({ id: 'ctx', execution_mode: 'context' }),
-      makeStep({ id: 'p1', execution_mode: 'workforce' }),
-    ]
-    const edges = [makeEdge('input', 'ctx'), makeEdge('ctx', 'p1')]
-    const lookups = emptyLookups({
-      protocolsByStep: new Map([['p1', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
-    })
-
-    const result = computeAutoLayout(steps, edges, lookups)
-
-    const inputPos = result.get('input')!
-    const ctxPos = result.get('ctx')!
-    const p1Pos = result.get('p1')!
-
-    expect(inputPos.x).toBeLessThan(ctxPos.x)
-    expect(ctxPos.x).toBeLessThan(p1Pos.x)
-    expect(inputPos.y).toBe(AUTO_LAYOUT.SPINE_Y)
-    expect(ctxPos.y).toBe(AUTO_LAYOUT.SPINE_Y)
-    expect(p1Pos.y).toBe(AUTO_LAYOUT.SPINE_Y)
-  })
-
-  it('places parallel agents side-by-side in same tier', () => {
-    const steps = [makeStep({ id: 'p1', execution_mode: 'workforce' })]
-    const lookups = emptyLookups({
-      protocolsByStep: new Map([['p1', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
       rosterByStep: {
         'p1': [
           makeAgent('r1', 'Agent A'),
@@ -325,7 +174,7 @@ describe('computeAutoLayout', () => {
       },
     })
 
-    const result = computeAutoLayout(steps, [], lookups)
+    const result = computeTowerPositions('p1', defaultProtocol, lookups, emptyMeasured)
 
     const agent1 = result.get('agent-artifact-r1')!
     const agent2 = result.get('agent-artifact-r2')!
@@ -340,14 +189,11 @@ describe('computeAutoLayout', () => {
     expect(agent2.x).toBeLessThan(agent3.x)
 
     // All above protocol
-    const protocolY = result.get('p1')!.y
-    expect(agent1.y).toBeLessThan(protocolY)
+    expect(agent1.y).toBeLessThan(defaultProtocol.y)
   })
 
   it('places dependent agent in higher tier (further from protocol)', () => {
-    const steps = [makeStep({ id: 'p1', execution_mode: 'workforce' })]
     const lookups = emptyLookups({
-      protocolsByStep: new Map([['p1', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
       rosterByStep: {
         'p1': [
           makeAgent('r1', 'Designer A'),
@@ -357,152 +203,149 @@ describe('computeAutoLayout', () => {
       },
     })
 
-    const result = computeAutoLayout(steps, [], lookups)
+    const result = computeTowerPositions('p1', defaultProtocol, lookups, emptyMeasured)
 
     const designerA = result.get('agent-artifact-r1')!
     const designerB = result.get('agent-artifact-r2')!
     const judge = result.get('agent-artifact-r3')!
 
-    // Designers are at same Y (tier 0)
+    // Designers at same Y
     expect(designerA.y).toBe(designerB.y)
-    // Judge is further from protocol (higher tier → more negative Y)
+    // Judge further from protocol (more negative Y)
     expect(judge.y).toBeLessThan(designerA.y)
-
     // Designers side by side
     expect(designerA.x).toBeLessThan(designerB.x)
   })
 
-  it('handles diamond pattern: 2 parallel → 1 judge', () => {
-    const steps = [makeStep({ id: 'p1', execution_mode: 'workforce' })]
+  it('centers agents on protocol width', () => {
     const lookups = emptyLookups({
-      protocolsByStep: new Map([['p1', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
+      rosterByStep: {
+        'p1': [makeAgent('r1', 'Solo Agent')],
+      },
+    })
+
+    const protocol: ProtocolDimensions = { x: 100, y: 200, width: 600 }
+    const result = computeTowerPositions('p1', protocol, lookups, emptyMeasured)
+
+    const agent = result.get('agent-artifact-r1')!
+    const agentCenter = agent.x + AGENT_DEFAULTS.DEFAULT_WIDTH / 2
+    const protocolCenter = protocol.x + protocol.width / 2
+
+    expect(agentCenter).toBe(protocolCenter)
+  })
+
+  it('uses measured dimensions when available', () => {
+    const lookups = emptyLookups({
       rosterByStep: {
         'p1': [
-          makeAgent('r1', 'A'),
-          makeAgent('r2', 'B'),
-          makeAgent('r3', 'C', ['r1', 'r2']),
+          makeAgent('r1', 'Small Agent'),
+          makeAgent('r2', 'Tall Agent'),
         ],
       },
     })
 
-    const result = computeAutoLayout(steps, [], lookups)
+    const measured = new Map<string, NodeDimensions>([
+      ['agent-artifact-r1', { width: 400, height: 300 }],
+      ['agent-artifact-r2', { width: 400, height: 600 }],
+    ])
 
-    const agentA = result.get('agent-artifact-r1')!
-    const agentB = result.get('agent-artifact-r2')!
-    const agentC = result.get('agent-artifact-r3')!
+    const result = computeTowerPositions('p1', defaultProtocol, lookups, measured)
 
-    // A and B at same tier
-    expect(agentA.y).toBe(agentB.y)
-    // C at higher tier
-    expect(agentC.y).toBeLessThan(agentA.y)
+    const agent1 = result.get('agent-artifact-r1')!
+    const agent2 = result.get('agent-artifact-r2')!
+
+    // Both at same Y (tallest in tier determines position)
+    expect(agent1.y).toBe(agent2.y)
+
+    // Y should account for the tallest agent (600px), not default
+    const expectedY = defaultProtocol.y - TOWER_LAYOUT.TOWER_START_GAP - 600
+    expect(agent1.y).toBe(expectedY)
   })
 
-  it('handles linear chain: A → B → C', () => {
-    const steps = [makeStep({ id: 'p1', execution_mode: 'workforce' })]
+  it('uses measured width for horizontal spacing', () => {
     const lookups = emptyLookups({
-      protocolsByStep: new Map([['p1', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
+      rosterByStep: {
+        'p1': [
+          makeAgent('r1', 'Wide Agent'),
+          makeAgent('r2', 'Narrow Agent'),
+        ],
+      },
+    })
+
+    const measured = new Map<string, NodeDimensions>([
+      ['agent-artifact-r1', { width: 500, height: 360 }],
+      ['agent-artifact-r2', { width: 300, height: 360 }],
+    ])
+
+    const result = computeTowerPositions('p1', defaultProtocol, lookups, measured)
+
+    const agent1 = result.get('agent-artifact-r1')!
+    const agent2 = result.get('agent-artifact-r2')!
+
+    // Agent2 should start after agent1's measured width + gap
+    const expectedAgent2X = agent1.x + 500 + TOWER_LAYOUT.TIER_AGENT_GAP
+    expect(agent2.x).toBe(expectedAgent2X)
+  })
+
+  it('handles linear chain with measured heights', () => {
+    const lookups = emptyLookups({
       rosterByStep: {
         'p1': [
           makeAgent('r1', 'A'),
           makeAgent('r2', 'B', ['r1']),
-          makeAgent('r3', 'C', ['r2']),
         ],
       },
     })
 
-    const result = computeAutoLayout(steps, [], lookups)
+    const measured = new Map<string, NodeDimensions>([
+      ['agent-artifact-r1', { width: 420, height: 400 }],
+      ['agent-artifact-r2', { width: 420, height: 500 }],
+    ])
+
+    const result = computeTowerPositions('p1', defaultProtocol, lookups, measured)
 
     const agentA = result.get('agent-artifact-r1')!
     const agentB = result.get('agent-artifact-r2')!
-    const agentC = result.get('agent-artifact-r3')!
 
-    // Each in a separate tier, stacking upward
+    // A is tier 0 (closest to protocol), B is tier 1 (above A)
     expect(agentB.y).toBeLessThan(agentA.y)
-    expect(agentC.y).toBeLessThan(agentB.y)
-  })
 
-  it('handles two protocols with different tower heights', () => {
-    const steps = [
-      makeStep({ id: 'p1', execution_mode: 'workforce' }),
-      makeStep({ id: 'p2', execution_mode: 'workforce' }),
-    ]
-    const edges = [makeEdge('p1', 'p2')]
+    // Tier 0 uses A's height (400), tier 1 uses B's height (500)
+    const tier0Y = defaultProtocol.y - TOWER_LAYOUT.TOWER_START_GAP - 400
+    expect(agentA.y).toBe(tier0Y)
+
+    const tier1Y = tier0Y - TOWER_LAYOUT.TOWER_GAP - 500
+    expect(agentB.y).toBe(tier1Y)
+  })
+})
+
+// ============================================================================
+// computeAllTowerPositions
+// ============================================================================
+
+describe('computeAllTowerPositions', () => {
+  it('computes positions for multiple protocols', () => {
     const lookups = emptyLookups({
-      protocolsByStep: new Map([
-        ['p1', { protocol_type: 'workforce', name: 'Team 1', portNames: [] }],
-        ['p2', { protocol_type: 'workforce', name: 'Team 2', portNames: [] }],
-      ]),
       rosterByStep: {
-        'p1': [
-          makeAgent('r1', 'Agent A'),
-          makeAgent('r2', 'Agent B'),
-          makeAgent('r3', 'Agent C'),
-        ],
-        'p2': [
-          makeAgent('r4', 'Agent D'),
-        ],
+        'p1': [makeAgent('r1', 'Agent A')],
+        'p2': [makeAgent('r2', 'Agent B')],
       },
     })
 
-    const result = computeAutoLayout(steps, edges, lookups)
+    const protocolDims = new Map<string, ProtocolDimensions>([
+      ['p1', { x: 0, y: 0, width: 560 }],
+      ['p2', { x: 700, y: 0, width: 560 }],
+    ])
 
-    const p1Pos = result.get('p1')!
-    const p2Pos = result.get('p2')!
+    const result = computeAllTowerPositions(protocolDims, lookups, emptyMeasured)
 
-    // P2 is to the right of P1
-    expect(p2Pos.x).toBeGreaterThan(p1Pos.x)
-
-    // Both on the spine
-    expect(p1Pos.y).toBe(AUTO_LAYOUT.SPINE_Y)
-    expect(p2Pos.y).toBe(AUTO_LAYOUT.SPINE_Y)
-
-    // All agents present
     expect(result.has('agent-artifact-r1')).toBe(true)
     expect(result.has('agent-artifact-r2')).toBe(true)
-    expect(result.has('agent-artifact-r3')).toBe(true)
-    expect(result.has('agent-artifact-r4')).toBe(true)
-  })
 
-  it('computes column width based on widest tier', () => {
-    const steps = [
-      makeStep({ id: 'input', execution_mode: 'input' }),
-      makeStep({ id: 'p1', execution_mode: 'workforce' }),
-    ]
-    const edges = [makeEdge('input', 'p1')]
-    const lookups = emptyLookups({
-      protocolsByStep: new Map([['p1', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
-      rosterByStep: {
-        'p1': [
-          makeAgent('r1', 'Agent A'),
-          makeAgent('r2', 'Agent B'),
-        ],
-      },
-    })
+    const agent1 = result.get('agent-artifact-r1')!
+    const agent2 = result.get('agent-artifact-r2')!
 
-    const result = computeAutoLayout(steps, edges, lookups)
-
-    const inputPos = result.get('input')!
-    const p1Pos = result.get('p1')!
-
-    // Column width = widest tier width (2 agents side-by-side)
-    const inputWidth = NODE_DIMENSIONS[CanvasNodeKind.INPUT].defaultWidth
-    const tierWidth = 2 * AGENT_DEFAULTS.DEFAULT_WIDTH + AUTO_LAYOUT.TIER_AGENT_GAP
-    const protocolWidth = NODE_DIMENSIONS[CanvasNodeKind.PROTOCOL].defaultWidth
-    const columnWidth = Math.max(protocolWidth, tierWidth)
-
-    expect(inputPos.x).toBe(0)
-    const expectedProtocolX = inputWidth + AUTO_LAYOUT.SPINE_GAP + (columnWidth - protocolWidth) / 2
-    expect(p1Pos.x).toBe(expectedProtocolX)
-  })
-
-  it('handles protocol with zero agents', () => {
-    const steps = [makeStep({ id: 'p1', execution_mode: 'workforce' })]
-    const lookups = emptyLookups({
-      protocolsByStep: new Map([['p1', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
-    })
-
-    const result = computeAutoLayout(steps, [], lookups)
-    expect(result.get('p1')).toBeDefined()
-    expect(result.size).toBe(1)
+    // Agent2 should be to the right (following its protocol)
+    expect(agent2.x).toBeGreaterThan(agent1.x)
   })
 })

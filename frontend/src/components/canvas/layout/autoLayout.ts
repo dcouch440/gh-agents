@@ -1,73 +1,11 @@
 import { Collections } from '@/utils/collections'
 import type { Point } from '@/utils/geometry'
-import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 import type { StepNodeLookups, RosterAgentInfo } from '../mappers/types'
-import { NODE_DIMENSIONS } from '../nodeDimensions'
-import { CanvasNodeKind } from '../canvasKinds'
 import { AGENT_DEFAULTS } from '../DynamicNode/archetypes'
-import { AUTO_LAYOUT } from './autoLayoutConfig'
+import { TOWER_LAYOUT } from './autoLayoutConfig'
 
 // ============================================================================
-// Node Classification
-// ============================================================================
-
-type NodeRole = 'input' | 'context' | 'protocol' | 'step'
-
-const classifyStep = (step: WorkflowStep, protocolsByStep: ReadonlyMap<string, unknown>): NodeRole => {
-  if (step.execution_mode === 'input') return 'input'
-  if (step.execution_mode === 'context') return 'context'
-  if (step.execution_mode === 'workforce' || step.execution_mode === 'room') return 'protocol'
-  if (protocolsByStep.has(step.id)) return 'protocol'
-  return 'step'
-}
-
-// ============================================================================
-// Topological Sort — spine ordering
-// ============================================================================
-
-/**
- * Kahn's algorithm for topological sort, restricted to the given step IDs.
- * Returns step IDs in execution order (left-to-right for spine).
- */
-const topologicalSort = (
-  stepIds: ReadonlySet<string>,
-  edges: readonly WorkflowStepEdge[],
-): string[] => {
-  const inDegree = new Map<string, number>()
-  const adjacency = new Map<string, string[]>()
-
-  for (const id of stepIds) {
-    inDegree.set(id, 0)
-    adjacency.set(id, [])
-  }
-
-  for (const edge of edges) {
-    if (!stepIds.has(edge.from_step_id) || !stepIds.has(edge.to_step_id)) continue
-    adjacency.get(edge.from_step_id)!.push(edge.to_step_id)
-    inDegree.set(edge.to_step_id, (inDegree.get(edge.to_step_id) ?? 0) + 1)
-  }
-
-  const queue: string[] = []
-  for (const [id, deg] of inDegree) {
-    if (deg === 0) queue.push(id)
-  }
-
-  const sorted: string[] = []
-  while (queue.length > 0) {
-    const current = queue.shift()!
-    sorted.push(current)
-    for (const neighbor of adjacency.get(current) ?? []) {
-      const newDeg = (inDegree.get(neighbor) ?? 1) - 1
-      inDegree.set(neighbor, newDeg)
-      if (newDeg === 0) queue.push(neighbor)
-    }
-  }
-
-  return sorted
-}
-
-// ============================================================================
-// Tower Entry — agent+document pair
+// Tower Entry — agent in a tier
 // ============================================================================
 
 type TowerEntry = {
@@ -86,24 +24,20 @@ type TierLayout = {
 /**
  * Assign agents to tiers based on depends_on relationships.
  * Tier 0 = root agents (no roster dependencies), tier N = depends on tier N-1.
- * Returns roster agents grouped by tier, ordered ascending.
  */
 const computeAgentTiers = (
   roster: readonly RosterAgentInfo[],
 ): ReadonlyMap<string, number> => {
-  // Only consider agents with child_step_id (active on canvas)
   const active = roster.filter((a) => a.child_step_id !== null)
   const activeIds = Collections.toSetBy(active, (a) => a.id)
   const tierMap = new Map<string, number>()
 
-  // Iteratively assign tiers until all agents are placed
   let changed = true
   while (changed) {
     changed = false
     for (const agent of active) {
       if (tierMap.has(agent.id)) continue
 
-      // Filter depends_on to only reference active roster agents
       const deps = agent.depends_on.filter((id) => activeIds.has(id))
 
       if (deps.length === 0) {
@@ -112,7 +46,6 @@ const computeAgentTiers = (
         continue
       }
 
-      // All dependencies must be assigned before we can compute this agent's tier
       const depTiers: number[] = []
       let allResolved = true
       for (const depId of deps) {
@@ -131,7 +64,7 @@ const computeAgentTiers = (
     }
   }
 
-  // Any remaining unassigned agents (circular deps or broken refs) → tier 0
+  // Unassigned agents (circular deps or broken refs) → tier 0
   for (const agent of active) {
     if (!tierMap.has(agent.id)) {
       tierMap.set(agent.id, 0)
@@ -150,10 +83,8 @@ const buildTieredTower = (
 ): TierLayout[] => {
   const roster: readonly RosterAgentInfo[] = lookups.rosterByStep[stepId] ?? []
 
-  // Compute tier assignments
   const tierMap = computeAgentTiers(roster)
 
-  // Group entries by tier
   const tierEntries = new Map<number, TowerEntry[]>()
   for (const agent of roster) {
     if (!agent.child_step_id) continue
@@ -165,7 +96,6 @@ const buildTieredTower = (
     tierEntries.set(tier, entries)
   }
 
-  // Sort tiers ascending (tier 0 closest to protocol)
   const tiers: TierLayout[] = []
   const sortedKeys = Collections.sortedCopy([...tierEntries.keys()], (a, b) => a - b)
   for (const tier of sortedKeys) {
@@ -176,167 +106,115 @@ const buildTieredTower = (
 }
 
 // ============================================================================
-// Main Layout Algorithm
+// Tower Position Computation
 // ============================================================================
 
+type NodeDimensions = {
+  width: number
+  height: number
+}
+
+type ProtocolDimensions = {
+  x: number
+  y: number
+  width: number
+}
+
 /**
- * Compute auto-layout positions for all canvas nodes using the spine+tower model.
+ * Compute agent positions for a single protocol's tower.
  *
- * The spine runs left-to-right: Input → Context → Protocol(s) → remaining steps.
- * Each protocol grows a vertical tower of agent+doc pairs above it.
- * Notes hang below each protocol.
+ * Agents are stacked in tiers above the protocol node, centered horizontally
+ * on the protocol's current width. Uses actual measured dimensions for each
+ * agent node — the tallest agent in a tier determines vertical spacing.
  *
- * Returns a Map of nodeId → position for ALL nodes (step nodes + virtual artifact nodes).
+ * Returns a Map of agentNodeId → position for all agents in this protocol's tower.
  */
-const computeAutoLayout = (
-  steps: readonly WorkflowStep[],
-  edges: readonly WorkflowStepEdge[],
+const computeTowerPositions = (
+  stepId: string,
+  protocol: ProtocolDimensions,
   lookups: StepNodeLookups,
+  measuredDimensions: ReadonlyMap<string, NodeDimensions>,
 ): ReadonlyMap<string, Point> => {
   const positions = new Map<string, Point>()
+  const tiers = buildTieredTower(stepId, lookups)
 
-  if (steps.length === 0) return positions
+  if (tiers.length === 0) return positions
 
-  // 1. Classify all steps
-  const inputs: WorkflowStep[] = []
-  const contexts: WorkflowStep[] = []
-  const protocols: WorkflowStep[] = []
-  const regularSteps: WorkflowStep[] = []
+  const defaultWidth = AGENT_DEFAULTS.DEFAULT_WIDTH
+  const defaultHeight = AGENT_DEFAULTS.DEFAULT_HEIGHT
+  const columnCenterX = protocol.x + protocol.width / 2
 
-  for (const step of steps) {
-    const role = classifyStep(step, lookups.protocolsByStep)
-    switch (role) {
-      case 'input': inputs.push(step); break
-      case 'context': contexts.push(step); break
-      case 'protocol': protocols.push(step); break
-      case 'step': regularSteps.push(step); break
-    }
-  }
+  let towerCursorY = protocol.y - TOWER_LAYOUT.TOWER_START_GAP
 
-  // 2. Build spine order via topological sort
-  const allSpineIds = new Set<string>()
-  for (const s of inputs) allSpineIds.add(s.id)
-  for (const s of contexts) allSpineIds.add(s.id)
-  for (const s of protocols) allSpineIds.add(s.id)
-  for (const s of regularSteps) allSpineIds.add(s.id)
+  for (let tierIdx = 0; tierIdx < tiers.length; tierIdx++) {
+    const tier = tiers[tierIdx]!
 
-  const spineOrder = topologicalSort(allSpineIds, edges)
-
-  // If topo sort missed some (disconnected nodes), append them
-  const spineOrderSet = Collections.toSet(spineOrder)
-  for (const id of allSpineIds) {
-    if (!spineOrderSet.has(id)) spineOrder.push(id)
-  }
-
-  // 3. Build tiered towers for each protocol
-  const towersByStep = new Map<string, TierLayout[]>()
-  for (const protocol of protocols) {
-    towersByStep.set(protocol.id, buildTieredTower(protocol.id, lookups))
-  }
-
-  // 4. Compute node dimensions
-  const protocolWidth = NODE_DIMENSIONS[CanvasNodeKind.PROTOCOL].defaultWidth
-  const protocolHeight = NODE_DIMENSIONS[CanvasNodeKind.PROTOCOL].defaultHeight
-  const inputWidth = NODE_DIMENSIONS[CanvasNodeKind.INPUT].defaultWidth
-  const inputHeight = NODE_DIMENSIONS[CanvasNodeKind.INPUT].defaultHeight
-  const contextWidth = NODE_DIMENSIONS[CanvasNodeKind.CONTEXT].defaultWidth
-  const agentWidth = AGENT_DEFAULTS.DEFAULT_WIDTH
-  const agentHeight = AGENT_DEFAULTS.DEFAULT_HEIGHT
-  const stepWidth = NODE_DIMENSIONS[CanvasNodeKind.STEP].defaultWidth
-
-  const spineY = AUTO_LAYOUT.SPINE_Y
-
-  // 5. Lay out spine left-to-right
-  let cursorX = 0
-  const stepById = new Map<string, WorkflowStep>()
-  for (const step of steps) stepById.set(step.id, step)
-
-  for (const stepId of spineOrder) {
-    const step = stepById.get(stepId)
-    if (!step) continue
-
-    const role = classifyStep(step, lookups.protocolsByStep)
-    const tiers = towersByStep.get(stepId) ?? []
-
-    // Determine this node's width and its column width
-    let nodeWidth: number
-    let nodeHeight: number
-
-    switch (role) {
-      case 'input':
-        nodeWidth = inputWidth
-        nodeHeight = inputHeight
-        break
-      case 'context':
-        nodeWidth = contextWidth
-        nodeHeight = inputHeight
-        break
-      case 'protocol':
-        nodeWidth = protocolWidth
-        nodeHeight = protocolHeight
-        break
-      case 'step':
-        nodeWidth = stepWidth
-        nodeHeight = NODE_DIMENSIONS[CanvasNodeKind.STEP].defaultHeight
-        break
+    if (tierIdx > 0) {
+      towerCursorY -= TOWER_LAYOUT.TOWER_GAP
     }
 
-    // Column width: max of node width and widest tier (agents side-by-side)
-    let widestTierWidth = 0
-    for (const tier of tiers) {
-      const tierWidth = tier.entries.length * agentWidth + (tier.entries.length - 1) * AUTO_LAYOUT.TIER_AGENT_GAP
-      if (tierWidth > widestTierWidth) widestTierWidth = tierWidth
+    // Find the tallest agent in this tier (determines vertical space needed)
+    let tallestHeight = 0
+    for (const entry of tier.entries) {
+      const dims = measuredDimensions.get(entry.agentNodeId)
+      const h = dims?.height ?? defaultHeight
+      if (h > tallestHeight) tallestHeight = h
     }
-    const columnWidth = Math.max(nodeWidth, widestTierWidth)
 
-    // Center the node in its column
-    const nodeX = cursorX + (columnWidth - nodeWidth) / 2
-    const columnCenterX = cursorX + columnWidth / 2
+    const agentY = towerCursorY - tallestHeight
 
-    // Place spine node
-    positions.set(stepId, { x: nodeX, y: spineY })
+    // Compute tier width using actual measured widths
+    let tierWidth = 0
+    for (let j = 0; j < tier.entries.length; j++) {
+      const entry = tier.entries[j]!
+      const dims = measuredDimensions.get(entry.agentNodeId)
+      tierWidth += dims?.width ?? defaultWidth
+      if (j < tier.entries.length - 1) tierWidth += TOWER_LAYOUT.TIER_AGENT_GAP
+    }
+    const startX = columnCenterX - tierWidth / 2
 
-    // 6. Place tiered tower above protocol (agents stacked by tier)
-    if (tiers.length > 0) {
-      // Cumulative cursor tracks the bottom edge of the next available slot,
-      // moving upward (negative Y) as tiers stack above the protocol.
-      let towerCursorY = spineY - AUTO_LAYOUT.TOWER_START_GAP
+    // Place each agent, advancing X by its actual width
+    let cursorX = startX
+    for (let j = 0; j < tier.entries.length; j++) {
+      const entry = tier.entries[j]!
+      const dims = measuredDimensions.get(entry.agentNodeId)
+      const w = dims?.width ?? defaultWidth
 
-      for (let tierIdx = 0; tierIdx < tiers.length; tierIdx++) {
-        const tier = tiers[tierIdx]!
-
-        if (tierIdx > 0) {
-          towerCursorY -= AUTO_LAYOUT.TOWER_GAP
-        }
-
-        // Agent top = cursor bottom minus agent height
-        const agentY = towerCursorY - agentHeight
-
-        // Spread entries horizontally, centered on column
-        const tierWidth = tier.entries.length * agentWidth + (tier.entries.length - 1) * AUTO_LAYOUT.TIER_AGENT_GAP
-        const startX = columnCenterX - tierWidth / 2
-
-        for (let j = 0; j < tier.entries.length; j++) {
-          const entry = tier.entries[j]!
-          const entryX = startX + j * (agentWidth + AUTO_LAYOUT.TIER_AGENT_GAP)
-
-          // Place agent node
-          if (entry.agentNodeId) {
-            positions.set(entry.agentNodeId, { x: entryX, y: agentY })
-          }
-        }
-
-        // Advance cursor upward past this tier's agent slot
-        towerCursorY -= agentHeight
+      if (entry.agentNodeId) {
+        positions.set(entry.agentNodeId, { x: cursorX, y: agentY })
       }
+      cursorX += w + TOWER_LAYOUT.TIER_AGENT_GAP
     }
 
-    // Advance cursor
-    cursorX += columnWidth + AUTO_LAYOUT.SPINE_GAP
+    towerCursorY -= tallestHeight
   }
 
   return positions
 }
 
-export { computeAutoLayout, classifyStep, topologicalSort, buildTieredTower, computeAgentTiers }
-export type { NodeRole, TowerEntry, TierLayout }
+/**
+ * Compute tower positions for ALL protocol steps.
+ *
+ * Takes a map of protocol step IDs → current dimensions and measured node
+ * dimensions for all agent nodes, then returns positions for all agent nodes
+ * across all towers.
+ */
+const computeAllTowerPositions = (
+  protocolDimensions: ReadonlyMap<string, ProtocolDimensions>,
+  lookups: StepNodeLookups,
+  measuredDimensions: ReadonlyMap<string, NodeDimensions>,
+): ReadonlyMap<string, Point> => {
+  const allPositions = new Map<string, Point>()
+
+  for (const [stepId, dims] of protocolDimensions) {
+    const towerPositions = computeTowerPositions(stepId, dims, lookups, measuredDimensions)
+    for (const [nodeId, pos] of towerPositions) {
+      allPositions.set(nodeId, pos)
+    }
+  }
+
+  return allPositions
+}
+
+export { computeTowerPositions, computeAllTowerPositions, computeAgentTiers, buildTieredTower }
+export type { TowerEntry, TierLayout, ProtocolDimensions, NodeDimensions }
