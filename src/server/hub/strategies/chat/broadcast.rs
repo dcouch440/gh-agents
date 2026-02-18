@@ -125,10 +125,13 @@ fn parse_uuid_field(value: &Value, field: &str) -> Option<Uuid> {
 /// Handles both universal tools (archetype, name, description) and
 /// archetype-specific tools (doc defs, config). Only emits if the
 /// step context is present and the tool result indicates success.
-pub(super) fn broadcast_step_event(
+///
+/// Called from both ChatStrategy (interactive) and DispatchStrategy
+/// (background). The `user_id` is `None` for background dispatch agents.
+pub(crate) fn broadcast_step_event(
     state: &AppState,
     step_context: Option<&StepChatContext>,
-    user_id: UserId,
+    user_id: Option<UserId>,
     name: &str,
     input: &Value,
     result: &Value,
@@ -150,7 +153,7 @@ pub(super) fn broadcast_step_event(
     state.broadcast_workflow(WorkflowEvent {
         run_id: None,
         workflow_id: ctx.workflow_id,
-        user_id: Some(user_id.0),
+        user_id: user_id.map(|u| u.0),
         kind,
     });
 
