@@ -2,9 +2,9 @@
 
 A layered system
 
-# About
+## About
 
-The assistant needs a few upgrades as he seems to be fairly busy with his job to add agents one by one. This results in the UI displaying tool uses and ultamatly cutting off the the tool use and leaving the chat empty.
+The assistant needs a few upgrades as he seems to be fairly busy with his job to add agents one by one. This results in the UI displaying tool uses and ultimately cutting off the the tool use and leaving the chat empty.
 
 Heres what we should do instead:
 Assistant dispatches what he needs planned in a detailed description right into a tool.
@@ -19,4 +19,23 @@ The second layer will have all the capabilities information (detailed) and a sin
 
 The goal of the assistant is to create a detailed task description to the second tiered agent.
 
-This would keep the conversation roleing.
+This would keep the conversation rolling.
+
+
+## Ideas
+
+The assistant should rarely call tools directly. Instead, he should gather information first and then dispatch the concept to the next layer. We can have multiple things going on at once. We have to decide what they are.
+
+Assistant Config examples:
+
+Has run to review: true // This would essentially notify the assistant that there is a run that was not investigated. At the users request he could dispatch a question sub agents like "Can you figure this out for me". This would invoke a system that is running and capable of taking dispatch requests to fulfil the task async while the assistant continues his conversation.
+Last run date: ...
+Agent Roster: [...]
+Context: <></>
+User Messages: [...]
+Dispatched Task Statuses: [...] // Detailed information on what the current state of all his agents are.
+
+
+We need a way to "Reactive" him as well. Because if hes waiting for something to be done and the user does not message him, he should be able to respond in the chat by having the appended response pushed to the front end.
+
+
