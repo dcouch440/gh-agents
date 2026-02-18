@@ -20,6 +20,7 @@ function WorkflowEditorPage() {
     void outputSchemaStore.fetchIfStale()
     void protocolStore.fetchAll()
     void workflowExecutionStore.hydrateLatestRun(id)
+    void workflowExecutionStore.hydrateWorkshop(id)
     return () => {
       workflowStore.clearActive()
       workflowExecutionStore.reset()

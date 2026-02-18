@@ -1,5 +1,5 @@
 import { api } from '@/api'
-import type { RunStepResult, ChildStepResult } from '@/types'
+import type { RunStepResult, ChildStepResult, WorkshopStepSummary } from '@/types'
 import type { StepExecutionState, StepExecutionStatus, StepTimelineEvent, ChildStepState, SubWorkflowProgress } from './types'
 import { store } from './_store'
 
@@ -129,4 +129,48 @@ const hydrateLatestRun = async (workflowId: string): Promise<void> => {
   }
 }
 
-export { hydrateLatestRun, mapApiStatusToStoreStatus, mapRunStepToStepState, buildSubWorkflowProgress, buildEventLog }
+const mapWorkshopStepToStepState = (step: WorkshopStepSummary, runId: string): StepExecutionState => ({
+  status: mapApiStatusToStoreStatus(step.status),
+  stepName: null,
+  agentId: null,
+  executionId: runId,
+  output: null,
+  error: null,
+  inputTokens: null,
+  outputTokens: null,
+  durationMs: null,
+  forEachProgress: null,
+  subWorkflowProgress: null,
+  startedAt: null,
+  completedAt: null,
+})
+
+const hydrateWorkshop = async (workflowId: string): Promise<void> => {
+  try {
+    const workshop = await api.workflows.getWorkshopStatus(workflowId)
+
+    if (workshop.completed_steps.length === 0) return
+
+    // Don't overwrite a live running execution
+    if (store.getState().isRunning) return
+
+    const stepStates: Record<string, StepExecutionState> = {}
+    for (const step of workshop.completed_steps) {
+      stepStates[step.step_id] = mapWorkshopStepToStepState(step, workshop.run_id)
+    }
+
+    store.setState({
+      runId: workshop.run_id,
+      workflowId: workshop.workflow_id,
+      isRunning: false,
+      stepStates,
+      totalSteps: workshop.completed_steps.length + workshop.next_executable_steps.length,
+      completedStepCount: workshop.completed_steps.length,
+      viewMode: 'live',
+    })
+  } catch {
+    // Workshop may not exist yet — swallow the error
+  }
+}
+
+export { hydrateLatestRun, hydrateWorkshop, mapApiStatusToStoreStatus, mapRunStepToStepState, buildSubWorkflowProgress, buildEventLog }

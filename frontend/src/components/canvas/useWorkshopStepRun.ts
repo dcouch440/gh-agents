@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from 'react'
-import { useStore, workflowStore } from '@/stores'
+import { useState, useCallback } from 'react'
+import { useStore, workflowStore, workflowExecutionStore } from '@/stores'
 import { api } from '@/api'
 
 type WorkshopRunStatus = 'idle' | 'initializing' | 'running' | 'completed' | 'error'
@@ -14,9 +14,9 @@ const RESET_DELAY_MS = 3000
 
 const useWorkshopStepRun = (stepId: string): UseWorkshopStepRunResult => {
   const activeWorkflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
+  const storeRunId = useStore(workflowExecutionStore.store, workflowExecutionStore.selectRunId)
   const [status, setStatus] = useState<WorkshopRunStatus>('idle')
   const [error, setError] = useState<string | null>(null)
-  const workshopRunIdRef = useRef<string | null>(null)
 
   const handleRun = useCallback(async () => {
     if (!activeWorkflowId || status === 'running' || status === 'initializing') return
@@ -25,10 +25,10 @@ const useWorkshopStepRun = (stepId: string): UseWorkshopStepRunResult => {
     setStatus('initializing')
 
     try {
-      // Get or create workshop session (cached after first call)
-      if (workshopRunIdRef.current === null) {
-        const workshop = await api.workflows.getOrCreateWorkshop(activeWorkflowId)
-        workshopRunIdRef.current = workshop.run_id
+      // Ensure workshop session exists. If the store already has a runId
+      // from hydration, skip — execute_workshop_step creates it internally.
+      if (storeRunId === null) {
+        await api.workflows.getOrCreateWorkshop(activeWorkflowId)
       }
 
       setStatus('running')
@@ -41,7 +41,7 @@ const useWorkshopStepRun = (stepId: string): UseWorkshopStepRunResult => {
       setStatus('error')
       setTimeout(() => { setStatus('idle'); setError(null) }, RESET_DELAY_MS)
     }
-  }, [activeWorkflowId, stepId, status])
+  }, [activeWorkflowId, stepId, status, storeRunId])
 
   return {
     status,

@@ -272,6 +272,19 @@ type WorkshopStepResponse = {
   next_executable_steps: string[]
 }
 
+type WorkshopStepSummary = {
+  step_id: string
+  status: string
+}
+
+type WorkshopStatusResponse = {
+  run_id: string
+  workflow_id: string
+  status: string
+  completed_steps: WorkshopStepSummary[]
+  next_executable_steps: string[]
+}
+
 export type {
   Workflow,
   WorkflowStep,
@@ -302,4 +315,6 @@ export type {
   RunTemplate,
   WorkshopResponse,
   WorkshopStepResponse,
+  WorkshopStepSummary,
+  WorkshopStatusResponse,
 }
