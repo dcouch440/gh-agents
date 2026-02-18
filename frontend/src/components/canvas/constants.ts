@@ -6,6 +6,8 @@ export const CANVAS = {
   GRID_SIZE: 24,
   FIT_VIEW_PADDING: 0.15,
   GROUP_HOVER_DELAY_MS: 300,
+  /** Gap (px) maintained between nodes during Alt+drag collision push. */
+  COLLISION_GAP: 24,
 } as const
 
 export const STEP_TYPE_COLORS: Record<string, string> = {
