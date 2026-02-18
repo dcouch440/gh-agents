@@ -22,7 +22,7 @@ use crate::types::UserId;
 use super::super::error::HubError;
 use super::super::strategy::ExecutionStrategy;
 
-mod broadcast;
+pub(crate) mod broadcast;
 mod completion;
 pub(crate) mod config;
 pub(crate) mod dispatch;
@@ -89,7 +89,7 @@ impl ChatStrategy {
         broadcast::broadcast_step_event(
             &self.state,
             self.step_context.as_ref(),
-            self.user_id,
+            Some(self.user_id),
             name,
             input,
             result,

@@ -18,6 +18,9 @@ use crate::server::hub::strategy::ExecutionStrategy;
 use crate::server::state::AppState;
 use crate::server::tools::workforce::{self, WorkforceToolContext};
 
+use super::chat::broadcast;
+use super::chat::config::StepChatContext;
+
 mod tests;
 
 /// Strategy for background dispatch agents.
@@ -33,6 +36,27 @@ pub struct DispatchStrategy {
 }
 
 impl DispatchStrategy {
+    /// Broadcast a workflow event after a tool mutation.
+    ///
+    /// Reuses the same broadcast logic as ChatStrategy so the frontend
+    /// sees live updates from background dispatch agents.
+    fn broadcast_tool_event(&self, name: &str, input: &Value, result: &Value) {
+        let step_ctx = StepChatContext {
+            workflow_id: self.workflow_id,
+            step_id: self.step_id,
+            execution_mode: "workforce".to_string(),
+            step_name: String::new(),
+        };
+        broadcast::broadcast_step_event(
+            &self.state,
+            Some(&step_ctx),
+            None, // no user — background agent
+            name,
+            input,
+            result,
+        );
+    }
+
     /// Build a new dispatch strategy.
     ///
     /// Loads the current step state snapshot and builds a system prompt
@@ -112,22 +136,19 @@ impl ExecutionStrategy for DispatchStrategy {
 
         // Route universal step tools
         let node_tools = &["set_node_name", "set_node_description", "render_panel"];
-        if node_tools.contains(&name) {
+        let result = if node_tools.contains(&name) {
             let tool_ctx = crate::server::tools::node_assistant::StepToolContext {
                 workflow_id: self.workflow_id,
                 step_id: self.step_id,
             };
-            return crate::server::tools::node_assistant::execute_node_assistant_tool(
+            crate::server::tools::node_assistant::execute_node_assistant_tool(
                 name,
                 input,
                 self.state.repos().workflows.as_ref(),
                 &tool_ctx,
             )
-            .await;
-        }
-
-        // Route update_notes
-        if name == "update_notes" {
+            .await
+        } else if name == "update_notes" {
             let content = input["content"].as_str().unwrap_or("");
             match self
                 .state
@@ -136,18 +157,25 @@ impl ExecutionStrategy for DispatchStrategy {
                 .upsert_assistant_notes(self.step_id, content)
                 .await
             {
-                Ok(()) => return serde_json::json!({ "status": "ok" }),
-                Err(e) => return serde_json::json!({ "error": e.to_string() }),
+                Ok(()) => serde_json::json!({ "status": "ok" }),
+                Err(e) => serde_json::json!({ "error": e.to_string() }),
             }
-        }
-
-        // Route think tool
-        if name == "think" {
-            return serde_json::json!({ "status": "ok" });
-        }
-
-        // Route workforce-specific tools
-        workforce::execute_workforce_tool(name, input, self.state.repos().workflows.as_ref(), &ctx)
+        } else if name == "think" {
+            serde_json::json!({ "status": "ok" })
+        } else {
+            // Route workforce-specific tools
+            workforce::execute_workforce_tool(
+                name,
+                input,
+                self.state.repos().workflows.as_ref(),
+                &ctx,
+            )
             .await
+        };
+
+        // Broadcast workflow event so the frontend updates live
+        self.broadcast_tool_event(name, input, &result);
+
+        result
     }
 }
