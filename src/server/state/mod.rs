@@ -27,10 +27,12 @@ use super::ws::events::{RoomEvent, ServerEvent, SessionEvent, WorkflowEvent};
 mod builder;
 mod events;
 mod repos;
+pub mod task_registry;
 
 pub use builder::{AppStateBuilder, BuilderError};
 pub use events::{BroadcastEnvelope, EventBus};
 pub use repos::Repos;
+pub use task_registry::TaskRegistry;
 
 #[cfg(test)]
 pub mod test_helpers;
@@ -115,6 +117,8 @@ pub(crate) struct AppStateInner {
     /// Pending deleted items awaiting consistency scan (debounce accumulator).
     pub(crate) pending_scan_items:
         DashMap<Uuid, Vec<crate::server::hub::consistency_scanner::DeletedItem>>,
+    /// Registry for background dispatch tasks.
+    pub(crate) task_registry: TaskRegistry,
 }
 
 /// Application state shared across all HTTP handlers.
@@ -187,6 +191,7 @@ impl AppState {
             ws_connection_count: AtomicUsize::new(0),
             ws_connections_by_ip: DashMap::new(),
             pending_scan_items: DashMap::new(),
+            task_registry: TaskRegistry::new(),
         }));
 
         (state, orchestrator_rx)
@@ -222,6 +227,7 @@ impl AppState {
                 ws_connection_count: AtomicUsize::new(0),
                 ws_connections_by_ip: DashMap::new(),
                 pending_scan_items: DashMap::new(),
+                task_registry: TaskRegistry::new(),
             })),
             orchestrator_rx,
         )
@@ -454,6 +460,11 @@ impl AppState {
         &self,
     ) -> &DashMap<Uuid, Vec<crate::server::hub::consistency_scanner::DeletedItem>> {
         &self.0.pending_scan_items
+    }
+
+    /// Access the background dispatch task registry.
+    pub fn task_registry(&self) -> &TaskRegistry {
+        &self.0.task_registry
     }
 
     /// Access the JWT secret.

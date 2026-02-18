@@ -14,6 +14,8 @@ const UNIVERSAL_TOOLS: &[&str] = &[
     "render_panel",
     "think",
     "update_notes",
+    "dispatch",
+    "cancel_dispatch",
 ];
 
 /// Universal tool names handled by node_assistant.
@@ -86,6 +88,12 @@ pub(super) async fn dispatch_step_tool(
             }
             Err(e) => return Some(serde_json::json!({ "error": e.to_string() })),
         }
+    }
+
+    // Dispatch tools (background service layer)
+    if name == "dispatch" || name == "cancel_dispatch" {
+        let result = super::dispatch::handle_dispatch_tool(name, input, state, ctx).await;
+        return Some(result);
     }
 
     // Universal tools (all archetypes)
