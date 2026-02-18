@@ -25,6 +25,7 @@ use super::super::strategy::ExecutionStrategy;
 mod broadcast;
 mod completion;
 pub(crate) mod config;
+pub(crate) mod dispatch;
 mod messages;
 pub(crate) mod tools;
 

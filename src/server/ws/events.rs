@@ -517,6 +517,35 @@ pub enum SessionEventKind {
         mode_id: Option<String>,
     },
     Deleted,
+    /// A background dispatch task was started.
+    DispatchStarted {
+        execution_id: Uuid,
+        step_id: Uuid,
+        instruction: String,
+    },
+    /// Progress update from a running dispatch task.
+    DispatchProgress {
+        execution_id: Uuid,
+        step_id: Uuid,
+        message: String,
+    },
+    /// A dispatch task completed successfully.
+    DispatchCompleted {
+        execution_id: Uuid,
+        step_id: Uuid,
+        summary: String,
+    },
+    /// A dispatch task failed.
+    DispatchFailed {
+        execution_id: Uuid,
+        step_id: Uuid,
+        error: String,
+    },
+    /// A dispatch task was cancelled.
+    DispatchCancelled {
+        execution_id: Uuid,
+        step_id: Uuid,
+    },
 }
 
 impl SessionEvent {
@@ -525,6 +554,11 @@ impl SessionEvent {
             SessionEventKind::Created { .. } => "created",
             SessionEventKind::Updated { .. } => "updated",
             SessionEventKind::Deleted => "deleted",
+            SessionEventKind::DispatchStarted { .. } => "dispatch_started",
+            SessionEventKind::DispatchProgress { .. } => "dispatch_progress",
+            SessionEventKind::DispatchCompleted { .. } => "dispatch_completed",
+            SessionEventKind::DispatchFailed { .. } => "dispatch_failed",
+            SessionEventKind::DispatchCancelled { .. } => "dispatch_cancelled",
         }
     }
 

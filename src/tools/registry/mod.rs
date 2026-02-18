@@ -89,6 +89,10 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "set_dependency" => Some(set_dependency_tool()),
         "remove_dependency" => Some(remove_dependency_tool()),
 
+        // Dispatch tools (background service layer)
+        "dispatch" => Some(dispatch_tool()),
+        "cancel_dispatch" => Some(cancel_dispatch_tool()),
+
         _ => None,
     }
 }
@@ -1206,6 +1210,51 @@ fn remove_dependency_tool() -> Tool {
                 }
             },
             "required": ["from_agent", "to_agent"]
+        }),
+    }
+}
+
+// ============================================================================
+// Dispatch Tool Definitions (background service layer)
+// ============================================================================
+
+fn dispatch_tool() -> Tool {
+    Tool {
+        name: "dispatch".into(),
+        description: concat!(
+            "Send a plain English instruction to a background agent that will configure this ",
+            "step. The background agent loads the current step state and calls mutation tools ",
+            "(add_agent, set_task, add_deliverable, etc.) on your behalf. You stay responsive ",
+            "while the work happens in the background. Use this instead of calling mutation ",
+            "tools directly.",
+        )
+        .into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "instruction": {
+                    "type": "string",
+                    "description": "Plain English instruction describing what to configure (e.g., 'Add a researcher agent focused on market trends and a writer agent for the final report')"
+                }
+            },
+            "required": ["instruction"]
+        }),
+    }
+}
+
+fn cancel_dispatch_tool() -> Tool {
+    Tool {
+        name: "cancel_dispatch".into(),
+        description: "Cancel a running background dispatch task.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "execution_id": {
+                    "type": "string",
+                    "description": "UUID of the dispatch task to cancel"
+                }
+            },
+            "required": ["execution_id"]
         }),
     }
 }

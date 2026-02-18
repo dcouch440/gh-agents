@@ -6,6 +6,7 @@
 
 pub mod chat;
 pub mod collection_dag;
+pub mod dispatch;
 pub mod room;
 
 pub use chat::*;

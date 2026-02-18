@@ -239,6 +239,9 @@ pub mod roles {
     pub const NODE_ASSISTANT_WORKFORCE_BLOCK: &str =
         include_str!("../../config/protocols/node_assistant/workforce/block.md");
 
+    /// Dispatch background agent system prompt template.
+    pub const DISPATCH_SYSTEM: &str = include_str!("../../config/protocols/dispatch/system.md");
+
     /// Workforce runtime agent prompt template.
     pub static WORKFORCE_AGENT: RoleDefinition = RoleDefinition {
         system: include_str!("../../config/protocols/workforce/agent/system.md"),

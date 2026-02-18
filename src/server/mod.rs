@@ -672,6 +672,12 @@ async fn shutdown_signal(state: AppState) {
         );
     }
 
+    // Cancel all running dispatch tasks
+    let dispatch_cancelled = state.task_registry().cancel_all();
+    if dispatch_cancelled > 0 {
+        info!("Cancelled {} running dispatch task(s)", dispatch_cancelled);
+    }
+
     // Cancel the master shutdown token (stops background tasks like the reaper)
     state.shutdown_token().cancel();
 }
