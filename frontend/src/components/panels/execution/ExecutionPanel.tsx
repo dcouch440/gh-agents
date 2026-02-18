@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import MuiButton from '@mui/material/Button'
@@ -45,12 +45,6 @@ function ExecutionPanel() {
   const historyError = useStore(workflowExecutionStore.store, workflowExecutionStore.selectHistoryError)
 
   const stepIds = useMemo(() => deriveStepIds(eventLog), [eventLog])
-
-  useEffect(() => {
-    if (activeWorkflowId) {
-      void workflowExecutionStore.fetchRuns(activeWorkflowId)
-    }
-  }, [activeWorkflowId])
 
   const hasLiveRun = runId !== null
   const hasHistory = runs.length > 0
