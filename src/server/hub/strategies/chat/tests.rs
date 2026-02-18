@@ -235,14 +235,16 @@ mod tests {
         let tools = super::super::resolve_chat_step_tools("workforce");
         let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
 
-        // Has universal tools
+        // Has universal tools (minus update_notes which is dispatch-only)
         assert!(names.contains(&"dispatch"));
         assert!(names.contains(&"cancel_dispatch"));
         assert!(names.contains(&"set_node_name"));
         assert!(names.contains(&"set_node_description"));
         assert!(names.contains(&"render_panel"));
         assert!(names.contains(&"think"));
-        assert!(names.contains(&"update_notes"));
+
+        // update_notes is owned by the dispatch sub-agent, not the assistant
+        assert!(!names.contains(&"update_notes"));
 
         // Does NOT have workforce mutation tools
         assert!(!names.contains(&"set_task"));
