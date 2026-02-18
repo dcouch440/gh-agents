@@ -9,6 +9,8 @@ import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import OpenInFullOutlined from '@mui/icons-material/OpenInFullOutlined'
+import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined'
+import CircularProgress from '@mui/material/CircularProgress'
 import StreamOutlined from '@mui/icons-material/StreamOutlined'
 import { useStore, canvasStore, shareStore } from '@/stores'
 import { CanvasFormNode } from '../CanvasFormNode'
@@ -23,6 +25,7 @@ import { useCanvasLOD } from '../useCanvasLOD'
 import { MinimalNodeShell } from '../MinimalNodeShell'
 import { ProtocolBadge } from '../ProtocolBadge'
 import { useEnterFocusMode } from '../useEnterFocusMode'
+import { useWorkshopStepRun } from '../useWorkshopStepRun'
 import { NodeHeader, ExecutionStatusBadge } from '../execution'
 import { SharePickerPanel } from '../SharePickerPanel'
 import { Archetype, ARCHETYPE_CONFIGS, AGENT_CONSTRAINTS } from './archetypes'
@@ -134,6 +137,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
 
   const enterFocusMode = useEnterFocusMode()
   const handleEnterFocusMode = useCallback(() => { enterFocusMode(id) }, [enterFocusMode, id])
+  const { status: workshopStatus, handleRun: handleWorkshopRun } = useWorkshopStepRun(id)
 
   // --- Handles (shared between MINIMAL and full render) ---
   const agentHandles = (
@@ -210,10 +214,23 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     <ProtocolBadge color={config.color} label={config.label} animated />
   ) : undefined
 
+  const workshopRunning = workshopStatus === 'running' || workshopStatus === 'initializing'
+
   const headerActions = isAgent ? undefined : (
-    <IconButton className="nodrag" onClick={handleEnterFocusMode} size="small" sx={{ flexShrink: 0, width: 28, height: 28, color: 'text.secondary', '&:hover': { color: 'text.primary' } }}>
-      <OpenInFullOutlined sx={{ fontSize: 16 }} />
-    </IconButton>
+    <Box sx={{ display: 'flex', gap: 0.25, alignItems: 'center' }}>
+      <Tooltip title={workshopRunning ? 'Running...' : 'Run step'} placement="top">
+        <span>
+          <IconButton className="nodrag" onClick={handleWorkshopRun} disabled={workshopRunning} size="small" sx={{ flexShrink: 0, width: 28, height: 28, color: 'text.secondary', '&:hover': { color: 'text.primary' } }}>
+            {workshopRunning
+              ? <CircularProgress size={12} thickness={5} sx={{ color: 'text.secondary' }} />
+              : <PlayArrowOutlined sx={{ fontSize: 16 }} />}
+          </IconButton>
+        </span>
+      </Tooltip>
+      <IconButton className="nodrag" onClick={handleEnterFocusMode} size="small" sx={{ flexShrink: 0, width: 28, height: 28, color: 'text.secondary', '&:hover': { color: 'text.primary' } }}>
+        <OpenInFullOutlined sx={{ fontSize: 16 }} />
+      </IconButton>
+    </Box>
   )
 
   const IconComponent = config.icon

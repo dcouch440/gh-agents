@@ -78,6 +78,8 @@ import type {
   RebaseRequest,
   RebaseResponse,
   RunTemplate,
+  WorkshopResponse,
+  WorkshopStepResponse,
 } from '@/types'
 
 // ============================================================================
@@ -360,6 +362,12 @@ const workflows = freeze({
 
   listTemplates: (workflowId: string, config?: RequestConfig) =>
     baseApi.get<RunTemplate[]>(API.WORKFLOW_TEMPLATES(workflowId), config),
+
+  getOrCreateWorkshop: (workflowId: string, body?: { initial_input?: string }, config?: RequestConfig) =>
+    baseApi.post<WorkshopResponse>(API.WORKFLOW_WORKSHOP(workflowId), body ?? {}, config),
+
+  executeWorkshopStep: (workflowId: string, stepId: string, config?: RequestConfig) =>
+    baseApi.post<WorkshopStepResponse>(API.WORKFLOW_WORKSHOP_STEP(workflowId, stepId), undefined, config),
 })
 
 const contextResponse = freeze({

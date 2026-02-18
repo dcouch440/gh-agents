@@ -86,7 +86,7 @@ impl ExecutionStrategy for WorkforceAgentStrategy {
     }
 
     fn streaming(&self) -> bool {
-        false
+        true
     }
 
     fn temperature(&self) -> f32 {
