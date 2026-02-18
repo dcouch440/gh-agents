@@ -76,3 +76,6 @@ Make Documents stick to template instead of re-generated.
 
   2. Port resolution scans all edges per step — O(V × E). Fine for typical workflows (< 200 edges). If a workforce node's
   sub-DAG grows large, build an adjacency index at DAG start. Not urgent but worth noting. 
+
+- Investigate create_doc vs file_write for deliverables
+- Investigate language used on the assistant telling him what to do for the assistants notes when he himself does not write them.
