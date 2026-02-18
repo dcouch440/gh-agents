@@ -49,10 +49,6 @@ use utoipa::OpenApi;
         super::api::auth::auth_login,
         super::api::auth::auth_register,
         super::api::auth::auth_me,
-        // Tasks
-        super::api::tasks::list_tasks,
-        super::api::tasks::get_task,
-        super::api::tasks::create_task,
         // Agents
         super::api::agents::list_agents,
         super::api::agents::create_agent,
@@ -159,8 +155,6 @@ use utoipa::OpenApi;
     components(schemas(
         // API response/request types
         super::api::health::HealthResponse,
-        super::api::tasks::TasksQuery,
-        super::api::tasks::CreateTaskRequest,
         super::api::agents::AgentResponse,
         super::api::agents::AgentsListResponse,
         super::api::agents::AgentPoolStats,
@@ -238,10 +232,8 @@ use utoipa::OpenApi;
         crate::db::DocumentSearchResult,
         crate::db::traits::ModelSpendRow,
         // Domain types
-        crate::types::Task,
         crate::types::TaskId,
         crate::types::TaskStatus,
-        crate::types::Priority,
         crate::types::SliceId,
         crate::types::AgentId,
         crate::types::ModelConfig,

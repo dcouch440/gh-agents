@@ -67,10 +67,6 @@ pub const TEMPERATURE_CASUAL: f32 = 0.7;
 
 // ── Task Execution ──────────────────────────────────────────────────────────
 
-/// Default maximum retries before a task is permanently failed.
-pub const TASK_MAX_RETRIES: u32 = 3;
-/// Maximum tool call rounds per task execution.
-pub const TASK_MAX_TOOL_ROUNDS: u32 = 15;
 /// Consecutive tool errors before the executor bails out early.
 pub const TASK_MAX_CONSECUTIVE_TOOL_ERRORS: u32 = 3;
 
@@ -205,10 +201,6 @@ pub mod routes {
     pub const AUTH_LOGIN: &str = "/auth/login";
     pub const AUTH_REGISTER: &str = "/auth/register";
     pub const AUTH_ME: &str = "/auth/me";
-
-    // Tasks
-    pub const TASKS: &str = "/tasks";
-    pub const TASK: &str = "/tasks/:id";
 
     // Agents
     pub const AGENTS: &str = "/agents";

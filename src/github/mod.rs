@@ -5,7 +5,6 @@ mod client;
 mod comments;
 mod issue_sync;
 mod merge;
-mod merge_queue;
 mod pr;
 mod types;
 
@@ -16,10 +15,6 @@ pub use issue_sync::{convert_issue_to_ticket, IssueRef, IssueSync, IssueSyncErro
 pub use merge::{
     MergeError, MergeMethod, MergePrRequest, MergePrResponse, MergePrResult, MergeableStatus,
     RepoMergeSettings,
-};
-pub use merge_queue::{
-    ConflictInfoJson, MergeQueue, MergeQueueProcessor, NotificationOptions, PrQueueEntry,
-    ProcessResult, QueueError, QueueStats, QueueStatus,
 };
 pub use pr::{PrBodyGenerator, PrError, PrResult, PrService};
 pub use types::{

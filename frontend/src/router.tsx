@@ -6,7 +6,6 @@ import { DashboardPage } from './pages/Dashboard/DashboardPage'
 import { AgentsPage } from './pages/Agents/AgentsPage'
 import { AgentDetailPage } from './pages/Agents/AgentDetailPage'
 import { AgentWorkshopPage } from './pages/Agents/AgentWorkshopPage'
-import { TasksPage } from './pages/Tasks/TasksPage'
 import { DocumentsPage } from './pages/Documents/DocumentsPage'
 import { SettingsPage } from './pages/Settings/SettingsPage'
 import { LoginPage } from './pages/Auth/LoginPage'
@@ -33,7 +32,6 @@ export const router = createBrowserRouter([
           { path: ROUTES.AGENTS, element: <AgentsPage /> },
           { path: ROUTES.AGENT_WORKSHOP, element: <AgentWorkshopPage /> },
           { path: ROUTES.AGENT_DETAIL, element: <AgentDetailPage /> },
-          { path: ROUTES.TASKS, element: <TasksPage /> },
           { path: ROUTES.WORKFLOWS, element: <WorkflowsPage /> },
           { path: ROUTES.WORKFLOW_EDITOR, element: <WorkflowEditorPage /> },
           { path: ROUTES.WORKFLOW_RUNS, element: <RunHistoryPage /> },
