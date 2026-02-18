@@ -6,7 +6,7 @@ import IconButton from '@mui/material/IconButton'
 import { useTheme } from '@mui/material/styles'
 import { PIPE } from './constants'
 import { PipeEdgePath } from './PipeEdgePath'
-import { computeOrthogonalPath, computeOrthogonalLabel } from './edges/orthogonalPath'
+import { computeBezierPath, computeBezierLabel } from './edges/bezierPath'
 
 type StepEdgeNodeData = {
   sourceColor: string
@@ -22,8 +22,8 @@ function StepEdgeComponent(props: EdgeProps) {
   const theme = useTheme()
   const { deleteElements } = useReactFlow()
 
-  const edgePath = computeOrthogonalPath(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition)
-  const { labelX, labelY } = computeOrthogonalLabel(sourceX, sourceY, targetX, targetY)
+  const edgePath = computeBezierPath(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition)
+  const { labelX, labelY } = computeBezierLabel(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition)
 
   const color = selected
     ? theme.palette.primary.main
