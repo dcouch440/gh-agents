@@ -20,7 +20,7 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::config::protocols::{roles, vars, AGENT_DESIGNER};
-use crate::db::traits::CreateDesignerOutputGenericInput;
+use crate::db::traits::{CreateAgentExecutionInput, CreateDesignerOutputGenericInput};
 use crate::db::WorkflowStepRow;
 use crate::server::hub::engine::filters::{FilterContext, ReasoningTraceFilter};
 use crate::server::hub::engine::ExecutionEngine;
@@ -204,7 +204,42 @@ pub(crate) async fn run_agent_designer(
         "Running Agent Designer pre-lifecycle"
     );
 
-    // 4. Build strategy (no tools, single round)
+    // 4. Create agent_execution for designer persistence
+    let ae_repo = &*state.repos().agent_executions;
+    let designer_ae_id = match ae_repo
+        .create_agent_execution(CreateAgentExecutionInput {
+            agent_id: None,
+            workflow_step_id: Some(step.id),
+            is_interactive: false,
+            parent_agent_execution_id: None,
+            system_prompt_rendered: protocol_ctx.system_prompt.clone(),
+            input: protocol_ctx.user_prompt.clone(),
+            room_session_id: None,
+            speaker_order: None,
+            workflow_execution_id: Some(ctx.stage_execution_id),
+        })
+        .await
+    {
+        Ok(row) => {
+            let _ = ae_repo
+                .create_execution_message(
+                    row.id, "system", &protocol_ctx.system_prompt, None, 0, 0,
+                )
+                .await;
+            let _ = ae_repo
+                .create_execution_message(
+                    row.id, "user", &protocol_ctx.user_prompt, None, 0, 0,
+                )
+                .await;
+            Some(row.id)
+        }
+        Err(e) => {
+            warn!(step_id = %step.id, error = %e, "Failed to create designer agent execution");
+            None
+        }
+    };
+
+    // 5. Build strategy (no tools, single round)
     let strategy = AgentDesignerStrategy::new(AgentDesignerConfig {
         system_prompt: protocol_ctx.system_prompt,
         model_id: designer_cfg.model_id.clone(),
@@ -213,9 +248,10 @@ pub(crate) async fn run_agent_designer(
         context_budget: designer_cfg.context_budget,
         state: Some(state.clone()),
         user_id: Some(UserId(ctx.user_id)),
+        agent_execution_id: designer_ae_id,
     });
 
-    // 5. Execute the designer call with reasoning trace filter
+    // 6. Execute the designer call with reasoning trace filter
     let mut filter_ctx = FilterContext::new(&designer_cfg.model_id, step.id);
     filter_ctx.has_output_schema = true;
     let filters: Vec<Arc<dyn crate::server::hub::engine::filters::ExecutionFilter>> =
@@ -224,8 +260,8 @@ pub(crate) async fn run_agent_designer(
     let recorder = ExecutionRecorder::new(
         &*state.repos().sessions,
         &*state.repos().chat_messages,
-        None,
-        None,
+        Some(&*state.repos().agent_executions),
+        Some(&*state.repos().token_ledger),
     );
     let result = engine
         .clone_with_provider()
@@ -240,7 +276,7 @@ pub(crate) async fn run_agent_designer(
         )
         .await?;
 
-    // 6. Compute cost and update token tracking
+    // 7. Compute cost and update token tracking
     let cost = compute_cost(
         &designer_cfg.model_id,
         result.input_tokens as i64,
@@ -265,7 +301,7 @@ pub(crate) async fn run_agent_designer(
         "Agent Designer call completed"
     );
 
-    // 7. Parse the designer's output as JSON
+    // 8. Parse the designer's output as JSON
     let parsed_json = parse_structured_output(&result.content).ok_or_else(|| {
         HubError::Internal(anyhow!(
             "Agent Designer produced no valid JSON. Raw output: {}",
@@ -300,7 +336,7 @@ pub(crate) async fn run_agent_designer(
             ))
         })?;
 
-    // 8. Build allowed capabilities from all agents in the input
+    // 9. Build allowed capabilities from all agents in the input
     let allowed: HashSet<&str> = input
         .agents
         .iter()

@@ -10,9 +10,11 @@ use async_trait::async_trait;
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::llm::{Message, Tool};
+use crate::llm::{Message, Tool, TokenUsage};
 use crate::server::hub::error::HubError;
+use crate::server::hub::protocols::json_utils::parse_structured_output;
 use crate::server::hub::strategy::ExecutionStrategy;
+use crate::server::hub::strategies;
 use crate::server::state::AppState;
 use crate::types::UserId;
 
@@ -32,11 +34,13 @@ pub struct AgentDesignerConfig {
     pub state: Option<AppState>,
     /// Optional user ID for token ledger attribution.
     pub user_id: Option<UserId>,
+    /// Agent execution ID for message persistence and on_complete updates.
+    pub agent_execution_id: Option<Uuid>,
 }
 
 /// Strategy for the Agent Designer pre-lifecycle LLM call.
 ///
-/// Single-shot, no tools. The default `on_complete` handles token ledger logging.
+/// Single-shot, no tools. Persists execution results via `on_complete`.
 pub struct AgentDesignerStrategy {
     config: AgentDesignerConfig,
 }
@@ -89,7 +93,43 @@ impl ExecutionStrategy for AgentDesignerStrategy {
         self.config.user_id.map(|u| u.0)
     }
 
+    fn agent_execution_id(&self) -> Option<Uuid> {
+        self.config.agent_execution_id
+    }
+
     async fn execute_tool(&self, _name: &str, _input: &Value) -> Value {
         serde_json::json!({"error": "agent designer does not execute tools"})
+    }
+
+    async fn on_complete(&self, response: &str, usage: &TokenUsage) -> Result<(), HubError> {
+        // Log token usage to ledger
+        if let (Some(state), Some(uid)) = (self.state(), self.user_id()) {
+            strategies::log_token_usage(
+                state,
+                uid,
+                self.agent_execution_id(),
+                self.model_id(),
+                usage,
+            )
+            .await;
+        }
+
+        // Update agent_execution with final status and output
+        if let (Some(state), Some(ae_id)) =
+            (self.config.state.as_ref(), self.config.agent_execution_id)
+        {
+            let ae_repo = &state.repos().agent_executions;
+            let structured = parse_structured_output(response);
+            let _ = ae_repo
+                .update_agent_execution_status(
+                    ae_id,
+                    "completed",
+                    Some(response.to_string()),
+                    structured,
+                )
+                .await;
+        }
+
+        Ok(())
     }
 }

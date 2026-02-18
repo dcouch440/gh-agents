@@ -267,7 +267,51 @@ impl ExecutionEngine {
                         });
                     }
 
-                    messages.push(Message::tool_results(result_blocks));
+                    messages.push(Message::tool_results(result_blocks.clone()));
+
+                    // Persist assistant response (tool calls) + tool results
+                    if let Some(ae_id) = strategy.agent_execution_id() {
+                        let assistant_content = response
+                            .content_blocks
+                            .iter()
+                            .filter_map(|b| match b {
+                                ContentBlock::ToolUse { name, input, .. } => {
+                                    Some(format!("tool_use: {} {}", name, input))
+                                }
+                                ContentBlock::Text { text } => Some(text.clone()),
+                                _ => None,
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n");
+                        let _ = recorder
+                            .record_execution_message(
+                                ae_id,
+                                "assistant",
+                                &assistant_content,
+                                None,
+                                response.usage.input_tokens as i64,
+                                response.usage.output_tokens as i64,
+                            )
+                            .await;
+                        for block in &result_blocks {
+                            if let ContentBlock::ToolResult {
+                                tool_use_id,
+                                content,
+                            } = block
+                            {
+                                let _ = recorder
+                                    .record_execution_message(
+                                        ae_id,
+                                        "tool",
+                                        content,
+                                        Some(tool_use_id.clone()),
+                                        0,
+                                        0,
+                                    )
+                                    .await;
+                            }
+                        }
+                    }
                 }
                 StopReason::EndTurn | StopReason::MaxTokens | StopReason::StopSequence => {
                     // ── on_response filters ──
@@ -306,6 +350,20 @@ impl ExecutionEngine {
                         }
                     }
 
+                    // Persist final assistant response
+                    if let Some(ae_id) = strategy.agent_execution_id() {
+                        let _ = recorder
+                            .record_execution_message(
+                                ae_id,
+                                "assistant",
+                                &final_content,
+                                None,
+                                response.usage.input_tokens as i64,
+                                response.usage.output_tokens as i64,
+                            )
+                            .await;
+                    }
+
                     // Execution complete
                     let usage = TokenUsage {
                         input_tokens: total_input as u32,
@@ -316,10 +374,6 @@ impl ExecutionEngine {
                     strategy.on_complete(&final_content, &usage).await?;
 
                     sink.done().await;
-
-                    // Use _ prefix to acknowledge recorder is available for strategies
-                    // that need it — actual recording happens in on_complete callbacks
-                    let _ = recorder;
 
                     return Ok(ExecutionResult {
                         content: final_content,
