@@ -12,6 +12,7 @@ use std::collections::{HashMap, HashSet};
 
 use uuid::Uuid;
 
+use crate::db::traits::ToolCapabilityRepo;
 use crate::db::WorkflowStepRow;
 use crate::types::StepExecutionEnvelope;
 
@@ -129,21 +130,55 @@ pub fn format_envelopes_as_upstream(
         .collect()
 }
 
-/// Convert capability names into tool descriptions.
-pub fn build_tool_descriptions(capabilities: &[String]) -> Vec<ToolDescription> {
+/// Load real capability descriptions from the database.
+///
+/// Fetches all capabilities (~27 rows), maps requested keys to their DB
+/// descriptions. Falls back to hardcoded descriptions on DB error.
+pub async fn build_tool_descriptions_from_db(
+    capabilities: &[String],
+    repo: &dyn ToolCapabilityRepo,
+) -> Vec<ToolDescription> {
+    let all_caps = match repo.get_tool_capabilities().await {
+        Ok(caps) => caps,
+        Err(_) => return build_tool_descriptions(capabilities),
+    };
+
+    let cap_map: HashMap<&str, &str> = all_caps
+        .iter()
+        .map(|c| (c.capability_key.as_str(), c.description.as_str()))
+        .collect();
+
+    capabilities
+        .iter()
+        .map(|key| ToolDescription {
+            name: key.clone(),
+            description: cap_map
+                .get(key.as_str())
+                .copied()
+                .unwrap_or(key.as_str())
+                .to_string(),
+        })
+        .collect()
+}
+
+/// Convert capability names into tool descriptions (hardcoded fallback).
+pub(crate) fn build_tool_descriptions(capabilities: &[String]) -> Vec<ToolDescription> {
     capabilities
         .iter()
         .map(|cap| {
             let desc = match cap.as_str() {
                 "file_read" => "Read file contents from the repository",
                 "file_write" => "Create or modify files in the repository",
-                "grep" => "Search file contents with regex patterns",
-                "shell" => "Execute shell commands in a sandboxed environment",
-                "git" => "Run git operations (status, diff, log, commit, branch)",
-                "github_api" => "Interact with GitHub API (issues, PRs, reviews)",
+                "content_search" => "Search file contents with regex patterns",
+                "shell_execution" => "Execute shell commands in a sandboxed environment",
+                "git_read" => "View git history, diffs, status, branches (read-only)",
+                "git_write" => "Commit changes, create branches, push to remote",
                 "web_search" => "Search the web for information",
                 "database_query" => "Execute read-only SQL queries",
                 "document_read" => "Read a document from the knowledge base by ID",
+                "document_create" => "Create a document in the knowledge base",
+                "document_update" => "Update an existing document in the knowledge base",
+                "document_search" => "Search knowledge documents by content or tags",
                 other => other,
             };
             ToolDescription {
