@@ -21,16 +21,22 @@ const UNIVERSAL_TOOLS: &[&str] = &[
 /// Universal tool names handled by node_assistant.
 const NODE_ASSISTANT_TOOLS: &[&str] = &["set_node_name", "set_node_description", "render_panel"];
 
+/// Tools excluded from the workforce assistant's chat session.
+/// The dispatch sub-agent owns note-taking for workforce nodes.
+const WORKFORCE_CHAT_EXCLUDED: &[&str] = &["update_notes"];
+
 /// Resolve tool definitions for step chat sessions.
 ///
-/// For workforce mode, returns only universal tools — the assistant dispatches
-/// to the background agent instead of calling mutation tools directly.
+/// For workforce mode, returns universal tools minus excluded tools — the
+/// assistant dispatches to the background agent instead of calling mutation
+/// tools directly. Notes are owned by the dispatch sub-agent.
 /// For other modes, delegates to `resolve_step_tools()` which includes
 /// both universal and archetype-specific tools.
 pub(crate) fn resolve_chat_step_tools(execution_mode: &str) -> Vec<Tool> {
     match execution_mode {
         "workforce" => UNIVERSAL_TOOLS
             .iter()
+            .filter(|name| !WORKFORCE_CHAT_EXCLUDED.contains(name))
             .filter_map(|name| crate::tools::registry::get_tool_definition(name))
             .collect(),
         _ => resolve_step_tools(execution_mode),
