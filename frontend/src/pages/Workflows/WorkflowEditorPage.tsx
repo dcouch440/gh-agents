@@ -19,8 +19,10 @@ function WorkflowEditorPage() {
     void agentStore.fetchAll()
     void outputSchemaStore.fetchIfStale()
     void protocolStore.fetchAll()
-    void workflowExecutionStore.hydrateLatestRun(id)
-    void workflowExecutionStore.hydrateWorkshop(id)
+    // Sequential: workshop hydration runs after latest-run so it gets the final say
+    void workflowExecutionStore.hydrateLatestRun(id).then(() =>
+      workflowExecutionStore.hydrateWorkshop(id),
+    )
     return () => {
       workflowStore.clearActive()
       workflowExecutionStore.reset()

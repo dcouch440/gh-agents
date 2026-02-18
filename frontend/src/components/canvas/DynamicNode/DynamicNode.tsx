@@ -71,7 +71,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
 
   // --- Extracted hooks ---
   const { isExecuting, resolvedExecStatus, agentSourceStatus, stepExecStatus } =
-    useDynamicNodeExecution(id, isAgent, nodeData.rosterAgentId)
+    useDynamicNodeExecution(id, isAgent, nodeData.rosterAgentId, nodeData.protocolStepId)
   const { documentDefs, roomStepMembers, stepIssues } = useStepStoreData(id)
   const documentActions = useDocumentActions(id)
 
@@ -114,7 +114,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   // --- Build tabs ---
   const tabs = isAgent
     ? [
-        { id: 'stream', icon: StreamOutlined, tooltip: 'Live Stream', content: <AgentStreamTab rosterAgentId={nodeData.rosterAgentId ?? ''} /> },
+        { id: 'stream', icon: StreamOutlined, tooltip: 'Live Stream', content: <AgentStreamTab rosterAgentId={nodeData.rosterAgentId ?? ''} protocolStepId={nodeData.protocolStepId} agentName={nodeData.label} /> },
         { id: 'info', icon: InfoOutlined, tooltip: 'Info', content: <AgentInfoTab roleDescription={nodeData.roleDescription ?? ''} capabilities={nodeData.capabilities} /> },
       ]
     : buildStepTabs({

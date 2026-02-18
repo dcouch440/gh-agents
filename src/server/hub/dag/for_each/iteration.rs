@@ -201,7 +201,18 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
 
     // Store envelope for downstream port resolution
     let envelope = wrap_in_envelope(&output, agent, step.id, 0, 0, 0.0);
+    let envelope_json = serde_json::to_string(&envelope).unwrap_or_default();
     dag_state.record_step_output(step.id, output, envelope);
+    let _ = crate::server::hub::dag::versioning::snapshot_content(
+        &*dag.state.repos().content_versions,
+        dag.ctx.run_id,
+        step.id,
+        step.id,
+        crate::server::hub::dag::versioning::content_types::ENVELOPE,
+        "output",
+        &envelope_json,
+    )
+    .await;
 
     // Broadcast: step completed (for-each)
     broadcast_workflow_event(

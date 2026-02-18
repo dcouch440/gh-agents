@@ -275,6 +275,7 @@ type WorkshopStepResponse = {
 type WorkshopStepSummary = {
   step_id: string
   status: string
+  output: unknown | null
 }
 
 type WorkshopStatusResponse = {
