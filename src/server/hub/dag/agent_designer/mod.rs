@@ -273,8 +273,27 @@ pub(crate) async fn run_agent_designer(
         ))
     })?;
 
-    let designer_output: DesignerOutputSchema =
-        serde_json::from_value(parsed_json).map_err(|e| {
+    let designer_output: DesignerOutputSchema = serde_json::from_value(parsed_json.clone())
+        .or_else(|initial_err| {
+            // Fallback: the designer may have wrapped the output in an extra layer
+            // (e.g., {"design": {"agents": [...]}}). Walk one level deep.
+            if let Some(obj) = parsed_json.as_object() {
+                for value in obj.values() {
+                    if let Ok(schema) =
+                        serde_json::from_value::<DesignerOutputSchema>(value.clone())
+                    {
+                        warn!("Agent Designer wrapped output in extra layer, unwrapped successfully");
+                        return Ok(schema);
+                    }
+                }
+            }
+            warn!(
+                "Agent Designer JSON does not match schema. Raw: {}",
+                truncate_for_log(&result.content, 1000)
+            );
+            Err(initial_err)
+        })
+        .map_err(|e| {
             HubError::Internal(anyhow!(
                 "Agent Designer JSON does not match expected schema: {}",
                 e
@@ -298,24 +317,19 @@ pub(crate) async fn run_agent_designer(
     let mut designed_prompts = Vec::with_capacity(designer_output.agents.len());
 
     for (idx, entry) in designer_output.agents.iter().enumerate() {
-        // Validate assigned tools against the allowed capabilities
-        let valid_tools: Vec<String> = entry
-            .tools
-            .iter()
-            .filter(|tool| {
-                if allowed.is_empty() || allowed.contains(tool.as_str()) {
-                    true
-                } else {
-                    warn!(
-                        agent = %entry.agent_name,
-                        tool = %tool,
-                        "Designer assigned tool not in allowed capabilities, stripping"
-                    );
-                    false
-                }
-            })
-            .cloned()
-            .collect();
+        // Log tools not in the allowed capabilities set but keep them — downstream
+        // resolve_capabilities_to_tools() handles the actual validation and unknown
+        // names simply won't resolve to any tool (harmless).
+        for tool in &entry.tools {
+            if !allowed.is_empty() && !allowed.contains(tool.as_str()) {
+                warn!(
+                    agent = %entry.agent_name,
+                    tool = %tool,
+                    "Designer assigned tool not in allowed capabilities"
+                );
+            }
+        }
+        let valid_tools: Vec<String> = entry.tools.clone();
 
         // Store in DB
         let _ = state

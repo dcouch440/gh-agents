@@ -237,7 +237,7 @@ pub(crate) async fn run_step_via_engine(
     // Create agent_execution row
     let ae_row = ae_repo
         .create_agent_execution(CreateAgentExecutionInput {
-            agent_id: agent.id,
+            agent_id: Some(agent.id),
             workflow_step_id: Some(step.id),
             is_interactive: false,
             parent_agent_execution_id: None,

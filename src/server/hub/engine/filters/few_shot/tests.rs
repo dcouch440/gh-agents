@@ -17,7 +17,7 @@ mod tests {
     ) -> AgentExecutionRow {
         AgentExecutionRow {
             id: Uuid::new_v4(),
-            agent_id,
+            agent_id: Some(agent_id),
             workflow_step_id: step_id,
             workflow_execution_id: None,
             is_interactive: false,

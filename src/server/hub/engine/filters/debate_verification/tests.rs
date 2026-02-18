@@ -150,7 +150,7 @@ mod tests {
     fn make_ae_row(agent_id: Uuid) -> AgentExecutionRow {
         AgentExecutionRow {
             id: Uuid::new_v4(),
-            agent_id,
+            agent_id: Some(agent_id),
             workflow_step_id: None,
             workflow_execution_id: None,
             is_interactive: false,
@@ -487,7 +487,7 @@ mod tests {
         ae_mock
             .expect_create_agent_execution()
             .withf(move |input| {
-                input.agent_id == agent_id && input.parent_agent_execution_id == Some(parent_ae_id)
+                input.agent_id == Some(agent_id) && input.parent_agent_execution_id == Some(parent_ae_id)
             })
             .times(1)
             .returning(move |_| Ok(make_ae_row(agent_id)));

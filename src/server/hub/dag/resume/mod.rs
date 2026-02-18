@@ -146,7 +146,7 @@ pub async fn resume_dag_from_approval(
 
     let user_id = completed_executions
         .first()
-        .map(|ae| ae.agent_id)
+        .and_then(|ae| ae.agent_id)
         .unwrap_or(Uuid::nil());
 
     // Reconstruct completed step outputs from DB

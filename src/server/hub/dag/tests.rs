@@ -293,7 +293,7 @@ mod tests {
     fn dummy_ae_row() -> AgentExecutionRow {
         AgentExecutionRow {
             id: Uuid::new_v4(),
-            agent_id: Uuid::new_v4(),
+            agent_id: Some(Uuid::new_v4()),
             workflow_step_id: None,
             workflow_execution_id: None,
             is_interactive: false,

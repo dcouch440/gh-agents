@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 use crate::config::protocols::{roles, vars, WORKFORCE};
 use crate::db::WorkflowStepRow;
+use crate::db::traits::CreateAgentExecutionInput;
 use crate::db::{ProtocolDocumentDefRow, TaskAgentRosterRow, TaskMissionBriefRow};
 use crate::server::hub::capability_resolver::resolve_capabilities_to_tools;
 use crate::server::hub::error::HubError;
@@ -400,6 +401,40 @@ pub(super) async fn execute_workforce_step(
             task_prompt = format!("{user_notes_block}\n\n{task_prompt}");
         }
 
+        // Create agent_execution row for message persistence
+        let ae_repo = &*dag.state.repos().agent_executions;
+        let ae_id = match ae_repo
+            .create_agent_execution(CreateAgentExecutionInput {
+                agent_id: None,
+                workflow_step_id: Some(step.id),
+                is_interactive: false,
+                parent_agent_execution_id: None,
+                system_prompt_rendered: designed.system_prompt.clone(),
+                input: task_prompt.clone(),
+                room_session_id: None,
+                speaker_order: None,
+                workflow_execution_id: Some(dag.ctx.stage_execution_id),
+            })
+            .await
+        {
+            Ok(row) => {
+                // Record initial messages
+                let _ = ae_repo
+                    .create_execution_message(
+                        row.id, "system", &designed.system_prompt, None, 0, 0,
+                    )
+                    .await;
+                let _ = ae_repo
+                    .create_execution_message(row.id, "user", &task_prompt, None, 0, 0)
+                    .await;
+                Some(row.id)
+            }
+            Err(e) => {
+                warn!(agent = %designed.agent_name, error = %e, "Failed to create agent execution");
+                None
+            }
+        };
+
         // Build strategy
         let strategy = WorkforceAgentStrategy::new(WorkforceAgentConfig {
             system_prompt: designed.system_prompt.clone(),
@@ -413,14 +448,15 @@ pub(super) async fn execute_workforce_step(
             container_handle: managed_container.as_ref().map(|mc| mc.agent_handle.clone()),
             state: Some(dag.state.clone()),
             user_id: Some(UserId(dag.ctx.user_id)),
+            agent_execution_id: ae_id,
         });
 
         // Execute with live streaming sink
         let inner_recorder = ExecutionRecorder::new(
             &*dag.state.repos().sessions,
             &*dag.state.repos().chat_messages,
-            None,
-            None,
+            Some(&*dag.state.repos().agent_executions),
+            Some(&*dag.state.repos().token_ledger),
         );
         let sink = DagStreamSink::new(
             dag.state.clone(),

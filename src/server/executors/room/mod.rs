@@ -355,7 +355,7 @@ pub async fn execute_room_turn(
         // Create agent_execution record
         let ae_row = ae_repo
             .create_agent_execution(CreateAgentExecutionInput {
-                agent_id: selection.agent_id,
+                agent_id: Some(selection.agent_id),
                 workflow_step_id: None,
                 is_interactive: false,
                 parent_agent_execution_id: None,

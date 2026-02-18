@@ -108,7 +108,7 @@ mod tests {
         let recorder = ExecutionRecorder::new(&session_mock, &chat_mock, None, None);
         let result = recorder
             .record_agent_execution(CreateAgentExecutionInput {
-                agent_id: Uuid::new_v4(),
+                agent_id: Some(Uuid::new_v4()),
                 workflow_step_id: Some(Uuid::new_v4()),
                 is_interactive: false,
                 parent_agent_execution_id: None,
