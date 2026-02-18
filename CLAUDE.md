@@ -2,13 +2,13 @@
 
 ## What is nexor?
 
-Multi-tier DAG orchestration platform for AI agents. Workflows compose steps (each with its own execution mode), collections compose workflows, and sub-workflows enable recursive nesting. Protocols expand into reusable workflow primitives. Supports multi-agent rooms, document generation pipelines, belief extraction, and containerized execution against GitHub repos.
+Multi-tier DAG orchestration platform for AI agents. Workflows compose steps (each with its own execution mode), collections compose workflows, and sub-workflows enable recursive nesting. Protocols expand into reusable workflow primitives. Supports multi-agent workforce teams, belief extraction, containerized execution against GitHub repos, and an assistant dispatch model for conversational step configuration.
 
 ## Architecture
 
 ```
 Rust (Axum)        → REST API (130+ endpoints), WebSocket, LLM providers, DAG orchestration
-React (Vite)       → Frontend in frontend/ (ui/ is deprecated)
+React (Vite)       → Frontend in frontend/
 Ink (TypeScript)   → Terminal CLI in cli/
 PostgreSQL         → nexor database (50+ entity types)
 ```
@@ -24,39 +24,61 @@ Collection DAG  (src/server/executors/collection_dag/)
 
 - **Collection**: DAG of entire workflows. Topological sort, sequential or parallel execution, output forwarding between workflows via `$workflow_{name}` variables.
 - **Workflow**: DAG of steps. Topological sort, port-based data flow (json_path extraction), variable interpolation (`{variable.path}`), edge conditions, label-based routing.
-- **Step execution modes**: `single`, `for_each`, `for_each_chain`, `task_force`, `documenter`, `belief_capture`, `room`, `sub_workflow`, `agent_designer`.
+- **Step execution modes**: `single`, `for_each`, `for_each_chain`, `workforce`, `belief_capture`, `room`, `sub_workflow`, `agent_designer`, `container`.
+
+### Assistant Dispatch Model
+
+```
+Chat Session
+  │
+  ├── Assistant (conversational, always responsive)
+  │     │
+  │     ├── dispatch({ instruction: "..." })
+  │     │     └── Background Agent (session service layer)
+  │     │           - Loads current state (notes, roster, context)
+  │     │           - Calls mutation tools to configure the step
+  │     │           - Done. Step is now configured.
+  │     │
+  │     ├── cancel_dispatch(execution_id)
+  │     │
+  │     └── Future dispatch layers (different background tasks)
+  │
+  └── Workflow Execution (separate trigger, existing pipeline)
+        └── Step (configured by the service layer above)
+              └── Designer (sub-workflow to the step)
+                    └── DAG Execution (agents run)
+```
 
 ### Backend Module Map
 
 ```
 src/
 ├── server/
-│   ├── api/           # 28 handler groups (agents, workflows, protocols, rooms, etc.)
+│   ├── api/           # 26 handler groups (thin — parse request, call service, return response)
+│   ├── services/      # Service layer — business logic, validation, orchestration
+│   ├── tools/         # Chat tools grouped by execution mode (workforce, node_assistant, etc.)
 │   ├── hub/           # Core execution engine — the heart of the system
 │   │   ├── engine/    # ExecutionEngine (unified LLM loop with retry, rate limit, streaming)
-│   │   ├── strategy.rs# ExecutionStrategy trait (implemented per execution mode)
-│   │   ├── strategies/# ChatStrategy, DagStepStrategy, RoomSpeakerStrategy, etc.
-│   │   ├── dag/       # Workflow DAG orchestrator (step loop, all execution modes)
-│   │   │   ├── single/, for_each/, task_force/, documenter/
-│   │   │   ├── belief_capture/, room_step/, sub_workflow/, agent_designer/
+│   │   ├── strategies/# ExecutionStrategy impls (chat, dag_step, dispatch, room_speaker, etc.)
+│   │   ├── dag/       # Workflow DAG orchestrator
+│   │   │   ├── single/, for_each/, workforce/, belief_capture/
+│   │   │   ├── room_step/, sub_workflow/, agent_designer/, container/
 │   │   │   └── utils/ # Port resolution, variable substitution, topo sort, routing
 │   │   └── protocols/ # Protocol engine: compiler trait, expansion, apply/unapply
-│   ├── executors/
-│   │   ├── collection_dag/  # Tier 1: DAG of workflows
+│   ├── executors/     # Top-level execution entry points
+│   │   ├── collection_dag/  # DAG of workflows
+│   │   ├── dispatch/        # Assistant dispatch (background agents)
 │   │   ├── chat/            # Background chat consumer
-│   │   └── room/            # Room execution (used by hub/dag/room_step)
+│   │   └── room/            # Room execution
 │   ├── ws/            # WebSocket: connections, topic subscriptions, event broadcast
 │   ├── state/         # AppState (Arc<AppStateInner>): db, repos, events, providers, config
 │   └── auth/          # JWT auth, password hashing, AuthUser extractor
 ├── llm/               # LLM providers: Anthropic, Grok (web/X search), Ollama, No-Op
 │   ├── provider/      # LLMProvider trait (send_message, send_message_stream)
 │   ├── registry/      # ProviderRegistry (multi-provider routing)
-│   ├── retry/         # Exponential backoff with jitter
-│   ├── rate_limit/    # Token bucket + semaphore concurrency control
-│   └── stream/        # SSE stream accumulation
-├── db/                # Row types (50+), repo traits (ServerRepo, WorkflowCollectionRepo)
-├── config/            # Protocol configs (YAML + role definitions with {{.var}} templates)
-│   └── protocols/     # documenter, meeting, task_force, agent_designer, belief_capture
+│   └── retry/, rate_limit/, stream/, types/
+├── db/                # Row types (50+), repo traits, pg implementations, query builders
+├── config/protocols/  # Protocol configs (YAML + role definitions with {{.var}} templates)
 └── constants.rs       # Models, token limits, timeouts, rate limits, route paths
 ```
 
@@ -64,7 +86,8 @@ src/
 
 - **ExecutionStrategy** trait: Each execution mode implements `system_prompt()`, `tools()`, `build_messages()`, `execute_tool()`, `on_complete()`. The engine calls these generically.
 - **ExecutionEngine**: Wraps `Arc<dyn LLMProvider>`. Runs multi-round tool-use loops with streaming, cancellation, and execution filters.
-- **Protocol Engine**: Compilers expand a `ProtocolConfig` into `ProtocolExpansion` (steps + edges + ports + schema). Applied to steps via DB records. Currently: DocumenterCompiler.
+- **Service Layer** (`services/`): Business logic between API handlers and DB/hub. Handlers stay thin (parse request, call service, return response). Services own validation, orchestration, and side effects.
+- **Protocol Engine**: Compilers expand a `ProtocolConfig` into `ProtocolExpansion` (steps + edges + ports + schema). Applied to steps via DB records.
 - **AppState**: `Arc<AppStateInner>` with `PgPool`, `Repos`, `EventBus`, `ProviderRegistry`, `ProtocolEngine`, `CancellationTokens`, `ResponseStreams`.
 
 ### LLM Providers
@@ -152,13 +175,6 @@ mod tests {
 ```
 
 Never inline `#[cfg(test)]` blocks in `mod.rs`. Tests always go in a separate `tests.rs` file. This keeps test code separate from implementation while maintaining rust-analyzer integration.
-
-## Off-limits directories
-
-Do NOT read, modify, or reference files in these directories:
-
-- `decomp/` — Ticket breakdowns managed by the project owner. Read-only for humans.
-- `ui/` — Deprecated legacy frontend. Do not modify.
 
 ## Database
 
