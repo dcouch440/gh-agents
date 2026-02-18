@@ -6,23 +6,21 @@ import type { ToolStatus } from '@/types'
 describe('ToolIndicator', () => {
   describe('tool variant', () => {
     it('renders running state with label', () => {
-      render(<ToolIndicator variant="tool" toolName="create_doc_def" status="running" />)
-      expect(screen.getByText('Creating document...')).toBeInTheDocument()
+      render(<ToolIndicator variant="tool" toolName="update_prompt" status="running" />)
+      expect(screen.getByText('Updating prompt...')).toBeInTheDocument()
     })
 
     it('renders complete state with label', () => {
-      render(<ToolIndicator variant="tool" toolName="create_doc_def" status="complete" />)
-      expect(screen.getByText('Created document')).toBeInTheDocument()
+      render(<ToolIndicator variant="tool" toolName="update_prompt" status="complete" />)
+      expect(screen.getByText('Updated prompt')).toBeInTheDocument()
     })
 
-    it('renders all 6 tool names with running labels', () => {
+    it('renders all tool names with running labels', () => {
       const expected: Record<string, string> = {
-        create_doc_def: 'Creating document...',
-        update_doc_def: 'Updating document...',
-        delete_doc_def: 'Removing document...',
         update_prompt: 'Updating prompt...',
         read_context: 'Reading context...',
         think: 'Thinking...',
+        render_panel: 'Rendering panel...',
       }
 
       for (const [toolName, label] of Object.entries(expected)) {
@@ -34,14 +32,12 @@ describe('ToolIndicator', () => {
       }
     })
 
-    it('renders all 6 tool names with complete labels', () => {
+    it('renders all tool names with complete labels', () => {
       const expected: Record<string, string> = {
-        create_doc_def: 'Created document',
-        update_doc_def: 'Updated document',
-        delete_doc_def: 'Removed document',
         update_prompt: 'Updated prompt',
         read_context: 'Read context',
         think: 'Thought',
+        render_panel: 'Rendered panel',
       }
 
       for (const [toolName, label] of Object.entries(expected)) {
@@ -73,14 +69,14 @@ describe('ToolIndicator', () => {
   })
 
   describe('TOOL_LABELS', () => {
-    it('contains exactly 7 tool mappings', () => {
-      expect(Object.keys(TOOL_LABELS)).toHaveLength(7)
+    it('contains exactly 4 tool mappings', () => {
+      expect(Object.keys(TOOL_LABELS)).toHaveLength(4)
     })
   })
 
   describe('getToolLabel', () => {
     it('returns mapped label for known tools', () => {
-      expect(getToolLabel('create_doc_def', 'running')).toBe('Creating document...')
+      expect(getToolLabel('update_prompt', 'running')).toBe('Updating prompt...')
       expect(getToolLabel('think', 'complete')).toBe('Thought')
     })
 

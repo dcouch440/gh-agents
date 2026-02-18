@@ -882,8 +882,8 @@ async fn execute_remove_dependency(
 
 /// Build the config snapshot string for `{{.System.current_config}}` injection.
 ///
-/// Merges task force config (mission brief, roster) with documenter config
-/// (deliverables), showing agents with their assigned deliverables.
+/// Shows the current step configuration: mission brief, agent roster,
+/// and incoming context from upstream steps.
 pub async fn build_config_snapshot(
     repo: &dyn WorkflowRepo,
     ctx: &WorkforceToolContext,
@@ -896,11 +896,6 @@ pub async fn build_config_snapshot(
 
     let brief = repo
         .get_mission_brief(ctx.step_id)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let doc_defs = repo
-        .list_document_defs(ctx.step_id)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -950,7 +945,7 @@ pub async fn build_config_snapshot(
             ));
         }
 
-        // Agents with deliverables
+        // Agents
         let roster = repo
             .list_agent_roster(brief.id)
             .await
@@ -977,53 +972,11 @@ pub async fn build_config_snapshot(
                         format!(" [{}]", agent.capabilities.join(", "))
                     }
                 ));
-
-                let agent_defs: Vec<_> = doc_defs
-                    .iter()
-                    .filter(|d| d.agent_roster_entry_id == Some(agent.id))
-                    .collect();
-                if !agent_defs.is_empty() {
-                    out.push_str("     Deliverables:\n");
-                    for def in agent_defs {
-                        out.push_str(&format!(
-                            "       - {} (~{} words){}\n",
-                            def.name,
-                            def.target_length,
-                            if def.description.is_empty() {
-                                String::new()
-                            } else {
-                                format!(" — {}", def.description)
-                            }
-                        ));
-                    }
-                }
             }
         }
     } else {
         out.push_str("\nTask: (not set)\n");
         out.push_str("\nAgents:\n  (none)\n");
-    }
-
-    // Unassigned deliverables
-    let unassigned: Vec<_> = doc_defs
-        .iter()
-        .filter(|d| d.agent_roster_entry_id.is_none())
-        .collect();
-    if !unassigned.is_empty() {
-        out.push_str("\nUnassigned Deliverables:\n");
-        for def in unassigned {
-            out.push_str(&format!(
-                "  - {} (id: {}, ~{} words){}\n",
-                def.name,
-                def.id,
-                def.target_length,
-                if def.description.is_empty() {
-                    String::new()
-                } else {
-                    format!(" — {}", def.description)
-                }
-            ));
-        }
     }
 
     // Incoming context

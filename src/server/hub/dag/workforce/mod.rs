@@ -1,10 +1,9 @@
 //! Workforce step execution within the DAG.
 //!
 //! When the DAG encounters a step with `execution_mode = "workforce"`, this
-//! module loads the mission brief, agent roster, and deliverables, runs the
-//! Agent Designer pre-lifecycle to generate optimized prompts, then executes
-//! each roster agent sequentially with designed prompts. The combined output
-//! includes both agent results and deliverable metadata.
+//! module loads the mission brief and agent roster, runs the Agent Designer
+//! pre-lifecycle to generate optimized prompts, then executes each roster
+//! agent sequentially with designed prompts.
 
 mod tests;
 
@@ -16,7 +15,7 @@ use uuid::Uuid;
 use crate::config::protocols::{roles, vars, WORKFORCE};
 use crate::db::WorkflowStepRow;
 use crate::db::traits::CreateAgentExecutionInput;
-use crate::db::{ProtocolDocumentDefRow, TaskAgentRosterRow, TaskMissionBriefRow};
+use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow};
 use crate::server::hub::capability_resolver::resolve_capabilities_to_tools;
 use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::execution_recorder::{
@@ -119,20 +118,10 @@ pub(super) async fn execute_workforce_step(
         )));
     }
 
-    // 4. Load deliverables (document definitions for this step)
-    let doc_defs = dag
-        .state
-        .repos()
-        .workflows
-        .list_document_defs(step.id)
-        .await
-        .map_err(|e| HubError::Internal(anyhow!("failed to load deliverables: {}", e)))?;
-
     info!(
         step_id = %step.id,
         task = %brief.task_description,
         agents = roster.len(),
-        deliverables = doc_defs.len(),
         failure_mode = %brief.failure_mode,
         "Starting workforce step execution"
     );
@@ -201,7 +190,6 @@ pub(super) async fn execute_workforce_step(
     let designer_input = build_workforce_designer_input(
         &brief,
         &roster,
-        &doc_defs,
         &dag_state.completed_envelopes,
         dag.steps,
         dag.state
@@ -296,7 +284,7 @@ pub(super) async fn execute_workforce_step(
                 error = %e,
                 "Workforce designer failed, using static prompts"
             );
-            let fallback = build_static_fallback_prompts(&brief, &roster, &doc_defs, &prompt);
+            let fallback = build_static_fallback_prompts(&brief, &roster, &prompt);
             let usage = DesignerTokenUsage {
                 input_tokens: 0,
                 output_tokens: 0,
@@ -588,8 +576,8 @@ pub(super) async fn execute_workforce_step(
     // 11. Destroy optional container
     destroy_optional_container(&managed_container, dag.ctx.wg_client.as_deref()).await;
 
-    // 12. Compose combined output (agents + deliverable metadata)
-    let combined_data = compose_workforce_output(&agent_outputs, &roster, &doc_defs);
+    // 12. Compose combined output
+    let combined_data = compose_workforce_output(&agent_outputs, &roster);
     let output_key = resolve_output_key(step, &dag.port_meta.step_outputs);
 
     // 13. Store results
@@ -647,7 +635,6 @@ pub(super) async fn execute_workforce_step(
     info!(
         step_id = %step.id,
         agents = total_agents,
-        deliverables = doc_defs.len(),
         tokens_in = step_in_tokens,
         tokens_out = step_out_tokens,
         duration_ms = step_start.elapsed().as_millis(),
@@ -696,10 +683,9 @@ fn map_designer_results(
 fn build_static_fallback_prompts(
     brief: &TaskMissionBriefRow,
     roster: &[TaskAgentRosterRow],
-    doc_defs: &[ProtocolDocumentDefRow],
     base_prompt: &str,
 ) -> Vec<DesignedAgentPrompt> {
-    let team_roster = build_team_roster_string(roster, doc_defs);
+    let team_roster = build_team_roster_string(roster);
 
     roster
         .iter()
@@ -733,11 +719,8 @@ fn build_static_fallback_prompts(
         .collect()
 }
 
-/// Build a team roster string that includes deliverable assignments.
-pub(crate) fn build_team_roster_string(
-    roster: &[TaskAgentRosterRow],
-    doc_defs: &[ProtocolDocumentDefRow],
-) -> String {
+/// Build a team roster string for fallback prompts.
+pub(crate) fn build_team_roster_string(roster: &[TaskAgentRosterRow]) -> String {
     roster
         .iter()
         .map(|a| {
@@ -747,21 +730,9 @@ pub(crate) fn build_team_roster_string(
                 format!(" [{}]", a.capabilities.join(", "))
             };
 
-            let deliverables: Vec<&ProtocolDocumentDefRow> = doc_defs
-                .iter()
-                .filter(|d| d.agent_roster_entry_id == Some(a.id))
-                .collect();
-
-            let deliverable_str = if deliverables.is_empty() {
-                String::new()
-            } else {
-                let names: Vec<&str> = deliverables.iter().map(|d| d.name.as_str()).collect();
-                format!(" → Deliverables: {}", names.join(", "))
-            };
-
             format!(
-                "- **{}** (order {}): {}{}{}",
-                a.name, a.execution_order, a.role_description, caps, deliverable_str
+                "- **{}** (order {}): {}{}",
+                a.name, a.execution_order, a.role_description, caps
             )
         })
         .collect::<Vec<_>>()
@@ -800,11 +771,10 @@ pub(crate) fn build_filtered_outputs_block(outputs: &[&(String, String)]) -> Str
     }
 }
 
-/// Compose workforce output: agent results + deliverable metadata.
+/// Compose workforce output: agent results keyed by normalized name.
 pub(crate) fn compose_workforce_output(
     agent_outputs: &[(String, String)],
-    roster: &[TaskAgentRosterRow],
-    doc_defs: &[ProtocolDocumentDefRow],
+    _roster: &[TaskAgentRosterRow],
 ) -> JsonValue {
     let mut composite = serde_json::Map::new();
 
@@ -817,28 +787,6 @@ pub(crate) fn compose_workforce_output(
         agents.insert(key, value);
     }
     composite.insert("agents".to_string(), JsonValue::Object(agents));
-
-    // Deliverable metadata
-    if !doc_defs.is_empty() {
-        let deliverables: Vec<JsonValue> = doc_defs
-            .iter()
-            .map(|d| {
-                let assigned_to = d
-                    .agent_roster_entry_id
-                    .and_then(|aid| roster.iter().find(|r| r.id == aid))
-                    .map(|r| r.name.clone())
-                    .unwrap_or_else(|| "unassigned".to_string());
-                serde_json::json!({
-                    "id": d.id.to_string(),
-                    "name": d.name,
-                    "description": d.description,
-                    "target_length": d.target_length,
-                    "assigned_to": assigned_to,
-                })
-            })
-            .collect();
-        composite.insert("deliverables".to_string(), JsonValue::Array(deliverables));
-    }
 
     JsonValue::Object(composite)
 }

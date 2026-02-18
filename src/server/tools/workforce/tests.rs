@@ -6,7 +6,7 @@ mod tests {
 
     use crate::db::traits::MockWorkflowRepo;
     use crate::db::{
-        ProtocolDocumentDefRow, TaskAgentRosterRow, TaskMissionBriefRow, WorkflowRow,
+        TaskAgentRosterRow, TaskMissionBriefRow, WorkflowRow,
         WorkflowStepEdgeRow, WorkflowStepRow,
     };
 
@@ -100,21 +100,6 @@ mod tests {
             execution_order: order,
             created_at: Utc::now(),
             child_step_id: None,
-        }
-    }
-
-    fn make_doc_def(step_id: Uuid, name: &str) -> ProtocolDocumentDefRow {
-        ProtocolDocumentDefRow {
-            id: Uuid::new_v4(),
-            step_id: Some(step_id),
-            name: name.to_string(),
-            description: String::new(),
-            target_length: 1500,
-            display_order: 0,
-            created_at: Utc::now(),
-            protocol_id: None,
-            document_id: None,
-            agent_roster_entry_id: None,
         }
     }
 
@@ -807,177 +792,16 @@ mod tests {
     }
 
     // =========================================================================
-    // add_deliverable
-    // =========================================================================
-
-    #[tokio::test]
-    async fn add_deliverable_creates_def() {
-        let ctx = make_ctx();
-        let step_id = ctx.step_id;
-        let agent_id = Uuid::new_v4();
-
-        let mut repo = MockWorkflowRepo::new();
-        repo.expect_create_document_def().returning(move |def| {
-            assert_eq!(def.name, "API Docs");
-            assert_eq!(def.step_id, Some(step_id));
-            assert_eq!(def.agent_roster_entry_id, Some(agent_id));
-            assert_eq!(def.target_length, 2000);
-            Ok(def)
-        });
-
-        let input = json!({
-            "name": "API Docs",
-            "description": "API documentation",
-            "target_length": 2000,
-            "agent_id": agent_id.to_string()
-        });
-        let result = execute_workforce_tool("add_deliverable", &input, &repo, &ctx).await;
-
-        assert_eq!(result["name"], "API Docs");
-        assert_eq!(result["target_length"], 2000);
-        assert_eq!(result["agent_id"], agent_id.to_string());
-    }
-
-    #[tokio::test]
-    async fn add_deliverable_without_agent() {
-        let ctx = make_ctx();
-
-        let mut repo = MockWorkflowRepo::new();
-        repo.expect_create_document_def().returning(|def| {
-            assert!(def.agent_roster_entry_id.is_none());
-            Ok(def)
-        });
-
-        let input = json!({ "name": "Overview" });
-        let result = execute_workforce_tool("add_deliverable", &input, &repo, &ctx).await;
-
-        assert_eq!(result["name"], "Overview");
-        assert!(result["agent_id"].is_null());
-    }
-
-    #[tokio::test]
-    async fn add_deliverable_missing_name_returns_error() {
-        let ctx = make_ctx();
-        let repo = MockWorkflowRepo::new();
-
-        let result = execute_workforce_tool("add_deliverable", &json!({}), &repo, &ctx).await;
-
-        assert_eq!(
-            result["error"].as_str().unwrap(),
-            "Missing required parameter: name"
-        );
-    }
-
-    // =========================================================================
-    // update_deliverable
-    // =========================================================================
-
-    #[tokio::test]
-    async fn update_deliverable_merges_fields() {
-        let ctx = make_ctx();
-        let def = make_doc_def(ctx.step_id, "Old Name");
-        let def_id = def.id;
-
-        let mut repo = MockWorkflowRepo::new();
-        let def_clone = def.clone();
-        repo.expect_list_document_defs()
-            .returning(move |_| Ok(vec![def_clone.clone()]));
-        repo.expect_update_document_def()
-            .returning(move |id, name, desc, tl| {
-                assert_eq!(id, def_id);
-                assert_eq!(name, "New Name");
-                assert_eq!(desc, ""); // preserved from existing (empty)
-                assert_eq!(tl, 1500); // preserved from existing
-                Ok(ProtocolDocumentDefRow {
-                    id,
-                    step_id: None,
-                    name,
-                    description: desc,
-                    target_length: tl,
-                    display_order: 0,
-                    created_at: Utc::now(),
-                    protocol_id: None,
-                    document_id: None,
-                    agent_roster_entry_id: None,
-                })
-            });
-
-        let input = json!({
-            "deliverable_id": def_id.to_string(),
-            "name": "New Name"
-        });
-        let result = execute_workforce_tool("update_deliverable", &input, &repo, &ctx).await;
-
-        assert_eq!(result["name"], "New Name");
-    }
-
-    #[tokio::test]
-    async fn update_deliverable_not_found_returns_error() {
-        let ctx = make_ctx();
-
-        let mut repo = MockWorkflowRepo::new();
-        repo.expect_list_document_defs().returning(|_| Ok(vec![]));
-
-        let input = json!({ "deliverable_id": Uuid::new_v4().to_string() });
-        let result = execute_workforce_tool("update_deliverable", &input, &repo, &ctx).await;
-
-        assert_eq!(result["error"].as_str().unwrap(), "Deliverable not found");
-    }
-
-    // =========================================================================
-    // remove_deliverable
-    // =========================================================================
-
-    #[tokio::test]
-    async fn remove_deliverable_deletes_def() {
-        let ctx = make_ctx();
-        let def = make_doc_def(ctx.step_id, "To Delete");
-        let def_id = def.id;
-
-        let mut repo = MockWorkflowRepo::new();
-        let def_clone = def.clone();
-        repo.expect_list_document_defs()
-            .returning(move |_| Ok(vec![def_clone.clone()]));
-        repo.expect_delete_document_def()
-            .withf(move |id| *id == def_id)
-            .returning(|_| Ok(()));
-
-        let input = json!({ "deliverable_id": def_id.to_string() });
-        let result = execute_workforce_tool("remove_deliverable", &input, &repo, &ctx).await;
-
-        assert_eq!(result["deleted"], true);
-        assert_eq!(result["name"], "To Delete");
-    }
-
-    #[tokio::test]
-    async fn remove_deliverable_missing_id_returns_error() {
-        let ctx = make_ctx();
-        let repo = MockWorkflowRepo::new();
-
-        let result = execute_workforce_tool("remove_deliverable", &json!({}), &repo, &ctx).await;
-
-        assert_eq!(
-            result["error"].as_str().unwrap(),
-            "Missing required parameter: deliverable_id"
-        );
-    }
-
-    // =========================================================================
     // build_config_snapshot
     // =========================================================================
 
     #[tokio::test]
-    async fn config_snapshot_shows_agents_and_deliverables() {
+    async fn config_snapshot_shows_agents() {
         let ctx = make_ctx();
         let step = make_step(ctx.step_id, ctx.workflow_id, "workforce");
         let brief = make_brief(ctx.step_id);
         let brief_id = brief.id;
         let agent = make_roster_agent(brief_id, "Scanner", 0);
-        let agent_id = agent.id;
-
-        let mut def = make_doc_def(ctx.step_id, "Analysis Report");
-        def.agent_roster_entry_id = Some(agent_id);
-        def.target_length = 2000;
 
         let step_id = ctx.step_id;
         let wf_id = ctx.workflow_id;
@@ -991,8 +815,6 @@ mod tests {
             .returning(move |_| Ok(Some(brief.clone())));
         repo.expect_list_agent_roster()
             .returning(move |_| Ok(vec![agent.clone()]));
-        repo.expect_list_document_defs()
-            .returning(move |_| Ok(vec![def.clone()]));
         repo.expect_list_edges()
             .withf(move |wid| *wid == wf_id)
             .returning(|_| Ok(vec![]));
@@ -1002,8 +824,6 @@ mod tests {
         assert!(snapshot.contains("Name: Test Workforce"));
         assert!(snapshot.contains("Task: Build the system"));
         assert!(snapshot.contains("1. Scanner"));
-        assert!(snapshot.contains("Analysis Report"));
-        assert!(snapshot.contains("~2000 words"));
     }
 
     #[tokio::test]
@@ -1020,7 +840,6 @@ mod tests {
             .withf(move |id| *id == step_id)
             .returning(move |_| Ok(Some(step_clone.clone())));
         repo.expect_get_mission_brief().returning(|_| Ok(None));
-        repo.expect_list_document_defs().returning(|_| Ok(vec![]));
         repo.expect_list_edges()
             .withf(move |wid| *wid == wf_id)
             .returning(|_| Ok(vec![]));

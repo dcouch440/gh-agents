@@ -251,9 +251,6 @@ mod tests {
         assert!(!names.contains(&"add_agent"));
         assert!(!names.contains(&"update_agent"));
         assert!(!names.contains(&"remove_agent"));
-        assert!(!names.contains(&"add_deliverable"));
-        assert!(!names.contains(&"update_deliverable"));
-        assert!(!names.contains(&"remove_deliverable"));
         assert!(!names.contains(&"set_dependency"));
         assert!(!names.contains(&"remove_dependency"));
         assert!(!names.contains(&"set_capabilities"));
@@ -278,7 +275,6 @@ mod tests {
 
         assert!(names.contains(&"set_task"));
         assert!(names.contains(&"add_agent"));
-        assert!(names.contains(&"add_deliverable"));
     }
 
     #[test]

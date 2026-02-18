@@ -72,9 +72,6 @@ pub(crate) fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
             "remove_dependency",
             "set_capabilities",
             "set_failure_mode",
-            "add_deliverable",
-            "update_deliverable",
-            "remove_deliverable",
         ],
         _ => &[],
     };
@@ -195,9 +192,6 @@ pub(super) async fn dispatch_step_tool(
                 "remove_dependency",
                 "set_capabilities",
                 "set_failure_mode",
-                "add_deliverable",
-                "update_deliverable",
-                "remove_deliverable",
             ];
             if WORKFORCE_TOOLS.contains(&name) {
                 let tool_ctx = crate::server::tools::workforce::WorkforceToolContext {

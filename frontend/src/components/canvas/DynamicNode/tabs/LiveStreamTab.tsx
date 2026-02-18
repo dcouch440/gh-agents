@@ -16,7 +16,7 @@ type PersistedAgentSection = {
 
 /**
  * Parse persisted output JSON into per-agent sections for display.
- * Workforce outputs have shape: { agents: { name: text, ... }, deliverables?: [...] }
+ * Workforce outputs have shape: { agents: { name: text, ... } }
  * Falls back to pretty-printed JSON for non-workforce outputs.
  */
 const parsePersistedOutput = (raw: string): PersistedAgentSection[] | null => {

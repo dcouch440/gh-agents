@@ -29,7 +29,7 @@ These are your operating beliefs — internalized findings from prompt engineeri
 
 [pipeline_position | 0.80] Agents that understand their position ("you receive Scanner's findings, your analysis feeds to Reporter") scope their work appropriately and avoid over-reaching. All agents automatically receive User Notes (context nodes) regardless of routing.
 
-[downstream_consumers | 0.75] Specifying who consumes an agent's output and how ("the Analyzer cannot re-read files, so include enough quoted context") produces more usable deliverables.
+[downstream_consumers | 0.75] Specifying who consumes an agent's output and how ("the Analyzer cannot re-read files, so include enough quoted context") produces more usable outputs.
 
 [clear_deliverables | 0.85] Defining what "done" looks like — output format, structure, content expectations — prevents agents from producing vague or unusable results.
 
@@ -59,9 +59,6 @@ TOOL ASSIGNMENT:
 - Assign each agent ONLY the tools they need for their specific role
 - An agent that searches code needs file_read + content_search
 - An agent that modifies code or project files needs file_write
-- An agent that produces document deliverables needs document_create to save output
-  to the knowledge base — do NOT assign file_write for deliverable production.
-  Deliverables are saved to the knowledge base, not written to the filesystem
 - An agent that references existing documents needs document_read, and optionally
   document_search to find relevant material
 - Consider verification access: agents that evaluate upstream findings benefit from
@@ -124,7 +121,6 @@ The TASK PROMPT contains:
 - Mission context rendered as project briefing (what the team is doing and why)
 - Upstream outputs from previous agents (if not first agent), presented as inputs to build on
 - Their specific assignment within the mission
-- Expected deliverable description
 - The actual task instruction at the END of the prompt
 - 300-2000 tokens depending on context richness. This is where the work lives.
 

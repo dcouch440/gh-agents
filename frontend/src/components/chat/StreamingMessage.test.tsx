@@ -30,14 +30,14 @@ describe('StreamingMessage', () => {
   it('renders interleaved text and tool segments', () => {
     const segments: MessageSegment[] = [
       { type: 'text', content: 'Setting up documents' },
-      { type: 'tool', toolId: 't1', toolName: 'create_doc_def', status: 'running' },
+      { type: 'tool', toolId: 't1', toolName: 'update_prompt', status: 'running' },
       { type: 'text', content: 'More text after tool' },
     ]
 
     render(<StreamingMessage segments={segments} />)
 
     expect(screen.getByText('Setting up documents')).toBeInTheDocument()
-    expect(screen.getByText('Creating document...')).toBeInTheDocument()
+    expect(screen.getByText('Updating prompt...')).toBeInTheDocument()
     expect(screen.getByText('More text after tool')).toBeInTheDocument()
   })
 
@@ -78,7 +78,7 @@ describe('StreamingMessage', () => {
   it('does not show cursor when last segment is a tool', () => {
     const segments: MessageSegment[] = [
       { type: 'text', content: 'Setting up' },
-      { type: 'tool', toolId: 't1', toolName: 'create_doc_def', status: 'running' },
+      { type: 'tool', toolId: 't1', toolName: 'update_prompt', status: 'running' },
     ]
 
     render(<StreamingMessage segments={segments} streaming />)

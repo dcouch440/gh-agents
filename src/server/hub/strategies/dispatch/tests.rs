@@ -29,9 +29,6 @@ mod tests {
         assert!(tool_names.contains(&"add_agent"));
         assert!(tool_names.contains(&"update_agent"));
         assert!(tool_names.contains(&"remove_agent"));
-        assert!(tool_names.contains(&"add_deliverable"));
-        assert!(tool_names.contains(&"update_deliverable"));
-        assert!(tool_names.contains(&"remove_deliverable"));
         assert!(tool_names.contains(&"set_dependency"));
         assert!(tool_names.contains(&"remove_dependency"));
         assert!(tool_names.contains(&"set_capabilities"));
@@ -86,37 +83,6 @@ mod tests {
         assert!(envelope.run_id.is_none());
         let value: serde_json::Value = serde_json::from_str(&envelope.json).unwrap();
         assert_eq!(value["event"], "roster_changed");
-        assert_eq!(value["data"]["step_id"], step_id.to_string());
-    }
-
-    #[test]
-    fn dispatch_broadcasts_config_updated_for_deliverable() {
-        let state = make_state();
-        let mut rx = state.events().subscribe();
-
-        let step_id = Uuid::new_v4();
-        let workflow_id = Uuid::new_v4();
-        let ctx = make_dispatch_ctx(step_id, workflow_id);
-
-        let input = serde_json::json!({ "name": "Report", "description": "Final report" });
-        let result = serde_json::json!({
-            "id": Uuid::new_v4().to_string(),
-            "name": "Report",
-        });
-
-        broadcast::broadcast_step_event(
-            &state,
-            Some(&ctx),
-            None,
-            "add_deliverable",
-            &input,
-            &result,
-        );
-
-        let envelope = rx.try_recv().unwrap();
-        assert_eq!(envelope.topic, Topic::Workflow);
-        let value: serde_json::Value = serde_json::from_str(&envelope.json).unwrap();
-        assert_eq!(value["event"], "step_config_updated");
         assert_eq!(value["data"]["step_id"], step_id.to_string());
     }
 

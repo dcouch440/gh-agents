@@ -2,9 +2,9 @@ import { nmSet } from '../lib'
 import { Collections } from '@/utils/collections'
 import { api } from '@/api'
 import { WORKFLOW_EVENT } from '@/types/ws'
-import type { WsWireMessage, DocDefChangedData, DocDefDeletedData, StepConfigUpdatedData, RosterChangedData, RoomMembersChangedData, AssistantNotesUpdatedData, DocumentContentUpdatedData, ConsistencyIssuesData } from '@/types/ws'
+import type { WsWireMessage, StepConfigUpdatedData, RosterChangedData, RoomMembersChangedData, AssistantNotesUpdatedData, DocumentContentUpdatedData, ConsistencyIssuesData } from '@/types/ws'
 import { store, getActiveId } from './_store'
-import { fetchDocumentDefs } from './documents'
+import { fetchDocumentDefs } from './documents'  // still needed for document_content_updated
 import { fetchRoster, fetchRoomStepMembers } from './roster'
 
 /** Fetch a single step from the API and patch it into the store silently.
@@ -30,14 +30,6 @@ const handleWsEvent = (msg: WsWireMessage): void => {
     const activeId = getActiveId()
 
     switch (msg.event) {
-      case WORKFLOW_EVENT.DOC_DEF_CREATED:
-      case WORKFLOW_EVENT.DOC_DEF_UPDATED:
-      case WORKFLOW_EVENT.DOC_DEF_DELETED: {
-        const d = msg.data as DocDefChangedData | DocDefDeletedData
-        if (d.workflow_id !== activeId) break
-        void fetchDocumentDefs(d.step_id)
-        break
-      }
       case WORKFLOW_EVENT.STEP_CONFIG_UPDATED: {
         const d = msg.data as StepConfigUpdatedData
         if (d.workflow_id !== activeId) break
