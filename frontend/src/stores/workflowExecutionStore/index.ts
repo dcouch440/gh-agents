@@ -21,6 +21,7 @@ import {
 } from './selectors'
 import { fetchRuns, viewHistoricalRun, returnToLive, reset } from './history'
 import { handleWsEvent } from './wsHandler'
+import { hydrateLatestRun } from './hydrate'
 
 export const workflowExecutionStore = {
   store,
@@ -46,6 +47,7 @@ export const workflowExecutionStore = {
   viewHistoricalRun,
   returnToLive,
   handleWsEvent,
+  hydrateLatestRun,
   reset,
 }
 

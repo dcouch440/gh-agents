@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
-import { useStore, workflowStore, agentStore, outputSchemaStore, protocolStore } from '@/stores'
+import { useStore, workflowStore, agentStore, outputSchemaStore, protocolStore, workflowExecutionStore } from '@/stores'
 import { WorkflowCanvas } from '@/components/canvas'
 
 function WorkflowEditorPage() {
@@ -19,8 +19,10 @@ function WorkflowEditorPage() {
     void agentStore.fetchAll()
     void outputSchemaStore.fetchIfStale()
     void protocolStore.fetchAll()
+    void workflowExecutionStore.hydrateLatestRun(id)
     return () => {
       workflowStore.clearActive()
+      workflowExecutionStore.reset()
     }
   }, [id, navigate])
 
