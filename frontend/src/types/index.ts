@@ -54,6 +54,8 @@ export type {
   RunTemplate,
   WorkshopResponse,
   WorkshopStepResponse,
+  WorkshopStepSummary,
+  WorkshopStatusResponse,
 } from './workflow'
 export type {
   AgentExecution,

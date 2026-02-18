@@ -80,6 +80,7 @@ import type {
   RunTemplate,
   WorkshopResponse,
   WorkshopStepResponse,
+  WorkshopStatusResponse,
 } from '@/types'
 
 // ============================================================================
@@ -368,6 +369,9 @@ const workflows = freeze({
 
   executeWorkshopStep: (workflowId: string, stepId: string, config?: RequestConfig) =>
     baseApi.post<WorkshopStepResponse>(API.WORKFLOW_WORKSHOP_STEP(workflowId, stepId), undefined, config),
+
+  getWorkshopStatus: (workflowId: string, config?: RequestConfig) =>
+    baseApi.get<WorkshopStatusResponse>(API.WORKFLOW_WORKSHOP(workflowId), config),
 })
 
 const contextResponse = freeze({

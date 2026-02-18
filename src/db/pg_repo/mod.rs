@@ -3199,6 +3199,7 @@ impl WorkflowCollectionRepo for PgRepo {
         let rows = sqlx::query_as::<_, WorkflowExecutionRow>(
             "SELECT * FROM workflow_executions \
              WHERE workflow_id = $1 AND user_id = $2 \
+             AND execution_mode <> 'workshop' \
              ORDER BY started_at DESC NULLS LAST",
         )
         .bind(workflow_id)
@@ -3285,21 +3286,6 @@ impl WorkflowCollectionRepo for PgRepo {
         workflow_id: Uuid,
         user_id: Uuid,
     ) -> Result<WorkflowExecutionRow> {
-        // Try to find existing workshop for this workflow
-        let existing = sqlx::query_as::<_, WorkflowExecutionRow>(
-            "SELECT * FROM workflow_executions \
-             WHERE workflow_id = $1 AND execution_mode = 'workshop' \
-             LIMIT 1",
-        )
-        .bind(workflow_id)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        if let Some(row) = existing {
-            return Ok(row);
-        }
-
-        // Create new workshop (unique index prevents duplicates under races)
         let id = Uuid::new_v4();
         let row = sqlx::query_as::<_, WorkflowExecutionRow>(
             "INSERT INTO workflow_executions \
