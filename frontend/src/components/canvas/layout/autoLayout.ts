@@ -331,16 +331,6 @@ const computeAutoLayout = (
       }
     }
 
-    // 7. Place notes below protocol
-    const notesContent = lookups.notesByStep[stepId]
-    if (notesContent) {
-      const notesNodeId = `notes-${stepId}`
-      positions.set(notesNodeId, {
-        x: nodeX,
-        y: spineY + nodeHeight + AUTO_LAYOUT.NOTES_GAP,
-      })
-    }
-
     // Advance cursor
     cursorX += columnWidth + AUTO_LAYOUT.SPINE_GAP
   }

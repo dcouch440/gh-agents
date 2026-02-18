@@ -11,12 +11,10 @@ type PortRole =
   | 'control-out'
   | 'agents'
   | 'documents'
-  | 'notes'
   | 'agent-input'
   | 'agent-output'
   | 'agent-documents'
   | 'document-input'
-  | 'notes-input'
 
 type PortPlacement = {
   readonly side: Side
@@ -47,7 +45,6 @@ const PORT_CONFIGS: Readonly<Record<CanvasNodeKind, NodePortConfig>> = {
       { side: 'right', role: 'control-out', handleType: 'source', handleId: null },
       { side: 'top', role: 'agents', handleType: 'source', handleId: 'agents' },
       { side: 'top', role: 'documents', handleType: 'source', handleId: 'documents' },
-      { side: 'bottom', role: 'notes', handleType: 'source', handleId: 'notes' },
     ],
   },
   [CanvasNodeKind.AGENT]: {
@@ -74,12 +71,6 @@ const PORT_CONFIGS: Readonly<Record<CanvasNodeKind, NodePortConfig>> = {
     kind: CanvasNodeKind.DOCUMENT,
     ports: [
       { side: 'bottom', role: 'document-input', handleType: 'target', handleId: 'document-input' },
-    ],
-  },
-  [CanvasNodeKind.NOTES]: {
-    kind: CanvasNodeKind.NOTES,
-    ports: [
-      { side: 'top', role: 'notes-input', handleType: 'target', handleId: 'notes-input' },
     ],
   },
   [CanvasNodeKind.SUB_WORKFLOW]: {

@@ -47,7 +47,6 @@ type StepNodeLookups = {
   toolsByAgent: ReadonlyMap<string, string[]>
   protocolsByStep: ReadonlyMap<string, ProtocolStepInfo>
   rosterByStep: Readonly<Record<string, ReadonlyArray<RosterAgentInfo>>>
-  notesByStep: Readonly<Record<string, string>>
   protocolGroups: ReadonlyMap<string, ProtocolGroupEntry>
 }
 

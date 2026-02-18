@@ -1,17 +1,20 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
+import { useStore, workflowStore } from '@/stores'
 import { MarkdownPreview } from '@/components/primitives/MarkdownPreview'
 
-type NotesNodeContentProps = {
-  content: string
+type NotesTabProps = {
+  stepId: string
 }
 
-function NotesNodeContent({ content }: NotesNodeContentProps) {
+function NotesTab({ stepId }: NotesTabProps) {
+  const notesByStep = useStore(workflowStore.store, workflowStore.selectNotesByStep)
+  const content = notesByStep[stepId] ?? ''
   const isEmpty = !content.trim()
 
   return (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Box className="nowheel nodrag nopan" sx={{ flex: 1, overflow: 'hidden', pt: 0.5, px: 0.5, pb: 0.5 }}>
+      <Box sx={{ flex: 1, overflow: 'hidden', pt: 0.5, px: 0.5, pb: 0.5 }}>
         {isEmpty ? (
           <Box
             sx={{
@@ -35,5 +38,4 @@ function NotesNodeContent({ content }: NotesNodeContentProps) {
   )
 }
 
-export { NotesNodeContent }
-export type { NotesNodeContentProps }
+export { NotesTab }

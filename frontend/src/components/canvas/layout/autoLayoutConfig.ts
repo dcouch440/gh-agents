@@ -15,9 +15,6 @@ export const AUTO_LAYOUT = {
   /** Horizontal gap between agents in the same tier (2 grid cells). */
   TIER_AGENT_GAP: 48,
 
-  /** Vertical gap below the protocol node to the notes node (2 grid cells). */
-  NOTES_GAP: 48,
-
   /** Vertical gap above the protocol node to the first tower entry (4 grid cells). */
   TOWER_START_GAP: 96,
 

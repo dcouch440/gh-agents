@@ -61,7 +61,6 @@ const emptyLookups = (overrides?: Partial<StepNodeLookups>): StepNodeLookups => 
   toolsByAgent: new Map(),
   protocolsByStep: new Map(),
   rosterByStep: {},
-  notesByStep: {},
   protocolGroups: new Map(),
   ...overrides,
 })
@@ -422,25 +421,6 @@ describe('computeAutoLayout', () => {
     expect(agentC.y).toBeLessThan(agentB.y)
   })
 
-  it('positions notes below protocol', () => {
-    const steps = [makeStep({ id: 'p1', execution_mode: 'workforce' })]
-    const lookups = emptyLookups({
-      protocolsByStep: new Map([['p1', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
-      notesByStep: { 'p1': 'Some notes content' },
-    })
-
-    const result = computeAutoLayout(steps, [], lookups)
-
-    const protocolPos = result.get('p1')!
-    const notesPos = result.get('notes-p1')
-
-    expect(notesPos).toBeDefined()
-    expect(notesPos!.y).toBeGreaterThan(protocolPos.y)
-    expect(notesPos!.y).toBe(
-      protocolPos.y + NODE_DIMENSIONS[CanvasNodeKind.PROTOCOL].defaultHeight + AUTO_LAYOUT.NOTES_GAP,
-    )
-  })
-
   it('handles two protocols with different tower heights', () => {
     const steps = [
       makeStep({ id: 'p1', execution_mode: 'workforce' }),
@@ -513,17 +493,6 @@ describe('computeAutoLayout', () => {
     expect(inputPos.x).toBe(0)
     const expectedProtocolX = inputWidth + AUTO_LAYOUT.SPINE_GAP + (columnWidth - protocolWidth) / 2
     expect(p1Pos.x).toBe(expectedProtocolX)
-  })
-
-  it('does not create notes nodes when no notes content', () => {
-    const steps = [makeStep({ id: 'p1', execution_mode: 'workforce' })]
-    const lookups = emptyLookups({
-      protocolsByStep: new Map([['p1', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
-      notesByStep: {},
-    })
-
-    const result = computeAutoLayout(steps, [], lookups)
-    expect(result.has('notes-p1')).toBe(false)
   })
 
   it('handles protocol with zero agents', () => {

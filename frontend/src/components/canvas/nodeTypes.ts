@@ -3,7 +3,6 @@ import { StepNode } from './StepNode'
 import { DynamicNode } from './DynamicNode'
 import { ContextNode } from './ContextNode'
 import { InputNode } from './InputNode'
-import { NotesNode } from './NotesNode'
 import { SubWorkflowNode } from './SubWorkflowNode'
 
 const nodeTypes: NodeTypes = {
@@ -11,7 +10,6 @@ const nodeTypes: NodeTypes = {
   dynamicNode: DynamicNode,
   contextNode: ContextNode,
   inputNode: InputNode,
-  notesNode: NotesNode,
   subWorkflowNode: SubWorkflowNode,
 }
 

@@ -11,7 +11,7 @@ type NodePosition = { x: number; y: number }
 
 /** Returns true for nodes that have no backing workflow_step and use localStorage. */
 const isVirtualNode = (nodeId: string): boolean =>
-  nodeId.startsWith('doc-artifact-') || nodeId.startsWith('notes-') || nodeId.startsWith('agent-artifact-')
+  nodeId.startsWith('doc-artifact-') || nodeId.startsWith('agent-artifact-')
 
 // ── Dimensions ──────────────────────────────────────────────────────
 
