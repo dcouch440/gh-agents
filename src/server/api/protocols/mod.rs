@@ -193,7 +193,7 @@ async fn resolve_and_map_associations(
     AppError,
 > {
     let (agent, schema, template) = protocol_svc::resolve_protocol_associations(
-        state.repo().as_ref(),
+        state.repos().agents.as_ref(),
         state.repos().output_schemas.as_ref(),
         state.repos().prompt_templates.as_ref(),
         row,
@@ -434,7 +434,8 @@ pub async fn preview_expansion(
 ) -> Result<Json<PreviewResponse>, AppError> {
     let expansion = protocol_svc::preview_expansion(
         state.repos().protocols.as_ref(),
-        state.repo().as_ref(),
+        state.repos().agents.as_ref(),
+        state.repos().tools.as_ref(),
         state.repos().output_schemas.as_ref(),
         state.protocol_engine(),
         protocol_id,
@@ -455,7 +456,8 @@ pub async fn apply_protocol(
         state.repos().protocols.as_ref(),
         state.repos().workflows.as_ref(),
         state.repos().output_schemas.as_ref(),
-        state.repo().as_ref(),
+        state.repos().agents.as_ref(),
+        state.repos().tools.as_ref(),
         state.protocol_engine(),
         auth.user_id.0,
         protocol_id,

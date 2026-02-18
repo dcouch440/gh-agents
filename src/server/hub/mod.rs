@@ -65,7 +65,8 @@ pub async fn run_chat(
 ) -> Result<ExecutionResult, HubError> {
     // Load agent from DB
     let agent = state
-        .repo()
+        .repos()
+        .agents
         .get_persisted_agent(agent_id)
         .await
         .map_err(HubError::Internal)?
@@ -73,7 +74,8 @@ pub async fn run_chat(
 
     // Load agent tools
     let tools = state
-        .repo()
+        .repos()
+        .tools
         .get_agent_tools(agent_id)
         .await
         .map_err(HubError::Internal)?;
@@ -116,12 +118,11 @@ pub async fn run_chat(
         engine = engine.with_filter_context(filter_ctx).with_filters(filters);
     }
     let sink = streaming::SseSink::new(state.clone(), req.message_id);
-    let ae_repo = state.agent_execution_repo();
-    let tl_repo = state.token_ledger_repo();
     let recorder = ExecutionRecorder::new(
-        state.repo().as_ref(),
-        ae_repo.as_deref(),
-        tl_repo.as_deref(),
+        &*state.repos().sessions,
+        &*state.repos().chat_messages,
+        Some(&*state.repos().agent_executions),
+        Some(&*state.repos().token_ledger),
     );
 
     engine
@@ -183,12 +184,11 @@ pub async fn run_step_chat(
     // Execute
     let engine = ExecutionEngine::new(req.provider);
     let sink = streaming::SseSink::new(state.clone(), req.message_id);
-    let ae_repo = state.agent_execution_repo();
-    let tl_repo = state.token_ledger_repo();
     let recorder = ExecutionRecorder::new(
-        state.repo().as_ref(),
-        ae_repo.as_deref(),
-        tl_repo.as_deref(),
+        &*state.repos().sessions,
+        &*state.repos().chat_messages,
+        Some(&*state.repos().agent_executions),
+        Some(&*state.repos().token_ledger),
     );
 
     engine

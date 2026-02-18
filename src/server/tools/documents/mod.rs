@@ -39,9 +39,7 @@ fn spawn_summary_task(doc_repo: Arc<dyn DocumentRepo>, doc_id: uuid::Uuid, conte
 }
 
 pub(crate) async fn execute_create_doc(input: &Value, state: &AppState, user_id: UserId) -> Value {
-    let Some(doc_repo) = state.doc_repo() else {
-        return json!({ "error": "Document repository not initialized" });
-    };
+    let doc_repo = Arc::clone(&state.repos().documents);
 
     let Some(title) = input["title"].as_str() else {
         return json!({ "error": "title is required" });
@@ -88,9 +86,7 @@ pub(crate) async fn execute_create_doc(input: &Value, state: &AppState, user_id:
 }
 
 pub(crate) async fn execute_update_doc(input: &Value, state: &AppState) -> Value {
-    let Some(doc_repo) = state.doc_repo() else {
-        return json!({ "error": "Document repository not initialized" });
-    };
+    let doc_repo = Arc::clone(&state.repos().documents);
 
     let Some(id_str) = input["doc_id"].as_str() else {
         return json!({ "error": "doc_id is required" });
@@ -127,9 +123,7 @@ pub(crate) async fn execute_update_doc(input: &Value, state: &AppState) -> Value
 }
 
 pub(crate) async fn execute_search_docs(input: &Value, state: &AppState, user_id: UserId) -> Value {
-    let Some(doc_repo) = state.doc_repo() else {
-        return json!({ "error": "Document repository not initialized" });
-    };
+    let doc_repo = &*state.repos().documents;
 
     let Some(query) = input["query"].as_str() else {
         return json!({ "error": "query is required" });
@@ -156,9 +150,7 @@ pub(crate) async fn execute_search_docs(input: &Value, state: &AppState, user_id
 }
 
 pub(crate) async fn execute_read_document(input: &Value, state: &AppState) -> Value {
-    let Some(doc_repo) = state.doc_repo() else {
-        return json!({ "error": "Document repository not initialized" });
-    };
+    let doc_repo = &*state.repos().documents;
 
     let Some(id_str) = input["document_id"].as_str() else {
         return json!({ "error": "document_id is required" });
@@ -232,9 +224,7 @@ pub(crate) async fn execute_read_document_by_def_id(
         return json!({ "error": "Document not yet generated for this definition" });
     };
 
-    let Some(doc_repo) = state.doc_repo() else {
-        return json!({ "error": "Document repository not initialized" });
-    };
+    let doc_repo = &*state.repos().documents;
 
     match doc_repo.get_document(doc_id).await {
         Ok(Some(doc)) => json!({
@@ -373,9 +363,7 @@ pub(crate) async fn execute_submit_prd(input: &Value, state: &AppState, user_id:
     }
 
     // Store as document
-    let Some(doc_repo) = state.doc_repo() else {
-        return json!({ "error": "Document repository not initialized" });
-    };
+    let doc_repo = Arc::clone(&state.repos().documents);
 
     let ref_tag = title_to_ref_tag(title);
 

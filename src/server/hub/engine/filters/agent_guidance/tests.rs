@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use super::super::*;
-    use crate::db::traits::ServerRepo;
+    use crate::db::traits::AgentRepo;
     use crate::db::AgentGuidanceRow;
     use crate::server::hub::engine::filters::FilterContext;
     use chrono::Utc;
@@ -23,8 +23,8 @@ mod tests {
     }
 
     /// Build a mock repo that returns the given guidance rows.
-    fn mock_repo_with_guidances(rows: Vec<AgentGuidanceRow>) -> Arc<dyn ServerRepo> {
-        let mut mock = crate::db::traits::MockServerRepo::new();
+    fn mock_repo_with_guidances(rows: Vec<AgentGuidanceRow>) -> Arc<dyn AgentRepo> {
+        let mut mock = crate::db::traits::MockAgentRepo::new();
         mock.expect_get_agent_guidances()
             .returning(move |_agent_id, _step_id| Ok(rows.clone()));
         Arc::new(mock)

@@ -24,7 +24,8 @@ pub(super) async fn build_chat_messages(
     // Load session history if applicable
     if let Some(session_id) = session_id {
         let history = state
-            .repo()
+            .repos()
+            .sessions
             .get_session_history(session_id, max_history)
             .await
             .map_err(|e| anyhow::anyhow!("failed to load session history: {}", e))?;
@@ -39,7 +40,7 @@ pub(super) async fn build_chat_messages(
         }
 
         // Inject prior context from session summary via distiller
-        if let Ok(Some(session)) = state.repo().get_session(session_id).await {
+        if let Ok(Some(session)) = state.repos().sessions.get_session(session_id).await {
             if !session.summary.is_empty() {
                 if let Some(targeted) = tools::haiku_extract_context(&session.summary, input).await
                 {

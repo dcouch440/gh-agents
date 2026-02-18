@@ -113,67 +113,17 @@ pub trait MergeQueueRepo: Send + Sync {
 }
 
 // ============================================================================
-// Server Repository (API handler DB operations)
+// Agent Repository
 // ============================================================================
 
-/// Database operations used by the HTTP API handlers.
+/// Database operations for agent persistence, context, and guidance.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
-pub trait ServerRepo: Send + Sync {
-    /// Check database connectivity (returns true if alive).
-    async fn health_check(&self) -> bool;
-
-    /// List tasks with optional status filter and limit.
-    async fn list_tasks(
-        &self,
-        user_id: UserId,
-        status: Option<String>,
-        limit: Option<u32>,
-    ) -> Result<Vec<Task>>;
-
-    /// Get a single task by UUID.
-    async fn get_task_by_uuid(&self, user_id: UserId, id: Uuid) -> Result<Option<Task>>;
-
-    /// Insert a new task.
-    async fn insert_task(&self, user_id: UserId, task: Task) -> Result<()>;
-
-    /// Insert a chat message.
-    async fn insert_chat_message(
-        &self,
-        user_id: UserId,
-        id: Uuid,
-        role: String,
-        content: String,
-    ) -> Result<()>;
-
-    /// Get chat history with pagination.
-    async fn get_chat_history(
-        &self,
-        user_id: UserId,
-        limit: u32,
-        offset: u32,
-    ) -> Result<Vec<ChatMessageRow>>;
-
-    /// Clear all chat history.
-    async fn clear_chat_history(&self, user_id: UserId) -> Result<()>;
-
-    /// Check if a password has been configured.
-    async fn has_password(&self) -> Result<bool>;
-
-    /// Store the password hash.
-    async fn set_password(&self, password_hash: String) -> Result<()>;
-
-    /// Get the stored password hash.
-    async fn get_password(&self) -> Result<Option<String>>;
-
-    // --- Agent persistence ---
-
-    /// List all agents for a user.
+pub trait AgentRepo: Send + Sync {
+    /// List all agents for a user (includes system agents where user_id IS NULL).
     async fn list_persisted_agents(&self, user_id: UserId) -> Result<Vec<AgentRow>>;
 
     /// Insert or update an agent definition.
-    /// For user-owned agents, pass agent.user_id = Some(user_id).
-    /// For system agents, pass agent.user_id = None.
     async fn upsert_agent(&self, agent: AgentRow) -> Result<()>;
 
     /// Get a single agent by ID.
@@ -182,8 +132,28 @@ pub trait ServerRepo: Send + Sync {
     /// Delete an agent by ID.
     async fn delete_persisted_agent(&self, agent_id: Uuid) -> Result<()>;
 
-    // --- Tool persistence ---
+    /// Get all context documents assigned to an agent.
+    async fn get_agent_context(&self, agent_id: Uuid) -> Result<Vec<DocumentRow>>;
 
+    /// Set the full context document list for an agent (replaces existing).
+    async fn set_agent_context(&self, agent_id: Uuid, document_ids: Vec<Uuid>) -> Result<()>;
+
+    /// Load active guidances for an agent, optionally filtered by step.
+    async fn get_agent_guidances(
+        &self,
+        agent_id: Uuid,
+        step_id: Option<Uuid>,
+    ) -> Result<Vec<AgentGuidanceRow>>;
+}
+
+// ============================================================================
+// Tool Repository
+// ============================================================================
+
+/// Database operations for tool persistence and agent-tool linkage.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait ToolRepo: Send + Sync {
     /// List all tools (system-wide).
     async fn list_tools(&self) -> Result<Vec<ToolRow>>;
 
@@ -204,17 +174,16 @@ pub trait ServerRepo: Send + Sync {
 
     /// Seed the built-in execution tools (system-wide). Idempotent.
     async fn seed_builtin_tools(&self) -> Result<()>;
+}
 
-    // --- Agent context (document linkage) ---
+// ============================================================================
+// Session Repository
+// ============================================================================
 
-    /// Get all context documents assigned to an agent.
-    async fn get_agent_context(&self, agent_id: Uuid) -> Result<Vec<DocumentRow>>;
-
-    /// Set the full context document list for an agent (replaces existing).
-    async fn set_agent_context(&self, agent_id: Uuid, document_ids: Vec<Uuid>) -> Result<()>;
-
-    // --- Session management ---
-
+/// Database operations for chat sessions and session-scoped messages.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait SessionRepo: Send + Sync {
     /// Create a new chat session.
     async fn create_session(
         &self,
@@ -276,16 +245,79 @@ pub trait ServerRepo: Send + Sync {
 
     /// Link an agent to a session (and clear draft_config).
     async fn link_session_agent(&self, session_id: Uuid, agent_id: Uuid) -> Result<()>;
+}
 
-    // --- Agent guidance ---
+// ============================================================================
+// Task Repository
+// ============================================================================
 
-    /// Load active guidances for an agent, optionally filtered by step.
-    /// Returns global (step_id=NULL) + step-specific guidances, stacked.
-    async fn get_agent_guidances(
+/// Database operations for task management.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait TaskRepo: Send + Sync {
+    /// List tasks with optional status filter and limit.
+    async fn list_tasks(
         &self,
-        agent_id: Uuid,
-        step_id: Option<Uuid>,
-    ) -> Result<Vec<AgentGuidanceRow>>;
+        user_id: UserId,
+        status: Option<String>,
+        limit: Option<u32>,
+    ) -> Result<Vec<Task>>;
+
+    /// Get a single task by UUID.
+    async fn get_task_by_uuid(&self, user_id: UserId, id: Uuid) -> Result<Option<Task>>;
+
+    /// Insert a new task.
+    async fn insert_task(&self, user_id: UserId, task: Task) -> Result<()>;
+}
+
+// ============================================================================
+// Chat Message Repository
+// ============================================================================
+
+/// Database operations for global (non-session) chat messages.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait ChatMessageRepo: Send + Sync {
+    /// Insert a chat message.
+    async fn insert_chat_message(
+        &self,
+        user_id: UserId,
+        id: Uuid,
+        role: String,
+        content: String,
+    ) -> Result<()>;
+
+    /// Get chat history with pagination.
+    async fn get_chat_history(
+        &self,
+        user_id: UserId,
+        limit: u32,
+        offset: u32,
+    ) -> Result<Vec<ChatMessageRow>>;
+
+    /// Clear all chat history.
+    async fn clear_chat_history(&self, user_id: UserId) -> Result<()>;
+}
+
+// ============================================================================
+// Auth Config Repository
+// ============================================================================
+
+/// Database operations for authentication configuration and health checks.
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait AuthConfigRepo: Send + Sync {
+    /// Check database connectivity (returns true if alive).
+    async fn health_check(&self) -> bool;
+
+    /// Check if a password has been configured.
+    async fn has_password(&self) -> Result<bool>;
+
+    /// Store the password hash.
+    async fn set_password(&self, password_hash: String) -> Result<()>;
+
+    /// Get the stored password hash.
+    async fn get_password(&self) -> Result<Option<String>>;
 }
 
 // ============================================================================

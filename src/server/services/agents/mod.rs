@@ -2,7 +2,7 @@
 
 use uuid::Uuid;
 
-use crate::db::traits::ServerRepo;
+use crate::db::traits::AgentRepo;
 use crate::db::AgentRow;
 use crate::types::UserId;
 
@@ -37,7 +37,7 @@ pub struct UpdateAgentInput {
 /// Verify the caller owns this agent. System agents (user_id = NULL) are
 /// accessible to all users.
 async fn verify_ownership(
-    repo: &dyn ServerRepo,
+    repo: &dyn AgentRepo,
     user_id: Uuid,
     agent_id: Uuid,
 ) -> Result<AgentRow, ServiceError> {
@@ -53,7 +53,7 @@ async fn verify_ownership(
 
 /// Create a new agent.
 pub async fn create_agent(
-    repo: &dyn ServerRepo,
+    repo: &dyn AgentRepo,
     input: CreateAgentInput,
 ) -> Result<AgentRow, ServiceError> {
     validation::validate_required(&input.model_id, "model_id")?;
@@ -90,7 +90,7 @@ pub async fn create_agent(
 
 /// Get a single agent by ID, verifying ownership.
 pub async fn get_agent(
-    repo: &dyn ServerRepo,
+    repo: &dyn AgentRepo,
     user_id: Uuid,
     agent_id: Uuid,
 ) -> Result<AgentRow, ServiceError> {
@@ -99,7 +99,7 @@ pub async fn get_agent(
 
 /// List agents for a user.
 pub async fn list_agents(
-    repo: &dyn ServerRepo,
+    repo: &dyn AgentRepo,
     user_id: UserId,
 ) -> Result<Vec<AgentRow>, ServiceError> {
     let rows = repo.list_persisted_agents(user_id).await?;
@@ -108,7 +108,7 @@ pub async fn list_agents(
 
 /// Update an existing agent (partial update).
 pub async fn update_agent(
-    repo: &dyn ServerRepo,
+    repo: &dyn AgentRepo,
     user_id: Uuid,
     agent_id: Uuid,
     input: UpdateAgentInput,
@@ -144,7 +144,7 @@ pub async fn update_agent(
 
 /// Delete an agent by ID, verifying ownership.
 pub async fn delete_agent(
-    repo: &dyn ServerRepo,
+    repo: &dyn AgentRepo,
     user_id: Uuid,
     agent_id: Uuid,
 ) -> Result<(), ServiceError> {

@@ -2,22 +2,17 @@
 mod tests {
     //! Tests for chat strategy
 
-    use crate::db::traits::MockServerRepo;
     use crate::server::hub::strategies::chat::{ChatConfig, ChatStrategy, StepChatContext};
     use crate::server::hub::strategy::ExecutionStrategy;
     use crate::server::state::test_helpers::default_mock_repos;
     use crate::server::state::AppState;
     use crate::server::ws::events::Topic;
     use crate::types::{AppConfig, UserId};
-    use std::sync::Arc;
     use uuid::Uuid;
 
     fn make_state() -> AppState {
-        let mut mock = MockServerRepo::new();
-        mock.expect_health_check().returning(|| true);
-        let repo: Arc<dyn crate::db::traits::ServerRepo> = Arc::new(mock);
         let repos = default_mock_repos();
-        let (state, _rx) = AppState::with_repo(None, repo, repos, AppConfig::default());
+        let (state, _rx) = AppState::with_repos(None, repos, AppConfig::default());
         state
     }
 

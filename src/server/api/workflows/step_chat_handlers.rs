@@ -70,7 +70,8 @@ pub async fn get_step_session(
     }
 
     let session = state
-        .repo()
+        .repos()
+        .sessions
         .find_session_by_step_id(p.sid)
         .await?
         .ok_or(AppError::not_found("Step session"))?;
@@ -126,7 +127,12 @@ pub async fn get_or_create_step_session(
     }
 
     // Try to find existing session
-    if let Some(session) = state.repo().find_session_by_step_id(p.sid).await? {
+    if let Some(session) = state
+        .repos()
+        .sessions
+        .find_session_by_step_id(p.sid)
+        .await?
+    {
         return Ok(Json(SessionResponse {
             id: session.id,
             mode_id: session.mode_id,
@@ -148,7 +154,8 @@ pub async fn get_or_create_step_session(
     });
 
     state
-        .repo()
+        .repos()
+        .sessions
         .create_session(
             auth.user_id,
             session_id,
@@ -160,7 +167,8 @@ pub async fn get_or_create_step_session(
         .await?;
 
     let session = state
-        .repo()
+        .repos()
+        .sessions
         .get_session(session_id)
         .await?
         .ok_or(AppError::Internal(
@@ -220,12 +228,17 @@ pub async fn clear_step_messages(
     }
 
     let session = state
-        .repo()
+        .repos()
+        .sessions
         .find_session_by_step_id(p.sid)
         .await?
         .ok_or(AppError::not_found("Step session"))?;
 
-    state.repo().clear_session_messages(session.id).await?;
+    state
+        .repos()
+        .sessions
+        .clear_session_messages(session.id)
+        .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }
@@ -265,8 +278,17 @@ pub async fn get_step_chat_debug(
             .map_err(|e| AppError::Internal(format!("Failed to build system prompt: {e}")))?;
 
     // Load session history if a session exists
-    let messages = if let Some(session) = state.repo().find_session_by_step_id(p.sid).await? {
-        let history = state.repo().get_session_history(session.id, 50).await?;
+    let messages = if let Some(session) = state
+        .repos()
+        .sessions
+        .find_session_by_step_id(p.sid)
+        .await?
+    {
+        let history = state
+            .repos()
+            .sessions
+            .get_session_history(session.id, 50)
+            .await?;
         history
             .into_iter()
             .map(|m| DebugMessage {

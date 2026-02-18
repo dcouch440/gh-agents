@@ -3,7 +3,6 @@ mod tests {
     //! Tests for application state
 
     use super::super::*;
-    use crate::db::traits::MockServerRepo;
     use crate::server::ws::events::{
         RoomEvent, RoomEventKind, SessionEvent, SessionEventKind, WorkflowEvent, WorkflowEventKind,
     };
@@ -11,11 +10,8 @@ mod tests {
     use super::super::test_helpers::default_mock_repos;
 
     fn make_state() -> AppState {
-        let mut mock = MockServerRepo::new();
-        mock.expect_health_check().returning(|| true);
-        let repo: Arc<dyn ServerRepo> = Arc::new(mock);
         let repos = default_mock_repos();
-        let (state, _rx) = AppState::with_repo(None, repo, repos, AppConfig::default());
+        let (state, _rx) = AppState::with_repos(None, repos, AppConfig::default());
         state
     }
 

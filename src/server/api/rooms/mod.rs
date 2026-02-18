@@ -263,15 +263,15 @@ pub async fn send_room_message(
 
     let mut members = Vec::new();
     for m in member_rows {
-        let agent =
-            state
-                .repo()
-                .get_persisted_agent(m.agent_id)
-                .await?
-                .ok_or(AppError::Internal(format!(
-                    "Agent {} not found for room member",
-                    m.agent_id
-                )))?;
+        let agent = state
+            .repos()
+            .agents
+            .get_persisted_agent(m.agent_id)
+            .await?
+            .ok_or(AppError::Internal(format!(
+                "Agent {} not found for room member",
+                m.agent_id
+            )))?;
         members.push(crate::server::executors::room::RoomMemberWithAgent { member: m, agent });
     }
 
@@ -358,36 +358,35 @@ pub async fn close_room_session(
 
     // Check if this session is DAG-linked via step->room relationship
     {
-        if let Some(wf_repo) = state.workflow_repo() {
-            if let Ok(Some(step)) = wf_repo.find_step_by_room_id(session.room_id).await {
-                // Extract per-agent outputs from the room transcript
-                let transcript = repo
-                    .get_room_transcript(session_id)
-                    .await
-                    .unwrap_or_default();
+        let wf_repo = &state.repos().workflows;
+        if let Ok(Some(step)) = wf_repo.find_step_by_room_id(session.room_id).await {
+            // Extract per-agent outputs from the room transcript
+            let transcript = repo
+                .get_room_transcript(session_id)
+                .await
+                .unwrap_or_default();
 
-                let room_output = rooms::build_room_step_output(&transcript, &step);
+            let room_output = rooms::build_room_step_output(&transcript, &step);
 
-                // Resume the DAG in the background
-                let state_clone = state.clone();
-                let step_id = step.id;
-                tokio::spawn(async move {
-                    if let Err(e) = crate::server::hub::dag::resume_dag_from_approval(
-                        &state_clone,
-                        step_id,
-                        room_output,
-                    )
-                    .await
-                    {
-                        tracing::warn!(
-                            step_id = %step_id,
-                            session_id = %session_id,
-                            "Failed to resume DAG after room close: {}",
-                            e
-                        );
-                    }
-                });
-            }
+            // Resume the DAG in the background
+            let state_clone = state.clone();
+            let step_id = step.id;
+            tokio::spawn(async move {
+                if let Err(e) = crate::server::hub::dag::resume_dag_from_approval(
+                    &state_clone,
+                    step_id,
+                    room_output,
+                )
+                .await
+                {
+                    tracing::warn!(
+                        step_id = %step_id,
+                        session_id = %session_id,
+                        "Failed to resume DAG after room close: {}",
+                        e
+                    );
+                }
+            });
         }
     }
 

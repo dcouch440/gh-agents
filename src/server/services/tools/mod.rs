@@ -2,7 +2,7 @@
 
 use uuid::Uuid;
 
-use crate::db::traits::ServerRepo;
+use crate::db::traits::{AgentRepo, ToolRepo};
 use crate::db::ToolRow;
 
 use super::error::ServiceError;
@@ -50,11 +50,11 @@ fn require_admin(is_admin: bool) -> Result<(), ServiceError> {
 }
 
 async fn verify_agent_ownership(
-    repo: &dyn ServerRepo,
+    agent_repo: &dyn AgentRepo,
     user_id: Uuid,
     agent_id: Uuid,
 ) -> Result<(), ServiceError> {
-    let agent = repo
+    let agent = agent_repo
         .get_persisted_agent(agent_id)
         .await?
         .ok_or_else(|| ServiceError::not_found("Agent"))?;
@@ -68,18 +68,18 @@ async fn verify_agent_ownership(
 // Service functions
 // ============================================================================
 
-pub async fn list_tools(repo: &dyn ServerRepo) -> Result<Vec<ToolRow>, ServiceError> {
+pub async fn list_tools(repo: &dyn ToolRepo) -> Result<Vec<ToolRow>, ServiceError> {
     Ok(repo.list_tools().await?)
 }
 
-pub async fn get_tool(repo: &dyn ServerRepo, tool_id: Uuid) -> Result<ToolRow, ServiceError> {
+pub async fn get_tool(repo: &dyn ToolRepo, tool_id: Uuid) -> Result<ToolRow, ServiceError> {
     repo.get_tool(tool_id)
         .await?
         .ok_or_else(|| ServiceError::not_found("Tool"))
 }
 
 pub async fn create_tool(
-    repo: &dyn ServerRepo,
+    repo: &dyn ToolRepo,
     input: CreateToolInput,
 ) -> Result<ToolRow, ServiceError> {
     require_admin(input.is_admin)?;
@@ -104,7 +104,7 @@ pub async fn create_tool(
 }
 
 pub async fn update_tool(
-    repo: &dyn ServerRepo,
+    repo: &dyn ToolRepo,
     input: UpdateToolInput,
 ) -> Result<ToolRow, ServiceError> {
     require_admin(input.is_admin)?;
@@ -129,7 +129,7 @@ pub async fn update_tool(
 }
 
 pub async fn delete_tool(
-    repo: &dyn ServerRepo,
+    repo: &dyn ToolRepo,
     is_admin: bool,
     tool_id: Uuid,
 ) -> Result<(), ServiceError> {
@@ -139,25 +139,27 @@ pub async fn delete_tool(
 }
 
 pub async fn get_agent_tools(
-    repo: &dyn ServerRepo,
+    tool_repo: &dyn ToolRepo,
+    agent_repo: &dyn AgentRepo,
     user_id: Uuid,
     agent_id: Uuid,
 ) -> Result<Vec<ToolRow>, ServiceError> {
-    verify_agent_ownership(repo, user_id, agent_id).await?;
-    Ok(repo.get_agent_tools(agent_id).await?)
+    verify_agent_ownership(agent_repo, user_id, agent_id).await?;
+    Ok(tool_repo.get_agent_tools(agent_id).await?)
 }
 
 pub async fn set_agent_tools(
-    repo: &dyn ServerRepo,
+    tool_repo: &dyn ToolRepo,
+    agent_repo: &dyn AgentRepo,
     input: SetAgentToolsInput,
 ) -> Result<Vec<ToolRow>, ServiceError> {
-    verify_agent_ownership(repo, input.user_id, input.agent_id).await?;
+    verify_agent_ownership(agent_repo, input.user_id, input.agent_id).await?;
 
     let tool_ids: Result<Vec<Uuid>, _> =
         input.tool_ids.iter().map(|s| Uuid::parse_str(s)).collect();
     let tool_ids =
         tool_ids.map_err(|_| ServiceError::validation("Invalid tool ID format, expected UUID"))?;
 
-    repo.set_agent_tools(input.agent_id, tool_ids).await?;
-    Ok(repo.get_agent_tools(input.agent_id).await?)
+    tool_repo.set_agent_tools(input.agent_id, tool_ids).await?;
+    Ok(tool_repo.get_agent_tools(input.agent_id).await?)
 }

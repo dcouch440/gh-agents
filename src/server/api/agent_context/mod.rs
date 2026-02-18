@@ -57,7 +57,7 @@ pub async fn get_agent_context(
     _auth: auth_utils::AuthUser,
     Path(agent_id): Path<Uuid>,
 ) -> Result<Json<AgentContextResponse>, AppError> {
-    let rows = svc::get_agent_context(state.repo().as_ref(), agent_id).await?;
+    let rows = svc::get_agent_context(state.repos().agents.as_ref(), agent_id).await?;
     Ok(Json(AgentContextResponse {
         agent_id: agent_id.to_string(),
         documents: rows_to_documents(rows),
@@ -84,7 +84,7 @@ pub async fn set_agent_context(
     Json(request): Json<SetAgentContextRequest>,
 ) -> Result<Json<AgentContextResponse>, AppError> {
     let rows = svc::set_agent_context(
-        state.repo().as_ref(),
+        state.repos().agents.as_ref(),
         svc::SetAgentContextInput {
             agent_id,
             document_ids: request.document_ids,

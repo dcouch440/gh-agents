@@ -197,7 +197,12 @@ pub(super) async fn execute_belief_capture_step(
         });
 
         // Execute via engine
-        let inner_recorder = ExecutionRecorder::new(&**dag.state.repo(), None, None);
+        let inner_recorder = ExecutionRecorder::new(
+            &*dag.state.repos().sessions,
+            &*dag.state.repos().chat_messages,
+            None,
+            None,
+        );
         let result = dag
             .engine
             .clone_with_provider()

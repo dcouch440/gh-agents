@@ -87,7 +87,7 @@ async fn handle_message(
 
     // Check if this is a step-scoped session — route to run_step_chat
     if let Some(session_id) = msg.session_id {
-        if let Ok(Some(session)) = state.repo().get_session(session_id).await {
+        if let Ok(Some(session)) = state.repos().sessions.get_session(session_id).await {
             if let Some(ref dc) = session.draft_config {
                 if let (Some(step_id_str), Some(wf_id_str)) = (
                     dc.get("step_id").and_then(|v| v.as_str()),

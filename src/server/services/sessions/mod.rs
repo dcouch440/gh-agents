@@ -2,7 +2,7 @@
 
 use uuid::Uuid;
 
-use crate::db::traits::ServerRepo;
+use crate::db::traits::{AgentRepo, SessionRepo};
 use crate::db::{ChatMessageRow, SessionRow};
 use crate::types::UserId;
 
@@ -19,7 +19,7 @@ pub struct CreateSessionInput {
 
 /// Verify the caller owns this session. Returns the session row on success.
 async fn verify_ownership(
-    repo: &dyn ServerRepo,
+    repo: &dyn SessionRepo,
     user_id: Uuid,
     session_id: Uuid,
 ) -> Result<SessionRow, ServiceError> {
@@ -36,12 +36,13 @@ async fn verify_ownership(
 /// Create a new session. Validates the agent exists if provided, applies
 /// defaults for mode_id and title, then persists and returns the row.
 pub async fn create_session(
-    repo: &dyn ServerRepo,
+    repo: &dyn SessionRepo,
+    agent_repo: &dyn AgentRepo,
     input: CreateSessionInput,
 ) -> Result<SessionRow, ServiceError> {
     // Validate agent exists if provided
     if let Some(aid) = input.agent_id {
-        if repo.get_persisted_agent(aid).await?.is_none() {
+        if agent_repo.get_persisted_agent(aid).await?.is_none() {
             return Err(ServiceError::validation("Agent not found"));
         }
     }
@@ -77,7 +78,7 @@ pub async fn create_session(
 
 /// Get a single session by ID, verifying ownership.
 pub async fn get_session(
-    repo: &dyn ServerRepo,
+    repo: &dyn SessionRepo,
     user_id: Uuid,
     session_id: Uuid,
 ) -> Result<SessionRow, ServiceError> {
@@ -86,7 +87,7 @@ pub async fn get_session(
 
 /// List sessions for a user.
 pub async fn list_sessions(
-    repo: &dyn ServerRepo,
+    repo: &dyn SessionRepo,
     user_id: UserId,
 ) -> Result<Vec<SessionRow>, ServiceError> {
     let rows = repo.list_sessions(user_id).await?;
@@ -95,7 +96,7 @@ pub async fn list_sessions(
 
 /// Update a session title, verifying ownership. Returns the updated row.
 pub async fn update_session(
-    repo: &dyn ServerRepo,
+    repo: &dyn SessionRepo,
     user_id: Uuid,
     session_id: Uuid,
     title: &str,
@@ -114,7 +115,7 @@ pub async fn update_session(
 
 /// Delete a session, verifying ownership.
 pub async fn delete_session(
-    repo: &dyn ServerRepo,
+    repo: &dyn SessionRepo,
     user_id: Uuid,
     session_id: Uuid,
 ) -> Result<(), ServiceError> {
@@ -126,7 +127,7 @@ pub async fn delete_session(
 /// Validate a chat message and verify session ownership. Returns the session
 /// row so the handler can use it for stream/queue logic.
 pub async fn verify_session_chat(
-    repo: &dyn ServerRepo,
+    repo: &dyn SessionRepo,
     user_id: Uuid,
     session_id: Uuid,
     message: &str,
@@ -139,7 +140,7 @@ pub async fn verify_session_chat(
 
 /// Get session chat history, verifying ownership.
 pub async fn get_session_history(
-    repo: &dyn ServerRepo,
+    repo: &dyn SessionRepo,
     user_id: Uuid,
     session_id: Uuid,
     limit: u32,
@@ -151,7 +152,7 @@ pub async fn get_session_history(
 
 /// Clear all messages in a session, verifying ownership.
 pub async fn clear_session_messages(
-    repo: &dyn ServerRepo,
+    repo: &dyn SessionRepo,
     user_id: Uuid,
     session_id: Uuid,
 ) -> Result<(), ServiceError> {

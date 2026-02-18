@@ -2,7 +2,7 @@
 
 use uuid::Uuid;
 
-use crate::db::traits::ServerRepo;
+use crate::db::traits::AgentRepo;
 use crate::db::DocumentRow;
 
 use super::error::ServiceError;
@@ -24,14 +24,14 @@ pub struct SetAgentContextInput {
 // ============================================================================
 
 pub async fn get_agent_context(
-    repo: &dyn ServerRepo,
+    repo: &dyn AgentRepo,
     agent_id: Uuid,
 ) -> Result<Vec<DocumentRow>, ServiceError> {
     Ok(repo.get_agent_context(agent_id).await?)
 }
 
 pub async fn set_agent_context(
-    repo: &dyn ServerRepo,
+    repo: &dyn AgentRepo,
     input: SetAgentContextInput,
 ) -> Result<Vec<DocumentRow>, ServiceError> {
     let document_ids: Result<Vec<Uuid>, _> = input

@@ -8,7 +8,7 @@ use regex::Regex;
 use uuid::Uuid;
 
 use crate::db::traits::{
-    CreateProtocolInput, OutputSchemaRepo, PromptTemplateRepo, ProtocolRepo, ServerRepo,
+    AgentRepo, CreateProtocolInput, OutputSchemaRepo, PromptTemplateRepo, ProtocolRepo, ToolRepo,
     UpdateProtocolInput, WorkflowRepo,
 };
 use crate::db::{
@@ -232,7 +232,7 @@ pub async fn delete_port(proto_repo: &dyn ProtocolRepo, port_id: Uuid) -> Result
 /// Resolve the associated agent, output schema, and prompt template for a protocol row.
 /// Returns domain types (not response types) — the handler maps these to response types.
 pub(crate) async fn resolve_protocol_associations(
-    server_repo: &dyn ServerRepo,
+    agent_repo: &dyn AgentRepo,
     schema_repo: &dyn OutputSchemaRepo,
     template_repo: &dyn PromptTemplateRepo,
     protocol_row: &ProtocolRow,
@@ -245,7 +245,7 @@ pub(crate) async fn resolve_protocol_associations(
     ServiceError,
 > {
     let agent = if let Some(agent_id) = protocol_row.agent_id {
-        server_repo.get_persisted_agent(agent_id).await?
+        agent_repo.get_persisted_agent(agent_id).await?
     } else {
         None
     };
@@ -267,7 +267,7 @@ pub(crate) async fn resolve_protocol_associations(
 
 /// Resolve agent names from agent IDs found in the port rows.
 pub(crate) async fn resolve_agent_names(
-    server_repo: &dyn ServerRepo,
+    agent_repo: &dyn AgentRepo,
     ports: &[ProtocolPortRow],
 ) -> Result<HashMap<Uuid, String>, ServiceError> {
     let mut names = HashMap::new();
@@ -275,7 +275,7 @@ pub(crate) async fn resolve_agent_names(
         if names.contains_key(&port.agent_id) {
             continue;
         }
-        let agent = server_repo
+        let agent = agent_repo
             .get_persisted_agent(port.agent_id)
             .await?
             .ok_or_else(|| {
@@ -292,7 +292,7 @@ pub(crate) async fn resolve_agent_names(
 /// Resolve agent output schemas from agent IDs in the port rows.
 /// Only includes agents that have an `output_schema_id` set.
 pub(crate) async fn resolve_agent_schemas(
-    server_repo: &dyn ServerRepo,
+    agent_repo: &dyn AgentRepo,
     schema_repo: &dyn OutputSchemaRepo,
     ports: &[ProtocolPortRow],
 ) -> Result<HashMap<Uuid, serde_json::Value>, ServiceError> {
@@ -301,7 +301,7 @@ pub(crate) async fn resolve_agent_schemas(
         if schemas.contains_key(&port.agent_id) {
             continue;
         }
-        let agent = server_repo.get_persisted_agent(port.agent_id).await?;
+        let agent = agent_repo.get_persisted_agent(port.agent_id).await?;
         if let Some(agent) = agent {
             if let Some(schema_id) = agent.output_schema_id {
                 let schema_row = schema_repo.get_output_schema(schema_id).await?;
@@ -316,7 +316,7 @@ pub(crate) async fn resolve_agent_schemas(
 
 /// Resolve agent tool names from agent IDs in the port rows.
 pub(crate) async fn resolve_agent_tools(
-    server_repo: &dyn ServerRepo,
+    tool_repo: &dyn ToolRepo,
     ports: &[ProtocolPortRow],
 ) -> Result<HashMap<Uuid, Vec<String>>, ServiceError> {
     let mut tools_map = HashMap::new();
@@ -324,7 +324,7 @@ pub(crate) async fn resolve_agent_tools(
         if tools_map.contains_key(&port.agent_id) {
             continue;
         }
-        let tools = server_repo.get_agent_tools(port.agent_id).await?;
+        let tools = tool_repo.get_agent_tools(port.agent_id).await?;
         let tool_names: Vec<String> = tools.into_iter().map(|t| t.name).collect();
         tools_map.insert(port.agent_id, tool_names);
     }
@@ -340,7 +340,8 @@ pub(crate) async fn resolve_agent_tools(
 /// and returns the resulting expansion.
 pub async fn preview_expansion(
     proto_repo: &dyn ProtocolRepo,
-    server_repo: &dyn ServerRepo,
+    agent_repo: &dyn AgentRepo,
+    tool_repo: &dyn ToolRepo,
     schema_repo: &dyn OutputSchemaRepo,
     protocol_engine: &ProtocolEngine,
     protocol_id: Uuid,
@@ -352,9 +353,9 @@ pub async fn preview_expansion(
 
     let ports = proto_repo.list_protocol_ports(protocol_id).await?;
 
-    let agent_names = resolve_agent_names(server_repo, &ports).await?;
-    let agent_tools = resolve_agent_tools(server_repo, &ports).await?;
-    let agent_schemas = resolve_agent_schemas(server_repo, schema_repo, &ports).await?;
+    let agent_names = resolve_agent_names(agent_repo, &ports).await?;
+    let agent_tools = resolve_agent_tools(tool_repo, &ports).await?;
+    let agent_schemas = resolve_agent_schemas(agent_repo, schema_repo, &ports).await?;
 
     let config = protocol_engine.build_config(
         &protocol.protocol_type,
@@ -386,7 +387,8 @@ pub async fn apply_protocol(
     proto_repo: &dyn ProtocolRepo,
     wf_repo: &dyn WorkflowRepo,
     os_repo: &dyn OutputSchemaRepo,
-    server_repo: &dyn ServerRepo,
+    agent_repo: &dyn AgentRepo,
+    tool_repo: &dyn ToolRepo,
     protocol_engine: &ProtocolEngine,
     user_id: Uuid,
     protocol_id: Uuid,
@@ -407,9 +409,9 @@ pub async fn apply_protocol(
         .ok_or_else(|| ServiceError::not_found("Workflow step"))?;
 
     // Resolve agent names, tools, and content schemas
-    let agent_names = resolve_agent_names(server_repo, &ports).await?;
-    let agent_tools = resolve_agent_tools(server_repo, &ports).await?;
-    let agent_schemas = resolve_agent_schemas(server_repo, os_repo, &ports).await?;
+    let agent_names = resolve_agent_names(agent_repo, &ports).await?;
+    let agent_tools = resolve_agent_tools(tool_repo, &ports).await?;
+    let agent_schemas = resolve_agent_schemas(agent_repo, os_repo, &ports).await?;
 
     let protocol_config_json = protocol.config.clone();
 

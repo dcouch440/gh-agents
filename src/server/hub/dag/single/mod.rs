@@ -66,14 +66,11 @@ pub(super) async fn execute_single_step(
         &dag_state.completed_envelopes,
     );
 
-    let pt_repo = dag.state.prompt_template_repo();
-    let doc_repo = dag.state.doc_repo();
-    let wf_repo = dag.state.workflow_repo();
     let repos = PromptRepos {
-        prompt_template_repo: pt_repo.as_deref(),
-        doc_repo: doc_repo.as_deref(),
-        workflow_repo: wf_repo.as_deref(),
-        server_repo: &**dag.state.repo(),
+        prompt_template_repo: Some(&*dag.state.repos().prompt_templates),
+        doc_repo: Some(&*dag.state.repos().documents),
+        workflow_repo: Some(&*dag.state.repos().workflows),
+        agent_repo: &*dag.state.repos().agents,
     };
     let prompt = compose_prompt(
         step,
@@ -186,17 +183,15 @@ pub(crate) async fn run_step_via_engine(
     prompt: &str,
     container_handle: Option<&ContainerHandle>,
 ) -> Result<(StepOutput, i64, i64, f32), HubError> {
-    let ae_repo = dag
-        .state
-        .agent_execution_repo()
-        .ok_or_else(|| anyhow::anyhow!("agent_execution_repo not configured"))?;
+    let ae_repo = &dag.state.repos().agent_executions;
 
     // Load agent tools (from snapshot if template-based, else from live DB)
     let agent_tool_rows = if let Some(snap) = &dag.ctx.snapshot {
         snap.agent_tools.get(&agent.id).cloned().unwrap_or_default()
     } else {
         dag.state
-            .repo()
+            .repos()
+            .tools
             .get_agent_tools(agent.id)
             .await
             .unwrap_or_default()
@@ -281,12 +276,11 @@ pub(crate) async fn run_step_via_engine(
     let strategy = DagStepStrategy::new(config, dag.state.clone());
 
     // Build recorder (strategy handles its own recording in on_complete)
-    let ae_repo = dag.state.agent_execution_repo();
-    let tl_repo = dag.state.token_ledger_repo();
     let recorder = ExecutionRecorder::new(
-        dag.state.repo().as_ref(),
-        ae_repo.as_deref(),
-        tl_repo.as_deref(),
+        &*dag.state.repos().sessions,
+        &*dag.state.repos().chat_messages,
+        Some(&*dag.state.repos().agent_executions),
+        Some(&*dag.state.repos().token_ledger),
     );
 
     let sink = NullSink;
@@ -306,12 +300,13 @@ pub(crate) async fn run_step_via_engine(
         serde_json::to_value(dag.ctx.stage_execution_id).unwrap(),
     );
 
-    let mut filters: Vec<Arc<dyn ExecutionFilter>> =
-        vec![Arc::new(AgentGuidanceFilter::new(dag.state.repo().clone()))];
+    let mut filters: Vec<Arc<dyn ExecutionFilter>> = vec![Arc::new(AgentGuidanceFilter::new(
+        dag.state.repos().agents.clone(),
+    ))];
 
-    if let Some(ae_repo) = dag.state.agent_execution_repo() {
-        filters.push(Arc::new(FewShotFilter::new(ae_repo)));
-    }
+    filters.push(Arc::new(FewShotFilter::new(
+        dag.state.repos().agent_executions.clone(),
+    )));
 
     if let Some(schema_val) = output_schema_value {
         filter_ctx = filter_ctx.with_schema(schema_val);
@@ -335,10 +330,10 @@ pub(crate) async fn run_step_via_engine(
         if let Some(provider) = dag.state.provider() {
             filters.push(Arc::new(DebateVerificationFilter::new(
                 provider.clone(),
-                dag.state.repo().clone(),
+                dag.state.repos().agents.clone(),
                 verification_ids,
-                dag.state.agent_execution_repo(),
-                dag.state.token_ledger_repo(),
+                Some(dag.state.repos().agent_executions.clone()),
+                Some(dag.state.repos().token_ledger.clone()),
             )));
         }
     }

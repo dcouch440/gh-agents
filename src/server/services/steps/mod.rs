@@ -2,7 +2,7 @@
 
 use uuid::Uuid;
 
-use crate::db::traits::{ServerRepo, WorkflowRepo};
+use crate::db::traits::{SessionRepo, WorkflowRepo};
 use crate::db::WorkflowStepRow;
 
 use super::error::ServiceError;
@@ -271,7 +271,7 @@ pub async fn update_step(
 /// (the caller is responsible for broadcasting the session deletion event).
 pub async fn delete_step(
     repo: &dyn WorkflowRepo,
-    server_repo: &dyn ServerRepo,
+    session_repo: &dyn SessionRepo,
     user_id: Uuid,
     workflow_id: Uuid,
     step_id: Uuid,
@@ -288,8 +288,8 @@ pub async fn delete_step(
 
     // Clean up any associated chat session
     let deleted_session_id =
-        if let Ok(Some(session)) = server_repo.find_session_by_step_id(step_id).await {
-            let _ = server_repo.delete_session(session.id).await;
+        if let Ok(Some(session)) = session_repo.find_session_by_step_id(step_id).await {
+            let _ = session_repo.delete_session(session.id).await;
             Some(session.id)
         } else {
             None

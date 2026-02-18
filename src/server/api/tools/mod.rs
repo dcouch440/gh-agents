@@ -82,7 +82,7 @@ pub async fn list_tools(
     State(state): State<AppState>,
     _auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<ToolResponse>>, AppError> {
-    let rows = svc::list_tools(state.repo().as_ref()).await?;
+    let rows = svc::list_tools(state.repos().tools.as_ref()).await?;
     Ok(Json(rows.into_iter().map(ToolResponse::from_row).collect()))
 }
 
@@ -104,7 +104,7 @@ pub async fn create_tool(
     Json(request): Json<CreateToolRequest>,
 ) -> Result<(StatusCode, Json<ToolResponse>), AppError> {
     let row = svc::create_tool(
-        state.repo().as_ref(),
+        state.repos().tools.as_ref(),
         svc::CreateToolInput {
             is_admin: auth.claims.is_admin,
             name: request.name,
@@ -134,7 +134,7 @@ pub async fn get_tool(
     _auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<ToolResponse>, AppError> {
-    let row = svc::get_tool(state.repo().as_ref(), id).await?;
+    let row = svc::get_tool(state.repos().tools.as_ref(), id).await?;
     Ok(Json(ToolResponse::from_row(row)))
 }
 
@@ -158,7 +158,7 @@ pub async fn update_tool(
     Json(request): Json<UpdateToolRequest>,
 ) -> Result<Json<ToolResponse>, AppError> {
     let row = svc::update_tool(
-        state.repo().as_ref(),
+        state.repos().tools.as_ref(),
         svc::UpdateToolInput {
             is_admin: auth.claims.is_admin,
             tool_id: id,
@@ -189,7 +189,7 @@ pub async fn delete_tool(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    svc::delete_tool(state.repo().as_ref(), auth.claims.is_admin, id).await?;
+    svc::delete_tool(state.repos().tools.as_ref(), auth.claims.is_admin, id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -209,7 +209,13 @@ pub async fn get_agent_tools(
     auth: auth_utils::AuthUser,
     Path(agent_id): Path<Uuid>,
 ) -> Result<Json<AgentToolsResponse>, AppError> {
-    let tools = svc::get_agent_tools(state.repo().as_ref(), auth.user_id.0, agent_id).await?;
+    let tools = svc::get_agent_tools(
+        state.repos().tools.as_ref(),
+        state.repos().agents.as_ref(),
+        auth.user_id.0,
+        agent_id,
+    )
+    .await?;
     Ok(Json(AgentToolsResponse {
         agent_id: agent_id.to_string(),
         tools: tools.into_iter().map(ToolResponse::from_row).collect(),
@@ -236,7 +242,8 @@ pub async fn set_agent_tools(
     Json(request): Json<SetAgentToolsRequest>,
 ) -> Result<Json<AgentToolsResponse>, AppError> {
     let tools = svc::set_agent_tools(
-        state.repo().as_ref(),
+        state.repos().tools.as_ref(),
+        state.repos().agents.as_ref(),
         svc::SetAgentToolsInput {
             user_id: auth.user_id.0,
             agent_id,

@@ -3,7 +3,8 @@ mod tests {
     //! Tests for execution recorder
 
     use crate::db::traits::{
-        CreateAgentExecutionInput, MockAgentExecutionRepo, MockServerRepo, MockTokenLedgerRepo,
+        CreateAgentExecutionInput, MockAgentExecutionRepo, MockChatMessageRepo, MockSessionRepo,
+        MockTokenLedgerRepo,
     };
     use crate::server::hub::recorder::ExecutionRecorder;
     use crate::types::UserId;
@@ -11,12 +12,14 @@ mod tests {
 
     #[tokio::test]
     async fn record_chat_message_global() {
-        let mut mock = MockServerRepo::new();
-        mock.expect_insert_chat_message()
+        let session_mock = MockSessionRepo::new();
+        let mut chat_mock = MockChatMessageRepo::new();
+        chat_mock
+            .expect_insert_chat_message()
             .withf(|_uid, _id, role, content| role == "user" && content == "hello")
             .returning(|_, _, _, _| Ok(()));
 
-        let recorder = ExecutionRecorder::new(&mock, None, None);
+        let recorder = ExecutionRecorder::new(&session_mock, &chat_mock, None, None);
         recorder
             .record_chat_message(UserId::new(), None, Uuid::new_v4(), "user", "hello")
             .await
@@ -25,13 +28,15 @@ mod tests {
 
     #[tokio::test]
     async fn record_chat_message_session() {
-        let mut mock = MockServerRepo::new();
-        mock.expect_insert_session_message()
+        let mut session_mock = MockSessionRepo::new();
+        session_mock
+            .expect_insert_session_message()
             .withf(|_uid, _sid, _id, role, content| role == "assistant" && content == "hi there")
             .returning(|_, _, _, _, _| Ok(()));
+        let chat_mock = MockChatMessageRepo::new();
 
         let session_id = Uuid::new_v4();
-        let recorder = ExecutionRecorder::new(&mock, None, None);
+        let recorder = ExecutionRecorder::new(&session_mock, &chat_mock, None, None);
         recorder
             .record_chat_message(
                 UserId::new(),
@@ -46,8 +51,9 @@ mod tests {
 
     #[tokio::test]
     async fn record_tokens_without_repo_fails() {
-        let mock = MockServerRepo::new();
-        let recorder = ExecutionRecorder::new(&mock, None, None);
+        let session_mock = MockSessionRepo::new();
+        let chat_mock = MockChatMessageRepo::new();
+        let recorder = ExecutionRecorder::new(&session_mock, &chat_mock, None, None);
         let result = recorder
             .record_tokens(
                 Uuid::new_v4(),
@@ -63,7 +69,8 @@ mod tests {
 
     #[tokio::test]
     async fn record_tokens_with_repo() {
-        let mock = MockServerRepo::new();
+        let session_mock = MockSessionRepo::new();
+        let chat_mock = MockChatMessageRepo::new();
         let mut tl_mock = MockTokenLedgerRepo::new();
         tl_mock
             .expect_insert_ledger_entry()
@@ -80,7 +87,7 @@ mod tests {
                 })
             });
 
-        let recorder = ExecutionRecorder::new(&mock, None, Some(&tl_mock));
+        let recorder = ExecutionRecorder::new(&session_mock, &chat_mock, None, Some(&tl_mock));
         recorder
             .record_tokens(
                 Uuid::new_v4(),
@@ -96,8 +103,9 @@ mod tests {
 
     #[tokio::test]
     async fn record_agent_execution_without_repo_fails() {
-        let mock = MockServerRepo::new();
-        let recorder = ExecutionRecorder::new(&mock, None, None);
+        let session_mock = MockSessionRepo::new();
+        let chat_mock = MockChatMessageRepo::new();
+        let recorder = ExecutionRecorder::new(&session_mock, &chat_mock, None, None);
         let result = recorder
             .record_agent_execution(CreateAgentExecutionInput {
                 agent_id: Uuid::new_v4(),

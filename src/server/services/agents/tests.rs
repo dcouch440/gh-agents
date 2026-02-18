@@ -2,7 +2,7 @@
 mod tests {
     use uuid::Uuid;
 
-    use crate::db::traits::MockServerRepo;
+    use crate::db::traits::MockAgentRepo;
     use crate::db::AgentRow;
     use crate::server::services::agents::*;
     use crate::server::services::ServiceError;
@@ -39,7 +39,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_rejects_empty_model_id() {
-        let repo = MockServerRepo::new();
+        let repo = MockAgentRepo::new();
         let result = create_agent(
             &repo,
             CreateAgentInput {
@@ -60,7 +60,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_applies_defaults() {
-        let mut repo = MockServerRepo::new();
+        let mut repo = MockAgentRepo::new();
         repo.expect_upsert_agent().returning(|_| Ok(()));
 
         let result = create_agent(
@@ -96,7 +96,7 @@ mod tests {
         let agent_id = Uuid::new_v4();
         let agent = make_agent(agent_id, owner);
 
-        let mut repo = MockServerRepo::new();
+        let mut repo = MockAgentRepo::new();
         repo.expect_get_persisted_agent()
             .returning(move |_| Ok(Some(agent.clone())));
 
@@ -109,7 +109,7 @@ mod tests {
         let agent_id = Uuid::new_v4();
         let system_agent = make_system_agent(agent_id);
 
-        let mut repo = MockServerRepo::new();
+        let mut repo = MockAgentRepo::new();
         repo.expect_get_persisted_agent()
             .returning(move |_| Ok(Some(system_agent.clone())));
 
@@ -131,7 +131,7 @@ mod tests {
             ..make_agent(agent_id, user_id)
         };
 
-        let mut repo = MockServerRepo::new();
+        let mut repo = MockAgentRepo::new();
         repo.expect_get_persisted_agent()
             .returning(move |_| Ok(Some(system_agent.clone())));
 
@@ -146,7 +146,7 @@ mod tests {
         let agent_id = Uuid::new_v4();
         let agent = make_agent(agent_id, owner);
 
-        let mut repo = MockServerRepo::new();
+        let mut repo = MockAgentRepo::new();
         repo.expect_get_persisted_agent()
             .returning(move |_| Ok(Some(agent.clone())));
 

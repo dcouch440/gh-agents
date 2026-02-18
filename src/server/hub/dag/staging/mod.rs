@@ -257,7 +257,8 @@ pub(crate) async fn execute_staged_step(
         ))
     })?;
     let agent = state
-        .repo()
+        .repos()
+        .agents
         .get_persisted_agent(agent_id)
         .await
         .map_err(|e| anyhow::anyhow!("failed to load agent: {}", e))?

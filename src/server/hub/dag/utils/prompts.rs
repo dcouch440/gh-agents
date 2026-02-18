@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use serde_json::Value as JsonValue;
 
-use crate::db::traits::{DocumentRepo, PromptTemplateRepo, ServerRepo, WorkflowRepo};
+use crate::db::traits::{AgentRepo, DocumentRepo, PromptTemplateRepo, WorkflowRepo};
 use crate::db::WorkflowStepRow;
 use crate::types::DownstreamRoutingContext;
 
@@ -15,7 +15,7 @@ pub(crate) struct PromptRepos<'a> {
     pub prompt_template_repo: Option<&'a dyn PromptTemplateRepo>,
     pub doc_repo: Option<&'a dyn DocumentRepo>,
     pub workflow_repo: Option<&'a dyn WorkflowRepo>,
-    pub server_repo: &'a dyn ServerRepo,
+    pub agent_repo: &'a dyn AgentRepo,
 }
 
 /// Build the full prompt for a step execution.
@@ -133,7 +133,7 @@ pub(crate) async fn compose_prompt(
     // Append agent context documents (global to agent)
     if let Some(_d_repo) = repos.doc_repo {
         if let Some(agent_id) = step.agent_id {
-            if let Ok(agent_docs) = repos.server_repo.get_agent_context(agent_id).await {
+            if let Ok(agent_docs) = repos.agent_repo.get_agent_context(agent_id).await {
                 if !agent_docs.is_empty() && !context_opened {
                     full_prompt.push_str("\n\n<context>");
                     context_opened = true;

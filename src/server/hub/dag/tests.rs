@@ -174,8 +174,8 @@ mod tests {
     use super::super::execute_workflow_via_engine;
     use super::super::WorkflowExecutionContext;
     use crate::db::traits::{
-        MockAgentExecutionRepo, MockContentVersionRepo, MockServerRepo, MockTokenLedgerRepo,
-        MockWorkflowRepo,
+        MockAgentExecutionRepo, MockAgentRepo, MockContentVersionRepo, MockTokenLedgerRepo,
+        MockToolRepo, MockWorkflowRepo,
     };
     use crate::db::{
         AgentExecutionRow, AgentRow, ContentVersionRow, ExecutionMessageRow, RunSnapshotRow,
@@ -491,7 +491,7 @@ mod tests {
     }
 
     /// Build a test harness with a single agent. The provided LLM provider is
-    /// used for the ExecutionEngine. MockServerRepo is configured to return the
+    /// used for the ExecutionEngine. MockAgentRepo is configured to return the
     /// agent for any `get_persisted_agent` call matching the given `agent_id`.
     fn build_test_harness(
         agent_id: Uuid,
@@ -499,10 +499,10 @@ mod tests {
     ) -> TestHarness {
         let agent = make_test_agent(agent_id);
 
-        // MockServerRepo
-        let mut server_repo = MockServerRepo::new();
+        // MockAgentRepo
+        let mut agent_repo = MockAgentRepo::new();
         let agent_clone = agent.clone();
-        server_repo
+        agent_repo
             .expect_get_persisted_agent()
             .returning(move |id| {
                 if id == agent_id {
@@ -511,15 +511,16 @@ mod tests {
                     Ok(None)
                 }
             });
-        server_repo
-            .expect_get_agent_tools()
-            .returning(|_| Ok(vec![]));
-        server_repo
+        agent_repo
             .expect_get_agent_guidances()
             .returning(|_, _| Ok(vec![]));
-        server_repo
+        agent_repo
             .expect_get_agent_context()
             .returning(|_| Ok(vec![]));
+
+        // MockToolRepo
+        let mut tool_repo = MockToolRepo::new();
+        tool_repo.expect_get_agent_tools().returning(|_| Ok(vec![]));
 
         // MockWorkflowRepo
         let mut wf_repo = MockWorkflowRepo::new();
@@ -585,6 +586,8 @@ mod tests {
         );
 
         let repos = MockReposBuilder::new()
+            .with_agents(Arc::new(agent_repo))
+            .with_tools(Arc::new(tool_repo))
             .with_workflows(Arc::new(wf_repo))
             .with_agent_executions(Arc::new(ae_repo))
             .with_token_ledger(Arc::new(tl_repo))
@@ -594,7 +597,6 @@ mod tests {
         let engine = ExecutionEngine::new(provider.clone());
 
         let (state, rx) = AppStateBuilder::new()
-            .with_server_repo(Arc::new(server_repo))
             .with_repos(repos)
             .with_config(AppConfig::default())
             .with_provider(provider)

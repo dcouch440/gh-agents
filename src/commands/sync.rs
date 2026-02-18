@@ -7,7 +7,7 @@ use std::path::Path;
 use crate::config::sync_config;
 use crate::db::init_db;
 use crate::db::pg_repo::PgRepo;
-use crate::db::traits::{ProtocolRepo, ServerRepo};
+use crate::db::traits::{ProtocolRepo, ToolRepo};
 
 /// Run config sync command
 pub async fn run_sync(config_dir: &Path, dry_run: bool, verbose: bool) -> Result<()> {

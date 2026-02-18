@@ -3,7 +3,7 @@ mod tests {
     use chrono::Utc;
     use uuid::Uuid;
 
-    use crate::db::traits::MockServerRepo;
+    use crate::db::traits::{MockAgentRepo, MockSessionRepo};
     use crate::db::SessionRow;
     use crate::server::services::sessions::*;
     use crate::server::services::ServiceError;
@@ -29,14 +29,17 @@ mod tests {
         let session = make_session(user_id);
         let session_clone = session.clone();
 
-        let mut repo = MockServerRepo::new();
+        let mut repo = MockSessionRepo::new();
         repo.expect_create_session()
             .returning(|_, _, _, _, _, _| Ok(()));
         repo.expect_get_session()
             .returning(move |_| Ok(Some(session_clone.clone())));
 
+        let agent_repo = MockAgentRepo::new();
+
         let result = create_session(
             &repo,
+            &agent_repo,
             CreateSessionInput {
                 user_id: UserId(user_id),
                 mode_id: String::new(),
@@ -55,11 +58,15 @@ mod tests {
         let user_id = Uuid::new_v4();
         let fake_agent = Uuid::new_v4();
 
-        let mut repo = MockServerRepo::new();
-        repo.expect_get_persisted_agent().returning(|_| Ok(None));
+        let repo = MockSessionRepo::new();
+        let mut agent_repo = MockAgentRepo::new();
+        agent_repo
+            .expect_get_persisted_agent()
+            .returning(|_| Ok(None));
 
         let result = create_session(
             &repo,
+            &agent_repo,
             CreateSessionInput {
                 user_id: UserId(user_id),
                 mode_id: "home".to_string(),
@@ -80,7 +87,7 @@ mod tests {
         let session_id = session.id;
         let session_clone = session.clone();
 
-        let mut repo = MockServerRepo::new();
+        let mut repo = MockSessionRepo::new();
         repo.expect_get_session()
             .returning(move |_| Ok(Some(session_clone.clone())));
 
@@ -91,7 +98,7 @@ mod tests {
     #[tokio::test]
     async fn verify_session_chat_rejects_empty_message() {
         let user_id = Uuid::new_v4();
-        let repo = MockServerRepo::new();
+        let repo = MockSessionRepo::new();
 
         let result = verify_session_chat(&repo, user_id, Uuid::new_v4(), "   ").await;
         assert!(matches!(result, Err(ServiceError::Validation(_))));
@@ -105,7 +112,7 @@ mod tests {
         let session_id = session.id;
         let session_clone = session.clone();
 
-        let mut repo = MockServerRepo::new();
+        let mut repo = MockSessionRepo::new();
         repo.expect_get_session()
             .returning(move |_| Ok(Some(session_clone.clone())));
 

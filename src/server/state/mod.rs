@@ -17,7 +17,6 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::db::pg_repo::PgRepo;
-use crate::db::traits::ServerRepo;
 use crate::llm::{LLMProvider, ProviderRegistry};
 use crate::types::{AppConfig, UserId};
 
@@ -83,8 +82,6 @@ pub(crate) struct BufferedStream {
 pub(crate) struct AppStateInner {
     /// Database connection pool
     pub(crate) db: Option<PgPool>,
-    /// Repository trait object for DB operations used by API handlers
-    pub(crate) server_repo: Arc<dyn ServerRepo>,
     /// All repository trait objects grouped together
     pub(crate) repos: Repos,
     /// All broadcast channels grouped together
@@ -138,8 +135,6 @@ impl AppState {
     ///
     /// Loads persisted agents and clusters from the database on startup.
     pub async fn new(db: PgPool, config: AppConfig) -> (Self, mpsc::Receiver<ConsumerMessage>) {
-        let server_repo: Arc<dyn ServerRepo> = Arc::new(PgRepo::new(db.clone()));
-
         // Create all repos from PgRepo
         let repos = Repos::new(
             Arc::new(PgRepo::new(db.clone())), // users
@@ -155,6 +150,12 @@ impl AppState {
             Arc::new(PgRepo::new(db.clone())), // system_config
             Arc::new(PgRepo::new(db.clone())), // protocols
             Arc::new(PgRepo::new(db.clone())), // content_versions
+            Arc::new(PgRepo::new(db.clone())), // agents
+            Arc::new(PgRepo::new(db.clone())), // tools
+            Arc::new(PgRepo::new(db.clone())), // sessions
+            Arc::new(PgRepo::new(db.clone())), // tasks
+            Arc::new(PgRepo::new(db.clone())), // chat_messages
+            Arc::new(PgRepo::new(db.clone())), // auth_config
         );
 
         let (chat_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
@@ -171,7 +172,6 @@ impl AppState {
 
         let state = Self(Arc::new(AppStateInner {
             db: Some(db),
-            server_repo,
             repos,
             events,
             config: Arc::new(RwLock::new(config)),
@@ -193,11 +193,10 @@ impl AppState {
         (state, orchestrator_rx)
     }
 
-    /// Create application state with a custom repo (for testing).
+    /// Create application state with custom repos (for testing).
     /// Returns the state and the orchestrator message receiver.
-    pub fn with_repo(
+    pub fn with_repos(
         db: Option<PgPool>,
-        server_repo: Arc<dyn ServerRepo>,
         repos: Repos,
         config: AppConfig,
     ) -> (Self, mpsc::Receiver<ConsumerMessage>) {
@@ -208,7 +207,6 @@ impl AppState {
         (
             Self(Arc::new(AppStateInner {
                 db,
-                server_repo,
                 repos,
                 events,
                 config: Arc::new(RwLock::new(config)),
@@ -373,17 +371,6 @@ impl AppState {
         self.0.db.as_ref()
     }
 
-    /// Access the server repository (legacy).
-    pub fn server_repo(&self) -> &Arc<dyn ServerRepo> {
-        &self.0.server_repo
-    }
-
-    /// Backward-compatible alias for `server_repo()`.
-    /// This is the primary method used by existing handlers.
-    pub fn repo(&self) -> &Arc<dyn ServerRepo> {
-        &self.0.server_repo
-    }
-
     /// Access the grouped repositories.
     pub fn repos(&self) -> &Repos {
         &self.0.repos
@@ -478,52 +465,6 @@ impl AppState {
     /// Access the chat sender (for sending messages to orchestrator).
     pub fn chat_tx(&self) -> &mpsc::Sender<ConsumerMessage> {
         &self.0.chat_tx
-    }
-
-    // =========================================================================
-    // Backward-compatible accessors (delegate to repos)
-    // These maintain the old API while we migrate handlers.
-    // After migration, handlers should use state.repos().* directly.
-    // =========================================================================
-
-    /// Backward-compatible: User repository.
-    pub fn user_repo(&self) -> Option<Arc<dyn crate::db::traits::UserRepo>> {
-        Some(self.0.repos.users.clone())
-    }
-
-    /// Backward-compatible: Document repository.
-    pub fn doc_repo(&self) -> Option<Arc<dyn crate::db::traits::DocumentRepo>> {
-        Some(self.0.repos.documents.clone())
-    }
-
-    /// Backward-compatible: Output schema repository.
-    pub fn output_schema_repo(&self) -> Option<Arc<dyn crate::db::traits::OutputSchemaRepo>> {
-        Some(self.0.repos.output_schemas.clone())
-    }
-
-    /// Backward-compatible: Prompt template repository.
-    pub fn prompt_template_repo(&self) -> Option<Arc<dyn crate::db::traits::PromptTemplateRepo>> {
-        Some(self.0.repos.prompt_templates.clone())
-    }
-
-    /// Backward-compatible: Workflow repository.
-    pub fn workflow_repo(&self) -> Option<Arc<dyn crate::db::traits::WorkflowRepo>> {
-        Some(self.0.repos.workflows.clone())
-    }
-
-    /// Backward-compatible: Agent execution repository.
-    pub fn agent_execution_repo(&self) -> Option<Arc<dyn crate::db::traits::AgentExecutionRepo>> {
-        Some(self.0.repos.agent_executions.clone())
-    }
-
-    /// Backward-compatible: Token ledger repository.
-    pub fn token_ledger_repo(&self) -> Option<Arc<dyn crate::db::traits::TokenLedgerRepo>> {
-        Some(self.0.repos.token_ledger.clone())
-    }
-
-    /// Backward-compatible: Room repository.
-    pub fn room_repo(&self) -> Option<Arc<dyn crate::db::traits::RoomRepo>> {
-        Some(self.0.repos.rooms.clone())
     }
 
     // =========================================================================

@@ -221,7 +221,12 @@ pub(crate) async fn run_agent_designer(
     let filters: Vec<Arc<dyn crate::server::hub::engine::filters::ExecutionFilter>> =
         vec![Arc::new(ReasoningTraceFilter::new())];
 
-    let recorder = ExecutionRecorder::new(&**state.repo(), None, None);
+    let recorder = ExecutionRecorder::new(
+        &*state.repos().sessions,
+        &*state.repos().chat_messages,
+        None,
+        None,
+    );
     let result = engine
         .clone_with_provider()
         .with_filters(filters)

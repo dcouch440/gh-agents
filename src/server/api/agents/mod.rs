@@ -119,7 +119,7 @@ pub async fn list_agents(
     let config = state.config().read().await;
     let pool_config = &config.pool;
 
-    let rows = agents::list_agents(state.repo().as_ref(), auth.user_id).await?;
+    let rows = agents::list_agents(state.repos().agents.as_ref(), auth.user_id).await?;
 
     let agents: Vec<AgentResponse> = rows
         .into_iter()
@@ -157,7 +157,7 @@ pub async fn create_agent(
     Json(request): Json<CreateAgentRequest>,
 ) -> Result<(StatusCode, Json<AgentResponse>), AppError> {
     let row = agents::create_agent(
-        state.repo().as_ref(),
+        state.repos().agents.as_ref(),
         agents::CreateAgentInput {
             user_id: auth.user_id.0,
             name: request.name,
@@ -192,7 +192,7 @@ pub async fn get_agent(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<AgentResponse>, AppError> {
-    let row = agents::get_agent(state.repo().as_ref(), auth.user_id.0, id).await?;
+    let row = agents::get_agent(state.repos().agents.as_ref(), auth.user_id.0, id).await?;
     Ok(Json(AgentResponse::from_row(row)))
 }
 
@@ -216,7 +216,7 @@ pub async fn update_agent(
     Json(request): Json<UpdateAgentRequest>,
 ) -> Result<Json<AgentResponse>, AppError> {
     let row = agents::update_agent(
-        state.repo().as_ref(),
+        state.repos().agents.as_ref(),
         auth.user_id.0,
         id,
         agents::UpdateAgentInput {
@@ -252,7 +252,7 @@ pub async fn delete_agent(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    agents::delete_agent(state.repo().as_ref(), auth.user_id.0, id).await?;
+    agents::delete_agent(state.repos().agents.as_ref(), auth.user_id.0, id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 #[cfg(test)]
