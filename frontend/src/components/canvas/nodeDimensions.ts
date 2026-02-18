@@ -68,14 +68,6 @@ const NODE_DIMENSIONS: Readonly<Record<CanvasNodeKind, NodeDimensionConfig>> = {
     maxWidth: 1800,
     maxHeight: 1600,
   },
-  [CanvasNodeKind.NOTES]: {
-    defaultWidth: 560,
-    defaultHeight: 500,
-    minWidth: 300,
-    minHeight: 240,
-    maxWidth: 1200,
-    maxHeight: 1200,
-  },
   [CanvasNodeKind.SUB_WORKFLOW]: {
     defaultWidth: 180,
     defaultHeight: 56,

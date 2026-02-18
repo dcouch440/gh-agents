@@ -3,7 +3,6 @@ import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 import { Collections } from '@/utils/collections'
 import { STEP_TYPE_COLORS, GREYSCALE_ACCENT } from '../constants'
 import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from '../DynamicNode/archetypes'
-import { NOTES_NODE } from '../NotesNode'
 import type { ProtocolStepInfo, ProtocolGroupEntry, StepNodeLookups, StepEdgeData } from './types'
 import { isWorkforceStep } from './protocolGroups'
 
@@ -49,28 +48,6 @@ const toRFEdges = (
       data,
     }
   })
-}
-
-const toNotesEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] => {
-  const edges: Edge[] = []
-  for (const step of steps) {
-    if (step.execution_mode === 'context' || step.execution_mode === 'input') continue
-    const content = lookups.notesByStep[step.id]
-    if (!content) continue
-
-    edges.push({
-      id: `notes-edge-${step.id}`,
-      type: 'artifactEdge',
-      source: step.id,
-      sourceHandle: 'notes',
-      target: `notes-${step.id}`,
-      targetHandle: 'notes-input',
-      data: { color: NOTES_NODE.ACCENT_COLOR },
-      selectable: false,
-      deletable: false,
-    })
-  }
-  return edges
 }
 
 const toAgentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] => {
@@ -120,4 +97,4 @@ const toAgentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] =
   return edges
 }
 
-export { toRFEdges, toAgentEdges, toNotesEdges }
+export { toRFEdges, toAgentEdges }

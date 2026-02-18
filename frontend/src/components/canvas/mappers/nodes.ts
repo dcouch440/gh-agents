@@ -13,7 +13,6 @@ import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from '../DynamicNode/a
 import type { DynamicNodeData } from '../DynamicNode/DynamicNode'
 import type { StepNodeLookups } from './types'
 import { toAgentArtifactNodes } from './agentArtifactNodes'
-import { toNotesArtifactNodes } from './notesArtifactNodes'
 
 const toStepNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
   const edgesByTarget = Collections.groupBy(lookups.edges, (e) => e.to_step_id)
@@ -155,8 +154,7 @@ const toStepNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] =>
 const toRFNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] => {
   const stepNodes = toStepNodes(steps, lookups)
   const { nodes: agentNodes } = toAgentArtifactNodes(steps, lookups)
-  const notesNodes = toNotesArtifactNodes(steps, lookups)
-  return [...stepNodes, ...agentNodes, ...notesNodes]
+  return [...stepNodes, ...agentNodes]
 }
 
 export { toRFNodes }

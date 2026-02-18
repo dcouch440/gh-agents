@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toRFNodes, toRFEdges, toNotesEdges, toAgentEdges, nodeDataEqual, computeProtocolGroups } from '.'
+import { toRFNodes, toRFEdges, toAgentEdges, nodeDataEqual, computeProtocolGroups } from '.'
 import type { StepNodeLookups, ProtocolStepInfo } from '.'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 
@@ -49,7 +49,6 @@ const emptyLookups: StepNodeLookups = {
   toolsByAgent: new Map(),
   protocolsByStep: new Map(),
   rosterByStep: {},
-  notesByStep: {},
   protocolGroups: new Map(),
 }
 
@@ -439,76 +438,6 @@ describe('computeProtocolGroups', () => {
   })
 })
 
-describe('toRFNodes — notes nodes', () => {
-  it('generates a notes node when notesByStep has content', () => {
-    const lookups: StepNodeLookups = {
-      ...emptyLookups,
-      notesByStep: { 'step-001': '## Direction\n- Build auth' },
-    }
-    const nodes = toRFNodes([step1], lookups)
-    const notesNode = nodes.find((n) => n.id === 'notes-step-001')
-    expect(notesNode).toBeDefined()
-    expect(notesNode?.type).toBe('notesNode')
-    expect(notesNode?.data.kind).toBe('notes')
-    expect(notesNode?.data.label).toBe('Agent Notes')
-    expect(notesNode?.data.stepName).toBe('First Step')
-    expect(notesNode?.data.content).toBe('## Direction\n- Build auth')
-    expect(notesNode?.data.protocolStepId).toBe('step-001')
-    expect(notesNode?.connectable).toBe(false)
-    expect(notesNode?.draggable).toBe(true)
-  })
-
-  it('does not generate notes node when notesByStep is empty for the step', () => {
-    const nodes = toRFNodes([step1], emptyLookups)
-    const notesNode = nodes.find((n) => n.id === 'notes-step-001')
-    expect(notesNode).toBeUndefined()
-  })
-
-  it('skips notes node for context steps', () => {
-    const contextStep: WorkflowStep = { ...step1, id: 'ctx-1', execution_mode: 'context' }
-    const lookups: StepNodeLookups = {
-      ...emptyLookups,
-      notesByStep: { 'ctx-1': 'should not appear' },
-    }
-    const nodes = toRFNodes([contextStep], lookups)
-    const notesNode = nodes.find((n) => n.id === 'notes-ctx-1')
-    expect(notesNode).toBeUndefined()
-  })
-
-  it('skips notes node for input steps', () => {
-    const inputStep: WorkflowStep = { ...step1, id: 'input-1', execution_mode: 'input' }
-    const lookups: StepNodeLookups = {
-      ...emptyLookups,
-      notesByStep: { 'input-1': 'should not appear' },
-    }
-    const nodes = toRFNodes([inputStep], lookups)
-    const notesNode = nodes.find((n) => n.id === 'notes-input-1')
-    expect(notesNode).toBeUndefined()
-  })
-
-  it('positions notes node to the left of the parent step', () => {
-    const lookups: StepNodeLookups = {
-      ...emptyLookups,
-      notesByStep: { 'step-001': 'some notes' },
-    }
-    const nodes = toRFNodes([step1], lookups)
-    const notesNode = nodes.find((n) => n.id === 'notes-step-001')
-    expect(notesNode?.position.x).toBe(step1.position_x ?? 0)
-    expect(notesNode?.position.y).toBeGreaterThan(step1.position_y ?? 0)
-  })
-
-  it('falls back to execution_mode for stepName when name is null', () => {
-    const stepNoName: WorkflowStep = { ...step1, name: null }
-    const lookups: StepNodeLookups = {
-      ...emptyLookups,
-      notesByStep: { 'step-001': 'notes' },
-    }
-    const nodes = toRFNodes([stepNoName], lookups)
-    const notesNode = nodes.find((n) => n.id === 'notes-step-001')
-    expect(notesNode?.data.stepName).toBe('single')
-  })
-})
-
 describe('toRFNodes — input nodes', () => {
   it('maps input step to inputNode with correct data', () => {
     const inputStep: WorkflowStep = {
@@ -559,63 +488,6 @@ describe('toRFNodes — input nodes', () => {
     }
     const nodes = toRFNodes([inputStep], emptyLookups)
     expect(nodes[0]?.data.label).toBe('Input')
-  })
-})
-
-describe('toNotesEdges', () => {
-  it('generates an edge for each step with notes', () => {
-    const lookups: StepNodeLookups = {
-      ...emptyLookups,
-      notesByStep: { 'step-001': '## Notes' },
-    }
-    const edges = toNotesEdges([step1], lookups)
-    expect(edges).toHaveLength(1)
-    expect(edges[0]).toEqual({
-      id: 'notes-edge-step-001',
-      type: 'artifactEdge',
-      source: 'step-001',
-      sourceHandle: 'notes',
-      target: 'notes-step-001',
-      targetHandle: 'notes-input',
-      data: { color: '#f85149' },
-      selectable: false,
-      deletable: false,
-    })
-  })
-
-  it('returns empty array when no notes exist', () => {
-    const edges = toNotesEdges([step1, step2], emptyLookups)
-    expect(edges).toEqual([])
-  })
-
-  it('skips context steps', () => {
-    const contextStep: WorkflowStep = { ...step1, id: 'ctx-1', execution_mode: 'context' }
-    const lookups: StepNodeLookups = {
-      ...emptyLookups,
-      notesByStep: { 'ctx-1': 'hidden' },
-    }
-    const edges = toNotesEdges([contextStep], lookups)
-    expect(edges).toEqual([])
-  })
-
-  it('skips input steps', () => {
-    const inputStep: WorkflowStep = { ...step1, id: 'input-1', execution_mode: 'input' }
-    const lookups: StepNodeLookups = {
-      ...emptyLookups,
-      notesByStep: { 'input-1': 'hidden' },
-    }
-    const edges = toNotesEdges([inputStep], lookups)
-    expect(edges).toEqual([])
-  })
-
-  it('generates edges only for steps that have notes', () => {
-    const lookups: StepNodeLookups = {
-      ...emptyLookups,
-      notesByStep: { 'step-002': 'has notes' },
-    }
-    const edges = toNotesEdges([step1, step2], lookups)
-    expect(edges).toHaveLength(1)
-    expect(edges[0]?.source).toBe('step-002')
   })
 })
 

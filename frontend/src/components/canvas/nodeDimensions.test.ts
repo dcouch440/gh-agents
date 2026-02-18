@@ -13,7 +13,6 @@ describe('nodeDimensions', () => {
       CanvasNodeKind.CONTEXT,
       CanvasNodeKind.INPUT,
       CanvasNodeKind.DOCUMENT,
-      CanvasNodeKind.NOTES,
       CanvasNodeKind.SUB_WORKFLOW,
     ]
 
@@ -47,16 +46,6 @@ describe('nodeDimensions', () => {
       expect(dims.minHeight).toBe(300)
       expect(dims.maxWidth).toBe(1200)
       expect(dims.maxHeight).toBe(1000)
-    })
-
-    it('returns correct values for notes node', () => {
-      const dims = getNodeDimensions(CanvasNodeKind.NOTES)
-      expect(dims.defaultWidth).toBe(560)
-      expect(dims.defaultHeight).toBe(500)
-      expect(dims.minWidth).toBe(300)
-      expect(dims.minHeight).toBe(240)
-      expect(dims.maxWidth).toBe(1200)
-      expect(dims.maxHeight).toBe(1200)
     })
 
     it('returns fixed dimensions for sub_workflow node', () => {
@@ -100,9 +89,9 @@ describe('nodeDimensions', () => {
     it('falls back to defaults when dimensions are undefined', () => {
       const rect = nodeToRect({
         position: { x: 0, y: 0 },
-        data: { kind: CanvasNodeKind.NOTES },
+        data: { kind: CanvasNodeKind.DOCUMENT },
       })
-      expect(rect).toEqual({ x: 0, y: 0, width: 560, height: 500 })
+      expect(rect).toEqual({ x: 0, y: 0, width: 420, height: 360 })
     })
 
     it('handles mixed null and explicit dimensions', () => {
@@ -126,16 +115,6 @@ describe('nodeDimensions', () => {
         minHeight: 300,
         maxWidth: 1800,
         maxHeight: 1600,
-      })
-    })
-
-    it('returns correct constraints for notes node', () => {
-      const c = toResizeConstraints(CanvasNodeKind.NOTES)
-      expect(c).toEqual({
-        minWidth: 300,
-        minHeight: 240,
-        maxWidth: 1200,
-        maxHeight: 1200,
       })
     })
 

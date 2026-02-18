@@ -6,10 +6,6 @@ describe('isVirtualNode', () => {
     expect(isVirtualNode('doc-artifact-abc-123')).toBe(true)
   })
 
-  it('returns true for notes nodes', () => {
-    expect(isVirtualNode('notes-abc-123')).toBe(true)
-  })
-
   it('returns true for agent-artifact nodes', () => {
     expect(isVirtualNode('agent-artifact-abc-123')).toBe(true)
   })

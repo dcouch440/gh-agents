@@ -5,6 +5,7 @@ import ForumOutlined from '@mui/icons-material/ForumOutlined'
 import BugReportOutlined from '@mui/icons-material/BugReportOutlined'
 import HistoryOutlined from '@mui/icons-material/HistoryOutlined'
 import StreamOutlined from '@mui/icons-material/StreamOutlined'
+import StickyNote2Outlined from '@mui/icons-material/StickyNote2Outlined'
 import type { CanvasFormTab } from '../CanvasFormNode'
 import type { Archetype as ArchetypeType } from './archetypes'
 import { Archetype } from './archetypes'
@@ -15,6 +16,7 @@ import { AgentRosterTab } from './tabs/AgentRosterTab'
 import { RoomMembersTab } from './tabs/RoomMembersTab'
 import { DebugLogTab } from './tabs/DebugLogTab'
 import { LastRunTab } from './tabs/LastRunTab'
+import { NotesTab } from './tabs/NotesTab'
 
 type BuildStepTabsParams = {
   stepId: string
@@ -71,6 +73,13 @@ const buildStepTabs = ({
       content: <RoomMembersTab stepId={stepId} />,
     })
   }
+
+  tabs.push({
+    id: 'notes',
+    icon: StickyNote2Outlined,
+    tooltip: 'Assistant Notes',
+    content: <NotesTab stepId={stepId} />,
+  })
 
   tabs.push({
     id: 'lastrun',

@@ -140,14 +140,9 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     </>
   )
 
-  const stepExtraHandles = (
-    <>
-      {nodeData.archetype === Archetype.WORKFORCE && (
-        <CanvasHandle type="source" position={Position.Top} id="agents" color={accentColor} variant="passive" />
-      )}
-      <CanvasHandle type="source" position={Position.Bottom} id="notes" color={NOTES_ACCENT} variant="passive" />
-    </>
-  )
+  const stepExtraHandles = nodeData.archetype === Archetype.WORKFORCE ? (
+    <CanvasHandle type="source" position={Position.Top} id="agents" color={accentColor} variant="passive" />
+  ) : undefined
 
   const protocolHandles = (
     <>

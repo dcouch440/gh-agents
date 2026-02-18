@@ -31,7 +31,7 @@ describe('portPlacements', () => {
       })
     })
 
-    it('returns protocol ports on all sides', () => {
+    it('returns protocol ports on left, right, and top', () => {
       const config = getPortConfig(CanvasNodeKind.PROTOCOL)
       expect(config.ports.length).toBeGreaterThanOrEqual(4)
 
@@ -39,7 +39,6 @@ describe('portPlacements', () => {
       expect(sides.has('left')).toBe(true)
       expect(sides.has('right')).toBe(true)
       expect(sides.has('top')).toBe(true)
-      expect(sides.has('bottom')).toBe(true)
     })
 
     it('returns agent ports (bottom-in, top-out, right-docs)', () => {
@@ -57,13 +56,6 @@ describe('portPlacements', () => {
       expect(config.ports).toHaveLength(1)
       expect(config.ports[0]!.side).toBe('bottom')
       expect(config.ports[0]!.handleType).toBe('source')
-    })
-
-    it('returns notes node with single top target', () => {
-      const config = getPortConfig(CanvasNodeKind.NOTES)
-      expect(config.ports).toHaveLength(1)
-      expect(config.ports[0]!.side).toBe('top')
-      expect(config.ports[0]!.handleType).toBe('target')
     })
 
     it('returns document node with single target', () => {
@@ -144,9 +136,5 @@ describe('portPlacements', () => {
       expect(pos).toEqual({ x: 500, y: 350 }) // right center
     })
 
-    it('returns top center for notes-input', () => {
-      const pos = getPortPosition(CanvasNodeKind.NOTES, rect, 'notes-input')
-      expect(pos).toEqual({ x: 300, y: 200 }) // top center
-    })
   })
 })
