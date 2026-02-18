@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildAlignmentGuides, findSnapCandidates, computeSnap } from './snapAlignment'
+import { Collections } from '@/utils/collections'
 import type { LayoutNode } from './types'
 import type { Rect } from '@/utils/geometry'
 
@@ -38,10 +39,10 @@ describe('snapAlignment', () => {
       expect(vertical).toHaveLength(3)
       expect(horizontal).toHaveLength(3)
 
-      const vPositions = vertical.map((g) => g.position).sort((a, b) => a - b)
+      const vPositions = Collections.sortedCopy(Collections.mapBy(vertical, (g) => g.position), (a, b) => a - b)
       expect(vPositions).toEqual([10, 60, 110]) // left, center, right
 
-      const hPositions = horizontal.map((g) => g.position).sort((a, b) => a - b)
+      const hPositions = Collections.sortedCopy(Collections.mapBy(horizontal, (g) => g.position), (a, b) => a - b)
       expect(hPositions).toEqual([20, 120, 220]) // top, center, bottom
     })
 
