@@ -82,10 +82,6 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "set_max_turns" => Some(set_max_turns_tool()),
         "set_interaction_mode" => Some(set_interaction_mode_tool()),
 
-        // Workforce archetype tools (3 unique deliverable tools)
-        "add_deliverable" => Some(add_deliverable_tool()),
-        "update_deliverable" => Some(update_deliverable_tool()),
-        "remove_deliverable" => Some(remove_deliverable_tool()),
         "set_dependency" => Some(set_dependency_tool()),
         "remove_dependency" => Some(remove_dependency_tool()),
 
@@ -1096,81 +1092,6 @@ fn set_interaction_mode_tool() -> Tool {
 // ============================================================================
 // Workforce Archetype Tool Definitions (deliverable-specific; agent tools shared)
 // ============================================================================
-
-fn add_deliverable_tool() -> Tool {
-    Tool {
-        name: "add_deliverable".into(),
-        description: "Add a deliverable (document output) to the workforce. Optionally assign it to an agent by providing their roster agent_id.".into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "Deliverable name (e.g., 'API Reference', 'Architecture Diagram')"
-                },
-                "description": {
-                    "type": "string",
-                    "description": "What this deliverable should contain"
-                },
-                "target_length": {
-                    "type": "integer",
-                    "description": "Target word count. Short: 500-1000, Medium: 1500-3000, Long: 3000-6000"
-                },
-                "agent_id": {
-                    "type": "string",
-                    "description": "Roster agent ID to assign this deliverable to (optional)"
-                }
-            },
-            "required": ["name"]
-        }),
-    }
-}
-
-fn update_deliverable_tool() -> Tool {
-    Tool {
-        name: "update_deliverable".into(),
-        description: "Update an existing deliverable's name, description, or target length.".into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "deliverable_id": {
-                    "type": "string",
-                    "description": "ID of the deliverable to update"
-                },
-                "name": {
-                    "type": "string",
-                    "description": "New deliverable name"
-                },
-                "description": {
-                    "type": "string",
-                    "description": "New description"
-                },
-                "target_length": {
-                    "type": "integer",
-                    "description": "New target word count"
-                }
-            },
-            "required": ["deliverable_id"]
-        }),
-    }
-}
-
-fn remove_deliverable_tool() -> Tool {
-    Tool {
-        name: "remove_deliverable".into(),
-        description: "Remove a deliverable from the workforce.".into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "deliverable_id": {
-                    "type": "string",
-                    "description": "ID of the deliverable to remove"
-                }
-            },
-            "required": ["deliverable_id"]
-        }),
-    }
-}
 
 fn set_dependency_tool() -> Tool {
     Tool {

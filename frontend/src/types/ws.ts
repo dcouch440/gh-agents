@@ -76,9 +76,6 @@ export const WORKFLOW_EVENT = {
   COMPLETED: 'completed',
   FAILED: 'failed',
   RESUMED: 'resumed',
-  DOC_DEF_CREATED: 'doc_def_created',
-  DOC_DEF_UPDATED: 'doc_def_updated',
-  DOC_DEF_DELETED: 'doc_def_deleted',
   STEP_CONFIG_UPDATED: 'step_config_updated',
   ROSTER_CHANGED: 'roster_changed',
   ROOM_MEMBERS_CHANGED: 'room_members_changed',
@@ -122,8 +119,6 @@ export type ForEachProgressData = { workflow_id: string; step_id: string; step_n
 export type WorkflowCompletedData = { workflow_id: string; duration_ms: number | null }
 export type WorkflowFailedData = { workflow_id: string; error: string }
 export type WorkflowResumedData = { workflow_id: string; step_id: string }
-export type DocDefChangedData = { workflow_id: string; step_id: string; doc_def_id: string; name: string }
-export type DocDefDeletedData = { workflow_id: string; step_id: string; doc_def_id: string }
 export type StepConfigUpdatedData = { workflow_id: string; step_id: string }
 export type RosterChangedData = { workflow_id: string; step_id: string }
 export type RoomMembersChangedData = { workflow_id: string; step_id: string }

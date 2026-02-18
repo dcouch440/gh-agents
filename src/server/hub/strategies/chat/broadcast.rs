@@ -46,10 +46,7 @@ impl ToolEffect {
             | "set_confidence_threshold"
             | "set_meeting_purpose"
             | "set_max_turns"
-            | "set_interaction_mode"
-            | "add_deliverable"
-            | "update_deliverable"
-            | "remove_deliverable" => Some(Self::ConfigUpdated),
+            | "set_interaction_mode" => Some(Self::ConfigUpdated),
 
             "add_agent" | "update_agent" | "remove_agent" => Some(Self::RosterChanged),
             "add_member" | "update_member" | "remove_member" => Some(Self::MembersChanged),
@@ -171,14 +168,7 @@ fn schedule_consistency_scan_if_deletion(
     result: &Value,
 ) {
     let (item_type, id_field) = match tool_name {
-        "delete_doc_def" | "remove_deliverable" => (
-            DeletedItemType::DocumentDef,
-            if tool_name == "delete_doc_def" {
-                "doc_def_id"
-            } else {
-                "deliverable_id"
-            },
-        ),
+        "delete_doc_def" => (DeletedItemType::DocumentDef, "doc_def_id"),
         "remove_agent" => (DeletedItemType::RosterAgent, "agent_id"),
         _ => return,
     };

@@ -55,25 +55,25 @@ describe('assistantSessionStore', () => {
 
     describe('buildToolSegments', () => {
       it('adds a running tool segment', () => {
-        const segments = buildToolSegments([], 't1', 'create_doc_def')
+        const segments = buildToolSegments([], 't1', 'update_prompt')
         expect(segments).toEqual([
-          { type: 'tool', toolId: 't1', toolName: 'create_doc_def', status: 'running' },
+          { type: 'tool', toolId: 't1', toolName: 'update_prompt', status: 'running' },
         ])
       })
     })
 
     describe('completeToolInSegments', () => {
       it('updates matching tool segment to complete', () => {
-        const withTool = buildToolSegments([], 't1', 'create_doc_def')
+        const withTool = buildToolSegments([], 't1', 'update_prompt')
         const segments = completeToolInSegments(withTool, 't1')
 
         expect(segments).toEqual([
-          { type: 'tool', toolId: 't1', toolName: 'create_doc_def', status: 'complete' },
+          { type: 'tool', toolId: 't1', toolName: 'update_prompt', status: 'complete' },
         ])
       })
 
       it('only updates the matching tool by id', () => {
-        let segs = buildToolSegments([], 't1', 'create_doc_def')
+        let segs = buildToolSegments([], 't1', 'update_prompt')
         segs = buildToolSegments(segs, 't2', 'read_context')
         const result = completeToolInSegments(segs, 't1')
 
@@ -148,21 +148,21 @@ describe('assistantSessionStore', () => {
     })
 
     it('addTool adds a running tool segment', () => {
-      assistantSessionStore.addTool(STEP, 't1', 'create_doc_def')
+      assistantSessionStore.addTool(STEP, 't1', 'update_prompt')
 
       const step = store.getState().byStep[STEP]!
       expect(step.streamingSegments).toEqual([
-        { type: 'tool', toolId: 't1', toolName: 'create_doc_def', status: 'running' },
+        { type: 'tool', toolId: 't1', toolName: 'update_prompt', status: 'running' },
       ])
     })
 
     it('completeTool marks tool as complete', () => {
-      assistantSessionStore.addTool(STEP, 't1', 'create_doc_def')
+      assistantSessionStore.addTool(STEP, 't1', 'update_prompt')
       assistantSessionStore.completeTool(STEP, 't1')
 
       const step = store.getState().byStep[STEP]!
       expect(step.streamingSegments).toEqual([
-        { type: 'tool', toolId: 't1', toolName: 'create_doc_def', status: 'complete' },
+        { type: 'tool', toolId: 't1', toolName: 'update_prompt', status: 'complete' },
       ])
     })
 
@@ -239,7 +239,7 @@ describe('assistantSessionStore', () => {
     describe('full streaming lifecycle', () => {
       it('handles a complete streaming sequence with tools', () => {
         assistantSessionStore.streamToken(STEP, "I'll create docs.\n\n")
-        assistantSessionStore.addTool(STEP, 't1', 'create_doc_def')
+        assistantSessionStore.addTool(STEP, 't1', 'update_prompt')
         assistantSessionStore.completeTool(STEP, 't1')
         assistantSessionStore.addDoc(STEP, 'd1', 'API Reference')
         assistantSessionStore.streamToken(STEP, '\n\nCreated the document.')
