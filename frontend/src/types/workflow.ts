@@ -255,6 +255,23 @@ type RebaseResponse = {
   template_id: string
 }
 
+type WorkshopResponse = {
+  run_id: string
+  workflow_id: string
+  status: string
+}
+
+type WorkshopStepResponse = {
+  step_id: string
+  status: string
+  output: unknown | null
+  tokens_in: number
+  tokens_out: number
+  cost_usd: number
+  duration_ms: number
+  next_executable_steps: string[]
+}
+
 export type {
   Workflow,
   WorkflowStep,
@@ -283,4 +300,6 @@ export type {
   RebaseResponse,
   ChildStepResult,
   RunTemplate,
+  WorkshopResponse,
+  WorkshopStepResponse,
 }

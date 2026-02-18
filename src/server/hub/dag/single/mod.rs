@@ -23,7 +23,7 @@ use crate::server::hub::engine::filters::{
 use crate::server::hub::error::HubError;
 use crate::server::hub::recorder::ExecutionRecorder;
 use crate::server::hub::strategies::dag_step::{compute_cost, DagStepConfig, DagStepStrategy};
-use crate::server::hub::streaming::NullSink;
+use crate::server::hub::streaming::DagStreamSink;
 use crate::server::ws::events::WorkflowEventKind;
 
 use super::container::{
@@ -283,7 +283,14 @@ pub(crate) async fn run_step_via_engine(
         Some(&*dag.state.repos().token_ledger),
     );
 
-    let sink = NullSink;
+    let sink = DagStreamSink::new(
+        dag.state.clone(),
+        dag.ctx.clone(),
+        step.workflow_id,
+        step.id,
+        step.id,
+        agent.name.clone(),
+    );
 
     // Build filter pipeline
     let mut filter_ctx = FilterContext::new(&agent.model_id, agent.id).with_step_id(step.id);

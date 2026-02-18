@@ -99,7 +99,7 @@ impl ExecutionStrategy for DagStepStrategy {
     }
 
     fn streaming(&self) -> bool {
-        false
+        true
     }
 
     fn temperature(&self) -> f32 {

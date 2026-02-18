@@ -201,6 +201,47 @@ mod tests {
     // Mock LLM Providers
     // ---------------------------------------------------------------------------
 
+    /// Convert an LLMResponse into a stream of chunks the StreamAccumulator can reconstruct.
+    fn response_to_stream(
+        resp: &LLMResponse,
+    ) -> Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>> {
+        let mut chunks: Vec<Result<StreamChunk, LLMError>> = vec![
+            Ok(StreamChunk::MessageStart {
+                model: resp.model.clone(),
+                input_tokens: resp.usage.input_tokens,
+            }),
+            Ok(StreamChunk::ContentBlockStart { index: 0 }),
+            Ok(StreamChunk::ContentDelta {
+                text: resp.content.clone(),
+                index: 0,
+            }),
+            Ok(StreamChunk::ContentBlockStop { index: 0 }),
+        ];
+        // Emit tool use blocks if present
+        for block in &resp.content_blocks {
+            if let crate::llm::ContentBlock::ToolUse { id, name, input } = block {
+                chunks.push(Ok(StreamChunk::ToolUseStart {
+                    index: chunks.len(),
+                    id: id.clone(),
+                    name: name.clone(),
+                }));
+                chunks.push(Ok(StreamChunk::InputJsonDelta {
+                    index: chunks.len(),
+                    partial_json: input.to_string(),
+                }));
+                chunks.push(Ok(StreamChunk::ContentBlockStop {
+                    index: chunks.len(),
+                }));
+            }
+        }
+        chunks.push(Ok(StreamChunk::MessageDelta {
+            stop_reason: Some(resp.stop_reason),
+            output_tokens: Some(resp.usage.output_tokens),
+        }));
+        chunks.push(Ok(StreamChunk::MessageStop));
+        Box::pin(futures::stream::iter(chunks))
+    }
+
     /// Returns the same response on every call.
     struct FixedProvider {
         response: LLMResponse,
@@ -216,7 +257,7 @@ mod tests {
             _req: LLMRequest,
         ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
         {
-            Err(LLMError::StreamError("not implemented".into()))
+            Ok(response_to_stream(&self.response))
         }
         fn provider_name(&self) -> &'static str {
             "fixed"
@@ -245,7 +286,9 @@ mod tests {
             _req: LLMRequest,
         ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
         {
-            Err(LLMError::StreamError("not implemented".into()))
+            let n = self.call_count.fetch_add(1, Ordering::SeqCst) as usize;
+            let idx = n.min(self.responses.len() - 1);
+            Ok(response_to_stream(&self.responses[idx]))
         }
         fn provider_name(&self) -> &'static str {
             "sequential"
@@ -276,7 +319,11 @@ mod tests {
             _req: LLMRequest,
         ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
         {
-            Err(LLMError::StreamError("not implemented".into()))
+            let n = self.call_count.fetch_add(1, Ordering::SeqCst);
+            if n == 0 {
+                self.token.cancel();
+            }
+            Ok(response_to_stream(&self.response))
         }
         fn provider_name(&self) -> &'static str {
             "cancelling"

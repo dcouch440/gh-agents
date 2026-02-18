@@ -3,8 +3,12 @@ import { Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
+import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
+import CircularProgress from '@mui/material/CircularProgress'
+import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined'
 import { useTheme } from '@mui/material/styles'
-import { useStore, workflowExecutionStore } from '@/stores'
+import { useStore, shallow, workflowExecutionStore, stepStreamStore } from '@/stores'
 import type { StepNodeData } from '../mappers'
 import { nodeDataEqual } from '../mappers'
 import { CanvasHandle } from '../CanvasHandle'
@@ -14,7 +18,8 @@ import { useProtocolHighlight } from '../useProtocolHighlight'
 import { getNodeHighlightStyles } from '../nodeHighlightStyles'
 import { useCanvasLOD } from '../useCanvasLOD'
 import { MinimalNodeShell } from '../MinimalNodeShell'
-import { NodeHeader, ExecutionStatusBadge, ExecutionProgress, toExecutionStatus } from '../execution'
+import { NodeHeader, ExecutionStatusBadge, ExecutionProgress, StreamView, ToolActivityFeed, toExecutionStatus } from '../execution'
+import { useWorkshopStepRun } from '../useWorkshopStepRun'
 import { SectionLabel } from './SectionLabel'
 import { BadgeList } from './BadgeList'
 import { STEP_TYPE_ICONS, DEFAULT_STEP_TYPE_ICON } from './constants'
@@ -31,6 +36,16 @@ function StepNodeComponent({ id, data, selected }: NodeProps) {
   const stepExec = useStore(workflowExecutionStore.store, workflowExecutionStore.selectStepState(id))
   const execStatus = toExecutionStatus(stepExec?.status)
   const isExecuting = execStatus !== 'idle'
+
+  // Streaming state
+  const sources = useStore(stepStreamStore.store, stepStreamStore.selectSourcesForStep(id), shallow)
+  const activeSource = sources.length > 0 ? sources[0] : null
+  const hasStream = activeSource !== null && (activeSource.streamBuffer !== '' || activeSource.toolUses.length > 0)
+
+  // Workshop run
+  const showRunButton = nodeData.stepType !== 'context' && nodeData.stepType !== 'input'
+  const { status: workshopStatus, handleRun } = useWorkshopStepRun(id)
+  const workshopRunning = workshopStatus === 'running' || workshopStatus === 'initializing'
   const highlight = getNodeHighlightStyles({
     selected: selected === true,
     accentColor,
@@ -92,6 +107,17 @@ function StepNodeComponent({ id, data, selected }: NodeProps) {
           subtitle={subtitle}
           accentColor={accentColor}
           size="compact"
+          actions={showRunButton ? (
+            <Tooltip title={workshopRunning ? 'Running...' : 'Run step'} placement="top">
+              <span>
+                <IconButton className="nodrag" onClick={handleRun} disabled={workshopRunning} size="small" sx={{ flexShrink: 0, width: 24, height: 24, color: 'text.secondary', '&:hover': { color: 'text.primary' } }}>
+                  {workshopRunning
+                    ? <CircularProgress size={10} thickness={5} sx={{ color: 'text.secondary' }} />
+                    : <PlayArrowOutlined sx={{ fontSize: 14 }} />}
+                </IconButton>
+              </span>
+            </Tooltip>
+          ) : undefined}
           badge={
             isExecuting ? (
               <ExecutionStatusBadge status={execStatus} />
@@ -203,6 +229,28 @@ function StepNodeComponent({ id, data, selected }: NodeProps) {
                   whiteSpace: 'nowrap',
                 }}
               />
+            </Box>
+          )}
+        </Box>
+      )}
+
+      {/* Live stream */}
+      {hasStream && activeSource !== null && (
+        <Box
+          className="nowheel nodrag nopan"
+          sx={{ borderTop: 1, borderColor: 'divider', maxHeight: 160, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
+        >
+          <Box sx={{ flex: 1, minHeight: 0, px: 1, py: 0.5 }}>
+            <StreamView
+              content={activeSource.streamBuffer}
+              status={activeSource.status === 'completed' || activeSource.status === 'failed' ? activeSource.status : 'running'}
+              error={activeSource.error}
+              maxHeight={120}
+            />
+          </Box>
+          {activeSource.toolUses.length > 0 && (
+            <Box sx={{ px: 1, py: 0.5, borderTop: 1, borderColor: 'divider', flexShrink: 0 }}>
+              <ToolActivityFeed tools={activeSource.toolUses} compact />
             </Box>
           )}
         </Box>

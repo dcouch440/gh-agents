@@ -52,6 +52,8 @@ export type {
   RebaseResponse,
   ChildStepResult,
   RunTemplate,
+  WorkshopResponse,
+  WorkshopStepResponse,
 } from './workflow'
 export type {
   AgentExecution,
