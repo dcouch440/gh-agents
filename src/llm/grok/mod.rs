@@ -29,8 +29,6 @@ pub struct GrokConfig {
     pub timeout_secs: u64,
     /// Maximum output tokens.
     pub max_tokens: u32,
-    /// Maximum agentic search turns.
-    pub max_search_turns: u32,
 }
 
 impl GrokConfig {
@@ -50,7 +48,6 @@ impl GrokConfig {
             model,
             timeout_secs: constants::XAI_RESEARCH_TIMEOUT_SECS,
             max_tokens: constants::XAI_RESEARCH_MAX_TOKENS,
-            max_search_turns: constants::XAI_RESEARCH_MAX_SEARCH_TURNS,
         })
     }
 
@@ -156,6 +153,8 @@ struct XAIRequest {
     max_output_tokens: Option<u32>,
     input: Vec<XAIMessage>,
     tools: Vec<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    include: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -187,6 +186,18 @@ struct XAIContentBlock {
     block_type: String,
     #[serde(default)]
     text: Option<String>,
+    #[serde(default)]
+    annotations: Vec<XAIAnnotation>,
+}
+
+#[derive(Debug, Deserialize)]
+struct XAIAnnotation {
+    #[serde(rename = "type", default)]
+    annotation_type: String,
+    #[serde(default)]
+    title: Option<String>,
+    #[serde(default)]
+    url: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -363,13 +374,15 @@ impl GrokResearchClient {
             max_output_tokens: Some(self.config.max_tokens),
             input,
             tools,
+            include: Some(vec!["inline_citations".to_string()]),
         }
     }
 
     /// Parse the xAI API response into our ResearchResponse.
     fn parse_response(api_response: XAIResponse) -> ResearchResponse {
         let mut answer_parts = Vec::new();
-        let citations = Vec::new();
+        let mut citations = Vec::new();
+        let mut seen_urls = std::collections::HashSet::new();
 
         for item in &api_response.output {
             if item.item_type == "message" {
@@ -379,15 +392,24 @@ impl GrokResearchClient {
                             answer_parts.push(text.clone());
                         }
                     }
+                    for annotation in &block.annotations {
+                        if annotation.annotation_type == "url_citation" {
+                            if let Some(ref url) = annotation.url {
+                                if seen_urls.insert(url.clone()) {
+                                    citations.push(Citation {
+                                        title: annotation.title.clone().unwrap_or_default(),
+                                        url: url.clone(),
+                                        source_type: "web".to_string(),
+                                    });
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
 
         let answer = answer_parts.join("\n\n");
-
-        // TODO: Parse citations from search result metadata when xAI adds
-        // structured citation data to the Responses API. For now, citations
-        // are embedded inline in the answer text by Grok.
 
         ResearchResponse {
             answer,

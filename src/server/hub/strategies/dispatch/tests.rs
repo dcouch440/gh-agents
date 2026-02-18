@@ -135,14 +135,7 @@ mod tests {
             "step_id": step_id.to_string(),
         });
 
-        broadcast::broadcast_step_event(
-            &state,
-            Some(&ctx),
-            None,
-            "set_node_name",
-            &input,
-            &result,
-        );
+        broadcast::broadcast_step_event(&state, Some(&ctx), None, "set_node_name", &input, &result);
 
         let envelope = rx.try_recv().unwrap();
         assert_eq!(envelope.topic, Topic::Workflow);

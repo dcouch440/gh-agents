@@ -405,14 +405,11 @@ pub const OLLAMA_DEFAULT_TIMEOUT_SECS: u64 = 300;
 /// Base URL for the xAI API.
 pub const XAI_DEFAULT_BASE_URL: &str = "https://api.x.ai";
 /// Model optimized for agentic search with server-side tool use.
-pub const XAI_RESEARCH_MODEL: &str = "grok-4-1-fast-non-reasoning";
+pub const XAI_RESEARCH_MODEL: &str = "grok-4-1-fast";
 /// Timeout for research requests (server-side search can take a while).
 pub const XAI_RESEARCH_TIMEOUT_SECS: u64 = 120;
 /// Max output tokens for research responses.
 pub const XAI_RESEARCH_MAX_TOKENS: u32 = 4096;
-/// Max agentic search turns Grok can take per request.
-pub const XAI_RESEARCH_MAX_SEARCH_TURNS: u32 = 10;
-
 // ── True Context Distiller ────────────────────────────────────────────────
 
 /// Model used for the True Context distiller pre-pass.
