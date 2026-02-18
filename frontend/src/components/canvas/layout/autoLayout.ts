@@ -323,14 +323,21 @@ const computeAutoLayout = (
 
     // 6. Place tiered tower above protocol (docs above agents)
     if (tiers.length > 0) {
-      // Tier slot height: agent + optional doc above
-      const tierHasDoc = tiers.some((t) => t.entries.some((e) => e.documentNodeId !== null))
-      const tierSlotHeight = agentHeight + (tierHasDoc ? AUTO_LAYOUT.DOC_GAP + docHeight : 0)
+      // Cumulative cursor tracks the bottom edge of the next available slot,
+      // moving upward (negative Y) as tiers stack above the protocol.
+      let towerCursorY = spineY - AUTO_LAYOUT.TOWER_START_GAP
 
       for (let tierIdx = 0; tierIdx < tiers.length; tierIdx++) {
         const tier = tiers[tierIdx]!
-        const agentY = spineY - AUTO_LAYOUT.TOWER_START_GAP - nodeHeight
-          - tierIdx * (tierSlotHeight + AUTO_LAYOUT.TOWER_GAP)
+        const thisHasDoc = tier.entries.some((e) => e.documentNodeId !== null)
+        const slotHeight = agentHeight + (thisHasDoc ? AUTO_LAYOUT.DOC_GAP + docHeight : 0)
+
+        if (tierIdx > 0) {
+          towerCursorY -= AUTO_LAYOUT.TOWER_GAP
+        }
+
+        // Agent top = cursor bottom minus agent height
+        const agentY = towerCursorY - agentHeight
 
         // Spread entries horizontally, centered on column
         const tierWidth = tier.entries.length * agentWidth + (tier.entries.length - 1) * AUTO_LAYOUT.TIER_AGENT_GAP
@@ -345,12 +352,14 @@ const computeAutoLayout = (
             positions.set(entry.agentNodeId, { x: entryX, y: agentY })
           }
 
-          // Place document node above agent, centered horizontally
+          // Place document node above agent
           if (entry.documentNodeId) {
-            const docX = entry.agentNodeId ? entryX : entryX
-            positions.set(entry.documentNodeId, { x: docX, y: agentY - docHeight - AUTO_LAYOUT.DOC_GAP })
+            positions.set(entry.documentNodeId, { x: entryX, y: agentY - docHeight - AUTO_LAYOUT.DOC_GAP })
           }
         }
+
+        // Advance cursor upward past this tier's full slot
+        towerCursorY -= slotHeight
       }
     }
 
