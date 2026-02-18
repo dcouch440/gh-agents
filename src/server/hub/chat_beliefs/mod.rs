@@ -77,7 +77,11 @@ async fn extract_and_replace_beliefs(
     let board_beliefs_text = format_beliefs_for_extraction(&connected_beliefs);
 
     // 3. Check message count
-    let msg_count = state.repo().count_session_messages(session_id).await?;
+    let msg_count = state
+        .repos()
+        .sessions
+        .count_session_messages(session_id)
+        .await?;
 
     if msg_count < MIN_MESSAGES_FOR_EXTRACTION {
         return Ok(());
@@ -85,7 +89,8 @@ async fn extract_and_replace_beliefs(
 
     // 4. Load conversation
     let messages = state
-        .repo()
+        .repos()
+        .sessions
         .get_session_history(session_id, MAX_CONVERSATION_MESSAGES)
         .await?;
 

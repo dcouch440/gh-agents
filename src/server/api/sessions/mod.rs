@@ -39,7 +39,11 @@ pub async fn list_modes(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<ModeInfo>>, AppError> {
-    let agents = state.repo().list_persisted_agents(auth.user_id).await?;
+    let agents = state
+        .repos()
+        .agents
+        .list_persisted_agents(auth.user_id)
+        .await?;
     let modes: Vec<ModeInfo> = agents
         .into_iter()
         .map(|a| ModeInfo {
@@ -104,7 +108,8 @@ pub async fn create_session(
     Json(request): Json<CreateSessionRequest>,
 ) -> Result<(StatusCode, Json<SessionResponse>), AppError> {
     let session = sessions::create_session(
-        state.repo().as_ref(),
+        state.repos().sessions.as_ref(),
+        state.repos().agents.as_ref(),
         CreateSessionInput {
             user_id: auth.user_id,
             mode_id: request.mode_id,
@@ -152,7 +157,7 @@ pub async fn list_sessions(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<Json<Vec<SessionResponse>>, AppError> {
-    let rows = sessions::list_sessions(state.repo().as_ref(), auth.user_id).await?;
+    let rows = sessions::list_sessions(state.repos().sessions.as_ref(), auth.user_id).await?;
 
     let response: Vec<SessionResponse> = rows
         .into_iter()
@@ -187,7 +192,8 @@ pub async fn get_session(
     auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<SessionResponse>, AppError> {
-    let session = sessions::get_session(state.repo().as_ref(), auth.user_id.0, session_id).await?;
+    let session =
+        sessions::get_session(state.repos().sessions.as_ref(), auth.user_id.0, session_id).await?;
 
     Ok(Json(SessionResponse {
         id: session.id,
@@ -217,7 +223,7 @@ pub async fn delete_session(
     auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    sessions::delete_session(state.repo().as_ref(), auth.user_id.0, session_id).await?;
+    sessions::delete_session(state.repos().sessions.as_ref(), auth.user_id.0, session_id).await?;
 
     state.broadcast_session(SessionEvent {
         session_id,
@@ -248,7 +254,7 @@ pub async fn update_session(
     Json(request): Json<UpdateSessionRequest>,
 ) -> Result<Json<SessionResponse>, AppError> {
     let updated = sessions::update_session(
-        state.repo().as_ref(),
+        state.repos().sessions.as_ref(),
         auth.user_id.0,
         session_id,
         &request.title,
@@ -296,7 +302,7 @@ pub async fn send_session_chat(
     Json(request): Json<ChatRequest>,
 ) -> Result<(StatusCode, Json<ChatResponse>), AppError> {
     let session = sessions::verify_session_chat(
-        state.repo().as_ref(),
+        state.repos().sessions.as_ref(),
         auth.user_id.0,
         session_id,
         &request.message,
@@ -309,7 +315,8 @@ pub async fn send_session_chat(
 
     // Store user message scoped to session
     state
-        .repo()
+        .repos()
+        .sessions
         .insert_session_message(
             auth.user_id,
             session_id,
@@ -364,9 +371,13 @@ pub async fn get_session_history(
     Query(query): Query<HistoryQuery>,
 ) -> Result<Json<Vec<ChatMessage>>, AppError> {
     let limit = query.limit.unwrap_or(50);
-    let rows =
-        sessions::get_session_history(state.repo().as_ref(), auth.user_id.0, session_id, limit)
-            .await?;
+    let rows = sessions::get_session_history(
+        state.repos().sessions.as_ref(),
+        auth.user_id.0,
+        session_id,
+        limit,
+    )
+    .await?;
 
     let messages: Vec<ChatMessage> = rows
         .into_iter()
@@ -398,7 +409,8 @@ pub async fn clear_session_messages(
     auth: auth_utils::AuthUser,
     Path(session_id): Path<Uuid>,
 ) -> Result<StatusCode, AppError> {
-    sessions::clear_session_messages(state.repo().as_ref(), auth.user_id.0, session_id).await?;
+    sessions::clear_session_messages(state.repos().sessions.as_ref(), auth.user_id.0, session_id)
+        .await?;
 
     Ok(StatusCode::NO_CONTENT)
 }

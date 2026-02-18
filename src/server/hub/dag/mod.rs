@@ -198,12 +198,17 @@ async fn gather_downstream_routing_context(
 
         let mut routes = Vec::new();
         for rule in rules {
-            let agent_name = match state.repo().get_persisted_agent(rule.agent_id).await {
+            let agent_name = match state
+                .repos()
+                .agents
+                .get_persisted_agent(rule.agent_id)
+                .await
+            {
                 Ok(Some(agent)) => agent.name,
                 _ => format!("Agent {}", rule.agent_id),
             };
 
-            let agent_tools = match state.repo().get_agent_tools(rule.agent_id).await {
+            let agent_tools = match state.repos().tools.get_agent_tools(rule.agent_id).await {
                 Ok(tools) => tools.into_iter().map(|t| t.name).collect(),
                 Err(_) => vec![],
             };
@@ -411,7 +416,8 @@ async fn run_dag_loop(
                 })?
         } else {
             dag.state
-                .repo()
+                .repos()
+                .agents
                 .get_persisted_agent(agent_id)
                 .await
                 .map_err(|e| anyhow::anyhow!("failed to load agent: {}", e))?

@@ -90,16 +90,12 @@ mod tests {
         }
     }
 
-    fn make_mock_recorder() -> (
-        crate::db::traits::MockServerRepo,
-        ExecutionRecorder<'static>,
-    ) {
-        // We leak the mock to get a 'static reference for testing.
+    fn make_mock_recorder() -> ExecutionRecorder<'static> {
+        // We leak the mocks to get 'static references for testing.
         // This is fine in tests.
-        let mock = Box::leak(Box::new(crate::db::traits::MockServerRepo::new()));
-        let recorder = ExecutionRecorder::new(mock, None, None);
-        // Return a separate mock for expectations (unused since recorder has its own ref)
-        (crate::db::traits::MockServerRepo::new(), recorder)
+        let session_mock = Box::leak(Box::new(crate::db::traits::MockSessionRepo::new()));
+        let chat_mock = Box::leak(Box::new(crate::db::traits::MockChatMessageRepo::new()));
+        ExecutionRecorder::new(session_mock, chat_mock, None, None)
     }
 
     #[tokio::test]
@@ -122,7 +118,7 @@ mod tests {
         let engine = ExecutionEngine::new(provider);
         let strategy = TestStrategy::new();
         let sink = NullSink;
-        let (_mock, recorder) = make_mock_recorder();
+        let recorder = make_mock_recorder();
 
         let result = engine
             .execute(&strategy, "Hi", &sink, &recorder, None)
@@ -148,7 +144,7 @@ mod tests {
 
         let engine = ExecutionEngine::new(provider);
         let sink = NullSink;
-        let (_mock, recorder) = make_mock_recorder();
+        let recorder = make_mock_recorder();
 
         // Strategy with a tiny budget
         struct TinyBudgetStrategy;
@@ -260,7 +256,7 @@ mod tests {
         let engine = ExecutionEngine::new(provider);
         let strategy = TestStrategy::new();
         let sink = NullSink;
-        let (_mock, recorder) = make_mock_recorder();
+        let recorder = make_mock_recorder();
 
         let result = engine
             .execute(&strategy, "search for test", &sink, &recorder, None)
@@ -347,7 +343,7 @@ mod tests {
 
         let engine = ExecutionEngine::new(Arc::new(AlwaysToolUse));
         let sink = NullSink;
-        let (_mock, recorder) = make_mock_recorder();
+        let recorder = make_mock_recorder();
 
         let result = engine
             .execute(&LimitedStrategy, "go", &sink, &recorder, None)
@@ -430,7 +426,7 @@ mod tests {
             completed: completed_clone,
         };
         let sink = NullSink;
-        let (_mock, recorder) = make_mock_recorder();
+        let recorder = make_mock_recorder();
 
         engine
             .execute(&strategy, "test", &sink, &recorder, None)
@@ -459,7 +455,7 @@ mod tests {
         let engine = ExecutionEngine::new(provider);
         let strategy = TestStrategy::new();
         let sink = NullSink;
-        let (_mock, recorder) = make_mock_recorder();
+        let recorder = make_mock_recorder();
 
         let result = engine
             .execute(&strategy, "long question", &sink, &recorder, None)
@@ -585,7 +581,7 @@ mod tests {
             count: tool_exec_clone,
         };
         let sink = NullSink;
-        let (_mock, recorder) = make_mock_recorder();
+        let recorder = make_mock_recorder();
 
         let result = engine
             .execute(&strategy, "do things", &sink, &recorder, None)
@@ -619,7 +615,7 @@ mod tests {
         let engine = ExecutionEngine::new(provider);
         let strategy = TestStrategy::new();
         let sink = NullSink;
-        let (_mock, recorder) = make_mock_recorder();
+        let recorder = make_mock_recorder();
 
         let token = CancellationToken::new();
         token.cancel();
@@ -724,7 +720,7 @@ mod tests {
             calls: call_count.clone(),
         };
         let sink = NullSink;
-        let (_mock, recorder) = make_mock_recorder();
+        let recorder = make_mock_recorder();
 
         let result = engine
             .execute(&strategy, "go", &sink, &recorder, Some(&token))

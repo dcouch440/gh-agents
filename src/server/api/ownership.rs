@@ -3,7 +3,7 @@
 use uuid::Uuid;
 
 use super::AppError;
-use crate::db::traits::ServerRepo;
+use crate::db::traits::AgentRepo;
 use crate::db::AgentRow;
 use crate::server::auth::AuthUser;
 
@@ -12,7 +12,7 @@ use crate::server::auth::AuthUser;
 /// Returns the agent row on success, or 404 on mismatch (avoids confirming
 /// resource existence to unauthorized users).
 pub async fn verify_agent_ownership(
-    repo: &dyn ServerRepo,
+    repo: &dyn AgentRepo,
     auth: &AuthUser,
     agent_id: Uuid,
 ) -> Result<AgentRow, AppError> {

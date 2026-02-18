@@ -7,14 +7,15 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::db::traits::{
-    AgentExecutionRepo, ContentVersionRepo, CreateAgentExecutionInput,
-    CreateDesignerOutputGenericInput, CreateDesignerOutputInput, CreateDocumentInput,
-    CreateProtocolInput, CreateRoomInput, CreateStepInputPort, CreateWorkflowInput, DocumentRepo,
-    InsertQueueEntryInput, MergeQueueRepo, ModelSpendRow, OutputSchemaRepo, PromptTemplateRepo,
-    ProtocolRepo, ResultRepo, RoomMemberInput, RoomRepo, SaveRoomExecutionOutputInput, ServerRepo,
-    SystemConfigRepo, TokenLedgerRepo, ToolCapabilityRepo, UpdateProtocolExecutionStatusInput,
-    UpdateProtocolInput, UpdateRoomInput, UpdateWorkflowInput, UserRepo, WorkflowCollectionRepo,
-    WorkflowRepo, WorkflowStepAgentRepo,
+    AgentExecutionRepo, AgentRepo, AuthConfigRepo, ChatMessageRepo, ContentVersionRepo,
+    CreateAgentExecutionInput, CreateDesignerOutputGenericInput, CreateDesignerOutputInput,
+    CreateDocumentInput, CreateProtocolInput, CreateRoomInput, CreateStepInputPort,
+    CreateWorkflowInput, DocumentRepo, InsertQueueEntryInput, MergeQueueRepo, ModelSpendRow,
+    OutputSchemaRepo, PromptTemplateRepo, ProtocolRepo, ResultRepo, RoomMemberInput, RoomRepo,
+    SaveRoomExecutionOutputInput, SessionRepo, SystemConfigRepo, TaskRepo, TokenLedgerRepo,
+    ToolCapabilityRepo, ToolRepo, UpdateProtocolExecutionStatusInput, UpdateProtocolInput,
+    UpdateRoomInput, UpdateWorkflowInput, UserRepo, WorkflowCollectionRepo, WorkflowRepo,
+    WorkflowStepAgentRepo,
 };
 use crate::db::{
     AgentDesignerOutputRow, AgentDesignerRunRow, AgentExecutionRow, AgentRow,
@@ -366,11 +367,34 @@ impl MergeQueueRepo for PgRepo {
 }
 
 #[async_trait]
-impl ServerRepo for PgRepo {
+// ============================================================================
+// Auth Config Repository
+// ============================================================================
+#[async_trait]
+impl AuthConfigRepo for PgRepo {
     async fn health_check(&self) -> bool {
         sqlx::query("SELECT 1").fetch_one(&self.pool).await.is_ok()
     }
 
+    async fn has_password(&self) -> Result<bool> {
+        crate::db::has_password(&self.pool).await
+    }
+
+    async fn set_password(&self, password_hash: String) -> Result<()> {
+        crate::db::set_password(&self.pool, &password_hash).await
+    }
+
+    async fn get_password(&self) -> Result<Option<String>> {
+        crate::db::get_password(&self.pool).await
+    }
+}
+
+// ============================================================================
+// Task Repository
+// ============================================================================
+
+#[async_trait]
+impl TaskRepo for PgRepo {
     async fn list_tasks(
         &self,
         user_id: UserId,
@@ -387,7 +411,14 @@ impl ServerRepo for PgRepo {
     async fn insert_task(&self, user_id: UserId, task: Task) -> Result<()> {
         crate::db::insert_task(&self.pool, user_id, &task).await
     }
+}
 
+// ============================================================================
+// Chat Message Repository
+// ============================================================================
+
+#[async_trait]
+impl ChatMessageRepo for PgRepo {
     async fn insert_chat_message(
         &self,
         user_id: UserId,
@@ -410,21 +441,14 @@ impl ServerRepo for PgRepo {
     async fn clear_chat_history(&self, user_id: UserId) -> Result<()> {
         crate::db::clear_chat_history(&self.pool, user_id).await
     }
+}
 
-    async fn has_password(&self) -> Result<bool> {
-        crate::db::has_password(&self.pool).await
-    }
+// ============================================================================
+// Agent Repository
+// ============================================================================
 
-    async fn set_password(&self, password_hash: String) -> Result<()> {
-        crate::db::set_password(&self.pool, &password_hash).await
-    }
-
-    async fn get_password(&self) -> Result<Option<String>> {
-        crate::db::get_password(&self.pool).await
-    }
-
-    // --- Agent persistence ---
-
+#[async_trait]
+impl AgentRepo for PgRepo {
     async fn list_persisted_agents(&self, user_id: UserId) -> Result<Vec<AgentRow>> {
         let rows = sqlx::query_as::<_, PgAgentRow>(
             "SELECT id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, output_schema_id, version, default_reasoning_trace, is_system FROM agents WHERE user_id = $1 OR user_id IS NULL",
@@ -500,8 +524,61 @@ impl ServerRepo for PgRepo {
         Ok(())
     }
 
-    // --- Tool persistence ---
+    async fn get_agent_context(&self, agent_id: Uuid) -> Result<Vec<DocumentRow>> {
+        let rows = sqlx::query_as::<_, DocumentRow>(
+            "SELECT d.id, d.user_id, d.session_id, d.title, d.content, d.summary, d.doc_type, d.ref_tag, d.tags, d.created_at, d.updated_at, d.workflow_id, d.target_length, d.is_static, d.source_protocol_step_id FROM documents d INNER JOIN agent_context ac ON d.id = ac.document_id WHERE ac.agent_id = $1 ORDER BY d.title",
+        )
+        .bind(agent_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
 
+    async fn set_agent_context(&self, agent_id: Uuid, document_ids: Vec<Uuid>) -> Result<()> {
+        run_serializable!(self.pool, |tx| {
+            sqlx::query("DELETE FROM agent_context WHERE agent_id = $1")
+                .bind(agent_id)
+                .execute(&mut *tx)
+                .await?;
+
+            for doc_id in &document_ids {
+                sqlx::query("INSERT INTO agent_context (agent_id, document_id) VALUES ($1, $2)")
+                    .bind(agent_id)
+                    .bind(doc_id)
+                    .execute(&mut *tx)
+                    .await?;
+            }
+            Ok(())
+        })
+    }
+
+    async fn get_agent_guidances(
+        &self,
+        agent_id: Uuid,
+        step_id: Option<Uuid>,
+    ) -> Result<Vec<crate::db::AgentGuidanceRow>> {
+        let rows = sqlx::query_as::<_, crate::db::AgentGuidanceRow>(
+            "SELECT id, agent_id, workflow_step_id, suggestions, source, version, \
+                    is_active, created_at, updated_at \
+             FROM agent_guidances \
+             WHERE agent_id = $1 AND is_active = true \
+               AND (workflow_step_id IS NULL OR workflow_step_id = $2) \
+             ORDER BY workflow_step_id NULLS FIRST, version DESC",
+        )
+        .bind(agent_id)
+        .bind(step_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+}
+
+// ============================================================================
+// Tool Repository
+// ============================================================================
+
+#[async_trait]
+impl ToolRepo for PgRepo {
     async fn list_tools(&self) -> Result<Vec<ToolRow>> {
         let rows = sqlx::query_as::<_, PgToolRow>("SELECT id, name, display_name, description, parameters, created_at, version FROM tools ORDER BY name")
             .fetch_all(&self.pool)
@@ -598,39 +675,14 @@ impl ServerRepo for PgRepo {
         }
         Ok(())
     }
+}
 
-    // --- Agent context (document linkage) ---
+// ============================================================================
+// Session Repository
+// ============================================================================
 
-    async fn get_agent_context(&self, agent_id: Uuid) -> Result<Vec<DocumentRow>> {
-        let rows = sqlx::query_as::<_, DocumentRow>(
-            "SELECT d.id, d.user_id, d.session_id, d.title, d.content, d.summary, d.doc_type, d.ref_tag, d.tags, d.created_at, d.updated_at, d.workflow_id, d.target_length, d.is_static, d.source_protocol_step_id FROM documents d INNER JOIN agent_context ac ON d.id = ac.document_id WHERE ac.agent_id = $1 ORDER BY d.title",
-        )
-        .bind(agent_id)
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(rows)
-    }
-
-    async fn set_agent_context(&self, agent_id: Uuid, document_ids: Vec<Uuid>) -> Result<()> {
-        run_serializable!(self.pool, |tx| {
-            sqlx::query("DELETE FROM agent_context WHERE agent_id = $1")
-                .bind(agent_id)
-                .execute(&mut *tx)
-                .await?;
-
-            for doc_id in &document_ids {
-                sqlx::query("INSERT INTO agent_context (agent_id, document_id) VALUES ($1, $2)")
-                    .bind(agent_id)
-                    .bind(doc_id)
-                    .execute(&mut *tx)
-                    .await?;
-            }
-            Ok(())
-        })
-    }
-
-    // --- Session management ---
-
+#[async_trait]
+impl SessionRepo for PgRepo {
     async fn create_session(
         &self,
         user_id: UserId,
@@ -724,26 +776,6 @@ impl ServerRepo for PgRepo {
 
     async fn link_session_agent(&self, session_id: Uuid, agent_id: Uuid) -> Result<()> {
         crate::db::link_session_agent(&self.pool, session_id, agent_id).await
-    }
-
-    async fn get_agent_guidances(
-        &self,
-        agent_id: Uuid,
-        step_id: Option<Uuid>,
-    ) -> Result<Vec<crate::db::AgentGuidanceRow>> {
-        let rows = sqlx::query_as::<_, crate::db::AgentGuidanceRow>(
-            "SELECT id, agent_id, workflow_step_id, suggestions, source, version, \
-                    is_active, created_at, updated_at \
-             FROM agent_guidances \
-             WHERE agent_id = $1 AND is_active = true \
-               AND (workflow_step_id IS NULL OR workflow_step_id = $2) \
-             ORDER BY workflow_step_id NULLS FIRST, version DESC",
-        )
-        .bind(agent_id)
-        .bind(step_id)
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(rows)
     }
 }
 

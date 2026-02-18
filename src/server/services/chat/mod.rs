@@ -2,7 +2,7 @@
 
 use uuid::Uuid;
 
-use crate::db::traits::ServerRepo;
+use crate::db::traits::ChatMessageRepo;
 use crate::db::ChatMessageRow;
 use crate::types::UserId;
 
@@ -27,7 +27,7 @@ pub fn validate_message(message: &str, max_length: usize) -> Result<(), ServiceE
 
 /// Store a user chat message in the database.
 pub async fn store_message(
-    repo: &dyn ServerRepo,
+    repo: &dyn ChatMessageRepo,
     user_id: UserId,
     message_id: Uuid,
     content: String,
@@ -38,7 +38,7 @@ pub async fn store_message(
 }
 
 pub async fn get_chat_history(
-    repo: &dyn ServerRepo,
+    repo: &dyn ChatMessageRepo,
     user_id: UserId,
     limit: u32,
     offset: u32,
@@ -47,7 +47,7 @@ pub async fn get_chat_history(
 }
 
 pub async fn clear_chat_history(
-    repo: &dyn ServerRepo,
+    repo: &dyn ChatMessageRepo,
     user_id: UserId,
 ) -> Result<(), ServiceError> {
     repo.clear_chat_history(user_id).await?;

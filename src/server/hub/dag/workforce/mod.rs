@@ -153,14 +153,11 @@ pub(super) async fn execute_workforce_step(
     );
 
     // 6. Compose base prompt
-    let pt_repo = dag.state.prompt_template_repo();
-    let doc_repo = dag.state.doc_repo();
-    let wf_repo = dag.state.workflow_repo();
     let repos = PromptRepos {
-        prompt_template_repo: pt_repo.as_deref(),
-        doc_repo: doc_repo.as_deref(),
-        workflow_repo: wf_repo.as_deref(),
-        server_repo: &**dag.state.repo(),
+        prompt_template_repo: Some(&*dag.state.repos().prompt_templates),
+        doc_repo: Some(&*dag.state.repos().documents),
+        workflow_repo: Some(&*dag.state.repos().workflows),
+        agent_repo: &*dag.state.repos().agents,
     };
     let prompt = compose_prompt(
         step,
@@ -419,7 +416,12 @@ pub(super) async fn execute_workforce_step(
         });
 
         // Execute with live streaming sink
-        let inner_recorder = ExecutionRecorder::new(&**dag.state.repo(), None, None);
+        let inner_recorder = ExecutionRecorder::new(
+            &*dag.state.repos().sessions,
+            &*dag.state.repos().chat_messages,
+            None,
+            None,
+        );
         let sink = DagStreamSink::new(
             dag.state.clone(),
             dag.ctx.clone(),

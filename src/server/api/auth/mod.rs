@@ -97,7 +97,7 @@ pub async fn auth_setup(
     Json(request): Json<SetupRequest>,
 ) -> Result<Json<SetupResponse>, AppError> {
     // Check if already setup
-    if state.repo().has_password().await? {
+    if state.repos().auth_config.has_password().await? {
         return Err(AppError::Conflict("Password already configured".into()));
     }
 
@@ -112,7 +112,7 @@ pub async fn auth_setup(
     let hash =
         auth::hash_password(&request.password).map_err(|e| AppError::Internal(e.to_string()))?;
 
-    state.repo().set_password(hash).await?;
+    state.repos().auth_config.set_password(hash).await?;
 
     Ok(Json(SetupResponse {
         message: "Password configured successfully".to_string(),
@@ -145,9 +145,7 @@ pub async fn auth_register(
         ));
     }
 
-    let user_repo = state
-        .user_repo()
-        .ok_or(AppError::Internal("User service unavailable".into()))?;
+    let user_repo = &state.repos().users;
 
     // Check if email already exists
     if user_repo.get_user_by_email(&request.email).await?.is_some() {
@@ -160,7 +158,7 @@ pub async fn auth_register(
     let user = user_repo.create_user(&request.email, &hash).await?;
 
     // Seed built-in execution tools and protocols (system-wide)
-    let _ = state.repo().seed_builtin_tools().await;
+    let _ = state.repos().tools.seed_builtin_tools().await;
     let _ = state.repos().protocols.seed_builtin_protocols().await;
 
     let token = auth::create_token(state.jwt_secret(), 24, user.id, &user.email, false)
@@ -197,9 +195,7 @@ pub async fn auth_login(
     State(state): State<AppState>,
     Json(request): Json<LoginRequest>,
 ) -> Result<Json<LoginResponse>, AppError> {
-    let user_repo = state
-        .user_repo()
-        .ok_or(AppError::Internal("User service unavailable".into()))?;
+    let user_repo = &state.repos().users;
 
     let user = user_repo
         .get_user_by_email(&request.email)
@@ -239,9 +235,7 @@ pub async fn auth_me(
     State(state): State<AppState>,
     auth: auth::AuthUser,
 ) -> Result<Json<MeResponse>, AppError> {
-    let user_repo = state
-        .user_repo()
-        .ok_or(AppError::Internal("User service unavailable".into()))?;
+    let user_repo = &state.repos().users;
 
     let user = user_repo
         .get_user_by_id(auth.user_id)

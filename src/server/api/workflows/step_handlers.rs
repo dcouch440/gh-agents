@@ -204,7 +204,7 @@ pub async fn delete_workflow_step(
 ) -> Result<StatusCode, AppError> {
     let deleted_session_id = steps::delete_step(
         state.repos().workflows.as_ref(),
-        state.repo().as_ref(),
+        state.repos().sessions.as_ref(),
         auth.user_id.0,
         p.wid,
         p.sid,

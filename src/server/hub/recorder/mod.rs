@@ -7,7 +7,7 @@ use anyhow::Context;
 use uuid::Uuid;
 
 use crate::db::traits::{
-    AgentExecutionRepo, CreateAgentExecutionInput, ServerRepo, TokenLedgerRepo,
+    AgentExecutionRepo, ChatMessageRepo, CreateAgentExecutionInput, SessionRepo, TokenLedgerRepo,
 };
 use crate::server::hub::error::HubError;
 use crate::types::UserId;
@@ -17,19 +17,22 @@ use crate::types::UserId;
 /// Wraps the various repository traits so execution code doesn't need
 /// to know which repo handles which table.
 pub struct ExecutionRecorder<'a> {
-    repo: &'a dyn ServerRepo,
+    session_repo: &'a dyn SessionRepo,
+    chat_message_repo: &'a dyn ChatMessageRepo,
     agent_execution_repo: Option<&'a dyn AgentExecutionRepo>,
     token_ledger_repo: Option<&'a dyn TokenLedgerRepo>,
 }
 
 impl<'a> ExecutionRecorder<'a> {
     pub fn new(
-        repo: &'a dyn ServerRepo,
+        session_repo: &'a dyn SessionRepo,
+        chat_message_repo: &'a dyn ChatMessageRepo,
         agent_execution_repo: Option<&'a dyn AgentExecutionRepo>,
         token_ledger_repo: Option<&'a dyn TokenLedgerRepo>,
     ) -> Self {
         Self {
-            repo,
+            session_repo,
+            chat_message_repo,
             agent_execution_repo,
             token_ledger_repo,
         }
@@ -46,7 +49,7 @@ impl<'a> ExecutionRecorder<'a> {
     ) -> Result<(), HubError> {
         match session_id {
             Some(sid) => {
-                self.repo
+                self.session_repo
                     .insert_session_message(
                         user_id,
                         sid,
@@ -58,7 +61,7 @@ impl<'a> ExecutionRecorder<'a> {
                     .context("failed to insert session message")?;
             }
             None => {
-                self.repo
+                self.chat_message_repo
                     .insert_chat_message(user_id, message_id, role.to_string(), content.to_string())
                     .await
                     .context("failed to insert chat message")?;

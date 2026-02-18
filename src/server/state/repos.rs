@@ -6,8 +6,9 @@
 use std::sync::Arc;
 
 use crate::db::traits::{
-    AgentExecutionRepo, ContentVersionRepo, DocumentRepo, OutputSchemaRepo, PromptTemplateRepo,
-    ProtocolRepo, ResultRepo, RoomRepo, SystemConfigRepo, TokenLedgerRepo, ToolCapabilityRepo,
+    AgentExecutionRepo, AgentRepo, AuthConfigRepo, ChatMessageRepo, ContentVersionRepo,
+    DocumentRepo, OutputSchemaRepo, PromptTemplateRepo, ProtocolRepo, ResultRepo, RoomRepo,
+    SessionRepo, SystemConfigRepo, TaskRepo, TokenLedgerRepo, ToolCapabilityRepo, ToolRepo,
     UserRepo, WorkflowRepo,
 };
 
@@ -43,6 +44,18 @@ pub struct Repos {
     pub protocols: Arc<dyn ProtocolRepo>,
     /// Content versioning operations
     pub content_versions: Arc<dyn ContentVersionRepo>,
+    /// Agent persistence, context, and guidance
+    pub agents: Arc<dyn AgentRepo>,
+    /// Tool persistence and agent-tool linkage
+    pub tools: Arc<dyn ToolRepo>,
+    /// Chat session management
+    pub sessions: Arc<dyn SessionRepo>,
+    /// Task management
+    pub tasks: Arc<dyn TaskRepo>,
+    /// Global chat messages
+    pub chat_messages: Arc<dyn ChatMessageRepo>,
+    /// Authentication configuration and health checks
+    pub auth_config: Arc<dyn AuthConfigRepo>,
 }
 
 impl Repos {
@@ -62,6 +75,12 @@ impl Repos {
         system_config: Arc<dyn SystemConfigRepo>,
         protocols: Arc<dyn ProtocolRepo>,
         content_versions: Arc<dyn ContentVersionRepo>,
+        agents: Arc<dyn AgentRepo>,
+        tools: Arc<dyn ToolRepo>,
+        sessions: Arc<dyn SessionRepo>,
+        tasks: Arc<dyn TaskRepo>,
+        chat_messages: Arc<dyn ChatMessageRepo>,
+        auth_config: Arc<dyn AuthConfigRepo>,
     ) -> Self {
         Self {
             users,
@@ -77,6 +96,12 @@ impl Repos {
             system_config,
             protocols,
             content_versions,
+            agents,
+            tools,
+            sessions,
+            tasks,
+            chat_messages,
+            auth_config,
         }
     }
 }

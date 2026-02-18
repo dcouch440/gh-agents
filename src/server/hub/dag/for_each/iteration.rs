@@ -93,7 +93,13 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
                     cached
                 } else {
                     // Load routed agent from DB
-                    match dag.state.repo().get_persisted_agent(routed_id).await {
+                    match dag
+                        .state
+                        .repos()
+                        .agents
+                        .get_persisted_agent(routed_id)
+                        .await
+                    {
                         Ok(Some(routed_agent)) => {
                             agent_cache.insert(routed_id, routed_agent);
                             agent_cache.get(&routed_id).expect("just inserted")
@@ -115,14 +121,11 @@ pub(in crate::server::hub::dag) async fn execute_for_each_step(
             agent
         };
 
-        let pt_repo = dag.state.prompt_template_repo();
-        let doc_repo = dag.state.doc_repo();
-        let wf_repo = dag.state.workflow_repo();
         let repos = PromptRepos {
-            prompt_template_repo: pt_repo.as_deref(),
-            doc_repo: doc_repo.as_deref(),
-            workflow_repo: wf_repo.as_deref(),
-            server_repo: &**dag.state.repo(),
+            prompt_template_repo: Some(&*dag.state.repos().prompt_templates),
+            doc_repo: Some(&*dag.state.repos().documents),
+            workflow_repo: Some(&*dag.state.repos().workflows),
+            agent_repo: &*dag.state.repos().agents,
         };
         let prompt = compose_prompt(
             step,

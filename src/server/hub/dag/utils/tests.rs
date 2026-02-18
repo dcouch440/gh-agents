@@ -1630,12 +1630,12 @@ mod tests {
     // compose_prompt XML Structure Tests
     // =========================================================================
 
-    use crate::db::traits::MockServerRepo;
+    use crate::db::traits::MockAgentRepo;
     use crate::server::hub::dag::utils::{compose_prompt, PromptRepos};
     use std::sync::Arc;
 
-    fn mock_server_repo() -> Arc<MockServerRepo> {
-        let mut mock = MockServerRepo::new();
+    fn mock_agent_repo() -> Arc<MockAgentRepo> {
+        let mut mock = MockAgentRepo::new();
         mock.expect_get_agent_context().returning(|_| Ok(vec![]));
         Arc::new(mock)
     }
@@ -1643,12 +1643,12 @@ mod tests {
     #[tokio::test]
     async fn compose_prompt_wraps_task_in_xml() {
         let step = make_step(Uuid::new_v4(), 0);
-        let repo = mock_server_repo();
+        let repo = mock_agent_repo();
         let repos = PromptRepos {
             prompt_template_repo: None,
             doc_repo: None,
             workflow_repo: None,
-            server_repo: &*repo,
+            agent_repo: &*repo,
         };
         let outputs = HashMap::new();
         let prior = HashMap::new();
@@ -1663,12 +1663,12 @@ mod tests {
     #[tokio::test]
     async fn compose_prompt_wraps_context_with_port_inputs() {
         let step = make_step(Uuid::new_v4(), 0);
-        let repo = mock_server_repo();
+        let repo = mock_agent_repo();
         let repos = PromptRepos {
             prompt_template_repo: None,
             doc_repo: None,
             workflow_repo: None,
-            server_repo: &*repo,
+            agent_repo: &*repo,
         };
         let outputs = HashMap::new();
         let prior = HashMap::new();
@@ -1689,12 +1689,12 @@ mod tests {
     #[tokio::test]
     async fn compose_prompt_omits_context_when_empty() {
         let step = make_step(Uuid::new_v4(), 0);
-        let repo = mock_server_repo();
+        let repo = mock_agent_repo();
         let repos = PromptRepos {
             prompt_template_repo: None,
             doc_repo: None,
             workflow_repo: None,
-            server_repo: &*repo,
+            agent_repo: &*repo,
         };
         let outputs = HashMap::new();
         let prior = HashMap::new();
@@ -1711,12 +1711,12 @@ mod tests {
         // appear in the <context> block (it's already inlined in the task text).
         let mut step = make_step(Uuid::new_v4(), 0);
         step.prompt_template = "Process this: {task_data}".to_string();
-        let repo = mock_server_repo();
+        let repo = mock_agent_repo();
         let repos = PromptRepos {
             prompt_template_repo: None,
             doc_repo: None,
             workflow_repo: None,
-            server_repo: &*repo,
+            agent_repo: &*repo,
         };
         let outputs = HashMap::new();
         let prior = HashMap::new();
@@ -1841,12 +1841,12 @@ mod tests {
         let mut step = make_step(Uuid::new_v4(), 0);
         step.prompt_template =
             "Analyze this task\n\n## Task Decomposition Protocol\nDecompose into ports: frontend, backend".to_string();
-        let repo = mock_server_repo();
+        let repo = mock_agent_repo();
         let repos = PromptRepos {
             prompt_template_repo: None,
             doc_repo: None,
             workflow_repo: None,
-            server_repo: &*repo,
+            agent_repo: &*repo,
         };
         let outputs = HashMap::new();
         let prior = HashMap::new();

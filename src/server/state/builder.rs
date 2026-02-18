@@ -12,7 +12,6 @@ use thiserror::Error;
 use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 
-use crate::db::traits::ServerRepo;
 use crate::llm::{LLMProvider, ProviderRegistry};
 use crate::types::AppConfig;
 
@@ -23,10 +22,6 @@ use super::{AppState, AppStateInner, ConsumerMessage, EventBus, Repos};
 /// Errors that can occur during AppState building.
 #[derive(Debug, Error)]
 pub enum BuilderError {
-    /// The server repository is required but was not provided.
-    #[error("server_repo is required")]
-    MissingServerRepo,
-
     /// The grouped repositories are required but were not provided.
     #[error("repos is required")]
     MissingRepos,
@@ -42,14 +37,12 @@ pub enum BuilderError {
 ///
 /// ```ignore
 /// let (state, rx) = AppStateBuilder::new()
-///     .with_server_repo(repo)
-///     .with_repos(repos)  // Required
+///     .with_repos(repos)
 ///     .with_config(config)
 ///     .build()?;
 /// ```
 pub struct AppStateBuilder {
     db: Option<PgPool>,
-    server_repo: Option<Arc<dyn ServerRepo>>,
     repos: Option<Repos>,
     events: Option<EventBus>,
     config: Option<AppConfig>,
@@ -64,7 +57,6 @@ impl AppStateBuilder {
     pub fn new() -> Self {
         Self {
             db: None,
-            server_repo: None,
             repos: None,
             events: None,
             config: None,
@@ -78,12 +70,6 @@ impl AppStateBuilder {
     /// Set the database connection pool.
     pub fn with_db(mut self, db: PgPool) -> Self {
         self.db = Some(db);
-        self
-    }
-
-    /// Set the server repository (required).
-    pub fn with_server_repo(mut self, repo: Arc<dyn ServerRepo>) -> Self {
-        self.server_repo = Some(repo);
         self
     }
 
@@ -133,11 +119,9 @@ impl AppStateBuilder {
     ///
     /// # Errors
     ///
-    /// Returns `BuilderError::MissingServerRepo` if `with_server_repo()` was not called.
     /// Returns `BuilderError::MissingRepos` if `with_repos()` was not called.
     /// Returns `BuilderError::MissingConfig` if `with_config()` was not called.
     pub fn build(self) -> Result<(AppState, mpsc::Receiver<ConsumerMessage>), BuilderError> {
-        let server_repo = self.server_repo.ok_or(BuilderError::MissingServerRepo)?;
         let repos = self.repos.ok_or(BuilderError::MissingRepos)?;
         let config = self.config.ok_or(BuilderError::MissingConfig)?;
 
@@ -154,7 +138,6 @@ impl AppStateBuilder {
 
         let state = AppState::from_inner(AppStateInner {
             db: self.db,
-            server_repo,
             repos,
             events,
             config: Arc::new(RwLock::new(config)),
@@ -199,14 +182,7 @@ impl Default for AppStateBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::traits::MockServerRepo;
     use crate::server::state::test_helpers::default_mock_repos;
-
-    fn mock_repo() -> Arc<dyn ServerRepo> {
-        let mut mock = MockServerRepo::new();
-        mock.expect_health_check().returning(|| true);
-        Arc::new(mock)
-    }
 
     fn default_config() -> AppConfig {
         AppConfig::default()
@@ -215,7 +191,6 @@ mod tests {
     #[test]
     fn build_with_required_fields_succeeds() {
         let result = AppStateBuilder::new()
-            .with_server_repo(mock_repo())
             .with_repos(default_mock_repos())
             .with_config(default_config())
             .build();
@@ -224,21 +199,8 @@ mod tests {
     }
 
     #[test]
-    fn build_without_server_repo_fails() {
-        let result = AppStateBuilder::new()
-            .with_repos(default_mock_repos())
-            .with_config(default_config())
-            .build();
-
-        assert!(matches!(result, Err(BuilderError::MissingServerRepo)));
-    }
-
-    #[test]
     fn build_without_repos_fails() {
-        let result = AppStateBuilder::new()
-            .with_server_repo(mock_repo())
-            .with_config(default_config())
-            .build();
+        let result = AppStateBuilder::new().with_config(default_config()).build();
 
         assert!(matches!(result, Err(BuilderError::MissingRepos)));
     }
@@ -246,7 +208,6 @@ mod tests {
     #[test]
     fn build_without_config_fails() {
         let result = AppStateBuilder::new()
-            .with_server_repo(mock_repo())
             .with_repos(default_mock_repos())
             .build();
 
@@ -256,7 +217,6 @@ mod tests {
     #[test]
     fn build_for_test_with_required_fields_succeeds() {
         let (_state, _rx) = AppStateBuilder::new()
-            .with_server_repo(mock_repo())
             .with_repos(default_mock_repos())
             .with_config(default_config())
             .build_for_test();
@@ -273,7 +233,6 @@ mod tests {
         let custom_secret = vec![1, 2, 3, 4];
 
         let (state, _rx) = AppStateBuilder::new()
-            .with_server_repo(mock_repo())
             .with_repos(default_mock_repos())
             .with_config(default_config())
             .with_jwt_secret(custom_secret.clone())

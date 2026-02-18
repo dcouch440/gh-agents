@@ -23,7 +23,7 @@ use uuid::Uuid;
 
 use crate::constants::VERIFICATION_AGENT_TIMEOUT_SECS;
 use crate::db::traits::{
-    AgentExecutionRepo, CreateAgentExecutionInput, ServerRepo, TokenLedgerRepo,
+    AgentExecutionRepo, AgentRepo, CreateAgentExecutionInput, TokenLedgerRepo,
 };
 use crate::llm::{LLMProvider, LLMRequest, LLMResponse, Message, Role};
 use crate::server::hub::strategies::compute_cost;
@@ -40,7 +40,7 @@ pub(crate) struct PromptCapture {
 /// Multi-agent critique panel that verifies the primary agent's output.
 pub struct DebateVerificationFilter {
     provider: Arc<dyn LLMProvider>,
-    repo: Arc<dyn ServerRepo>,
+    repo: Arc<dyn AgentRepo>,
     verification_agent_ids: Vec<Uuid>,
     /// Captured from on_start for use in on_response.
     pub(crate) prompt_context: tokio::sync::Mutex<Option<PromptCapture>>,
@@ -79,7 +79,7 @@ struct VerificationResult {
 impl DebateVerificationFilter {
     pub fn new(
         provider: Arc<dyn LLMProvider>,
-        repo: Arc<dyn ServerRepo>,
+        repo: Arc<dyn AgentRepo>,
         verification_agent_ids: Vec<Uuid>,
         ae_repo: Option<Arc<dyn AgentExecutionRepo>>,
         tl_repo: Option<Arc<dyn TokenLedgerRepo>>,

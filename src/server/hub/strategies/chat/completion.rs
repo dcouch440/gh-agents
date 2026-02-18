@@ -33,7 +33,8 @@ pub(super) async fn on_chat_complete(
         let response_id = Uuid::new_v4();
         let save_result = if let Some(session_id) = session_id {
             state
-                .repo()
+                .repos()
+                .sessions
                 .insert_session_message(
                     user_id,
                     session_id,
@@ -44,7 +45,8 @@ pub(super) async fn on_chat_complete(
                 .await
         } else {
             state
-                .repo()
+                .repos()
+                .chat_messages
                 .insert_chat_message(
                     user_id,
                     response_id,
@@ -86,13 +88,17 @@ pub(super) async fn on_chat_complete(
 /// default "New ..." title.
 fn spawn_auto_naming(state: AppState, session_id: Uuid, input_preview: String) {
     tokio::spawn(async move {
-        if let Ok(Some(session)) = state.repo().get_session(session_id).await {
+        if let Ok(Some(session)) = state.repos().sessions.get_session(session_id).await {
             if session.title.starts_with("New ") {
                 if let Some(title) =
                     tools::haiku_summarize_title(&format!("Conversation opener: {}", input_preview))
                         .await
                 {
-                    let _ = state.repo().update_session_title(session_id, &title).await;
+                    let _ = state
+                        .repos()
+                        .sessions
+                        .update_session_title(session_id, &title)
+                        .await;
                     state.broadcast_session(crate::server::ws::events::SessionEvent {
                         session_id,
                         user_id: None,
@@ -112,13 +118,15 @@ fn spawn_auto_naming(state: AppState, session_id: Uuid, input_preview: String) {
 fn spawn_compaction(state: AppState, session_id: Uuid) {
     tokio::spawn(async move {
         let count = state
-            .repo()
+            .repos()
+            .sessions
             .count_session_messages(session_id)
             .await
             .unwrap_or(0);
         if count > crate::constants::SUMMARIZE_THRESHOLD as u32 {
             let history = state
-                .repo()
+                .repos()
+                .sessions
                 .get_session_history(session_id, count)
                 .await
                 .unwrap_or_default();
@@ -134,7 +142,8 @@ fn spawn_compaction(state: AppState, session_id: Uuid) {
                     .join("\n");
                 if let Some(summary) = tools::haiku_summarize(&conversation_text).await {
                     let _ = state
-                        .repo()
+                        .repos()
+                        .sessions
                         .update_session_summary(session_id, &summary)
                         .await;
                 }

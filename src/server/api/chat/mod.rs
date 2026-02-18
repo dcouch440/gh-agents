@@ -79,7 +79,7 @@ pub async fn send_chat(
 
     // Store the user message in the database
     svc::store_message(
-        state.repo().as_ref(),
+        state.repos().chat_messages.as_ref(),
         auth.user_id,
         message_id,
         request.message.clone(),
@@ -130,7 +130,13 @@ pub async fn get_chat_history(
     let limit = query.limit.unwrap_or(50);
     let offset = query.offset.unwrap_or(0);
 
-    let rows = svc::get_chat_history(state.repo().as_ref(), auth.user_id, limit, offset).await?;
+    let rows = svc::get_chat_history(
+        state.repos().chat_messages.as_ref(),
+        auth.user_id,
+        limit,
+        offset,
+    )
+    .await?;
 
     let messages: Vec<ChatMessage> = rows
         .into_iter()
@@ -296,7 +302,7 @@ pub async fn clear_chat_history(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
 ) -> Result<StatusCode, AppError> {
-    svc::clear_chat_history(state.repo().as_ref(), auth.user_id).await?;
+    svc::clear_chat_history(state.repos().chat_messages.as_ref(), auth.user_id).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 

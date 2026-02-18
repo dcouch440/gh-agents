@@ -159,23 +159,22 @@ pub(crate) async fn prefetch_port_metadata(
     let mut step_outputs: HashMap<Uuid, Vec<StepOutputRow>> = HashMap::new();
     let mut routing_rules: HashMap<Uuid, Vec<StepRoutingRuleRow>> = HashMap::new();
 
-    if let Some(ref wf_repo) = state.workflow_repo() {
-        for step in steps {
-            if let Ok(inputs) = wf_repo.get_step_inputs(step.id).await {
-                if !inputs.is_empty() {
-                    step_inputs.insert(step.id, inputs);
-                }
+    let wf_repo = &state.repos().workflows;
+    for step in steps {
+        if let Ok(inputs) = wf_repo.get_step_inputs(step.id).await {
+            if !inputs.is_empty() {
+                step_inputs.insert(step.id, inputs);
             }
-            if let Ok(outputs) = wf_repo.get_step_outputs(step.id).await {
-                if !outputs.is_empty() {
-                    step_outputs.insert(step.id, outputs);
-                }
+        }
+        if let Ok(outputs) = wf_repo.get_step_outputs(step.id).await {
+            if !outputs.is_empty() {
+                step_outputs.insert(step.id, outputs);
             }
-            if step.routing_mode.as_deref() == Some("label") {
-                if let Ok(rules) = wf_repo.get_step_routing_rules(step.id).await {
-                    if !rules.is_empty() {
-                        routing_rules.insert(step.id, rules);
-                    }
+        }
+        if step.routing_mode.as_deref() == Some("label") {
+            if let Ok(rules) = wf_repo.get_step_routing_rules(step.id).await {
+                if !rules.is_empty() {
+                    routing_rules.insert(step.id, rules);
                 }
             }
         }

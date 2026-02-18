@@ -126,15 +126,16 @@ pub(crate) async fn capture_workflow_snapshot(
     }
 
     // Load full agent definitions + their tools
-    let server_repo = state.repo();
+    let agent_repo = &state.repos().agents;
+    let tool_repo = &state.repos().tools;
     let mut agents: HashMap<Uuid, AgentRow> = HashMap::new();
     let mut agent_tools: HashMap<Uuid, Vec<ToolRow>> = HashMap::new();
 
     for aid in &agent_ids {
-        if let Ok(Some(agent)) = server_repo.get_persisted_agent(*aid).await {
+        if let Ok(Some(agent)) = agent_repo.get_persisted_agent(*aid).await {
             agents.insert(*aid, agent);
         }
-        if let Ok(tools) = server_repo.get_agent_tools(*aid).await {
+        if let Ok(tools) = tool_repo.get_agent_tools(*aid).await {
             if !tools.is_empty() {
                 agent_tools.insert(*aid, tools);
             }

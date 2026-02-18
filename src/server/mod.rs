@@ -702,279 +702,112 @@ async fn drain_active_executions(state: &AppState, timeout: std::time::Duration)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::traits::ServerRepo;
-    use crate::db::{ChatMessageRow, SessionRow};
-    use crate::server::state::test_helpers::default_mock_repos;
+    use crate::db::traits::{
+        MockAgentRepo, MockAuthConfigRepo, MockChatMessageRepo, MockSessionRepo, MockTaskRepo,
+        MockToolRepo,
+    };
+    use crate::server::state::test_helpers::MockReposBuilder;
     use crate::types::UserId;
     use axum::{
         body::Body,
         http::{Request, StatusCode},
     };
-    use chrono::Utc;
     use std::sync::Arc;
     use tempfile::TempDir;
     use tower::util::ServiceExt;
     use uuid::Uuid;
 
-    /// In-memory implementation of ServerRepo for tests (no Postgres needed).
-    struct InMemoryServerRepo {
-        tasks: std::sync::Mutex<Vec<crate::types::Task>>,
-        chat_messages: std::sync::Mutex<Vec<ChatMessageRow>>,
-        password_hash: std::sync::Mutex<Option<String>>,
-    }
-
-    impl InMemoryServerRepo {
-        fn new() -> Self {
-            Self {
-                tasks: std::sync::Mutex::new(vec![]),
-                chat_messages: std::sync::Mutex::new(vec![]),
-                password_hash: std::sync::Mutex::new(None),
-            }
-        }
-    }
-
-    #[async_trait::async_trait]
-    impl ServerRepo for InMemoryServerRepo {
-        async fn health_check(&self) -> bool {
-            true
-        }
-        async fn list_tasks(
-            &self,
-            _user_id: UserId,
-            status: Option<String>,
-            limit: Option<u32>,
-        ) -> anyhow::Result<Vec<crate::types::Task>> {
-            let tasks = self.tasks.lock().unwrap();
-            let limit = limit
-                .unwrap_or(crate::constants::DEFAULT_QUERY_LIMIT as u32)
-                .min(crate::constants::MAX_QUERY_LIMIT as u32) as usize;
-            Ok(tasks
-                .iter()
-                .filter(|t| {
-                    if let Some(ref s) = status {
-                        format!("{:?}", t.status).to_lowercase() == *s
-                    } else {
-                        true
-                    }
-                })
-                .rev()
-                .take(limit)
-                .cloned()
-                .collect())
-        }
-        async fn get_task_by_uuid(
-            &self,
-            _user_id: UserId,
-            id: Uuid,
-        ) -> anyhow::Result<Option<crate::types::Task>> {
-            Ok(self
-                .tasks
-                .lock()
-                .unwrap()
-                .iter()
-                .find(|t| t.id.0 == id)
-                .cloned())
-        }
-        async fn insert_task(
-            &self,
-            _user_id: UserId,
-            task: crate::types::Task,
-        ) -> anyhow::Result<()> {
-            self.tasks.lock().unwrap().push(task);
-            Ok(())
-        }
-        async fn insert_chat_message(
-            &self,
-            _user_id: UserId,
-            id: Uuid,
-            role: String,
-            content: String,
-        ) -> anyhow::Result<()> {
-            self.chat_messages.lock().unwrap().push(ChatMessageRow {
-                id,
-                role,
-                content,
-                timestamp: Utc::now(),
-            });
-            Ok(())
-        }
-        async fn get_chat_history(
-            &self,
-            _user_id: UserId,
-            limit: u32,
-            offset: u32,
-        ) -> anyhow::Result<Vec<ChatMessageRow>> {
-            let msgs = self.chat_messages.lock().unwrap();
-            Ok(msgs
-                .iter()
-                .skip(offset as usize)
-                .take(limit.min(1000) as usize)
-                .cloned()
-                .collect())
-        }
-        async fn clear_chat_history(&self, _user_id: UserId) -> anyhow::Result<()> {
-            self.chat_messages.lock().unwrap().clear();
-            Ok(())
-        }
-        async fn has_password(&self) -> anyhow::Result<bool> {
-            Ok(self.password_hash.lock().unwrap().is_some())
-        }
-        async fn set_password(&self, hash: String) -> anyhow::Result<()> {
-            *self.password_hash.lock().unwrap() = Some(hash);
-            Ok(())
-        }
-        async fn get_password(&self) -> anyhow::Result<Option<String>> {
-            Ok(self.password_hash.lock().unwrap().clone())
-        }
-        async fn list_persisted_agents(
-            &self,
-            _user_id: UserId,
-        ) -> anyhow::Result<Vec<crate::db::AgentRow>> {
-            Ok(vec![])
-        }
-        async fn get_persisted_agent(
-            &self,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<Option<crate::db::AgentRow>> {
-            Ok(None)
-        }
-        async fn upsert_agent(&self, _agent: crate::db::AgentRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn delete_persisted_agent(&self, _agent_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn list_tools(&self) -> anyhow::Result<Vec<crate::db::ToolRow>> {
-            Ok(vec![])
-        }
-        async fn get_tool(&self, _tool_id: Uuid) -> anyhow::Result<Option<crate::db::ToolRow>> {
-            Ok(None)
-        }
-        async fn upsert_tool(&self, _tool: crate::db::ToolRow) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn delete_tool(&self, _tool_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn get_agent_tools(
-            &self,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<Vec<crate::db::ToolRow>> {
-            Ok(vec![])
-        }
-        async fn set_agent_tools(
-            &self,
-            _agent_id: Uuid,
-            _tool_ids: Vec<Uuid>,
-        ) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn seed_builtin_tools(&self) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn get_agent_context(
-            &self,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<Vec<crate::db::DocumentRow>> {
-            Ok(vec![])
-        }
-        async fn set_agent_context(
-            &self,
-            _agent_id: Uuid,
-            _document_ids: Vec<Uuid>,
-        ) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn create_session(
-            &self,
-            _user_id: UserId,
-            _session_id: Uuid,
-            _mode_id: &str,
-            _title: &str,
-            _agent_id: Option<Uuid>,
-            _draft_config: Option<serde_json::Value>,
-        ) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn list_sessions(&self, _user_id: UserId) -> anyhow::Result<Vec<SessionRow>> {
-            Ok(vec![])
-        }
-        async fn get_session(&self, _session_id: Uuid) -> anyhow::Result<Option<SessionRow>> {
-            Ok(None)
-        }
-        async fn delete_session(&self, _session_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn insert_session_message(
-            &self,
-            _user_id: UserId,
-            _session_id: Uuid,
-            _id: Uuid,
-            _role: String,
-            _content: String,
-        ) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn get_session_history(
-            &self,
-            _session_id: Uuid,
-            _limit: u32,
-        ) -> anyhow::Result<Vec<ChatMessageRow>> {
-            Ok(vec![])
-        }
-        async fn update_session_title(
-            &self,
-            _session_id: Uuid,
-            _title: &str,
-        ) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn update_session_summary(
-            &self,
-            _session_id: Uuid,
-            _summary: &str,
-        ) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn count_session_messages(&self, _session_id: Uuid) -> anyhow::Result<u32> {
-            Ok(0)
-        }
-        async fn update_session_draft_config(
-            &self,
-            _session_id: Uuid,
-            _draft_config: Option<serde_json::Value>,
-        ) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn clear_session_messages(&self, _session_id: Uuid) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn find_session_by_step_id(
-            &self,
-            _step_id: Uuid,
-        ) -> anyhow::Result<Option<crate::db::SessionRow>> {
-            Ok(None)
-        }
-        async fn link_session_agent(
-            &self,
-            _session_id: Uuid,
-            _agent_id: Uuid,
-        ) -> anyhow::Result<()> {
-            Ok(())
-        }
-        async fn get_agent_guidances(
-            &self,
-            _agent_id: Uuid,
-            _step_id: Option<Uuid>,
-        ) -> anyhow::Result<Vec<crate::db::AgentGuidanceRow>> {
-            Ok(vec![])
-        }
-    }
-
     fn setup_mock_state() -> AppState {
-        let repo: Arc<dyn ServerRepo> = Arc::new(InMemoryServerRepo::new());
-        let repos = default_mock_repos();
-        let (state, rx) = AppState::with_repo(None, repo, repos, AppConfig::default());
+        // Create focused mocks for each trait that the integration tests exercise.
+        let mut agents = MockAgentRepo::new();
+        agents
+            .expect_list_persisted_agents()
+            .returning(|_| Ok(vec![]));
+        agents.expect_get_persisted_agent().returning(|_| Ok(None));
+        agents.expect_upsert_agent().returning(|_| Ok(()));
+        agents.expect_delete_persisted_agent().returning(|_| Ok(()));
+        agents.expect_get_agent_context().returning(|_| Ok(vec![]));
+        agents.expect_set_agent_context().returning(|_, _| Ok(()));
+        agents
+            .expect_get_agent_guidances()
+            .returning(|_, _| Ok(vec![]));
+
+        let mut tools = MockToolRepo::new();
+        tools.expect_list_tools().returning(|| Ok(vec![]));
+        tools.expect_get_tool().returning(|_| Ok(None));
+        tools.expect_upsert_tool().returning(|_| Ok(()));
+        tools.expect_delete_tool().returning(|_| Ok(()));
+        tools.expect_get_agent_tools().returning(|_| Ok(vec![]));
+        tools.expect_set_agent_tools().returning(|_, _| Ok(()));
+        tools.expect_seed_builtin_tools().returning(|| Ok(()));
+
+        let mut sessions = MockSessionRepo::new();
+        sessions
+            .expect_create_session()
+            .returning(|_, _, _, _, _, _| Ok(()));
+        sessions.expect_list_sessions().returning(|_| Ok(vec![]));
+        sessions.expect_get_session().returning(|_| Ok(None));
+        sessions.expect_delete_session().returning(|_| Ok(()));
+        sessions
+            .expect_insert_session_message()
+            .returning(|_, _, _, _, _| Ok(()));
+        sessions
+            .expect_get_session_history()
+            .returning(|_, _| Ok(vec![]));
+        sessions
+            .expect_update_session_title()
+            .returning(|_, _| Ok(()));
+        sessions
+            .expect_update_session_summary()
+            .returning(|_, _| Ok(()));
+        sessions
+            .expect_count_session_messages()
+            .returning(|_| Ok(0));
+        sessions
+            .expect_update_session_draft_config()
+            .returning(|_, _| Ok(()));
+        sessions
+            .expect_clear_session_messages()
+            .returning(|_| Ok(()));
+        sessions
+            .expect_find_session_by_step_id()
+            .returning(|_| Ok(None));
+        sessions
+            .expect_link_session_agent()
+            .returning(|_, _| Ok(()));
+
+        let mut tasks = MockTaskRepo::new();
+        tasks.expect_list_tasks().returning(|_, _, _| Ok(vec![]));
+        tasks.expect_get_task_by_uuid().returning(|_, _| Ok(None));
+        tasks.expect_insert_task().returning(|_, _| Ok(()));
+
+        let mut chat_messages = MockChatMessageRepo::new();
+        chat_messages
+            .expect_insert_chat_message()
+            .returning(|_, _, _, _| Ok(()));
+        chat_messages
+            .expect_get_chat_history()
+            .returning(|_, _, _| Ok(vec![]));
+        chat_messages
+            .expect_clear_chat_history()
+            .returning(|_| Ok(()));
+
+        let mut auth_config = MockAuthConfigRepo::new();
+        auth_config.expect_health_check().returning(|| true);
+        auth_config.expect_has_password().returning(|| Ok(false));
+        auth_config.expect_set_password().returning(|_| Ok(()));
+        auth_config.expect_get_password().returning(|| Ok(None));
+
+        let repos = MockReposBuilder::new()
+            .with_agents(Arc::new(agents))
+            .with_tools(Arc::new(tools))
+            .with_sessions(Arc::new(sessions))
+            .with_tasks(Arc::new(tasks))
+            .with_chat_messages(Arc::new(chat_messages))
+            .with_auth_config(Arc::new(auth_config))
+            .build();
+
+        let (state, rx) = AppState::with_repos(None, repos, AppConfig::default());
         // Keep the receiver alive so chat_tx.send() doesn't fail in tests
         std::mem::forget(rx);
         state

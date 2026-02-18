@@ -138,7 +138,8 @@ pub(super) async fn execute_room_step(
     for member in members {
         let agent = dag
             .state
-            .repo()
+            .repos()
+            .agents
             .get_persisted_agent(member.agent_id)
             .await
             .map_err(|e| anyhow::anyhow!("failed to load agent: {}", e))?
@@ -256,14 +257,11 @@ pub(super) async fn execute_room_step(
     );
 
     // 6. Compose initial prompt
-    let pt_repo = dag.state.prompt_template_repo();
-    let doc_repo = dag.state.doc_repo();
-    let wf_repo = dag.state.workflow_repo();
     let repos = PromptRepos {
-        prompt_template_repo: pt_repo.as_deref(),
-        doc_repo: doc_repo.as_deref(),
-        workflow_repo: wf_repo.as_deref(),
-        server_repo: &**dag.state.repo(),
+        prompt_template_repo: Some(&*dag.state.repos().prompt_templates),
+        doc_repo: Some(&*dag.state.repos().documents),
+        workflow_repo: Some(&*dag.state.repos().workflows),
+        agent_repo: &*dag.state.repos().agents,
     };
     let mut prompt = compose_prompt(
         step,

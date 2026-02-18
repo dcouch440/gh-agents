@@ -295,7 +295,8 @@ pub async fn execute_room_turn(
 
         // Load agent tools
         let agent_tool_rows = state
-            .repo()
+            .repos()
+            .tools
             .get_agent_tools(ma.agent.id)
             .await
             .unwrap_or_default();
@@ -319,7 +320,12 @@ pub async fn execute_room_turn(
                 sp.push_str("\n\n");
                 sp.push_str(&room_context);
 
-                if let Ok(agent_docs) = state.repo().get_agent_context(selection.agent_id).await {
+                if let Ok(agent_docs) = state
+                    .repos()
+                    .agents
+                    .get_agent_context(selection.agent_id)
+                    .await
+                {
                     for doc in &agent_docs {
                         sp.push_str(&format!(
                             "\n\n---\n## {} (Agent Context)\n{}",
@@ -398,12 +404,11 @@ pub async fn execute_room_turn(
             user_id,
         };
 
-        let ae_repo2 = state.agent_execution_repo();
-        let tl_repo = state.token_ledger_repo();
         let recorder = ExecutionRecorder::new(
-            state.repo().as_ref(),
-            ae_repo2.as_deref(),
-            tl_repo.as_deref(),
+            &*state.repos().sessions,
+            &*state.repos().chat_messages,
+            Some(&*state.repos().agent_executions),
+            Some(&*state.repos().token_ledger),
         );
 
         let exec_result = engine

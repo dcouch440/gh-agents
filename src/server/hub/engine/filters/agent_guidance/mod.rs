@@ -9,18 +9,18 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::db::traits::ServerRepo;
+use crate::db::traits::AgentRepo;
 use crate::llm::Message;
 
 use super::{ExecutionFilter, FilterContext, HubError};
 
 /// Injects stored guidance into the system prompt.
 pub struct AgentGuidanceFilter {
-    repo: Arc<dyn ServerRepo>,
+    repo: Arc<dyn AgentRepo>,
 }
 
 impl AgentGuidanceFilter {
-    pub fn new(repo: Arc<dyn ServerRepo>) -> Self {
+    pub fn new(repo: Arc<dyn AgentRepo>) -> Self {
         Self { repo }
     }
 }

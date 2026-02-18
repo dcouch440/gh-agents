@@ -9,7 +9,7 @@ mod tests {
     use std::pin::Pin;
     use uuid::Uuid;
 
-    use crate::db::traits::{AgentExecutionRepo, ServerRepo, TokenLedgerRepo};
+    use crate::db::traits::{AgentExecutionRepo, AgentRepo, TokenLedgerRepo};
     use crate::db::{AgentExecutionRow, AgentRow, TokenLedgerRow};
     use crate::llm::{
         LLMError, LLMProvider, LLMRequest, LLMResponse, StopReason, StreamChunk, TokenUsage,
@@ -191,8 +191,8 @@ mod tests {
         }
     }
 
-    fn mock_repo_with_agents(agents: Vec<AgentRow>) -> Arc<dyn ServerRepo> {
-        let mut mock = crate::db::traits::MockServerRepo::new();
+    fn mock_repo_with_agents(agents: Vec<AgentRow>) -> Arc<dyn AgentRepo> {
+        let mut mock = crate::db::traits::MockAgentRepo::new();
         mock.expect_get_persisted_agent()
             .returning(move |id| Ok(agents.iter().find(|a| a.id == id).cloned()));
         Arc::new(mock)

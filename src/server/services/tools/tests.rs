@@ -3,7 +3,7 @@ mod tests {
     use chrono::Utc;
     use uuid::Uuid;
 
-    use crate::db::traits::MockServerRepo;
+    use crate::db::traits::{MockAgentRepo, MockToolRepo};
     use crate::db::{AgentRow, ToolRow};
     use crate::server::services::tools::*;
     use crate::server::services::ServiceError;
@@ -42,7 +42,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_rejects_non_admin() {
-        let repo = MockServerRepo::new();
+        let repo = MockToolRepo::new();
         let result = create_tool(
             &repo,
             CreateToolInput {
@@ -59,7 +59,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_rejects_empty_name() {
-        let repo = MockServerRepo::new();
+        let repo = MockToolRepo::new();
         let result = create_tool(
             &repo,
             CreateToolInput {
@@ -76,7 +76,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_succeeds_for_admin() {
-        let mut repo = MockServerRepo::new();
+        let mut repo = MockToolRepo::new();
         repo.expect_upsert_tool().returning(|_| Ok(()));
 
         let result = create_tool(
@@ -98,7 +98,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_defaults_display_name_to_name() {
-        let mut repo = MockServerRepo::new();
+        let mut repo = MockToolRepo::new();
         repo.expect_upsert_tool().returning(|_| Ok(()));
 
         let result = create_tool(
@@ -118,7 +118,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_rejects_non_admin() {
-        let repo = MockServerRepo::new();
+        let repo = MockToolRepo::new();
         let result = update_tool(
             &repo,
             UpdateToolInput {
@@ -140,7 +140,7 @@ mod tests {
         let tool_id = tool.id;
         let tool_clone = tool.clone();
 
-        let mut repo = MockServerRepo::new();
+        let mut repo = MockToolRepo::new();
         repo.expect_get_tool()
             .returning(move |_| Ok(Some(tool_clone.clone())));
         repo.expect_upsert_tool().returning(|_| Ok(()));
@@ -164,7 +164,7 @@ mod tests {
 
     #[tokio::test]
     async fn delete_rejects_non_admin() {
-        let repo = MockServerRepo::new();
+        let repo = MockToolRepo::new();
         let result = delete_tool(&repo, false, Uuid::new_v4()).await;
         assert!(matches!(result, Err(ServiceError::NotFound(_))));
     }
@@ -176,11 +176,13 @@ mod tests {
         let agent_id = Uuid::new_v4();
         let agent = make_agent(agent_id, owner_id);
 
-        let mut repo = MockServerRepo::new();
-        repo.expect_get_persisted_agent()
+        let tool_repo = MockToolRepo::new();
+        let mut agent_repo = MockAgentRepo::new();
+        agent_repo
+            .expect_get_persisted_agent()
             .returning(move |_| Ok(Some(agent.clone())));
 
-        let result = get_agent_tools(&repo, attacker_id, agent_id).await;
+        let result = get_agent_tools(&tool_repo, &agent_repo, attacker_id, agent_id).await;
         assert!(matches!(result, Err(ServiceError::NotFound(_))));
     }
 
@@ -191,13 +193,17 @@ mod tests {
         let agent = make_agent(agent_id, user_id);
         let tool = make_tool("search");
 
-        let mut repo = MockServerRepo::new();
-        repo.expect_get_persisted_agent()
-            .returning(move |_| Ok(Some(agent.clone())));
-        repo.expect_get_agent_tools()
+        let mut tool_repo = MockToolRepo::new();
+        tool_repo
+            .expect_get_agent_tools()
             .returning(move |_| Ok(vec![tool.clone()]));
 
-        let result = get_agent_tools(&repo, user_id, agent_id).await;
+        let mut agent_repo = MockAgentRepo::new();
+        agent_repo
+            .expect_get_persisted_agent()
+            .returning(move |_| Ok(Some(agent.clone())));
+
+        let result = get_agent_tools(&tool_repo, &agent_repo, user_id, agent_id).await;
         let tools = result.unwrap();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].name, "search");
@@ -209,12 +215,15 @@ mod tests {
         let agent_id = Uuid::new_v4();
         let agent = make_agent(agent_id, user_id);
 
-        let mut repo = MockServerRepo::new();
-        repo.expect_get_persisted_agent()
+        let tool_repo = MockToolRepo::new();
+        let mut agent_repo = MockAgentRepo::new();
+        agent_repo
+            .expect_get_persisted_agent()
             .returning(move |_| Ok(Some(agent.clone())));
 
         let result = set_agent_tools(
-            &repo,
+            &tool_repo,
+            &agent_repo,
             SetAgentToolsInput {
                 user_id,
                 agent_id,

@@ -51,7 +51,8 @@ pub async fn list_tasks(
     Query(query): Query<TasksQuery>,
 ) -> Result<Json<Vec<Task>>, AppError> {
     let tasks = state
-        .repo()
+        .repos()
+        .tasks
         .list_tasks(auth.user_id, query.status, query.limit)
         .await?;
 
@@ -78,7 +79,8 @@ pub async fn get_task(
     Path(id): Path<Uuid>,
 ) -> Result<Json<Task>, AppError> {
     let task = state
-        .repo()
+        .repos()
+        .tasks
         .get_task_by_uuid(auth.user_id, id)
         .await?
         .ok_or(AppError::not_found("Task"))?;
@@ -137,7 +139,11 @@ pub async fn create_task(
     task.updated_at = Utc::now();
 
     // Insert into database
-    state.repo().insert_task(auth.user_id, task.clone()).await?;
+    state
+        .repos()
+        .tasks
+        .insert_task(auth.user_id, task.clone())
+        .await?;
 
     Ok((StatusCode::CREATED, Json(task)))
 }

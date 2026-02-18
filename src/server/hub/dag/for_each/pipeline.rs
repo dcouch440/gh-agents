@@ -105,7 +105,8 @@ pub(in crate::server::hub::dag) async fn execute_for_each_chain(
             ))
         })?;
         let default_agent = state
-            .repo()
+            .repos()
+            .agents
             .get_persisted_agent(default_agent_id)
             .await
             .map_err(|e| anyhow::anyhow!("failed to load agent: {}", e))?
@@ -124,8 +125,11 @@ pub(in crate::server::hub::dag) async fn execute_for_each_chain(
             for rule in rules {
                 use std::collections::hash_map::Entry;
                 if let Entry::Vacant(entry) = agent_cache.entry(rule.agent_id) {
-                    if let Ok(Some(routed_agent)) =
-                        state.repo().get_persisted_agent(rule.agent_id).await
+                    if let Ok(Some(routed_agent)) = state
+                        .repos()
+                        .agents
+                        .get_persisted_agent(rule.agent_id)
+                        .await
                     {
                         entry.insert(routed_agent);
                     }
@@ -318,14 +322,11 @@ async fn execute_pipeline_item(
         };
 
         // Build prompt with the current element
-        let pt_repo = state.prompt_template_repo();
-        let doc_repo = state.doc_repo();
-        let wf_repo = state.workflow_repo();
         let repos = PromptRepos {
-            prompt_template_repo: pt_repo.as_deref(),
-            doc_repo: doc_repo.as_deref(),
-            workflow_repo: wf_repo.as_deref(),
-            server_repo: &**state.repo(),
+            prompt_template_repo: Some(&*state.repos().prompt_templates),
+            doc_repo: Some(&*state.repos().documents),
+            workflow_repo: Some(&*state.repos().workflows),
+            agent_repo: &*state.repos().agents,
         };
         let prompt = compose_prompt(
             step,

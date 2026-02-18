@@ -5,9 +5,11 @@
 use std::sync::Arc;
 
 use crate::db::traits::{
-    MockAgentExecutionRepo, MockContentVersionRepo, MockDocumentRepo, MockOutputSchemaRepo,
-    MockPromptTemplateRepo, MockProtocolRepo, MockResultRepo, MockRoomRepo, MockSystemConfigRepo,
-    MockTokenLedgerRepo, MockToolCapabilityRepo, MockUserRepo, MockWorkflowRepo,
+    MockAgentExecutionRepo, MockAgentRepo, MockAuthConfigRepo, MockChatMessageRepo,
+    MockContentVersionRepo, MockDocumentRepo, MockOutputSchemaRepo, MockPromptTemplateRepo,
+    MockProtocolRepo, MockResultRepo, MockRoomRepo, MockSessionRepo, MockSystemConfigRepo,
+    MockTaskRepo, MockTokenLedgerRepo, MockToolCapabilityRepo, MockToolRepo, MockUserRepo,
+    MockWorkflowRepo,
 };
 
 use super::Repos;
@@ -31,6 +33,12 @@ pub fn default_mock_repos() -> Repos {
         Arc::new(MockSystemConfigRepo::new()),
         Arc::new(MockProtocolRepo::new()),
         Arc::new(MockContentVersionRepo::new()),
+        Arc::new(MockAgentRepo::new()),
+        Arc::new(MockToolRepo::new()),
+        Arc::new(MockSessionRepo::new()),
+        Arc::new(MockTaskRepo::new()),
+        Arc::new(MockChatMessageRepo::new()),
+        Arc::new(MockAuthConfigRepo::new()),
     )
 }
 
@@ -128,6 +136,42 @@ impl MockReposBuilder {
         repo: Arc<dyn crate::db::traits::ContentVersionRepo>,
     ) -> Self {
         self.repos.content_versions = repo;
+        self
+    }
+
+    /// Override the agents repository.
+    pub fn with_agents(mut self, repo: Arc<dyn crate::db::traits::AgentRepo>) -> Self {
+        self.repos.agents = repo;
+        self
+    }
+
+    /// Override the tools repository.
+    pub fn with_tools(mut self, repo: Arc<dyn crate::db::traits::ToolRepo>) -> Self {
+        self.repos.tools = repo;
+        self
+    }
+
+    /// Override the sessions repository.
+    pub fn with_sessions(mut self, repo: Arc<dyn crate::db::traits::SessionRepo>) -> Self {
+        self.repos.sessions = repo;
+        self
+    }
+
+    /// Override the tasks repository.
+    pub fn with_tasks(mut self, repo: Arc<dyn crate::db::traits::TaskRepo>) -> Self {
+        self.repos.tasks = repo;
+        self
+    }
+
+    /// Override the chat messages repository.
+    pub fn with_chat_messages(mut self, repo: Arc<dyn crate::db::traits::ChatMessageRepo>) -> Self {
+        self.repos.chat_messages = repo;
+        self
+    }
+
+    /// Override the auth config repository.
+    pub fn with_auth_config(mut self, repo: Arc<dyn crate::db::traits::AuthConfigRepo>) -> Self {
+        self.repos.auth_config = repo;
         self
     }
 
