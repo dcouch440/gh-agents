@@ -10,43 +10,20 @@ import RefreshOutlined from '@mui/icons-material/RefreshOutlined'
 import ExpandMoreOutlined from '@mui/icons-material/ExpandMoreOutlined'
 import ExpandLessOutlined from '@mui/icons-material/ExpandLessOutlined'
 import { useStepLastRun } from '@/hooks/useStepLastRun'
+import { MetricChip } from '../../execution'
+import { formatDuration, formatTokens, formatCost } from '../../formatters'
 import type { PhaseExecution } from '@/types'
 
 type LastRunTabProps = {
   stepId: string
 }
 
-const STATUS_COLORS: Record<string, 'success' | 'error' | 'warning' | 'info' | 'default'> = {
+const CHIP_STATUS_COLORS: Record<string, 'success' | 'error' | 'warning' | 'info' | 'default'> = {
   completed: 'success',
   complete: 'success',
   failed: 'error',
   running: 'warning',
   pending: 'info',
-}
-
-const formatDuration = (ms: number): string => {
-  if (ms < 1000) return `${ms}ms`
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
-  return `${(ms / 60_000).toFixed(1)}m`
-}
-
-const formatTokens = (count: number): string => {
-  if (count < 1000) return String(count)
-  return `${(count / 1000).toFixed(1)}k`
-}
-
-const formatCost = (usd: number): string => {
-  if (usd < 0.01) return `$${usd.toFixed(4)}`
-  return `$${usd.toFixed(2)}`
-}
-
-function MetricChip({ label, value }: { label: string; value: string }) {
-  return (
-    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, mr: 1.5 }}>
-      <Typography variant="caption" color="text.secondary">{label}</Typography>
-      <Typography variant="caption" sx={{ fontWeight: 600 }}>{value}</Typography>
-    </Box>
-  )
 }
 
 function PhaseCard({ phase }: { phase: PhaseExecution }) {
@@ -80,7 +57,7 @@ function PhaseCard({ phase }: { phase: PhaseExecution }) {
         <Chip
           label={phase.status}
           size="small"
-          color={STATUS_COLORS[phase.status] ?? 'default'}
+          color={CHIP_STATUS_COLORS[phase.status] ?? 'default'}
           sx={{ height: 20, fontSize: '0.7rem' }}
         />
         {phase.input_tokens !== null && phase.output_tokens !== null && (
@@ -166,7 +143,7 @@ function LastRunTab({ stepId }: LastRunTabProps) {
             <Chip
               label={data.status}
               size="small"
-              color={STATUS_COLORS[data.status] ?? 'default'}
+              color={CHIP_STATUS_COLORS[data.status] ?? 'default'}
               sx={{ height: 22 }}
             />
             {data.duration_ms !== null && (

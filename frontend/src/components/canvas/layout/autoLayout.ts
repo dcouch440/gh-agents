@@ -192,7 +192,7 @@ const buildTieredTower = (
 
   // Sort tiers ascending (tier 0 closest to protocol)
   const tiers: TierLayout[] = []
-  const sortedKeys = [...tierEntries.keys()].sort((a, b) => a - b)
+  const sortedKeys = Collections.sortedCopy([...tierEntries.keys()], (a, b) => a - b)
   for (const tier of sortedKeys) {
     tiers.push({ tier, entries: tierEntries.get(tier)! })
   }
@@ -248,8 +248,9 @@ const computeAutoLayout = (
   const spineOrder = topologicalSort(allSpineIds, edges)
 
   // If topo sort missed some (disconnected nodes), append them
+  const spineOrderSet = Collections.toSet(spineOrder)
   for (const id of allSpineIds) {
-    if (!spineOrder.includes(id)) spineOrder.push(id)
+    if (!spineOrderSet.has(id)) spineOrder.push(id)
   }
 
   // 3. Build tiered towers for each protocol
