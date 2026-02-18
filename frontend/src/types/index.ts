@@ -9,7 +9,6 @@ export type {
   CreateAgentRequest,
   UpdateAgentRequest,
 } from './agent'
-export type { Task, TaskStatus, TaskPriority, CreateTaskRequest } from './task'
 export type {
   DraftConfig,
   Session,

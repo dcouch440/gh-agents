@@ -166,8 +166,6 @@ fn build_public_routes() -> Router<AppState> {
 fn build_protected_routes(state: AppState) -> Router<AppState> {
     Router::new()
         .route(routes::AUTH_ME, get(api::auth_me))
-        .route(routes::TASKS, get(api::list_tasks).post(api::create_task))
-        .route(routes::TASK, get(api::get_task))
         .route(
             routes::AGENTS,
             get(api::list_agents).post(api::create_agent),
@@ -703,8 +701,7 @@ async fn drain_active_executions(state: &AppState, timeout: std::time::Duration)
 mod tests {
     use super::*;
     use crate::db::traits::{
-        MockAgentRepo, MockAuthConfigRepo, MockChatMessageRepo, MockSessionRepo, MockTaskRepo,
-        MockToolRepo,
+        MockAgentRepo, MockAuthConfigRepo, MockChatMessageRepo, MockSessionRepo, MockToolRepo,
     };
     use crate::server::state::test_helpers::MockReposBuilder;
     use crate::types::UserId;
@@ -776,11 +773,6 @@ mod tests {
             .expect_link_session_agent()
             .returning(|_, _| Ok(()));
 
-        let mut tasks = MockTaskRepo::new();
-        tasks.expect_list_tasks().returning(|_, _, _| Ok(vec![]));
-        tasks.expect_get_task_by_uuid().returning(|_, _| Ok(None));
-        tasks.expect_insert_task().returning(|_, _| Ok(()));
-
         let mut chat_messages = MockChatMessageRepo::new();
         chat_messages
             .expect_insert_chat_message()
@@ -802,7 +794,6 @@ mod tests {
             .with_agents(Arc::new(agents))
             .with_tools(Arc::new(tools))
             .with_sessions(Arc::new(sessions))
-            .with_tasks(Arc::new(tasks))
             .with_chat_messages(Arc::new(chat_messages))
             .with_auth_config(Arc::new(auth_config))
             .build();
@@ -838,25 +829,6 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/health")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-    }
-
-    #[tokio::test]
-    async fn tasks_endpoint_returns_list() {
-        let (app, state) = setup_test_app();
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri("/api/tasks")
-                    .header(
-                        "authorization",
-                        format!("Bearer {}", create_test_token(&state)),
-                    )
                     .body(Body::empty())
                     .unwrap(),
             )

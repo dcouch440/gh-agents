@@ -153,7 +153,6 @@ impl AppState {
             Arc::new(PgRepo::new(db.clone())), // agents
             Arc::new(PgRepo::new(db.clone())), // tools
             Arc::new(PgRepo::new(db.clone())), // sessions
-            Arc::new(PgRepo::new(db.clone())), // tasks
             Arc::new(PgRepo::new(db.clone())), // chat_messages
             Arc::new(PgRepo::new(db.clone())), // auth_config
         );

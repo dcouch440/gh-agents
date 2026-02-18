@@ -31,7 +31,6 @@ export const ROUTES = {
   AGENTS: '/agents',
   AGENT_WORKSHOP: '/agents/workshop/:sessionId?',
   AGENT_DETAIL: '/agents/:id',
-  TASKS: '/tasks',
   DOCUMENTS: '/documents',
   DOCUMENT_DETAIL: '/documents/:id',
   WORKFLOWS: '/workflows',
@@ -88,10 +87,6 @@ export const API = {
   AGENT: (id: string) => `/agents/${id}`,
   AGENT_TOOLS: (id: string) => `/agents/${id}/tools`,
   AGENT_CONTEXT: (id: string) => `/agents/${id}/context`,
-
-  // Tasks
-  TASKS: '/tasks',
-  TASK: (id: string) => `/tasks/${id}`,
 
   // Tools
   TOOLS: '/tools',

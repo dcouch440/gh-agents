@@ -8,8 +8,7 @@ use crate::db::traits::{
     MockAgentExecutionRepo, MockAgentRepo, MockAuthConfigRepo, MockChatMessageRepo,
     MockContentVersionRepo, MockDocumentRepo, MockOutputSchemaRepo, MockPromptTemplateRepo,
     MockProtocolRepo, MockResultRepo, MockRoomRepo, MockSessionRepo, MockSystemConfigRepo,
-    MockTaskRepo, MockTokenLedgerRepo, MockToolCapabilityRepo, MockToolRepo, MockUserRepo,
-    MockWorkflowRepo,
+    MockTokenLedgerRepo, MockToolCapabilityRepo, MockToolRepo, MockUserRepo, MockWorkflowRepo,
 };
 
 use super::Repos;
@@ -36,7 +35,6 @@ pub fn default_mock_repos() -> Repos {
         Arc::new(MockAgentRepo::new()),
         Arc::new(MockToolRepo::new()),
         Arc::new(MockSessionRepo::new()),
-        Arc::new(MockTaskRepo::new()),
         Arc::new(MockChatMessageRepo::new()),
         Arc::new(MockAuthConfigRepo::new()),
     )
@@ -154,12 +152,6 @@ impl MockReposBuilder {
     /// Override the sessions repository.
     pub fn with_sessions(mut self, repo: Arc<dyn crate::db::traits::SessionRepo>) -> Self {
         self.repos.sessions = repo;
-        self
-    }
-
-    /// Override the tasks repository.
-    pub fn with_tasks(mut self, repo: Arc<dyn crate::db::traits::TaskRepo>) -> Self {
-        self.repos.tasks = repo;
         self
     }
 

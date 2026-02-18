@@ -8,8 +8,6 @@ import type {
   UpdateAgentRequest,
   AgentToolsResponse,
   AgentContextResponse,
-  Task,
-  CreateTaskRequest,
   Tool,
   CreateToolRequest,
   UpdateToolRequest,
@@ -147,18 +145,6 @@ const agents = freeze({
 
   setContext: (id: string, docIds: string[], config?: RequestConfig) =>
     baseApi.put<void>(API.AGENT_CONTEXT(id), { document_ids: docIds }, config),
-})
-
-const tasks = freeze({
-  list: (config?: RequestConfig) => baseApi.get<Task[]>(API.TASKS, config),
-
-  get: (id: string, config?: RequestConfig) => baseApi.get<Task>(API.TASK(id), config),
-
-  create: (body: CreateTaskRequest, config?: RequestConfig) => baseApi.post<Task>(API.TASKS, body, config),
-
-  update: (id: string, body: Partial<Task>, config?: RequestConfig) => baseApi.patch<Task>(API.TASK(id), body, config),
-
-  delete: (id: string, config?: RequestConfig) => baseApi.del<void>(API.TASK(id), config),
 })
 
 const tools = freeze({
@@ -470,7 +456,6 @@ export const api = Object.freeze({
   // Typed endpoints
   auth,
   agents,
-  tasks,
   tools,
   documents,
   sessions,

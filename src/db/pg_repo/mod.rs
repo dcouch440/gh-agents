@@ -10,12 +10,11 @@ use crate::db::traits::{
     AgentExecutionRepo, AgentRepo, AuthConfigRepo, ChatMessageRepo, ContentVersionRepo,
     CreateAgentExecutionInput, CreateDesignerOutputGenericInput, CreateDesignerOutputInput,
     CreateDocumentInput, CreateProtocolInput, CreateRoomInput, CreateStepInputPort,
-    CreateWorkflowInput, DocumentRepo, InsertQueueEntryInput, MergeQueueRepo, ModelSpendRow,
-    OutputSchemaRepo, PromptTemplateRepo, ProtocolRepo, ResultRepo, RoomMemberInput, RoomRepo,
-    SaveRoomExecutionOutputInput, SessionRepo, SystemConfigRepo, TaskRepo, TokenLedgerRepo,
-    ToolCapabilityRepo, ToolRepo, UpdateProtocolExecutionStatusInput, UpdateProtocolInput,
-    UpdateRoomInput, UpdateWorkflowInput, UserRepo, WorkflowCollectionRepo, WorkflowRepo,
-    WorkflowStepAgentRepo,
+    CreateWorkflowInput, DocumentRepo, ModelSpendRow, OutputSchemaRepo, PromptTemplateRepo,
+    ProtocolRepo, ResultRepo, RoomMemberInput, RoomRepo, SaveRoomExecutionOutputInput, SessionRepo,
+    SystemConfigRepo, TokenLedgerRepo, ToolCapabilityRepo, ToolRepo,
+    UpdateProtocolExecutionStatusInput, UpdateProtocolInput, UpdateRoomInput, UpdateWorkflowInput,
+    UserRepo, WorkflowCollectionRepo, WorkflowRepo, WorkflowStepAgentRepo,
 };
 use crate::db::{
     AgentDesignerOutputRow, AgentDesignerRunRow, AgentExecutionRow, AgentRow,
@@ -30,8 +29,7 @@ use crate::db::{
     WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
     WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
 };
-use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
-use crate::types::{Task, User, UserId};
+use crate::types::{User, UserId};
 
 /// Maximum retries on serialization failure (Postgres error 40001).
 const SERIALIZABLE_MAX_RETRIES: u32 = 3;
@@ -120,253 +118,6 @@ impl PgRepo {
     }
 }
 
-#[async_trait]
-impl MergeQueueRepo for PgRepo {
-    async fn insert_queue_entry(
-        &self,
-        input: InsertQueueEntryInput,
-    ) -> Result<(), MergeQueueError> {
-        sqlx::query(
-            r#"
-            INSERT INTO pr_merge_queue (
-                id, repo_owner, repo_name, pr_number,
-                queue_position, status, created_at, updated_at, user_id
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            ON CONFLICT (repo_owner, repo_name, pr_number)
-            DO UPDATE SET updated_at = excluded.updated_at
-            "#,
-        )
-        .bind(input.id)
-        .bind(&input.owner)
-        .bind(&input.repo)
-        .bind(input.pr_number as i32)
-        .bind(input.position as i32)
-        .bind("pending")
-        .bind(input.now)
-        .bind(input.now)
-        .bind(input.user_id)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(())
-    }
-
-    async fn get_next_position(&self, owner: String, repo: String) -> Result<u32, MergeQueueError> {
-        let row: Option<(i32,)> = sqlx::query_as(
-            r#"
-            SELECT COALESCE(MAX(queue_position), 0) + 1
-            FROM pr_merge_queue
-            WHERE repo_owner = $1 AND repo_name = $2
-            "#,
-        )
-        .bind(&owner)
-        .bind(&repo)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(row.map(|(n,)| n as u32).unwrap_or(1))
-    }
-
-    async fn delete_queue_entry(
-        &self,
-        owner: String,
-        repo: String,
-        pr_number: u32,
-    ) -> Result<bool, MergeQueueError> {
-        let result = sqlx::query(
-            r#"
-            DELETE FROM pr_merge_queue
-            WHERE repo_owner = $1 AND repo_name = $2 AND pr_number = $3
-            "#,
-        )
-        .bind(&owner)
-        .bind(&repo)
-        .bind(pr_number as i32)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(result.rows_affected() > 0)
-    }
-
-    async fn get_queue_entries(
-        &self,
-        owner: String,
-        repo: String,
-    ) -> Result<Vec<PrQueueEntry>, MergeQueueError> {
-        let rows: Vec<(
-            Uuid,
-            String,
-            String,
-            i32,
-            i32,
-            String,
-            Option<String>,
-            Option<String>,
-            DateTime<Utc>,
-            DateTime<Utc>,
-        )> = sqlx::query_as(
-            r#"
-            SELECT
-                id, repo_owner, repo_name, pr_number,
-                queue_position, status, conflict_info,
-                error_message, created_at, updated_at
-            FROM pr_merge_queue
-            WHERE repo_owner = $1 AND repo_name = $2
-            ORDER BY queue_position ASC
-            "#,
-        )
-        .bind(&owner)
-        .bind(&repo)
-        .fetch_all(&self.pool)
-        .await?;
-
-        let entries = rows
-            .into_iter()
-            .filter_map(|row| {
-                Some(PrQueueEntry {
-                    id: row.0,
-                    repo_owner: row.1,
-                    repo_name: row.2,
-                    pr_number: row.3 as u32,
-                    queue_position: row.4 as u32,
-                    status: row.5.parse().ok()?,
-                    conflict_info: row.6.and_then(|s| serde_json::from_str(&s).ok()),
-                    error_message: row.7,
-                    created_at: row.8,
-                    updated_at: row.9,
-                })
-            })
-            .collect();
-
-        Ok(entries)
-    }
-
-    async fn update_entry_status(
-        &self,
-        owner: String,
-        repo: String,
-        pr_number: u32,
-        status: String,
-        error_message: Option<String>,
-        now: DateTime<Utc>,
-    ) -> Result<bool, MergeQueueError> {
-        let result = sqlx::query(
-            r#"
-            UPDATE pr_merge_queue
-            SET status = $1, error_message = $2, updated_at = $3
-            WHERE repo_owner = $4 AND repo_name = $5 AND pr_number = $6
-            "#,
-        )
-        .bind(&status)
-        .bind(error_message.as_deref())
-        .bind(now)
-        .bind(&owner)
-        .bind(&repo)
-        .bind(pr_number as i32)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(result.rows_affected() > 0)
-    }
-
-    async fn set_entry_conflict(
-        &self,
-        owner: String,
-        repo: String,
-        pr_number: u32,
-        conflict_json: String,
-        now: DateTime<Utc>,
-    ) -> Result<bool, MergeQueueError> {
-        let result = sqlx::query(
-            r#"
-            UPDATE pr_merge_queue
-            SET status = $1, conflict_info = $2, updated_at = $3
-            WHERE repo_owner = $4 AND repo_name = $5 AND pr_number = $6
-            "#,
-        )
-        .bind("conflict")
-        .bind(&conflict_json)
-        .bind(now)
-        .bind(&owner)
-        .bind(&repo)
-        .bind(pr_number as i32)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(result.rows_affected() > 0)
-    }
-
-    async fn update_entry_position(
-        &self,
-        id: Uuid,
-        position: u32,
-        now: DateTime<Utc>,
-    ) -> Result<(), MergeQueueError> {
-        sqlx::query(
-            r#"
-            UPDATE pr_merge_queue
-            SET queue_position = $1, updated_at = $2
-            WHERE id = $3
-            "#,
-        )
-        .bind(position as i32)
-        .bind(now)
-        .bind(id)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(())
-    }
-
-    async fn reset_interrupted(
-        &self,
-        owner: String,
-        repo: String,
-        now: DateTime<Utc>,
-    ) -> Result<u32, MergeQueueError> {
-        let result = sqlx::query(
-            r#"
-            UPDATE pr_merge_queue
-            SET status = 'pending', updated_at = $1
-            WHERE repo_owner = $2 AND repo_name = $3
-            AND status = 'in_progress'
-            "#,
-        )
-        .bind(now)
-        .bind(&owner)
-        .bind(&repo)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(result.rows_affected() as u32)
-    }
-
-    async fn cleanup_old(
-        &self,
-        owner: String,
-        repo: String,
-        cutoff: DateTime<Utc>,
-    ) -> Result<u32, MergeQueueError> {
-        let result = sqlx::query(
-            r#"
-            DELETE FROM pr_merge_queue
-            WHERE repo_owner = $1 AND repo_name = $2
-            AND status IN ('merged', 'skipped')
-            AND updated_at < $3
-            "#,
-        )
-        .bind(&owner)
-        .bind(&repo)
-        .bind(cutoff)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(result.rows_affected() as u32)
-    }
-}
-
-#[async_trait]
 // ============================================================================
 // Auth Config Repository
 // ============================================================================
@@ -386,30 +137,6 @@ impl AuthConfigRepo for PgRepo {
 
     async fn get_password(&self) -> Result<Option<String>> {
         crate::db::get_password(&self.pool).await
-    }
-}
-
-// ============================================================================
-// Task Repository
-// ============================================================================
-
-#[async_trait]
-impl TaskRepo for PgRepo {
-    async fn list_tasks(
-        &self,
-        user_id: UserId,
-        status: Option<String>,
-        limit: Option<u32>,
-    ) -> Result<Vec<Task>> {
-        crate::db::list_tasks(&self.pool, user_id, status.as_deref(), limit).await
-    }
-
-    async fn get_task_by_uuid(&self, user_id: UserId, id: Uuid) -> Result<Option<Task>> {
-        crate::db::get_task_by_uuid(&self.pool, user_id, id).await
-    }
-
-    async fn insert_task(&self, user_id: UserId, task: Task) -> Result<()> {
-        crate::db::insert_task(&self.pool, user_id, &task).await
     }
 }
 

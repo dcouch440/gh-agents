@@ -19,7 +19,6 @@ pub mod prompt_templates;
 pub mod results;
 pub mod rooms;
 pub mod sessions;
-pub mod tasks;
 pub mod tools;
 pub mod workflows;
 
@@ -30,9 +29,6 @@ pub use auth::{
     auth_login, auth_me, auth_register, auth_setup, AuthTokenResponse, LoginRequest, LoginResponse,
     MeResponse, RegisterRequest, SetupRequest, SetupResponse, UserResponse,
 };
-
-// Re-export task handlers and types
-pub use tasks::{create_task, get_task, list_tasks, CreateTaskRequest, TasksQuery};
 
 // Re-export agent handlers and types
 pub use agents::{

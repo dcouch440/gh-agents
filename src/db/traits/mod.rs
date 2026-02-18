@@ -21,96 +21,7 @@ use crate::db::{
     WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
     WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
 };
-use crate::github::{PrQueueEntry, QueueError as MergeQueueError};
-use crate::types::{Task, User, UserId};
-
-// ============================================================================
-// Merge Queue Repository
-// ============================================================================
-
-/// Input for inserting or updating a merge queue entry.
-#[derive(Debug, Clone)]
-pub struct InsertQueueEntryInput {
-    pub id: Uuid,
-    pub owner: String,
-    pub repo: String,
-    pub pr_number: u32,
-    pub position: u32,
-    pub now: DateTime<Utc>,
-    pub user_id: Uuid,
-}
-
-/// Database operations for the PR merge queue.
-#[cfg_attr(test, mockall::automock)]
-#[async_trait]
-pub trait MergeQueueRepo: Send + Sync {
-    /// Insert or update a queue entry (upsert).
-    async fn insert_queue_entry(&self, input: InsertQueueEntryInput)
-        -> Result<(), MergeQueueError>;
-
-    /// Get the next queue position for a repo.
-    async fn get_next_position(&self, owner: String, repo: String) -> Result<u32, MergeQueueError>;
-
-    /// Delete a queue entry. Returns true if a row was deleted.
-    async fn delete_queue_entry(
-        &self,
-        owner: String,
-        repo: String,
-        pr_number: u32,
-    ) -> Result<bool, MergeQueueError>;
-
-    /// Get all queue entries for a repo, ordered by position.
-    async fn get_queue_entries(
-        &self,
-        owner: String,
-        repo: String,
-    ) -> Result<Vec<PrQueueEntry>, MergeQueueError>;
-
-    /// Update the status (and optional error message) of a queue entry.
-    async fn update_entry_status(
-        &self,
-        owner: String,
-        repo: String,
-        pr_number: u32,
-        status: String,
-        error_message: Option<String>,
-        now: DateTime<Utc>,
-    ) -> Result<bool, MergeQueueError>;
-
-    /// Set conflict info on a queue entry.
-    async fn set_entry_conflict(
-        &self,
-        owner: String,
-        repo: String,
-        pr_number: u32,
-        conflict_json: String,
-        now: DateTime<Utc>,
-    ) -> Result<bool, MergeQueueError>;
-
-    /// Update the position of a queue entry by ID.
-    async fn update_entry_position(
-        &self,
-        id: Uuid,
-        position: u32,
-        now: DateTime<Utc>,
-    ) -> Result<(), MergeQueueError>;
-
-    /// Reset in_progress entries back to pending.
-    async fn reset_interrupted(
-        &self,
-        owner: String,
-        repo: String,
-        now: DateTime<Utc>,
-    ) -> Result<u32, MergeQueueError>;
-
-    /// Delete merged/skipped entries older than cutoff.
-    async fn cleanup_old(
-        &self,
-        owner: String,
-        repo: String,
-        cutoff: DateTime<Utc>,
-    ) -> Result<u32, MergeQueueError>;
-}
+use crate::types::{User, UserId};
 
 // ============================================================================
 // Agent Repository
@@ -245,29 +156,6 @@ pub trait SessionRepo: Send + Sync {
 
     /// Link an agent to a session (and clear draft_config).
     async fn link_session_agent(&self, session_id: Uuid, agent_id: Uuid) -> Result<()>;
-}
-
-// ============================================================================
-// Task Repository
-// ============================================================================
-
-/// Database operations for task management.
-#[cfg_attr(test, mockall::automock)]
-#[async_trait]
-pub trait TaskRepo: Send + Sync {
-    /// List tasks with optional status filter and limit.
-    async fn list_tasks(
-        &self,
-        user_id: UserId,
-        status: Option<String>,
-        limit: Option<u32>,
-    ) -> Result<Vec<Task>>;
-
-    /// Get a single task by UUID.
-    async fn get_task_by_uuid(&self, user_id: UserId, id: Uuid) -> Result<Option<Task>>;
-
-    /// Insert a new task.
-    async fn insert_task(&self, user_id: UserId, task: Task) -> Result<()>;
 }
 
 // ============================================================================
