@@ -312,7 +312,7 @@ impl ExecutionFilter for DebateVerificationFilter {
                 let verification_ae_id = if let Some(ref ae_repo) = ae_repo {
                     match ae_repo
                         .create_agent_execution(CreateAgentExecutionInput {
-                            agent_id: verifier_id,
+                            agent_id: Some(verifier_id),
                             workflow_step_id: step_id,
                             is_interactive: false,
                             parent_agent_execution_id: parent_execution_id,

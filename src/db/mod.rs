@@ -325,7 +325,7 @@ pub struct StepDocumentRow {
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct AgentExecutionRow {
     pub id: Uuid,
-    pub agent_id: Uuid,
+    pub agent_id: Option<Uuid>,
     pub workflow_step_id: Option<Uuid>,
     pub workflow_execution_id: Option<Uuid>,
     pub is_interactive: bool,

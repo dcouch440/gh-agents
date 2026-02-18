@@ -812,7 +812,7 @@ pub trait WorkflowRepo: Send + Sync {
 /// Input for creating an agent execution record.
 #[derive(Debug, Clone)]
 pub struct CreateAgentExecutionInput {
-    pub agent_id: Uuid,
+    pub agent_id: Option<Uuid>,
     pub workflow_step_id: Option<Uuid>,
     pub is_interactive: bool,
     pub parent_agent_execution_id: Option<Uuid>,

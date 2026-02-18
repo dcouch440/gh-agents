@@ -580,7 +580,7 @@ mod tests {
 
         let exec = repo
             .create_agent_execution(CreateAgentExecutionInput {
-                agent_id: agent.id,
+                agent_id: Some(agent.id),
                 workflow_step_id: None,
                 is_interactive: false,
                 parent_agent_execution_id: None,
@@ -593,7 +593,7 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(exec.agent_id, agent.id);
+        assert_eq!(exec.agent_id, Some(agent.id));
         assert_eq!(exec.status, "running");
         assert_eq!(exec.input, "What is 2+2?");
         assert_eq!(exec.system_prompt_rendered, "You are a test agent.");
@@ -627,7 +627,7 @@ mod tests {
         // --- completed: sets completed_at + stores output ---
         let exec1 = repo
             .create_agent_execution(CreateAgentExecutionInput {
-                agent_id: agent.id,
+                agent_id: Some(agent.id),
                 workflow_step_id: None,
                 is_interactive: false,
                 parent_agent_execution_id: None,
@@ -659,7 +659,7 @@ mod tests {
         // --- failed: sets completed_at ---
         let exec2 = repo
             .create_agent_execution(CreateAgentExecutionInput {
-                agent_id: agent.id,
+                agent_id: Some(agent.id),
                 workflow_step_id: None,
                 is_interactive: false,
                 parent_agent_execution_id: None,
@@ -681,7 +681,7 @@ mod tests {
         // --- COALESCE: passing None preserves previous output ---
         let exec3 = repo
             .create_agent_execution(CreateAgentExecutionInput {
-                agent_id: agent.id,
+                agent_id: Some(agent.id),
                 workflow_step_id: None,
                 is_interactive: false,
                 parent_agent_execution_id: None,
@@ -726,7 +726,7 @@ mod tests {
         for _ in 0..3 {
             let exec = repo
                 .create_agent_execution(CreateAgentExecutionInput {
-                    agent_id: agent.id,
+                    agent_id: Some(agent.id),
                     workflow_step_id: None,
                     is_interactive: true,
                     parent_agent_execution_id: None,
@@ -784,7 +784,7 @@ mod tests {
         // completed + non-interactive (should match)
         let e1 = repo
             .create_agent_execution(CreateAgentExecutionInput {
-                agent_id: agent.id,
+                agent_id: Some(agent.id),
                 workflow_step_id: Some(step_a.id),
                 is_interactive: false,
                 parent_agent_execution_id: None,
@@ -802,7 +802,7 @@ mod tests {
 
         let e2 = repo
             .create_agent_execution(CreateAgentExecutionInput {
-                agent_id: agent.id,
+                agent_id: Some(agent.id),
                 workflow_step_id: Some(step_b.id),
                 is_interactive: false,
                 parent_agent_execution_id: None,
@@ -820,7 +820,7 @@ mod tests {
 
         // running + non-interactive (should NOT match)
         repo.create_agent_execution(CreateAgentExecutionInput {
-            agent_id: agent.id,
+            agent_id: Some(agent.id),
             workflow_step_id: Some(step_a.id),
             is_interactive: false,
             parent_agent_execution_id: None,
@@ -836,7 +836,7 @@ mod tests {
         // completed + interactive (should NOT match)
         let e4 = repo
             .create_agent_execution(CreateAgentExecutionInput {
-                agent_id: agent.id,
+                agent_id: Some(agent.id),
                 workflow_step_id: Some(step_a.id),
                 is_interactive: true,
                 parent_agent_execution_id: None,
@@ -881,7 +881,7 @@ mod tests {
 
         let exec = repo
             .create_agent_execution(CreateAgentExecutionInput {
-                agent_id: agent.id,
+                agent_id: Some(agent.id),
                 workflow_step_id: Some(step.id),
                 is_interactive: false,
                 parent_agent_execution_id: None,
@@ -1300,7 +1300,7 @@ mod tests {
         // Create executions per agent
         let exec_a = repo
             .create_agent_execution(CreateAgentExecutionInput {
-                agent_id: agent_a.id,
+                agent_id: Some(agent_a.id),
                 workflow_step_id: None,
                 is_interactive: false,
                 parent_agent_execution_id: None,
@@ -1314,7 +1314,7 @@ mod tests {
             .unwrap();
         let exec_b = repo
             .create_agent_execution(CreateAgentExecutionInput {
-                agent_id: agent_b.id,
+                agent_id: Some(agent_b.id),
                 workflow_step_id: None,
                 is_interactive: false,
                 parent_agent_execution_id: None,

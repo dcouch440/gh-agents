@@ -211,6 +211,52 @@ mod tests {
         assert!(parsed.agents[0].receives_from.is_empty());
     }
 
+    // ── Wrapped JSON unwrapping ────────────────────────────────────────
+
+    #[test]
+    fn parse_designer_output_wrapped_one_level() {
+        let json = r#"{"design": {"agents": [{
+            "agent_id": "aaa",
+            "agent_name": "Scanner",
+            "tools": ["file_read"],
+            "system_prompt": "sys",
+            "task_prompt": "task",
+            "reasoning": "r"
+        }]}}"#;
+        let value: serde_json::Value = serde_json::from_str(json).unwrap();
+        // Direct parse should fail
+        assert!(serde_json::from_value::<DesignerOutputSchema>(value.clone()).is_err());
+        // Unwrapping one level should succeed
+        if let Some(obj) = value.as_object() {
+            let found = obj.values().any(|v| {
+                serde_json::from_value::<DesignerOutputSchema>(v.clone()).is_ok()
+            });
+            assert!(found, "Should find DesignerOutputSchema one level deep");
+        }
+    }
+
+    #[test]
+    fn parse_designer_output_double_wrapped_fails() {
+        let json = r#"{"outer": {"inner": {"agents": [{
+            "agent_id": "aaa",
+            "agent_name": "Scanner",
+            "tools": [],
+            "system_prompt": "sys",
+            "task_prompt": "task",
+            "reasoning": "r"
+        }]}}}"#;
+        let value: serde_json::Value = serde_json::from_str(json).unwrap();
+        // Direct parse should fail
+        assert!(serde_json::from_value::<DesignerOutputSchema>(value.clone()).is_err());
+        // One-level unwrap should also fail (double-wrapped)
+        if let Some(obj) = value.as_object() {
+            let found = obj.values().any(|v| {
+                serde_json::from_value::<DesignerOutputSchema>(v.clone()).is_ok()
+            });
+            assert!(!found, "Double-wrapped should not be found at one level");
+        }
+    }
+
     // ── normalize_agent_name ─────────────────────────────────────────────
 
     use super::super::normalize_agent_name;

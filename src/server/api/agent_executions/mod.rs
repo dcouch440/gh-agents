@@ -23,7 +23,7 @@ use crate::server::state::{AppState, StreamChunk};
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct AgentExecutionResponse {
     pub id: Uuid,
-    pub agent_id: Uuid,
+    pub agent_id: Option<Uuid>,
     pub workflow_step_id: Option<Uuid>,
     pub is_interactive: bool,
     pub parent_agent_execution_id: Option<Uuid>,
