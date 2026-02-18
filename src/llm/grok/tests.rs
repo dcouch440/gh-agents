@@ -13,7 +13,6 @@ mod tests {
             model: constants::XAI_RESEARCH_MODEL.to_string(),
             timeout_secs: constants::XAI_RESEARCH_TIMEOUT_SECS,
             max_tokens: constants::XAI_RESEARCH_MAX_TOKENS,
-            max_search_turns: constants::XAI_RESEARCH_MAX_SEARCH_TURNS,
         };
 
         assert_eq!(config.base_url, "https://api.x.ai");
@@ -30,7 +29,6 @@ mod tests {
             model: constants::XAI_RESEARCH_MODEL.to_string(),
             timeout_secs: 120,
             max_tokens: 4096,
-            max_search_turns: 10,
         }
         .with_model("grok-3")
         .with_base_url("http://localhost:8080");
@@ -47,7 +45,6 @@ mod tests {
             model: "grok-4-1-fast".to_string(),
             timeout_secs: 120,
             max_tokens: 4096,
-            max_search_turns: 10,
         })
         .unwrap();
 
@@ -72,7 +69,6 @@ mod tests {
             model: "grok-4-1-fast".to_string(),
             timeout_secs: 120,
             max_tokens: 4096,
-            max_search_turns: 10,
         })
         .unwrap();
 
@@ -104,7 +100,6 @@ mod tests {
             model: "grok-4-1-fast".to_string(),
             timeout_secs: 120,
             max_tokens: 4096,
-            max_search_turns: 10,
         })
         .unwrap();
 
@@ -136,10 +131,12 @@ mod tests {
                 content: vec![
                     XAIContentBlock {
                         block_type: "text".to_string(),
+                        annotations: vec![],
                         text: Some("Rust is a systems programming language.".to_string()),
                     },
                     XAIContentBlock {
                         block_type: "text".to_string(),
+                        annotations: vec![],
                         text: Some("It focuses on safety and performance.".to_string()),
                     },
                 ],
@@ -165,6 +162,7 @@ mod tests {
                     item_type: "tool_call".to_string(),
                     content: vec![XAIContentBlock {
                         block_type: "text".to_string(),
+                        annotations: vec![],
                         text: Some("should be ignored".to_string()),
                     }],
                 },
@@ -172,6 +170,7 @@ mod tests {
                     item_type: "message".to_string(),
                     content: vec![XAIContentBlock {
                         block_type: "text".to_string(),
+                        annotations: vec![],
                         text: Some("actual answer".to_string()),
                     }],
                 },
@@ -245,7 +244,6 @@ mod tests {
             model: "grok-4-1-fast".to_string(),
             timeout_secs: 120,
             max_tokens: 4096,
-            max_search_turns: 10,
         });
         assert!(result.is_err());
     }
@@ -260,5 +258,111 @@ mod tests {
         assert!(req.web_filters.is_none());
         assert!(req.x_filters.is_none());
         assert!(req.system_prompt.is_none());
+    }
+
+    #[test]
+    fn build_request_body_includes_inline_citations() {
+        let client = GrokResearchClient::new(GrokConfig {
+            api_key: "test".to_string(),
+            base_url: "https://api.x.ai".to_string(),
+            model: "grok-4-1-fast".to_string(),
+            timeout_secs: 120,
+            max_tokens: 4096,
+        })
+        .unwrap();
+
+        let req = ResearchRequest::new("test");
+        let body = client.build_request_body(&req);
+
+        let serialized = serde_json::to_value(&body).unwrap();
+        let include = serialized["include"].as_array().unwrap();
+        assert_eq!(include.len(), 1);
+        assert_eq!(include[0], "inline_citations");
+    }
+
+    #[test]
+    fn parse_response_extracts_citations() {
+        let api_response = XAIResponse {
+            output: vec![XAIOutputItem {
+                item_type: "message".to_string(),
+                content: vec![XAIContentBlock {
+                    block_type: "text".to_string(),
+                    text: Some("Rust is great.".to_string()),
+                    annotations: vec![
+                        XAIAnnotation {
+                            annotation_type: "url_citation".to_string(),
+                            title: Some("Rust Lang".to_string()),
+                            url: Some("https://rust-lang.org".to_string()),
+                        },
+                        XAIAnnotation {
+                            annotation_type: "url_citation".to_string(),
+                            title: Some("Rust Blog".to_string()),
+                            url: Some("https://blog.rust-lang.org".to_string()),
+                        },
+                    ],
+                }],
+            }],
+            usage: XAIUsage::default(),
+        };
+
+        let result = GrokResearchClient::parse_response(api_response);
+        assert_eq!(result.citations.len(), 2);
+        assert_eq!(result.citations[0].title, "Rust Lang");
+        assert_eq!(result.citations[0].url, "https://rust-lang.org");
+        assert_eq!(result.citations[0].source_type, "web");
+        assert_eq!(result.citations[1].url, "https://blog.rust-lang.org");
+    }
+
+    #[test]
+    fn parse_response_deduplicates_citations() {
+        let api_response = XAIResponse {
+            output: vec![XAIOutputItem {
+                item_type: "message".to_string(),
+                content: vec![
+                    XAIContentBlock {
+                        block_type: "text".to_string(),
+                        text: Some("Part one.".to_string()),
+                        annotations: vec![XAIAnnotation {
+                            annotation_type: "url_citation".to_string(),
+                            title: Some("Rust".to_string()),
+                            url: Some("https://rust-lang.org".to_string()),
+                        }],
+                    },
+                    XAIContentBlock {
+                        block_type: "text".to_string(),
+                        text: Some("Part two.".to_string()),
+                        annotations: vec![XAIAnnotation {
+                            annotation_type: "url_citation".to_string(),
+                            title: Some("Rust".to_string()),
+                            url: Some("https://rust-lang.org".to_string()),
+                        }],
+                    },
+                ],
+            }],
+            usage: XAIUsage::default(),
+        };
+
+        let result = GrokResearchClient::parse_response(api_response);
+        assert_eq!(result.citations.len(), 1);
+        assert_eq!(result.citations[0].url, "https://rust-lang.org");
+    }
+
+    #[test]
+    fn parse_response_no_annotations_empty_citations() {
+        let api_response = XAIResponse {
+            output: vec![XAIOutputItem {
+                item_type: "message".to_string(),
+                content: vec![XAIContentBlock {
+                    block_type: "text".to_string(),
+                    text: Some("No citations here.".to_string()),
+                    annotations: vec![],
+                }],
+            }],
+            usage: XAIUsage::default(),
+        };
+
+        let result = GrokResearchClient::parse_response(api_response);
+        assert!(result.citations.is_empty());
+        assert_eq!(result.answer, "No citations here.");
     }
 }
