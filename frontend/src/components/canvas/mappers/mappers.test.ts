@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toRFNodes, toRFEdges, toDocumentEdges, toNotesEdges, toAgentEdges, nodeDataEqual, computeProtocolGroups } from '.'
+import { toRFNodes, toRFEdges, toNotesEdges, toAgentEdges, nodeDataEqual, computeProtocolGroups } from '.'
 import type { StepNodeLookups, ProtocolStepInfo } from '.'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 
@@ -48,8 +48,6 @@ const emptyLookups: StepNodeLookups = {
   edges: [],
   toolsByAgent: new Map(),
   protocolsByStep: new Map(),
-  documentDefsByStep: {},
-  documentContentByDefId: {},
   rosterByStep: {},
   notesByStep: {},
   protocolGroups: new Map(),
@@ -564,50 +562,6 @@ describe('toRFNodes — input nodes', () => {
   })
 })
 
-describe('toRFNodes — document nodes', () => {
-  const workforceStep: WorkflowStep = {
-    ...step1,
-    id: 'doc-step',
-    execution_mode: 'workforce',
-    position_x: 200,
-    position_y: 300,
-  }
-
-  it('generates document nodes with content from documentContentByDefId', () => {
-    const lookups: StepNodeLookups = {
-      ...emptyLookups,
-      documentDefsByStep: {
-        'doc-step': [
-          { id: 'def-1', step_id: 'doc-step', name: 'README', description: '', target_length: 5000, display_order: 0, created_at: '2025-01-01', document_id: 'doc-aaa', agent_roster_entry_id: null },
-        ],
-      },
-      documentContentByDefId: { 'def-1': '# Generated README' },
-      protocolsByStep: new Map([['doc-step', { protocol_type: 'workforce', name: 'Doc', portNames: [] }]]),
-    }
-    const nodes = toRFNodes([workforceStep], lookups)
-    const docNode = nodes.find((n) => n.id === 'doc-artifact-def-1')
-    expect(docNode).toBeDefined()
-    expect(docNode?.type).toBe('documentNode')
-    expect(docNode?.data.content).toBe('# Generated README')
-  })
-
-  it('falls back to empty string when no content exists for def', () => {
-    const lookups: StepNodeLookups = {
-      ...emptyLookups,
-      documentDefsByStep: {
-        'doc-step': [
-          { id: 'def-2', step_id: 'doc-step', name: 'CHANGELOG', description: '', target_length: 2000, display_order: 0, created_at: '2025-01-01', document_id: null, agent_roster_entry_id: null },
-        ],
-      },
-      protocolsByStep: new Map([['doc-step', { protocol_type: 'workforce', name: 'Doc', portNames: [] }]]),
-    }
-    const nodes = toRFNodes([workforceStep], lookups)
-    const docNode = nodes.find((n) => n.id === 'doc-artifact-def-2')
-    expect(docNode).toBeDefined()
-    expect(docNode?.data.content).toBe('')
-  })
-})
-
 describe('toNotesEdges', () => {
   it('generates an edge for each step with notes', () => {
     const lookups: StepNodeLookups = {
@@ -889,136 +843,3 @@ describe('toRFNodes — agent vertical stacking', () => {
   })
 })
 
-describe('toRFNodes — document positioned by assigned agent', () => {
-  const workforceStep: WorkflowStep = {
-    ...step1,
-    id: 'wf-step',
-    execution_mode: 'workforce',
-    position_x: 200,
-    position_y: 300,
-  }
-
-  it('places document to the right of its assigned agent', () => {
-    const lookups: StepNodeLookups = {
-      ...emptyLookups,
-      rosterByStep: {
-        'wf-step': [
-          { id: 'agent-1', name: 'Writer', child_step_id: 'cs-1', role_description: '', depends_on: [] },
-        ],
-      },
-      documentDefsByStep: {
-        'wf-step': [
-          { id: 'def-1', step_id: 'wf-step', name: 'Report', description: '', target_length: 2000, display_order: 0, created_at: '2025-01-01', document_id: null, agent_roster_entry_id: 'agent-1' },
-        ],
-      },
-      protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
-    }
-    const nodes = toRFNodes([workforceStep], lookups)
-    const agentNode = nodes.find((n) => n.id === 'agent-artifact-agent-1')
-    const docNode = nodes.find((n) => n.id === 'doc-artifact-def-1')
-
-    expect(agentNode).toBeDefined()
-    expect(docNode).toBeDefined()
-    // Document x should be to the right of agent x
-    expect(docNode!.position.x).toBeGreaterThan(agentNode!.position.x)
-    // Document y should match agent y
-    expect(docNode!.position.y).toBe(agentNode!.position.y)
-  })
-
-  it('falls back to protocol-relative position when no agent assigned', () => {
-    const lookups: StepNodeLookups = {
-      ...emptyLookups,
-      documentDefsByStep: {
-        'wf-step': [
-          { id: 'def-1', step_id: 'wf-step', name: 'Orphan', description: '', target_length: 2000, display_order: 0, created_at: '2025-01-01', document_id: null, agent_roster_entry_id: null },
-        ],
-      },
-      protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
-    }
-    const nodes = toRFNodes([workforceStep], lookups)
-    const docNode = nodes.find((n) => n.id === 'doc-artifact-def-1')
-    expect(docNode).toBeDefined()
-    // Fallback: positioned above protocol (y < protocol y)
-    expect(docNode!.position.y).toBeLessThan(300)
-  })
-})
-
-describe('toDocumentEdges — agent-sourced', () => {
-  const workforceStep: WorkflowStep = {
-    ...step1,
-    id: 'wf-step',
-    execution_mode: 'workforce',
-  }
-
-  it('sources edge from agent node when document is assigned to an agent', () => {
-    const lookups: StepNodeLookups = {
-      ...emptyLookups,
-      rosterByStep: {
-        'wf-step': [
-          { id: 'agent-1', name: 'Writer', child_step_id: 'cs-1', role_description: '', depends_on: [] },
-        ],
-      },
-      documentDefsByStep: {
-        'wf-step': [
-          { id: 'def-1', step_id: 'wf-step', name: 'Report', description: '', target_length: 2000, display_order: 0, created_at: '2025-01-01', document_id: null, agent_roster_entry_id: 'agent-1' },
-        ],
-      },
-      protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
-    }
-    const edges = toDocumentEdges([workforceStep], lookups)
-    expect(edges).toHaveLength(1)
-    expect(edges[0]).toEqual({
-      id: 'doc-edge-def-1',
-      type: 'artifactEdge',
-      source: 'agent-artifact-agent-1',
-      sourceHandle: 'agent-documents',
-      target: 'doc-artifact-def-1',
-      targetHandle: 'document-input',
-      data: { color: '#3b82f6' },
-      selectable: false,
-      deletable: false,
-    })
-  })
-
-  it('falls back to protocol source when no agent assigned', () => {
-    const lookups: StepNodeLookups = {
-      ...emptyLookups,
-      rosterByStep: {
-        'wf-step': [
-          { id: 'agent-1', name: 'Writer', child_step_id: 'cs-1', role_description: '', depends_on: [] },
-        ],
-      },
-      documentDefsByStep: {
-        'wf-step': [
-          { id: 'def-1', step_id: 'wf-step', name: 'Orphan', description: '', target_length: 2000, display_order: 0, created_at: '2025-01-01', document_id: null, agent_roster_entry_id: null },
-        ],
-      },
-      protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
-    }
-    const edges = toDocumentEdges([workforceStep], lookups)
-    expect(edges).toHaveLength(1)
-    expect(edges[0]?.source).toBe('wf-step')
-    expect(edges[0]?.sourceHandle).toBe('documents')
-  })
-
-  it('falls back to protocol when assigned agent has no child_step_id', () => {
-    const lookups: StepNodeLookups = {
-      ...emptyLookups,
-      rosterByStep: {
-        'wf-step': [
-          { id: 'agent-1', name: 'Old', child_step_id: null, role_description: '', depends_on: [] },
-        ],
-      },
-      documentDefsByStep: {
-        'wf-step': [
-          { id: 'def-1', step_id: 'wf-step', name: 'Report', description: '', target_length: 2000, display_order: 0, created_at: '2025-01-01', document_id: null, agent_roster_entry_id: 'agent-1' },
-        ],
-      },
-      protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
-    }
-    const edges = toDocumentEdges([workforceStep], lookups)
-    expect(edges).toHaveLength(1)
-    expect(edges[0]?.source).toBe('wf-step')
-    expect(edges[0]?.sourceHandle).toBe('documents')
-  })
-})

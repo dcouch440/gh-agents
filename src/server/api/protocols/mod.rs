@@ -15,7 +15,6 @@ use crate::server::hub::protocols::types::ProtocolExpansion;
 use crate::server::services::protocols as protocol_svc;
 use crate::server::state::AppState;
 
-pub mod documents;
 pub mod executions;
 
 #[cfg(test)]

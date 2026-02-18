@@ -7,7 +7,7 @@ import { DEFAULT_STEP_TYPE_COLOR, STEP_TYPE_COLORS, SECTION_LABEL_SX, COLOR_DOT_
 import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from './DynamicNode/archetypes'
 import type { Archetype as ArchetypeType } from './DynamicNode/archetypes'
 import { buildShareableFields } from './buildShareableFields'
-import { parseDocArtifactId, findParentStepForDef, buildProtocolsByStep, buildDocArtifactShareFields } from './canvasContextMenuUtils'
+import { buildProtocolsByStep } from './canvasContextMenuUtils'
 
 const VIEWPORT_PADDING = 8
 
@@ -111,27 +111,6 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
 
     const state = workflowStore.store.getState()
 
-    // Handle document artifact nodes (doc-artifact-{defId})
-    const defId = parseDocArtifactId(position.nodeId)
-    if (defId) {
-      const parentStepId = findParentStepForDef(state.documentDefsByStep, defId)
-      if (!parentStepId) return
-
-      const parentStep = state.steps.byId.get(parentStepId)
-      if (!parentStep) return
-
-      const defs = state.documentDefsByStep[parentStepId] ?? []
-      const targetDef = defs.find((d) => d.id === defId)
-      if (!targetDef) return
-
-      const protocolsByStep = buildProtocolsByStep(canvasStore.store.getState().stepProtocols)
-      const fields = buildDocArtifactShareFields(defId, parentStep, parentStepId, targetDef, protocolsByStep)
-
-      shareStore.enterShareMode(position.nodeId, fields)
-      onClose()
-      return
-    }
-
     // Regular step nodes
     const step = state.steps.byId.get(position.nodeId)
     if (!step) return
@@ -139,7 +118,6 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     const protocolsByStep = buildProtocolsByStep(canvasStore.store.getState().stepProtocols)
     const archetype = resolveArchetype(step, protocolsByStep, position.nodeId)
 
-    const documentDefs = state.documentDefsByStep[position.nodeId] ?? []
     const rosterAgents = state.rosterByStep[position.nodeId] ?? []
     const roomMembers = state.roomMembersByStep[position.nodeId] ?? []
 
@@ -147,7 +125,6 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
       stepId: position.nodeId,
       step,
       archetype,
-      documentDefs,
       rosterAgents,
       roomMembers,
     })

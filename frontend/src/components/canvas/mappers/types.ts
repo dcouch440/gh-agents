@@ -31,13 +31,6 @@ type StepNodeData = {
   isProtocol: boolean
 }
 
-type DocumentDefInfo = {
-  id: string
-  name: string
-  document_id: string | null
-  agent_roster_entry_id: string | null
-}
-
 type RosterAgentInfo = {
   id: string
   name: string
@@ -53,10 +46,8 @@ type StepNodeLookups = {
   edges: ReadonlyArray<{ from_step_id: string; to_step_id: string }>
   toolsByAgent: ReadonlyMap<string, string[]>
   protocolsByStep: ReadonlyMap<string, ProtocolStepInfo>
-  documentDefsByStep: Readonly<Record<string, ReadonlyArray<DocumentDefInfo>>>
   rosterByStep: Readonly<Record<string, ReadonlyArray<RosterAgentInfo>>>
   notesByStep: Readonly<Record<string, string>>
-  documentContentByDefId: Readonly<Record<string, string>>
   protocolGroups: ReadonlyMap<string, ProtocolGroupEntry>
 }
 
@@ -71,7 +62,6 @@ export type {
   ProtocolStepInfo,
   ProtocolGroupEntry,
   StepNodeData,
-  DocumentDefInfo,
   RosterAgentInfo,
   StepNodeLookups,
   AgentPositionMap,

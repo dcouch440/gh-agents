@@ -144,13 +144,6 @@ pub use step_ports::{
     StepOutputResponse,
 };
 
-// Re-export document definition handlers and types
-pub mod document_defs;
-pub use document_defs::{
-    create_document_def, delete_document_def, list_document_defs, update_document_def,
-    CreateDocumentDefRequest, DocumentDefResponse, UpdateDocumentDefRequest,
-};
-
 // Re-export agent roster handlers and types
 pub mod agent_roster;
 pub use agent_roster::{
@@ -184,10 +177,6 @@ pub use cancellation::{cancel_agent_execution, cancel_chat_message};
 
 // Re-export protocol handlers and types
 pub mod protocols;
-pub use protocols::documents::{
-    create_protocol_document_def, delete_protocol_document_def, list_protocol_document_defs,
-    update_protocol_document_def,
-};
 pub use protocols::executions::list_protocol_executions;
 pub use protocols::{
     apply_protocol, create_port, create_protocol, delete_port, delete_protocol, get_protocol,
@@ -195,4 +184,3 @@ pub use protocols::{
     update_protocol,
 };
 
-use crate::constants::{MAX_DESCRIPTION_LENGTH, MAX_TITLE_LENGTH};

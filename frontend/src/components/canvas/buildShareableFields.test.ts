@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildShareableFields } from './buildShareableFields'
-import type { WorkflowStep, DocumentDef, RosterAgent, RoomStepMember } from '@/types/workflow'
+import type { WorkflowStep, RosterAgent, RoomStepMember } from '@/types/workflow'
 
 const makeStep = (overrides: Partial<WorkflowStep> = {}): WorkflowStep => ({
   id: 'step-1',
@@ -18,18 +18,6 @@ const makeStep = (overrides: Partial<WorkflowStep> = {}): WorkflowStep => ({
   width: 560,
   height: 500,
   ...overrides,
-})
-
-const makeDoc = (id: string, name: string, description: string): DocumentDef => ({
-  id,
-  step_id: 'step-1',
-  name,
-  description,
-  target_length: 500,
-  display_order: 0,
-  created_at: '2025-01-01',
-  document_id: null,
-  agent_roster_entry_id: null,
 })
 
 const makeAgent = (id: string, name: string, role: string): RosterAgent => ({
@@ -58,7 +46,6 @@ describe('buildShareableFields', () => {
         stepId: 'step-1',
         step: makeStep({ name: 'My Node', description: '', prompt_template: '' }),
         archetype: 'workforce',
-        documentDefs: [],
         rosterAgents: [],
         roomMembers: [],
       })
@@ -76,7 +63,6 @@ describe('buildShareableFields', () => {
         stepId: 'step-1',
         step: makeStep({ description: 'Important info' }),
         archetype: 'workforce',
-        documentDefs: [],
         rosterAgents: [],
         roomMembers: [],
       })
@@ -92,7 +78,6 @@ describe('buildShareableFields', () => {
         stepId: 'step-1',
         step: makeStep({ description: '' }),
         archetype: 'workforce',
-        documentDefs: [],
         rosterAgents: [],
         roomMembers: [],
       })
@@ -105,7 +90,6 @@ describe('buildShareableFields', () => {
         stepId: 'step-1',
         step: makeStep({ prompt_template: 'Do the thing' }),
         archetype: 'workforce',
-        documentDefs: [],
         rosterAgents: [],
         roomMembers: [],
       })
@@ -122,7 +106,6 @@ describe('buildShareableFields', () => {
         stepId: 'step-1',
         step: makeStep({ prompt_template: '' }),
         archetype: 'workforce',
-        documentDefs: [],
         rosterAgents: [],
         roomMembers: [],
       })
@@ -132,34 +115,11 @@ describe('buildShareableFields', () => {
   })
 
   describe('WORKFORCE archetype', () => {
-    it('includes document defs', () => {
-      const fields = buildShareableFields({
-        stepId: 'step-1',
-        step: makeStep(),
-        archetype: 'workforce',
-        documentDefs: [
-          makeDoc('d1', 'README', 'Project readme'),
-          makeDoc('d2', 'API Guide', 'API documentation'),
-        ],
-        rosterAgents: [],
-        roomMembers: [],
-      })
-
-      const docFields = fields.filter((f) => f.category === 'Documents')
-      expect(docFields).toHaveLength(2)
-      expect(docFields[0]!.key).toBe('doc::d1')
-      expect(docFields[0]!.label).toBe('README')
-      expect(docFields[0]!.kind).toBe('document')
-      expect(docFields[0]!.chipKey).toBe('doc')
-      expect(docFields[1]!.label).toBe('API Guide')
-    })
-
     it('uses workforce color', () => {
       const fields = buildShareableFields({
         stepId: 'step-1',
         step: makeStep(),
         archetype: 'workforce',
-        documentDefs: [makeDoc('d1', 'README', 'docs')],
         rosterAgents: [],
         roomMembers: [],
       })
@@ -172,7 +132,6 @@ describe('buildShareableFields', () => {
         stepId: 'step-1',
         step: makeStep(),
         archetype: 'workforce',
-        documentDefs: [],
         rosterAgents: [
           makeAgent('a1', 'CodeBot', 'Write code'),
           makeAgent('a2', 'TestBot', 'Write tests'),
@@ -195,7 +154,6 @@ describe('buildShareableFields', () => {
         stepId: 'step-1',
         step: makeStep({ execution_mode: 'room' }),
         archetype: 'room',
-        documentDefs: [],
         rosterAgents: [],
         roomMembers: [
           makeMember('m1', 'Alice', 'Facilitator', 'UX focus'),
@@ -218,7 +176,6 @@ describe('buildShareableFields', () => {
         stepId: 'step-1',
         step: makeStep({ execution_mode: 'single', description: 'A blank node', prompt_template: 'Do stuff' }),
         archetype: 'blank',
-        documentDefs: [],
         rosterAgents: [],
         roomMembers: [],
       })

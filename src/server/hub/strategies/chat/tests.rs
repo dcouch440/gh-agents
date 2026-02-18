@@ -61,53 +61,6 @@ mod tests {
     // ========================================================================
 
     #[test]
-    fn broadcast_step_event_emits_on_create_success() {
-        let state = make_state();
-        let mut rx = state.events().subscribe();
-
-        let step_id = Uuid::new_v4();
-        let workflow_id = Uuid::new_v4();
-        let doc_id = Uuid::new_v4();
-        let strategy = ChatStrategy::with_step_context(
-            ChatConfig {
-                system_prompt: "sys".into(),
-                model_id: "m".into(),
-                ..Default::default()
-            },
-            state,
-            UserId::new(),
-            None,
-            Uuid::new_v4(),
-            StepChatContext {
-                workflow_id,
-                step_id,
-                execution_mode: "documenter".into(),
-                step_name: "Test Step".into(),
-            },
-        );
-
-        let input = serde_json::json!({ "name": "API Docs" });
-        let result = serde_json::json!({
-            "id": doc_id.to_string(),
-            "name": "API Docs",
-            "description": "",
-            "target_length": 1500,
-        });
-
-        strategy.broadcast_step_event("create_doc_def", &input, &result);
-
-        let envelope = rx.try_recv().unwrap();
-        assert_eq!(envelope.topic, Topic::Workflow);
-        assert!(envelope.run_id.is_none());
-        let value: serde_json::Value = serde_json::from_str(&envelope.json).unwrap();
-        assert_eq!(value["event"], "doc_def_created");
-        assert_eq!(value["data"]["workflow_id"], workflow_id.to_string());
-        assert_eq!(value["data"]["step_id"], step_id.to_string());
-        assert_eq!(value["data"]["doc_def_id"], doc_id.to_string());
-        assert_eq!(value["data"]["name"], "API Docs");
-    }
-
-    #[test]
     fn broadcast_step_event_skips_on_error() {
         let state = make_state();
         let mut rx = state.events().subscribe();
@@ -125,7 +78,7 @@ mod tests {
             StepChatContext {
                 workflow_id: Uuid::new_v4(),
                 step_id: Uuid::new_v4(),
-                execution_mode: "documenter".into(),
+                execution_mode: "workforce".into(),
                 step_name: "Test Step".into(),
             },
         );
@@ -133,7 +86,7 @@ mod tests {
         let input = serde_json::json!({});
         let result = serde_json::json!({ "error": "Missing required parameter: name" });
 
-        strategy.broadcast_step_event("create_doc_def", &input, &result);
+        strategy.broadcast_step_event("update_config", &input, &result);
 
         assert!(rx.try_recv().is_err());
     }
@@ -156,9 +109,9 @@ mod tests {
         );
 
         let input = serde_json::json!({});
-        let result = serde_json::json!({ "id": Uuid::new_v4().to_string() });
+        let result = serde_json::json!({ "name": "Updated Config" });
 
-        strategy.broadcast_step_event("create_doc_def", &input, &result);
+        strategy.broadcast_step_event("update_config", &input, &result);
 
         assert!(rx.try_recv().is_err());
     }
@@ -179,7 +132,6 @@ mod tests {
         assert!(!names.contains(&"set_node_archetype"));
 
         // No archetype-specific tools
-        assert!(!names.contains(&"create_doc_def"));
         assert!(!names.contains(&"update_config"));
     }
 

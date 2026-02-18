@@ -3,7 +3,7 @@
 // ============================================================================
 
 import type { ShareableField } from '@/stores/shareStore'
-import type { WorkflowStep, DocumentDef, RosterAgent, RoomStepMember } from '@/types/workflow'
+import type { WorkflowStep, RosterAgent, RoomStepMember } from '@/types/workflow'
 import type { Archetype } from './DynamicNode/archetypes'
 import { Archetype as ArchetypeEnum, ARCHETYPE_CONFIGS } from './DynamicNode/archetypes'
 
@@ -11,7 +11,6 @@ type BuildShareableFieldsInput = {
   stepId: string
   step: WorkflowStep
   archetype: Archetype
-  documentDefs: ReadonlyArray<DocumentDef>
   rosterAgents: ReadonlyArray<RosterAgent>
   roomMembers: ReadonlyArray<RoomStepMember>
 }
@@ -20,7 +19,6 @@ const buildShareableFields = ({
   stepId,
   step,
   archetype,
-  documentDefs,
   rosterAgents,
   roomMembers,
 }: BuildShareableFieldsInput): ShareableField[] => {
@@ -86,28 +84,6 @@ const buildShareableFields = ({
   // ── Workforce (documents + agents) ────────────────────────────────────
 
   if (archetype === ArchetypeEnum.WORKFORCE) {
-    for (const doc of documentDefs) {
-      fields.push({
-        key: `doc::${doc.id}`,
-        label: doc.name,
-        category: 'Documents',
-        kind: 'document',
-        color,
-        chipKey: 'doc',
-        entity: {
-          kind: 'document',
-          id: doc.document_id ?? `${stepId}::doc::${doc.id}`,
-          name: doc.name,
-          summary: `Document from ${stepName}`,
-          data: {
-            parentStepName: stepName,
-            description: doc.description,
-            document_id: doc.document_id,
-          },
-        },
-      })
-    }
-
     for (const agent of rosterAgents) {
       fields.push({
         key: `agent::${agent.id}`,

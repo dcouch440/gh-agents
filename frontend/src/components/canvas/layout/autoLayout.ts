@@ -1,11 +1,10 @@
 import { Collections } from '@/utils/collections'
 import type { Point } from '@/utils/geometry'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
-import type { StepNodeLookups, RosterAgentInfo, DocumentDefInfo } from '../mappers/types'
+import type { StepNodeLookups, RosterAgentInfo } from '../mappers/types'
 import { NODE_DIMENSIONS } from '../nodeDimensions'
 import { CanvasNodeKind } from '../canvasKinds'
 import { AGENT_DEFAULTS } from '../DynamicNode/archetypes'
-import { DOCUMENT_NODE } from '../DocumentNode'
 import { AUTO_LAYOUT } from './autoLayoutConfig'
 
 // ============================================================================
@@ -73,7 +72,6 @@ const topologicalSort = (
 
 type TowerEntry = {
   agentNodeId: string
-  documentNodeId: string | null
 }
 
 // ============================================================================
@@ -144,23 +142,13 @@ const computeAgentTiers = (
 }
 
 /**
- * Build tiered tower for a protocol step: agents grouped by dependency tier,
- * each paired with its assigned document (if any).
+ * Build tiered tower for a protocol step: agents grouped by dependency tier.
  */
 const buildTieredTower = (
   stepId: string,
   lookups: StepNodeLookups,
 ): TierLayout[] => {
   const roster: readonly RosterAgentInfo[] = lookups.rosterByStep[stepId] ?? []
-  const defs: readonly DocumentDefInfo[] = lookups.documentDefsByStep[stepId] ?? []
-
-  // Build doc lookup by agent_roster_entry_id
-  const docByRosterId = new Map<string, string>()
-  for (const def of defs) {
-    if (def.agent_roster_entry_id) {
-      docByRosterId.set(def.agent_roster_entry_id, def.id)
-    }
-  }
 
   // Compute tier assignments
   const tierMap = computeAgentTiers(roster)
@@ -173,21 +161,8 @@ const buildTieredTower = (
     const entries = tierEntries.get(tier) ?? []
     entries.push({
       agentNodeId: `agent-artifact-${agent.id}`,
-      documentNodeId: docByRosterId.has(agent.id) ? `doc-artifact-${docByRosterId.get(agent.id)!}` : null,
     })
     tierEntries.set(tier, entries)
-  }
-
-  // Add unassigned documents as tier 0 entries
-  for (const def of defs) {
-    if (!def.agent_roster_entry_id) {
-      const entries = tierEntries.get(0) ?? []
-      entries.push({
-        agentNodeId: '',
-        documentNodeId: `doc-artifact-${def.id}`,
-      })
-      tierEntries.set(0, entries)
-    }
   }
 
   // Sort tiers ascending (tier 0 closest to protocol)
@@ -267,7 +242,6 @@ const computeAutoLayout = (
   const contextWidth = NODE_DIMENSIONS[CanvasNodeKind.CONTEXT].defaultWidth
   const agentWidth = AGENT_DEFAULTS.DEFAULT_WIDTH
   const agentHeight = AGENT_DEFAULTS.DEFAULT_HEIGHT
-  const docHeight = DOCUMENT_NODE.DEFAULT_HEIGHT
   const stepWidth = NODE_DIMENSIONS[CanvasNodeKind.STEP].defaultWidth
 
   const spineY = AUTO_LAYOUT.SPINE_Y
@@ -322,7 +296,7 @@ const computeAutoLayout = (
     // Place spine node
     positions.set(stepId, { x: nodeX, y: spineY })
 
-    // 6. Place tiered tower above protocol (docs above agents)
+    // 6. Place tiered tower above protocol (agents stacked by tier)
     if (tiers.length > 0) {
       // Cumulative cursor tracks the bottom edge of the next available slot,
       // moving upward (negative Y) as tiers stack above the protocol.
@@ -330,8 +304,6 @@ const computeAutoLayout = (
 
       for (let tierIdx = 0; tierIdx < tiers.length; tierIdx++) {
         const tier = tiers[tierIdx]!
-        const thisHasDoc = tier.entries.some((e) => e.documentNodeId !== null)
-        const slotHeight = agentHeight + (thisHasDoc ? AUTO_LAYOUT.DOC_GAP + docHeight : 0)
 
         if (tierIdx > 0) {
           towerCursorY -= AUTO_LAYOUT.TOWER_GAP
@@ -352,15 +324,10 @@ const computeAutoLayout = (
           if (entry.agentNodeId) {
             positions.set(entry.agentNodeId, { x: entryX, y: agentY })
           }
-
-          // Place document node above agent
-          if (entry.documentNodeId) {
-            positions.set(entry.documentNodeId, { x: entryX, y: agentY - docHeight - AUTO_LAYOUT.DOC_GAP })
-          }
         }
 
-        // Advance cursor upward past this tier's full slot
-        towerCursorY -= slotHeight
+        // Advance cursor upward past this tier's agent slot
+        towerCursorY -= agentHeight
       }
     }
 

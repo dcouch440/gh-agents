@@ -7,7 +7,6 @@ import { AUTO_LAYOUT } from './autoLayoutConfig'
 import { NODE_DIMENSIONS } from '../nodeDimensions'
 import { CanvasNodeKind } from '../canvasKinds'
 import { AGENT_DEFAULTS } from '../DynamicNode/archetypes'
-import { DOCUMENT_NODE } from '../DocumentNode'
 
 // ============================================================================
 // Helpers
@@ -61,10 +60,8 @@ const emptyLookups = (overrides?: Partial<StepNodeLookups>): StepNodeLookups => 
   edges: [],
   toolsByAgent: new Map(),
   protocolsByStep: new Map(),
-  documentDefsByStep: {},
   rosterByStep: {},
   notesByStep: {},
-  documentContentByDefId: {},
   protocolGroups: new Map(),
   ...overrides,
 })
@@ -257,19 +254,6 @@ describe('buildTieredTower', () => {
     expect(tiers[1]!.entries).toHaveLength(1)
   })
 
-  it('pairs agents with their documents', () => {
-    const lookups = emptyLookups({
-      rosterByStep: {
-        's1': [makeAgent('r1', 'Agent A')],
-      },
-      documentDefsByStep: {
-        's1': [{ id: 'd1', name: 'Doc A', document_id: null, agent_roster_entry_id: 'r1' }],
-      },
-    })
-    const tiers = buildTieredTower('s1', lookups)
-    expect(tiers[0]!.entries[0]!.documentNodeId).toBe('doc-artifact-d1')
-  })
-
   it('skips agents without child_step_id', () => {
     const lookups = emptyLookups({
       rosterByStep: {
@@ -281,18 +265,6 @@ describe('buildTieredTower', () => {
     expect(buildTieredTower('s1', lookups)).toEqual([])
   })
 
-  it('includes unassigned documents in tier 0', () => {
-    const lookups = emptyLookups({
-      rosterByStep: { 's1': [] },
-      documentDefsByStep: {
-        's1': [{ id: 'd1', name: 'Orphan Doc', document_id: null, agent_roster_entry_id: null }],
-      },
-    })
-    const tiers = buildTieredTower('s1', lookups)
-    expect(tiers).toHaveLength(1)
-    expect(tiers[0]!.entries[0]!.agentNodeId).toBe('')
-    expect(tiers[0]!.entries[0]!.documentNodeId).toBe('doc-artifact-d1')
-  })
 })
 
 // ============================================================================
@@ -412,12 +384,6 @@ describe('computeAutoLayout', () => {
           makeAgent('r3', 'C', ['r1', 'r2']),
         ],
       },
-      documentDefsByStep: {
-        'p1': [
-          { id: 'd1', name: 'Doc A', document_id: null, agent_roster_entry_id: 'r1' },
-          { id: 'd3', name: 'Doc C', document_id: null, agent_roster_entry_id: 'r3' },
-        ],
-      },
     })
 
     const result = computeAutoLayout(steps, [], lookups)
@@ -425,20 +391,11 @@ describe('computeAutoLayout', () => {
     const agentA = result.get('agent-artifact-r1')!
     const agentB = result.get('agent-artifact-r2')!
     const agentC = result.get('agent-artifact-r3')!
-    const docA = result.get('doc-artifact-d1')!
-    const docC = result.get('doc-artifact-d3')!
 
     // A and B at same tier
     expect(agentA.y).toBe(agentB.y)
     // C at higher tier
     expect(agentC.y).toBeLessThan(agentA.y)
-
-    // Docs above their agents
-    expect(docA.y).toBeLessThan(agentA.y)
-    expect(docC.y).toBeLessThan(agentC.y)
-
-    // Doc A same x as agent A (both same width)
-    expect(docA.x).toBe(agentA.x)
   })
 
   it('handles linear chain: A → B → C', () => {
@@ -463,30 +420,6 @@ describe('computeAutoLayout', () => {
     // Each in a separate tier, stacking upward
     expect(agentB.y).toBeLessThan(agentA.y)
     expect(agentC.y).toBeLessThan(agentB.y)
-  })
-
-  it('positions documents above their agents', () => {
-    const steps = [makeStep({ id: 'p1', execution_mode: 'workforce' })]
-    const lookups = emptyLookups({
-      protocolsByStep: new Map([['p1', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
-      rosterByStep: {
-        'p1': [makeAgent('r1', 'Agent A')],
-      },
-      documentDefsByStep: {
-        'p1': [{ id: 'd1', name: 'Doc A', document_id: null, agent_roster_entry_id: 'r1' }],
-      },
-    })
-
-    const result = computeAutoLayout(steps, [], lookups)
-
-    const agentPos = result.get('agent-artifact-r1')!
-    const docPos = result.get('doc-artifact-d1')!
-
-    // Document is above agent
-    expect(docPos.y).toBeLessThan(agentPos.y)
-    expect(docPos.y).toBe(agentPos.y - DOCUMENT_NODE.DEFAULT_HEIGHT - AUTO_LAYOUT.DOC_GAP)
-    // Same x-coordinate (agent and doc are same width)
-    expect(docPos.x).toBe(agentPos.x)
   })
 
   it('positions notes below protocol', () => {

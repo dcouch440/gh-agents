@@ -351,10 +351,6 @@ pub mod routes {
     pub const STEP_OUTPUTS: &str = "/workflows/:wid/steps/:sid/outputs";
     pub const STEP_OUTPUT: &str = "/workflows/:wid/steps/:sid/outputs/:pid";
 
-    // Document Definitions
-    pub const STEP_DOCUMENT_DEFS: &str = "/workflows/:wid/steps/:sid/document-defs";
-    pub const STEP_DOCUMENT_DEF: &str = "/workflows/:wid/steps/:sid/document-defs/:did";
-
     // Agent Roster
     pub const STEP_AGENT_ROSTER: &str = "/workflows/:wid/steps/:sid/agent-roster";
     pub const STEP_ROSTER_AGENT: &str = "/workflows/:wid/steps/:sid/agent-roster/:rid";
@@ -379,8 +375,6 @@ pub mod routes {
     pub const PROTOCOL_PREVIEW: &str = "/protocols/:id/preview";
     pub const PROTOCOL_APPLY: &str = "/protocols/:id/apply/:step_id";
     pub const PROTOCOL_UNAPPLY: &str = "/protocols/:protocol_id/unapply/:step_id";
-    pub const PROTOCOL_DOCUMENT_DEFS: &str = "/protocols/:id/document-defs";
-    pub const PROTOCOL_DOCUMENT_DEF: &str = "/protocols/:pid/document-defs/:did";
     pub const PROTOCOL_EXECUTIONS: &str = "/protocols/:id/executions";
 
     // WebSocket

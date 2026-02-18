@@ -4,11 +4,6 @@ import { store } from './_store'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-const mockFetchDocumentDefs = vi.hoisted(() => vi.fn())
-vi.mock('./documents', () => ({
-  fetchDocumentDefs: mockFetchDocumentDefs,
-}))
-
 const mockGetStep = vi.hoisted(() => vi.fn())
 vi.mock('@/api', () => ({
   api: {
@@ -92,79 +87,6 @@ describe('workflowStore/wsHandler', () => {
         content: 'should not appear',
       }))
       expect(store.getState().notesByStep).toEqual({})
-    })
-  })
-
-  describe('document_content_updated', () => {
-    it('updates documentContentByDefId for active workflow', () => {
-      store.setState({ activeWorkflowId: 'wf-1', documentContentByDefId: {} })
-      handleWsEvent(makeMsg('document_content_updated', {
-        workflow_id: 'wf-1',
-        step_id: 'step-1',
-        document_def_id: 'def-1',
-        document_name: 'README',
-        content: '# Generated README\nHello world',
-      }))
-      expect(store.getState().documentContentByDefId).toEqual({
-        'def-1': '# Generated README\nHello world',
-      })
-    })
-
-    it('merges with existing content', () => {
-      store.setState({
-        activeWorkflowId: 'wf-1',
-        documentContentByDefId: { 'def-2': 'existing content' },
-      })
-      handleWsEvent(makeMsg('document_content_updated', {
-        workflow_id: 'wf-1',
-        step_id: 'step-1',
-        document_def_id: 'def-1',
-        document_name: 'API Docs',
-        content: 'new content',
-      }))
-      const content = store.getState().documentContentByDefId
-      expect(content['def-1']).toBe('new content')
-      expect(content['def-2']).toBe('existing content')
-    })
-
-    it('replaces existing content for same def', () => {
-      store.setState({
-        activeWorkflowId: 'wf-1',
-        documentContentByDefId: { 'def-1': 'old' },
-      })
-      handleWsEvent(makeMsg('document_content_updated', {
-        workflow_id: 'wf-1',
-        step_id: 'step-1',
-        document_def_id: 'def-1',
-        document_name: 'README',
-        content: 'updated',
-      }))
-      expect(store.getState().documentContentByDefId['def-1']).toBe('updated')
-    })
-
-    it('refetches document defs to pick up document_id link', () => {
-      store.setState({ activeWorkflowId: 'wf-1', documentContentByDefId: {} })
-      handleWsEvent(makeMsg('document_content_updated', {
-        workflow_id: 'wf-1',
-        step_id: 'step-1',
-        document_def_id: 'def-1',
-        document_name: 'README',
-        content: 'content',
-      }))
-      expect(mockFetchDocumentDefs).toHaveBeenCalledWith('step-1')
-    })
-
-    it('ignores events for a different workflow', () => {
-      store.setState({ activeWorkflowId: 'wf-1', documentContentByDefId: {} })
-      handleWsEvent(makeMsg('document_content_updated', {
-        workflow_id: 'wf-other',
-        step_id: 'step-1',
-        document_def_id: 'def-1',
-        document_name: 'README',
-        content: 'should not appear',
-      }))
-      expect(store.getState().documentContentByDefId).toEqual({})
-      expect(mockFetchDocumentDefs).not.toHaveBeenCalled()
     })
   })
 

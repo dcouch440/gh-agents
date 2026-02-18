@@ -1,12 +1,11 @@
 import { toArray, nmGet } from '../lib'
 import type { WorkflowState } from './types'
-import type { Workflow, WorkflowStep, WorkflowStepEdge, DocumentDef, RosterAgent, RoomStepMember } from '@/types/workflow'
+import type { Workflow, WorkflowStep, WorkflowStepEdge, RosterAgent, RoomStepMember } from '@/types/workflow'
 import type { Document } from '@/types/document'
 import type { ConsistencyIssue } from '@/types/ws'
 import { STALE_THRESHOLD_MS } from './_store'
 
 const EMPTY_DOCS: Document[] = []
-const EMPTY_DEFS: DocumentDef[] = []
 const EMPTY_ROSTER: RosterAgent[] = []
 const EMPTY_ROOM_MEMBERS: RoomStepMember[] = []
 const EMPTY_ISSUES: ConsistencyIssue[] = []
@@ -39,14 +38,6 @@ const selectStepDocuments =
   (s: WorkflowState): Document[] =>
     s.documentsByStep[stepId] ?? EMPTY_DOCS
 
-const selectStepDocumentDefs =
-  (stepId: string) =>
-  (s: WorkflowState): DocumentDef[] =>
-    s.documentDefsByStep[stepId] ?? EMPTY_DEFS
-
-const selectDocumentDefsByStep = (s: WorkflowState): Record<string, DocumentDef[]> =>
-  s.documentDefsByStep
-
 const selectStepRoster =
   (stepId: string) =>
   (s: WorkflowState): RosterAgent[] =>
@@ -66,9 +57,6 @@ const selectRoomMembersByStep = (s: WorkflowState): Record<string, RoomStepMembe
 const selectNotesByStep = (s: WorkflowState): Record<string, string> =>
   s.notesByStep
 
-const selectDocumentContentByDefId = (s: WorkflowState): Record<string, string> =>
-  s.documentContentByDefId
-
 const selectLoading = (s: WorkflowState): boolean => s.loading
 
 const selectError = (s: WorkflowState): string | null => s.error
@@ -84,16 +72,6 @@ const selectStepIssues =
   (stepId: string) =>
   (s: WorkflowState): ConsistencyIssue[] =>
     s.issuesByStep[stepId] ?? EMPTY_ISSUES
-
-const selectDocumentDefById =
-  (id: string) =>
-  (s: WorkflowState): DocumentDef | null => {
-    for (const defs of Object.values(s.documentDefsByStep)) {
-      const found = defs.find((d) => d.id === id)
-      if (found) return found
-    }
-    return null
-  }
 
 const selectRosterAgentById =
   (id: string) =>
@@ -126,21 +104,17 @@ export {
   selectStepById,
   selectEdgeById,
   selectStepDocuments,
-  selectStepDocumentDefs,
-  selectDocumentDefsByStep,
   selectStepRoster,
   selectRosterByStep,
   selectRoomStepMembers,
   selectRoomMembersByStep,
   selectNotesByStep,
-  selectDocumentContentByDefId,
   selectLoading,
   selectError,
   selectDirty,
   selectDirtyStepIds,
   selectIssuesByStep,
   selectStepIssues,
-  selectDocumentDefById,
   selectRosterAgentById,
   selectRoomMemberById,
   selectIsStale,

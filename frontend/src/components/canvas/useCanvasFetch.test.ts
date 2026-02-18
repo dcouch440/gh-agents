@@ -6,8 +6,6 @@ import type { WorkflowStep } from '@/types/workflow'
 
 const mocks = vi.hoisted(() => ({
   fetchTools: vi.fn<(id: string) => void>(),
-  fetchDocumentDefs: vi.fn<(id: string) => Promise<void>>().mockResolvedValue(undefined),
-  fetchDocumentContent: vi.fn<(id: string) => void>(),
   fetchRoster: vi.fn<(id: string) => void>(),
   fetchRoomStepMembers: vi.fn<(id: string) => void>(),
   fetchAllProtocols: vi.fn<() => void>(),
@@ -17,8 +15,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/stores', () => ({
   agentStore: { fetchTools: mocks.fetchTools },
   workflowStore: {
-    fetchDocumentDefs: mocks.fetchDocumentDefs,
-    fetchDocumentContent: mocks.fetchDocumentContent,
     fetchRoster: mocks.fetchRoster,
     fetchRoomStepMembers: mocks.fetchRoomStepMembers,
   },
@@ -86,25 +82,6 @@ describe('useCanvasFetch', () => {
     expect(mocks.fetchTools).toHaveBeenCalledTimes(2)
   })
 
-  it('fetches document defs for workforce steps once', () => {
-    const steps = [makeStep('s1', 'workforce')]
-    renderHook(() => useCanvasFetch([], steps))
-
-    expect(mocks.fetchDocumentDefs).toHaveBeenCalledTimes(1)
-    expect(mocks.fetchDocumentDefs).toHaveBeenCalledWith('s1')
-  })
-
-  it('chains fetchDocumentContent after fetchDocumentDefs for workforce steps', async () => {
-    const steps = [makeStep('s1', 'workforce')]
-    renderHook(() => useCanvasFetch([], steps))
-
-    // Wait for the .then() chain to resolve
-    await vi.waitFor(() => {
-      expect(mocks.fetchDocumentContent).toHaveBeenCalledTimes(1)
-      expect(mocks.fetchDocumentContent).toHaveBeenCalledWith('s1')
-    })
-  })
-
   it('fetches roster for workforce steps once', () => {
     const steps = [makeStep('s1', 'workforce')]
     renderHook(() => useCanvasFetch([], steps))
@@ -125,7 +102,6 @@ describe('useCanvasFetch', () => {
     const steps = [makeStep('s1', 'single')]
     renderHook(() => useCanvasFetch([], steps))
 
-    expect(mocks.fetchDocumentDefs).not.toHaveBeenCalled()
     expect(mocks.fetchRoster).not.toHaveBeenCalled()
     expect(mocks.fetchRoomStepMembers).not.toHaveBeenCalled()
   })

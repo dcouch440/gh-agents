@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Collections } from '@/utils/collections'
 import { computeProtocolGroups } from './mappers'
 import type { StepNodeLookups, ProtocolStepInfo, ProtocolGroupEntry } from './mappers'
-import type { WorkflowStep, WorkflowStepEdge, DocumentDef, RosterAgent, Agent, OutputSchema, Tool } from '@/types'
+import type { WorkflowStep, WorkflowStepEdge, RosterAgent, Agent, OutputSchema, Tool } from '@/types'
 import type { StepProtocolLink } from '@/stores'
 
 type CanvasLookupsResult = {
@@ -18,10 +18,8 @@ const useCanvasLookups = (
   schemas: OutputSchema[],
   toolsByAgent: Record<string, Tool[]>,
   stepProtocols: Readonly<Record<string, StepProtocolLink>>,
-  documentDefsByStep: Record<string, DocumentDef[]>,
   rosterByStep: Record<string, RosterAgent[]>,
   notesByStep: Record<string, string>,
-  documentContentByDefId: Record<string, string>,
 ): CanvasLookupsResult => {
   const agentLookup = useMemo(
     () =>
@@ -93,13 +91,11 @@ const useCanvasLookups = (
       edges,
       toolsByAgent: toolsByAgentLookup,
       protocolsByStep: protocolsByStepLookup,
-      documentDefsByStep,
       rosterByStep,
       notesByStep,
-      documentContentByDefId,
       protocolGroups,
     }),
-    [agentLookup, schemaLookup, stepNameLookup, edges, toolsByAgentLookup, protocolsByStepLookup, documentDefsByStep, rosterByStep, notesByStep, documentContentByDefId, protocolGroups],
+    [agentLookup, schemaLookup, stepNameLookup, edges, toolsByAgentLookup, protocolsByStepLookup, rosterByStep, notesByStep, protocolGroups],
   )
 
   return { lookups, protocolGroups, protocolsByStepLookup }
