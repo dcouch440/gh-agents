@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::config::protocols::roles;
+use crate::config::protocols::{roles, AgentConfig, DISPATCH};
 use crate::llm::{Message, Tool};
 use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::template_resolve::resolve_template;
@@ -36,6 +36,11 @@ pub struct DispatchStrategy {
 }
 
 impl DispatchStrategy {
+    /// Protocol config for the dispatcher agent role.
+    fn config(&self) -> &AgentConfig {
+        DISPATCH.agent("dispatcher")
+    }
+
     /// Broadcast a workflow event after a tool mutation.
     ///
     /// Reuses the same broadcast logic as ChatStrategy so the frontend
@@ -101,15 +106,15 @@ impl ExecutionStrategy for DispatchStrategy {
     }
 
     fn model_id(&self) -> &str {
-        crate::constants::DEFAULT_MODEL
+        &self.config().model_id
     }
 
     fn max_rounds(&self) -> u32 {
-        15
+        self.config().max_rounds
     }
 
     fn context_budget(&self) -> usize {
-        200_000
+        self.config().context_budget
     }
 
     fn streaming(&self) -> bool {
@@ -117,7 +122,7 @@ impl ExecutionStrategy for DispatchStrategy {
     }
 
     fn temperature(&self) -> f32 {
-        0.3
+        self.config().temperature
     }
 
     fn state(&self) -> Option<&AppState> {

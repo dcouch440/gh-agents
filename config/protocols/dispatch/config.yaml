@@ -1,0 +1,7 @@
+agents:
+  dispatcher:
+    model_id: claude-sonnet-4-20250514
+    max_tokens: 8192
+    temperature: 0.3
+    max_rounds: 15
+    context_budget: 200000

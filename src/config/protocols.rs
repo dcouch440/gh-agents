@@ -207,6 +207,11 @@ pub static AGENT_DESIGNER: Lazy<ProtocolConfig> = Lazy::new(|| {
     .expect("Failed to parse config/protocols/agent_designer/config.yaml")
 });
 
+pub static DISPATCH: Lazy<ProtocolConfig> = Lazy::new(|| {
+    serde_yaml::from_str(include_str!("../../config/protocols/dispatch/config.yaml"))
+        .expect("Failed to parse config/protocols/dispatch/config.yaml")
+});
+
 // ---------------------------------------------------------------------------
 // Role statics — compile-time embedded content
 // ---------------------------------------------------------------------------
@@ -435,6 +440,17 @@ mod tests {
         assert_eq!(designer.max_tokens, 16384);
         assert_eq!(designer.max_rounds, 1);
         assert_eq!(designer.context_budget, 480_000);
+    }
+
+    #[test]
+    fn dispatch_config_parses() {
+        let cfg = &*DISPATCH;
+        let dispatcher = cfg.agent("dispatcher");
+        assert_eq!(dispatcher.model_id, "claude-sonnet-4-20250514");
+        assert_eq!(dispatcher.temperature, 0.3);
+        assert_eq!(dispatcher.max_tokens, 8192);
+        assert_eq!(dispatcher.max_rounds, 15);
+        assert_eq!(dispatcher.context_budget, 200_000);
     }
 
     #[test]
