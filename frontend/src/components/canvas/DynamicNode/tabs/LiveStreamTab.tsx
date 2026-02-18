@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import { useStore, shallow, stepStreamStore, workflowExecutionStore } from '@/stores'
@@ -6,6 +7,37 @@ import { StreamView, ToolActivityFeed, ExecutionStatusBadge, ExecutionProgress, 
 
 type LiveStreamTabProps = {
   stepId: string
+}
+
+type PersistedAgentSection = {
+  name: string
+  content: string
+}
+
+/**
+ * Parse persisted output JSON into per-agent sections for display.
+ * Workforce outputs have shape: { agents: { name: text, ... }, deliverables?: [...] }
+ * Falls back to pretty-printed JSON for non-workforce outputs.
+ */
+const parsePersistedOutput = (raw: string): PersistedAgentSection[] | null => {
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (parsed === null || typeof parsed !== 'object') return null
+
+    const obj = parsed as Record<string, unknown>
+    if (typeof obj.agents !== 'object' || obj.agents === null) return null
+
+    const agents = obj.agents as Record<string, unknown>
+    const sections: PersistedAgentSection[] = []
+    for (const [name, content] of Object.entries(agents)) {
+      if (typeof content === 'string') {
+        sections.push({ name, content })
+      }
+    }
+    return sections.length > 0 ? sections : null
+  } catch {
+    return null
+  }
 }
 
 function LiveStreamTab({ stepId }: LiveStreamTabProps) {
@@ -18,6 +50,7 @@ function LiveStreamTab({ stepId }: LiveStreamTabProps) {
   const hasSources = sources.length > 0
   const isDesignerActive = designerStatus === 'running' || designerStatus === 'completed' || designerStatus === 'failed'
 
+  // No live data and step hasn't executed yet
   if (!hasSources && !isDesignerActive && execStatus === 'idle') {
     return (
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', p: 2 }}>
@@ -26,6 +59,12 @@ function LiveStreamTab({ stepId }: LiveStreamTabProps) {
         </Typography>
       </Box>
     )
+  }
+
+  // Step completed but no live streams (e.g. page refresh) — show persisted output
+  const persistedOutput = stepExec?.output ?? null
+  if (!hasSources && !isDesignerActive && persistedOutput !== null) {
+    return <PersistedOutputView output={persistedOutput} execStatus={execStatus} />
   }
 
   return (
@@ -56,6 +95,59 @@ function LiveStreamTab({ stepId }: LiveStreamTabProps) {
         {sources.map((source) => (
           <SourceCard key={source.sourceId} source={source} />
         ))}
+      </Box>
+    </Box>
+  )
+}
+
+function PersistedOutputView({ output, execStatus }: { output: string; execStatus: ReturnType<typeof toExecutionStatus> }) {
+  const agentSections = useMemo(() => parsePersistedOutput(output), [output])
+
+  // Workforce output — render each agent as a card
+  if (agentSections !== null) {
+    return (
+      <Box className="nowheel nodrag nopan" sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', p: 1 }}>
+          {agentSections.map((section) => (
+            <Box
+              key={section.name}
+              sx={{ mb: 1, border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}
+            >
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  px: 1.5,
+                  py: 0.5,
+                  backgroundColor: 'action.hover',
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                }}
+              >
+                <Typography variant="caption" sx={{ fontWeight: 600, flex: 1, textTransform: 'capitalize' }}>
+                  {section.name}
+                </Typography>
+                <ExecutionStatusBadge status="completed" />
+              </Box>
+              <Box sx={{ px: 1, py: 0.5, maxHeight: 200 }}>
+                <StreamView content={section.content} status="completed" />
+              </Box>
+            </Box>
+          ))}
+        </Box>
+      </Box>
+    )
+  }
+
+  // Generic output — show as formatted text
+  return (
+    <Box className="nowheel nodrag nopan" sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <Box sx={{ px: 1.5, py: 0.75, borderBottom: 1, borderColor: 'divider', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
+        <ExecutionStatusBadge status={execStatus} />
+      </Box>
+      <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+        <StreamView content={output} status="completed" />
       </Box>
     </Box>
   )

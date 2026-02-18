@@ -6,6 +6,7 @@ use axum::{
 };
 use std::collections::HashMap;
 use std::sync::Arc;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::db::pg_repo::PgRepo;
@@ -140,8 +141,18 @@ pub async fn execute_workshop_step(
 
     let run_id = workshop.id;
 
-    // Concurrency guard: must be "workshop" (not running another step)
-    if workshop.status != "workshop" {
+    // Concurrency guard: must be "workshop" (not running another step).
+    // Auto-recover stale "workshop_running" — the spawned task always resets
+    // status on completion, so a stuck status means the server crashed.
+    if workshop.status == "workshop_running" {
+        warn!(
+            run_id = %run_id,
+            "Workshop stuck in 'workshop_running' — auto-recovering stale lock"
+        );
+        let _ = collection_repo
+            .update_workflow_execution_status(run_id, "workshop", None, None)
+            .await;
+    } else if workshop.status != "workshop" {
         return Err(AppError::Conflict(format!(
             "Workshop is '{}', not ready for step execution",
             workshop.status
@@ -162,7 +173,7 @@ pub async fn execute_workshop_step(
     let port_meta = prefetch_port_metadata(&state, &steps).await;
 
     // Reconstruct DagState from snapshots
-    let mut dag_state = reconstruct_dag_state_from_snapshots(
+    let dag_state = reconstruct_dag_state_from_snapshots(
         &*state.repos().content_versions,
         &steps,
         &port_meta,
@@ -227,73 +238,112 @@ pub async fn execute_workshop_step(
         parent_context: None,
     };
 
-    // Broadcast step started
+    // Extract data needed for broadcast before moving into spawn
+    let step_clone = step.clone();
+    let step_name = step
+        .output_variable_name
+        .clone()
+        .unwrap_or_else(|| path.step_id.to_string());
+    let step_agent_id = step.agent_id;
+    let workflow_id = path.id;
+    let step_id = path.step_id;
+
+    // Broadcast step started (before spawn so it's immediate)
     broadcast_workflow_event(
         &state,
         &ctx,
-        path.id,
+        workflow_id,
         WorkflowEventKind::StepStarted {
-            step_id: path.step_id,
-            step_name: step
-                .output_variable_name
-                .clone()
-                .unwrap_or_else(|| path.step_id.to_string()),
-            agent_id: step.agent_id,
+            step_id,
+            step_name: step_name.clone(),
+            agent_id: step_agent_id,
             execution_id: Some(run_id),
         },
     );
 
-    // Execute the step
-    let result = execute_staged_step(
-        &state,
-        &ctx,
-        step,
-        &steps,
-        &edges,
-        &mut dag_state,
-        &port_meta,
-    )
-    .await;
+    // Spawn execution in a background task so it survives client disconnect.
+    // Long-running steps (workforce, for_each) can take minutes; if the user
+    // navigates away, the spawned task still runs to completion and snapshots
+    // the result for later hydration.
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let bg_state = state.clone();
+    let bg_ctx = ctx.clone();
 
-    // Reset status back to workshop
-    let _ = collection_repo
-        .update_workflow_execution_status(run_id, "workshop", None, None)
+    tokio::spawn(async move {
+        let mut dag_state = dag_state;
+
+        let result = execute_staged_step(
+            &bg_state,
+            &bg_ctx,
+            &step_clone,
+            &steps,
+            &edges,
+            &mut dag_state,
+            &port_meta,
+        )
         .await;
 
-    let step_result = result.map_err(|e| AppError::Internal(e.to_string()))?;
+        // Always reset status back to workshop
+        let _ = collection_repo
+            .update_workflow_execution_status(run_id, "workshop", None, None)
+            .await;
 
-    // Compute next executable steps
-    let next = compute_next_executable_steps(&steps, &edges, &dag_state);
+        match result {
+            Ok(step_result) => {
+                let next = compute_next_executable_steps(&steps, &edges, &dag_state);
 
-    // Broadcast step completed
-    broadcast_workflow_event(
-        &state,
-        &ctx,
-        path.id,
-        WorkflowEventKind::StepCompleted {
-            step_id: path.step_id,
-            step_name: step
-                .output_variable_name
-                .clone()
-                .unwrap_or_else(|| path.step_id.to_string()),
-            agent_id: step.agent_id,
-            output: step_result.output.as_ref().map(|v| v.to_string()),
-            input_tokens: Some(step_result.tokens_in as u64),
-            output_tokens: Some(step_result.tokens_out as u64),
-            duration_ms: Some(step_result.duration_ms),
-        },
-    );
+                broadcast_workflow_event(
+                    &bg_state,
+                    &bg_ctx,
+                    workflow_id,
+                    WorkflowEventKind::StepCompleted {
+                        step_id,
+                        step_name: step_name.clone(),
+                        agent_id: step_agent_id,
+                        output: step_result.output.as_ref().map(|v| v.to_string()),
+                        input_tokens: Some(step_result.tokens_in as u64),
+                        output_tokens: Some(step_result.tokens_out as u64),
+                        duration_ms: Some(step_result.duration_ms),
+                    },
+                );
 
-    Ok(Json(WorkshopStepResponse {
-        step_id: step_result.step_id,
-        status: step_result.status,
-        output: step_result.output,
-        tokens_in: step_result.tokens_in,
-        tokens_out: step_result.tokens_out,
-        cost_usd: step_result.cost_usd,
-        duration_ms: step_result.duration_ms,
-        next_executable_steps: next,
-    }))
+                let _ = tx.send(Ok(WorkshopStepResponse {
+                    step_id: step_result.step_id,
+                    status: step_result.status,
+                    output: step_result.output,
+                    tokens_in: step_result.tokens_in,
+                    tokens_out: step_result.tokens_out,
+                    cost_usd: step_result.cost_usd,
+                    duration_ms: step_result.duration_ms,
+                    next_executable_steps: next,
+                }));
+            }
+            Err(e) => {
+                broadcast_workflow_event(
+                    &bg_state,
+                    &bg_ctx,
+                    workflow_id,
+                    WorkflowEventKind::StepFailed {
+                        step_id,
+                        step_name: step_name.clone(),
+                        error: e.to_string(),
+                    },
+                );
+
+                let _ = tx.send(Err(e.to_string()));
+            }
+        }
+    });
+
+    // Await result — if client disconnects, the spawned task still runs to
+    // completion and saves the snapshot for later hydration.
+    match rx.await {
+        Ok(Ok(response)) => Ok(Json(response)),
+        Ok(Err(e)) => Err(AppError::Internal(e)),
+        Err(_) => Err(AppError::Internal(
+            "workshop execution task dropped unexpectedly".into(),
+        )),
+    }
 }
 
 /// GET /api/workflows/:id/workshop - Get workshop status + completed steps.
@@ -339,6 +389,17 @@ pub async fn get_workshop(
 
     let run_id = workshop.id;
 
+    // Auto-recover stale workshop_running on page load
+    if workshop.status == "workshop_running" {
+        warn!(
+            run_id = %run_id,
+            "Workshop stuck in 'workshop_running' on GET — auto-recovering"
+        );
+        let _ = collection_repo
+            .update_workflow_execution_status(run_id, "workshop", None, None)
+            .await;
+    }
+
     // Load steps + edges
     let steps = workflow_repo.list_steps(id).await?;
     let edges = workflow_repo.list_edges(id).await?;
@@ -355,13 +416,14 @@ pub async fn get_workshop(
     .await
     .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    // Build completed steps list
+    // Build completed steps list (include output from snapshots)
     let completed_steps: Vec<WorkshopStepSummary> = dag_state
         .completed
-        .keys()
-        .map(|step_id| WorkshopStepSummary {
+        .iter()
+        .map(|(step_id, step_output)| WorkshopStepSummary {
             step_id: *step_id,
             status: "completed".to_string(),
+            output: step_output.structured_output.clone(),
         })
         .collect();
 
@@ -371,7 +433,7 @@ pub async fn get_workshop(
     Ok(Json(WorkshopStatusResponse {
         run_id,
         workflow_id: id,
-        status: workshop.status,
+        status: "workshop".to_string(),
         completed_steps,
         next_executable_steps: next,
     }))

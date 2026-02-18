@@ -22,7 +22,7 @@ const mapChildStatus = (status: string): ChildStepState['status'] => {
 }
 
 const buildSubWorkflowProgress = (step: RunStepResult): SubWorkflowProgress | null => {
-  if (step.child_execution_id === null || step.child_steps === null || step.child_steps.length === 0) return null
+  if (step.child_execution_id === null || !step.child_steps || step.child_steps.length === 0) return null
 
   const terminalCount = step.child_steps.filter(
     (cs) => cs.status === 'completed' || cs.status === 'failed',
@@ -134,7 +134,7 @@ const mapWorkshopStepToStepState = (step: WorkshopStepSummary, runId: string): S
   stepName: null,
   agentId: null,
   executionId: runId,
-  output: null,
+  output: step.output !== null ? JSON.stringify(step.output) : null,
   error: null,
   inputTokens: null,
   outputTokens: null,
@@ -169,7 +169,7 @@ const hydrateWorkshop = async (workflowId: string): Promise<void> => {
       viewMode: 'live',
     })
   } catch {
-    // Workshop may not exist yet — swallow the error
+    // Workshop may not exist yet — no-op
   }
 }
 

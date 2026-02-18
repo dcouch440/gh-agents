@@ -250,7 +250,18 @@ pub(in crate::server::hub::dag) async fn execute_for_each_chain(
             stage_output_tokens,
             stage_cost,
         );
+        let envelope_json = serde_json::to_string(&envelope).unwrap_or_default();
         dag_state.record_step_output(*step_id, output, envelope);
+        let _ = crate::server::hub::dag::versioning::snapshot_content(
+            &*dag.state.repos().content_versions,
+            dag.ctx.run_id,
+            *step_id,
+            *step_id,
+            crate::server::hub::dag::versioning::content_types::ENVELOPE,
+            "output",
+            &envelope_json,
+        )
+        .await;
 
         // Only accumulate totals once (at the end)
         if stage_idx == chain.step_ids.len() - 1 {
