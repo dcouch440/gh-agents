@@ -1,6 +1,6 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import { useStore, stepStreamStore, workflowExecutionStore } from '@/stores'
+import { useStore, shallow, stepStreamStore, workflowExecutionStore } from '@/stores'
 import type { SourceStreamState } from '@/stores'
 import { StreamView, ToolActivityFeed, ExecutionStatusBadge, ExecutionProgress, toExecutionStatus } from '../../execution'
 
@@ -9,7 +9,7 @@ type LiveStreamTabProps = {
 }
 
 function LiveStreamTab({ stepId }: LiveStreamTabProps) {
-  const sources = useStore(stepStreamStore.store, stepStreamStore.selectSourcesForStep(stepId))
+  const sources = useStore(stepStreamStore.store, stepStreamStore.selectSourcesForStep(stepId), shallow)
   const designerStatus = useStore(stepStreamStore.store, stepStreamStore.selectDesignerStatus)
   const stepExec = useStore(workflowExecutionStore.store, workflowExecutionStore.selectStepState(stepId))
   const execStatus = toExecutionStatus(stepExec?.status)
