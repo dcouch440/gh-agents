@@ -157,18 +157,6 @@ impl Iterator for ExponentialBackoff {
     }
 }
 
-/// Parse Retry-After header value
-pub fn parse_retry_after(header_value: &str) -> Option<Duration> {
-    // Try parsing as seconds first
-    if let Ok(seconds) = header_value.parse::<u64>() {
-        return Some(Duration::from_secs(seconds));
-    }
-
-    // Try parsing as HTTP date (simplified - just use a default)
-    // Full HTTP date parsing would require the `httpdate` crate
-    None
-}
-
 /// Policy for which errors should be retried
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RetryPolicy {

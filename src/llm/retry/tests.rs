@@ -56,12 +56,6 @@ mod tests {
         assert!(backoff.next().is_some());
     }
 
-    #[test]
-    fn test_parse_retry_after() {
-        assert_eq!(parse_retry_after("30"), Some(Duration::from_secs(30)));
-        assert_eq!(parse_retry_after("invalid"), None);
-    }
-
     #[tokio::test]
     async fn test_success_no_retry() {
         use std::sync::atomic::{AtomicU32, Ordering};
@@ -331,21 +325,6 @@ mod tests {
         // After multiplier: 100s, capped to 15s
         assert_eq!(delays[1], Duration::from_secs(15));
         assert_eq!(delays[2], Duration::from_secs(15));
-    }
-
-    #[test]
-    fn test_parse_retry_after_zero() {
-        assert_eq!(parse_retry_after("0"), Some(Duration::from_secs(0)));
-    }
-
-    #[test]
-    fn test_parse_retry_after_large() {
-        assert_eq!(parse_retry_after("3600"), Some(Duration::from_secs(3600)));
-    }
-
-    #[test]
-    fn test_parse_retry_after_http_date_returns_none() {
-        assert_eq!(parse_retry_after("Wed, 21 Oct 2015 07:28:00 GMT"), None);
     }
 
     #[test]
