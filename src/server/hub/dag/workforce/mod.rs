@@ -605,18 +605,18 @@ fn map_designer_results(
     result: &agent_designer::DesignerResult,
     roster: &[TaskAgentRosterRow],
 ) -> Result<Vec<DesignedAgentPrompt>, HubError> {
+    let roster_by_id: HashMap<String, &TaskAgentRosterRow> =
+        roster.iter().map(|r| (r.id.to_string(), r)).collect();
+
     let mut prompts = Vec::with_capacity(result.prompts.len());
 
     for entry in &result.prompts {
-        let roster_entry = roster
-            .iter()
-            .find(|r| r.id.to_string() == entry.agent_id)
-            .ok_or_else(|| {
-                HubError::Internal(anyhow!(
-                    "Designer referenced unknown agent_id: {}",
-                    entry.agent_id
-                ))
-            })?;
+        let roster_entry = roster_by_id.get(&entry.agent_id).ok_or_else(|| {
+            HubError::Internal(anyhow!(
+                "Designer referenced unknown agent_id: {}",
+                entry.agent_id
+            ))
+        })?;
 
         prompts.push(DesignedAgentPrompt {
             agent_roster_entry_id: roster_entry.id,
@@ -641,22 +641,24 @@ fn build_static_fallback_prompts(
 ) -> Vec<DesignedAgentPrompt> {
     let team_roster = build_team_roster_string(roster);
 
+    let mut base_vars = HashMap::with_capacity(6);
+    base_vars.insert(
+        vars::workforce::TASK_DESCRIPTION.into(),
+        brief.task_description.clone(),
+    );
+    base_vars.insert(vars::workforce::TEAM_ROSTER.into(), team_roster);
+    base_vars.insert(vars::workforce::PREVIOUS_OUTPUTS.into(), String::new());
+    base_vars.insert(vars::user::PROMPT.into(), base_prompt.to_string());
+
     roster
         .iter()
         .map(|entry| {
-            let mut v = std::collections::HashMap::new();
+            let mut v = base_vars.clone();
             v.insert(vars::workforce::AGENT_NAME.into(), entry.name.clone());
             v.insert(
                 vars::workforce::ROLE_DESCRIPTION.into(),
                 entry.role_description.clone(),
             );
-            v.insert(
-                vars::workforce::TASK_DESCRIPTION.into(),
-                brief.task_description.clone(),
-            );
-            v.insert(vars::workforce::TEAM_ROSTER.into(), team_roster.clone());
-            v.insert(vars::workforce::PREVIOUS_OUTPUTS.into(), String::new());
-            v.insert(vars::user::PROMPT.into(), base_prompt.to_string());
 
             let role_ctx = roles::WORKFORCE_AGENT.resolve(&v);
 
