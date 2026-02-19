@@ -1,19 +1,15 @@
 //! ExecutionStrategy implementations.
 
 pub mod agent_designer;
-pub mod belief_capture;
 pub mod chat;
 pub mod dag_step;
 pub mod dispatch;
-pub mod room_speaker;
 pub mod workforce_agent;
 
 pub use agent_designer::{AgentDesignerConfig, AgentDesignerStrategy};
-pub use belief_capture::{BeliefCaptureExtractorConfig, BeliefCaptureExtractorStrategy};
 pub use chat::{ChatConfig, ChatStrategy, StepChatContext};
 pub use dag_step::DagStepStrategy;
 pub use dispatch::DispatchStrategy;
-pub use room_speaker::{RoomSpeakerConfig, RoomSpeakerStrategy};
 pub use workforce_agent::{WorkforceAgentConfig, WorkforceAgentStrategy};
 
 use crate::llm::TokenUsage;

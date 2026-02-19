@@ -40,27 +40,8 @@ const WORKFORCE_CHAT_EXCLUDED: &[&str] = &["update_notes"];
 /// For workforce mode, additionally excludes `update_notes` (dispatch sub-agent
 /// owns note-taking for workforce nodes).
 pub(crate) fn resolve_chat_step_tools(execution_mode: &str) -> Vec<Tool> {
-    let archetype_specific: &[&str] = match execution_mode {
-        "belief_capture" => &[
-            "set_extraction_focus",
-            "set_tag_vocabulary",
-            "set_contradiction_handling",
-            "set_confidence_threshold",
-        ],
-        "room" => &[
-            "set_meeting_purpose",
-            "add_member",
-            "update_member",
-            "remove_member",
-            "set_max_turns",
-            "set_interaction_mode",
-        ],
-        "workforce" => &[],
-        _ => &[],
-    };
     UNIVERSAL_TOOLS
         .iter()
-        .chain(archetype_specific.iter())
         .filter(|name| {
             if execution_mode == "workforce" {
                 !WORKFORCE_CHAT_EXCLUDED.contains(name)
@@ -79,20 +60,6 @@ pub(crate) fn resolve_chat_step_tools(execution_mode: &str) -> Vec<Tool> {
 /// including mutations that the conversational assistant cannot call directly.
 pub(crate) fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
     let archetype_specific: &[&str] = match execution_mode {
-        "belief_capture" => &[
-            "set_extraction_focus",
-            "set_tag_vocabulary",
-            "set_contradiction_handling",
-            "set_confidence_threshold",
-        ],
-        "room" => &[
-            "set_meeting_purpose",
-            "add_member",
-            "update_member",
-            "remove_member",
-            "set_max_turns",
-            "set_interaction_mode",
-        ],
         "workforce" => &[
             "set_task",
             "add_agent",
@@ -165,54 +132,6 @@ pub(super) async fn dispatch_step_tool(
 
     // Archetype-specific dispatch
     match ctx.execution_mode.as_str() {
-        "belief_capture" => {
-            const BELIEF_CAPTURE_TOOLS: &[&str] = &[
-                "set_extraction_focus",
-                "set_tag_vocabulary",
-                "set_contradiction_handling",
-                "set_confidence_threshold",
-            ];
-            if BELIEF_CAPTURE_TOOLS.contains(&name) {
-                let tool_ctx = crate::server::tools::belief_capture::BeliefCaptureToolContext {
-                    workflow_id: ctx.workflow_id,
-                    step_id: ctx.step_id,
-                };
-                let result = crate::server::tools::belief_capture::execute_belief_capture_tool(
-                    name,
-                    input,
-                    state.repos().workflows.as_ref(),
-                    &tool_ctx,
-                )
-                .await;
-                return Some(result);
-            }
-            None
-        }
-        "room" => {
-            const ROOM_TOOLS: &[&str] = &[
-                "set_meeting_purpose",
-                "add_member",
-                "update_member",
-                "remove_member",
-                "set_max_turns",
-                "set_interaction_mode",
-            ];
-            if ROOM_TOOLS.contains(&name) {
-                let tool_ctx = crate::server::tools::room_config::RoomConfigToolContext {
-                    workflow_id: ctx.workflow_id,
-                    step_id: ctx.step_id,
-                };
-                let result = crate::server::tools::room_config::execute_room_config_tool(
-                    name,
-                    input,
-                    state.repos().workflows.as_ref(),
-                    &tool_ctx,
-                )
-                .await;
-                return Some(result);
-            }
-            None
-        }
         "workforce" => {
             const WORKFORCE_TOOLS: &[&str] = &[
                 "set_task",

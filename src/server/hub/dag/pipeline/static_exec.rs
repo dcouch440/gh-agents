@@ -207,8 +207,14 @@ pub(super) async fn execute_static_pipeline(
             .unwrap_or_default(),
     };
 
-    super::super::utils::record_and_snapshot_output(dag, dag_state, step.id, output, envelope.clone())
-        .await;
+    super::super::utils::record_and_snapshot_output(
+        dag,
+        dag_state,
+        step.id,
+        output,
+        envelope.clone(),
+    )
+    .await;
 
     // 13. Broadcast parent step completed or failed
     if envelope.status == ExecutionStatus::Success {

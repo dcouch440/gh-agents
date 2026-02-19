@@ -1,11 +1,10 @@
-//! DAG orchestration — topological sort, variable resolution, for-each fan-out,
+//! DAG orchestration — topological sort, variable resolution,
 //! port-based data flow, and workflow execution using the unified ExecutionEngine.
 //!
 //! Pure utility functions live in the `utils` submodule and are re-exported here.
 //! Execution functions use the hub's `ExecutionEngine` for step execution.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
 
 use serde_json::Value as JsonValue;
 use tokio_util::sync::CancellationToken;
@@ -115,14 +114,11 @@ pub(crate) fn build_parent_relay(
 // ── Submodules ──────────────────────────────────────────────────────────────
 
 pub(crate) mod agent_designer;
-pub(crate) mod belief_capture;
 pub(crate) mod container;
 pub(crate) mod dag_state;
 pub(crate) mod designer_input;
-pub(crate) mod for_each;
 pub(crate) mod pipeline;
 pub(crate) mod resume;
-pub(crate) mod room_step;
 pub(crate) mod single;
 pub(crate) mod staging;
 pub mod templates;
@@ -137,11 +133,10 @@ pub(crate) use dag_state::{
 
 pub use utils::{
     build_routing_instruction_block, check_step_readiness, collect_upstream_context_data,
-    compute_dead_path_steps, evaluate_edge_condition, extract_for_each_label, find_entry_steps,
-    get_child_steps, get_parent_steps, resolve_dot_path, resolve_for_each_array,
-    resolve_port_inputs, resolve_variables, topological_sort, ContainerExecutionConfig, DagPaused,
-    PortResolutionError, StepOutput, StepReadiness, WorkflowExecutionContext,
-    WorkflowExecutionResult,
+    compute_dead_path_steps, evaluate_edge_condition, find_entry_steps, get_child_steps,
+    get_parent_steps, resolve_dot_path, resolve_port_inputs, resolve_variables, topological_sort,
+    ContainerExecutionConfig, DagPaused, PortResolutionError, StepOutput, StepReadiness,
+    WorkflowExecutionContext, WorkflowExecutionResult,
 };
 pub(crate) use utils::{compose_prompt, PromptRepos};
 
@@ -149,11 +144,7 @@ pub(crate) use utils::{compose_prompt, PromptRepos};
 pub use resume::{resume_dag_from_approval, resume_workflow_via_engine, ResumeState};
 
 // Internal imports for the main orchestration loop
-use belief_capture::execute_belief_capture_step;
-
-use for_each::{detect_for_each_chains, execute_for_each_chain, execute_for_each_step};
 use pipeline::execute_pipeline_step;
-use room_step::execute_room_step;
 use single::execute_single_step;
 
 // ── Routing Context ─────────────────────────────────────────────────────────
@@ -361,21 +352,6 @@ async fn run_dag_loop(
         );
     }
 
-    // Phase 6B: Detect chained for-each pipelines
-    let chains = detect_for_each_chains(dag.steps, dag.edges);
-    let chain_member_set: HashSet<Uuid> = chains
-        .iter()
-        .flat_map(|c| c.step_ids.iter().copied())
-        .collect();
-    let chain_by_head: HashMap<Uuid, _> = chains.iter().map(|c| (c.step_ids[0], c)).collect();
-
-    if !chains.is_empty() {
-        info!(
-            chain_count = chains.len(),
-            "Detected chained for-each pipelines"
-        );
-    }
-
     for step_id in &sorted {
         // Skip steps already executed as part of a chain
         if dag_state.completed.contains_key(step_id) {
@@ -447,17 +423,6 @@ async fn run_dag_loop(
             StepReadiness::Ready => { /* proceed with execution */ }
         }
 
-        // Phase 6B: If this is the head of a for-each chain, execute the whole chain
-        if let Some(chain) = chain_by_head.get(step_id) {
-            execute_for_each_chain(dag, chain, &step_map, dag_state).await?;
-            continue;
-        }
-
-        // Skip non-head chain members (already executed by chain head)
-        if chain_member_set.contains(step_id) {
-            continue;
-        }
-
         // Context / input steps pass through their prompt_template as output — no LLM call
         if step.execution_mode == "context" || step.execution_mode == "input" {
             let step_start = std::time::Instant::now();
@@ -504,7 +469,6 @@ async fn run_dag_loop(
         // Dispatch based on execution mode
         let step_result = match step.execution_mode.as_str() {
             // Agentless modes — no agent_id needed
-            "belief_capture" => execute_belief_capture_step(dag, step, dag_state).await,
             "workforce" => execute_pipeline_step(dag, step, dag_state).await,
 
             // Agent-based modes — load agent + resolve provider
@@ -569,11 +533,7 @@ async fn run_dag_loop(
                     ..*dag
                 };
 
-                match step.execution_mode.as_str() {
-                    "room" => execute_room_step(&step_dag, step, dag_state).await,
-                    "for_each" => execute_for_each_step(&step_dag, step, &agent, dag_state).await,
-                    _ => execute_single_step(&step_dag, step, &agent, dag_state).await,
-                }
+                execute_single_step(&step_dag, step, &agent, dag_state).await
             }
         };
 

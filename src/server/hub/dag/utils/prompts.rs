@@ -8,7 +8,7 @@ use crate::db::traits::{AgentRepo, DocumentRepo, PromptTemplateRepo, WorkflowRep
 use crate::db::WorkflowStepRow;
 use crate::types::DownstreamRoutingContext;
 
-use super::variables::{resolve_for_each_prompt, resolve_variables};
+use super::variables::resolve_variables;
 
 /// Repository references needed for prompt composition.
 pub(crate) struct PromptRepos<'a> {
@@ -28,7 +28,6 @@ pub(crate) async fn compose_prompt(
     repos: &PromptRepos<'_>,
     outputs: &HashMap<String, JsonValue>,
     prior_outputs: &HashMap<String, JsonValue>,
-    for_each_element: Option<&JsonValue>,
     port_inputs: Option<&HashMap<String, JsonValue>>,
 ) -> String {
     // Get prompt text: prefer saved template, fall back to inline
@@ -93,16 +92,7 @@ pub(crate) async fn compose_prompt(
         outputs.clone()
     };
 
-    // For for_each steps, replace `$` with the current element in variable refs
-    let prompt = if let Some(element) = for_each_element {
-        // In for_each mode, `{var.content.$.name}` means current element's .name
-        // We resolve $ by injecting the element into a special "__for_each_element" key
-        let augmented_outputs = effective_outputs.clone();
-        // Replace $ references by pre-resolving them
-        resolve_for_each_prompt(&raw_prompt, element, &augmented_outputs, prior_outputs)
-    } else {
-        resolve_variables(&raw_prompt, &effective_outputs, prior_outputs)
-    };
+    let prompt = resolve_variables(&raw_prompt, &effective_outputs, prior_outputs);
 
     let mut full_prompt = format!("<task>\n{}\n</task>", prompt);
 

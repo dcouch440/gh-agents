@@ -38,10 +38,7 @@ pub use engine::{ExecutionEngine, ExecutionResult};
 pub use error::HubError;
 pub use prompt_registry::PromptRegistry;
 pub use recorder::ExecutionRecorder;
-pub use strategies::{
-    ChatConfig, ChatStrategy, DagStepStrategy, RoomSpeakerConfig, RoomSpeakerStrategy,
-    StepChatContext,
-};
+pub use strategies::{ChatConfig, ChatStrategy, DagStepStrategy, StepChatContext};
 pub use strategy::ExecutionStrategy;
 pub use streaming::{DagStreamSink, NullSink, StreamSink};
 
@@ -251,37 +248,6 @@ pub async fn build_step_system_prompt(
 
     // 2. Build archetype block + config snapshot based on execution mode
     let (archetype_block, config_snapshot) = match execution_mode {
-        "belief_capture" => {
-            let ctx = crate::server::tools::belief_capture::BeliefCaptureToolContext {
-                workflow_id,
-                step_id,
-            };
-            let snapshot = crate::server::tools::belief_capture::build_config_snapshot(
-                state.repos().workflows.as_ref(),
-                &ctx,
-            )
-            .await
-            .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
-
-            (
-                roles::NODE_ASSISTANT_BELIEF_CAPTURE_BLOCK.to_string(),
-                snapshot,
-            )
-        }
-        "room" => {
-            let ctx = crate::server::tools::room_config::RoomConfigToolContext {
-                workflow_id,
-                step_id,
-            };
-            let snapshot = crate::server::tools::room_config::build_config_snapshot(
-                state.repos().workflows.as_ref(),
-                &ctx,
-            )
-            .await
-            .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
-
-            (roles::NODE_ASSISTANT_ROOM_BLOCK.to_string(), snapshot)
-        }
         "workforce" => {
             let ctx = crate::server::tools::workforce::WorkforceToolContext {
                 workflow_id,
@@ -298,8 +264,9 @@ pub async fn build_step_system_prompt(
         }
         _ => {
             return Err(HubError::Internal(anyhow::anyhow!(
-                "Step {} has unsupported execution_mode '{}'. Expected: belief_capture, room, or workforce.",
-                step_id, execution_mode
+                "Step {} has unsupported execution_mode '{}'. Expected: workforce.",
+                step_id,
+                execution_mode
             )));
         }
     };

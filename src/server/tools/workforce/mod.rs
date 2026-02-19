@@ -784,7 +784,8 @@ async fn execute_remove_dependency(
 
     // Remove edge via pipeline service
     let pip_ctx = pipeline_ctx(ctx);
-    if let Err(e) = pipeline::remove_edge(repo, &pip_ctx, from_child_step_id, to_child_step_id).await
+    if let Err(e) =
+        pipeline::remove_edge(repo, &pip_ctx, from_child_step_id, to_child_step_id).await
     {
         return json!({ "error": format!("Failed to remove dependency: {}", e) });
     }

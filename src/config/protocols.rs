@@ -142,16 +142,6 @@ pub mod vars {
         pub const PREVIOUS_OUTPUTS: &str = "Workforce.previous_outputs";
     }
 
-    /// Variables for belief capture runtime extraction prompts.
-    pub mod belief_capture {
-        pub const EXTRACTION_FOCUS: &str = "BeliefCapture.extraction_focus";
-        pub const TAG_VOCABULARY: &str = "BeliefCapture.tag_vocabulary";
-        pub const CONTRADICTION_HANDLING: &str = "BeliefCapture.contradiction_handling";
-        pub const SOURCE_STEP_NAME: &str = "BeliefCapture.source_step_name";
-        pub const SOURCE_TYPE: &str = "BeliefCapture.source_type";
-        pub const SOURCE_CONTENT: &str = "BeliefCapture.source_content";
-    }
-
     /// Variables for chat belief extraction prompts.
     pub mod chat_belief {
         pub const NODE_NAME: &str = "ChatBelief.node_name";
@@ -200,24 +190,10 @@ fn load_protocol_config(yaml: &str, name: &str) -> ProtocolConfig {
     config
 }
 
-pub static MEETING: Lazy<ProtocolConfig> = Lazy::new(|| {
-    load_protocol_config(
-        include_str!("../../config/protocols/meeting/config.yaml"),
-        "config/protocols/meeting/config.yaml",
-    )
-});
-
 pub static NODE_ASSISTANT: Lazy<ProtocolConfig> = Lazy::new(|| {
     load_protocol_config(
         include_str!("../../config/protocols/node_assistant/config.yaml"),
         "config/protocols/node_assistant/config.yaml",
-    )
-});
-
-pub static BELIEF_CAPTURE: Lazy<ProtocolConfig> = Lazy::new(|| {
-    load_protocol_config(
-        include_str!("../../config/protocols/belief_capture/config.yaml"),
-        "config/protocols/belief_capture/config.yaml",
     )
 });
 
@@ -249,27 +225,11 @@ pub static DISPATCH: Lazy<ProtocolConfig> = Lazy::new(|| {
 pub mod roles {
     use super::RoleDefinition;
 
-    pub static MEETING_GATEKEEPER: RoleDefinition = RoleDefinition {
-        system: include_str!("../../config/protocols/meeting/gatekeeper/system.md"),
-        prompt: include_str!("../../config/protocols/meeting/gatekeeper/prompt.md"),
-        response: Some(include_str!(
-            "../../config/protocols/meeting/gatekeeper/response.json"
-        )),
-    };
-
     pub static NODE_ASSISTANT_BASE: RoleDefinition = RoleDefinition {
         system: include_str!("../../config/protocols/node_assistant/base/system.md"),
         prompt: include_str!("../../config/protocols/node_assistant/base/prompt.md"),
         response: None,
     };
-
-    /// Belief capture archetype block, injected via `{{.System.archetype_block}}`.
-    pub const NODE_ASSISTANT_BELIEF_CAPTURE_BLOCK: &str =
-        include_str!("../../config/protocols/node_assistant/belief_capture/block.md");
-
-    /// Room archetype block, injected via `{{.System.archetype_block}}`.
-    pub const NODE_ASSISTANT_ROOM_BLOCK: &str =
-        include_str!("../../config/protocols/node_assistant/room/block.md");
 
     /// Workforce archetype block, injected via `{{.System.archetype_block}}`.
     pub const NODE_ASSISTANT_WORKFORCE_BLOCK: &str =
@@ -283,14 +243,6 @@ pub mod roles {
         system: include_str!("../../config/protocols/workforce/agent/system.md"),
         prompt: include_str!("../../config/protocols/workforce/agent/prompt.md"),
         response: None,
-    };
-
-    pub static BELIEF_CAPTURE_EXTRACTOR: RoleDefinition = RoleDefinition {
-        system: include_str!("../../config/protocols/belief_capture/extractor/system.md"),
-        prompt: include_str!("../../config/protocols/belief_capture/extractor/prompt.md"),
-        response: Some(include_str!(
-            "../../config/protocols/belief_capture/extractor/response.json"
-        )),
     };
 
     /// Chat belief extractor: reads chat conversations and extracts user beliefs.
@@ -329,20 +281,9 @@ mod tests {
     // ── Config tests ─────────────────────────────────────────────────────
 
     #[test]
-    fn meeting_config_parses_gatekeeper() {
-        let cfg = &*MEETING;
-        let gk = cfg.agent("gatekeeper");
-        assert_eq!(gk.model_id, crate::constants::MODEL_TIER3);
-        assert_eq!(gk.temperature, 0.3);
-        assert_eq!(gk.max_tokens, 4096);
-        assert_eq!(gk.max_rounds, 1);
-        assert_eq!(gk.context_budget, 480_000);
-    }
-
-    #[test]
     #[should_panic(expected = "Unknown agent role")]
     fn unknown_role_panics() {
-        MEETING.agent("nonexistent");
+        NODE_ASSISTANT.agent("nonexistent");
     }
 
     // ── RoleDefinition / ProtocolContext tests ───────────────────────────
@@ -413,25 +354,15 @@ mod tests {
 
     #[test]
     fn all_role_statics_load() {
-        assert!(!roles::MEETING_GATEKEEPER.system.is_empty());
-        assert!(!roles::MEETING_GATEKEEPER.prompt.is_empty());
-        assert!(roles::MEETING_GATEKEEPER.response.is_some());
-
         assert!(!roles::NODE_ASSISTANT_BASE.system.is_empty());
         assert!(!roles::NODE_ASSISTANT_BASE.prompt.is_empty());
         assert!(roles::NODE_ASSISTANT_BASE.response.is_none());
 
-        assert!(!roles::NODE_ASSISTANT_BELIEF_CAPTURE_BLOCK.is_empty());
-        assert!(!roles::NODE_ASSISTANT_ROOM_BLOCK.is_empty());
         assert!(!roles::NODE_ASSISTANT_WORKFORCE_BLOCK.is_empty());
 
         assert!(!roles::WORKFORCE_AGENT.system.is_empty());
         assert!(!roles::WORKFORCE_AGENT.prompt.is_empty());
         assert!(roles::WORKFORCE_AGENT.response.is_none());
-
-        assert!(!roles::BELIEF_CAPTURE_EXTRACTOR.system.is_empty());
-        assert!(!roles::BELIEF_CAPTURE_EXTRACTOR.prompt.is_empty());
-        assert!(roles::BELIEF_CAPTURE_EXTRACTOR.response.is_some());
 
         assert!(!roles::CHAT_BELIEF_EXTRACTOR.system.is_empty());
         assert!(!roles::CHAT_BELIEF_EXTRACTOR.prompt.is_empty());
@@ -458,15 +389,6 @@ mod tests {
         assert_eq!(agent.temperature, 0.3);
         assert_eq!(agent.max_rounds, 15);
         assert_eq!(agent.context_budget, 480_000);
-    }
-
-    #[test]
-    fn belief_capture_config_parses() {
-        let cfg = &*BELIEF_CAPTURE;
-        let extractor = cfg.agent("extractor");
-        assert_eq!(extractor.temperature, 0.2);
-        assert_eq!(extractor.max_rounds, 1);
-        assert_eq!(extractor.context_budget, 200_000);
     }
 
     #[test]
@@ -519,15 +441,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn gatekeeper_response_json_parses_directly() {
-        let raw = roles::MEETING_GATEKEEPER.response.unwrap();
-        let schema: serde_json::Value =
-            serde_json::from_str(raw).expect("gatekeeper response.json should be valid JSON");
-        assert_eq!(schema["type"], "object");
-        assert!(schema["properties"]["speakers"].is_object());
-    }
-
     // ── Template variable validation ─────────────────────────────────────
 
     #[test]
@@ -555,12 +468,6 @@ mod tests {
             vars::workforce::TASK_DESCRIPTION,
             vars::workforce::TEAM_ROSTER,
             vars::workforce::PREVIOUS_OUTPUTS,
-            vars::belief_capture::EXTRACTION_FOCUS,
-            vars::belief_capture::TAG_VOCABULARY,
-            vars::belief_capture::CONTRADICTION_HANDLING,
-            vars::belief_capture::SOURCE_STEP_NAME,
-            vars::belief_capture::SOURCE_TYPE,
-            vars::belief_capture::SOURCE_CONTENT,
             vars::chat_belief::NODE_NAME,
             vars::chat_belief::NODE_ARCHETYPE,
             vars::chat_belief::CONVERSATION,
@@ -574,10 +481,8 @@ mod tests {
         ]);
 
         let all_roles: &[(&str, &RoleDefinition)] = &[
-            ("gatekeeper", &roles::MEETING_GATEKEEPER),
             ("node_assistant", &roles::NODE_ASSISTANT_BASE),
             ("workforce_agent", &roles::WORKFORCE_AGENT),
-            ("belief_capture_extractor", &roles::BELIEF_CAPTURE_EXTRACTOR),
             ("chat_belief_extractor", &roles::CHAT_BELIEF_EXTRACTOR),
             ("agent_designer", &roles::AGENT_DESIGNER_DESIGNER),
         ];

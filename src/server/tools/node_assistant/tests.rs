@@ -164,7 +164,7 @@ mod tests {
 
     #[tokio::test]
     async fn all_valid_archetypes_accepted() {
-        for archetype in &["belief_capture", "room", "workforce"] {
+        for archetype in &["workforce"] {
             let ctx = make_ctx();
             let step = make_step(ctx.step_id, ctx.workflow_id);
             let step_id = ctx.step_id;

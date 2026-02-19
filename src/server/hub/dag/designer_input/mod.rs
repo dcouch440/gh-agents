@@ -1,10 +1,9 @@
 //! Archetype-agnostic input types and shared utilities for the Agent Designer.
 //!
-//! Each archetype (task_force, documenter, room) provides a formatter function
+//! Each archetype (workforce) provides a formatter function
 //! that converts its domain-specific configuration into a generic `DesignerInput`.
 //! The Agent Designer consumes `DesignerInput` to generate optimized prompt pairs.
 
-pub mod room;
 mod tests;
 pub mod workforce;
 
@@ -22,7 +21,7 @@ use crate::types::StepExecutionEnvelope;
 /// Each archetype builds this from its own configuration.
 #[derive(Debug, Clone)]
 pub struct DesignerInput {
-    /// Which archetype is requesting design ("task_force", "documenter", "room").
+    /// Which archetype is requesting design ("workforce").
     pub archetype: String,
 
     /// High-level description of what this execution does.
@@ -58,7 +57,7 @@ pub struct DependencyEdge {
 /// One agent that needs a prompt pair designed.
 #[derive(Debug, Clone)]
 pub struct AgentDefinition {
-    /// Stable identifier — roster entry ID, document def ID, room member ID, etc.
+    /// Stable identifier — roster entry ID, etc.
     pub id: String,
     /// Human-readable name for the agent.
     pub name: String,
@@ -68,8 +67,7 @@ pub struct AgentDefinition {
     pub capabilities: Vec<String>,
     /// Execution order relative to other agents (0-indexed).
     pub execution_order: i32,
-    /// Extra context specific to this agent (e.g., strategist's research_strategy,
-    /// room member's perspective, belief subset).
+    /// Extra context specific to this agent.
     pub additional_context: String,
 }
 
@@ -78,7 +76,7 @@ pub struct AgentDefinition {
 pub struct UpstreamContext {
     /// Name of the upstream source.
     pub source_name: String,
-    /// Type of upstream (context, documenter, task_force, belief_capture, room).
+    /// Type of upstream (context, workforce, room).
     pub source_type: String,
     /// The actual content (may be truncated for context budget).
     pub content: String,
@@ -89,16 +87,6 @@ pub struct UpstreamContext {
 pub struct ToolDescription {
     pub name: String,
     pub description: String,
-}
-
-/// A room member for the designer input, decoupled from specific DB row types.
-/// At runtime, `id` is `agent_id.to_string()`. At design-time, it's the member row ID.
-#[derive(Debug, Clone)]
-pub struct RoomDesignerMember {
-    pub id: String,
-    pub name: String,
-    pub role: String,
-    pub perspective: String,
 }
 
 // ── Shared utilities ────────────────────────────────────────────────────────

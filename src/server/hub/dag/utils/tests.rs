@@ -4,9 +4,8 @@
 mod tests {
     use crate::db::{StepInputRow, StepOutputRow, WorkflowStepEdgeRow, WorkflowStepRow};
     use crate::server::hub::dag::utils::{
-        collect_upstream_context_data, extract_for_each_label, find_entry_steps, get_child_steps,
-        get_parent_steps, resolve_dot_path, resolve_for_each_array, resolve_port_inputs,
-        resolve_variables, topological_sort, DagPaused,
+        collect_upstream_context_data, find_entry_steps, get_child_steps, get_parent_steps,
+        resolve_dot_path, resolve_port_inputs, resolve_variables, topological_sort, DagPaused,
     };
     use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
     use std::collections::HashMap;
@@ -432,97 +431,6 @@ mod tests {
     fn resolve_no_variables() {
         let result = resolve_variables("No variables here", &HashMap::new(), &HashMap::new());
         assert_eq!(result, "No variables here");
-    }
-
-    // =========================================================================
-    // For-Each Resolution Tests
-    // =========================================================================
-
-    #[test]
-    fn resolve_for_each_simple_array() {
-        let mut outputs = HashMap::new();
-        outputs.insert("items".to_string(), serde_json::json!(["a", "b", "c"]));
-
-        let result = resolve_for_each_array("items", &outputs, &HashMap::new());
-        assert!(result.is_some());
-        let arr = result.unwrap();
-        assert_eq!(arr.len(), 3);
-        assert_eq!(arr[0], serde_json::json!("a"));
-    }
-
-    #[test]
-    fn resolve_for_each_nested_array() {
-        let mut outputs = HashMap::new();
-        outputs.insert("data".to_string(), serde_json::json!({"items": [1, 2, 3]}));
-
-        let result = resolve_for_each_array("data.items", &outputs, &HashMap::new());
-        assert!(result.is_some());
-        let arr = result.unwrap();
-        assert_eq!(arr.len(), 3);
-    }
-
-    #[test]
-    fn resolve_for_each_returns_none_for_non_array() {
-        let mut outputs = HashMap::new();
-        outputs.insert("value".to_string(), serde_json::json!("not an array"));
-
-        let result = resolve_for_each_array("value", &outputs, &HashMap::new());
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn resolve_for_each_returns_none_for_missing() {
-        let outputs = HashMap::new();
-
-        let result = resolve_for_each_array("missing", &outputs, &HashMap::new());
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn resolve_for_each_from_prior_outputs() {
-        let outputs = HashMap::new();
-        let mut prior = HashMap::new();
-        prior.insert("items".to_string(), serde_json::json!([1, 2]));
-
-        let result = resolve_for_each_array("items", &outputs, &prior);
-        assert!(result.is_some());
-        assert_eq!(result.unwrap().len(), 2);
-    }
-
-    // =========================================================================
-    // Extract For-Each Label Tests
-    // =========================================================================
-
-    #[test]
-    fn extract_label_from_object() {
-        let element = serde_json::json!({"name": "Task 1", "id": 123});
-
-        let label = extract_for_each_label(&element, Some("name"));
-        assert_eq!(label, Some("Task 1".to_string()));
-    }
-
-    #[test]
-    fn extract_label_missing_field() {
-        let element = serde_json::json!({"id": 123});
-
-        let label = extract_for_each_label(&element, Some("name"));
-        assert!(label.is_none());
-    }
-
-    #[test]
-    fn extract_label_none_field() {
-        let element = serde_json::json!({"name": "Task 1"});
-
-        let label = extract_for_each_label(&element, None);
-        assert!(label.is_none());
-    }
-
-    #[test]
-    fn extract_label_non_string_value() {
-        let element = serde_json::json!({"name": 123});
-
-        let label = extract_for_each_label(&element, Some("name"));
-        assert!(label.is_none());
     }
 
     // =========================================================================
@@ -1591,7 +1499,7 @@ mod tests {
         let outputs = HashMap::new();
         let prior = HashMap::new();
 
-        let result = compose_prompt(&step, &repos, &outputs, &prior, None, None).await;
+        let result = compose_prompt(&step, &repos, &outputs, &prior, None).await;
 
         assert!(result.starts_with("<task>\n"));
         assert!(result.contains("</task>"));
@@ -1613,7 +1521,7 @@ mod tests {
         let mut ports = HashMap::new();
         ports.insert("task_data".to_string(), serde_json::json!({"key": "value"}));
 
-        let result = compose_prompt(&step, &repos, &outputs, &prior, None, Some(&ports)).await;
+        let result = compose_prompt(&step, &repos, &outputs, &prior, Some(&ports)).await;
 
         assert!(result.contains("<task>"));
         assert!(result.contains("</task>"));
@@ -1637,7 +1545,7 @@ mod tests {
         let outputs = HashMap::new();
         let prior = HashMap::new();
 
-        let result = compose_prompt(&step, &repos, &outputs, &prior, None, None).await;
+        let result = compose_prompt(&step, &repos, &outputs, &prior, None).await;
 
         assert!(!result.contains("<context>"));
         assert!(!result.contains("</context>"));
@@ -1661,7 +1569,7 @@ mod tests {
         let mut ports = HashMap::new();
         ports.insert("task_data".to_string(), serde_json::json!("inline_value"));
 
-        let result = compose_prompt(&step, &repos, &outputs, &prior, None, Some(&ports)).await;
+        let result = compose_prompt(&step, &repos, &outputs, &prior, Some(&ports)).await;
 
         // The port data is inlined in the task, not in a separate context block
         assert!(!result.contains("<context>"));
@@ -1789,7 +1697,7 @@ mod tests {
         let outputs = HashMap::new();
         let prior = HashMap::new();
 
-        let result = compose_prompt(&step, &repos, &outputs, &prior, None, None).await;
+        let result = compose_prompt(&step, &repos, &outputs, &prior, None).await;
 
         // Both the task and protocol injection are inside <task>
         assert!(result.starts_with("<task>\n"));

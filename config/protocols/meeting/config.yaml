@@ -1,5 +1,0 @@
-agents:
-  gatekeeper:
-    model_id: "tier:3"
-    max_tokens: 4096
-    temperature: 0.3

@@ -27,7 +27,7 @@ pub use types::{
     ContainerExecutionConfig, DagPaused, StepOutput, StepReadiness, SubWorkflowParentContext,
     WorkflowExecutionContext, WorkflowExecutionResult,
 };
-pub use variables::{extract_for_each_label, resolve_for_each_array, resolve_variables};
+pub use variables::resolve_variables;
 
 use uuid::Uuid;
 

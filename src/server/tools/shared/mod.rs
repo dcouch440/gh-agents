@@ -1,7 +1,7 @@
 //! Shared utilities for tool modules.
 //!
 //! Functions here are used across multiple archetype tool modules
-//! (node_assistant, belief_capture, room_config, workforce).
+//! (node_assistant, workforce).
 
 use serde_json::{json, Value};
 use uuid::Uuid;

@@ -38,9 +38,6 @@ pub enum HubError {
     #[error("variable '{path}' unresolved")]
     UnresolvedVariable { path: String },
 
-    #[error("for_each ref '{reference}' did not resolve to array")]
-    ForEachNotArray { reference: String },
-
     #[error("step {step_id} agent {agent_id} not found")]
     AgentNotFound { step_id: Uuid, agent_id: Uuid },
 

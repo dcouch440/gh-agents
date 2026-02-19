@@ -70,14 +70,6 @@ mod tests {
     }
 
     #[test]
-    fn display_for_each_not_array() {
-        let err = HubError::ForEachNotArray {
-            reference: "results".into(),
-        };
-        assert!(err.to_string().contains("results"));
-    }
-
-    #[test]
     fn display_agent_not_found() {
         let step = Uuid::nil();
         let agent = Uuid::nil();

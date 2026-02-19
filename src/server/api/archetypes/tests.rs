@@ -5,7 +5,7 @@ mod tests {
     #[tokio::test]
     async fn list_archetypes_returns_all() {
         let result = list_archetypes().await;
-        assert_eq!(result.0.len(), 3);
+        assert_eq!(result.0.len(), 1);
     }
 
     #[test]

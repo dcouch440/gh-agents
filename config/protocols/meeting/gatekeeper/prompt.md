@@ -1,1 +1,0 @@
-{{.User.gatekeeper_input}}

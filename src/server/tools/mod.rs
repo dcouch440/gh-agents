@@ -4,12 +4,10 @@
 //! and structured output validation. Handler implementations live in
 //! focused sub-modules: `exploration`, `documents`, and `haiku`.
 
-pub mod belief_capture;
 pub mod documents;
 mod exploration;
 pub mod haiku;
 pub mod node_assistant;
-pub mod room_config;
 pub mod shared;
 pub mod workforce;
 
