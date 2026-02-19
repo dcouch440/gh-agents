@@ -97,9 +97,9 @@ pub const RETRY_JITTER_FACTOR: f64 = 0.25;
 // ── Rate Limiting ─────────────────────────────────────────────────────────
 
 /// Maximum concurrent LLM API calls across all agents.
-pub const RATE_LIMIT_MAX_CONCURRENT_CALLS: usize = 5;
+pub const RATE_LIMIT_MAX_CONCURRENT_CALLS: usize = 50;
 /// Maximum requests per minute to Anthropic API (0 = unlimited).
-pub const RATE_LIMIT_REQUESTS_PER_MINUTE: usize = 25;
+pub const RATE_LIMIT_REQUESTS_PER_MINUTE: usize = 1000;
 /// Initial global backoff delay when any agent gets rate limited.
 pub const RATE_LIMIT_GLOBAL_BACKOFF_INITIAL_MS: u64 = 2000;
 /// Maximum global backoff delay.
@@ -108,9 +108,9 @@ pub const RATE_LIMIT_GLOBAL_BACKOFF_MAX_MS: u64 = 60000;
 // ── WebSocket Limits ──────────────────────────────────────────────────────────
 
 /// Maximum concurrent WebSocket connections (global).
-pub const WS_MAX_CONNECTIONS: usize = 2000;
+pub const WS_MAX_CONNECTIONS: usize = 10_000;
 /// Maximum concurrent WebSocket connections per IP address.
-pub const WS_MAX_CONNECTIONS_PER_IP: usize = 20;
+pub const WS_MAX_CONNECTIONS_PER_IP: usize = 1000;
 /// Maximum WebSocket frame size (1 MB).
 pub const WS_MAX_FRAME_SIZE: usize = 1_048_576;
 /// Maximum WebSocket message size (4 MB).
@@ -123,7 +123,7 @@ pub const WS_PONG_TIMEOUT_SECS: u64 = 90;
 /// Buffer size for agent command/response channels.
 pub const CHANNEL_AGENT: usize = 32;
 /// Buffer size for the orchestrator message queue.
-pub const CHANNEL_ORCHESTRATOR: usize = 100;
+pub const CHANNEL_ORCHESTRATOR: usize = 1000;
 
 // ── Content Truncation Limits (chars) ───────────────────────────────────────
 
@@ -169,7 +169,7 @@ pub const DEFAULT_SEARCH_RESULTS: usize = 20;
 /// Scheduler poll interval in milliseconds.
 pub const SCHEDULER_POLL_INTERVAL_MS: u64 = 100;
 /// Scheduler batch size (tasks per poll).
-pub const SCHEDULER_BATCH_SIZE: usize = 5;
+pub const SCHEDULER_BATCH_SIZE: usize = 50;
 /// Scheduler agent wait timeout in milliseconds.
 pub const SCHEDULER_AGENT_WAIT_MS: u64 = 500;
 
@@ -447,7 +447,7 @@ pub const SHUTDOWN_DRAIN_TIMEOUT_SECS: u64 = 30;
 /// Maximum seconds for the entire container creation flow (create + clone + config).
 pub const CONTAINER_CREATE_TIMEOUT_SECS: u64 = 600;
 /// Maximum concurrent container creation operations (semaphore permits).
-pub const CONTAINER_MAX_CONCURRENT_CREATES: usize = 10;
+pub const CONTAINER_MAX_CONCURRENT_CREATES: usize = 50;
 /// Maximum retry attempts for transient container creation failures.
 pub const CONTAINER_RETRY_MAX_ATTEMPTS: u32 = 2;
 /// Initial retry backoff delay for container creation (ms).

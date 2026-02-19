@@ -109,10 +109,10 @@ fn create_router(state: AppState) -> Router {
         info!("Rate limiting disabled (NEXOR_SKIP_RATE_LIMIT=1)");
         build_public_routes()
     } else {
-        // Rate limiter for auth routes: 10 requests per 60 seconds per IP
+        // Rate limiter for auth routes: 50 requests per second per IP (burst 100)
         let auth_rate_limit = GovernorConfigBuilder::default()
-            .per_second(6)
-            .burst_size(10)
+            .per_second(50)
+            .burst_size(100)
             .key_extractor(SmartIpKeyExtractor)
             .finish()
             .expect("valid governor config");
@@ -124,10 +124,10 @@ fn create_router(state: AppState) -> Router {
     let protected_routes = if skip_rate_limit {
         build_protected_routes(state.clone())
     } else {
-        // Rate limiter for general API routes: ~100 requests per minute per IP
+        // Rate limiter for general API routes: ~1200 requests per minute per IP
         let api_rate_limit = GovernorConfigBuilder::default()
-            .per_second(2)
-            .burst_size(50)
+            .per_second(20)
+            .burst_size(100)
             .key_extractor(SmartIpKeyExtractor)
             .finish()
             .expect("valid governor config");

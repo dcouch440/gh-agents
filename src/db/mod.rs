@@ -1053,7 +1053,7 @@ pub async fn init_db_with_url(database_url: &str) -> Result<PgPool> {
     let max_connections: u32 = std::env::var(crate::constants::ENV_DB_MAX_CONNECTIONS)
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(10);
+        .unwrap_or(50);
     tracing::info!("DB pool max_connections = {}", max_connections);
 
     let pool = PgPoolOptions::new()
