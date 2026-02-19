@@ -77,50 +77,14 @@ pub struct WorkflowStepResponse {
 
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct CreateStepRequest {
-    pub agent_id: Option<Uuid>,
-    pub execution_mode: Option<String>,
-    pub for_each_ref: Option<String>,
-    pub prompt_template_id: Option<Uuid>,
-    pub prompt_template: Option<String>,
-    pub output_schema_id: Option<Uuid>,
-    pub output_variable_name: Option<String>,
-    pub interactive_agent_id: Option<Uuid>,
-    pub for_each_label_field: Option<String>,
-    pub display_order: Option<i32>,
-    pub reasoning_trace: Option<bool>,
-    pub verification_agent_ids: Option<Vec<Uuid>>,
-    pub position_x: Option<f64>,
-    pub position_y: Option<f64>,
-    pub width: Option<f64>,
-    pub height: Option<f64>,
-    pub name: Option<String>,
-    pub system_prompt_suffix: Option<String>,
-    pub description: Option<String>,
-    pub sub_workflow_template_id: Option<Uuid>,
+    #[serde(flatten)]
+    pub payload: crate::server::services::steps::StepPayload,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateStepRequest {
-    pub agent_id: Option<Uuid>,
-    pub execution_mode: Option<String>,
-    pub for_each_ref: Option<String>,
-    pub prompt_template_id: Option<Uuid>,
-    pub prompt_template: Option<String>,
-    pub output_schema_id: Option<Uuid>,
-    pub output_variable_name: Option<String>,
-    pub interactive_agent_id: Option<Uuid>,
-    pub for_each_label_field: Option<String>,
-    pub display_order: Option<i32>,
-    pub reasoning_trace: Option<bool>,
-    pub verification_agent_ids: Option<Vec<Uuid>>,
-    pub position_x: Option<f64>,
-    pub position_y: Option<f64>,
-    pub width: Option<f64>,
-    pub height: Option<f64>,
-    pub name: Option<String>,
-    pub system_prompt_suffix: Option<String>,
-    pub description: Option<String>,
-    pub sub_workflow_template_id: Option<Uuid>,
+    #[serde(flatten)]
+    pub payload: crate::server::services::steps::StepPayload,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
