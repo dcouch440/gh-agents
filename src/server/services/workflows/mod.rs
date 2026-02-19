@@ -18,9 +18,7 @@ pub(crate) async fn verify_workflow_ownership(
         .get_workflow(workflow_id)
         .await?
         .ok_or_else(|| ServiceError::not_found("Workflow"))?;
-    if wf.user_id != user_id {
-        return Err(ServiceError::not_found("Workflow"));
-    }
+    super::ownership::check_direct_owner(wf.user_id, user_id, "Workflow")?;
     Ok(wf)
 }
 

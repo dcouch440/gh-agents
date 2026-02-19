@@ -27,9 +27,7 @@ async fn verify_ownership(
         .get_session(session_id)
         .await?
         .ok_or_else(|| ServiceError::not_found("Session"))?;
-    if session.user_id != user_id {
-        return Err(ServiceError::not_found("Session"));
-    }
+    super::ownership::check_direct_owner(session.user_id, user_id, "Session")?;
     Ok(session)
 }
 

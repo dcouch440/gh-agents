@@ -20,11 +20,7 @@ async fn verify_ownership(
         .get_output_schema(schema_id)
         .await?
         .ok_or_else(|| ServiceError::not_found("Output schema"))?;
-    match schema.user_id {
-        Some(owner) if owner != user_id => return Err(ServiceError::not_found("Output schema")),
-        None => return Err(ServiceError::not_found("Output schema")),
-        _ => {}
-    }
+    super::ownership::check_strict_owner(schema.user_id, user_id, "Output schema")?;
     Ok(schema)
 }
 

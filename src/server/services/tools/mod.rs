@@ -58,9 +58,7 @@ async fn verify_agent_ownership(
         .get_persisted_agent(agent_id)
         .await?
         .ok_or_else(|| ServiceError::not_found("Agent"))?;
-    if agent.user_id.is_some() && agent.user_id != Some(user_id) {
-        return Err(ServiceError::not_found("Agent"));
-    }
+    super::ownership::check_system_passthrough(agent.user_id, user_id, "Agent")?;
     Ok(())
 }
 

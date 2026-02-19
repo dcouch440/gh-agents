@@ -15,6 +15,7 @@ pub mod documents;
 pub mod edges;
 pub mod error;
 pub mod output_schemas;
+pub mod ownership;
 pub mod prompt_templates;
 pub mod protocols;
 pub mod results;
