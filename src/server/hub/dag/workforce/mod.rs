@@ -190,6 +190,17 @@ pub(super) async fn execute_workforce_step(
         },
     );
 
+    let child_edges = if let Some(child_wf_id) = step.child_workflow_id {
+        dag.state
+            .repos()
+            .workflows
+            .list_edges(child_wf_id)
+            .await
+            .unwrap_or_default()
+    } else {
+        vec![]
+    };
+
     let designer_input = build_workforce_designer_input(
         &brief,
         &roster,
@@ -203,6 +214,7 @@ pub(super) async fn execute_workforce_step(
             .unwrap_or_default()
             .as_deref(),
         &*dag.state.repos().tool_capabilities,
+        &child_edges,
     )
     .await;
 

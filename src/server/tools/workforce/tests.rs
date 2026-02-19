@@ -610,6 +610,182 @@ mod tests {
         assert_eq!(result["already_exists"], true);
     }
 
+    #[tokio::test]
+    async fn set_dependency_detects_two_node_cycle() {
+        let ctx = make_ctx();
+        let brief = make_brief(ctx.step_id);
+        let brief_id = brief.id;
+        let child_wf_id = Uuid::new_v4();
+        let scanner_child = Uuid::new_v4();
+        let analyzer_child = Uuid::new_v4();
+
+        let mut scanner = make_roster_agent(brief_id, "Scanner", 0);
+        scanner.child_step_id = Some(scanner_child);
+        let mut analyzer = make_roster_agent(brief_id, "Analyzer", 1);
+        analyzer.child_step_id = Some(analyzer_child);
+
+        let mut parent_step = make_step(ctx.step_id, ctx.workflow_id, "workforce");
+        parent_step.child_workflow_id = Some(child_wf_id);
+
+        let mut repo = MockWorkflowRepo::new();
+
+        let brief_clone = brief.clone();
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(brief_clone.clone())));
+
+        let scanner_clone = scanner.clone();
+        let analyzer_clone = analyzer.clone();
+        repo.expect_list_agent_roster()
+            .returning(move |_| Ok(vec![scanner_clone.clone(), analyzer_clone.clone()]));
+
+        let parent_step_clone = parent_step.clone();
+        repo.expect_get_step()
+            .returning(move |_| Ok(Some(parent_step_clone.clone())));
+
+        // Scanner → Analyzer already exists; trying Analyzer → Scanner
+        repo.expect_list_edges().returning(move |_| {
+            Ok(vec![WorkflowStepEdgeRow {
+                id: Uuid::new_v4(),
+                from_step_id: scanner_child,
+                to_step_id: analyzer_child,
+                workflow_id: child_wf_id,
+                ..Default::default()
+            }])
+        });
+
+        let input = json!({ "from_agent": "Analyzer", "to_agent": "Scanner" });
+        let result = execute_workforce_tool("set_dependency", &input, &repo, &ctx).await;
+
+        assert!(result["error"].as_str().unwrap().contains("cycle"));
+    }
+
+    #[tokio::test]
+    async fn set_dependency_detects_three_node_cycle() {
+        let ctx = make_ctx();
+        let brief = make_brief(ctx.step_id);
+        let brief_id = brief.id;
+        let child_wf_id = Uuid::new_v4();
+        let a_child = Uuid::new_v4();
+        let b_child = Uuid::new_v4();
+        let c_child = Uuid::new_v4();
+
+        let mut agent_a = make_roster_agent(brief_id, "A", 0);
+        agent_a.child_step_id = Some(a_child);
+        let mut agent_b = make_roster_agent(brief_id, "B", 1);
+        agent_b.child_step_id = Some(b_child);
+        let mut agent_c = make_roster_agent(brief_id, "C", 2);
+        agent_c.child_step_id = Some(c_child);
+
+        let mut parent_step = make_step(ctx.step_id, ctx.workflow_id, "workforce");
+        parent_step.child_workflow_id = Some(child_wf_id);
+
+        let mut repo = MockWorkflowRepo::new();
+
+        let brief_clone = brief.clone();
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(brief_clone.clone())));
+
+        let a_clone = agent_a.clone();
+        let b_clone = agent_b.clone();
+        let c_clone = agent_c.clone();
+        repo.expect_list_agent_roster()
+            .returning(move |_| Ok(vec![a_clone.clone(), b_clone.clone(), c_clone.clone()]));
+
+        let parent_step_clone = parent_step.clone();
+        repo.expect_get_step()
+            .returning(move |_| Ok(Some(parent_step_clone.clone())));
+
+        // A → B, B → C exist; trying C → A
+        repo.expect_list_edges().returning(move |_| {
+            Ok(vec![
+                WorkflowStepEdgeRow {
+                    id: Uuid::new_v4(),
+                    from_step_id: a_child,
+                    to_step_id: b_child,
+                    workflow_id: child_wf_id,
+                    ..Default::default()
+                },
+                WorkflowStepEdgeRow {
+                    id: Uuid::new_v4(),
+                    from_step_id: b_child,
+                    to_step_id: c_child,
+                    workflow_id: child_wf_id,
+                    ..Default::default()
+                },
+            ])
+        });
+
+        let input = json!({ "from_agent": "C", "to_agent": "A" });
+        let result = execute_workforce_tool("set_dependency", &input, &repo, &ctx).await;
+
+        assert!(result["error"].as_str().unwrap().contains("cycle"));
+    }
+
+    #[tokio::test]
+    async fn set_dependency_allows_non_cycle() {
+        let ctx = make_ctx();
+        let brief = make_brief(ctx.step_id);
+        let brief_id = brief.id;
+        let child_wf_id = Uuid::new_v4();
+        let a_child = Uuid::new_v4();
+        let b_child = Uuid::new_v4();
+        let c_child = Uuid::new_v4();
+
+        let mut agent_a = make_roster_agent(brief_id, "A", 0);
+        agent_a.child_step_id = Some(a_child);
+        let mut agent_b = make_roster_agent(brief_id, "B", 1);
+        agent_b.child_step_id = Some(b_child);
+        let mut agent_c = make_roster_agent(brief_id, "C", 2);
+        agent_c.child_step_id = Some(c_child);
+
+        let mut parent_step = make_step(ctx.step_id, ctx.workflow_id, "workforce");
+        parent_step.child_workflow_id = Some(child_wf_id);
+
+        let mut repo = MockWorkflowRepo::new();
+
+        let brief_clone = brief.clone();
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(brief_clone.clone())));
+
+        let a_clone = agent_a.clone();
+        let b_clone = agent_b.clone();
+        let c_clone = agent_c.clone();
+        repo.expect_list_agent_roster()
+            .returning(move |_| Ok(vec![a_clone.clone(), b_clone.clone(), c_clone.clone()]));
+
+        let parent_step_clone = parent_step.clone();
+        repo.expect_get_step()
+            .returning(move |_| Ok(Some(parent_step_clone.clone())));
+
+        // A → B exists; adding A → C (no cycle)
+        repo.expect_list_edges().returning(move |_| {
+            Ok(vec![WorkflowStepEdgeRow {
+                id: Uuid::new_v4(),
+                from_step_id: a_child,
+                to_step_id: b_child,
+                workflow_id: child_wf_id,
+                ..Default::default()
+            }])
+        });
+
+        repo.expect_add_edge()
+            .withf(move |_, from, to| *from == a_child && *to == c_child)
+            .returning(|wid, from, to| {
+                Ok(WorkflowStepEdgeRow {
+                    id: Uuid::new_v4(),
+                    from_step_id: from,
+                    to_step_id: to,
+                    workflow_id: wid,
+                    ..Default::default()
+                })
+            });
+
+        let input = json!({ "from_agent": "A", "to_agent": "C" });
+        let result = execute_workforce_tool("set_dependency", &input, &repo, &ctx).await;
+
+        assert_eq!(result["created"], true);
+    }
+
     // =========================================================================
     // remove_dependency
     // =========================================================================
@@ -764,6 +940,138 @@ mod tests {
         let snapshot = build_config_snapshot(&repo, &ctx).await.unwrap();
 
         assert!(snapshot.contains("Task: (not set)"));
+        assert!(snapshot.contains("(none)"));
+    }
+
+    #[tokio::test]
+    async fn config_snapshot_shows_dependencies() {
+        let ctx = make_ctx();
+        let child_wf_id = Uuid::new_v4();
+        let scanner_child = Uuid::new_v4();
+        let analyzer_child = Uuid::new_v4();
+        let designer_step = Uuid::new_v4();
+
+        let mut step = make_step(ctx.step_id, ctx.workflow_id, "workforce");
+        step.child_workflow_id = Some(child_wf_id);
+
+        let brief = make_brief(ctx.step_id);
+        let brief_id = brief.id;
+
+        let mut scanner = make_roster_agent(brief_id, "Scanner", 0);
+        scanner.child_step_id = Some(scanner_child);
+        let mut analyzer = make_roster_agent(brief_id, "Analyzer", 1);
+        analyzer.child_step_id = Some(analyzer_child);
+
+        let step_id = ctx.step_id;
+        let wf_id = ctx.workflow_id;
+        let step_clone = step.clone();
+
+        let mut repo = MockWorkflowRepo::new();
+        repo.expect_get_step()
+            .withf(move |id| *id == step_id)
+            .returning(move |_| Ok(Some(step_clone.clone())));
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(brief.clone())));
+
+        let scanner_clone = scanner.clone();
+        let analyzer_clone = analyzer.clone();
+        repo.expect_list_agent_roster()
+            .returning(move |_| Ok(vec![scanner_clone.clone(), analyzer_clone.clone()]));
+
+        // Parent workflow edges (upstream context)
+        repo.expect_list_edges()
+            .withf(move |wid| *wid == wf_id)
+            .returning(|_| Ok(vec![]));
+
+        // Child workflow edges: Designer→Scanner, Designer→Analyzer, Scanner→Analyzer
+        repo.expect_list_edges()
+            .withf(move |wid| *wid == child_wf_id)
+            .returning(move |_| {
+                Ok(vec![
+                    WorkflowStepEdgeRow {
+                        id: Uuid::new_v4(),
+                        from_step_id: designer_step,
+                        to_step_id: scanner_child,
+                        workflow_id: child_wf_id,
+                        ..Default::default()
+                    },
+                    WorkflowStepEdgeRow {
+                        id: Uuid::new_v4(),
+                        from_step_id: designer_step,
+                        to_step_id: analyzer_child,
+                        workflow_id: child_wf_id,
+                        ..Default::default()
+                    },
+                    WorkflowStepEdgeRow {
+                        id: Uuid::new_v4(),
+                        from_step_id: scanner_child,
+                        to_step_id: analyzer_child,
+                        workflow_id: child_wf_id,
+                        ..Default::default()
+                    },
+                ])
+            });
+
+        let snapshot = build_config_snapshot(&repo, &ctx).await.unwrap();
+
+        assert!(snapshot.contains("Dependencies:"));
+        assert!(snapshot.contains("Scanner \u{2192} Analyzer"));
+        // Designer edges should NOT appear
+        assert!(!snapshot.contains("Designer"));
+    }
+
+    #[tokio::test]
+    async fn config_snapshot_shows_no_dependencies() {
+        let ctx = make_ctx();
+        let child_wf_id = Uuid::new_v4();
+        let scanner_child = Uuid::new_v4();
+        let designer_step = Uuid::new_v4();
+
+        let mut step = make_step(ctx.step_id, ctx.workflow_id, "workforce");
+        step.child_workflow_id = Some(child_wf_id);
+
+        let brief = make_brief(ctx.step_id);
+        let brief_id = brief.id;
+
+        let mut scanner = make_roster_agent(brief_id, "Scanner", 0);
+        scanner.child_step_id = Some(scanner_child);
+
+        let step_id = ctx.step_id;
+        let wf_id = ctx.workflow_id;
+        let step_clone = step.clone();
+
+        let mut repo = MockWorkflowRepo::new();
+        repo.expect_get_step()
+            .withf(move |id| *id == step_id)
+            .returning(move |_| Ok(Some(step_clone.clone())));
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(brief.clone())));
+
+        let scanner_clone = scanner.clone();
+        repo.expect_list_agent_roster()
+            .returning(move |_| Ok(vec![scanner_clone.clone()]));
+
+        // Parent workflow edges
+        repo.expect_list_edges()
+            .withf(move |wid| *wid == wf_id)
+            .returning(|_| Ok(vec![]));
+
+        // Child workflow: only Designer→Scanner (no agent-to-agent)
+        repo.expect_list_edges()
+            .withf(move |wid| *wid == child_wf_id)
+            .returning(move |_| {
+                Ok(vec![WorkflowStepEdgeRow {
+                    id: Uuid::new_v4(),
+                    from_step_id: designer_step,
+                    to_step_id: scanner_child,
+                    workflow_id: child_wf_id,
+                    ..Default::default()
+                }])
+            });
+
+        let snapshot = build_config_snapshot(&repo, &ctx).await.unwrap();
+
+        assert!(snapshot.contains("Dependencies:"));
         assert!(snapshot.contains("(none)"));
     }
 
