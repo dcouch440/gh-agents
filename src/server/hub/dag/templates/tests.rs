@@ -16,39 +16,11 @@ mod tests {
             id,
             workflow_id,
             agent_id: Some(Uuid::new_v4()),
-            execution_mode: "single".to_string(),
-            agent_execution_mode: None,
-            for_each_ref: None,
-            prompt_template_id: None,
             prompt_template: "Test prompt".to_string(),
-            output_schema_id: None,
             output_variable_name: Some("output".to_string()),
-            interactive_agent_id: None,
-            for_each_label_field: None,
-            room_id: None,
-            routing_mode: None,
-            routing_field: None,
-            display_order: 0,
-            version: 1,
-            reasoning_trace: false,
-            verification_agent_ids: None,
-            position_x: None,
-            position_y: None,
-            width: None,
-            height: None,
             name: Some("Test Step".to_string()),
-            system_prompt_suffix: None,
-            visible: true,
             description: "Test step description".to_string(),
-            board_context_cache: String::new(),
-            board_context_updated_at: None,
-            goal_summary: String::new(),
-            goal_summary_updated_at: None,
-            sub_workflow_template_id: None,
-            child_workflow_id: None,
-            is_designer_step: false,
-            pinned: false,
-            run_results_summary: String::new(),
+            ..Default::default()
         }
     }
 
@@ -57,13 +29,8 @@ mod tests {
             id: Uuid::new_v4(),
             from_step_id: from_id,
             to_step_id: to_id,
-            from_output_port: None,
-            to_input_port: None,
-            transform_jsonpath: None,
-            condition_type: None,
-            condition_value: None,
-            edge_label: None,
             workflow_id,
+            ..Default::default()
         }
     }
 
@@ -81,21 +48,10 @@ mod tests {
 
         let agent = AgentRow {
             id: agent_id,
-            user_id: None,
-            tier: None,
             name: "Test Agent".to_string(),
             system_prompt: "You are a test agent.".to_string(),
-            persona_style: None,
-            model_provider: "anthropic".to_string(),
             model_id: "claude-sonnet-4-5-20250929".to_string(),
-            model_max_tokens: 4096,
-            model_temperature: 0.7,
-            status: None,
-
-            output_schema_id: None,
-            version: 1,
-            default_reasoning_trace: None,
-            is_system: false,
+            ..Default::default()
         };
 
         let mut agents = HashMap::new();
@@ -107,10 +63,8 @@ mod tests {
             port_name: "context".to_string(),
             port_type: "string".to_string(),
             required: true,
-            default_value: None,
             description: Some("Input context".to_string()),
-            json_schema: None,
-            created_at: chrono::Utc::now(),
+            ..Default::default()
         };
 
         let output = StepOutputRow {
@@ -120,8 +74,7 @@ mod tests {
             port_type: "string".to_string(),
             json_path: "$.output".to_string(),
             description: Some("Step output".to_string()),
-            json_schema: None,
-            created_at: chrono::Utc::now(),
+            ..Default::default()
         };
 
         let mut step_inputs = HashMap::new();

@@ -1,5 +1,7 @@
 //! Database initialization and connection management
 
+#[cfg(test)]
+pub mod fixtures;
 pub mod pg_repo;
 mod queries;
 #[cfg(test)]
@@ -760,6 +762,278 @@ pub struct EnvelopeSnapshotRow {
     pub step_id: Uuid,
     pub content: String,
     pub source_id: Uuid,
+}
+
+// ============================================================================
+// Default Implementations
+// ============================================================================
+//
+// Manual `impl Default` (not derive) because DateTime<Utc> doesn't implement
+// Default and some fields need non-zero defaults (e.g. visible=true, version=1).
+// These enable `..Default::default()` spread in tests so that adding a new
+// Option field to a struct requires zero test file changes.
+
+impl Default for WorkflowStepRow {
+    fn default() -> Self {
+        Self {
+            id: Uuid::nil(),
+            workflow_id: Uuid::nil(),
+            agent_id: None,
+            execution_mode: "single".to_string(),
+            agent_execution_mode: None,
+            for_each_ref: None,
+            prompt_template_id: None,
+            prompt_template: String::new(),
+            output_schema_id: None,
+            output_variable_name: None,
+            interactive_agent_id: None,
+            for_each_label_field: None,
+            room_id: None,
+            routing_mode: None,
+            routing_field: None,
+            display_order: 0,
+            version: 1,
+            reasoning_trace: false,
+            verification_agent_ids: None,
+            position_x: None,
+            position_y: None,
+            width: None,
+            height: None,
+            name: None,
+            system_prompt_suffix: None,
+            visible: true,
+            description: String::new(),
+            board_context_cache: String::new(),
+            board_context_updated_at: None,
+            goal_summary: String::new(),
+            goal_summary_updated_at: None,
+            sub_workflow_template_id: None,
+            child_workflow_id: None,
+            is_designer_step: false,
+            pinned: false,
+            run_results_summary: String::new(),
+        }
+    }
+}
+
+impl Default for WorkflowStepEdgeRow {
+    fn default() -> Self {
+        Self {
+            id: Uuid::nil(),
+            from_step_id: Uuid::nil(),
+            to_step_id: Uuid::nil(),
+            from_output_port: None,
+            to_input_port: None,
+            transform_jsonpath: None,
+            condition_type: None,
+            condition_value: None,
+            edge_label: None,
+            workflow_id: Uuid::nil(),
+        }
+    }
+}
+
+impl Default for AgentRow {
+    fn default() -> Self {
+        Self {
+            id: Uuid::nil(),
+            user_id: None,
+            tier: None,
+            name: String::new(),
+            system_prompt: String::new(),
+            persona_style: None,
+            model_provider: "anthropic".to_string(),
+            model_id: "claude-sonnet-4-20250514".to_string(),
+            model_max_tokens: 4096,
+            model_temperature: 0.7,
+            status: None,
+            output_schema_id: None,
+            version: 1,
+            default_reasoning_trace: None,
+            is_system: false,
+        }
+    }
+}
+
+impl Default for WorkflowRow {
+    fn default() -> Self {
+        Self {
+            id: Uuid::nil(),
+            user_id: Uuid::nil(),
+            name: String::new(),
+            description: String::new(),
+            execution_mode: "dag".to_string(),
+            created_at: Utc::now(),
+            version: 1,
+            container_enabled: false,
+            target_repo_url: None,
+            target_branch: None,
+            vpn_enabled: false,
+            board_overview_summary: String::new(),
+        }
+    }
+}
+
+impl Default for WorkflowExecutionRow {
+    fn default() -> Self {
+        Self {
+            id: Uuid::nil(),
+            collection_run_id: None,
+            workflow_id: Uuid::nil(),
+            user_id: Uuid::nil(),
+            status: "pending".to_string(),
+            started_at: None,
+            completed_at: None,
+            outputs: None,
+            error: None,
+            execution_mode: "dag".to_string(),
+            template_id: None,
+            parent_execution_id: None,
+            root_execution_id: None,
+            depth: 0,
+        }
+    }
+}
+
+impl Default for AgentExecutionRow {
+    fn default() -> Self {
+        Self {
+            id: Uuid::nil(),
+            agent_id: None,
+            workflow_step_id: None,
+            workflow_execution_id: None,
+            is_interactive: false,
+            parent_agent_execution_id: None,
+            system_prompt_rendered: String::new(),
+            input: String::new(),
+            output: None,
+            structured_output: None,
+            room_session_id: None,
+            speaker_order: None,
+            status: "pending".to_string(),
+            started_at: Utc::now(),
+            completed_at: None,
+            is_exemplary: false,
+        }
+    }
+}
+
+impl Default for ExecutionMessageRow {
+    fn default() -> Self {
+        Self {
+            id: Uuid::nil(),
+            agent_execution_id: Uuid::nil(),
+            role: "user".to_string(),
+            content: String::new(),
+            tool_call_id: None,
+            input_tokens: 0,
+            output_tokens: 0,
+            created_at: Utc::now(),
+        }
+    }
+}
+
+impl Default for TokenLedgerRow {
+    fn default() -> Self {
+        Self {
+            id: Uuid::nil(),
+            user_id: Uuid::nil(),
+            agent_execution_id: None,
+            model_id: "test".to_string(),
+            input_tokens: 0,
+            output_tokens: 0,
+            cost_usd: 0.0,
+            created_at: Utc::now(),
+        }
+    }
+}
+
+impl Default for TaskMissionBriefRow {
+    fn default() -> Self {
+        Self {
+            id: Uuid::nil(),
+            step_id: Uuid::nil(),
+            task_description: String::new(),
+            available_capabilities: vec![],
+            failure_mode: "fail_fast".to_string(),
+            downstream_context: None,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+}
+
+impl Default for TaskAgentRosterRow {
+    fn default() -> Self {
+        Self {
+            id: Uuid::nil(),
+            mission_brief_id: Uuid::nil(),
+            name: String::new(),
+            role_description: String::new(),
+            capabilities: vec![],
+            execution_order: 0,
+            created_at: Utc::now(),
+            child_step_id: None,
+        }
+    }
+}
+
+impl Default for BeliefRow {
+    fn default() -> Self {
+        Self {
+            id: Uuid::nil(),
+            workflow_id: Uuid::nil(),
+            workflow_execution_id: None,
+            source_step_id: Uuid::nil(),
+            source_document_title: None,
+            source_document_def_id: None,
+            source_phase: String::new(),
+            content: String::new(),
+            reasoning: String::new(),
+            belief_type: String::new(),
+            confidence: String::new(),
+            confidence_justification: None,
+            semantic_tags: vec![],
+            emotional_tone: None,
+            cross_source_tension: None,
+            source_step_name: String::new(),
+            extraction_model: String::new(),
+            extraction_tokens_in: 0,
+            extraction_tokens_out: 0,
+            created_at: Utc::now(),
+        }
+    }
+}
+
+impl Default for StepInputRow {
+    fn default() -> Self {
+        Self {
+            id: Uuid::nil(),
+            workflow_step_id: Uuid::nil(),
+            port_name: String::new(),
+            port_type: "any".to_string(),
+            required: false,
+            default_value: None,
+            description: None,
+            json_schema: None,
+            created_at: Utc::now(),
+        }
+    }
+}
+
+impl Default for StepOutputRow {
+    fn default() -> Self {
+        Self {
+            id: Uuid::nil(),
+            workflow_step_id: Uuid::nil(),
+            port_name: String::new(),
+            port_type: "any".to_string(),
+            json_path: "$".to_string(),
+            description: None,
+            json_schema: None,
+            created_at: Utc::now(),
+        }
+    }
 }
 
 /// Type alias for the database pool

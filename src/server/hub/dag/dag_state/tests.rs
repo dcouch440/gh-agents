@@ -53,28 +53,9 @@ mod tests {
         };
 
         let envelope = StepExecutionEnvelope {
-            status: crate::types::ExecutionStatus::Success,
             data: Some(json!({"key": "value"})),
-            metadata: crate::types::ExecutionMetadata {
-                execution_id: step_id,
-                execution_time_ms: 0,
-                tokens_in: None,
-                tokens_out: None,
-                cost_usd: None,
-                model: None,
-                agent_id: None,
-                iteration_index: None,
-                iteration_label: None,
-                routing_label: None,
-
-                upstream_agent_id: None,
-                upstream_routing_label: None,
-                room_session_id: None,
-                room_id: None,
-                total_rounds: None,
-                child_workflow_execution_id: None,
-            },
-            error: None,
+            metadata: crate::types::ExecutionMetadata::new(step_id),
+            ..Default::default()
         };
 
         state.record_step_output(step_id, output, envelope);
@@ -99,28 +80,9 @@ mod tests {
         };
 
         let envelope = StepExecutionEnvelope {
-            status: crate::types::ExecutionStatus::Success,
             data: Some(json!(42)),
-            metadata: crate::types::ExecutionMetadata {
-                execution_id: step_id,
-                execution_time_ms: 0,
-                tokens_in: None,
-                tokens_out: None,
-                cost_usd: None,
-                model: None,
-                agent_id: None,
-                iteration_index: None,
-                iteration_label: None,
-                routing_label: None,
-
-                upstream_agent_id: None,
-                upstream_routing_label: None,
-                room_session_id: None,
-                room_id: None,
-                total_rounds: None,
-                child_workflow_execution_id: None,
-            },
-            error: None,
+            metadata: crate::types::ExecutionMetadata::new(step_id),
+            ..Default::default()
         };
 
         state.record_step_output(step_id, output, envelope);
@@ -204,40 +166,8 @@ mod tests {
         let mut step = crate::db::WorkflowStepRow {
             id: Uuid::new_v4(),
             workflow_id: Uuid::new_v4(),
-            agent_id: None,
-            execution_mode: "single".into(),
-            agent_execution_mode: None,
-            for_each_ref: None,
-            prompt_template_id: None,
-            prompt_template: String::new(),
-            output_schema_id: None,
             output_variable_name: Some("my_output".to_string()),
-            interactive_agent_id: None,
-            for_each_label_field: None,
-            room_id: None,
-            routing_mode: None,
-            routing_field: None,
-            display_order: 0,
-            version: 1,
-            reasoning_trace: false,
-            verification_agent_ids: None,
-            position_x: None,
-            position_y: None,
-            width: None,
-            height: None,
-            name: None,
-            system_prompt_suffix: None,
-            visible: true,
-            description: String::new(),
-            board_context_cache: String::new(),
-            board_context_updated_at: None,
-            goal_summary: String::new(),
-            goal_summary_updated_at: None,
-            sub_workflow_template_id: None,
-            child_workflow_id: None,
-            is_designer_step: false,
-            pinned: false,
-            run_results_summary: String::new(),
+            ..Default::default()
         };
         assert_eq!(step_display_name(&step), "my_output");
 

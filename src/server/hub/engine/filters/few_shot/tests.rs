@@ -19,19 +19,12 @@ mod tests {
             id: Uuid::new_v4(),
             agent_id: Some(agent_id),
             workflow_step_id: step_id,
-            workflow_execution_id: None,
-            is_interactive: false,
-            parent_agent_execution_id: None,
-            system_prompt_rendered: String::new(),
             input: input.to_string(),
             output: Some(output.to_string()),
-            structured_output: None,
-            room_session_id: None,
-            speaker_order: None,
             status: "completed".into(),
-            started_at: Utc::now(),
             completed_at: Some(Utc::now()),
             is_exemplary: true,
+            ..Default::default()
         }
     }
 

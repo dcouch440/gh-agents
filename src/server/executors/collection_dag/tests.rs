@@ -141,15 +141,8 @@ mod tests {
                     id,
                     user_id: Uuid::new_v4(),
                     name: "test_workflow".to_string(),
-                    description: String::new(),
                     execution_mode: "parallel".to_string(),
-                    created_at: Utc::now(),
-                    version: 1,
-                    container_enabled: false,
-                    target_repo_url: None,
-                    target_branch: None,
-                    vpn_enabled: false,
-                    board_overview_summary: String::new(),
+                    ..Default::default()
                 }))
             }
 
@@ -592,12 +585,9 @@ mod tests {
                 "analysis": {"findings": ["issue1", "issue2"]},
                 "summary": "Test complete"
             })),
-            error: None,
             execution_mode: "full".to_string(),
-            template_id: None,
-            parent_execution_id: None,
             root_execution_id: Some(exec_id),
-            depth: 0,
+            ..Default::default()
         };
 
         completed_workflows.insert(workflow_id, workflow_exec);

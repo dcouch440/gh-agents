@@ -4,7 +4,6 @@ mod tests {
     use std::sync::Arc;
 
     use async_trait::async_trait;
-    use chrono::Utc;
     use futures::Stream;
     use std::pin::Pin;
     use uuid::Uuid;
@@ -129,21 +128,11 @@ mod tests {
     fn make_agent(id: Uuid, name: &str) -> AgentRow {
         AgentRow {
             id,
-            user_id: None,
-            tier: None,
             name: name.to_string(),
             system_prompt: format!("You are {name}, an expert reviewer."),
-            persona_style: None,
-            model_provider: "anthropic".to_string(),
             model_id: "claude-3".to_string(),
-            model_max_tokens: 4096,
             model_temperature: 0.0,
-            status: None,
-
-            output_schema_id: None,
-            version: 1,
-            default_reasoning_trace: None,
-            is_system: false,
+            ..Default::default()
         }
     }
 
@@ -151,20 +140,7 @@ mod tests {
         AgentExecutionRow {
             id: Uuid::new_v4(),
             agent_id: Some(agent_id),
-            workflow_step_id: None,
-            workflow_execution_id: None,
-            is_interactive: false,
-            parent_agent_execution_id: None,
-            system_prompt_rendered: String::new(),
-            input: String::new(),
-            output: None,
-            structured_output: None,
-            room_session_id: None,
-            speaker_order: None,
-            status: "pending".to_string(),
-            started_at: Utc::now(),
-            completed_at: None,
-            is_exemplary: false,
+            ..Default::default()
         }
     }
 
@@ -172,12 +148,11 @@ mod tests {
         TokenLedgerRow {
             id: Uuid::new_v4(),
             user_id,
-            agent_execution_id: None,
             model_id: "claude-3".to_string(),
             input_tokens: 100,
             output_tokens: 50,
             cost_usd: 0.001,
-            created_at: Utc::now(),
+            ..Default::default()
         }
     }
 

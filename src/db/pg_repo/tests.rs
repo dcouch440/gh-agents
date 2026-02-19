@@ -26,19 +26,11 @@ mod tests {
         let agent = AgentRow {
             id: Uuid::new_v4(),
             user_id: Some(user_id),
-            tier: None,
             name: format!("test-agent-{}", Uuid::new_v4().simple()),
             system_prompt: "You are a test agent.".to_string(),
-            persona_style: None,
-            model_provider: "anthropic".to_string(),
             model_id: "claude-sonnet-4-5-20250929".to_string(),
-            model_max_tokens: 4096,
-            model_temperature: 0.7,
             status: Some("active".to_string()),
-            output_schema_id: None,
-            version: 1,
-            default_reasoning_trace: None,
-            is_system: false,
+            ..Default::default()
         };
         repo.upsert_agent(agent.clone()).await.unwrap();
         agent
@@ -63,39 +55,9 @@ mod tests {
             id: Uuid::new_v4(),
             workflow_id,
             agent_id: Some(agent_id),
-            execution_mode: "single".to_string(),
-            agent_execution_mode: None,
-            for_each_ref: None,
-            prompt_template_id: None,
             prompt_template: "Test prompt".to_string(),
-            output_schema_id: None,
             output_variable_name: Some("result".to_string()),
-            interactive_agent_id: None,
-            for_each_label_field: None,
-            room_id: None,
-            routing_mode: None,
-            routing_field: None,
-            display_order: 0,
-            version: 1,
-            reasoning_trace: false,
-            verification_agent_ids: None,
-            position_x: None,
-            position_y: None,
-            width: None,
-            height: None,
-            name: None,
-            system_prompt_suffix: None,
-            visible: true,
-            description: String::new(),
-            board_context_cache: String::new(),
-            board_context_updated_at: None,
-            goal_summary: String::new(),
-            goal_summary_updated_at: None,
-            sub_workflow_template_id: None,
-            child_workflow_id: None,
-            is_designer_step: false,
-            pinned: false,
-            run_results_summary: String::new(),
+            ..Default::default()
         };
         repo.create_step(step).await.unwrap()
     }
@@ -1541,51 +1503,21 @@ mod tests {
         let workflow = create_test_workflow(&repo, user_id).await;
 
         // Create 3 steps with names
-        let mut step_a = WorkflowStepRow {
+        let step_a_row = WorkflowStepRow {
             id: Uuid::new_v4(),
             workflow_id: workflow.id,
             agent_id: Some(agent.id),
-            execution_mode: "single".to_string(),
-            agent_execution_mode: None,
-            for_each_ref: None,
-            prompt_template_id: None,
             prompt_template: "Prompt A".to_string(),
-            output_schema_id: None,
-            output_variable_name: None,
-            interactive_agent_id: None,
-            for_each_label_field: None,
-            room_id: None,
-            routing_mode: None,
-            routing_field: None,
-            display_order: 0,
-            version: 1,
-            reasoning_trace: false,
-            verification_agent_ids: None,
-            position_x: None,
-            position_y: None,
-            width: None,
-            height: None,
             name: Some("Alpha".to_string()),
-            system_prompt_suffix: None,
-            visible: true,
-            description: String::new(),
-            board_context_cache: String::new(),
-            board_context_updated_at: None,
-            goal_summary: String::new(),
-            goal_summary_updated_at: None,
-            sub_workflow_template_id: None,
-            child_workflow_id: None,
-            is_designer_step: false,
-            pinned: false,
-            run_results_summary: String::new(),
+            ..Default::default()
         };
-        let step_a = repo.create_step(step_a.clone()).await.unwrap();
+        let step_a = repo.create_step(step_a_row).await.unwrap();
 
         let mut step_b_row = step_a.clone();
         step_b_row.id = Uuid::new_v4();
         step_b_row.name = Some("Bravo".to_string());
         step_b_row.prompt_template = "Prompt B".to_string();
-        let step_b = repo.create_step(step_b_row).await.unwrap();
+        let _step_b = repo.create_step(step_b_row).await.unwrap();
 
         let mut step_c_row = step_a.clone();
         step_c_row.id = Uuid::new_v4();

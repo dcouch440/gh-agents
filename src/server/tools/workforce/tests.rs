@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
     use serde_json::json;
     use uuid::Uuid;
 
@@ -24,40 +23,10 @@ mod tests {
         WorkflowStepRow {
             id,
             workflow_id,
-            agent_id: None,
             execution_mode: mode.to_string(),
-            agent_execution_mode: None,
-            for_each_ref: None,
-            prompt_template_id: None,
-            prompt_template: String::new(),
-            output_schema_id: None,
-            output_variable_name: None,
-            interactive_agent_id: None,
-            for_each_label_field: None,
-            room_id: None,
-            routing_mode: None,
-            routing_field: None,
-            display_order: 0,
-            version: 1,
-            reasoning_trace: false,
-            verification_agent_ids: None,
-            position_x: None,
-            position_y: None,
-            width: None,
-            height: None,
             name: Some("Test Workforce".to_string()),
-            system_prompt_suffix: None,
-            visible: true,
             description: "Test description".to_string(),
-            board_context_cache: String::new(),
-            board_context_updated_at: None,
-            goal_summary: String::new(),
-            goal_summary_updated_at: None,
-            sub_workflow_template_id: None,
-            child_workflow_id: None,
-            is_designer_step: false,
-            pinned: false,
-            run_results_summary: String::new(),
+            ..Default::default()
         }
     }
 
@@ -66,15 +35,8 @@ mod tests {
             id,
             user_id,
             name: "Parent Workflow".to_string(),
-            description: String::new(),
             execution_mode: "sequential".to_string(),
-            created_at: Utc::now(),
-            version: 1,
-            container_enabled: false,
-            target_repo_url: None,
-            target_branch: None,
-            vpn_enabled: false,
-            board_overview_summary: String::new(),
+            ..Default::default()
         }
     }
 
@@ -84,10 +46,7 @@ mod tests {
             step_id,
             task_description: "Build the system".to_string(),
             available_capabilities: vec!["code_gen".to_string()],
-            failure_mode: "fail_fast".to_string(),
-            downstream_context: None,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
+            ..Default::default()
         }
     }
 
@@ -99,8 +58,7 @@ mod tests {
             role_description: "Worker".to_string(),
             capabilities: vec!["code_gen".to_string()],
             execution_order: order,
-            created_at: Utc::now(),
-            child_step_id: None,
+            ..Default::default()
         }
     }
 
@@ -141,8 +99,7 @@ mod tests {
                     available_capabilities: caps.to_vec(),
                     failure_mode: fm.to_string(),
                     downstream_context: dc,
-                    created_at: Utc::now(),
-                    updated_at: Utc::now(),
+                    ..Default::default()
                 })
             });
 
@@ -204,15 +161,8 @@ mod tests {
                 id: child_wf_id,
                 user_id: input.user_id,
                 name: input.name,
-                description: String::new(),
                 execution_mode: "sequential".to_string(),
-                created_at: Utc::now(),
-                version: 1,
-                container_enabled: false,
-                target_repo_url: None,
-                target_branch: None,
-                vpn_enabled: false,
-                board_overview_summary: String::new(),
+                ..Default::default()
             })
         });
         repo.expect_update_step().returning(|s| Ok(s));
@@ -229,13 +179,8 @@ mod tests {
                 id: Uuid::new_v4(),
                 from_step_id: from,
                 to_step_id: to,
-                from_output_port: None,
-                to_input_port: None,
-                transform_jsonpath: None,
-                condition_type: None,
-                condition_value: None,
-                edge_label: None,
                 workflow_id: wid,
+                ..Default::default()
             })
         });
 
@@ -252,8 +197,7 @@ mod tests {
                     role_description: role.to_string(),
                     capabilities: caps.to_vec(),
                     execution_order: order,
-                    created_at: Utc::now(),
-                    child_step_id: None,
+                    ..Default::default()
                 })
             });
 
@@ -327,13 +271,8 @@ mod tests {
                     id: Uuid::new_v4(),
                     from_step_id: from,
                     to_step_id: to,
-                    from_output_port: None,
-                    to_input_port: None,
-                    transform_jsonpath: None,
-                    condition_type: None,
-                    condition_value: None,
-                    edge_label: None,
                     workflow_id: wid,
+                    ..Default::default()
                 })
             });
 
@@ -347,8 +286,7 @@ mod tests {
                     role_description: role.to_string(),
                     capabilities: caps.to_vec(),
                     execution_order: order,
-                    created_at: Utc::now(),
-                    child_step_id: None,
+                    ..Default::default()
                 })
             });
 
@@ -400,10 +338,8 @@ mod tests {
                     mission_brief_id: Uuid::new_v4(),
                     name: name.unwrap_or_else(|| "Coder".to_string()),
                     role_description: role.unwrap_or_else(|| "Worker".to_string()),
-                    capabilities: vec![],
-                    execution_order: 0,
-                    created_at: Utc::now(),
                     child_step_id: Some(child_step_id),
+                    ..Default::default()
                 })
             });
 
@@ -487,13 +423,8 @@ mod tests {
                 id: Uuid::new_v4(),
                 from_step_id: designer_id,
                 to_step_id: agent1_step,
-                from_output_port: None,
-                to_input_port: None,
-                transform_jsonpath: None,
-                condition_type: None,
-                condition_value: None,
-                edge_label: None,
                 workflow_id: child_wf_id,
+                ..Default::default()
             }])
         });
 
@@ -571,13 +502,8 @@ mod tests {
                     id: Uuid::new_v4(),
                     from_step_id: from,
                     to_step_id: to,
-                    from_output_port: None,
-                    to_input_port: None,
-                    transform_jsonpath: None,
-                    condition_type: None,
-                    condition_value: None,
-                    edge_label: None,
                     workflow_id: wid,
+                    ..Default::default()
                 })
             });
 
@@ -673,13 +599,8 @@ mod tests {
                 id: Uuid::new_v4(),
                 from_step_id: scanner_child,
                 to_step_id: analyzer_child,
-                from_output_port: None,
-                to_input_port: None,
-                transform_jsonpath: None,
-                condition_type: None,
-                condition_value: None,
-                edge_label: None,
                 workflow_id: child_wf_id,
+                ..Default::default()
             }])
         });
 
@@ -757,13 +678,8 @@ mod tests {
                 assert_eq!(caps, &["read_file".to_string(), "write_file".to_string()]);
                 Ok(TaskMissionBriefRow {
                     id: Uuid::new_v4(),
-                    step_id: Uuid::new_v4(),
-                    task_description: String::new(),
                     available_capabilities: caps.to_vec(),
-                    failure_mode: "fail_fast".to_string(),
-                    downstream_context: None,
-                    created_at: Utc::now(),
-                    updated_at: Utc::now(),
+                    ..Default::default()
                 })
             });
 

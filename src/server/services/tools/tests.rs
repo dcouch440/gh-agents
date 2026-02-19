@@ -24,19 +24,9 @@ mod tests {
         AgentRow {
             id,
             user_id: Some(owner_id),
-            tier: None,
             name: "test".to_string(),
-            system_prompt: String::new(),
-            persona_style: None,
-            model_provider: "anthropic".to_string(),
-            model_id: "claude-sonnet-4-20250514".to_string(),
-            model_max_tokens: 4096,
-            model_temperature: 0.7,
             status: Some("idle".to_string()),
-            output_schema_id: None,
-            version: 1,
-            default_reasoning_trace: None,
-            is_system: false,
+            ..Default::default()
         }
     }
 

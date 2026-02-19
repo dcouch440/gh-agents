@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
     use uuid::Uuid;
 
     use crate::db::traits::MockWorkflowRepo;
@@ -13,15 +12,7 @@ mod tests {
             id: Uuid::new_v4(),
             user_id,
             name: "wf".to_string(),
-            description: String::new(),
-            execution_mode: "dag".to_string(),
-            version: 1,
-            container_enabled: false,
-            target_repo_url: None,
-            target_branch: None,
-            vpn_enabled: false,
-            created_at: Utc::now(),
-            board_overview_summary: String::new(),
+            ..Default::default()
         }
     }
 
@@ -29,40 +20,7 @@ mod tests {
         WorkflowStepRow {
             id: Uuid::new_v4(),
             workflow_id,
-            agent_id: None,
-            execution_mode: "single".to_string(),
-            agent_execution_mode: None,
-            for_each_ref: None,
-            prompt_template_id: None,
-            prompt_template: String::new(),
-            output_schema_id: None,
-            output_variable_name: None,
-            interactive_agent_id: None,
-            for_each_label_field: None,
-            room_id: None,
-            routing_mode: None,
-            routing_field: None,
-            display_order: 0,
-            version: 1,
-            reasoning_trace: false,
-            verification_agent_ids: None,
-            position_x: None,
-            position_y: None,
-            width: None,
-            height: None,
-            name: None,
-            system_prompt_suffix: None,
-            visible: true,
-            description: String::new(),
-            board_context_cache: String::new(),
-            board_context_updated_at: None,
-            goal_summary: String::new(),
-            goal_summary_updated_at: None,
-            sub_workflow_template_id: None,
-            child_workflow_id: None,
-            is_designer_step: false,
-            pinned: false,
-            run_results_summary: String::new(),
+            ..Default::default()
         }
     }
 

@@ -5,7 +5,6 @@ mod tests {
         build_filtered_outputs_block, build_team_roster_string, compose_workforce_output,
         filter_outputs_for_agent,
     };
-    use chrono::Utc;
     use uuid::Uuid;
 
     fn make_roster_agent(name: &str, order: i32) -> TaskAgentRosterRow {
@@ -16,8 +15,7 @@ mod tests {
             role_description: format!("{} role", name),
             capabilities: vec!["file_read".to_string()],
             execution_order: order,
-            created_at: Utc::now(),
-            child_step_id: None,
+            ..Default::default()
         }
     }
 
