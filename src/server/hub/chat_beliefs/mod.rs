@@ -13,7 +13,7 @@ use uuid::Uuid;
 use crate::config::protocols::{roles, vars};
 use crate::db::{BeliefRow, ChatMessageRow};
 use crate::llm::{
-    AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage,
+    LLMRequest, Message as LlmMessage,
 };
 use crate::server::hub::protocols::json_utils::parse_structured_output;
 use crate::server::state::AppState;
@@ -118,12 +118,11 @@ async fn extract_and_replace_beliefs(
 
     let resolved = roles::CHAT_BELIEF_EXTRACTOR.resolve(&vars_map);
 
-    // 6. Call Haiku
-    let config = AnthropicConfig::from_env()?;
-    let client = AnthropicClient::new(config)?;
+    // 6. Call utility model
+    let client = crate::llm::create_utility_client()?;
 
     let request = LLMRequest::new(
-        crate::constants::MODEL_HAIKU,
+        crate::constants::MODEL_TIER3,
         vec![LlmMessage::user(resolved.user_prompt)],
     )
     .with_system(&resolved.system_prompt)
@@ -160,7 +159,7 @@ async fn extract_and_replace_beliefs(
             emotional_tone: b.emotional_tone,
             cross_source_tension: b.cross_source_tension,
             source_step_name: node_name.to_string(),
-            extraction_model: crate::constants::MODEL_HAIKU.to_string(),
+            extraction_model: crate::constants::MODEL_TIER3.to_string(),
             extraction_tokens_in: response.usage.input_tokens as i32,
             extraction_tokens_out: response.usage.output_tokens as i32,
             created_at: chrono::Utc::now(),
@@ -189,6 +188,7 @@ fn format_conversation(messages: &[ChatMessageRow]) -> String {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct BeliefExtractionOutput {
+    #[serde(default)]
     beliefs: Vec<ExtractedBelief>,
 }
 
@@ -210,13 +210,18 @@ pub(crate) struct ExtractedBelief {
 
 pub(crate) fn parse_extraction_output(content: &str) -> Vec<ExtractedBelief> {
     match parse_structured_output(content) {
-        Some(json) => match serde_json::from_value::<BeliefExtractionOutput>(json) {
-            Ok(output) => output.beliefs,
-            Err(e) => {
-                warn!("Failed to deserialize chat belief extraction output: {}", e);
-                vec![]
+        Some(json) => {
+            // Try as wrapped object: {"beliefs": [...]}
+            if let Ok(output) = serde_json::from_value::<BeliefExtractionOutput>(json.clone()) {
+                return output.beliefs;
             }
-        },
+            // Try as direct array: [...]
+            if let Ok(beliefs) = serde_json::from_value::<Vec<ExtractedBelief>>(json) {
+                return beliefs;
+            }
+            warn!("Failed to deserialize chat belief extraction output");
+            vec![]
+        }
         None => {
             warn!("No structured JSON found in chat belief extraction response");
             vec![]

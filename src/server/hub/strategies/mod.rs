@@ -70,6 +70,15 @@ pub fn compute_cost(model_id: &str, input_tokens: i64, output_tokens: i64) -> f3
         (3.0, 15.0)
     } else if model_id.contains("haiku") {
         (0.25, 1.25)
+    } else if model_id.contains("grok-4-0709") {
+        // xAI Grok T1 (orchestrator)
+        (3.0, 12.0)
+    } else if model_id.contains("grok") && model_id.contains("reasoning") {
+        // xAI Grok T2 (fast reasoning)
+        (2.0, 8.0)
+    } else if model_id.contains("grok") {
+        // xAI Grok T3 / generic Grok fallback
+        (0.6, 2.4)
     } else if model_id.contains("gpt-4o") {
         (2.5, 10.0)
     } else if model_id.contains("gpt-4") {

@@ -6,7 +6,7 @@ mod tests {
     fn make_config() -> AgentDesignerConfig {
         AgentDesignerConfig {
             system_prompt: "You are the Agent Designer.".to_string(),
-            model_id: "claude-sonnet-4-20250514".to_string(),
+            model_id: crate::constants::MODEL_TIER1.to_string(),
             temperature: 0.4,
             max_rounds: 1,
             context_budget: 480_000,
@@ -31,7 +31,7 @@ mod tests {
     #[test]
     fn strategy_model_id() {
         let strategy = AgentDesignerStrategy::new(make_config());
-        assert_eq!(strategy.model_id(), "claude-sonnet-4-20250514");
+        assert_eq!(strategy.model_id(), crate::constants::MODEL_TIER1);
     }
 
     #[test]

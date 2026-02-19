@@ -223,6 +223,22 @@ mod tests {
     }
 
     #[test]
+    fn parse_extraction_output_empty_object() {
+        // Grok may return {} without a beliefs key — should gracefully return empty
+        let result = parse_extraction_output("{}");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn parse_extraction_output_direct_array() {
+        // Some models return a bare array instead of {"beliefs": [...]}
+        let json = r#"[{"content": "direct", "reasoning": "r", "belief_type": "goal", "confidence": "high"}]"#;
+        let result = parse_extraction_output(json);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].content, "direct");
+    }
+
+    #[test]
     fn parse_extraction_output_with_cross_source_tension() {
         let json = r#"{"beliefs": [{"content": "New direction", "reasoning": "user pivoted", "belief_type": "goal", "confidence": "high", "cross_source_tension": "SUPERSEDED: old cats and dogs idea"}]}"#;
         let result = parse_extraction_output(json);

@@ -488,11 +488,24 @@ impl StreamAccumulator {
             );
         }
 
+        // If we accumulated tool use blocks, the stop reason MUST be ToolUse
+        // regardless of what the provider's completion event reported. This
+        // protects against providers (e.g. xAI Responses API) whose
+        // response.completed event doesn't reliably signal tool calls.
+        let has_tool_blocks = blocks
+            .iter()
+            .any(|b| matches!(b, ContentBlock::ToolUse { .. }));
+        let stop_reason = if has_tool_blocks {
+            StopReason::ToolUse
+        } else {
+            self.stop_reason?
+        };
+
         Some(LLMResponse {
             content: self.content,
             content_blocks: blocks,
             model: self.model?,
-            stop_reason: self.stop_reason?,
+            stop_reason,
             usage: TokenUsage {
                 input_tokens: self.input_tokens.unwrap_or(0),
                 output_tokens: self.output_tokens.unwrap_or(0),

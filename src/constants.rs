@@ -14,18 +14,33 @@ pub const ENV_RUST_ENV: &str = "RUST_ENV";
 pub const ENV_CORS_ORIGINS: &str = "CORS_ORIGINS";
 pub const ENV_NEXOR_STATIC_DIR: &str = "NEXOR_STATIC_DIR";
 
-// ── Model IDs ──────────────────────────────────────────────────────────────
-// Anthropic Claude model identifiers. Update these when migrating to new
-// model versions — every runtime reference should use these constants.
+// ── Active Provider Profile ──────────────────────────────────────────────
+// Switch all agents by commenting/uncommenting a profile block.
+// Tier 1 = orchestrator (assistant, designer, dispatch)
+// Tier 2 = worker (agents, room speakers)
+// Tier 3 = utility (extraction, summarization, gating)
 
-/// Primary orchestrator model (Opus tier).
-pub const MODEL_OPUS: &str = "claude-opus-4-5-20251101";
+/// The default LLM provider name used by the registry and all internal callers.
+pub const ACTIVE_PROVIDER: &str = "xai";
+/// Orchestrator tier — highest capability.
+pub const MODEL_TIER1: &str = "grok-4-0709";
+/// Worker tier — fast reasoning.
+pub const MODEL_TIER2: &str = "grok-4-1-fast-reasoning";
+/// Utility tier — fast non-reasoning.
+pub const MODEL_TIER3: &str = "grok-4-1-fast-non-reasoning";
 
-/// Primary worker model (Sonnet tier).
-pub const MODEL_SONNET: &str = "claude-sonnet-4-20250514";
+// ── Anthropic Profile (uncomment to switch back) ────────────────────────
+// pub const ACTIVE_PROVIDER: &str = "anthropic";
+// pub const MODEL_TIER1: &str = "claude-opus-4-5-20251101";
+// pub const MODEL_TIER2: &str = "claude-sonnet-4-20250514";
+// pub const MODEL_TIER3: &str = "claude-3-5-haiku-20241022";
 
-/// Primary utility model (Haiku tier).
-pub const MODEL_HAIKU: &str = "claude-3-5-haiku-20241022";
+// ── Per-Provider Default Models ──────────────────────────────────────────
+// Used by provider clients as their internal default (when no model is
+// explicitly requested). These do NOT change with the active profile.
+
+/// Default Anthropic model (used by AnthropicClient when no model specified).
+pub const ANTHROPIC_DEFAULT_MODEL: &str = "claude-sonnet-4-20250514";
 
 // ── Well-known IDs ────────────────────────────────────────────────────────
 
@@ -39,7 +54,7 @@ pub const DOCUMENTER_ASSISTANT_AGENT_ID: uuid::Uuid = uuid::Uuid::from_u128(2);
 // ── Defaults ───────────────────────────────────────────────────────────────
 
 /// Default model used when no tier/config is specified.
-pub const DEFAULT_MODEL: &str = MODEL_SONNET;
+pub const DEFAULT_MODEL: &str = MODEL_TIER1;
 
 // ── Token Limits (tier defaults) ────────────────────────────────────────────
 
@@ -399,6 +414,10 @@ pub const OLLAMA_DEFAULT_TIMEOUT_SECS: u64 = 300;
 
 /// Base URL for the xAI API.
 pub const XAI_DEFAULT_BASE_URL: &str = "https://api.x.ai";
+/// Default model for xAI Responses API (general-purpose).
+pub const XAI_DEFAULT_CHAT_MODEL: &str = MODEL_TIER1;
+/// Timeout for xAI chat completions (seconds).
+pub const XAI_CHAT_TIMEOUT_SECS: u64 = 120;
 /// Model optimized for agentic search with server-side tool use.
 pub const XAI_RESEARCH_MODEL: &str = "grok-4-1-fast";
 /// Timeout for research requests (server-side search can take a while).
@@ -409,7 +428,7 @@ pub const XAI_RESEARCH_MAX_TOKENS: u32 = 4096;
 
 /// Model used for the True Context distiller pre-pass.
 /// Swap to XAI_RESEARCH_MODEL or any model ID to change the distiller backend.
-pub const DISTILLER_MODEL: &str = MODEL_HAIKU;
+pub const DISTILLER_MODEL: &str = MODEL_TIER3;
 /// Max output tokens for the distiller response.
 pub const DISTILLER_MAX_TOKENS: u32 = 256;
 /// Max input characters from chat history fed to the distiller.

@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::llm::{
-    AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage,
+    LLMRequest, Message as LlmMessage,
 };
 use crate::server::state::AppState;
 use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
@@ -148,12 +148,11 @@ async fn run_consistency_scan(
     // 2. Build prompt input
     let prompt_input = format_scan_input(deleted_items, &all_notes);
 
-    // 3. Call Haiku
-    let config = AnthropicConfig::from_env()?;
-    let client = AnthropicClient::new(config)?;
+    // 3. Call utility model
+    let client = crate::llm::create_utility_client()?;
 
     let request = LLMRequest::new(
-        crate::constants::MODEL_HAIKU,
+        crate::constants::MODEL_TIER3,
         vec![LlmMessage::user(prompt_input)],
     )
     .with_system(SYSTEM_PROMPT)

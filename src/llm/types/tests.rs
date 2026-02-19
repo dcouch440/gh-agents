@@ -216,6 +216,41 @@ mod tests {
     }
 
     #[test]
+    fn accumulator_tool_blocks_override_end_turn_stop_reason() {
+        // xAI Responses API may report EndTurn in response.completed even
+        // when function_call blocks were streamed. The accumulator should
+        // override stop_reason to ToolUse based on accumulated blocks.
+        let mut acc = StreamAccumulator::new();
+        acc.apply(&StreamChunk::MessageStart {
+            model: "grok-4".to_string(),
+            input_tokens: 10,
+        });
+        acc.apply(&StreamChunk::ToolUseStart {
+            index: 0,
+            id: "call_1".to_string(),
+            name: "dispatch".to_string(),
+        });
+        acc.apply(&StreamChunk::InputJsonDelta {
+            index: 0,
+            partial_json: r#"{"instruction":"add agents"}"#.to_string(),
+        });
+        acc.apply(&StreamChunk::ContentBlockStop { index: 0 });
+        // Provider reports EndTurn instead of ToolUse
+        acc.apply(&StreamChunk::MessageDelta {
+            stop_reason: Some(StopReason::EndTurn),
+            output_tokens: Some(15),
+        });
+
+        let response = acc.build().unwrap();
+        // Must be ToolUse — the blocks are authoritative
+        assert_eq!(response.stop_reason, StopReason::ToolUse);
+        assert_eq!(response.content_blocks.len(), 1);
+        assert!(
+            matches!(&response.content_blocks[0], ContentBlock::ToolUse { name, .. } if name == "dispatch")
+        );
+    }
+
+    #[test]
     fn accumulator_tool_use_multiple_json_chunks() {
         let mut acc = StreamAccumulator::new();
         acc.apply(&StreamChunk::MessageStart {

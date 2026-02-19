@@ -30,13 +30,13 @@ mod tests {
         let config = ChatConfig {
             system_prompt: "You are helpful.".into(),
             tool_names: vec!["think".into()],
-            model_id: "claude-sonnet-4-20250514".into(),
+            model_id: crate::constants::DEFAULT_MODEL.into(),
             ..Default::default()
         };
         let strategy = ChatStrategy::new(config, state, UserId::new(), None, Uuid::new_v4());
 
         assert_eq!(strategy.system_prompt(), "You are helpful.");
-        assert_eq!(strategy.model_id(), "claude-sonnet-4-20250514");
+        assert_eq!(strategy.model_id(), crate::constants::DEFAULT_MODEL);
         assert_eq!(strategy.max_rounds(), 10);
         assert!(strategy.streaming());
     }
