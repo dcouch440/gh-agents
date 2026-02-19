@@ -560,6 +560,19 @@ mod tests {
             async fn delete_template(&self, _: Uuid) -> Result<()> {
                 unimplemented!()
             }
+            async fn set_step_pinned(&self, _: Uuid, _: bool) -> Result<()> {
+                unimplemented!()
+            }
+            async fn update_run_results_summary(&self, _: Uuid, _: &str) -> Result<()> {
+                unimplemented!()
+            }
+            async fn get_run_context_for_step(
+                &self,
+                _: Uuid,
+                _: Uuid,
+            ) -> Result<Vec<(String, String, bool)>> {
+                unimplemented!()
+            }
         }
 
         // Create test data

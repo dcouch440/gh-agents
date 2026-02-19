@@ -228,9 +228,9 @@ mod tests {
         assert!(serde_json::from_value::<DesignerOutputSchema>(value.clone()).is_err());
         // Unwrapping one level should succeed
         if let Some(obj) = value.as_object() {
-            let found = obj.values().any(|v| {
-                serde_json::from_value::<DesignerOutputSchema>(v.clone()).is_ok()
-            });
+            let found = obj
+                .values()
+                .any(|v| serde_json::from_value::<DesignerOutputSchema>(v.clone()).is_ok());
             assert!(found, "Should find DesignerOutputSchema one level deep");
         }
     }
@@ -250,9 +250,9 @@ mod tests {
         assert!(serde_json::from_value::<DesignerOutputSchema>(value.clone()).is_err());
         // One-level unwrap should also fail (double-wrapped)
         if let Some(obj) = value.as_object() {
-            let found = obj.values().any(|v| {
-                serde_json::from_value::<DesignerOutputSchema>(v.clone()).is_ok()
-            });
+            let found = obj
+                .values()
+                .any(|v| serde_json::from_value::<DesignerOutputSchema>(v.clone()).is_ok());
             assert!(!found, "Double-wrapped should not be found at one level");
         }
     }

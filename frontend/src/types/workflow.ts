@@ -34,6 +34,8 @@ type WorkflowStep = {
   system_prompt_suffix: string | null
   description: string
   sub_workflow_template_id: string | null
+  pinned: boolean
+  run_results_summary: string
 }
 
 type WorkflowStepEdge = {

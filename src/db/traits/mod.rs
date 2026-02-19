@@ -467,6 +467,21 @@ pub trait WorkflowRepo: Send + Sync {
     async fn update_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow>;
     async fn delete_step(&self, id: Uuid) -> Result<()>;
 
+    /// Toggle the pinned flag on a step.
+    async fn set_step_pinned(&self, step_id: Uuid, pinned: bool) -> Result<()>;
+
+    /// Update the run results summary for a step.
+    async fn update_run_results_summary(&self, step_id: Uuid, summary: &str) -> Result<()>;
+
+    /// Get run context for a step: the step's own summary plus summaries of
+    /// directly connected steps (upstream + downstream). Returns
+    /// `(step_name, run_results_summary, is_pinned)` for each.
+    async fn get_run_context_for_step(
+        &self,
+        workflow_id: Uuid,
+        step_id: Uuid,
+    ) -> Result<Vec<(String, String, bool)>>;
+
     // --- Edges ---
     async fn set_edges(&self, workflow_id: Uuid, edges: Vec<WorkflowStepEdgeRow>) -> Result<()>;
     async fn list_edges(&self, workflow_id: Uuid) -> Result<Vec<WorkflowStepEdgeRow>>;
@@ -1603,4 +1618,8 @@ pub trait ContentVersionRepo: Send + Sync {
         &self,
         run_id: Uuid,
     ) -> Result<Vec<EnvelopeSnapshotRow>>;
+
+    /// Get the latest envelope snapshot content for a step (across all runs).
+    /// Used by pinned node replay to load the most recent execution output.
+    async fn get_latest_envelope_for_step(&self, step_id: Uuid) -> Result<Option<String>>;
 }

@@ -6,8 +6,7 @@ mod tests {
 
     use crate::db::traits::MockWorkflowRepo;
     use crate::db::{
-        TaskAgentRosterRow, TaskMissionBriefRow, WorkflowRow,
-        WorkflowStepEdgeRow, WorkflowStepRow,
+        TaskAgentRosterRow, TaskMissionBriefRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
     };
 
     use super::super::{
@@ -57,6 +56,8 @@ mod tests {
             sub_workflow_template_id: None,
             child_workflow_id: None,
             is_designer_step: false,
+            pinned: false,
+            run_results_summary: String::new(),
         }
     }
 

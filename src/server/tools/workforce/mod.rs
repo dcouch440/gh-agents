@@ -152,6 +152,8 @@ async fn create_designer_step(
         sub_workflow_template_id: None,
         child_workflow_id: None,
         is_designer_step: true,
+        pinned: false,
+        run_results_summary: String::new(),
     };
 
     repo.create_step(step)
@@ -233,6 +235,8 @@ fn build_agent_child_step(
         sub_workflow_template_id: None,
         child_workflow_id: None,
         is_designer_step: false,
+        pinned: false,
+        run_results_summary: String::new(),
     }
 }
 

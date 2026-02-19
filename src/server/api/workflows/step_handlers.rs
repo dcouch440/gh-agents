@@ -13,8 +13,8 @@ use crate::server::services::steps;
 use crate::server::state::AppState;
 
 use super::types::{
-    step_response, CreateStepRequest, UpdateStepRequest, WorkflowNoteEntry, WorkflowStepPath,
-    WorkflowStepResponse,
+    step_response, CreateStepRequest, TogglePinRequest, UpdateStepRequest, WorkflowNoteEntry,
+    WorkflowStepPath, WorkflowStepResponse,
 };
 
 /// POST /api/workflows/:id/steps
@@ -248,4 +248,83 @@ pub async fn get_workflow_notes(
         })
         .collect();
     Ok(Json(entries))
+}
+
+/// POST /api/workflows/:wid/steps/:sid/pin — toggle step pin state
+#[utoipa::path(
+    post,
+    path = "/api/workflows/{wid}/steps/{sid}/pin",
+    tag = "Workflow Steps",
+    security(("bearer_auth" = [])),
+    params(
+        ("wid" = Uuid, Path, description = "Workflow ID"),
+        ("sid" = Uuid, Path, description = "Step ID")
+    ),
+    request_body = TogglePinRequest,
+    responses(
+        (status = 200, description = "Pin state updated", body = WorkflowStepResponse),
+        (status = 400, description = "Step not eligible for pinning"),
+        (status = 404, description = "Not found")
+    )
+)]
+pub async fn toggle_step_pin(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(p): Path<WorkflowStepPath>,
+    Json(req): Json<TogglePinRequest>,
+) -> Result<Json<WorkflowStepResponse>, AppError> {
+    let repo = state.repos().workflows.as_ref();
+
+    // Verify ownership
+    let step = steps::get_step(repo, auth.user_id.0, p.wid, p.sid).await?;
+
+    // Only single, context, and input modes are pin-eligible in v1
+    let pin_eligible = matches!(step.execution_mode.as_str(), "single" | "context" | "input");
+    if !pin_eligible {
+        return Err(AppError::BadRequest(format!(
+            "Execution mode '{}' is not eligible for pinning. Only single, context, and input steps can be pinned.",
+            step.execution_mode
+        )));
+    }
+
+    // For single steps: require a prior execution output before pinning
+    if req.pinned && step.execution_mode == "single" {
+        let has_envelope = state
+            .repos()
+            .content_versions
+            .get_latest_envelope_for_step(p.sid)
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?
+            .is_some();
+        if !has_envelope {
+            return Err(AppError::BadRequest(
+                "Cannot pin a single step that has never been executed. Run the step first."
+                    .to_string(),
+            ));
+        }
+    }
+
+    // Toggle pin
+    repo.set_step_pinned(p.sid, req.pinned)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    // Broadcast event
+    state.broadcast_workflow(crate::server::ws::events::WorkflowEvent {
+        run_id: None,
+        workflow_id: p.wid,
+        user_id: Some(auth.user_id.0),
+        kind: crate::server::ws::events::WorkflowEventKind::StepPinChanged {
+            step_id: p.sid,
+            pinned: req.pinned,
+        },
+    });
+
+    // Return updated step
+    let updated = repo
+        .get_step(p.sid)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Step"))?;
+    Ok(Json(step_response(updated)))
 }

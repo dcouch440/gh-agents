@@ -15,7 +15,7 @@ use uuid::Uuid;
 use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::server::state::AppState;
 use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
-use crate::types::{DownstreamRoutingContext, RouteDescription};
+use crate::types::{DownstreamRoutingContext, RouteDescription, StepExecutionEnvelope};
 
 use super::engine::ExecutionEngine;
 use super::error::HubError;
@@ -138,10 +138,11 @@ pub(crate) use dag_state::{
 
 pub use utils::{
     build_routing_instruction_block, check_step_readiness, collect_upstream_context_data,
-    evaluate_edge_condition, extract_for_each_label, find_entry_steps, get_child_steps,
-    get_parent_steps, resolve_dot_path, resolve_for_each_array, resolve_port_inputs,
-    resolve_variables, topological_sort, ContainerExecutionConfig, DagPaused, PortResolutionError,
-    StepOutput, StepReadiness, WorkflowExecutionContext, WorkflowExecutionResult,
+    compute_dead_path_steps, evaluate_edge_condition, extract_for_each_label, find_entry_steps,
+    get_child_steps, get_parent_steps, resolve_dot_path, resolve_for_each_array,
+    resolve_port_inputs, resolve_variables, topological_sort, ContainerExecutionConfig, DagPaused,
+    PortResolutionError, StepOutput, StepReadiness, WorkflowExecutionContext,
+    WorkflowExecutionResult,
 };
 pub(crate) use utils::{compose_prompt, PromptRepos};
 
@@ -231,6 +232,85 @@ async fn gather_downstream_routing_context(
     contexts
 }
 
+/// Spawn a background run results summarization if the step has completed output.
+fn spawn_summarizer_if_completed(state: &AppState, step_id: Uuid, dag_state: &DagExecutionState) {
+    if let Some(output) = dag_state.completed.get(&step_id) {
+        if !output.raw_output.is_empty() {
+            crate::server::hub::run_results::spawn_run_results_summary(
+                state.clone(),
+                state.run_results_tokens(),
+                step_id,
+                output.raw_output.clone(),
+            );
+        }
+    }
+}
+
+/// Load output for a pinned step, replaying its last known result.
+///
+/// For `context`/`input` modes: always returns Some with the pass-through output.
+/// For `single` and other modes: loads the last envelope from DB; returns None
+/// if no prior execution exists (caller should fall through to normal execution).
+async fn load_pinned_output(
+    dag: &DagContext<'_>,
+    step: &WorkflowStepRow,
+) -> Result<Option<(StepOutput, StepExecutionEnvelope)>, HubError> {
+    match step.execution_mode.as_str() {
+        "context" | "input" => {
+            let output_key = resolve_output_key(step, &dag.port_meta.step_outputs);
+            let content = if step.prompt_template.is_empty() {
+                dag.ctx.initial_input.clone()
+            } else {
+                step.prompt_template.clone()
+            };
+            let value = JsonValue::String(content.clone());
+            let output = StepOutput {
+                variable_name: output_key,
+                structured_output: Some(value.clone()),
+                raw_output: content,
+            };
+            let envelope = wrap_in_agentless_envelope(step.id, Some(value), 0, 0, 0, 0.0);
+            Ok(Some((output, envelope)))
+        }
+        _ => {
+            // For single/other modes: load last envelope from DB
+            let envelope_json = dag
+                .state
+                .repos()
+                .content_versions
+                .get_latest_envelope_for_step(step.id)
+                .await
+                .map_err(|e| {
+                    HubError::Internal(anyhow::anyhow!("Failed to load pinned envelope: {}", e))
+                })?;
+
+            match envelope_json {
+                Some(json_str) => {
+                    let envelope: StepExecutionEnvelope =
+                        serde_json::from_str(&json_str).map_err(|e| {
+                            HubError::Internal(anyhow::anyhow!(
+                                "Failed to deserialize pinned envelope: {}",
+                                e
+                            ))
+                        })?;
+                    let output_key = resolve_output_key(step, &dag.port_meta.step_outputs);
+                    let output = StepOutput {
+                        variable_name: output_key,
+                        structured_output: envelope.data.clone(),
+                        raw_output: envelope
+                            .data
+                            .as_ref()
+                            .map(|d| serde_json::to_string(d).unwrap_or_default())
+                            .unwrap_or_default(),
+                    };
+                    Ok(Some((output, envelope)))
+                }
+                None => Ok(None),
+            }
+        }
+    }
+}
+
 // ── Shared DAG Loop ─────────────────────────────────────────────────────────
 
 /// Core step dispatch loop shared by both fresh execution and resume paths.
@@ -249,6 +329,15 @@ async fn run_dag_loop(
         .first()
         .map(|s| s.workflow_id)
         .unwrap_or(Uuid::nil());
+
+    // Dead-path elimination: skip non-pinned steps whose output has no unpinned consumers
+    let dead_path_steps = compute_dead_path_steps(dag.steps, dag.edges);
+    if !dead_path_steps.is_empty() {
+        info!(
+            count = dead_path_steps.len(),
+            "Dead-path steps identified (all consumers pinned)"
+        );
+    }
 
     // Phase 6B: Detect chained for-each pipelines
     let chains = detect_for_each_chains(dag.steps, dag.edges);
@@ -279,6 +368,40 @@ async fn run_dag_loop(
         // Check cancellation before each step
         if dag.cancel.is_some_and(|t| t.is_cancelled()) {
             return Err(HubError::Cancelled);
+        }
+
+        // Pinned steps replay their last output — skip execution entirely
+        if step.pinned {
+            if let Some((output, envelope)) = load_pinned_output(dag, step).await? {
+                dag_state.record_step_output(step.id, output, envelope);
+                broadcast_workflow_event(
+                    dag.state,
+                    dag.ctx,
+                    step.workflow_id,
+                    WorkflowEventKind::StepCompleted {
+                        step_id: step.id,
+                        step_name: step_display_name(step),
+                        agent_id: None,
+                        output: None,
+                        input_tokens: Some(0),
+                        output_tokens: Some(0),
+                        duration_ms: Some(0),
+                    },
+                );
+                info!(step_id = %step.id, mode = %step.execution_mode, "Pinned step replayed");
+                continue;
+            }
+            // No prior output for single step: warn and fall through to normal execution
+            warn!(step_id = %step.id, "Pinned step has no prior output, executing normally");
+        }
+
+        // Dead-path elimination: skip steps whose output has no unpinned consumers
+        if dead_path_steps.contains(step_id) {
+            dag_state
+                .completed
+                .insert(*step_id, StepOutput::skipped(*step_id));
+            info!(step_id = %step.id, "Dead-path step skipped (all consumers pinned)");
+            continue;
         }
 
         // Check step readiness (handles conditional edges)
@@ -361,6 +484,8 @@ async fn run_dag_loop(
                 },
             );
 
+            spawn_summarizer_if_completed(dag.state, step.id, dag_state);
+
             info!(step_id = %step.id, "Context step pass-through completed");
             continue;
         }
@@ -373,6 +498,7 @@ async fn run_dag_loop(
                 broadcast_step_failure_if_real(dag.state, dag.ctx, workflow_id, step, e);
             }
             step_result?;
+            spawn_summarizer_if_completed(dag.state, step.id, dag_state);
             continue;
         }
 
@@ -384,6 +510,7 @@ async fn run_dag_loop(
                 broadcast_step_failure_if_real(dag.state, dag.ctx, workflow_id, step, e);
             }
             step_result?;
+            spawn_summarizer_if_completed(dag.state, step.id, dag_state);
             continue;
         }
 
@@ -395,6 +522,7 @@ async fn run_dag_loop(
                 broadcast_step_failure_if_real(dag.state, dag.ctx, workflow_id, step, e);
             }
             step_result?;
+            spawn_summarizer_if_completed(dag.state, step.id, dag_state);
             continue;
         }
 
@@ -470,6 +598,8 @@ async fn run_dag_loop(
             broadcast_step_failure_if_real(dag.state, dag.ctx, workflow_id, step, e);
         }
         step_result?;
+
+        spawn_summarizer_if_completed(dag.state, step.id, dag_state);
     }
 
     Ok(())

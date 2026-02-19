@@ -169,6 +169,7 @@ pub mod vars {
         pub const ASSISTANT_NOTES: &str = "System.assistant_notes";
         pub const BOARD_OVERVIEW: &str = "System.board_overview";
         pub const DISPATCH_STATUS: &str = "System.dispatch_status";
+        pub const RUN_CONTEXT: &str = "System.run_context";
     }
 }
 
@@ -511,6 +512,7 @@ mod tests {
             vars::system::ASSISTANT_NOTES,
             vars::system::BOARD_OVERVIEW,
             vars::system::DISPATCH_STATUS,
+            vars::system::RUN_CONTEXT,
             vars::workforce::AGENT_NAME,
             vars::workforce::ROLE_DESCRIPTION,
             vars::workforce::TASK_DESCRIPTION,

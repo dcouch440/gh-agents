@@ -16,6 +16,7 @@ pub mod graph_context;
 pub mod prompt_registry;
 pub mod protocols;
 pub mod recorder;
+pub mod run_results;
 pub mod strategies;
 pub mod strategy;
 pub mod streaming;
@@ -306,6 +307,9 @@ pub async fn build_step_system_prompt(
     // 2b. Build dispatch task status for this step
     let dispatch_status = build_dispatch_status(state, step_id);
 
+    // 2c. Build run context (run results summaries from self + connected steps)
+    let run_context = build_run_context(state, workflow_id, step_id).await;
+
     // 3. Resolve base template with all variables
     let mut vars_map = std::collections::HashMap::new();
     vars_map.insert(vars::system::BOARD_CONTEXT.to_string(), board_context);
@@ -317,6 +321,7 @@ pub async fn build_step_system_prompt(
     );
     vars_map.insert(vars::system::ASSISTANT_NOTES.to_string(), assistant_notes);
     vars_map.insert(vars::system::DISPATCH_STATUS.to_string(), dispatch_status);
+    vars_map.insert(vars::system::RUN_CONTEXT.to_string(), run_context);
 
     let resolved = roles::NODE_ASSISTANT_BASE.resolve(&vars_map);
 
@@ -384,6 +389,32 @@ pub(crate) fn build_dispatch_status(state: &AppState, step_id: Uuid) -> String {
         "<dispatch_status>\n{}\n</dispatch_status>",
         lines.join("\n")
     )
+}
+
+/// Build the `<run_context>` block from run results summaries of the step
+/// itself and directly connected steps (upstream + downstream).
+///
+/// Returns empty string if no summaries exist (blank-line collapsed by
+/// the template resolver).
+async fn build_run_context(state: &AppState, workflow_id: Uuid, step_id: Uuid) -> String {
+    let entries = state
+        .repos()
+        .workflows
+        .get_run_context_for_step(workflow_id, step_id)
+        .await
+        .unwrap_or_default();
+
+    if entries.is_empty() {
+        return String::new();
+    }
+
+    let mut lines = Vec::new();
+    for (step_name, summary, pinned) in &entries {
+        let pin_marker = if *pinned { " [pinned]" } else { "" };
+        lines.push(format!("- {}{}: {}", step_name, pin_marker, summary));
+    }
+
+    format!("<run_context>\n{}\n</run_context>", lines.join("\n"))
 }
 
 /// Truncate a string to at most `max` bytes at a char boundary.

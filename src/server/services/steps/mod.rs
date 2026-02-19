@@ -145,6 +145,8 @@ pub async fn create_step(
         sub_workflow_template_id: input.sub_workflow_template_id,
         child_workflow_id: None,
         is_designer_step: false,
+        pinned: false,
+        run_results_summary: String::new(),
     };
     let row = repo.create_step(step).await?;
     Ok(row)
@@ -260,6 +262,8 @@ pub async fn update_step(
             .or(existing.sub_workflow_template_id),
         child_workflow_id: existing.child_workflow_id,
         is_designer_step: existing.is_designer_step,
+        pinned: existing.pinned,
+        run_results_summary: existing.run_results_summary.clone(),
     };
     let row = repo.update_step(step).await?;
     Ok(row)

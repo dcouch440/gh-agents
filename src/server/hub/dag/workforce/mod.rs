@@ -13,8 +13,8 @@ use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::config::protocols::{roles, vars, WORKFORCE};
-use crate::db::WorkflowStepRow;
 use crate::db::traits::CreateAgentExecutionInput;
+use crate::db::WorkflowStepRow;
 use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow};
 use crate::server::hub::capability_resolver::resolve_capabilities_to_tools;
 use crate::server::hub::error::HubError;
@@ -410,9 +410,7 @@ pub(super) async fn execute_workforce_step(
             Ok(row) => {
                 // Record initial messages
                 let _ = ae_repo
-                    .create_execution_message(
-                        row.id, "system", &designed.system_prompt, None, 0, 0,
-                    )
+                    .create_execution_message(row.id, "system", &designed.system_prompt, None, 0, 0)
                     .await;
                 let _ = ae_repo
                     .create_execution_message(row.id, "user", &task_prompt, None, 0, 0)

@@ -88,3 +88,58 @@ pub fn get_child_steps(step_id: Uuid, edges: &[WorkflowStepEdgeRow]) -> Vec<Uuid
         .map(|e| e.to_step_id)
         .collect()
 }
+
+/// Compute the set of steps that can be skipped because all their downstream
+/// consumers are pinned (or themselves dead-path).
+///
+/// A non-terminal, non-pinned step is dead-path if **every** child is either
+/// pinned or dead-path. Terminal steps (no outgoing edges) are never dead-path.
+/// Iterates to a fixed point.
+pub fn compute_dead_path_steps(
+    steps: &[WorkflowStepRow],
+    edges: &[WorkflowStepEdgeRow],
+) -> HashSet<Uuid> {
+    let step_ids: HashSet<Uuid> = steps.iter().map(|s| s.id).collect();
+    let pinned: HashSet<Uuid> = steps.iter().filter(|s| s.pinned).map(|s| s.id).collect();
+
+    // Build children map
+    let mut children: HashMap<Uuid, Vec<Uuid>> = step_ids.iter().map(|id| (*id, vec![])).collect();
+    for edge in edges {
+        if step_ids.contains(&edge.from_step_id) && step_ids.contains(&edge.to_step_id) {
+            children
+                .entry(edge.from_step_id)
+                .or_default()
+                .push(edge.to_step_id);
+        }
+    }
+
+    let mut dead_path: HashSet<Uuid> = HashSet::new();
+
+    // Iterate to fixed point
+    loop {
+        let mut changed = false;
+        for step in steps {
+            if step.pinned || dead_path.contains(&step.id) {
+                continue;
+            }
+            let kids = children.get(&step.id).map(|v| v.as_slice()).unwrap_or(&[]);
+            // Terminal nodes are never dead-path
+            if kids.is_empty() {
+                continue;
+            }
+            // Dead-path if ALL children are pinned or dead-path
+            if kids
+                .iter()
+                .all(|kid| pinned.contains(kid) || dead_path.contains(kid))
+            {
+                dead_path.insert(step.id);
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
+    dead_path
+}

@@ -222,14 +222,10 @@ pub(crate) async fn run_agent_designer(
     {
         Ok(row) => {
             let _ = ae_repo
-                .create_execution_message(
-                    row.id, "system", &protocol_ctx.system_prompt, None, 0, 0,
-                )
+                .create_execution_message(row.id, "system", &protocol_ctx.system_prompt, None, 0, 0)
                 .await;
             let _ = ae_repo
-                .create_execution_message(
-                    row.id, "user", &protocol_ctx.user_prompt, None, 0, 0,
-                )
+                .create_execution_message(row.id, "user", &protocol_ctx.user_prompt, None, 0, 0)
                 .await;
             Some(row.id)
         }
@@ -318,7 +314,9 @@ pub(crate) async fn run_agent_designer(
                     if let Ok(schema) =
                         serde_json::from_value::<DesignerOutputSchema>(value.clone())
                     {
-                        warn!("Agent Designer wrapped output in extra layer, unwrapped successfully");
+                        warn!(
+                            "Agent Designer wrapped output in extra layer, unwrapped successfully"
+                        );
                         return Ok(schema);
                     }
                 }
