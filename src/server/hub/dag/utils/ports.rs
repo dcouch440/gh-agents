@@ -118,12 +118,12 @@ pub fn resolve_port_inputs(
 ) -> std::result::Result<HashMap<String, JsonValue>, PortResolutionError> {
     let mut resolved: HashMap<String, JsonValue> = HashMap::new();
 
-    // Find all incoming edges with port wiring, filtering out non-matching conditional edges
+    // Find port-wired edges, filtering out non-matching conditional edges.
+    // Callers should pass only edges targeting this step (pre-filtered via
+    // the incoming_edges adjacency index) so no full-scan is needed here.
     let incoming_edges: Vec<&WorkflowStepEdgeRow> = edges
         .iter()
-        .filter(|e| {
-            e.to_step_id == step_id && e.from_output_port.is_some() && e.to_input_port.is_some()
-        })
+        .filter(|e| e.from_output_port.is_some() && e.to_input_port.is_some())
         .filter(|e| {
             // Skip conditional edges whose condition didn't match
             if e.condition_type.is_some() {
@@ -216,20 +216,19 @@ pub fn resolve_port_inputs(
 /// envelope's `data` field. This function finds all incoming bare edges (no port
 /// names) from completed context steps and returns their data as `(title, content)`.
 ///
+/// Callers should pass only edges targeting this step (pre-filtered via
+/// the incoming_edges adjacency index).
+///
 /// Complements `resolve_port_inputs()` which handles port-wired edges.
 pub fn collect_upstream_context_data(
-    step_id: Uuid,
-    edges: &[WorkflowStepEdgeRow],
+    incoming_edges: &[WorkflowStepEdgeRow],
     steps: &[WorkflowStepRow],
     completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
 ) -> Vec<(String, String)> {
     let step_map: HashMap<Uuid, &WorkflowStepRow> = steps.iter().map(|s| (s.id, s)).collect();
     let mut results = Vec::new();
 
-    for edge in edges {
-        if edge.to_step_id != step_id {
-            continue;
-        }
+    for edge in incoming_edges {
         // Skip port-wired edges — those are handled by resolve_port_inputs
         if edge.from_output_port.is_some() || edge.to_input_port.is_some() {
             continue;

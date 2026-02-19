@@ -1691,7 +1691,7 @@ mod tests {
             make_envelope(serde_json::json!("This is the context content")),
         );
 
-        let result = collect_upstream_context_data(doc_id, &edges, &steps, &envelopes);
+        let result = collect_upstream_context_data(&edges, &steps, &envelopes);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].0, "Project Spec");
         assert_eq!(result[0].1, "This is the context content");
@@ -1711,7 +1711,7 @@ mod tests {
         let mut envelopes = HashMap::new();
         envelopes.insert(agent_id, make_envelope(serde_json::json!("Agent output")));
 
-        let result = collect_upstream_context_data(doc_id, &edges, &steps, &envelopes);
+        let result = collect_upstream_context_data(&edges, &steps, &envelopes);
         assert!(result.is_empty());
     }
 
@@ -1732,7 +1732,7 @@ mod tests {
         let mut envelopes = HashMap::new();
         envelopes.insert(ctx_id, make_envelope(serde_json::json!("Port data")));
 
-        let result = collect_upstream_context_data(doc_id, &edges, &steps, &envelopes);
+        let result = collect_upstream_context_data(&edges, &steps, &envelopes);
         assert!(result.is_empty());
     }
 
@@ -1764,7 +1764,7 @@ mod tests {
             make_envelope(serde_json::json!("API reference content")),
         );
 
-        let result = collect_upstream_context_data(doc_id, &edges, &steps, &envelopes);
+        let result = collect_upstream_context_data(&edges, &steps, &envelopes);
         assert_eq!(result.len(), 2);
 
         let titles: Vec<&str> = result.iter().map(|(t, _)| t.as_str()).collect();

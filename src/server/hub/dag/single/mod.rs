@@ -61,7 +61,6 @@ pub(super) async fn execute_single_step(
     // Resolve port inputs if this step has input ports defined
     let port_inputs = resolve_step_port_inputs(
         step,
-        dag.edges,
         dag.port_meta,
         &dag_state.completed_envelopes,
     );

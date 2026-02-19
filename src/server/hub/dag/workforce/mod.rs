@@ -129,15 +129,18 @@ pub(super) async fn execute_workforce_step(
     // 5. Resolve port inputs
     let port_inputs = resolve_step_port_inputs(
         step,
-        dag.edges,
         dag.port_meta,
         &dag_state.completed_envelopes,
     );
 
     // 5b. Collect upstream context from context nodes
+    let incoming = dag.port_meta
+        .incoming_edges
+        .get(&step.id)
+        .map(|v| v.as_slice())
+        .unwrap_or(&[]);
     let upstream_context = collect_upstream_context_data(
-        step.id,
-        dag.edges,
+        incoming,
         dag.steps,
         &dag_state.completed_envelopes,
     );

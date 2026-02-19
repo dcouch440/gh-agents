@@ -171,7 +171,7 @@ pub async fn execute_workshop_step(
         .ok_or(AppError::not_found("Step"))?;
 
     // Pre-fetch port metadata
-    let port_meta = prefetch_port_metadata(&state, &steps).await;
+    let port_meta = prefetch_port_metadata(&state, &steps, &edges).await;
 
     // Reconstruct DagState from snapshots
     let dag_state = reconstruct_dag_state_from_snapshots(
@@ -515,7 +515,7 @@ pub async fn get_workshop(
     let steps = workflow_repo.list_steps(id).await?;
     let edges = workflow_repo.list_edges(id).await?;
 
-    let port_meta = prefetch_port_metadata(&state, &steps).await;
+    let port_meta = prefetch_port_metadata(&state, &steps, &edges).await;
 
     // Reconstruct DagState from snapshots
     let dag_state = reconstruct_dag_state_from_snapshots(

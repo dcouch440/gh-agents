@@ -55,6 +55,7 @@ mod tests {
             step_inputs: HashMap::new(),
             step_outputs: HashMap::new(),
             routing_rules: HashMap::new(),
+            incoming_edges: HashMap::new(),
         };
 
         let step_map: HashMap<Uuid, &WorkflowStepRow> = steps.iter().map(|s| (s.id, s)).collect();
@@ -109,6 +110,7 @@ mod tests {
             step_inputs: HashMap::new(),
             step_outputs: HashMap::new(),
             routing_rules: HashMap::new(),
+            incoming_edges: HashMap::new(),
         };
 
         let step_map: HashMap<Uuid, &WorkflowStepRow> = steps.iter().map(|s| (s.id, s)).collect();
@@ -177,6 +179,7 @@ mod tests {
             step_inputs: HashMap::new(),
             step_outputs: HashMap::new(),
             routing_rules: HashMap::new(),
+            incoming_edges: HashMap::new(),
         };
 
         let step_map: HashMap<Uuid, &WorkflowStepRow> = steps.iter().map(|s| (s.id, s)).collect();
