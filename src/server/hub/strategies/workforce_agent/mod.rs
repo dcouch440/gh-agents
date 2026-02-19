@@ -137,45 +137,15 @@ impl ExecutionStrategy for WorkforceAgentStrategy {
             _ => {}
         }
 
-        // Container mode: route through docker exec
-        if let Some(ref handle) = self.config.container_handle {
-            info!(
-                tool = %name,
-                container = %handle.container_name(),
-                "Workforce agent tool call (container)"
-            );
-            return execution_tools::execute_tool_in_container(
-                name,
-                input,
-                handle,
-                Some(&self.config.tool_names),
-            )
-            .await;
-        }
-
-        // Local mode: use host execution context
-        match &self.config.execution_context {
-            Some(exec_ctx) => {
-                info!(tool = %name, "Workforce agent tool call");
-                execution_tools::execute_execution_tool(
-                    name,
-                    input,
-                    exec_ctx,
-                    Some(&self.config.tool_names),
-                )
-                .await
-            }
-            None => {
-                // No local execution context — try context-free tools
-                info!(tool = %name, "Workforce agent tool call (context-free)");
-                execution_tools::execute_context_free_tool(
-                    name,
-                    input,
-                    Some(&self.config.tool_names),
-                )
-                .await
-            }
-        }
+        info!(tool = %name, "Workforce agent tool call");
+        execution_tools::dispatch_tool_cascade(
+            name,
+            input,
+            self.config.container_handle.as_ref(),
+            self.config.execution_context.as_ref(),
+            Some(&self.config.tool_names),
+        )
+        .await
     }
 
     fn state(&self) -> Option<&AppState> {

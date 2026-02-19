@@ -117,54 +117,16 @@ impl ExecutionStrategy for DagStepStrategy {
             return crate::server::tools::documents::execute_read_document(input, &self.state)
                 .await;
         }
-        // Container mode: route through docker exec
-        if let Some(ref handle) = self.config.container_handle {
-            info!(
-                agent = %self.config.agent.name,
-                tool = %name,
-                container = %handle.container_name(),
-                "DAG step tool call (container)"
-            );
-            return execution_tools::execute_tool_in_container(
-                name,
-                input,
-                handle,
-                Some(&self.config.tool_names),
-            )
-            .await;
-        }
 
-        // Local mode: use host execution context
-        match &self.config.execution_context {
-            Some(exec_ctx) => {
-                info!(
-                    agent = %self.config.agent.name,
-                    tool = %name,
-                    "DAG step tool call"
-                );
-                execution_tools::execute_execution_tool(
-                    name,
-                    input,
-                    exec_ctx,
-                    Some(&self.config.tool_names),
-                )
-                .await
-            }
-            None => {
-                // No local execution context — try context-free tools (external APIs)
-                info!(
-                    agent = %self.config.agent.name,
-                    tool = %name,
-                    "DAG step tool call (context-free)"
-                );
-                execution_tools::execute_context_free_tool(
-                    name,
-                    input,
-                    Some(&self.config.tool_names),
-                )
-                .await
-            }
-        }
+        info!(agent = %self.config.agent.name, tool = %name, "DAG step tool call");
+        execution_tools::dispatch_tool_cascade(
+            name,
+            input,
+            self.config.container_handle.as_ref(),
+            self.config.execution_context.as_ref(),
+            Some(&self.config.tool_names),
+        )
+        .await
     }
 
     fn state(&self) -> Option<&AppState> {

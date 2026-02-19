@@ -469,6 +469,28 @@ pub async fn execute_context_free_tool(
     }
 }
 
+/// Dispatch a tool call through the container → local → context-free cascade.
+///
+/// Tries container execution first (if a handle is provided), then local
+/// execution via the host execution context, then context-free tools (external
+/// APIs only). Strategies should intercept any DB-backed tools *before* calling
+/// this function.
+pub async fn dispatch_tool_cascade(
+    name: &str,
+    input: &Value,
+    container_handle: Option<&ContainerHandle>,
+    execution_context: Option<&ExecutionContext>,
+    allowed_tools: Option<&[String]>,
+) -> Value {
+    if let Some(handle) = container_handle {
+        return execute_tool_in_container(name, input, handle, allowed_tools).await;
+    }
+    if let Some(ctx) = execution_context {
+        return execute_execution_tool(name, input, ctx, allowed_tools).await;
+    }
+    execute_context_free_tool(name, input, allowed_tools).await
+}
+
 // --- File operations ---
 
 async fn exec_read_file(input: &Value, ctx: &ExecutionContext) -> Value {

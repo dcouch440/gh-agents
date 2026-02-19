@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::db::traits::{CreateWorkflowInput, WorkflowRepo};
-use crate::db::WorkflowStepEdgeRow;
+use crate::db::{TaskMissionBriefRow, WorkflowStepEdgeRow};
 use crate::server::tools::shared::{require_array, require_str, require_uuid};
 
 mod tests;
@@ -248,6 +248,37 @@ fn build_agent_child_step(
 // Tool Handlers — Mission Brief & Roster (shared with task_force pattern)
 // =========================================================================
 
+/// Read-preserve-write helper for mission brief fields.
+///
+/// Loads the existing brief (if any), merges in provided overrides, and upserts.
+/// Fields set to `None` keep their existing (or default) values.
+async fn upsert_mission_brief_field(
+    repo: &dyn WorkflowRepo,
+    step_id: Uuid,
+    task_description: Option<&str>,
+    available_capabilities: Option<&[String]>,
+    failure_mode: Option<&str>,
+    downstream_context: Option<Option<String>>,
+) -> Result<TaskMissionBriefRow, String> {
+    let existing = repo.get_mission_brief(step_id).await.ok().flatten();
+
+    let desc = task_description
+        .map(String::from)
+        .unwrap_or_else(|| existing.as_ref().map_or(String::new(), |b| b.task_description.clone()));
+    let caps = available_capabilities
+        .map(|c| c.to_vec())
+        .unwrap_or_else(|| existing.as_ref().map_or(vec![], |b| b.available_capabilities.clone()));
+    let fm = failure_mode
+        .map(String::from)
+        .unwrap_or_else(|| existing.as_ref().map_or("fail_fast".to_string(), |b| b.failure_mode.clone()));
+    let dc = downstream_context
+        .unwrap_or_else(|| existing.as_ref().and_then(|b| b.downstream_context.clone()));
+
+    repo.upsert_mission_brief(step_id, &desc, &caps, &fm, dc)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 async fn execute_set_task(
     input: &Value,
     repo: &dyn WorkflowRepo,
@@ -258,31 +289,12 @@ async fn execute_set_task(
         Err(e) => return e,
     };
 
-    let existing = repo.get_mission_brief(ctx.step_id).await.ok().flatten();
-    let (capabilities, failure_mode, downstream_context) = match &existing {
-        Some(brief) => (
-            brief.available_capabilities.clone(),
-            brief.failure_mode.clone(),
-            brief.downstream_context.clone(),
-        ),
-        None => (vec![], "fail_fast".to_string(), None),
-    };
-
-    match repo
-        .upsert_mission_brief(
-            ctx.step_id,
-            description,
-            &capabilities,
-            &failure_mode,
-            downstream_context,
-        )
-        .await
-    {
+    match upsert_mission_brief_field(repo, ctx.step_id, Some(description), None, None, None).await {
         Ok(brief) => json!({
             "step_id": ctx.step_id.to_string(),
             "task_description": brief.task_description,
         }),
-        Err(e) => json!({ "error": e.to_string() }),
+        Err(e) => json!({ "error": e }),
     }
 }
 
@@ -531,30 +543,11 @@ async fn execute_set_capabilities(
         .filter_map(|v| v.as_str().map(String::from))
         .collect();
 
-    let existing = repo.get_mission_brief(ctx.step_id).await.ok().flatten();
-    let (task_description, failure_mode, downstream_context) = match &existing {
-        Some(brief) => (
-            brief.task_description.clone(),
-            brief.failure_mode.clone(),
-            brief.downstream_context.clone(),
-        ),
-        None => (String::new(), "fail_fast".to_string(), None),
-    };
-
-    match repo
-        .upsert_mission_brief(
-            ctx.step_id,
-            &task_description,
-            &capabilities,
-            &failure_mode,
-            downstream_context,
-        )
-        .await
-    {
+    match upsert_mission_brief_field(repo, ctx.step_id, None, Some(&capabilities), None, None).await {
         Ok(brief) => json!({
             "capabilities": brief.available_capabilities,
         }),
-        Err(e) => json!({ "error": e.to_string() }),
+        Err(e) => json!({ "error": e }),
     }
 }
 
@@ -578,30 +571,11 @@ async fn execute_set_failure_mode(
         });
     }
 
-    let existing = repo.get_mission_brief(ctx.step_id).await.ok().flatten();
-    let (task_description, capabilities, downstream_context) = match &existing {
-        Some(brief) => (
-            brief.task_description.clone(),
-            brief.available_capabilities.clone(),
-            brief.downstream_context.clone(),
-        ),
-        None => (String::new(), vec![], None),
-    };
-
-    match repo
-        .upsert_mission_brief(
-            ctx.step_id,
-            &task_description,
-            &capabilities,
-            mode,
-            downstream_context,
-        )
-        .await
-    {
+    match upsert_mission_brief_field(repo, ctx.step_id, None, None, Some(mode), None).await {
         Ok(brief) => json!({
             "failure_mode": brief.failure_mode,
         }),
-        Err(e) => json!({ "error": e.to_string() }),
+        Err(e) => json!({ "error": e }),
     }
 }
 

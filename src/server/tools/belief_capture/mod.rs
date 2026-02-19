@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::db::traits::WorkflowRepo;
+use crate::db::BeliefExtractionPlanRow;
 use crate::server::tools::shared::{require_array, require_str};
 
 mod tests;
@@ -41,6 +42,38 @@ pub async fn execute_belief_capture_tool(
     }
 }
 
+/// Read-preserve-write helper for extraction plan fields.
+///
+/// Loads the existing plan (if any), merges in provided overrides, and upserts.
+/// Fields set to `None` keep their existing (or default) values.
+async fn upsert_extraction_plan_field(
+    repo: &dyn WorkflowRepo,
+    step_id: Uuid,
+    extraction_focus: Option<&str>,
+    tag_vocabulary: Option<&[String]>,
+    contradiction_handling: Option<&str>,
+    confidence_threshold: Option<&str>,
+) -> Result<BeliefExtractionPlanRow, String> {
+    let existing = repo.get_extraction_plan(step_id).await.ok().flatten();
+
+    let focus = extraction_focus
+        .map(String::from)
+        .unwrap_or_else(|| existing.as_ref().map_or(String::new(), |p| p.extraction_focus.clone()));
+    let tags = tag_vocabulary
+        .map(|t| t.to_vec())
+        .unwrap_or_else(|| existing.as_ref().map_or(vec![], |p| p.tag_vocabulary.clone()));
+    let contra = contradiction_handling
+        .map(String::from)
+        .unwrap_or_else(|| existing.as_ref().map_or("flag".to_string(), |p| p.contradiction_handling.clone()));
+    let conf = confidence_threshold
+        .map(String::from)
+        .unwrap_or_else(|| existing.as_ref().map_or("low".to_string(), |p| p.confidence_threshold.clone()));
+
+    repo.upsert_extraction_plan(step_id, &focus, &tags, &contra, &conf)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 async fn execute_set_extraction_focus(
     input: &Value,
     repo: &dyn WorkflowRepo,
@@ -51,33 +84,12 @@ async fn execute_set_extraction_focus(
         Err(e) => return e,
     };
 
-    // Load existing plan to preserve other fields, or create new
-    let existing = repo.get_extraction_plan(ctx.step_id).await.ok().flatten();
-
-    let (tag_vocabulary, contradiction_handling, confidence_threshold) = match &existing {
-        Some(plan) => (
-            plan.tag_vocabulary.clone(),
-            plan.contradiction_handling.clone(),
-            plan.confidence_threshold.clone(),
-        ),
-        None => (vec![], "flag".to_string(), "low".to_string()),
-    };
-
-    match repo
-        .upsert_extraction_plan(
-            ctx.step_id,
-            guidance,
-            &tag_vocabulary,
-            &contradiction_handling,
-            &confidence_threshold,
-        )
-        .await
-    {
+    match upsert_extraction_plan_field(repo, ctx.step_id, Some(guidance), None, None, None).await {
         Ok(plan) => json!({
             "step_id": ctx.step_id.to_string(),
             "extraction_focus": plan.extraction_focus,
         }),
-        Err(e) => json!({ "error": e.to_string() }),
+        Err(e) => json!({ "error": e }),
     }
 }
 
@@ -95,32 +107,11 @@ async fn execute_set_tag_vocabulary(
         .filter_map(|v| v.as_str().map(String::from))
         .collect();
 
-    // Load existing plan to preserve other fields
-    let existing = repo.get_extraction_plan(ctx.step_id).await.ok().flatten();
-
-    let (extraction_focus, contradiction_handling, confidence_threshold) = match &existing {
-        Some(plan) => (
-            plan.extraction_focus.clone(),
-            plan.contradiction_handling.clone(),
-            plan.confidence_threshold.clone(),
-        ),
-        None => (String::new(), "flag".to_string(), "low".to_string()),
-    };
-
-    match repo
-        .upsert_extraction_plan(
-            ctx.step_id,
-            &extraction_focus,
-            &tags,
-            &contradiction_handling,
-            &confidence_threshold,
-        )
-        .await
-    {
+    match upsert_extraction_plan_field(repo, ctx.step_id, None, Some(&tags), None, None).await {
         Ok(plan) => json!({
             "tag_vocabulary": plan.tag_vocabulary,
         }),
-        Err(e) => json!({ "error": e.to_string() }),
+        Err(e) => json!({ "error": e }),
     }
 }
 
@@ -144,32 +135,11 @@ async fn execute_set_contradiction_handling(
         });
     }
 
-    // Load existing plan to preserve other fields
-    let existing = repo.get_extraction_plan(ctx.step_id).await.ok().flatten();
-
-    let (extraction_focus, tag_vocabulary, confidence_threshold) = match &existing {
-        Some(plan) => (
-            plan.extraction_focus.clone(),
-            plan.tag_vocabulary.clone(),
-            plan.confidence_threshold.clone(),
-        ),
-        None => (String::new(), vec![], "low".to_string()),
-    };
-
-    match repo
-        .upsert_extraction_plan(
-            ctx.step_id,
-            &extraction_focus,
-            &tag_vocabulary,
-            mode,
-            &confidence_threshold,
-        )
-        .await
-    {
+    match upsert_extraction_plan_field(repo, ctx.step_id, None, None, Some(mode), None).await {
         Ok(plan) => json!({
             "contradiction_handling": plan.contradiction_handling,
         }),
-        Err(e) => json!({ "error": e.to_string() }),
+        Err(e) => json!({ "error": e }),
     }
 }
 
@@ -193,32 +163,11 @@ async fn execute_set_confidence_threshold(
         });
     }
 
-    // Load existing plan to preserve other fields
-    let existing = repo.get_extraction_plan(ctx.step_id).await.ok().flatten();
-
-    let (extraction_focus, tag_vocabulary, contradiction_handling) = match &existing {
-        Some(plan) => (
-            plan.extraction_focus.clone(),
-            plan.tag_vocabulary.clone(),
-            plan.contradiction_handling.clone(),
-        ),
-        None => (String::new(), vec![], "flag".to_string()),
-    };
-
-    match repo
-        .upsert_extraction_plan(
-            ctx.step_id,
-            &extraction_focus,
-            &tag_vocabulary,
-            &contradiction_handling,
-            threshold,
-        )
-        .await
-    {
+    match upsert_extraction_plan_field(repo, ctx.step_id, None, None, None, Some(threshold)).await {
         Ok(plan) => json!({
             "confidence_threshold": plan.confidence_threshold,
         }),
-        Err(e) => json!({ "error": e.to_string() }),
+        Err(e) => json!({ "error": e }),
     }
 }
 
