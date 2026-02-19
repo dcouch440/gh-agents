@@ -1,27 +1,22 @@
 import AutoAwesomeOutlined from '@mui/icons-material/AutoAwesomeOutlined'
-import InputOutlined from '@mui/icons-material/InputOutlined'
 import GroupsOutlined from '@mui/icons-material/GroupsOutlined'
 import ForumOutlined from '@mui/icons-material/ForumOutlined'
 import BugReportOutlined from '@mui/icons-material/BugReportOutlined'
-import HistoryOutlined from '@mui/icons-material/HistoryOutlined'
-import StreamOutlined from '@mui/icons-material/StreamOutlined'
+import AssignmentOutlined from '@mui/icons-material/AssignmentOutlined'
 import StickyNote2Outlined from '@mui/icons-material/StickyNote2Outlined'
 import type { CanvasFormTab } from '../CanvasFormNode'
 import type { Archetype as ArchetypeType } from './archetypes'
 import { Archetype } from './archetypes'
 import { ChatTab } from './tabs/ChatTab'
 import { LiveStreamTab } from './tabs/LiveStreamTab'
-import { InputsOutputsTab } from './tabs/InputsOutputsTab'
 import { AgentRosterTab } from './tabs/AgentRosterTab'
 import { RoomMembersTab } from './tabs/RoomMembersTab'
 import { DebugLogTab } from './tabs/DebugLogTab'
-import { LastRunTab } from './tabs/LastRunTab'
 import { NotesTab } from './tabs/NotesTab'
 
 type BuildStepTabsParams = {
   stepId: string
   archetype: ArchetypeType
-  upstreamStepNames: readonly string[]
   includeLiveStream?: boolean
   focusMode?: boolean
 }
@@ -29,7 +24,6 @@ type BuildStepTabsParams = {
 const buildStepTabs = ({
   stepId,
   archetype,
-  upstreamStepNames,
   includeLiveStream = false,
   focusMode = false,
 }: BuildStepTabsParams): CanvasFormTab[] => {
@@ -45,18 +39,11 @@ const buildStepTabs = ({
   if (includeLiveStream) {
     tabs.push({
       id: 'live',
-      icon: StreamOutlined,
-      tooltip: 'Live Stream',
+      icon: AssignmentOutlined,
+      tooltip: 'Run Results',
       content: <LiveStreamTab stepId={stepId} />,
     })
   }
-
-  tabs.push({
-    id: 'io',
-    icon: InputOutlined,
-    tooltip: 'Inputs / Outputs',
-    content: <InputsOutputsTab upstreamStepNames={upstreamStepNames} />,
-  })
 
   if (archetype === Archetype.WORKFORCE) {
     tabs.push({
@@ -79,13 +66,6 @@ const buildStepTabs = ({
     icon: StickyNote2Outlined,
     tooltip: 'Assistant Notes',
     content: <NotesTab stepId={stepId} />,
-  })
-
-  tabs.push({
-    id: 'lastrun',
-    icon: HistoryOutlined,
-    tooltip: 'Last Run',
-    content: <LastRunTab stepId={stepId} />,
   })
 
   tabs.push({

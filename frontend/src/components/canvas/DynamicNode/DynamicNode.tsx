@@ -1,4 +1,4 @@
-import { memo, useState, useCallback, useEffect } from 'react'
+import { memo, useMemo, useState, useCallback, useEffect } from 'react'
 import { Position } from '@xyflow/react'
 import type { NodeProps } from '@xyflow/react'
 
@@ -11,7 +11,7 @@ import Typography from '@mui/material/Typography'
 import OpenInFullOutlined from '@mui/icons-material/OpenInFullOutlined'
 import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined'
 import CircularProgress from '@mui/material/CircularProgress'
-import StreamOutlined from '@mui/icons-material/StreamOutlined'
+import AssignmentOutlined from '@mui/icons-material/AssignmentOutlined'
 import { useStore, canvasStore, shareStore } from '@/stores'
 import { CanvasFormNode } from '../CanvasFormNode'
 import { CanvasHandle } from '../CanvasHandle'
@@ -107,18 +107,18 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   const shareOverlay = isShareSource ? <SharePickerPanel stepId={id} /> : undefined
   const effectiveHighlight = shareActive && !isShareSource ? HighlightMode.HOVER : baseHighlight
 
-  // --- Build tabs ---
-  const tabs = isAgent
+  // --- Build tabs (stabilized to prevent CanvasFormNode re-renders) ---
+  const tabs = useMemo(() => isAgent
     ? [
-        { id: 'stream', icon: StreamOutlined, tooltip: 'Live Stream', content: <AgentStreamTab rosterAgentId={nodeData.rosterAgentId ?? ''} protocolStepId={nodeData.protocolStepId} agentName={nodeData.label} /> },
+        { id: 'stream', icon: AssignmentOutlined, tooltip: 'Run Results', content: <AgentStreamTab rosterAgentId={nodeData.rosterAgentId ?? ''} protocolStepId={nodeData.protocolStepId} agentName={nodeData.label} /> },
         { id: 'info', icon: InfoOutlined, tooltip: 'Info', content: <AgentInfoTab roleDescription={nodeData.roleDescription ?? ''} capabilities={nodeData.capabilities} /> },
       ]
     : buildStepTabs({
         stepId: id,
         archetype: nodeData.archetype,
-        upstreamStepNames: nodeData.upstreamStepNames,
         includeLiveStream: true,
-      })
+      }),
+  [isAgent, id, nodeData.archetype, nodeData.rosterAgentId, nodeData.protocolStepId, nodeData.label, nodeData.roleDescription, nodeData.capabilities])
 
   // --- Header ---
   const subtitle = resolveSubtitle({

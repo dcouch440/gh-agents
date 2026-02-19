@@ -1,3 +1,4 @@
+import { memo, useMemo } from 'react'
 import { Box } from '@mui/material'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -8,10 +9,12 @@ type MarkdownPreviewProps = {
   className?: string
 }
 
+const REMARK_PLUGINS = [remarkGfm, remarkBreaks] as const
+
 const stripThinkingTags = (text: string): string => text.replace(/<thinking>[\s\S]*?<\/thinking>/g, '')
 
-function MarkdownPreview({ content, className }: MarkdownPreviewProps) {
-  const cleaned = stripThinkingTags(content)
+const MarkdownPreview = memo(function MarkdownPreview({ content, className }: MarkdownPreviewProps) {
+  const cleaned = useMemo(() => stripThinkingTags(content), [content])
 
   return (
     <Box
@@ -19,6 +22,7 @@ function MarkdownPreview({ content, className }: MarkdownPreviewProps) {
       sx={{
         overflow: 'auto',
         height: '100%',
+        contain: 'layout style paint',
         fontSize: '0.875rem',
         lineHeight: 1.6,
         color: 'text.primary',
@@ -60,10 +64,10 @@ function MarkdownPreview({ content, className }: MarkdownPreviewProps) {
         },
       }}
     >
-      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{cleaned}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={REMARK_PLUGINS}>{cleaned}</ReactMarkdown>
     </Box>
   )
-}
+})
 
 export { MarkdownPreview }
 export type { MarkdownPreviewProps }

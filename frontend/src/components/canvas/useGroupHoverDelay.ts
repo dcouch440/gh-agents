@@ -12,6 +12,13 @@ type GroupHoverCallbacks = {
   onNodeMouseLeave: () => void
 }
 
+/** Module-level drag flag — suppresses hover events during node drag to prevent re-renders. */
+let dragging = false
+
+const setDragging = (value: boolean): void => {
+  dragging = value
+}
+
 const useGroupHoverDelay = (): GroupHoverCallbacks => {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -24,6 +31,8 @@ const useGroupHoverDelay = (): GroupHoverCallbacks => {
   }, [])
 
   const onNodeMouseEnter = useCallback((_event: React.MouseEvent, node: NodeHoverInfo) => {
+    if (dragging) return
+
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current)
       timerRef.current = null
@@ -40,6 +49,8 @@ const useGroupHoverDelay = (): GroupHoverCallbacks => {
   }, [])
 
   const onNodeMouseLeave = useCallback(() => {
+    if (dragging) return
+
     if (timerRef.current !== null) {
       clearTimeout(timerRef.current)
       timerRef.current = null
@@ -50,4 +61,4 @@ const useGroupHoverDelay = (): GroupHoverCallbacks => {
   return { onNodeMouseEnter, onNodeMouseLeave }
 }
 
-export { useGroupHoverDelay }
+export { useGroupHoverDelay, setDragging }

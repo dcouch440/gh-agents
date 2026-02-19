@@ -3,16 +3,13 @@ import { buildStepTabs } from './buildStepTabs'
 import { Archetype } from './archetypes'
 vi.mock('./tabs/ChatTab', () => ({ ChatTab: () => null }))
 vi.mock('./tabs/LiveStreamTab', () => ({ LiveStreamTab: () => null }))
-vi.mock('./tabs/InputsOutputsTab', () => ({ InputsOutputsTab: () => null }))
 vi.mock('./tabs/AgentRosterTab', () => ({ AgentRosterTab: () => null }))
 vi.mock('./tabs/RoomMembersTab', () => ({ RoomMembersTab: () => null }))
 vi.mock('./tabs/DebugLogTab', () => ({ DebugLogTab: () => null }))
-vi.mock('./tabs/LastRunTab', () => ({ LastRunTab: () => null }))
 vi.mock('./tabs/NotesTab', () => ({ NotesTab: () => null }))
 
 const baseParams = {
   stepId: 'step-1',
-  upstreamStepNames: ['Upstream A'] as readonly string[],
 }
 
 describe('buildStepTabs', () => {
@@ -21,22 +18,20 @@ describe('buildStepTabs', () => {
     expect(tabs[0]!.id).toBe('chat')
   })
 
-  it('always includes io, notes, lastrun, and debug tabs', () => {
+  it('always includes notes and debug tabs', () => {
     const tabs = buildStepTabs({ ...baseParams, archetype: Archetype.BLANK })
     const ids = tabs.map((t) => t.id)
-    expect(ids).toContain('io')
     expect(ids).toContain('notes')
-    expect(ids).toContain('lastrun')
     expect(ids).toContain('debug')
   })
 
-  it('includes live stream tab when includeLiveStream is true', () => {
+  it('includes run results tab when includeLiveStream is true', () => {
     const tabs = buildStepTabs({ ...baseParams, archetype: Archetype.BLANK, includeLiveStream: true })
     const ids = tabs.map((t) => t.id)
     expect(ids).toContain('live')
   })
 
-  it('excludes live stream tab when includeLiveStream is false', () => {
+  it('excludes run results tab when includeLiveStream is false', () => {
     const tabs = buildStepTabs({ ...baseParams, archetype: Archetype.BLANK, includeLiveStream: false })
     const ids = tabs.map((t) => t.id)
     expect(ids).not.toContain('live')
@@ -81,10 +76,10 @@ describe('buildStepTabs', () => {
     })
   })
 
-  it('tab order: chat > live? > io > archetype-specific > notes > lastrun > debug', () => {
+  it('tab order: chat > live? > archetype-specific > notes > debug', () => {
     const tabs = buildStepTabs({ ...baseParams, archetype: Archetype.WORKFORCE, includeLiveStream: true })
     const ids = tabs.map((t) => t.id)
-    expect(ids).toEqual(['chat', 'live', 'io', 'agents', 'notes', 'lastrun', 'debug'])
+    expect(ids).toEqual(['chat', 'live', 'agents', 'notes', 'debug'])
   })
 
   it('every tab has an id, icon, tooltip, and content', () => {

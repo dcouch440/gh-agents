@@ -14,7 +14,6 @@ type FocusNodeViewProps = {
   stepId: string
   archetype: ArchetypeType
   stepName: string
-  upstreamStepNames: string[]
   activeTabId: string
   onTabChange: (tabId: string) => void
 }
@@ -23,7 +22,6 @@ function FocusNodeView({
   stepId,
   archetype,
   stepName,
-  upstreamStepNames,
   activeTabId,
   onTabChange,
 }: FocusNodeViewProps) {
@@ -37,7 +35,6 @@ function FocusNodeView({
   const tabs = buildStepTabs({
     stepId,
     archetype,
-    upstreamStepNames,
     focusMode: true,
   })
 

@@ -1,13 +1,10 @@
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
-import AddOutlined from '@mui/icons-material/AddOutlined'
 import { useTheme } from '@mui/material/styles'
 import { useStore, workflowStore } from '@/stores'
 import type { RosterAgent } from '@/types/workflow'
-import { RosterAddForm } from './RosterAddForm'
 
 type RosterListProps = {
   stepId: string
@@ -17,7 +14,6 @@ type RosterListProps = {
 function RosterList({ stepId, entityLabel }: RosterListProps) {
   const theme = useTheme()
   const roster = useStore(workflowStore.store, workflowStore.selectStepRoster(stepId))
-  const [adding, setAdding] = useState(false)
 
   const handleRemove = useCallback(
     (agentId: string) => {
@@ -26,30 +22,11 @@ function RosterList({ stepId, entityLabel }: RosterListProps) {
     [stepId],
   )
 
-  const handleSubmitNew = useCallback(
-    (name: string, roleDescription: string) => {
-      void workflowStore.createRosterAgent(stepId, {
-        name: name.trim(),
-        role_description: roleDescription.trim() || undefined,
-        execution_order: roster.length,
-      })
-      setAdding(false)
-    },
-    [stepId, roster.length],
-  )
-
   const lowerLabel = entityLabel.toLowerCase()
 
   return (
     <Box sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 1, height: '100%', overflow: 'auto' }}>
-      {adding && (
-        <RosterAddForm
-          onSubmit={handleSubmitNew}
-          onCancel={() => { setAdding(false) }}
-        />
-      )}
-
-      {!adding && roster.length === 0 && (
+      {roster.length === 0 && (
         <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Typography sx={{ fontSize: 12, color: 'text.disabled' }}>No {lowerLabel}s configured yet</Typography>
         </Box>
@@ -100,18 +77,6 @@ function RosterList({ stepId, entityLabel }: RosterListProps) {
           )}
         </Box>
       ))}
-
-      {!adding && (
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<AddOutlined />}
-          onClick={() => { setAdding(true) }}
-          sx={{ alignSelf: 'stretch' }}
-        >
-          Add {entityLabel}
-        </Button>
-      )}
     </Box>
   )
 }

@@ -53,9 +53,9 @@ function AgentStreamTabComponent({ rosterAgentId, protocolStepId, agentName }: A
     return (
       <Box
         className="nowheel nodrag nopan"
-        sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+        sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
       >
-        <Box sx={{ flex: 1, minHeight: 0, px: 1, py: 0.5 }}>
+        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: 1, py: 0.5 }}>
           <StreamView content={persistedContent} status="completed" />
         </Box>
       </Box>
@@ -75,9 +75,9 @@ function AgentStreamTabComponent({ rosterAgentId, protocolStepId, agentName }: A
   return (
     <Box
       className="nowheel nodrag nopan"
-      sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+      sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
     >
-      <Box sx={{ flex: 1, minHeight: 0, px: 1, py: 0.5 }}>
+      <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: 1, py: 0.5 }}>
         <StreamView
           content={source?.streamBuffer ?? ''}
           status={status === 'completed' || status === 'failed' ? status : 'running'}
