@@ -40,6 +40,9 @@ pub trait AgentRepo: Send + Sync {
     /// Get a single agent by ID.
     async fn get_persisted_agent(&self, agent_id: Uuid) -> Result<Option<AgentRow>>;
 
+    /// Get multiple agents by their IDs in a single query.
+    async fn get_agents_by_ids(&self, agent_ids: &[Uuid]) -> Result<Vec<AgentRow>>;
+
     /// Delete an agent by ID.
     async fn delete_persisted_agent(&self, agent_id: Uuid) -> Result<()>;
 
@@ -79,6 +82,10 @@ pub trait ToolRepo: Send + Sync {
 
     /// Get all tools assigned to an agent.
     async fn get_agent_tools(&self, agent_id: Uuid) -> Result<Vec<ToolRow>>;
+
+    /// Get tools for multiple agents in a single query.
+    /// Returns `(agent_id, ToolRow)` pairs; the caller groups by agent.
+    async fn get_tools_for_agents(&self, agent_ids: &[Uuid]) -> Result<Vec<(Uuid, ToolRow)>>;
 
     /// Set the full tool list for an agent (replaces existing).
     async fn set_agent_tools(&self, agent_id: Uuid, tool_ids: Vec<Uuid>) -> Result<()>;
