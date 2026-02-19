@@ -125,8 +125,12 @@ const dismissPanel = (stepId: string): void => {
   updateStep(stepId, { activePanel: null })
 }
 
+const setStreaming = (stepId: string, value: boolean): void => {
+  updateStep(stepId, { streaming: value })
+}
+
 const finalizeStream = (stepId: string): void => {
-  updateStep(stepId, { streamingSegments: [] })
+  updateStep(stepId, { streamingSegments: [], streaming: false })
 }
 
 const handleStreamError = (stepId: string, error: string): void => {
@@ -134,6 +138,7 @@ const handleStreamError = (stepId: string, error: string): void => {
   updateStep(stepId, {
     messages: applyStreamError(step.messages, error),
     streamingSegments: [],
+    streaming: false,
     error,
   })
 }
@@ -183,6 +188,19 @@ const buildDeduplicatingHandler = (
   trackLength: (len: number) => void,
 ): ((event: SSEEvent) => void) => {
   let replayedLength = 0
+  // Track tool IDs already seen in current segments to skip replayed events
+  const step = getStep(stepId)
+  const seenToolIds = new Set<string>(
+    step.streamingSegments
+      .filter((s): s is Extract<typeof s, { type: 'tool' }> => s.type === 'tool')
+      .map((s) => s.toolId),
+  )
+  const seenDocIds = new Set<string>(
+    step.streamingSegments
+      .filter((s): s is Extract<typeof s, { type: 'doc_update' }> => s.type === 'doc_update')
+      .map((s) => s.docId),
+  )
+
   return (evt: SSEEvent) => {
     if (isContentEvent(evt.event)) {
       const text = parseTokenText(evt.data)
@@ -194,6 +212,24 @@ const buildDeduplicatingHandler = (
         trackLength(newText.length)
         streamToken(stepId, newText)
       }
+    } else if (evt.event === SSE_EVENT.TOOL_START) {
+      const data = JSON.parse(evt.data) as { id: string }
+      if (seenToolIds.has(data.id)) return
+      seenToolIds.add(data.id)
+      onEvent(evt)
+    } else if (evt.event === SSE_EVENT.TOOL_END) {
+      const data = JSON.parse(evt.data) as { id: string }
+      // Check if tool was already completed in segments
+      const seg = getStep(stepId).streamingSegments.find(
+        (s) => s.type === 'tool' && s.toolId === data.id,
+      )
+      if (seg?.type === 'tool' && seg.status === 'complete') return
+      onEvent(evt)
+    } else if (evt.event === SSE_EVENT.DOC_UPDATE) {
+      const data = JSON.parse(evt.data) as { doc_id: string }
+      if (seenDocIds.has(data.doc_id)) return
+      seenDocIds.add(data.doc_id)
+      onEvent(evt)
     } else {
       onEvent(evt)
     }
@@ -217,6 +253,7 @@ export {
   addDoc,
   setPanel,
   dismissPanel,
+  setStreaming,
   finalizeStream,
   handleStreamError,
   handleSSEEvent,

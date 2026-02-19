@@ -3,13 +3,40 @@ import { useStore } from '@/stores'
 import { assistantSessionStore } from '@/stores/assistantSessionStore'
 import { api, createSSEStream } from '@/api'
 import { API } from '@/constants'
-import { useSendSessionMessage } from './useChatMutations'
+import type { SSEEvent } from '@/api'
 import type { ChatMessageData } from '@/components/chat'
 import type { MessageSegment } from '@/types'
 import type { PanelState } from '@/stores/assistantSessionStore'
 
 const STREAM_LOST_ERROR = 'Stream connection lost'
 const SEND_FAILED_ERROR = 'Failed to send message'
+
+// ---------------------------------------------------------------------------
+// Module-level stream lifecycle management
+//
+// Stream abort functions and retry state live here (not in component state)
+// so streams survive tab switches within the same workflow. Streams are only
+// aborted when the user explicitly cancels or navigates to a different workflow.
+// ---------------------------------------------------------------------------
+
+type ActiveStream = {
+  abort: () => void
+  retryAbort: (() => void) | null
+  receivedLength: number
+  retried: boolean
+  sessionId: string
+  messageId: string
+}
+
+const activeStreams = new Map<string, ActiveStream>()
+
+const abortStep = (stepId: string): void => {
+  const stream = activeStreams.get(stepId)
+  if (!stream) return
+  stream.abort()
+  stream.retryAbort?.()
+  activeStreams.delete(stepId)
+}
 
 // Track how many hook instances are mounted per stepId so we only
 // reset store state when the *last* consumer unmounts (e.g. full-screen
@@ -30,6 +57,11 @@ type UseAssistantSessionReturn = {
   submitPanelSelections: (selections: string) => void
 }
 
+type SendMessageResponse = {
+  message_id: string
+  status: string
+}
+
 const useAssistantSession = (
   workflowId: string | null,
   stepId: string,
@@ -39,12 +71,9 @@ const useAssistantSession = (
   const isLoading = useStore(assistantSessionStore.store, assistantSessionStore.selectLoading(stepId))
   const error = useStore(assistantSessionStore.store, assistantSessionStore.selectError(stepId))
   const activePanel = useStore(assistantSessionStore.store, assistantSessionStore.selectPanel(stepId))
+  const streaming = useStore(assistantSessionStore.store, assistantSessionStore.selectStreaming(stepId))
 
-  const { send, abort, cancelChat, streaming } = useSendSessionMessage()
-  const receivedLengthRef = useRef(0)
-  const retriedRef = useRef(false)
-  const retryAbortRef = useRef<(() => void) | null>(null)
-
+  // Mount tracking and session loading
   useEffect(() => {
     const prev = stepMountCounts.get(stepId) ?? 0
     stepMountCounts.set(stepId, prev + 1)
@@ -56,6 +85,7 @@ const useAssistantSession = (
         stepMountCounts.set(stepId, next)
         if (next <= 0) {
           stepMountCounts.delete(stepId)
+          abortStep(stepId)
           assistantSessionStore.resetStep(stepId)
         }
       }
@@ -67,42 +97,55 @@ const useAssistantSession = (
     }
 
     return () => {
-      abort()
-      retryAbortRef.current?.()
-      retryAbortRef.current = null
-
+      // Don't abort the stream on unmount — it persists across tab switches.
+      // Stream state (segments, messages) stays in the store and will be
+      // picked up when the component remounts.
       const next = (stepMountCounts.get(stepId) ?? 1) - 1
       stepMountCounts.set(stepId, next)
       if (next <= 0) {
         stepMountCounts.delete(stepId)
         // Defer reset to allow re-mount in the same render cycle
-        // (e.g. effect re-fire due to dependency change)
         queueMicrotask(() => {
           if ((stepMountCounts.get(stepId) ?? 0) === 0) {
+            // All consumers gone and nobody re-mounted — clean up.
+            // Only abort + reset if we're truly leaving (no re-mount).
+            abortStep(stepId)
             assistantSessionStore.resetStep(stepId)
           }
         })
       }
     }
-  }, [workflowId, stepId, abort])
+  }, [workflowId, stepId])
+
+  // Abort streams when the workflow changes (user navigated away)
+  const prevWorkflowIdRef = useRef(workflowId)
+  useEffect(() => {
+    if (prevWorkflowIdRef.current && prevWorkflowIdRef.current !== workflowId) {
+      abortStep(stepId)
+    }
+    prevWorkflowIdRef.current = workflowId
+  }, [workflowId, stepId])
 
   const sendMessage = useCallback(
     (content: string) => {
       if (!workflowId) return
 
-      receivedLengthRef.current = 0
-      retriedRef.current = false
-      retryAbortRef.current?.()
-      retryAbortRef.current = null
+      // Abort any existing stream for this step
+      abortStep(stepId)
 
       assistantSessionStore.appendMessage(stepId, { id: crypto.randomUUID(), role: 'user', content })
       assistantSessionStore.appendMessage(stepId, { id: crypto.randomUUID(), role: 'assistant', content: '' })
+      assistantSessionStore.setStreaming(stepId, true)
 
-      const onEvent = (event: Parameters<typeof assistantSessionStore.handleSSEEvent>[1]) => {
-        receivedLengthRef.current += assistantSessionStore.handleSSEEvent(stepId, event)
+      const onEvent = (event: SSEEvent) => {
+        const stream = activeStreams.get(stepId)
+        if (stream) {
+          stream.receivedLength += assistantSessionStore.handleSSEEvent(stepId, event)
+        }
       }
 
       const onDone = () => {
+        activeStreams.delete(stepId)
         assistantSessionStore.finalizeStream(stepId)
       }
 
@@ -114,54 +157,82 @@ const useAssistantSession = (
             assistantSessionStore.setSessionCreated(stepId, session)
           }
 
-          const messageId = await send(
-            session.id,
+          const { message_id: messageId } = await api.post<SendMessageResponse>(
+            API.SESSION_CHAT(session.id),
             { message: content },
-            onEvent,
-            onDone,
-            (err: Error) => {
-              if (!retriedRef.current) {
-                retriedRef.current = true
-                const dedupeAfter = receivedLengthRef.current
-                const handler = dedupeAfter > 0
-                  ? assistantSessionStore.buildDeduplicatingHandler(
-                      stepId,
-                      dedupeAfter,
-                      onEvent,
-                      (len) => { receivedLengthRef.current += len },
-                    )
-                  : onEvent
+          )
 
-                retryAbortRef.current = createSSEStream(
-                  API.SESSION_CHAT_STREAM(session.id, messageId),
-                  {
-                    onEvent: handler,
-                    onDone,
-                    onError: () => { assistantSessionStore.handleStreamError(stepId, STREAM_LOST_ERROR) },
-                  },
-                )
-              } else {
-                assistantSessionStore.handleStreamError(stepId, err.message)
-              }
+          const sseAbort = createSSEStream(
+            API.SESSION_CHAT_STREAM(session.id, messageId),
+            {
+              onEvent,
+              onDone,
+              onError: (err) => {
+                const stream = activeStreams.get(stepId)
+                if (!stream) return
+
+                if (!stream.retried) {
+                  stream.retried = true
+                  const dedupeAfter = stream.receivedLength
+                  const handler = dedupeAfter > 0
+                    ? assistantSessionStore.buildDeduplicatingHandler(
+                        stepId,
+                        dedupeAfter,
+                        onEvent,
+                        (len) => {
+                          const s = activeStreams.get(stepId)
+                          if (s) s.receivedLength += len
+                        },
+                      )
+                    : onEvent
+
+                  stream.retryAbort = createSSEStream(
+                    API.SESSION_CHAT_STREAM(session.id, messageId),
+                    {
+                      onEvent: handler,
+                      onDone,
+                      onError: () => {
+                        activeStreams.delete(stepId)
+                        assistantSessionStore.handleStreamError(stepId, STREAM_LOST_ERROR)
+                      },
+                    },
+                  )
+                } else {
+                  activeStreams.delete(stepId)
+                  assistantSessionStore.handleStreamError(stepId, err.message)
+                }
+              },
             },
           )
-          void messageId
+
+          activeStreams.set(stepId, {
+            abort: sseAbort,
+            retryAbort: null,
+            receivedLength: 0,
+            retried: false,
+            sessionId: session.id,
+            messageId,
+          })
         } catch (e) {
+          activeStreams.delete(stepId)
           assistantSessionStore.handleStreamError(stepId, e instanceof Error ? e.message : SEND_FAILED_ERROR)
         }
       }
 
       void doSend()
     },
-    [workflowId, stepId, send],
+    [workflowId, stepId],
   )
 
   const cancelGeneration = useCallback(() => {
-    cancelChat()
-    retryAbortRef.current?.()
-    retryAbortRef.current = null
+    const stream = activeStreams.get(stepId)
+    if (stream) {
+      // Cancel on the backend with proper session/message IDs
+      void api.sessions.cancelChat(stream.sessionId, stream.messageId).catch(() => {})
+    }
+    abortStep(stepId)
     assistantSessionStore.finalizeStream(stepId)
-  }, [cancelChat, stepId])
+  }, [stepId])
 
   const dismissPanel = useCallback(() => {
     assistantSessionStore.dismissPanel(stepId)

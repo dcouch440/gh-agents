@@ -53,6 +53,9 @@ pub(crate) struct DagExecutionState {
     pub var_outputs: HashMap<String, JsonValue>,
     pub completed: HashMap<Uuid, StepOutput>,
     pub completed_envelopes: HashMap<Uuid, StepExecutionEnvelope>,
+    /// Steps that failed during execution (step_id → error message).
+    /// Used by workshop hydration to surface prior failures on page reload.
+    pub failed: HashMap<Uuid, String>,
     pub total_input_tokens: i64,
     pub total_output_tokens: i64,
     pub total_cost_usd: f32,
@@ -64,6 +67,7 @@ impl DagExecutionState {
             var_outputs: HashMap::new(),
             completed: HashMap::new(),
             completed_envelopes: HashMap::new(),
+            failed: HashMap::new(),
             total_input_tokens: 0,
             total_output_tokens: 0,
             total_cost_usd: 0.0,
@@ -79,6 +83,7 @@ impl DagExecutionState {
             var_outputs,
             completed,
             completed_envelopes: HashMap::new(),
+            failed: HashMap::new(),
             total_input_tokens: 0,
             total_output_tokens: 0,
             total_cost_usd: 0.0,
@@ -90,11 +95,13 @@ impl DagExecutionState {
         completed: HashMap<Uuid, StepOutput>,
         var_outputs: HashMap<String, JsonValue>,
         completed_envelopes: HashMap<Uuid, StepExecutionEnvelope>,
+        failed: HashMap<Uuid, String>,
     ) -> Self {
         Self {
             var_outputs,
             completed,
             completed_envelopes,
+            failed,
             total_input_tokens: 0,
             total_output_tokens: 0,
             total_cost_usd: 0.0,

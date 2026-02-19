@@ -356,6 +356,7 @@ pub struct WorkshopStepSummary {
     pub step_id: Uuid,
     pub status: String,
     pub output: Option<serde_json::Value>,
+    pub error: Option<String>,
 }
 
 /// Path params for workshop step execution.

@@ -3,13 +3,14 @@ import { useAssistantSession } from './useAssistantSession'
 import { assistantSessionStore } from '@/stores/assistantSessionStore'
 import type { Session, ChatMessage } from '@/types'
 
-const { mockGetStepSession, mockGetOrCreate, mockGetHistory, mockClearMessages, mockSend, mockAbort } = vi.hoisted(() => ({
+const { mockGetStepSession, mockGetOrCreate, mockGetHistory, mockClearMessages, mockPost, mockCreateSSE, mockCancelChat } = vi.hoisted(() => ({
   mockGetStepSession: vi.fn(),
   mockGetOrCreate: vi.fn(),
   mockGetHistory: vi.fn(),
   mockClearMessages: vi.fn(),
-  mockSend: vi.fn(),
-  mockAbort: vi.fn(),
+  mockPost: vi.fn(),
+  mockCreateSSE: vi.fn(),
+  mockCancelChat: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -21,19 +22,11 @@ vi.mock('@/api', () => ({
     },
     sessions: {
       getHistory: mockGetHistory,
+      cancelChat: mockCancelChat,
     },
+    post: mockPost,
   },
-  createSSEStream: vi.fn(),
-}))
-
-vi.mock('./useChatMutations', () => ({
-  useSendSessionMessage: () => ({
-    send: mockSend,
-    abort: mockAbort,
-    loading: false,
-    streaming: false,
-    error: null,
-  }),
+  createSSEStream: mockCreateSSE,
 }))
 
 const makeSession = (id = 'session-001'): Session => ({
@@ -55,6 +48,7 @@ describe('useAssistantSession', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     assistantSessionStore.store.setState({ byStep: {} })
+    mockCreateSSE.mockReturnValue(vi.fn())
   })
 
   it('returns empty state when no existing session (GET 404)', async () => {
@@ -91,7 +85,7 @@ describe('useAssistantSession', () => {
     mockGetStepSession.mockRejectedValue(new Error('404 Not Found'))
     const session = makeSession()
     mockGetOrCreate.mockResolvedValue(session)
-    mockSend.mockResolvedValue('msg-new')
+    mockPost.mockResolvedValue({ message_id: 'msg-new', status: 'ok' })
 
     const { result } = renderHook(() => useAssistantSession('wf-001', 'step-001'))
 
@@ -113,13 +107,7 @@ describe('useAssistantSession', () => {
     })
 
     await waitFor(() => {
-      expect(mockSend).toHaveBeenCalledWith(
-        'session-001',
-        { message: 'set up docs' },
-        expect.any(Function),
-        expect.any(Function),
-        expect.any(Function),
-      )
+      expect(mockPost).toHaveBeenCalled()
     })
   })
 
@@ -127,7 +115,7 @@ describe('useAssistantSession', () => {
     const session = makeSession()
     mockGetStepSession.mockResolvedValue(session)
     mockGetHistory.mockResolvedValue([])
-    mockSend.mockResolvedValue('msg-new')
+    mockPost.mockResolvedValue({ message_id: 'msg-new', status: 'ok' })
 
     const { result } = renderHook(() => useAssistantSession('wf-001', 'step-001'))
 
@@ -140,7 +128,7 @@ describe('useAssistantSession', () => {
     })
 
     await waitFor(() => {
-      expect(mockSend).toHaveBeenCalled()
+      expect(mockPost).toHaveBeenCalled()
     })
 
     expect(mockGetOrCreate).not.toHaveBeenCalled()
@@ -254,5 +242,24 @@ describe('useAssistantSession', () => {
     await waitFor(() => {
       expect(result.current.messages).toEqual([])
     })
+  })
+
+  it('streaming state comes from store, not component', async () => {
+    mockGetStepSession.mockRejectedValue(new Error('404 Not Found'))
+
+    const { result } = renderHook(() => useAssistantSession('wf-001', 'step-001'))
+
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false)
+    })
+
+    expect(result.current.streaming).toBe(false)
+
+    // Simulate store streaming state change
+    act(() => {
+      assistantSessionStore.setStreaming('step-001', true)
+    })
+
+    expect(result.current.streaming).toBe(true)
   })
 })

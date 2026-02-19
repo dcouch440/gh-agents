@@ -16,7 +16,7 @@ use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
 use crate::server::state::AppState;
-use crate::types::StepExecutionEnvelope;
+use crate::types::{ExecutionStatus, StepExecutionEnvelope};
 
 use super::belief_capture::execute_belief_capture_step;
 use super::dag_state::{
@@ -67,6 +67,7 @@ pub(crate) async fn reconstruct_dag_state_from_snapshots(
     let mut completed = HashMap::new();
     let mut completed_envelopes = HashMap::new();
     let mut var_outputs = HashMap::new();
+    let mut failed: HashMap<Uuid, String> = HashMap::new();
 
     for snapshot in &snapshots {
         let envelope: StepExecutionEnvelope = match serde_json::from_str(&snapshot.content) {
@@ -80,6 +81,24 @@ pub(crate) async fn reconstruct_dag_state_from_snapshots(
                 continue;
             }
         };
+
+        // Error envelopes go to `failed`; successful ones go to `completed`.
+        // Snapshots are ordered by created_at ASC, so retries overwrite prior state.
+        if envelope.status == ExecutionStatus::Error && envelope.data.is_none() {
+            let error_msg = envelope
+                .error
+                .as_ref()
+                .map(|e| e.message.clone())
+                .unwrap_or_else(|| "Unknown error".to_string());
+            // Remove from completed in case this is a re-run that failed
+            completed.remove(&snapshot.step_id);
+            completed_envelopes.remove(&snapshot.step_id);
+            failed.insert(snapshot.step_id, error_msg);
+            continue;
+        }
+
+        // Success path — remove from failed in case this is a retry after failure
+        failed.remove(&snapshot.step_id);
 
         // Build StepOutput for the completed map
         let variable_name = step_map
@@ -108,6 +127,7 @@ pub(crate) async fn reconstruct_dag_state_from_snapshots(
         completed,
         var_outputs,
         completed_envelopes,
+        failed,
     ))
 }
 

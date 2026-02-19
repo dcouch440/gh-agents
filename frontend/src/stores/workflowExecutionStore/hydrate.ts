@@ -135,7 +135,7 @@ const mapWorkshopStepToStepState = (step: WorkshopStepSummary, runId: string): S
   agentId: null,
   executionId: runId,
   output: step.output !== null ? JSON.stringify(step.output) : null,
-  error: null,
+  error: step.error,
   inputTokens: null,
   outputTokens: null,
   durationMs: null,
@@ -159,13 +159,17 @@ const hydrateWorkshop = async (workflowId: string): Promise<void> => {
       stepStates[step.step_id] = mapWorkshopStepToStepState(step, workshop.run_id)
     }
 
+    const completedCount = workshop.completed_steps.filter(
+      (s) => s.status === 'completed',
+    ).length
+
     store.setState({
       runId: workshop.run_id,
       workflowId: workshop.workflow_id,
       isRunning: false,
       stepStates,
-      totalSteps: workshop.completed_steps.length + workshop.next_executable_steps.length,
-      completedStepCount: workshop.completed_steps.length,
+      totalSteps: completedCount + workshop.next_executable_steps.length,
+      completedStepCount: completedCount,
       viewMode: 'live',
     })
   } catch {

@@ -6,6 +6,7 @@ import {
   selectPanel,
   selectLoading,
   selectError,
+  selectStreaming,
 } from './selectors'
 import {
   initStep,
@@ -25,6 +26,7 @@ import {
   addDoc,
   setPanel,
   dismissPanel,
+  setStreaming,
   finalizeStream,
   handleStreamError,
   handleSSEEvent,
@@ -40,6 +42,7 @@ export const assistantSessionStore = {
   selectPanel,
   selectLoading,
   selectError,
+  selectStreaming,
   initStep,
   initEmpty,
   setSession,
@@ -55,6 +58,7 @@ export const assistantSessionStore = {
   addDoc,
   setPanel,
   dismissPanel,
+  setStreaming,
   finalizeStream,
   handleStreamError,
   handleSSEEvent,
