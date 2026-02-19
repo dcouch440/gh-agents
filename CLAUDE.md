@@ -78,7 +78,7 @@ src/
 │   ├── registry/      # ProviderRegistry (multi-provider routing)
 │   └── retry/, rate_limit/, stream/, types/
 ├── db/                # Row types (50+), repo traits, pg implementations, query builders
-├── config/protocols/  # Protocol configs (YAML + role definitions with {{.var}} templates)
+├── config/            # All AI prompts (system prompts, role definitions, protocol configs with {{.var}} templates)
 └── constants.rs       # Models, token limits, timeouts, rate limits, route paths
 ```
 
