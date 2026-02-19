@@ -159,7 +159,7 @@ pub async fn delete_roster_agent(
     auth: auth_utils::AuthUser,
     Path((wid, sid, rid)): Path<(Uuid, Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
-    let info = svc::delete_roster_agent(
+    let _info = svc::delete_roster_agent(
         state.repos().workflows.as_ref(),
         auth.user_id.0,
         wid,
@@ -168,18 +168,7 @@ pub async fn delete_roster_agent(
     )
     .await?;
 
-    // Schedule consistency scan (requires AppState, so stays in handler)
-    crate::server::hub::consistency_scanner::schedule_consistency_scan(
-        state.clone(),
-        wid,
-        crate::server::hub::consistency_scanner::DeletedItem {
-            item_type: crate::server::hub::consistency_scanner::DeletedItemType::RosterAgent,
-            name: info.agent_name,
-            id: rid,
-            source_step_id: sid,
-            source_step_name: info.step_name,
-        },
-    );
+    // Consistency scanner disabled — see consistency_scanner/mod.rs for details.
 
     Ok(StatusCode::NO_CONTENT)
 }
