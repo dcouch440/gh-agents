@@ -153,8 +153,6 @@ struct XAIRequest {
     max_output_tokens: Option<u32>,
     input: Vec<XAIMessage>,
     tools: Vec<serde_json::Value>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    include: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -374,7 +372,6 @@ impl GrokResearchClient {
             max_output_tokens: Some(self.config.max_tokens),
             input,
             tools,
-            include: Some(vec!["inline_citations".to_string()]),
         }
     }
 
