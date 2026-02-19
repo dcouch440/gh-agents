@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use super::super::*;
+    use crate::llm::*;
+    use crate::llm::sse_provider::SseProviderAdapter;
+    use crate::llm::xai::{convert_message, parse_xai_response, parse_xai_sse_line, XaiAdapter, XaiResponse};
 
     // ── Helper ──────────────────────────────────────────────────────────
 
@@ -15,8 +17,14 @@ mod tests {
         }
     }
 
+    fn test_adapter() -> XaiAdapter {
+        XaiAdapter {
+            config: test_config(),
+        }
+    }
+
     fn make_client() -> XaiClient {
-        XaiClient::new(test_config()).unwrap()
+        XaiClient::with_config(test_config()).unwrap()
     }
 
     // ── Config ──────────────────────────────────────────────────────────
@@ -55,26 +63,26 @@ mod tests {
     fn client_rejects_empty_key() {
         let mut config = test_config();
         config.api_key = String::new();
-        assert!(XaiClient::new(config).is_err());
+        assert!(XaiClient::with_config(config).is_err());
     }
 
     #[test]
     fn client_creates_with_valid_key() {
-        assert!(XaiClient::new(test_config()).is_ok());
+        assert!(XaiClient::with_config(test_config()).is_ok());
     }
 
     #[test]
-    fn responses_url_correct() {
-        let client = make_client();
-        assert_eq!(client.responses_url(), "https://api.x.ai/v1/responses");
+    fn endpoint_url_correct() {
+        let adapter = test_adapter();
+        assert_eq!(adapter.endpoint_url(), "https://api.x.ai/v1/responses");
     }
 
     #[test]
-    fn responses_url_with_custom_base() {
-        let config = test_config().with_base_url("http://localhost:9000");
-        let client = XaiClient::new(config).unwrap();
+    fn endpoint_url_with_custom_base() {
+        let mut adapter = test_adapter();
+        adapter.config.base_url = "http://localhost:9000".to_string();
         assert_eq!(
-            client.responses_url(),
+            adapter.endpoint_url(),
             "http://localhost:9000/v1/responses"
         );
     }
@@ -93,43 +101,44 @@ mod tests {
 
     #[test]
     fn build_request_uses_config_model_when_empty() {
-        let client = make_client();
+        let adapter = test_adapter();
         let req = LLMRequest::new("", vec![Message::user("Hello")]);
-        let api_req = client.build_request(&req, false);
-        assert_eq!(api_req.model, "grok-3-latest");
+        let body = adapter.build_request_body(&req, false);
+        assert_eq!(body["model"], "grok-3-latest");
     }
 
     #[test]
     fn build_request_uses_provided_model() {
-        let client = make_client();
+        let adapter = test_adapter();
         let req = LLMRequest::new("grok-4-1-fast", vec![Message::user("Hello")]);
-        let api_req = client.build_request(&req, false);
-        assert_eq!(api_req.model, "grok-4-1-fast");
+        let body = adapter.build_request_body(&req, false);
+        assert_eq!(body["model"], "grok-4-1-fast");
     }
 
     #[test]
     fn build_request_with_system_prompt() {
-        let client = make_client();
+        let adapter = test_adapter();
         let req = LLMRequest::new("", vec![Message::user("Hi")]).with_system("Be helpful");
-        let api_req = client.build_request(&req, false);
-        assert_eq!(api_req.instructions, Some("Be helpful".to_string()));
+        let body = adapter.build_request_body(&req, false);
+        assert_eq!(body["instructions"], "Be helpful");
     }
 
     #[test]
     fn build_request_stream_flag() {
-        let client = make_client();
+        let adapter = test_adapter();
         let req = LLMRequest::new("", vec![Message::user("Hi")]);
 
-        let non_stream = client.build_request(&req, false);
-        assert!(!non_stream.stream);
+        let non_stream = adapter.build_request_body(&req, false);
+        // stream=false is skipped during serialization
+        assert!(non_stream.get("stream").is_none() || non_stream["stream"] == false);
 
-        let stream = client.build_request(&req, true);
-        assert!(stream.stream);
+        let stream = adapter.build_request_body(&req, true);
+        assert_eq!(stream["stream"], true);
     }
 
     #[test]
     fn build_request_with_function_tools() {
-        let client = make_client();
+        let adapter = test_adapter();
         let tool = Tool {
             name: "get_weather".to_string(),
             description: "Get the weather".to_string(),
@@ -139,9 +148,9 @@ mod tests {
             }),
         };
         let req = LLMRequest::new("", vec![Message::user("Hi")]).with_tools(vec![tool]);
-        let api_req = client.build_request(&req, false);
+        let body = adapter.build_request_body(&req, false);
 
-        let tools = api_req.tools.unwrap();
+        let tools = body["tools"].as_array().unwrap();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0]["type"], "function");
         assert_eq!(tools[0]["name"], "get_weather");
@@ -153,12 +162,12 @@ mod tests {
         let mut config = test_config();
         config.web_search = true;
         config.x_search = true;
-        let client = XaiClient::new(config).unwrap();
+        let adapter = XaiAdapter { config };
 
         let req = LLMRequest::new("", vec![Message::user("Hi")]);
-        let api_req = client.build_request(&req, false);
+        let body = adapter.build_request_body(&req, false);
 
-        let tools = api_req.tools.unwrap();
+        let tools = body["tools"].as_array().unwrap();
         assert_eq!(tools.len(), 2);
         assert_eq!(tools[0]["type"], "web_search");
         assert_eq!(tools[1]["type"], "x_search");
@@ -168,7 +177,7 @@ mod tests {
     fn build_request_mixes_builtin_and_function_tools() {
         let mut config = test_config();
         config.web_search = true;
-        let client = XaiClient::new(config).unwrap();
+        let adapter = XaiAdapter { config };
 
         let tool = Tool {
             name: "read_file".to_string(),
@@ -176,9 +185,9 @@ mod tests {
             input_schema: serde_json::json!({"type": "object"}),
         };
         let req = LLMRequest::new("", vec![Message::user("Hi")]).with_tools(vec![tool]);
-        let api_req = client.build_request(&req, false);
+        let body = adapter.build_request_body(&req, false);
 
-        let tools = api_req.tools.unwrap();
+        let tools = body["tools"].as_array().unwrap();
         assert_eq!(tools.len(), 2);
         assert_eq!(tools[0]["type"], "web_search");
         assert_eq!(tools[1]["type"], "function");
@@ -187,10 +196,10 @@ mod tests {
 
     #[test]
     fn build_request_no_tools_omitted() {
-        let client = make_client();
+        let adapter = test_adapter();
         let req = LLMRequest::new("", vec![Message::user("Hi")]);
-        let api_req = client.build_request(&req, false);
-        assert!(api_req.tools.is_none());
+        let body = adapter.build_request_body(&req, false);
+        assert!(body.get("tools").is_none());
     }
 
     // ── Message conversion ──────────────────────────────────────────────
@@ -199,7 +208,7 @@ mod tests {
     fn convert_message_user_text() {
         let msg = Message::user("Hello");
         let mut out = Vec::new();
-        XaiClient::convert_message(&msg, &mut out);
+        convert_message(&msg, &mut out);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0]["role"], "user");
         assert_eq!(out[0]["content"], "Hello");
@@ -209,7 +218,7 @@ mod tests {
     fn convert_message_assistant_text() {
         let msg = Message::assistant("Hi there");
         let mut out = Vec::new();
-        XaiClient::convert_message(&msg, &mut out);
+        convert_message(&msg, &mut out);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0]["type"], "message");
         assert_eq!(out[0]["role"], "assistant");
@@ -231,9 +240,8 @@ mod tests {
         ];
         let msg = Message::assistant_with_blocks(blocks);
         let mut out = Vec::new();
-        XaiClient::convert_message(&msg, &mut out);
+        convert_message(&msg, &mut out);
 
-        // Should produce: 1 message + 1 function_call
         assert_eq!(out.len(), 2);
         assert_eq!(out[0]["type"], "message");
         assert_eq!(out[0]["content"][0]["text"], "Let me check.");
@@ -250,7 +258,7 @@ mod tests {
         }];
         let msg = Message::tool_results(blocks);
         let mut out = Vec::new();
-        XaiClient::convert_message(&msg, &mut out);
+        convert_message(&msg, &mut out);
 
         assert_eq!(out.len(), 1);
         assert_eq!(out[0]["type"], "function_call_output");
@@ -275,7 +283,7 @@ mod tests {
         ];
         let msg = Message::tool_results(blocks);
         let mut out = Vec::new();
-        XaiClient::convert_message(&msg, &mut out);
+        convert_message(&msg, &mut out);
 
         assert_eq!(out.len(), 3);
         assert_eq!(out[0]["role"], "user");
@@ -302,7 +310,7 @@ mod tests {
         }))
         .unwrap();
 
-        let resp = XaiClient::parse_response(api_resp);
+        let resp = parse_xai_response(api_resp);
         assert_eq!(resp.content, "Hello!");
         assert_eq!(resp.model, "grok-3-latest");
         assert_eq!(resp.stop_reason, StopReason::EndTurn);
@@ -332,7 +340,7 @@ mod tests {
         }))
         .unwrap();
 
-        let resp = XaiClient::parse_response(api_resp);
+        let resp = parse_xai_response(api_resp);
         assert_eq!(resp.content, "Let me search.");
         assert_eq!(resp.stop_reason, StopReason::ToolUse);
         assert_eq!(resp.content_blocks.len(), 2);
@@ -362,7 +370,7 @@ mod tests {
         }))
         .unwrap();
 
-        let resp = XaiClient::parse_response(api_resp);
+        let resp = parse_xai_response(api_resp);
         assert_eq!(resp.content, "");
         assert_eq!(resp.stop_reason, StopReason::ToolUse);
         assert_eq!(resp.content_blocks.len(), 1);
@@ -382,7 +390,7 @@ mod tests {
         }))
         .unwrap();
 
-        let resp = XaiClient::parse_response(api_resp);
+        let resp = parse_xai_response(api_resp);
         assert_eq!(resp.stop_reason, StopReason::MaxTokens);
     }
 
@@ -403,7 +411,7 @@ mod tests {
         }))
         .unwrap();
 
-        let resp = XaiClient::parse_response(api_resp);
+        let resp = parse_xai_response(api_resp);
         assert_eq!(resp.content, "Found it!");
         assert_eq!(resp.content_blocks.len(), 1);
         assert_eq!(resp.stop_reason, StopReason::EndTurn);
@@ -414,7 +422,7 @@ mod tests {
     #[test]
     fn parse_sse_text_delta() {
         let line = r#"data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"delta":"Hello"}"#;
-        let result = XaiClient::parse_sse_line(line);
+        let result = parse_xai_sse_line(line);
         assert!(result.is_some());
         match result.unwrap().unwrap() {
             StreamChunk::ContentDelta { text, index } => {
@@ -428,7 +436,7 @@ mod tests {
     #[test]
     fn parse_sse_function_call_added() {
         let line = r#"data: {"type":"response.output_item.added","output_index":1,"item":{"type":"function_call","call_id":"call_1","name":"search"}}"#;
-        let result = XaiClient::parse_sse_line(line);
+        let result = parse_xai_sse_line(line);
         assert!(result.is_some());
         match result.unwrap().unwrap() {
             StreamChunk::ToolUseStart { index, id, name } => {
@@ -443,7 +451,7 @@ mod tests {
     #[test]
     fn parse_sse_function_call_args_delta() {
         let line = r#"data: {"type":"response.function_call_arguments.delta","output_index":1,"delta":"{\"q\":"}"#;
-        let result = XaiClient::parse_sse_line(line);
+        let result = parse_xai_sse_line(line);
         assert!(result.is_some());
         match result.unwrap().unwrap() {
             StreamChunk::InputJsonDelta {
@@ -460,7 +468,7 @@ mod tests {
     #[test]
     fn parse_sse_function_call_args_done() {
         let line = r#"data: {"type":"response.function_call_arguments.done","output_index":1,"arguments":"{\"q\":\"test\"}"}"#;
-        let result = XaiClient::parse_sse_line(line);
+        let result = parse_xai_sse_line(line);
         assert!(result.is_some());
         match result.unwrap().unwrap() {
             StreamChunk::ContentBlockStop { index } => assert_eq!(index, 1),
@@ -471,7 +479,7 @@ mod tests {
     #[test]
     fn parse_sse_response_created() {
         let line = r#"data: {"type":"response.created","response":{"id":"resp_1","model":"grok-3-latest","status":"in_progress"}}"#;
-        let result = XaiClient::parse_sse_line(line);
+        let result = parse_xai_sse_line(line);
         assert!(result.is_some());
         match result.unwrap().unwrap() {
             StreamChunk::MessageStart {
@@ -488,7 +496,7 @@ mod tests {
     #[test]
     fn parse_sse_response_completed_text_only() {
         let line = r#"data: {"type":"response.completed","response":{"model":"grok-3","output":[{"type":"message"}],"usage":{"input_tokens":25,"output_tokens":50},"status":"completed"}}"#;
-        let result = XaiClient::parse_sse_line(line);
+        let result = parse_xai_sse_line(line);
         assert!(result.is_some());
         match result.unwrap().unwrap() {
             StreamChunk::MessageDelta {
@@ -505,7 +513,7 @@ mod tests {
     #[test]
     fn parse_sse_response_completed_with_tool_calls() {
         let line = r#"data: {"type":"response.completed","response":{"model":"grok-3","output":[{"type":"function_call","call_id":"c1","name":"f"}],"usage":{"input_tokens":10,"output_tokens":20},"status":"completed"}}"#;
-        let result = XaiClient::parse_sse_line(line);
+        let result = parse_xai_sse_line(line);
         assert!(result.is_some());
         match result.unwrap().unwrap() {
             StreamChunk::MessageDelta {
@@ -522,7 +530,7 @@ mod tests {
     #[test]
     fn parse_sse_response_failed() {
         let line = r#"data: {"type":"response.failed","response":{"error":{"message":"Model overloaded"}}}"#;
-        let result = XaiClient::parse_sse_line(line);
+        let result = parse_xai_sse_line(line);
         assert!(result.is_some());
         match result.unwrap() {
             Err(LLMError::ApiError { status, message }) => {
@@ -536,7 +544,7 @@ mod tests {
     #[test]
     fn parse_sse_response_incomplete() {
         let line = r#"data: {"type":"response.incomplete","response":{"status":"incomplete"}}"#;
-        let result = XaiClient::parse_sse_line(line);
+        let result = parse_xai_sse_line(line);
         assert!(result.is_some());
         match result.unwrap().unwrap() {
             StreamChunk::MessageDelta { stop_reason, .. } => {
@@ -548,35 +556,36 @@ mod tests {
 
     #[test]
     fn parse_sse_ignores_non_data_lines() {
-        assert!(XaiClient::parse_sse_line("event: response.created").is_none());
-        assert!(XaiClient::parse_sse_line("").is_none());
-        assert!(XaiClient::parse_sse_line(": keepalive").is_none());
+        assert!(parse_xai_sse_line("event: response.created").is_none());
+        assert!(parse_xai_sse_line("").is_none());
+        assert!(parse_xai_sse_line(": keepalive").is_none());
     }
 
     #[test]
     fn parse_sse_ignores_unknown_event_types() {
         let line =
             r#"data: {"type":"response.in_progress","response":{"status":"in_progress"}}"#;
-        assert!(XaiClient::parse_sse_line(line).is_none());
+        assert!(parse_xai_sse_line(line).is_none());
     }
 
     #[test]
     fn parse_sse_invalid_json_returns_none() {
-        assert!(XaiClient::parse_sse_line("data: {invalid json}").is_none());
+        assert!(parse_xai_sse_line("data: {invalid json}").is_none());
     }
 
     #[test]
     fn parse_sse_output_item_added_non_function_call_ignored() {
         let line = r#"data: {"type":"response.output_item.added","output_index":0,"item":{"type":"message","role":"assistant"}}"#;
-        assert!(XaiClient::parse_sse_line(line).is_none());
+        assert!(parse_xai_sse_line(line).is_none());
     }
 
     // ── Error handling ──────────────────────────────────────────────────
 
     #[test]
     fn handle_error_401_auth() {
+        let adapter = test_adapter();
         let body = r#"{"error":{"message":"Invalid API key"}}"#;
-        match XaiClient::handle_error(401, body, None) {
+        match adapter.handle_error(401, body, None) {
             LLMError::AuthError(msg) => assert_eq!(msg, "Invalid API key"),
             other => panic!("Expected AuthError, got {:?}", other),
         }
@@ -584,8 +593,9 @@ mod tests {
 
     #[test]
     fn handle_error_429_rate_limited() {
+        let adapter = test_adapter();
         let body = r#"{"error":{"message":"Rate limit exceeded"}}"#;
-        match XaiClient::handle_error(429, body, None) {
+        match adapter.handle_error(429, body, None) {
             LLMError::RateLimited { retry_after_ms } => assert_eq!(retry_after_ms, 60000),
             other => panic!("Expected RateLimited, got {:?}", other),
         }
@@ -593,8 +603,9 @@ mod tests {
 
     #[test]
     fn handle_error_429_with_retry_after() {
+        let adapter = test_adapter();
         let body = r#"{"error":{"message":"Rate limit exceeded"}}"#;
-        match XaiClient::handle_error(429, body, Some(5000)) {
+        match adapter.handle_error(429, body, Some(5000)) {
             LLMError::RateLimited { retry_after_ms } => assert_eq!(retry_after_ms, 5000),
             other => panic!("Expected RateLimited, got {:?}", other),
         }
@@ -602,8 +613,9 @@ mod tests {
 
     #[test]
     fn handle_error_500_api_error() {
+        let adapter = test_adapter();
         let body = r#"{"error":{"message":"Internal server error"}}"#;
-        match XaiClient::handle_error(500, body, None) {
+        match adapter.handle_error(500, body, None) {
             LLMError::ApiError { status, message } => {
                 assert_eq!(status, 500);
                 assert_eq!(message, "Internal server error");
@@ -614,13 +626,33 @@ mod tests {
 
     #[test]
     fn handle_error_unparseable_body() {
-        match XaiClient::handle_error(502, "not json", None) {
+        let adapter = test_adapter();
+        match adapter.handle_error(502, "not json", None) {
             LLMError::ApiError { status, message } => {
                 assert_eq!(status, 502);
                 assert_eq!(message, "not json");
             }
             other => panic!("Expected ApiError, got {:?}", other),
         }
+    }
+
+    // ── Pre/post stream events ──────────────────────────────────────────
+
+    #[test]
+    fn pre_stream_events_has_content_block_start() {
+        let adapter = test_adapter();
+        let events = adapter.pre_stream_events();
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], StreamChunk::ContentBlockStart { index: 0 }));
+    }
+
+    #[test]
+    fn post_stream_events_has_stop_and_message_stop() {
+        let adapter = test_adapter();
+        let events = adapter.post_stream_events();
+        assert_eq!(events.len(), 2);
+        assert!(matches!(events[0], StreamChunk::ContentBlockStop { index: 0 }));
+        assert!(matches!(events[1], StreamChunk::MessageStop));
     }
 
     // ── Integration tests (wiremock) ────────────────────────────────────
@@ -650,7 +682,7 @@ mod tests {
             .await;
 
         let config = test_config().with_base_url(mock_server.uri());
-        let client = XaiClient::new(config).unwrap();
+        let client = XaiClient::with_config(config).unwrap();
 
         let request = LLMRequest::new("grok-3-latest", vec![Message::user("Hi")]);
         let response = client.send_message(request).await.unwrap();
@@ -688,7 +720,7 @@ mod tests {
             .await;
 
         let config = test_config().with_base_url(mock_server.uri());
-        let client = XaiClient::new(config).unwrap();
+        let client = XaiClient::with_config(config).unwrap();
 
         let request = LLMRequest::new("grok-3-latest", vec![Message::user("Read main.rs")]);
         let response = client.send_message(request).await.unwrap();
@@ -722,7 +754,7 @@ mod tests {
             .await;
 
         let config = test_config().with_base_url(mock_server.uri());
-        let client = XaiClient::new(config).unwrap();
+        let client = XaiClient::with_config(config).unwrap();
 
         let request = LLMRequest::new("grok-3-latest", vec![Message::user("Hi")]);
         match client.send_message(request).await.unwrap_err() {
@@ -751,7 +783,7 @@ mod tests {
             .await;
 
         let config = test_config().with_base_url(mock_server.uri());
-        let client = XaiClient::new(config).unwrap();
+        let client = XaiClient::with_config(config).unwrap();
 
         let request = LLMRequest::new("grok-3-latest", vec![Message::user("Hi")]);
         match client.send_message(request).await.unwrap_err() {
@@ -778,7 +810,7 @@ mod tests {
             .await;
 
         let config = test_config().with_base_url(mock_server.uri());
-        let client = XaiClient::new(config).unwrap();
+        let client = XaiClient::with_config(config).unwrap();
 
         let request = LLMRequest::new("grok-3-latest", vec![Message::user("Hi")]);
         match client.send_message(request).await.unwrap_err() {
@@ -801,7 +833,7 @@ mod tests {
             .await;
 
         let config = test_config().with_base_url(mock_server.uri());
-        let client = XaiClient::new(config).unwrap();
+        let client = XaiClient::with_config(config).unwrap();
 
         let request = LLMRequest::new("grok-3-latest", vec![Message::user("Hi")]);
         assert!(matches!(
@@ -824,7 +856,6 @@ mod tests {
             "status": "completed"
         });
 
-        // Verify the request body includes web_search in tools
         Mock::given(method("POST"))
             .and(path("/v1/responses"))
             .and(body_partial_json(serde_json::json!({
@@ -837,7 +868,7 @@ mod tests {
         let config = test_config()
             .with_base_url(mock_server.uri())
             .with_web_search();
-        let client = XaiClient::new(config).unwrap();
+        let client = XaiClient::with_config(config).unwrap();
 
         let request = LLMRequest::new("grok-3-latest", vec![Message::user("Search for Rust")]);
         let response = client.send_message(request).await.unwrap();
