@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react'
+import { memo, useRef, useEffect } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 
@@ -9,7 +9,7 @@ type StreamViewProps = {
   maxHeight?: number
 }
 
-function StreamView({ content, status, error, maxHeight }: StreamViewProps) {
+const StreamView = memo(function StreamView({ content, status, error, maxHeight }: StreamViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const shouldAutoScrollRef = useRef(true)
 
@@ -81,7 +81,7 @@ function StreamView({ content, status, error, maxHeight }: StreamViewProps) {
       )}
     </Box>
   )
-}
+})
 
 export { StreamView }
 export type { StreamViewProps }

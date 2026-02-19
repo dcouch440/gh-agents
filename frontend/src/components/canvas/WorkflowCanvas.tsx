@@ -194,6 +194,9 @@ function WorkflowCanvasInner() {
           '--xy-minimap-background-color': theme.palette.custom.minimapBg,
           '--xy-minimap-mask-background-color': theme.palette.custom.minimapMask,
         },
+        '& .react-flow__node.dragging': {
+          willChange: 'transform',
+        },
       }}
     >
       <ReactFlow

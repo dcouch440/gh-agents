@@ -9,6 +9,7 @@ import { isVirtualNode, setStoredPosition } from './nodeResizeStorage'
 import { detectOverlaps, resolveOverlaps } from './layout'
 import type { LayoutNode } from './layout'
 import { CANVAS } from './constants'
+import { setDragging } from './useGroupHoverDelay'
 
 type PackNode = {
   id: string
@@ -68,6 +69,7 @@ const usePackDrag = (
 
   const onNodeDragStart = useCallback(
     (_event: React.MouseEvent, node: Node) => {
+      setDragging(true)
       const allNodes = getNodes()
       const members = resolvePackMembers(node.id, Collections.mapBy(allNodes, toPackNode))
       packMembersRef.current = members
@@ -230,6 +232,7 @@ const usePackDrag = (
 
   const onNodeDragStop = useCallback(
     (_event: React.MouseEvent, node: Node) => {
+      setDragging(false)
       const roundedPos = { x: Math.round(node.position.x), y: Math.round(node.position.y) }
       if (isVirtualNode(node.id)) {
         setStoredPosition(node.id, roundedPos)

@@ -45,7 +45,7 @@ function ResizableNodeShell({
         border: 2,
         borderColor: highlight.borderColor,
         boxShadow: highlight.boxShadow,
-        transition: 'border-color 150ms ease, box-shadow 150ms ease',
+        transition: 'border-color 150ms ease',
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
@@ -71,7 +71,15 @@ function ResizableNodeShell({
       />
 
       {/* Zoomed inner container — scales content with node size */}
-      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', zoom: scaleFactor }}>
+      <Box sx={{
+        flex: 1,
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        zoom: scaleFactor,
+        contain: 'layout style paint',
+      }}>
         {children}
       </Box>
 

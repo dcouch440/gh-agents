@@ -90,25 +90,6 @@ function FocusModeOverlay() {
   const stepsById = useMemo(() => Collections.keyBy(steps, (s) => s.id), [steps])
   const edgesByFromId = useMemo(() => Collections.groupBy(edges, (e) => e.from_step_id), [edges])
 
-  // Compute step names map for nav bar and upstream resolution
-  const stepNamesMap = useMemo(
-    () => Collections.toLookupMap(steps, (s) => s.id, (s) => s.name ?? 'Unnamed'),
-    [steps],
-  )
-
-  // Compute upstream step names for the current step
-  const upstreamStepNames = useMemo(() => {
-    if (!currentStepId) return []
-    const upstream: string[] = []
-    for (let i = 0; i < edges.length; i++) {
-      const e = edges[i]!
-      if (e.to_step_id === currentStepId) {
-        upstream.push(stepNamesMap.get(e.from_step_id) ?? 'Unknown Step')
-      }
-    }
-    return upstream
-  }, [currentStepId, edges, stepNamesMap])
-
   // Compute accent colors for nav dots (protocol steps only — no input/context)
   const accentColors = useMemo(() => {
     const colors: string[] = []
@@ -277,7 +258,6 @@ function FocusModeOverlay() {
                 stepId={currentStepId}
                 archetype={currentArchetype}
                 stepName={currentStepName}
-                upstreamStepNames={upstreamStepNames}
                 activeTabId={activeTabId}
                 onTabChange={handleTabChange}
               />

@@ -87,7 +87,7 @@ function StepNodeComponent({ id, data, selected }: NodeProps) {
         border: 2,
         borderColor: highlight.borderColor,
         boxShadow: highlight.boxShadow,
-        transition: 'border-color 150ms ease, box-shadow 150ms ease',
+        transition: 'border-color 150ms ease',
         overflow: 'hidden',
       }}
     >
