@@ -16,21 +16,11 @@ mod tests {
     fn make_agent(id: Uuid, name: &str) -> AgentRow {
         AgentRow {
             id,
-            user_id: None,
-            tier: None,
             name: name.to_string(),
             system_prompt: "You are a helpful assistant.".to_string(),
-            persona_style: None,
-            model_provider: "anthropic".to_string(),
             model_id: "claude-3-sonnet".to_string(),
-            model_max_tokens: 4096,
-            model_temperature: 0.7,
             status: Some("active".to_string()),
-
-            output_schema_id: None,
-            version: 1,
-            default_reasoning_trace: None,
-            is_system: false,
+            ..Default::default()
         }
     }
 

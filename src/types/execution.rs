@@ -7,9 +7,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Standard execution status
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecutionStatus {
+    #[default]
     Success,
     Error,
     Partial, // For for-each with some failures
@@ -71,6 +72,12 @@ impl ExecutionMetadata {
     }
 }
 
+impl Default for ExecutionMetadata {
+    fn default() -> Self {
+        Self::new(Uuid::nil())
+    }
+}
+
 /// Execution error details
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionError {
@@ -81,7 +88,7 @@ pub struct ExecutionError {
 }
 
 /// Standard execution envelope (single step)
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct StepExecutionEnvelope {
     pub status: ExecutionStatus,
     pub data: Option<serde_json::Value>,

@@ -23,39 +23,10 @@ mod tests {
             id,
             workflow_id: Uuid::new_v4(),
             agent_id: Some(Uuid::new_v4()),
-            execution_mode: "single".into(),
-            agent_execution_mode: None,
-            for_each_ref: None,
-            prompt_template_id: None,
             prompt_template: prompt.into(),
-            output_schema_id: None,
             output_variable_name: var_name.map(|s| s.into()),
-            interactive_agent_id: None,
-            for_each_label_field: None,
-            room_id: None,
-            routing_mode: None,
-            routing_field: None,
             display_order,
-            version: 1,
-            reasoning_trace: false,
-            verification_agent_ids: None,
-            position_x: None,
-            position_y: None,
-            width: None,
-            height: None,
-            name: None,
-            system_prompt_suffix: None,
-            visible: true,
-            description: String::new(),
-            board_context_cache: String::new(),
-            board_context_updated_at: None,
-            goal_summary: String::new(),
-            goal_summary_updated_at: None,
-            sub_workflow_template_id: None,
-            child_workflow_id: None,
-            is_designer_step: false,
-            pinned: false,
-            run_results_summary: String::new(),
+            ..Default::default()
         }
     }
 
@@ -64,13 +35,8 @@ mod tests {
             id: Uuid::new_v4(),
             from_step_id: from,
             to_step_id: to,
-            from_output_port: None,
-            to_input_port: None,
-            transform_jsonpath: None,
-            condition_type: None,
-            condition_value: None,
-            edge_label: None,
             workflow_id: Uuid::new_v4(),
+            ..Default::default()
         }
     }
 
@@ -343,20 +309,8 @@ mod tests {
         AgentExecutionRow {
             id: Uuid::new_v4(),
             agent_id: Some(Uuid::new_v4()),
-            workflow_step_id: None,
-            workflow_execution_id: None,
-            is_interactive: false,
-            parent_agent_execution_id: None,
-            system_prompt_rendered: String::new(),
-            input: String::new(),
-            output: None,
-            structured_output: None,
-            room_session_id: None,
-            speaker_order: None,
             status: "running".into(),
-            started_at: Utc::now(),
-            completed_at: None,
-            is_exemplary: false,
+            ..Default::default()
         }
     }
 
@@ -365,11 +319,7 @@ mod tests {
             id: Uuid::new_v4(),
             agent_execution_id: Uuid::new_v4(),
             role: "system".into(),
-            content: String::new(),
-            tool_call_id: None,
-            input_tokens: 0,
-            output_tokens: 0,
-            created_at: Utc::now(),
+            ..Default::default()
         }
     }
 
@@ -377,12 +327,8 @@ mod tests {
         TokenLedgerRow {
             id: Uuid::new_v4(),
             user_id: Uuid::new_v4(),
-            agent_execution_id: None,
             model_id: "test-model".into(),
-            input_tokens: 0,
-            output_tokens: 0,
-            cost_usd: 0.0,
-            created_at: Utc::now(),
+            ..Default::default()
         }
     }
 
@@ -393,21 +339,10 @@ mod tests {
     fn make_test_agent(id: Uuid) -> AgentRow {
         AgentRow {
             id,
-            user_id: None,
-            tier: None,
             name: "Test Agent".into(),
             system_prompt: "You are a test agent.".into(),
-            persona_style: None,
-            model_provider: "anthropic".into(),
-            model_id: "claude-sonnet-4-20250514".into(),
-            model_max_tokens: 4096,
-            model_temperature: 0.7,
             status: Some("active".into()),
-
-            output_schema_id: None,
-            version: 1,
-            default_reasoning_trace: None,
-            is_system: false,
+            ..Default::default()
         }
     }
 
@@ -422,39 +357,10 @@ mod tests {
             id,
             workflow_id: Uuid::new_v4(),
             agent_id: Some(agent_id),
-            execution_mode: "single".into(),
-            agent_execution_mode: None,
-            for_each_ref: None,
-            prompt_template_id: None,
             prompt_template: prompt.into(),
-            output_schema_id: None,
             output_variable_name: var_name.map(|s| s.into()),
-            interactive_agent_id: None,
-            for_each_label_field: None,
-            room_id: None,
-            routing_mode: None,
-            routing_field: None,
             display_order: order,
-            version: 1,
-            reasoning_trace: false,
-            verification_agent_ids: None,
-            position_x: None,
-            position_y: None,
-            width: None,
-            height: None,
-            name: None,
-            system_prompt_suffix: None,
-            visible: true,
-            description: String::new(),
-            board_context_cache: String::new(),
-            board_context_updated_at: None,
-            goal_summary: String::new(),
-            goal_summary_updated_at: None,
-            sub_workflow_template_id: None,
-            child_workflow_id: None,
-            is_designer_step: false,
-            pinned: false,
-            run_results_summary: String::new(),
+            ..Default::default()
         }
     }
 
@@ -472,36 +378,10 @@ mod tests {
             execution_mode: "for_each".into(),
             agent_execution_mode: Some("parallel".into()),
             for_each_ref: Some(for_each_ref.into()),
-            prompt_template_id: None,
             prompt_template: "Process item".into(),
-            output_schema_id: None,
             output_variable_name: var_name.map(|s| s.into()),
-            interactive_agent_id: None,
-            for_each_label_field: None,
-            room_id: None,
-            routing_mode: None,
-            routing_field: None,
             display_order: order,
-            version: 1,
-            reasoning_trace: false,
-            verification_agent_ids: None,
-            position_x: None,
-            position_y: None,
-            width: None,
-            height: None,
-            name: None,
-            system_prompt_suffix: None,
-            visible: true,
-            description: String::new(),
-            board_context_cache: String::new(),
-            board_context_updated_at: None,
-            goal_summary: String::new(),
-            goal_summary_updated_at: None,
-            sub_workflow_template_id: None,
-            child_workflow_id: None,
-            is_designer_step: false,
-            pinned: false,
-            run_results_summary: String::new(),
+            ..Default::default()
         }
     }
 

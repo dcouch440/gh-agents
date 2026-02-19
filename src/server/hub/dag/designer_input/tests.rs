@@ -2,45 +2,17 @@
 mod tests {
     use std::collections::HashMap;
 
-    use chrono::Utc;
     use uuid::Uuid;
 
-    use crate::db::{BeliefRow, TaskAgentRosterRow, TaskMissionBriefRow, WorkflowStepRow};
-    use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
+    use crate::db::BeliefRow;
+    use crate::types::{ExecutionMetadata, StepExecutionEnvelope};
 
     use super::super::*;
 
     // ── Test helpers ─────────────────────────────────────────────────────────
 
-    fn make_brief(task: &str, capabilities: Vec<String>) -> TaskMissionBriefRow {
-        TaskMissionBriefRow {
-            id: Uuid::new_v4(),
-            step_id: Uuid::new_v4(),
-            task_description: task.to_string(),
-            available_capabilities: capabilities,
-            failure_mode: "fail_fast".to_string(),
-            downstream_context: Some("Engineering lead triages findings.".to_string()),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        }
-    }
-
-    fn make_roster_entry(name: &str, role: &str, order: i32) -> TaskAgentRosterRow {
-        TaskAgentRosterRow {
-            id: Uuid::new_v4(),
-            mission_brief_id: Uuid::new_v4(),
-            name: name.to_string(),
-            role_description: role.to_string(),
-            capabilities: vec![],
-            execution_order: order,
-            created_at: Utc::now(),
-            child_step_id: None,
-        }
-    }
-
     fn make_envelope(data: serde_json::Value) -> StepExecutionEnvelope {
         StepExecutionEnvelope {
-            status: ExecutionStatus::Success,
             data: Some(data),
             metadata: ExecutionMetadata {
                 execution_id: Uuid::new_v4(),
@@ -49,59 +21,9 @@ mod tests {
                 tokens_out: Some(25),
                 cost_usd: Some(0.001),
                 model: Some("test-model".to_string()),
-                agent_id: None,
-                iteration_index: None,
-                iteration_label: None,
-                routing_label: None,
-                upstream_agent_id: None,
-                upstream_routing_label: None,
-                room_session_id: None,
-                room_id: None,
-                total_rounds: None,
-                child_workflow_execution_id: None,
+                ..Default::default()
             },
-            error: None,
-        }
-    }
-
-    fn make_step() -> WorkflowStepRow {
-        WorkflowStepRow {
-            id: Uuid::new_v4(),
-            workflow_id: Uuid::new_v4(),
-            agent_id: None,
-            execution_mode: "workforce".to_string(),
-            agent_execution_mode: None,
-            for_each_ref: None,
-            prompt_template_id: None,
-            prompt_template: String::new(),
-            output_schema_id: None,
-            output_variable_name: None,
-            interactive_agent_id: None,
-            for_each_label_field: None,
-            room_id: None,
-            routing_mode: None,
-            routing_field: None,
-            display_order: 0,
-            version: 1,
-            reasoning_trace: false,
-            verification_agent_ids: None,
-            position_x: None,
-            position_y: None,
-            width: None,
-            height: None,
-            name: Some("Test Step".to_string()),
-            system_prompt_suffix: None,
-            visible: true,
-            description: String::new(),
-            board_context_cache: String::new(),
-            board_context_updated_at: None,
-            goal_summary: String::new(),
-            goal_summary_updated_at: None,
-            sub_workflow_template_id: None,
-            child_workflow_id: None,
-            is_designer_step: false,
-            pinned: false,
-            run_results_summary: String::new(),
+            ..Default::default()
         }
     }
 
@@ -120,22 +42,16 @@ mod tests {
             workflow_id: Uuid::new_v4(),
             workflow_execution_id: Some(Uuid::new_v4()),
             source_step_id: Uuid::new_v4(),
-            source_document_title: None,
-            source_document_def_id: None,
             source_phase: "research".to_string(),
             content: content.to_string(),
             reasoning: "Test reasoning".to_string(),
             belief_type: belief_type.to_string(),
             confidence: confidence.to_string(),
-            confidence_justification: None,
-            semantic_tags: vec![],
-            emotional_tone: None,
-            cross_source_tension: None,
             source_step_name: "Test Source".to_string(),
             extraction_model: "test-model".to_string(),
             extraction_tokens_in: 100,
             extraction_tokens_out: 50,
-            created_at: Utc::now(),
+            ..Default::default()
         }
     }
 

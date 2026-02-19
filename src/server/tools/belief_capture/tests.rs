@@ -22,40 +22,10 @@ mod tests {
         WorkflowStepRow {
             id,
             workflow_id,
-            agent_id: None,
             execution_mode: mode.to_string(),
-            agent_execution_mode: None,
-            for_each_ref: None,
-            prompt_template_id: None,
-            prompt_template: String::new(),
-            output_schema_id: None,
-            output_variable_name: None,
-            interactive_agent_id: None,
-            for_each_label_field: None,
-            room_id: None,
-            routing_mode: None,
-            routing_field: None,
-            display_order: 0,
-            version: 1,
-            reasoning_trace: false,
-            verification_agent_ids: None,
-            position_x: None,
-            position_y: None,
-            width: None,
-            height: None,
             name: Some("Test Step".to_string()),
-            system_prompt_suffix: None,
-            visible: true,
             description: "Test description".to_string(),
-            board_context_cache: String::new(),
-            board_context_updated_at: None,
-            goal_summary: String::new(),
-            goal_summary_updated_at: None,
-            sub_workflow_template_id: None,
-            child_workflow_id: None,
-            is_designer_step: false,
-            pinned: false,
-            run_results_summary: String::new(),
+            ..Default::default()
         }
     }
 
@@ -459,13 +429,8 @@ mod tests {
                     id: Uuid::new_v4(),
                     from_step_id: upstream_id,
                     to_step_id: step_id,
-                    from_output_port: None,
-                    to_input_port: None,
-                    transform_jsonpath: None,
-                    condition_type: None,
-                    condition_value: None,
-                    edge_label: None,
                     workflow_id: wf_id,
+                    ..Default::default()
                 }])
             });
 

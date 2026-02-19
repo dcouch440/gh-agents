@@ -21,39 +21,10 @@ mod tests {
             id,
             workflow_id: Uuid::new_v4(),
             agent_id: Some(Uuid::new_v4()),
-            execution_mode: "single".to_string(),
-            agent_execution_mode: None,
-            for_each_ref: None,
-            prompt_template_id: None,
             prompt_template: "Test prompt".to_string(),
-            output_schema_id: None,
             output_variable_name: Some("output".to_string()),
-            interactive_agent_id: None,
-            for_each_label_field: None,
-            room_id: None,
-            routing_mode: None,
-            routing_field: None,
             display_order,
-            version: 1,
-            reasoning_trace: false,
-            verification_agent_ids: None,
-            position_x: None,
-            position_y: None,
-            width: None,
-            height: None,
-            name: None,
-            system_prompt_suffix: None,
-            visible: true,
-            description: String::new(),
-            board_context_cache: String::new(),
-            board_context_updated_at: None,
-            goal_summary: String::new(),
-            goal_summary_updated_at: None,
-            sub_workflow_template_id: None,
-            child_workflow_id: None,
-            is_designer_step: false,
-            pinned: false,
-            run_results_summary: String::new(),
+            ..Default::default()
         }
     }
 
@@ -62,28 +33,16 @@ mod tests {
             id: Uuid::new_v4(),
             from_step_id: from,
             to_step_id: to,
-            from_output_port: None,
-            to_input_port: None,
-            transform_jsonpath: None,
-            condition_type: None,
-            condition_value: None,
-            edge_label: None,
             workflow_id: Uuid::new_v4(),
+            ..Default::default()
         }
     }
 
     fn make_port_edge(from: Uuid, to: Uuid, from_port: &str, to_port: &str) -> WorkflowStepEdgeRow {
         WorkflowStepEdgeRow {
-            id: Uuid::new_v4(),
-            from_step_id: from,
-            to_step_id: to,
             from_output_port: Some(from_port.to_string()),
             to_input_port: Some(to_port.to_string()),
-            transform_jsonpath: None,
-            condition_type: None,
-            condition_value: None,
-            edge_label: None,
-            workflow_id: Uuid::new_v4(),
+            ..make_edge(from, to)
         }
     }
 
@@ -94,10 +53,7 @@ mod tests {
             port_name: port_name.to_string(),
             port_type: "string".to_string(),
             required,
-            default_value: None,
-            description: None,
-            json_schema: None,
-            created_at: chrono::Utc::now(),
+            ..Default::default()
         }
     }
 
@@ -108,9 +64,7 @@ mod tests {
             port_name: port_name.to_string(),
             port_type: "string".to_string(),
             json_path: json_path.to_string(),
-            description: None,
-            json_schema: None,
-            created_at: chrono::Utc::now(),
+            ..Default::default()
         }
     }
 
@@ -118,25 +72,7 @@ mod tests {
         StepExecutionEnvelope {
             status: ExecutionStatus::Success,
             data: Some(data),
-            metadata: ExecutionMetadata {
-                execution_id: Uuid::new_v4(),
-                execution_time_ms: 100,
-                tokens_in: None,
-                tokens_out: None,
-                cost_usd: None,
-                model: None,
-                agent_id: None,
-                iteration_index: None,
-                iteration_label: None,
-                routing_label: None,
-
-                upstream_agent_id: None,
-                upstream_routing_label: None,
-                room_session_id: None,
-                room_id: None,
-                total_rounds: None,
-                child_workflow_execution_id: None,
-            },
+            metadata: ExecutionMetadata::new(Uuid::new_v4()),
             error: None,
         }
     }
