@@ -120,15 +120,14 @@ pub(crate) mod container;
 pub(crate) mod dag_state;
 pub(crate) mod designer_input;
 pub(crate) mod for_each;
+pub(crate) mod pipeline;
 pub(crate) mod resume;
 pub(crate) mod room_step;
 pub(crate) mod single;
 pub(crate) mod staging;
-pub(crate) mod sub_workflow;
 pub mod templates;
 pub(crate) mod utils;
 pub(crate) mod versioning;
-pub(crate) mod workforce;
 
 pub(crate) use dag_state::{
     broadcast_step_failure_if_real, build_incoming_edge_index, prefetch_port_metadata,
@@ -153,10 +152,9 @@ pub use resume::{resume_dag_from_approval, resume_workflow_via_engine, ResumeSta
 use belief_capture::execute_belief_capture_step;
 
 use for_each::{detect_for_each_chains, execute_for_each_chain, execute_for_each_step};
+use pipeline::execute_pipeline_step;
 use room_step::execute_room_step;
 use single::execute_single_step;
-use sub_workflow::execute_sub_workflow_step;
-use workforce::execute_workforce_step;
 
 // ── Routing Context ─────────────────────────────────────────────────────────
 
@@ -507,8 +505,7 @@ async fn run_dag_loop(
         let step_result = match step.execution_mode.as_str() {
             // Agentless modes — no agent_id needed
             "belief_capture" => execute_belief_capture_step(dag, step, dag_state).await,
-            "sub_workflow" => execute_sub_workflow_step(dag, step, dag_state).await,
-            "workforce" => execute_workforce_step(dag, step, dag_state).await,
+            "workforce" => execute_pipeline_step(dag, step, dag_state).await,
 
             // Agent-based modes — load agent + resolve provider
             _ => {

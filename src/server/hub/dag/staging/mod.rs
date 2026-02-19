@@ -23,11 +23,11 @@ use super::dag_state::{
     resolve_output_key, wrap_in_agentless_envelope, DagContext, DagExecutionState, PortMetadata,
 };
 use super::for_each::execute_for_each_step;
+use super::pipeline::execute_pipeline_step;
 use super::room_step::execute_room_step;
 use super::single::execute_single_step;
 use super::utils::{check_step_readiness, StepOutput, StepReadiness, WorkflowExecutionContext};
 use super::versioning;
-use super::workforce::execute_workforce_step;
 
 mod tests;
 
@@ -248,7 +248,7 @@ pub(crate) async fn execute_staged_step(
 
         match step.execution_mode.as_str() {
             "belief_capture" => execute_belief_capture_step(&dag, step, dag_state).await?,
-            "workforce" => execute_workforce_step(&dag, step, dag_state).await?,
+            "workforce" => execute_pipeline_step(&dag, step, dag_state).await?,
             _ => unreachable!(),
         };
 

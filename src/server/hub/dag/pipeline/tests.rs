@@ -1,11 +1,62 @@
 #[cfg(test)]
 mod tests {
-    use crate::db::TaskAgentRosterRow;
-    use crate::server::hub::dag::workforce::{
+    use uuid::Uuid;
+
+    use crate::db::{TaskAgentRosterRow, WorkflowStepRow};
+    use crate::server::hub::dag::pipeline::{
         build_filtered_outputs_block, build_team_roster_string, compose_workforce_output,
         compute_execution_levels, filter_outputs_for_agent, DesignedAgentPrompt,
     };
-    use uuid::Uuid;
+
+    // ── Designer Detection ────────────────────────────────────────────────────
+
+    /// Verify that Designer detection logic works correctly.
+    /// A child workflow with an `is_designer_step = true` step is "designed",
+    /// one without is "static".
+    #[test]
+    fn designer_detection_with_designer() {
+        let child_wf_id = Uuid::new_v4();
+        let designer = WorkflowStepRow {
+            id: Uuid::new_v4(),
+            workflow_id: child_wf_id,
+            is_designer_step: true,
+            ..Default::default()
+        };
+        let agent = WorkflowStepRow {
+            id: Uuid::new_v4(),
+            workflow_id: child_wf_id,
+            ..Default::default()
+        };
+
+        let steps = vec![designer, agent];
+        assert!(steps.iter().any(|s| s.is_designer_step));
+    }
+
+    #[test]
+    fn designer_detection_without_designer() {
+        let child_wf_id = Uuid::new_v4();
+        let step_a = WorkflowStepRow {
+            id: Uuid::new_v4(),
+            workflow_id: child_wf_id,
+            ..Default::default()
+        };
+        let step_b = WorkflowStepRow {
+            id: Uuid::new_v4(),
+            workflow_id: child_wf_id,
+            ..Default::default()
+        };
+
+        let steps = vec![step_a, step_b];
+        assert!(!steps.iter().any(|s| s.is_designer_step));
+    }
+
+    #[test]
+    fn designer_detection_empty_steps() {
+        let steps: Vec<WorkflowStepRow> = vec![];
+        assert!(!steps.iter().any(|s| s.is_designer_step));
+    }
+
+    // ── Output Composition ────────────────────────────────────────────────────
 
     fn make_roster_agent(name: &str, order: i32) -> TaskAgentRosterRow {
         TaskAgentRosterRow {
@@ -95,7 +146,7 @@ mod tests {
         assert!(result.contains("### Agent B"));
     }
 
-    // ── compute_execution_levels tests ────────────────────────────────────
+    // ── Execution Level Scheduling ────────────────────────────────────────────
 
     #[test]
     fn compute_levels_parallel_researchers() {

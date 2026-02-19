@@ -1,10 +1,9 @@
-//! Sub-workflow step execution within the DAG.
+//! Static pipeline execution — runs a child workflow through the DAG loop.
 //!
-//! When the DAG encounters a step with `execution_mode = "sub_workflow"`, this
-//! module loads the referenced template snapshot, maps parent port inputs to
-//! child workflow context, creates a child workflow execution, and calls
-//! `execute_workflow_via_engine()` recursively. The child's outputs are wrapped
-//! in a `StepExecutionEnvelope` for the parent DAG.
+//! Adapted from `sub_workflow` but uses a live child workflow (via
+//! `child_workflow_id`) instead of a frozen template snapshot. Each child
+//! step executes according to its own `execution_mode`, agent, and prompt
+//! configuration.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -18,43 +17,44 @@ use crate::db::pg_repo::PgRepo;
 use crate::db::traits::WorkflowCollectionRepo;
 use crate::db::WorkflowStepRow;
 use crate::server::hub::error::HubError;
-use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
 use crate::types::{ExecutionError, ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
 
-use super::dag_state::DagExecutionState;
-use super::templates::WorkflowSnapshot;
-use super::utils::{
+use super::super::dag_state::DagExecutionState;
+use super::super::utils::{
     StepOutput, SubWorkflowParentContext, WorkflowExecutionContext, WorkflowExecutionResult,
 };
-use super::{
+use super::super::{
     broadcast_workflow_event, execute_workflow_via_engine, resolve_output_key,
     resolve_step_port_inputs, step_display_name, DagContext,
 };
 
-mod tests;
-
-/// Execute a sub-workflow step within the DAG.
+/// Execute a static pipeline (no Designer step) by running the child
+/// workflow through the standard DAG loop.
 ///
-/// Loads the referenced template snapshot, maps parent port inputs to child
-/// workflow initial context, creates a child execution record, and executes
-/// the child workflow. Returns the child's outputs wrapped in an envelope.
-pub(super) async fn execute_sub_workflow_step(
+/// 1. Resolves port inputs from the parent step
+/// 2. Loads child workflow edges
+/// 3. Creates a child execution record for tracking
+/// 4. Builds a child execution context with parent port data
+/// 5. Calls `execute_workflow_via_engine` on the child workflow
+/// 6. Wraps child outputs in an envelope for the parent DAG
+pub(super) async fn execute_static_pipeline(
     dag: &DagContext<'_>,
     step: &WorkflowStepRow,
     dag_state: &mut DagExecutionState,
+    child_workflow_id: Uuid,
+    child_steps: &[WorkflowStepRow],
 ) -> Result<(), HubError> {
     let step_start = std::time::Instant::now();
 
-    // 1. Validate that step has sub_workflow_template_id
-    let template_id = step.sub_workflow_template_id.ok_or_else(|| {
-        HubError::Internal(anyhow!(
-            "sub_workflow step {} has no sub_workflow_template_id",
+    if child_steps.is_empty() {
+        return Err(HubError::Internal(anyhow!(
+            "pipeline step {} has no child steps",
             step.id
-        ))
-    })?;
+        )));
+    }
 
-    // 2. Broadcast step started (agentless)
+    // 1. Broadcast step started (agentless)
     broadcast_workflow_event(
         dag.state,
         dag.ctx,
@@ -67,35 +67,10 @@ pub(super) async fn execute_sub_workflow_step(
         },
     );
 
-    // 3. Load template snapshot
-    let template = dag
-        .state
-        .repos()
-        .workflows
-        .get_template(template_id)
-        .await
-        .map_err(|e| HubError::Internal(anyhow!("failed to load template: {}", e)))?
-        .ok_or_else(|| {
-            HubError::Internal(anyhow!("sub_workflow template {} not found", template_id))
-        })?;
-
-    let snapshot: WorkflowSnapshot = serde_json::from_value(template.snapshot).map_err(|e| {
-        HubError::Internal(anyhow!("failed to deserialize template snapshot: {}", e))
-    })?;
-
-    if snapshot.steps.is_empty() {
-        return Err(HubError::Internal(anyhow!(
-            "sub_workflow template {} has no steps",
-            template_id
-        )));
-    }
-
-    // 4. Resolve port inputs from parent step
+    // 2. Resolve port inputs from parent step
     let port_inputs = resolve_step_port_inputs(step, dag.port_meta, &dag_state.completed_envelopes);
 
-    // 5. Map port inputs to child workflow context
     let child_prior_outputs: HashMap<String, JsonValue> = port_inputs.unwrap_or_default();
-
     let child_initial_input = child_prior_outputs
         .values()
         .next()
@@ -105,9 +80,16 @@ pub(super) async fn execute_sub_workflow_step(
         })
         .unwrap_or_default();
 
-    // 6. Create child workflow execution record
-    let child_workflow_id = snapshot.steps[0].workflow_id;
+    // 3. Load child workflow edges
+    let child_edges = dag
+        .state
+        .repos()
+        .workflows
+        .list_edges(child_workflow_id)
+        .await
+        .map_err(|e| HubError::Internal(anyhow!("failed to load pipeline edges: {}", e)))?;
 
+    // 4. Create child execution record for tracking
     let db = dag
         .state
         .db()
@@ -120,25 +102,25 @@ pub(super) async fn execute_sub_workflow_step(
             dag.ctx.run_id,
             child_workflow_id,
             dag.ctx.user_id,
-            template_id,
+            Uuid::nil(), // no template for live pipelines
         )
         .await
-        .map_err(|e| HubError::Internal(anyhow!("failed to create child execution: {}", e)))?;
+        .map_err(|e| HubError::Internal(anyhow!("failed to create pipeline execution: {}", e)))?;
 
     info!(
         parent_step_id = %step.id,
         child_execution_id = %child_execution.id,
-        template_id = %template_id,
-        child_steps = snapshot.steps.len(),
-        "Starting sub-workflow execution"
+        child_workflow_id = %child_workflow_id,
+        child_steps = child_steps.len(),
+        "Starting static pipeline execution"
     );
 
-    // 7. Update child execution status to running
+    // 5. Update child execution status to running
     let _ = collection_repo
         .update_workflow_execution_status(child_execution.id, "running", None, None)
         .await;
 
-    // 8. Broadcast SubWorkflowStarted on parent's channel
+    // 6. Broadcast pipeline started on parent's channel
     broadcast_workflow_event(
         dag.state,
         dag.ctx,
@@ -146,11 +128,11 @@ pub(super) async fn execute_sub_workflow_step(
         WorkflowEventKind::SubWorkflowStarted {
             parent_step_id: step.id,
             child_execution_id: child_execution.id,
-            total_steps: snapshot.steps.len(),
+            total_steps: child_steps.len(),
         },
     );
 
-    // 9. Build child workflow execution context
+    // 7. Build child workflow execution context
     let child_ctx = WorkflowExecutionContext {
         stage_execution_id: child_execution.id,
         run_id: child_execution.id,
@@ -160,7 +142,7 @@ pub(super) async fn execute_sub_workflow_step(
         execution_context: dag.ctx.execution_context.clone(),
         container_config: dag.ctx.container_config.clone(),
         wg_client: dag.ctx.wg_client.clone(),
-        snapshot: Some(Arc::new(snapshot.clone())),
+        snapshot: None, // live pipeline — no frozen snapshot
         parent_context: Some(SubWorkflowParentContext {
             parent_step_id: step.id,
             parent_run_id: dag.ctx.run_id,
@@ -168,22 +150,23 @@ pub(super) async fn execute_sub_workflow_step(
         }),
     };
 
-    // 10. Execute child workflow (recursive call, propagate cancellation token)
+    // 8. Execute child workflow (recursive via DAG loop)
     // Box::pin is required because this creates async recursion:
-    // execute_sub_workflow_step → execute_workflow_via_engine → run_dag_loop → execute_sub_workflow_step
+    // execute_pipeline_step → execute_static_pipeline → execute_workflow_via_engine
+    //   → run_dag_loop → execute_pipeline_step (if nested)
     let child_result = Box::pin(execute_workflow_via_engine(
         dag.engine,
         dag.state,
         &child_ctx,
-        &snapshot.steps,
-        &snapshot.edges,
+        child_steps,
+        &child_edges,
         dag.cancel,
     ))
     .await;
 
     let step_duration = step_start.elapsed().as_millis() as u64;
 
-    // 11. Handle result
+    // 9. Build result envelope
     let (envelope, final_status) = build_result_envelope(
         dag.state,
         &collection_repo,
@@ -193,14 +176,14 @@ pub(super) async fn execute_sub_workflow_step(
     )
     .await;
 
-    // 12. Accumulate tokens from child into parent
+    // 10. Accumulate child tokens into parent
     dag_state.accumulate_tokens(
         envelope.metadata.tokens_in.unwrap_or(0) as i64,
         envelope.metadata.tokens_out.unwrap_or(0) as i64,
         envelope.metadata.cost_usd.unwrap_or(0.0) as f32,
     );
 
-    // 13. Broadcast SubWorkflowCompleted on parent's channel
+    // 11. Broadcast pipeline completed on parent's channel
     broadcast_workflow_event(
         dag.state,
         dag.ctx,
@@ -212,7 +195,7 @@ pub(super) async fn execute_sub_workflow_step(
         },
     );
 
-    // 14. Record output in parent's DAG state
+    // 12. Record output in parent's DAG state
     let output_key = resolve_output_key(step, &dag.port_meta.step_outputs);
     let output = StepOutput {
         variable_name: output_key,
@@ -224,11 +207,10 @@ pub(super) async fn execute_sub_workflow_step(
             .unwrap_or_default(),
     };
 
-    // Record output + snapshot envelope for run history
-    super::utils::record_and_snapshot_output(dag, dag_state, step.id, output, envelope.clone())
+    super::super::utils::record_and_snapshot_output(dag, dag_state, step.id, output, envelope.clone())
         .await;
 
-    // 15. Broadcast parent step completed or failed
+    // 13. Broadcast parent step completed or failed
     if envelope.status == ExecutionStatus::Success {
         broadcast_workflow_event(
             dag.state,
@@ -249,7 +231,7 @@ pub(super) async fn execute_sub_workflow_step(
             parent_step_id = %step.id,
             child_execution_id = %child_execution.id,
             duration_ms = step_duration,
-            "Sub-workflow step completed successfully"
+            "Static pipeline step completed successfully"
         );
 
         Ok(())
@@ -258,10 +240,10 @@ pub(super) async fn execute_sub_workflow_step(
             .error
             .as_ref()
             .map(|e| e.message.clone())
-            .unwrap_or_else(|| "sub-workflow failed".to_string());
+            .unwrap_or_else(|| "pipeline execution failed".to_string());
 
         Err(HubError::Internal(anyhow!(
-            "Sub-workflow execution failed: {}",
+            "Pipeline execution failed: {}",
             error_msg
         )))
     }
@@ -269,7 +251,7 @@ pub(super) async fn execute_sub_workflow_step(
 
 /// Build either a success or error envelope from the child workflow result.
 async fn build_result_envelope(
-    state: &AppState,
+    state: &crate::server::state::AppState,
     collection_repo: &Arc<dyn WorkflowCollectionRepo>,
     child_execution_id: &Uuid,
     child_result: Result<WorkflowExecutionResult, HubError>,
@@ -277,8 +259,6 @@ async fn build_result_envelope(
 ) -> (StepExecutionEnvelope, &'static str) {
     match child_result {
         Ok(result) => {
-            // Build a JSON object from the child's completed step outputs.
-            // Each key is the step's output variable name, value is the structured output.
             let outputs_map: serde_json::Map<String, JsonValue> = result
                 .outputs
                 .iter()
@@ -321,7 +301,7 @@ async fn build_result_envelope(
             warn!(
                 child_execution_id = %child_execution_id,
                 error = %error_msg,
-                "Sub-workflow execution failed"
+                "Pipeline execution failed"
             );
 
             let _ = collection_repo
@@ -353,7 +333,7 @@ async fn build_result_envelope(
                 },
                 error: Some(ExecutionError {
                     message: error_msg,
-                    error_type: "SubWorkflowFailed".into(),
+                    error_type: "PipelineFailed".into(),
                     retryable: false,
                     details: None,
                 }),
