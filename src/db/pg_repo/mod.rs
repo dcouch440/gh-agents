@@ -198,6 +198,17 @@ impl AgentRepo for PgRepo {
         Ok(row.map(agent_row_from_pg))
     }
 
+    async fn get_agents_by_ids(&self, agent_ids: &[Uuid]) -> Result<Vec<AgentRow>> {
+        let rows = sqlx::query_as::<_, PgAgentRow>(
+            "SELECT id, user_id, name, system_prompt, persona_style, model_provider, model_id, model_max_tokens, model_temperature, status, output_schema_id, version, default_reasoning_trace, is_system FROM agents WHERE id = ANY($1)",
+        )
+        .bind(agent_ids)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows.into_iter().map(agent_row_from_pg).collect())
+    }
+
     async fn upsert_agent(&self, agent: AgentRow) -> Result<()> {
         sqlx::query(
             r#"
@@ -363,6 +374,34 @@ impl ToolRepo for PgRepo {
         .await?;
 
         Ok(rows.into_iter().map(tool_row_from_pg).collect())
+    }
+
+    async fn get_tools_for_agents(&self, agent_ids: &[Uuid]) -> Result<Vec<(Uuid, ToolRow)>> {
+        let rows = sqlx::query_as::<_, PgAgentToolJoinRow>(
+            "SELECT at.agent_id, t.id, t.name, t.display_name, t.description, t.parameters, t.created_at, t.version \
+             FROM tools t INNER JOIN agent_tools at ON t.id = at.tool_id \
+             WHERE at.agent_id = ANY($1) ORDER BY t.name",
+        )
+        .bind(agent_ids)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| {
+                let agent_id = r.agent_id;
+                let tool = ToolRow {
+                    id: r.id,
+                    name: r.name,
+                    display_name: r.display_name,
+                    description: r.description,
+                    parameters: r.parameters,
+                    created_at: r.created_at,
+                    version: r.version,
+                };
+                (agent_id, tool)
+            })
+            .collect())
     }
 
     async fn set_agent_tools(&self, agent_id: Uuid, tool_ids: Vec<Uuid>) -> Result<()> {
@@ -569,6 +608,19 @@ fn tool_row_from_pg(r: PgToolRow) -> ToolRow {
         created_at: r.created_at,
         version: r.version,
     }
+}
+
+/// Intermediate row for the agent-tools JOIN query (includes owning agent_id).
+#[derive(sqlx::FromRow)]
+struct PgAgentToolJoinRow {
+    agent_id: Uuid,
+    id: Uuid,
+    name: String,
+    display_name: String,
+    description: String,
+    parameters: serde_json::Value,
+    created_at: chrono::DateTime<chrono::Utc>,
+    version: i32,
 }
 
 #[derive(sqlx::FromRow)]

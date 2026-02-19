@@ -12,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
+use crate::db::{StepRoutingRuleRow, WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::server::state::AppState;
 use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
 use crate::types::{DownstreamRoutingContext, RouteDescription, StepExecutionEnvelope};
@@ -164,7 +164,7 @@ use workforce::execute_workforce_step;
 /// routing context for prompt injection.
 ///
 /// Uses edges (in memory), the step map, and pre-fetched routing rules.
-/// Loads agent names and tools from the database on demand.
+/// Batch-loads agent names and tools in two queries (regardless of rule count).
 async fn gather_downstream_routing_context(
     step_id: Uuid,
     edges: &[WorkflowStepEdgeRow],
@@ -172,64 +172,88 @@ async fn gather_downstream_routing_context(
     port_meta: &PortMetadata,
     state: &AppState,
 ) -> Vec<DownstreamRoutingContext> {
-    let mut contexts = Vec::new();
-
     let child_step_ids = get_child_steps(step_id, edges);
+
+    // 1. Filter qualifying children and collect all agent_ids
+    let mut all_agent_ids = Vec::new();
+    let mut qualifying: Vec<(Uuid, &str, &[StepRoutingRuleRow])> = Vec::new();
 
     for child_id in child_step_ids {
         let Some(child_step) = step_map.get(&child_id) else {
             continue;
         };
-
         if child_step.routing_mode.as_deref() != Some("label") {
             continue;
         }
-
-        let Some(routing_field) = child_step.routing_field.as_ref() else {
+        let Some(routing_field) = child_step.routing_field.as_deref() else {
             continue;
         };
-
         let Some(rules) = port_meta.routing_rules.get(&child_id) else {
             continue;
         };
-
         if rules.is_empty() {
             continue;
         }
 
-        let mut routes = Vec::new();
         for rule in rules {
-            let agent_name = match state
-                .repos()
-                .agents
-                .get_persisted_agent(rule.agent_id)
-                .await
-            {
-                Ok(Some(agent)) => agent.name,
-                _ => format!("Agent {}", rule.agent_id),
-            };
-
-            let agent_tools = match state.repos().tools.get_agent_tools(rule.agent_id).await {
-                Ok(tools) => tools.into_iter().map(|t| t.name).collect(),
-                Err(_) => vec![],
-            };
-
-            routes.push(RouteDescription {
-                label_value: rule.label_value.clone(),
-                description: rule.description.clone(),
-                agent_name,
-                agent_tools,
-            });
+            all_agent_ids.push(rule.agent_id);
         }
-
-        contexts.push(DownstreamRoutingContext {
-            downstream_step_id: child_id,
-            routing_field: routing_field.clone(),
-            routes,
-        });
+        qualifying.push((child_id, routing_field, rules));
     }
 
-    contexts
+    if qualifying.is_empty() {
+        return vec![];
+    }
+
+    all_agent_ids.sort_unstable();
+    all_agent_ids.dedup();
+
+    // 2. Batch fetch agents + tools (2 queries total)
+    let agent_map: HashMap<Uuid, String> = state
+        .repos()
+        .agents
+        .get_agents_by_ids(&all_agent_ids)
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|a| (a.id, a.name))
+        .collect();
+
+    let mut tools_map: HashMap<Uuid, Vec<String>> = HashMap::new();
+    for (agent_id, tool) in state
+        .repos()
+        .tools
+        .get_tools_for_agents(&all_agent_ids)
+        .await
+        .unwrap_or_default()
+    {
+        tools_map.entry(agent_id).or_default().push(tool.name);
+    }
+
+    // 3. Assemble from maps (zero DB calls)
+    qualifying
+        .into_iter()
+        .map(|(child_id, routing_field, rules)| {
+            let routes = rules
+                .iter()
+                .map(|rule| RouteDescription {
+                    label_value: rule.label_value.clone(),
+                    description: rule.description.clone(),
+                    agent_name: agent_map
+                        .get(&rule.agent_id)
+                        .cloned()
+                        .unwrap_or_else(|| format!("Agent {}", rule.agent_id)),
+                    agent_tools: tools_map.get(&rule.agent_id).cloned().unwrap_or_default(),
+                })
+                .collect();
+
+            DownstreamRoutingContext {
+                downstream_step_id: child_id,
+                routing_field: routing_field.to_string(),
+                routes,
+            }
+        })
+        .collect()
 }
 
 /// Spawn a background run results summarization if the step has completed output.
