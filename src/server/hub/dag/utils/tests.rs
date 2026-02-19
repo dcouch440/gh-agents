@@ -52,6 +52,8 @@ mod tests {
             sub_workflow_template_id: None,
             child_workflow_id: None,
             is_designer_step: false,
+            pinned: false,
+            run_results_summary: String::new(),
         }
     }
 
@@ -1862,5 +1864,91 @@ mod tests {
         let task_end = result.find("</task>").unwrap();
         let task_content = &result[..task_end];
         assert!(task_content.contains("Decompose into ports"));
+    }
+
+    // =========================================================================
+    // Dead-Path Elimination
+    // =========================================================================
+
+    use crate::server::hub::dag::utils::compute_dead_path_steps;
+
+    #[test]
+    fn dead_path_linear_all_pinned() {
+        // A → B → C(pinned): A and B should be dead-path
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let c = Uuid::new_v4();
+        let mut steps = vec![make_step(a, 0), make_step(b, 1), make_step(c, 2)];
+        steps[2].pinned = true;
+        let edges = vec![make_edge(a, b), make_edge(b, c)];
+
+        let dead = compute_dead_path_steps(&steps, &edges);
+        assert!(dead.contains(&a));
+        assert!(dead.contains(&b));
+        assert!(!dead.contains(&c)); // pinned, not dead-path
+    }
+
+    #[test]
+    fn dead_path_mixed_consumers() {
+        // A → B(pinned), A → C(not pinned): A is NOT dead-path (C needs it)
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let c = Uuid::new_v4();
+        let mut steps = vec![make_step(a, 0), make_step(b, 1), make_step(c, 2)];
+        steps[1].pinned = true;
+        let edges = vec![make_edge(a, b), make_edge(a, c)];
+
+        let dead = compute_dead_path_steps(&steps, &edges);
+        assert!(!dead.contains(&a)); // C is unpinned, so A must execute
+        assert!(!dead.contains(&b)); // pinned
+        assert!(!dead.contains(&c)); // unpinned terminal
+    }
+
+    #[test]
+    fn dead_path_terminal_never_skipped() {
+        // Single terminal step, not pinned: never dead-path
+        let a = Uuid::new_v4();
+        let steps = vec![make_step(a, 0)];
+        let edges = vec![];
+
+        let dead = compute_dead_path_steps(&steps, &edges);
+        assert!(dead.is_empty());
+    }
+
+    #[test]
+    fn dead_path_complex_dag() {
+        // A → B(pinned), A → C(pinned), D → C(pinned)
+        // Both A and D should be dead-path since ALL their children are pinned
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let c = Uuid::new_v4();
+        let d = Uuid::new_v4();
+        let mut steps = vec![
+            make_step(a, 0),
+            make_step(b, 1),
+            make_step(c, 2),
+            make_step(d, 3),
+        ];
+        steps[1].pinned = true;
+        steps[2].pinned = true;
+        let edges = vec![make_edge(a, b), make_edge(a, c), make_edge(d, c)];
+
+        let dead = compute_dead_path_steps(&steps, &edges);
+        assert!(dead.contains(&a));
+        assert!(dead.contains(&d));
+        assert!(!dead.contains(&b));
+        assert!(!dead.contains(&c));
+    }
+
+    #[test]
+    fn dead_path_no_pinned_steps() {
+        // No pinned steps → no dead-path
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let steps = vec![make_step(a, 0), make_step(b, 1)];
+        let edges = vec![make_edge(a, b)];
+
+        let dead = compute_dead_path_steps(&steps, &edges);
+        assert!(dead.is_empty());
     }
 }

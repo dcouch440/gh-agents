@@ -236,6 +236,8 @@ mod tests {
             sub_workflow_template_id: None,
             child_workflow_id: None,
             is_designer_step: false,
+            pinned: false,
+            run_results_summary: String::new(),
         };
         assert_eq!(step_display_name(&step), "my_output");
 

@@ -334,6 +334,11 @@ pub enum WorkflowEventKind {
         source_name: String,
         error: String,
     },
+    /// Step pin state was toggled.
+    StepPinChanged {
+        step_id: Uuid,
+        pinned: bool,
+    },
 }
 
 impl WorkflowEvent {
@@ -365,6 +370,7 @@ impl WorkflowEvent {
             WorkflowEventKind::StepStreamToolStart { .. } => "step_stream_tool_start",
             WorkflowEventKind::StepStreamToolEnd { .. } => "step_stream_tool_end",
             WorkflowEventKind::StepStreamError { .. } => "step_stream_error",
+            WorkflowEventKind::StepPinChanged { .. } => "step_pin_changed",
         }
     }
 

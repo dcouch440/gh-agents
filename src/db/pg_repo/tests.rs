@@ -94,6 +94,8 @@ mod tests {
             sub_workflow_template_id: None,
             child_workflow_id: None,
             is_designer_step: false,
+            pinned: false,
+            run_results_summary: String::new(),
         };
         repo.create_step(step).await.unwrap()
     }
@@ -1574,6 +1576,8 @@ mod tests {
             sub_workflow_template_id: None,
             child_workflow_id: None,
             is_designer_step: false,
+            pinned: false,
+            run_results_summary: String::new(),
         };
         let step_a = repo.create_step(step_a.clone()).await.unwrap();
 

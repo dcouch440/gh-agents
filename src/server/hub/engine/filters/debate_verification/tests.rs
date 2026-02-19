@@ -487,7 +487,8 @@ mod tests {
         ae_mock
             .expect_create_agent_execution()
             .withf(move |input| {
-                input.agent_id == Some(agent_id) && input.parent_agent_execution_id == Some(parent_ae_id)
+                input.agent_id == Some(agent_id)
+                    && input.parent_agent_execution_id == Some(parent_ae_id)
             })
             .times(1)
             .returning(move |_| Ok(make_ae_row(agent_id)));

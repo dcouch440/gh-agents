@@ -13,11 +13,11 @@ use uuid::Uuid;
 
 use crate::agents::execution_tools;
 use crate::execution::{ContainerHandle, ExecutionContext};
-use crate::llm::{Message, Tool, TokenUsage};
+use crate::llm::{Message, TokenUsage, Tool};
 use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::json_utils::parse_structured_output;
-use crate::server::hub::strategy::ExecutionStrategy;
 use crate::server::hub::strategies;
+use crate::server::hub::strategy::ExecutionStrategy;
 use crate::server::state::AppState;
 use crate::types::UserId;
 
@@ -110,8 +110,7 @@ impl ExecutionStrategy for WorkforceAgentStrategy {
                 return json!({ "error": "Document reading not available in this context" });
             }
             "create_doc" => {
-                if let (Some(ref state), Some(user_id)) =
-                    (&self.config.state, self.config.user_id)
+                if let (Some(ref state), Some(user_id)) = (&self.config.state, self.config.user_id)
                 {
                     return crate::server::tools::documents::execute_create_doc(
                         input, state, user_id,
@@ -127,8 +126,7 @@ impl ExecutionStrategy for WorkforceAgentStrategy {
                 return json!({ "error": "Document update not available in this context" });
             }
             "search_docs" => {
-                if let (Some(ref state), Some(user_id)) =
-                    (&self.config.state, self.config.user_id)
+                if let (Some(ref state), Some(user_id)) = (&self.config.state, self.config.user_id)
                 {
                     return crate::server::tools::documents::execute_search_docs(
                         input, state, user_id,

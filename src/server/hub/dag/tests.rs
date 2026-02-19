@@ -54,6 +54,8 @@ mod tests {
             sub_workflow_template_id: None,
             child_workflow_id: None,
             is_designer_step: false,
+            pinned: false,
+            run_results_summary: String::new(),
         }
     }
 
@@ -451,6 +453,8 @@ mod tests {
             sub_workflow_template_id: None,
             child_workflow_id: None,
             is_designer_step: false,
+            pinned: false,
+            run_results_summary: String::new(),
         }
     }
 
@@ -496,6 +500,8 @@ mod tests {
             sub_workflow_template_id: None,
             child_workflow_id: None,
             is_designer_step: false,
+            pinned: false,
+            run_results_summary: String::new(),
         }
     }
 
@@ -617,6 +623,9 @@ mod tests {
                 })
             },
         );
+        cv_repo
+            .expect_get_latest_envelope_for_step()
+            .returning(|_| Ok(None));
         cv_repo.expect_create_run_snapshot().returning(
             |run_id, step_id, content_type, role, cv_id, source_id| {
                 Ok(RunSnapshotRow {
@@ -959,6 +968,313 @@ mod tests {
         // Step 2: 3 * 8 input = 24, 3 * 4 output = 12
         assert_eq!(result.total_input_tokens, 34);
         assert_eq!(result.total_output_tokens, 17);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Pinned Step Tests
+    // ---------------------------------------------------------------------------
+
+    fn make_context_step(
+        id: Uuid,
+        prompt: &str,
+        var_name: Option<&str>,
+        order: i32,
+    ) -> WorkflowStepRow {
+        WorkflowStepRow {
+            execution_mode: "context".into(),
+            agent_id: None,
+            ..make_integration_step(id, Uuid::new_v4(), prompt, var_name, order)
+        }
+    }
+
+    /// Build a test harness where `get_latest_envelope_for_step` returns
+    /// a specific envelope JSON for any step.
+    fn build_pinned_harness(
+        agent_id: Uuid,
+        provider: Arc<dyn LLMProvider + Send + Sync>,
+        envelope_json: Option<String>,
+    ) -> TestHarness {
+        let agent = make_test_agent(agent_id);
+
+        let mut agent_repo = MockAgentRepo::new();
+        let agent_clone = agent.clone();
+        agent_repo
+            .expect_get_persisted_agent()
+            .returning(move |id| {
+                if id == agent_id {
+                    Ok(Some(agent_clone.clone()))
+                } else {
+                    Ok(None)
+                }
+            });
+        agent_repo
+            .expect_get_agent_guidances()
+            .returning(|_, _| Ok(vec![]));
+        agent_repo
+            .expect_get_agent_context()
+            .returning(|_| Ok(vec![]));
+
+        let mut tool_repo = MockToolRepo::new();
+        tool_repo.expect_get_agent_tools().returning(|_| Ok(vec![]));
+
+        let mut wf_repo = MockWorkflowRepo::new();
+        wf_repo.expect_get_step_inputs().returning(|_| Ok(vec![]));
+        wf_repo.expect_get_step_outputs().returning(|_| Ok(vec![]));
+        wf_repo
+            .expect_get_step_routing_rules()
+            .returning(|_| Ok(vec![]));
+        wf_repo
+            .expect_list_step_documents()
+            .returning(|_| Ok(vec![]));
+
+        let mut ae_repo = MockAgentExecutionRepo::new();
+        ae_repo
+            .expect_create_agent_execution()
+            .returning(|_| Ok(dummy_ae_row()));
+        ae_repo
+            .expect_create_execution_message()
+            .returning(|_, _, _, _, _, _| Ok(dummy_msg_row()));
+        ae_repo
+            .expect_update_agent_execution_status()
+            .returning(|_, _, _, _| Ok(dummy_ae_row()));
+        ae_repo
+            .expect_list_exemplary_executions()
+            .returning(|_, _, _| Ok(vec![]));
+
+        let mut tl_repo = MockTokenLedgerRepo::new();
+        tl_repo
+            .expect_insert_ledger_entry()
+            .returning(|_, _, _, _, _, _| Ok(dummy_tl_row()));
+
+        let mut cv_repo = MockContentVersionRepo::new();
+        cv_repo.expect_find_or_create_version().returning(
+            |source_id, content_type, content_hash, _content| {
+                Ok(ContentVersionRow {
+                    id: Uuid::new_v4(),
+                    source_id,
+                    content_type: content_type.to_string(),
+                    content_hash: content_hash.to_string(),
+                    content: String::new(),
+                    version_number: 1,
+                    byte_size: 0,
+                    created_at: Utc::now(),
+                })
+            },
+        );
+        cv_repo
+            .expect_get_latest_envelope_for_step()
+            .returning(move |_| Ok(envelope_json.clone()));
+        cv_repo.expect_create_run_snapshot().returning(
+            |run_id, step_id, content_type, role, cv_id, source_id| {
+                Ok(RunSnapshotRow {
+                    id: Uuid::new_v4(),
+                    run_id,
+                    step_id,
+                    content_type: content_type.to_string(),
+                    role: role.to_string(),
+                    content_version_id: cv_id,
+                    source_id,
+                    created_at: Utc::now(),
+                })
+            },
+        );
+
+        let repos = MockReposBuilder::new()
+            .with_agents(Arc::new(agent_repo))
+            .with_tools(Arc::new(tool_repo))
+            .with_workflows(Arc::new(wf_repo))
+            .with_agent_executions(Arc::new(ae_repo))
+            .with_token_ledger(Arc::new(tl_repo))
+            .with_content_versions(Arc::new(cv_repo))
+            .build();
+
+        let engine = ExecutionEngine::new(provider.clone());
+
+        let (state, rx) = AppStateBuilder::new()
+            .with_repos(repos)
+            .with_config(AppConfig::default())
+            .with_provider(provider)
+            .build_for_test();
+
+        TestHarness {
+            engine,
+            state,
+            _rx: rx,
+        }
+    }
+
+    #[tokio::test]
+    async fn pinned_context_step_replays_output() {
+        let agent_id = Uuid::new_v4();
+        let s1 = Uuid::new_v4();
+
+        // Provider should never be called — pinned context is pure pass-through
+        let provider = Arc::new(FixedProvider {
+            response: make_llm_response("should not be called", 999, 999),
+        });
+        let harness = build_test_harness(agent_id, provider);
+        let ctx = make_ctx();
+
+        let mut step = make_context_step(s1, "pinned context data", Some("ctx_out"), 0);
+        step.pinned = true;
+
+        let steps = vec![step];
+        let edges = vec![];
+
+        let result = execute_workflow_via_engine(
+            &harness.engine,
+            &harness.state,
+            &ctx,
+            &steps,
+            &edges,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Context step pass-through: 0 tokens (pinned or not, context steps don't use LLM)
+        assert_eq!(result.total_input_tokens, 0);
+        assert_eq!(result.total_output_tokens, 0);
+        assert_eq!(result.outputs.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn pinned_single_step_replays_last_envelope() {
+        let agent_id = Uuid::new_v4();
+        let s1 = Uuid::new_v4();
+
+        // Prepare a stored envelope that the pinned step should replay
+        let stored_envelope = serde_json::json!({
+            "status": "success",
+            "data": {"result": "previously computed"},
+            "metadata": {
+                "execution_id": Uuid::new_v4().to_string(),
+                "execution_time_ms": 500,
+                "tokens_in": 100,
+                "tokens_out": 50,
+                "cost_usd": 0.001
+            },
+            "error": null
+        });
+        let envelope_json = serde_json::to_string(&stored_envelope).unwrap();
+
+        // Provider should NOT be called — pinned step replays from stored envelope
+        let provider = Arc::new(FixedProvider {
+            response: make_llm_response("should not be called", 999, 999),
+        });
+        let harness = build_pinned_harness(agent_id, provider, Some(envelope_json));
+        let ctx = make_ctx();
+
+        let mut step = make_integration_step(s1, agent_id, "Compute something", Some("output"), 0);
+        step.pinned = true;
+
+        let steps = vec![step];
+        let edges = vec![];
+
+        let result = execute_workflow_via_engine(
+            &harness.engine,
+            &harness.state,
+            &ctx,
+            &steps,
+            &edges,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Pinned replay: 0 tokens charged
+        assert_eq!(result.total_input_tokens, 0);
+        assert_eq!(result.total_output_tokens, 0);
+        assert_eq!(result.outputs.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn pinned_single_step_no_prior_output_falls_through() {
+        let agent_id = Uuid::new_v4();
+        let s1 = Uuid::new_v4();
+
+        // No stored envelope — pinned step should fall through to normal execution
+        let provider = Arc::new(FixedProvider {
+            response: make_llm_response(r#"{"fresh":"result"}"#, 15, 8),
+        });
+        let harness = build_pinned_harness(agent_id, provider, None);
+        let ctx = make_ctx();
+
+        let mut step = make_integration_step(s1, agent_id, "Compute something", Some("output"), 0);
+        step.pinned = true;
+
+        let steps = vec![step];
+        let edges = vec![];
+
+        let result = execute_workflow_via_engine(
+            &harness.engine,
+            &harness.state,
+            &ctx,
+            &steps,
+            &edges,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Falls through to normal execution — tokens charged
+        assert_eq!(result.total_input_tokens, 15);
+        assert_eq!(result.total_output_tokens, 8);
+        assert_eq!(result.outputs.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn pinned_step_in_chain_skips_downstream() {
+        // A → B(pinned) → C — B replays, C still executes against B's replayed output
+        let agent_id = Uuid::new_v4();
+        let s_a = Uuid::new_v4();
+        let s_b = Uuid::new_v4();
+        let s_c = Uuid::new_v4();
+
+        let stored_envelope = serde_json::json!({
+            "status": "success",
+            "data": {"cached": "value"},
+            "metadata": {
+                "execution_id": Uuid::new_v4().to_string(),
+                "execution_time_ms": 100,
+                "tokens_in": 50,
+                "tokens_out": 25,
+                "cost_usd": 0.0005
+            },
+            "error": null
+        });
+        let envelope_json = serde_json::to_string(&stored_envelope).unwrap();
+
+        let provider = Arc::new(FixedProvider {
+            response: make_llm_response(r#"{"result":"computed"}"#, 10, 5),
+        });
+        let harness = build_pinned_harness(agent_id, provider, Some(envelope_json));
+        let ctx = make_ctx();
+
+        let s_a_step = make_integration_step(s_a, agent_id, "Step A", Some("a_out"), 0);
+        let mut s_b_step = make_integration_step(s_b, agent_id, "Step B", Some("b_out"), 1);
+        s_b_step.pinned = true;
+        let s_c_step =
+            make_integration_step(s_c, agent_id, "Step C uses {b_out}", Some("c_out"), 2);
+
+        let steps = vec![s_a_step, s_b_step, s_c_step];
+        let edges = vec![make_edge(s_a, s_b), make_edge(s_b, s_c)];
+
+        let result = execute_workflow_via_engine(
+            &harness.engine,
+            &harness.state,
+            &ctx,
+            &steps,
+            &edges,
+            None,
+        )
+        .await
+        .unwrap();
+
+        // A: dead-path skipped (only child B is pinned), B: pinned (0), C: 10 in + 5 out
+        assert_eq!(result.total_input_tokens, 10);
+        assert_eq!(result.total_output_tokens, 5);
+        assert_eq!(result.outputs.len(), 3);
     }
 
     #[tokio::test]

@@ -311,6 +311,7 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             get(api::get_step_chat_debug),
         )
         .route(routes::WORKFLOW_STEP_CONFIG, get(api::get_step_config))
+        .route(routes::WORKFLOW_STEP_PIN, post(api::toggle_step_pin))
         .route(routes::WORKFLOW_STEP_LAST_RUN, get(api::get_step_last_run))
         .route(routes::WORKFLOW_STEP_SUB_DAG, get(api::get_step_sub_dag))
         .route(routes::WORKFLOW_NOTES, get(api::get_workflow_notes))

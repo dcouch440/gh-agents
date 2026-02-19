@@ -50,6 +50,8 @@ so the background agent can record them as required reading.
 
 {{.System.dispatch_status}}
 
+{{.System.run_context}}
+
 {{.System.current_config}}
 
 <examples>

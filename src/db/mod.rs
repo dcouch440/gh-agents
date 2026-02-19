@@ -213,6 +213,10 @@ pub struct WorkflowStepRow {
     pub child_workflow_id: Option<Uuid>,
     /// Marks the auto-managed Designer step within a workforce child workflow.
     pub is_designer_step: bool,
+    /// Whether this step's output is frozen (replayed instead of re-executed).
+    pub pinned: bool,
+    /// Haiku-generated summary of this step's last execution output.
+    pub run_results_summary: String,
 }
 
 /// Row type for a workflow step edge (DAG edge).

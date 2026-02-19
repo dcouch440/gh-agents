@@ -1187,6 +1187,51 @@ impl WorkflowRepo for PgRepo {
         Ok(())
     }
 
+    async fn set_step_pinned(&self, step_id: Uuid, pinned: bool) -> Result<()> {
+        sqlx::query("UPDATE workflow_steps SET pinned = $1 WHERE id = $2")
+            .bind(pinned)
+            .bind(step_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn update_run_results_summary(&self, step_id: Uuid, summary: &str) -> Result<()> {
+        sqlx::query("UPDATE workflow_steps SET run_results_summary = $1 WHERE id = $2")
+            .bind(summary)
+            .bind(step_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn get_run_context_for_step(
+        &self,
+        workflow_id: Uuid,
+        step_id: Uuid,
+    ) -> Result<Vec<(String, String, bool)>> {
+        let rows: Vec<(String, String, bool)> = sqlx::query_as(
+            "SELECT COALESCE(ws.name, ws.execution_mode) AS step_name, \
+                    ws.run_results_summary, \
+                    ws.pinned \
+             FROM workflow_steps ws \
+             WHERE ws.id = $1 AND ws.run_results_summary != '' \
+             UNION \
+             SELECT COALESCE(ws.name, ws.execution_mode) AS step_name, \
+                    ws.run_results_summary, \
+                    ws.pinned \
+             FROM workflow_steps ws \
+             JOIN workflow_step_edges e ON (ws.id = e.from_step_id AND e.to_step_id = $1) \
+                                        OR (ws.id = e.to_step_id AND e.from_step_id = $1) \
+             WHERE ws.workflow_id = $2 AND ws.run_results_summary != ''",
+        )
+        .bind(step_id)
+        .bind(workflow_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
     // --- Edges ---
 
     async fn set_edges(&self, workflow_id: Uuid, edges: Vec<WorkflowStepEdgeRow>) -> Result<()> {
@@ -4215,6 +4260,21 @@ impl ContentVersionRepo for PgRepo {
         .fetch_all(&self.pool)
         .await?;
         Ok(rows)
+    }
+
+    async fn get_latest_envelope_for_step(&self, step_id: Uuid) -> Result<Option<String>> {
+        let row: Option<(String,)> = sqlx::query_as(
+            "SELECT cv.content \
+             FROM content_versions cv \
+             JOIN run_snapshots rs ON cv.id = rs.content_version_id \
+             WHERE rs.step_id = $1 AND rs.content_type = 'envelope' AND rs.role = 'output' \
+             ORDER BY cv.created_at DESC \
+             LIMIT 1",
+        )
+        .bind(step_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|(content,)| content))
     }
 }
 

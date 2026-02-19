@@ -71,6 +71,8 @@ pub struct WorkflowStepResponse {
     pub visible: bool,
     pub description: String,
     pub sub_workflow_template_id: Option<Uuid>,
+    pub pinned: bool,
+    pub run_results_summary: String,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -125,6 +127,11 @@ pub struct UpdateStepRequest {
 pub struct WorkflowStepPath {
     pub wid: Uuid,
     pub sid: Uuid,
+}
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct TogglePinRequest {
+    pub pinned: bool,
 }
 
 // ============================================================================
@@ -399,5 +406,7 @@ pub fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
         visible: r.visible,
         description: r.description,
         sub_workflow_template_id: r.sub_workflow_template_id,
+        pinned: r.pinned,
+        run_results_summary: r.run_results_summary,
     }
 }

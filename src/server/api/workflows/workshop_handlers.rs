@@ -213,6 +213,77 @@ pub async fn execute_workshop_step(
         }
     }
 
+    // Pinned steps replay their last output — skip execution entirely
+    if step.pinned {
+        let envelope_json = state
+            .repos()
+            .content_versions
+            .get_latest_envelope_for_step(path.step_id)
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+
+        if let Some(json_str) = envelope_json {
+            let envelope: crate::types::StepExecutionEnvelope = serde_json::from_str(&json_str)
+                .map_err(|e| AppError::Internal(format!("Bad pinned envelope: {}", e)))?;
+
+            // Re-snapshot the replayed envelope for this run
+            let _ = crate::server::hub::dag::versioning::snapshot_content(
+                &*state.repos().content_versions,
+                run_id,
+                path.step_id,
+                path.step_id,
+                "envelope",
+                "output",
+                &json_str,
+            )
+            .await;
+
+            let next = compute_next_executable_steps(&steps, &edges, &dag_state);
+
+            broadcast_workflow_event(
+                &state,
+                &WorkflowExecutionContext {
+                    stage_execution_id: run_id,
+                    run_id,
+                    user_id: auth.user_id.0,
+                    initial_input: String::new(),
+                    prior_outputs: HashMap::new(),
+                    execution_context: None,
+                    container_config: None,
+                    wg_client: None,
+                    snapshot: None,
+                    parent_context: None,
+                },
+                path.id,
+                WorkflowEventKind::StepCompleted {
+                    step_id: path.step_id,
+                    step_name: step
+                        .output_variable_name
+                        .clone()
+                        .unwrap_or_else(|| path.step_id.to_string()),
+                    agent_id: step.agent_id,
+                    output: envelope.data.as_ref().map(|v| v.to_string()),
+                    input_tokens: Some(0),
+                    output_tokens: Some(0),
+                    duration_ms: Some(0),
+                },
+            );
+
+            return Ok(Json(WorkshopStepResponse {
+                step_id: path.step_id,
+                status: "completed".to_string(),
+                output: envelope.data,
+                tokens_in: 0,
+                tokens_out: 0,
+                cost_usd: 0.0,
+                duration_ms: 0,
+                next_executable_steps: next,
+            }));
+        }
+        // No prior output — fall through to normal execution
+        warn!(step_id = %path.step_id, "Pinned step has no prior output, executing normally");
+    }
+
     // Mark as running
     let _ = collection_repo
         .update_workflow_execution_status(run_id, "workshop_running", None, None)
@@ -306,6 +377,18 @@ pub async fn execute_workshop_step(
                         duration_ms: Some(step_result.duration_ms),
                     },
                 );
+
+                // Spawn run results summarizer for workshop step
+                if let Some(output) = dag_state.completed.get(&step_id) {
+                    if !output.raw_output.is_empty() {
+                        crate::server::hub::run_results::spawn_run_results_summary(
+                            bg_state.clone(),
+                            bg_state.run_results_tokens(),
+                            step_id,
+                            output.raw_output.clone(),
+                        );
+                    }
+                }
 
                 let _ = tx.send(Ok(WorkshopStepResponse {
                     step_id: step_result.step_id,

@@ -109,12 +109,13 @@ pub use workflows::{
     get_template, get_workflow, get_workflow_notes, get_workflow_step, get_workshop,
     list_step_documents, list_templates, list_workflow_edges, list_workflow_executions,
     list_workflow_steps, list_workflows, rebase_workshop, remove_step_document,
-    remove_workflow_edge, run_workflow, update_workflow, update_workflow_step, CreateStepRequest,
-    CreateTemplateRequest, CreateWorkflowRequest, EdgeRequest, EdgeResponse, RebaseResponse,
-    RunDetailResponse, RunStepResultResponse, RunTemplateDetailResponse, RunTemplateResponse,
-    RunWorkflowRequest, StepDocumentRequest, StepDocumentResponse, UpdateStepRequest,
-    UpdateWorkflowRequest, WorkflowExecutionResponse, WorkflowResponse, WorkflowRunResponse,
-    WorkflowStepResponse, WorkshopResponse, WorkshopStatusResponse, WorkshopStepResponse,
+    remove_workflow_edge, run_workflow, toggle_step_pin, update_workflow, update_workflow_step,
+    CreateStepRequest, CreateTemplateRequest, CreateWorkflowRequest, EdgeRequest, EdgeResponse,
+    RebaseResponse, RunDetailResponse, RunStepResultResponse, RunTemplateDetailResponse,
+    RunTemplateResponse, RunWorkflowRequest, StepDocumentRequest, StepDocumentResponse,
+    UpdateStepRequest, UpdateWorkflowRequest, WorkflowExecutionResponse, WorkflowResponse,
+    WorkflowRunResponse, WorkflowStepResponse, WorkshopResponse, WorkshopStatusResponse,
+    WorkshopStepResponse,
 };
 
 // Re-export archetype handlers
@@ -183,4 +184,3 @@ pub use protocols::{
     list_protocol_types, list_protocols, preview_expansion, unapply_protocol, update_port,
     update_protocol,
 };
-

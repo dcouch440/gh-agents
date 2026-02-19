@@ -119,6 +119,8 @@ pub(crate) struct AppStateInner {
         DashMap<Uuid, Vec<crate::server::hub::consistency_scanner::DeletedItem>>,
     /// Registry for background dispatch tasks.
     pub(crate) task_registry: TaskRegistry,
+    /// Cancellation tokens for in-flight run results summarizations (cancel-and-replace).
+    pub(crate) run_results_tokens: super::hub::run_results::RunResultsTokens,
 }
 
 /// Application state shared across all HTTP handlers.
@@ -192,6 +194,7 @@ impl AppState {
             ws_connections_by_ip: DashMap::new(),
             pending_scan_items: DashMap::new(),
             task_registry: TaskRegistry::new(),
+            run_results_tokens: super::hub::run_results::new_run_results_tokens(),
         }));
 
         (state, orchestrator_rx)
@@ -228,6 +231,7 @@ impl AppState {
                 ws_connections_by_ip: DashMap::new(),
                 pending_scan_items: DashMap::new(),
                 task_registry: TaskRegistry::new(),
+                run_results_tokens: super::hub::run_results::new_run_results_tokens(),
             })),
             orchestrator_rx,
         )
@@ -465,6 +469,11 @@ impl AppState {
     /// Access the background dispatch task registry.
     pub fn task_registry(&self) -> &TaskRegistry {
         &self.0.task_registry
+    }
+
+    /// Access the run results summarization tokens (cancel-and-replace map).
+    pub fn run_results_tokens(&self) -> &super::hub::run_results::RunResultsTokens {
+        &self.0.run_results_tokens
     }
 
     /// Access the JWT secret.

@@ -15,7 +15,9 @@ mod variables;
 
 // Re-export all public items to preserve the existing API surface.
 pub use conditions::{check_step_readiness, evaluate_edge_condition};
-pub use graph::{find_entry_steps, get_child_steps, get_parent_steps, topological_sort};
+pub use graph::{
+    compute_dead_path_steps, find_entry_steps, get_child_steps, get_parent_steps, topological_sort,
+};
 pub use ports::{
     collect_upstream_context_data, resolve_dot_path, resolve_port_inputs, PortResolutionError,
 };
