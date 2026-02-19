@@ -3,7 +3,7 @@ mod tests {
     use crate::db::TaskAgentRosterRow;
     use crate::server::hub::dag::workforce::{
         build_filtered_outputs_block, build_team_roster_string, compose_workforce_output,
-        filter_outputs_for_agent,
+        compute_execution_levels, filter_outputs_for_agent, DesignedAgentPrompt,
     };
     use uuid::Uuid;
 
@@ -16,6 +16,18 @@ mod tests {
             capabilities: vec!["file_read".to_string()],
             execution_order: order,
             ..Default::default()
+        }
+    }
+
+    fn make_designed_prompt(name: &str, receives_from: &[&str]) -> DesignedAgentPrompt {
+        DesignedAgentPrompt {
+            agent_roster_entry_id: Uuid::new_v4(),
+            agent_name: name.to_string(),
+            tools: vec![],
+            system_prompt: String::new(),
+            task_prompt: String::new(),
+            execution_order: 0,
+            receives_from: receives_from.iter().map(|s| s.to_string()).collect(),
         }
     }
 
@@ -85,5 +97,103 @@ mod tests {
         assert!(result.contains("### Agent A"));
         assert!(result.contains("output a"));
         assert!(result.contains("### Agent B"));
+    }
+
+    // ── compute_execution_levels tests ────────────────────────────────────
+
+    #[test]
+    fn compute_levels_parallel_researchers() {
+        // 3 researchers (no receives_from) + 1 synthesizer (receives from all 3)
+        let prompts = vec![
+            make_designed_prompt("FewShotResearcher", &[]),
+            make_designed_prompt("PersonalityResearcher", &[]),
+            make_designed_prompt("BestPracticesResearcher", &[]),
+            make_designed_prompt(
+                "Synthesizer",
+                &[
+                    "FewShotResearcher",
+                    "PersonalityResearcher",
+                    "BestPracticesResearcher",
+                ],
+            ),
+        ];
+
+        let levels = compute_execution_levels(&prompts);
+
+        assert_eq!(levels.len(), 2);
+        assert_eq!(levels[0].len(), 3); // All 3 researchers at level 0
+        assert_eq!(levels[1], vec![3]); // Synthesizer at level 1
+        // Researchers should be indices 0, 1, 2 in some order
+        let mut level_0 = levels[0].clone();
+        level_0.sort();
+        assert_eq!(level_0, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn compute_levels_linear_pipeline() {
+        // A → B → C
+        let prompts = vec![
+            make_designed_prompt("Scanner", &[]),
+            make_designed_prompt("Analyzer", &["Scanner"]),
+            make_designed_prompt("Reporter", &["Analyzer"]),
+        ];
+
+        let levels = compute_execution_levels(&prompts);
+
+        assert_eq!(levels.len(), 3);
+        assert_eq!(levels[0], vec![0]); // Scanner
+        assert_eq!(levels[1], vec![1]); // Analyzer
+        assert_eq!(levels[2], vec![2]); // Reporter
+    }
+
+    #[test]
+    fn compute_levels_diamond() {
+        // A → B, A → C, B → D, C → D
+        let prompts = vec![
+            make_designed_prompt("A", &[]),
+            make_designed_prompt("B", &["A"]),
+            make_designed_prompt("C", &["A"]),
+            make_designed_prompt("D", &["B", "C"]),
+        ];
+
+        let levels = compute_execution_levels(&prompts);
+
+        assert_eq!(levels.len(), 3);
+        assert_eq!(levels[0], vec![0]); // A
+        let mut level_1 = levels[1].clone();
+        level_1.sort();
+        assert_eq!(level_1, vec![1, 2]); // B, C in parallel
+        assert_eq!(levels[2], vec![3]); // D
+    }
+
+    #[test]
+    fn compute_levels_no_dependencies() {
+        // All agents independent
+        let prompts = vec![
+            make_designed_prompt("A", &[]),
+            make_designed_prompt("B", &[]),
+            make_designed_prompt("C", &[]),
+        ];
+
+        let levels = compute_execution_levels(&prompts);
+
+        assert_eq!(levels.len(), 1);
+        let mut level_0 = levels[0].clone();
+        level_0.sort();
+        assert_eq!(level_0, vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn compute_levels_empty() {
+        let levels = compute_execution_levels(&[]);
+        assert!(levels.is_empty());
+    }
+
+    #[test]
+    fn compute_levels_single_agent() {
+        let prompts = vec![make_designed_prompt("Solo", &[])];
+        let levels = compute_execution_levels(&prompts);
+        assert_eq!(levels.len(), 1);
+        assert_eq!(levels[0], vec![0]);
     }
 }

@@ -372,6 +372,9 @@ mod tests {
             async fn remove_roster_agent(&self, _: Uuid) -> Result<()> {
                 unimplemented!()
             }
+            async fn update_roster_agent_order(&self, _: Uuid, _: i32) -> Result<()> {
+                unimplemented!()
+            }
             async fn link_roster_agent_to_child_step(
                 &self,
                 _: Uuid,
