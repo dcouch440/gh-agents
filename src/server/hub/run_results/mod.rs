@@ -14,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 use uuid::Uuid;
 
+use crate::config::protocols::roles;
 use crate::llm::{LLMRequest, Message as LlmMessage};
 use crate::server::state::AppState;
 
@@ -25,18 +26,6 @@ const MAX_OUTPUT_CHARS: usize = 50_000;
 
 /// Model to use for summarization. Uses the default utility model.
 const SUMMARIZER_MODEL: &str = crate::constants::MODEL_HAIKU;
-
-const RUN_RESULTS_SYSTEM_PROMPT: &str = r#"You summarize the output of a workflow step execution.
-
-You receive the raw output from a step that just completed. Describe what the step produced in 2-4 sentences:
-- What kind of data or content was generated
-- Key data points, entities, or conclusions
-- The shape/structure of the output (list, object, text, etc.)
-
-Be concrete and specific. Reference actual values, names, and numbers from the output.
-Do NOT describe what the step was supposed to do — describe what it actually produced.
-
-Return ONLY the summary. No headers, no bullet points, no preamble."#;
 
 /// In-memory token map for cancel-and-replace semantics.
 /// Each step_id maps to a CancellationToken for the in-flight summarization.
@@ -106,7 +95,7 @@ async fn summarize_step_output(
         SUMMARIZER_MODEL,
         vec![LlmMessage::user(truncated.to_string())],
     )
-    .with_system(RUN_RESULTS_SYSTEM_PROMPT)
+    .with_system(roles::RUN_RESULTS_SUMMARIZER)
     .with_max_tokens(MAX_TOKENS_RUN_SUMMARY);
 
     let response = provider.send_message(request).await?;

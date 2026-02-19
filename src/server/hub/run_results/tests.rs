@@ -3,7 +3,9 @@ mod tests {
     use tokio_util::sync::CancellationToken;
     use uuid::Uuid;
 
-    use super::super::{new_run_results_tokens, MAX_OUTPUT_CHARS, RUN_RESULTS_SYSTEM_PROMPT};
+    use crate::config::protocols::roles;
+
+    use super::super::{new_run_results_tokens, MAX_OUTPUT_CHARS};
 
     #[test]
     fn truncates_long_output() {
@@ -37,8 +39,12 @@ mod tests {
     }
 
     #[test]
-    fn system_prompt_is_concrete() {
-        assert!(RUN_RESULTS_SYSTEM_PROMPT.contains("concrete"));
-        assert!(RUN_RESULTS_SYSTEM_PROMPT.contains("2-4 sentences"));
+    fn system_prompt_has_required_sections() {
+        let prompt = roles::RUN_RESULTS_SUMMARIZER;
+        assert!(prompt.contains("<identity>"));
+        assert!(prompt.contains("<audience>"));
+        assert!(prompt.contains("<instructions>"));
+        assert!(prompt.contains("<examples>"));
+        assert!(prompt.contains("2-4 sentence"));
     }
 }

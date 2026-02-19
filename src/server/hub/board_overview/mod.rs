@@ -8,6 +8,7 @@
 use tracing::info;
 use uuid::Uuid;
 
+use crate::config::protocols::roles;
 use crate::llm::{
     AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage,
 };
@@ -16,21 +17,6 @@ use crate::server::state::AppState;
 /// Max tokens for the board overview response.
 /// One paragraph = ~100-150 tokens. Allow headroom.
 const MAX_TOKENS_BOARD_OVERVIEW: u32 = 512;
-
-const BOARD_OVERVIEW_SYSTEM_PROMPT: &str = r#"You summarize what a workflow board is doing.
-
-You receive notes from multiple workflow steps. Each step is a different part of the pipeline (task forces, documenters, rooms, etc.). The notes were written by each step's configuration assistant during conversations with the user.
-
-Produce ONE paragraph (3-5 sentences max) that describes:
-- What the overall workflow does (the big picture)
-- What each step contributes to the pipeline
-- Any key constraints or technical details that affect multiple steps
-
-Write for an AI assistant that needs ambient awareness of the full board. Be specific — name the actual technologies, domains, and deliverables mentioned in the notes. Do not be vague ("the team is working on a project") — be concrete ("the pipeline scans Python repos for auth vulnerabilities, generates a remediation guide, then a review panel debates priority").
-
-If only one step has notes, still summarize it — the other steps haven't been configured yet.
-
-Return ONLY the paragraph. No headers, no bullet points, no preamble."#;
 
 /// Spawn a background board overview summarization.
 /// Non-blocking — fires and forgets. Errors are logged, not propagated.
@@ -88,7 +74,7 @@ async fn regenerate_board_overview(
         crate::constants::MODEL_HAIKU,
         vec![LlmMessage::user(formatted_input)],
     )
-    .with_system(BOARD_OVERVIEW_SYSTEM_PROMPT)
+    .with_system(roles::BOARD_OVERVIEW_SUMMARIZER)
     .with_max_tokens(MAX_TOKENS_BOARD_OVERVIEW);
 
     let response = client.send_message(request).await?;
