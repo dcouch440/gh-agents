@@ -279,6 +279,14 @@ pub mod roles {
         prompt: include_str!("../../config/protocols/agent_designer/designer/prompt.md"),
         response: None,
     };
+
+    /// Run results summarizer: distills step output into a 2-4 sentence summary.
+    pub const RUN_RESULTS_SUMMARIZER: &str =
+        include_str!("../../config/protocols/run_results/system.md");
+
+    /// Board overview summarizer: distills all assistant notes into a board-wide summary.
+    pub const BOARD_OVERVIEW_SUMMARIZER: &str =
+        include_str!("../../config/protocols/board_overview/system.md");
 }
 
 // ---------------------------------------------------------------------------
