@@ -205,6 +205,10 @@ mod tests {
         repo.expect_link_roster_agent_to_child_step()
             .returning(|_, _| Ok(()));
 
+        // recompute_execution_order: list_edges for child workflow
+        repo.expect_list_edges()
+            .returning(|_| Ok(vec![]));
+
         let input = json!({
             "name": "Scanner",
             "role": "Scan codebase",
@@ -214,7 +218,7 @@ mod tests {
 
         assert_eq!(result["name"], "Scanner");
         assert_eq!(result["role"], "Scan codebase");
-        assert_eq!(result["execution_order"], 0);
+        assert!(result["execution_sequence"].is_array());
         assert!(result["child_step_id"].is_string());
     }
 
@@ -293,11 +297,15 @@ mod tests {
         repo.expect_link_roster_agent_to_child_step()
             .returning(|_, _| Ok(()));
 
+        // recompute_execution_order: list_edges for child workflow
+        repo.expect_list_edges()
+            .returning(|_| Ok(vec![]));
+
         let input = json!({ "name": "Agent2", "role": "Writer" });
         let result = execute_workforce_tool("add_agent", &input, &repo, &ctx).await;
 
         assert_eq!(result["name"], "Agent2");
-        assert_eq!(result["execution_order"], 1);
+        assert!(result["execution_sequence"].is_array());
     }
 
     #[tokio::test]
@@ -795,6 +803,7 @@ mod tests {
         let ctx = make_ctx();
         let brief = make_brief(ctx.step_id);
         let brief_id = brief.id;
+        let child_wf_id = Uuid::new_v4();
         let scanner_child = Uuid::new_v4();
         let analyzer_child = Uuid::new_v4();
 
@@ -802,6 +811,10 @@ mod tests {
         scanner.child_step_id = Some(scanner_child);
         let mut analyzer = make_roster_agent(brief_id, "Analyzer", 1);
         analyzer.child_step_id = Some(analyzer_child);
+
+        // Step with child_workflow_id (needed by recompute_execution_order)
+        let mut step = make_step(ctx.step_id, ctx.workflow_id, "workforce");
+        step.child_workflow_id = Some(child_wf_id);
 
         let mut repo = MockWorkflowRepo::new();
 
@@ -814,9 +827,17 @@ mod tests {
         repo.expect_list_agent_roster()
             .returning(move |_| Ok(vec![scanner_clone.clone(), analyzer_clone.clone()]));
 
+        let step_clone = step.clone();
+        repo.expect_get_step()
+            .returning(move |_| Ok(Some(step_clone.clone())));
+
         repo.expect_remove_edge()
             .withf(move |from, to| *from == scanner_child && *to == analyzer_child)
             .returning(|_, _| Ok(()));
+
+        // recompute_execution_order: list_edges (edge was just removed)
+        repo.expect_list_edges()
+            .returning(|_| Ok(vec![]));
 
         let input = json!({ "from_agent": "Scanner", "to_agent": "Analyzer" });
         let result = execute_workforce_tool("remove_dependency", &input, &repo, &ctx).await;
@@ -824,6 +845,7 @@ mod tests {
         assert_eq!(result["removed"], true);
         assert_eq!(result["from"], "Scanner");
         assert_eq!(result["to"], "Analyzer");
+        assert!(result["execution_sequence"].is_array());
     }
 
     #[tokio::test]

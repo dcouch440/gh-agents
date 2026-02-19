@@ -1686,6 +1686,15 @@ impl WorkflowRepo for PgRepo {
         Ok(())
     }
 
+    async fn update_roster_agent_order(&self, agent_id: Uuid, execution_order: i32) -> Result<()> {
+        sqlx::query("UPDATE task_agent_roster SET execution_order = $2 WHERE id = $1")
+            .bind(agent_id)
+            .bind(execution_order)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     async fn link_roster_agent_to_child_step(
         &self,
         agent_id: Uuid,

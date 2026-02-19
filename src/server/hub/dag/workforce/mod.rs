@@ -9,10 +9,12 @@ mod tests;
 
 use anyhow::anyhow;
 use serde_json::Value as JsonValue;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
-use crate::config::protocols::{roles, vars, WORKFORCE};
+use std::collections::HashMap;
+
+use crate::config::protocols::{roles, vars, AgentConfig, WORKFORCE};
 use crate::db::traits::CreateAgentExecutionInput;
 use crate::db::WorkflowStepRow;
 use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow};
@@ -30,7 +32,9 @@ use crate::server::hub::streaming::DagStreamSink;
 use crate::server::ws::events::WorkflowEventKind;
 use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope, UserId};
 
+use crate::execution::container::ContainerHandle;
 use crate::server::hub::protocols::context::{build_context_block, ContextDocument};
+use crate::server::state::AppState;
 
 use super::agent_designer::{self, normalize_agent_name};
 use super::container::{create_optional_container, destroy_optional_container};
@@ -54,6 +58,16 @@ pub(crate) struct DesignedAgentPrompt {
     pub task_prompt: String,
     pub execution_order: i32,
     pub receives_from: Vec<String>,
+}
+
+/// Result from executing a single agent — returned by `execute_single_agent`.
+pub(crate) struct AgentExecutionResult {
+    pub name: String,
+    pub content: String,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cost: f32,
+    pub roster_agent_id: Uuid,
 }
 
 /// Token usage from the designer call, for accumulating into step totals.
@@ -333,236 +347,62 @@ pub(super) async fn execute_workforce_step(
         format!("<user_notes>\n{inner}\n</user_notes>")
     };
 
-    // 10. Sequential agent execution loop
+    // 10. Level-based parallel agent execution
     let mut agent_outputs: Vec<(String, String)> = Vec::new();
     let mut step_in_tokens: i64 = designer_usage.input_tokens;
     let mut step_out_tokens: i64 = designer_usage.output_tokens;
     let mut step_cost: f32 = designer_usage.cost_usd;
     let total_agents = designed_prompts.len();
     let agent_cfg = WORKFORCE.agent("agent");
+    let designer_run_id = if designer_usage.run_id.is_nil() {
+        None
+    } else {
+        Some(designer_usage.run_id)
+    };
 
-    for (idx, designed) in designed_prompts.iter().enumerate() {
-        // Check cancellation
+    let levels = compute_execution_levels(&designed_prompts);
+
+    for level_indices in &levels {
+        // Check cancellation before each level
         if dag.cancel.is_some_and(|t| t.is_cancelled()) {
             destroy_optional_container(&managed_container, dag.ctx.wg_client.as_deref()).await;
             return Err(HubError::Cancelled);
         }
 
-        // Broadcast agent progress
-        broadcast_workflow_event(
-            dag.state,
-            dag.ctx,
-            step.workflow_id,
-            WorkflowEventKind::WorkforceAgentProgress {
-                step_id: step.id,
-                agent_name: designed.agent_name.clone(),
-                roster_agent_id: designed.agent_roster_entry_id,
-                agent_index: idx,
+        if level_indices.len() == 1 {
+            // Single agent at this level — run directly (no spawn overhead)
+            let idx = level_indices[0];
+            let designed = &designed_prompts[idx];
+            let container_handle =
+                managed_container.as_ref().map(|mc| mc.agent_handle.clone());
+
+            match execute_single_agent(
+                dag.state,
+                dag.ctx,
+                &dag.engine.clone_with_provider(),
+                designed,
+                &agent_outputs,
+                &user_notes_block,
+                agent_cfg,
+                container_handle,
+                dag.cancel,
+                idx,
                 total_agents,
-                status: "started".to_string(),
-            },
-        );
-
-        // Create protocol execution row
-        let designer_run_id = if designer_usage.run_id.is_nil() {
-            None
-        } else {
-            Some(designer_usage.run_id)
-        };
-        let exec_row = recorder
-            .create_phase_with_context(
-                &format!("agent_{}", idx),
-                None,
-                Some(&prompt),
-                Some(&designed.agent_name),
-                Some("workforce"),
+                step.id,
+                step.workflow_id,
                 designer_run_id,
+                &prompt,
             )
-            .await?;
-
-        // Resolve capabilities
-        let (tools, tool_names) =
-            resolve_capabilities_to_tools(&designed.tools, &*dag.state.repos().tool_capabilities)
-                .await
-                .unwrap_or_else(|e| {
-                    warn!(agent = %designed.agent_name, "Capability resolution failed: {}", e);
-                    (vec![], vec![])
-                });
-
-        // Inject previous outputs filtered by designer routing
-        let filtered = filter_outputs_for_agent(&agent_outputs, &designed.receives_from);
-        let mut task_prompt = if filtered.is_empty() {
-            designed.task_prompt.clone()
-        } else {
-            let previous_outputs = build_filtered_outputs_block(&filtered);
-            format!(
-                "{}\n\n<previous_agent_outputs>\n{}\n</previous_agent_outputs>",
-                designed.task_prompt, previous_outputs
-            )
-        };
-
-        // Inject user notes
-        if !user_notes_block.is_empty() {
-            task_prompt = format!("{user_notes_block}\n\n{task_prompt}");
-        }
-
-        // Create agent_execution row for message persistence
-        let ae_repo = &*dag.state.repos().agent_executions;
-        let ae_id = match ae_repo
-            .create_agent_execution(CreateAgentExecutionInput {
-                agent_id: None,
-                workflow_step_id: Some(step.id),
-                is_interactive: false,
-                parent_agent_execution_id: None,
-                system_prompt_rendered: designed.system_prompt.clone(),
-                input: task_prompt.clone(),
-                room_session_id: None,
-                speaker_order: None,
-                workflow_execution_id: Some(dag.ctx.stage_execution_id),
-            })
             .await
-        {
-            Ok(row) => {
-                // Record initial messages
-                let _ = ae_repo
-                    .create_execution_message(row.id, "system", &designed.system_prompt, None, 0, 0)
-                    .await;
-                let _ = ae_repo
-                    .create_execution_message(row.id, "user", &task_prompt, None, 0, 0)
-                    .await;
-                Some(row.id)
-            }
-            Err(e) => {
-                warn!(agent = %designed.agent_name, error = %e, "Failed to create agent execution");
-                None
-            }
-        };
-
-        // Build strategy
-        let strategy = WorkforceAgentStrategy::new(WorkforceAgentConfig {
-            system_prompt: designed.system_prompt.clone(),
-            model_id: agent_cfg.model_id.clone(),
-            temperature: agent_cfg.temperature,
-            max_rounds: agent_cfg.max_rounds,
-            context_budget: agent_cfg.context_budget,
-            tools,
-            tool_names,
-            execution_context: dag.ctx.execution_context.clone(),
-            container_handle: managed_container.as_ref().map(|mc| mc.agent_handle.clone()),
-            state: Some(dag.state.clone()),
-            user_id: Some(UserId(dag.ctx.user_id)),
-            agent_execution_id: ae_id,
-        });
-
-        // Execute with live streaming sink
-        let inner_recorder = ExecutionRecorder::new(
-            &*dag.state.repos().sessions,
-            &*dag.state.repos().chat_messages,
-            Some(&*dag.state.repos().agent_executions),
-            Some(&*dag.state.repos().token_ledger),
-        );
-        let sink = DagStreamSink::new(
-            dag.state.clone(),
-            dag.ctx.clone(),
-            step.workflow_id,
-            step.id,
-            designed.agent_roster_entry_id,
-            designed.agent_name.clone(),
-        );
-        let result = dag
-            .engine
-            .clone_with_provider()
-            .execute(&strategy, &task_prompt, &sink, &inner_recorder, dag.cancel)
-            .await;
-
-        match result {
-            Ok(exec_result) => {
-                let cost = compute_cost(
-                    &agent_cfg.model_id,
-                    exec_result.input_tokens as i64,
-                    exec_result.output_tokens as i64,
-                );
-                step_in_tokens += exec_result.input_tokens as i64;
-                step_out_tokens += exec_result.output_tokens as i64;
-                step_cost += cost;
-
-                agent_outputs.push((designed.agent_name.clone(), exec_result.content.clone()));
-
-                recorder
-                    .update_phase(
-                        exec_row.id,
-                        PhaseCompletion {
-                            status: "complete",
-                            output_content: Some(&exec_result.content),
-                            error_message: None,
-                            tokens_in: exec_result.input_tokens as i64,
-                            tokens_out: exec_result.output_tokens as i64,
-                            cost_usd: cost,
-                            model: Some(&agent_cfg.model_id),
-                        },
-                    )
-                    .await;
-
-                info!(
-                    agent = %designed.agent_name,
-                    idx = idx,
-                    tokens_in = exec_result.input_tokens,
-                    tokens_out = exec_result.output_tokens,
-                    "Workforce agent completed"
-                );
-
-                broadcast_workflow_event(
-                    dag.state,
-                    dag.ctx,
-                    step.workflow_id,
-                    WorkflowEventKind::WorkforceAgentProgress {
-                        step_id: step.id,
-                        agent_name: designed.agent_name.clone(),
-                        roster_agent_id: designed.agent_roster_entry_id,
-                        agent_index: idx,
-                        total_agents,
-                        status: "completed".to_string(),
-                    },
-                );
-            }
-            Err(e) => {
-                let err_msg = format!("{}", e);
-                recorder
-                    .update_phase(
-                        exec_row.id,
-                        PhaseCompletion {
-                            status: "failed",
-                            output_content: None,
-                            error_message: Some(&err_msg),
-                            tokens_in: 0,
-                            tokens_out: 0,
-                            cost_usd: 0.0,
-                            model: Some(&agent_cfg.model_id),
-                        },
-                    )
-                    .await;
-
-                broadcast_workflow_event(
-                    dag.state,
-                    dag.ctx,
-                    step.workflow_id,
-                    WorkflowEventKind::WorkforceAgentProgress {
-                        step_id: step.id,
-                        agent_name: designed.agent_name.clone(),
-                        roster_agent_id: designed.agent_roster_entry_id,
-                        agent_index: idx,
-                        total_agents,
-                        status: "failed".to_string(),
-                    },
-                );
-
-                match brief.failure_mode.as_str() {
+            {
+                Ok(result) => {
+                    step_in_tokens += result.input_tokens;
+                    step_out_tokens += result.output_tokens;
+                    step_cost += result.cost;
+                    agent_outputs.push((result.name, result.content));
+                }
+                Err(e) => match brief.failure_mode.as_str() {
                     "fail_fast" => {
-                        warn!(
-                            agent = %designed.agent_name,
-                            error = %err_msg,
-                            "Workforce agent failed (fail_fast)"
-                        );
                         destroy_optional_container(
                             &managed_container,
                             dag.ctx.wg_client.as_deref(),
@@ -571,17 +411,118 @@ pub(super) async fn execute_workforce_step(
                         return Err(e);
                     }
                     _ => {
+                        let agent_name = designed.agent_name.clone();
+                        let err_msg = format!("{}", e);
                         warn!(
-                            agent = %designed.agent_name,
+                            agent = %agent_name,
                             error = %err_msg,
                             "Workforce agent failed, skipping ({})", brief.failure_mode
                         );
-                        agent_outputs.push((
-                            designed.agent_name.clone(),
-                            format!("[AGENT FAILED: {}]", err_msg),
-                        ));
+                        agent_outputs
+                            .push((agent_name, format!("[AGENT FAILED: {}]", err_msg)));
+                    }
+                },
+            }
+        } else {
+            // Multiple agents at this level — run in parallel
+            let mut join_set = tokio::task::JoinSet::new();
+            let outputs_snapshot = agent_outputs.clone();
+
+            for &idx in level_indices {
+                let designed = designed_prompts[idx].clone();
+                let state_clone = dag.state.clone();
+                let ctx_clone = dag.ctx.clone();
+                let provider = dag.engine.provider();
+                let cancel = dag.cancel.cloned();
+                let outputs = outputs_snapshot.clone();
+                let user_notes = user_notes_block.clone();
+                let container_handle =
+                    managed_container.as_ref().map(|mc| mc.agent_handle.clone());
+                let prompt_clone = prompt.clone();
+                let step_id = step.id;
+                let workflow_id = step.workflow_id;
+
+                join_set.spawn(async move {
+                    let engine =
+                        crate::server::hub::engine::ExecutionEngine::new(provider);
+                    let result = execute_single_agent(
+                        &state_clone,
+                        &ctx_clone,
+                        &engine,
+                        &designed,
+                        &outputs,
+                        &user_notes,
+                        WORKFORCE.agent("agent"),
+                        container_handle,
+                        cancel.as_ref(),
+                        idx,
+                        total_agents,
+                        step_id,
+                        workflow_id,
+                        designer_run_id,
+                        &prompt_clone,
+                    )
+                    .await;
+                    (idx, result)
+                });
+            }
+
+            // Collect results from parallel agents
+            let mut level_failed = false;
+            while let Some(join_result) = join_set.join_next().await {
+                match join_result {
+                    Ok((_idx, Ok(agent_result))) => {
+                        step_in_tokens += agent_result.input_tokens;
+                        step_out_tokens += agent_result.output_tokens;
+                        step_cost += agent_result.cost;
+                        agent_outputs
+                            .push((agent_result.name, agent_result.content));
+                    }
+                    Ok((idx, Err(e))) => match brief.failure_mode.as_str() {
+                        "fail_fast" => {
+                            warn!(
+                                agent_index = idx,
+                                error = %e,
+                                "Workforce agent failed (fail_fast), aborting level"
+                            );
+                            join_set.abort_all();
+                            destroy_optional_container(
+                                &managed_container,
+                                dag.ctx.wg_client.as_deref(),
+                            )
+                            .await;
+                            return Err(e);
+                        }
+                        _ => {
+                            let agent_name = designed_prompts[idx].agent_name.clone();
+                            let err_msg = format!("{}", e);
+                            warn!(
+                                agent = %agent_name,
+                                error = %err_msg,
+                                "Workforce agent failed, skipping ({})",
+                                brief.failure_mode
+                            );
+                            agent_outputs.push((
+                                agent_name,
+                                format!("[AGENT FAILED: {}]", err_msg),
+                            ));
+                            level_failed = true;
+                        }
+                    },
+                    Err(join_err) => {
+                        error!("Workforce agent task panicked: {}", join_err);
+                        level_failed = true;
                     }
                 }
+            }
+
+            if level_failed && brief.failure_mode == "fail_fast" {
+                destroy_optional_container(
+                    &managed_container,
+                    dag.ctx.wg_client.as_deref(),
+                )
+                .await;
+                return Err(HubError::Internal(anyhow!("Agent task panicked")));
             }
         }
     }
@@ -802,4 +743,298 @@ pub(crate) fn compose_workforce_output(
     composite.insert("agents".to_string(), JsonValue::Object(agents));
 
     JsonValue::Object(composite)
+}
+
+/// Execute a single workforce agent. Used by both sequential (single agent at
+/// a level) and parallel (spawned task) paths.
+#[allow(clippy::too_many_arguments)]
+async fn execute_single_agent(
+    state: &AppState,
+    ctx: &super::utils::types::WorkflowExecutionContext,
+    engine: &crate::server::hub::engine::ExecutionEngine,
+    designed: &DesignedAgentPrompt,
+    prior_outputs: &[(String, String)],
+    user_notes_block: &str,
+    agent_cfg: &AgentConfig,
+    container_handle: Option<ContainerHandle>,
+    cancel: Option<&tokio_util::sync::CancellationToken>,
+    agent_index: usize,
+    total_agents: usize,
+    step_id: Uuid,
+    workflow_id: Uuid,
+    designer_run_id: Option<Uuid>,
+    original_prompt: &str,
+) -> Result<AgentExecutionResult, HubError> {
+    // Broadcast started
+    broadcast_workflow_event(
+        state,
+        ctx,
+        workflow_id,
+        WorkflowEventKind::WorkforceAgentProgress {
+            step_id,
+            agent_name: designed.agent_name.clone(),
+            roster_agent_id: designed.agent_roster_entry_id,
+            agent_index,
+            total_agents,
+            status: "started".to_string(),
+        },
+    );
+
+    // Create protocol execution recorder (per-agent, owns its own repo refs)
+    let recorder = ProtocolExecutionRecorder::new(
+        &*state.repos().protocols,
+        step_id,
+        ctx.run_id,
+    );
+    let exec_row = recorder
+        .create_phase_with_context(
+            &format!("agent_{}", agent_index),
+            None,
+            Some(original_prompt),
+            Some(&designed.agent_name),
+            Some("workforce"),
+            designer_run_id,
+        )
+        .await?;
+
+    // Resolve capabilities
+    let (tools, tool_names) =
+        resolve_capabilities_to_tools(&designed.tools, &*state.repos().tool_capabilities)
+            .await
+            .unwrap_or_else(|e| {
+                warn!(agent = %designed.agent_name, "Capability resolution failed: {}", e);
+                (vec![], vec![])
+            });
+
+    // Inject previous outputs filtered by designer routing
+    let filtered = filter_outputs_for_agent(prior_outputs, &designed.receives_from);
+    let mut task_prompt = if filtered.is_empty() {
+        designed.task_prompt.clone()
+    } else {
+        let previous_outputs = build_filtered_outputs_block(&filtered);
+        format!(
+            "{}\n\n<previous_agent_outputs>\n{}\n</previous_agent_outputs>",
+            designed.task_prompt, previous_outputs
+        )
+    };
+
+    // Inject user notes
+    if !user_notes_block.is_empty() {
+        task_prompt = format!("{user_notes_block}\n\n{task_prompt}");
+    }
+
+    // Create agent_execution row for message persistence
+    let ae_repo = &*state.repos().agent_executions;
+    let ae_id = match ae_repo
+        .create_agent_execution(CreateAgentExecutionInput {
+            agent_id: None,
+            workflow_step_id: Some(step_id),
+            is_interactive: false,
+            parent_agent_execution_id: None,
+            system_prompt_rendered: designed.system_prompt.clone(),
+            input: task_prompt.clone(),
+            room_session_id: None,
+            speaker_order: None,
+            workflow_execution_id: Some(ctx.stage_execution_id),
+        })
+        .await
+    {
+        Ok(row) => {
+            let _ = ae_repo
+                .create_execution_message(row.id, "system", &designed.system_prompt, None, 0, 0)
+                .await;
+            let _ = ae_repo
+                .create_execution_message(row.id, "user", &task_prompt, None, 0, 0)
+                .await;
+            Some(row.id)
+        }
+        Err(e) => {
+            warn!(agent = %designed.agent_name, error = %e, "Failed to create agent execution");
+            None
+        }
+    };
+
+    // Build strategy
+    let strategy = WorkforceAgentStrategy::new(WorkforceAgentConfig {
+        system_prompt: designed.system_prompt.clone(),
+        model_id: agent_cfg.model_id.clone(),
+        temperature: agent_cfg.temperature,
+        max_rounds: agent_cfg.max_rounds,
+        context_budget: agent_cfg.context_budget,
+        tools,
+        tool_names,
+        execution_context: ctx.execution_context.clone(),
+        container_handle,
+        state: Some(state.clone()),
+        user_id: Some(UserId(ctx.user_id)),
+        agent_execution_id: ae_id,
+    });
+
+    // Execute with live streaming sink
+    let inner_recorder = ExecutionRecorder::new(
+        &*state.repos().sessions,
+        &*state.repos().chat_messages,
+        Some(&*state.repos().agent_executions),
+        Some(&*state.repos().token_ledger),
+    );
+    let sink = DagStreamSink::new(
+        state.clone(),
+        ctx.clone(),
+        workflow_id,
+        step_id,
+        designed.agent_roster_entry_id,
+        designed.agent_name.clone(),
+    );
+    let result = engine
+        .execute(&strategy, &task_prompt, &sink, &inner_recorder, cancel)
+        .await;
+
+    match result {
+        Ok(exec_result) => {
+            let cost = compute_cost(
+                &agent_cfg.model_id,
+                exec_result.input_tokens as i64,
+                exec_result.output_tokens as i64,
+            );
+
+            recorder
+                .update_phase(
+                    exec_row.id,
+                    PhaseCompletion {
+                        status: "complete",
+                        output_content: Some(&exec_result.content),
+                        error_message: None,
+                        tokens_in: exec_result.input_tokens as i64,
+                        tokens_out: exec_result.output_tokens as i64,
+                        cost_usd: cost,
+                        model: Some(&agent_cfg.model_id),
+                    },
+                )
+                .await;
+
+            info!(
+                agent = %designed.agent_name,
+                idx = agent_index,
+                tokens_in = exec_result.input_tokens,
+                tokens_out = exec_result.output_tokens,
+                "Workforce agent completed"
+            );
+
+            broadcast_workflow_event(
+                state,
+                ctx,
+                workflow_id,
+                WorkflowEventKind::WorkforceAgentProgress {
+                    step_id,
+                    agent_name: designed.agent_name.clone(),
+                    roster_agent_id: designed.agent_roster_entry_id,
+                    agent_index,
+                    total_agents,
+                    status: "completed".to_string(),
+                },
+            );
+
+            Ok(AgentExecutionResult {
+                name: designed.agent_name.clone(),
+                content: exec_result.content,
+                input_tokens: exec_result.input_tokens as i64,
+                output_tokens: exec_result.output_tokens as i64,
+                cost,
+                roster_agent_id: designed.agent_roster_entry_id,
+            })
+        }
+        Err(e) => {
+            let err_msg = format!("{}", e);
+            recorder
+                .update_phase(
+                    exec_row.id,
+                    PhaseCompletion {
+                        status: "failed",
+                        output_content: None,
+                        error_message: Some(&err_msg),
+                        tokens_in: 0,
+                        tokens_out: 0,
+                        cost_usd: 0.0,
+                        model: Some(&agent_cfg.model_id),
+                    },
+                )
+                .await;
+
+            broadcast_workflow_event(
+                state,
+                ctx,
+                workflow_id,
+                WorkflowEventKind::WorkforceAgentProgress {
+                    step_id,
+                    agent_name: designed.agent_name.clone(),
+                    roster_agent_id: designed.agent_roster_entry_id,
+                    agent_index,
+                    total_agents,
+                    status: "failed".to_string(),
+                },
+            );
+
+            warn!(
+                agent = %designed.agent_name,
+                error = %err_msg,
+                "Workforce agent failed"
+            );
+            Err(e)
+        }
+    }
+}
+
+/// Group designed prompts into execution levels based on `receives_from`.
+///
+/// Level 0 = agents with no `receives_from` (roots).
+/// Level N = agents whose `receives_from` agents are all in levels < N.
+///
+/// Returns `Vec<Vec<usize>>` where each inner vec contains indices into `prompts`.
+/// Agents within the same level can execute in parallel.
+pub(crate) fn compute_execution_levels(prompts: &[DesignedAgentPrompt]) -> Vec<Vec<usize>> {
+    if prompts.is_empty() {
+        return vec![];
+    }
+
+    // Build name → index lookup (normalized)
+    let name_to_idx: HashMap<String, usize> = prompts
+        .iter()
+        .enumerate()
+        .map(|(i, p)| (normalize_agent_name(&p.agent_name), i))
+        .collect();
+
+    // Build in-degree from receives_from
+    let mut in_degree = vec![0usize; prompts.len()];
+    let mut dependents: Vec<Vec<usize>> = vec![vec![]; prompts.len()];
+
+    for (i, prompt) in prompts.iter().enumerate() {
+        for dep_name in &prompt.receives_from {
+            if let Some(&dep_idx) = name_to_idx.get(&normalize_agent_name(dep_name)) {
+                in_degree[i] += 1;
+                dependents[dep_idx].push(i);
+            }
+        }
+    }
+
+    // BFS by levels (Kahn's with level tracking)
+    let mut levels: Vec<Vec<usize>> = Vec::new();
+    let mut current_level: Vec<usize> = (0..prompts.len())
+        .filter(|&i| in_degree[i] == 0)
+        .collect();
+
+    while !current_level.is_empty() {
+        let mut next_level: Vec<usize> = Vec::new();
+        for &idx in &current_level {
+            for &dep_idx in &dependents[idx] {
+                in_degree[dep_idx] -= 1;
+                if in_degree[dep_idx] == 0 {
+                    next_level.push(dep_idx);
+                }
+            }
+        }
+        levels.push(current_level);
+        current_level = next_level;
+    }
+
+    levels
 }
