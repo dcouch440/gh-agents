@@ -276,10 +276,10 @@ pub async fn send_room_message(
     }
 
     // Get LLM provider from state registry
-    let provider: std::sync::Arc<dyn crate::llm::LLMProvider + Send + Sync> =
-        state.provider().cloned().ok_or_else(|| {
-            AppError::ServiceUnavailable("LLM provider not configured".to_string())
-        })?;
+    let provider: std::sync::Arc<dyn crate::llm::LLMProvider + Send + Sync> = state
+        .provider()
+        .cloned()
+        .ok_or_else(|| AppError::ServiceUnavailable("LLM provider not configured".to_string()))?;
 
     // Spawn background task to execute the turn
     let room_clone = room.clone();

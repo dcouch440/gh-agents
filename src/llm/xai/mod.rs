@@ -304,9 +304,7 @@ fn convert_message(msg: &Message, out: &mut Vec<serde_json::Value>) {
             }
 
             if !text_parts.is_empty() {
-                out.push(
-                    serde_json::json!({"role": "user", "content": text_parts.join("")}),
-                );
+                out.push(serde_json::json!({"role": "user", "content": text_parts.join("")}));
             }
         }
     }
@@ -328,8 +326,7 @@ pub(crate) fn parse_xai_response(api_response: XaiResponse) -> LLMResponse {
                         if part.part_type == "output_text" {
                             if let Some(ref text) = part.text {
                                 text_parts.push(text.clone());
-                                content_blocks
-                                    .push(ContentBlock::Text { text: text.clone() });
+                                content_blocks.push(ContentBlock::Text { text: text.clone() });
                             }
                         }
                     }
@@ -435,10 +432,7 @@ pub(crate) fn parse_xai_sse_line(line: &str) -> Option<LLMResult<StreamChunk>> {
         }
 
         "response.function_call_arguments.delta" => {
-            let delta = event
-                .get("delta")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let delta = event.get("delta").and_then(|v| v.as_str()).unwrap_or("");
             if delta.is_empty() {
                 return None;
             }
@@ -499,9 +493,9 @@ pub(crate) fn parse_xai_sse_line(line: &str) -> Option<LLMResult<StreamChunk>> {
                 .and_then(|r| r.get("output"))
                 .and_then(|o| o.as_array())
                 .map(|items| {
-                    items.iter().any(|i| {
-                        i.get("type").and_then(|v| v.as_str()) == Some("function_call")
-                    })
+                    items
+                        .iter()
+                        .any(|i| i.get("type").and_then(|v| v.as_str()) == Some("function_call"))
                 })
                 .unwrap_or(false);
 

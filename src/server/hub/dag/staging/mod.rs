@@ -288,21 +288,20 @@ pub(crate) async fn execute_staged_step(
         })?;
 
     // Resolve provider: empty or active → default engine, explicit name → named provider
-    let step_engine =
-        if agent.model_provider.is_empty()
-            || agent.model_provider == crate::constants::ACTIVE_PROVIDER
-        {
-            None
-        } else {
-            let provider = state.provider_for(&agent.model_provider).ok_or_else(|| {
-                HubError::ProviderUnavailable {
-                    provider: agent.model_provider.clone(),
-                    step_id: step.id,
-                    agent_name: agent.name.clone(),
-                }
-            })?;
-            Some(ExecutionEngine::new(provider))
-        };
+    let step_engine = if agent.model_provider.is_empty()
+        || agent.model_provider == crate::constants::ACTIVE_PROVIDER
+    {
+        None
+    } else {
+        let provider = state.provider_for(&agent.model_provider).ok_or_else(|| {
+            HubError::ProviderUnavailable {
+                provider: agent.model_provider.clone(),
+                step_id: step.id,
+                agent_name: agent.name.clone(),
+            }
+        })?;
+        Some(ExecutionEngine::new(provider))
+    };
     let effective_engine = step_engine.as_ref().unwrap_or(&engine);
 
     let step_dag = DagContext {

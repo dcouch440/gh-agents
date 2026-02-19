@@ -1,8 +1,10 @@
 #[cfg(test)]
 mod tests {
-    use crate::llm::*;
     use crate::llm::sse_provider::SseProviderAdapter;
-    use crate::llm::xai::{convert_message, parse_xai_response, parse_xai_sse_line, XaiAdapter, XaiResponse};
+    use crate::llm::xai::{
+        convert_message, parse_xai_response, parse_xai_sse_line, XaiAdapter, XaiResponse,
+    };
+    use crate::llm::*;
 
     // ── Helper ──────────────────────────────────────────────────────────
 
@@ -81,10 +83,7 @@ mod tests {
     fn endpoint_url_with_custom_base() {
         let mut adapter = test_adapter();
         adapter.config.base_url = "http://localhost:9000".to_string();
-        assert_eq!(
-            adapter.endpoint_url(),
-            "http://localhost:9000/v1/responses"
-        );
+        assert_eq!(adapter.endpoint_url(), "http://localhost:9000/v1/responses");
     }
 
     #[test]
@@ -563,8 +562,7 @@ mod tests {
 
     #[test]
     fn parse_sse_ignores_unknown_event_types() {
-        let line =
-            r#"data: {"type":"response.in_progress","response":{"status":"in_progress"}}"#;
+        let line = r#"data: {"type":"response.in_progress","response":{"status":"in_progress"}}"#;
         assert!(parse_xai_sse_line(line).is_none());
     }
 
@@ -643,7 +641,10 @@ mod tests {
         let adapter = test_adapter();
         let events = adapter.pre_stream_events();
         assert_eq!(events.len(), 1);
-        assert!(matches!(events[0], StreamChunk::ContentBlockStart { index: 0 }));
+        assert!(matches!(
+            events[0],
+            StreamChunk::ContentBlockStart { index: 0 }
+        ));
     }
 
     #[test]
@@ -651,7 +652,10 @@ mod tests {
         let adapter = test_adapter();
         let events = adapter.post_stream_events();
         assert_eq!(events.len(), 2);
-        assert!(matches!(events[0], StreamChunk::ContentBlockStop { index: 0 }));
+        assert!(matches!(
+            events[0],
+            StreamChunk::ContentBlockStop { index: 0 }
+        ));
         assert!(matches!(events[1], StreamChunk::MessageStop));
     }
 

@@ -9,9 +9,7 @@ use tracing::info;
 use uuid::Uuid;
 
 use crate::config::protocols::roles;
-use crate::llm::{
-    LLMRequest, Message as LlmMessage,
-};
+use crate::llm::{LLMRequest, Message as LlmMessage};
 use crate::server::state::AppState;
 
 /// Max tokens for the board overview response.

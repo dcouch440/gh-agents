@@ -92,8 +92,12 @@ pub async fn create_step(
         }
     }
 
-    let (resolved_agent_id, resolved_schema_id, resolved_reasoning) =
-        resolve_step_defaults(&execution_mode, p.agent_id, p.output_schema_id, p.reasoning_trace);
+    let (resolved_agent_id, resolved_schema_id, resolved_reasoning) = resolve_step_defaults(
+        &execution_mode,
+        p.agent_id,
+        p.output_schema_id,
+        p.reasoning_trace,
+    );
 
     let description = p.description.unwrap_or_default();
 

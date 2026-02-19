@@ -59,11 +59,7 @@ pub(super) async fn execute_single_step(
     );
 
     // Resolve port inputs if this step has input ports defined
-    let port_inputs = resolve_step_port_inputs(
-        step,
-        dag.port_meta,
-        &dag_state.completed_envelopes,
-    );
+    let port_inputs = resolve_step_port_inputs(step, dag.port_meta, &dag_state.completed_envelopes);
 
     let repos = PromptRepos {
         prompt_template_repo: Some(&*dag.state.repos().prompt_templates),

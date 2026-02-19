@@ -38,9 +38,7 @@ async fn run_chat_consumer(state: AppState, mut chat_rx: mpsc::Receiver<Consumer
             while let Some(msg) = chat_rx.recv().await {
                 state.send_stream_chunk(
                     msg.id,
-                    StreamChunk::Error(
-                        "LLM provider not configured.".into(),
-                    ),
+                    StreamChunk::Error("LLM provider not configured.".into()),
                 );
                 let cleanup_state = state.clone();
                 let mid = msg.id;

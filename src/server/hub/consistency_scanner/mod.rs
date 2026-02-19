@@ -18,9 +18,7 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::llm::{
-    LLMRequest, Message as LlmMessage,
-};
+use crate::llm::{LLMRequest, Message as LlmMessage};
 use crate::server::state::AppState;
 use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
 
