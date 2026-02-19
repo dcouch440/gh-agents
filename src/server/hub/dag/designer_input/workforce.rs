@@ -12,8 +12,8 @@ use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow, WorkflowStepEdgeRow, Wo
 use crate::types::StepExecutionEnvelope;
 
 use super::{
-    build_tool_descriptions_from_db, format_envelopes_as_upstream, AgentDefinition,
-    DependencyEdge, DesignerInput,
+    build_tool_descriptions_from_db, format_envelopes_as_upstream, AgentDefinition, DependencyEdge,
+    DesignerInput,
 };
 
 /// Build a `DesignerInput` from a workforce configuration.

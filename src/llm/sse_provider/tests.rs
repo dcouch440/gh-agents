@@ -87,10 +87,7 @@ mod tests {
     #[test]
     fn adapter_endpoint_url() {
         let adapter = TestAdapter;
-        assert_eq!(
-            adapter.endpoint_url(),
-            "https://test.example.com/v1/chat"
-        );
+        assert_eq!(adapter.endpoint_url(), "https://test.example.com/v1/chat");
     }
 
     // ── SseHttpProvider construction ─────────────────────────────────────

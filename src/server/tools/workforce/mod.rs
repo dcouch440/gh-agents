@@ -262,15 +262,23 @@ async fn upsert_mission_brief_field(
 ) -> Result<TaskMissionBriefRow, String> {
     let existing = repo.get_mission_brief(step_id).await.ok().flatten();
 
-    let desc = task_description
-        .map(String::from)
-        .unwrap_or_else(|| existing.as_ref().map_or(String::new(), |b| b.task_description.clone()));
+    let desc = task_description.map(String::from).unwrap_or_else(|| {
+        existing
+            .as_ref()
+            .map_or(String::new(), |b| b.task_description.clone())
+    });
     let caps = available_capabilities
         .map(|c| c.to_vec())
-        .unwrap_or_else(|| existing.as_ref().map_or(vec![], |b| b.available_capabilities.clone()));
-    let fm = failure_mode
-        .map(String::from)
-        .unwrap_or_else(|| existing.as_ref().map_or("fail_fast".to_string(), |b| b.failure_mode.clone()));
+        .unwrap_or_else(|| {
+            existing
+                .as_ref()
+                .map_or(vec![], |b| b.available_capabilities.clone())
+        });
+    let fm = failure_mode.map(String::from).unwrap_or_else(|| {
+        existing
+            .as_ref()
+            .map_or("fail_fast".to_string(), |b| b.failure_mode.clone())
+    });
     let dc = downstream_context
         .unwrap_or_else(|| existing.as_ref().and_then(|b| b.downstream_context.clone()));
 
@@ -390,7 +398,9 @@ async fn execute_add_agent(
     }
 
     // Recompute execution order from dependency graph
-    let execution_sequence = recompute_execution_order(repo, ctx).await.unwrap_or_default();
+    let execution_sequence = recompute_execution_order(repo, ctx)
+        .await
+        .unwrap_or_default();
 
     json!({
         "agent_id": roster_agent.id.to_string(),
@@ -519,7 +529,9 @@ async fn execute_remove_agent(
     }
 
     // Recompute execution order from dependency graph (closes gaps)
-    let execution_sequence = recompute_execution_order(repo, ctx).await.unwrap_or_default();
+    let execution_sequence = recompute_execution_order(repo, ctx)
+        .await
+        .unwrap_or_default();
 
     json!({
         "deleted": true,
@@ -543,7 +555,8 @@ async fn execute_set_capabilities(
         .filter_map(|v| v.as_str().map(String::from))
         .collect();
 
-    match upsert_mission_brief_field(repo, ctx.step_id, None, Some(&capabilities), None, None).await {
+    match upsert_mission_brief_field(repo, ctx.step_id, None, Some(&capabilities), None, None).await
+    {
         Ok(brief) => json!({
             "capabilities": brief.available_capabilities,
         }),
@@ -731,11 +744,7 @@ fn find_agent_by_name<'a>(
 ///
 /// Performs BFS from `to_step_id` following existing outgoing edges. If
 /// `from_step_id` is reachable, adding the proposed edge creates a cycle.
-fn would_create_cycle(
-    from_step_id: Uuid,
-    to_step_id: Uuid,
-    edges: &[WorkflowStepEdgeRow],
-) -> bool {
+fn would_create_cycle(from_step_id: Uuid, to_step_id: Uuid, edges: &[WorkflowStepEdgeRow]) -> bool {
     let mut adjacency: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
     for edge in edges {
         adjacency
@@ -852,7 +861,9 @@ async fn execute_set_dependency(
     }
 
     // Recompute execution order from dependency graph
-    let execution_sequence = recompute_execution_order(repo, ctx).await.unwrap_or_default();
+    let execution_sequence = recompute_execution_order(repo, ctx)
+        .await
+        .unwrap_or_default();
 
     json!({
         "created": true,
@@ -909,7 +920,9 @@ async fn execute_remove_dependency(
     }
 
     // Recompute execution order from dependency graph
-    let execution_sequence = recompute_execution_order(repo, ctx).await.unwrap_or_default();
+    let execution_sequence = recompute_execution_order(repo, ctx)
+        .await
+        .unwrap_or_default();
 
     json!({
         "removed": true,

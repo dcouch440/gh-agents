@@ -168,10 +168,7 @@ pub(crate) fn build_incoming_edge_index(
 ) -> HashMap<Uuid, Vec<WorkflowStepEdgeRow>> {
     let mut index: HashMap<Uuid, Vec<WorkflowStepEdgeRow>> = HashMap::new();
     for edge in edges {
-        index
-            .entry(edge.to_step_id)
-            .or_default()
-            .push(edge.clone());
+        index.entry(edge.to_step_id).or_default().push(edge.clone());
     }
     index
 }

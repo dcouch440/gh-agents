@@ -26,9 +26,7 @@ use tracing::warn;
 
 use crate::constants;
 use crate::db::DocumentRow;
-use crate::llm::{
-    ContentBlock, LLMRequest, Message,
-};
+use crate::llm::{ContentBlock, LLMRequest, Message};
 
 // ---------------------------------------------------------------------------
 // Types

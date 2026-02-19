@@ -367,8 +367,12 @@ async fn execute_pipeline_item(
         // Build a temporary DagContext for run_step_via_engine.
         // Pipeline items run in spawned tasks with owned data, so we construct
         // a local PortMetadata and DagContext from the available params.
-        let pipeline_port_meta =
-            PortMetadata::new(HashMap::new(), step_outputs.clone(), HashMap::new(), HashMap::new());
+        let pipeline_port_meta = PortMetadata::new(
+            HashMap::new(),
+            step_outputs.clone(),
+            HashMap::new(),
+            HashMap::new(),
+        );
         let pipeline_dag = DagContext {
             engine,
             state,

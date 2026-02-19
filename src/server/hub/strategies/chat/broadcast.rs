@@ -79,7 +79,6 @@ impl ToolEffect {
     }
 }
 
-
 /// Broadcast a workflow event when a step tool mutates data.
 ///
 /// Handles both universal tools (archetype, name, description) and
@@ -116,7 +115,6 @@ pub(crate) fn broadcast_step_event(
         user_id: user_id.map(|u| u.0),
         kind,
     });
-
 }
 
 // Consistency scanner disabled — see consistency_scanner/mod.rs for details.

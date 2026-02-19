@@ -56,18 +56,26 @@ async fn upsert_extraction_plan_field(
 ) -> Result<BeliefExtractionPlanRow, String> {
     let existing = repo.get_extraction_plan(step_id).await.ok().flatten();
 
-    let focus = extraction_focus
-        .map(String::from)
-        .unwrap_or_else(|| existing.as_ref().map_or(String::new(), |p| p.extraction_focus.clone()));
-    let tags = tag_vocabulary
-        .map(|t| t.to_vec())
-        .unwrap_or_else(|| existing.as_ref().map_or(vec![], |p| p.tag_vocabulary.clone()));
-    let contra = contradiction_handling
-        .map(String::from)
-        .unwrap_or_else(|| existing.as_ref().map_or("flag".to_string(), |p| p.contradiction_handling.clone()));
-    let conf = confidence_threshold
-        .map(String::from)
-        .unwrap_or_else(|| existing.as_ref().map_or("low".to_string(), |p| p.confidence_threshold.clone()));
+    let focus = extraction_focus.map(String::from).unwrap_or_else(|| {
+        existing
+            .as_ref()
+            .map_or(String::new(), |p| p.extraction_focus.clone())
+    });
+    let tags = tag_vocabulary.map(|t| t.to_vec()).unwrap_or_else(|| {
+        existing
+            .as_ref()
+            .map_or(vec![], |p| p.tag_vocabulary.clone())
+    });
+    let contra = contradiction_handling.map(String::from).unwrap_or_else(|| {
+        existing
+            .as_ref()
+            .map_or("flag".to_string(), |p| p.contradiction_handling.clone())
+    });
+    let conf = confidence_threshold.map(String::from).unwrap_or_else(|| {
+        existing
+            .as_ref()
+            .map_or("low".to_string(), |p| p.confidence_threshold.clone())
+    });
 
     repo.upsert_extraction_plan(step_id, &focus, &tags, &contra, &conf)
         .await

@@ -91,11 +91,7 @@ pub(super) async fn execute_sub_workflow_step(
     }
 
     // 4. Resolve port inputs from parent step
-    let port_inputs = resolve_step_port_inputs(
-        step,
-        dag.port_meta,
-        &dag_state.completed_envelopes,
-    );
+    let port_inputs = resolve_step_port_inputs(step, dag.port_meta, &dag_state.completed_envelopes);
 
     // 5. Map port inputs to child workflow context
     let child_prior_outputs: HashMap<String, JsonValue> = port_inputs.unwrap_or_default();

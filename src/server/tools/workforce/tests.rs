@@ -206,8 +206,7 @@ mod tests {
             .returning(|_, _| Ok(()));
 
         // recompute_execution_order: list_edges for child workflow
-        repo.expect_list_edges()
-            .returning(|_| Ok(vec![]));
+        repo.expect_list_edges().returning(|_| Ok(vec![]));
 
         let input = json!({
             "name": "Scanner",
@@ -298,8 +297,7 @@ mod tests {
             .returning(|_, _| Ok(()));
 
         // recompute_execution_order: list_edges for child workflow
-        repo.expect_list_edges()
-            .returning(|_| Ok(vec![]));
+        repo.expect_list_edges().returning(|_| Ok(vec![]));
 
         let input = json!({ "name": "Agent2", "role": "Writer" });
         let result = execute_workforce_tool("add_agent", &input, &repo, &ctx).await;
@@ -836,8 +834,7 @@ mod tests {
             .returning(|_, _| Ok(()));
 
         // recompute_execution_order: list_edges (edge was just removed)
-        repo.expect_list_edges()
-            .returning(|_| Ok(vec![]));
+        repo.expect_list_edges().returning(|_| Ok(vec![]));
 
         let input = json!({ "from_agent": "Scanner", "to_agent": "Analyzer" });
         let result = execute_workforce_tool("remove_dependency", &input, &repo, &ctx).await;

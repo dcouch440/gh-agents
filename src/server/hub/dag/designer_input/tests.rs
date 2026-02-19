@@ -375,7 +375,9 @@ mod tests {
         .await;
 
         assert!(input.dependencies.is_empty());
-        assert!(input.archetype_guidance.contains("No inter-agent dependencies"));
+        assert!(input
+            .archetype_guidance
+            .contains("No inter-agent dependencies"));
     }
 
     #[tokio::test]
@@ -405,6 +407,8 @@ mod tests {
         .await;
 
         assert!(input.dependencies.is_empty());
-        assert!(input.archetype_guidance.contains("No inter-agent dependencies"));
+        assert!(input
+            .archetype_guidance
+            .contains("No inter-agent dependencies"));
     }
 }

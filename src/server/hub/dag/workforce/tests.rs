@@ -33,16 +33,12 @@ mod tests {
 
     #[test]
     fn compose_workforce_output_includes_agents() {
-        let agent1 = make_roster_agent("Scanner", 0);
-        let agent2 = make_roster_agent("Writer", 1);
-        let roster = vec![agent1.clone(), agent2.clone()];
-
         let agent_outputs = vec![
             ("Scanner".to_string(), "scan results".to_string()),
             ("Writer".to_string(), "written docs".to_string()),
         ];
 
-        let result = compose_workforce_output(&agent_outputs, &roster);
+        let result = compose_workforce_output(&agent_outputs);
 
         assert!(result["agents"]["scanner"].is_string());
         assert_eq!(result["agents"]["scanner"], "scan results");
@@ -123,7 +119,7 @@ mod tests {
         assert_eq!(levels.len(), 2);
         assert_eq!(levels[0].len(), 3); // All 3 researchers at level 0
         assert_eq!(levels[1], vec![3]); // Synthesizer at level 1
-        // Researchers should be indices 0, 1, 2 in some order
+                                        // Researchers should be indices 0, 1, 2 in some order
         let mut level_0 = levels[0].clone();
         level_0.sort();
         assert_eq!(level_0, vec![0, 1, 2]);

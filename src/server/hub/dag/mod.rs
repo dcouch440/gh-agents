@@ -520,9 +520,7 @@ async fn run_dag_loop(
                 let step_engine = if agent.model_provider.is_empty() {
                     None
                 } else {
-                    if agent.model_provider == "ollama"
-                        && !dag.state.is_ollama_enabled().await
-                    {
+                    if agent.model_provider == "ollama" && !dag.state.is_ollama_enabled().await {
                         return Err(HubError::ProviderUnavailable {
                             provider: agent.model_provider.clone(),
                             step_id: *step_id,
@@ -532,14 +530,14 @@ async fn run_dag_loop(
                     if agent.model_provider == crate::constants::ACTIVE_PROVIDER {
                         None
                     } else {
-                        let provider = dag
-                            .state
-                            .provider_for(&agent.model_provider)
-                            .ok_or_else(|| HubError::ProviderUnavailable {
-                                provider: agent.model_provider.clone(),
-                                step_id: *step_id,
-                                agent_name: agent.name.clone(),
-                            })?;
+                        let provider =
+                            dag.state
+                                .provider_for(&agent.model_provider)
+                                .ok_or_else(|| HubError::ProviderUnavailable {
+                                    provider: agent.model_provider.clone(),
+                                    step_id: *step_id,
+                                    agent_name: agent.name.clone(),
+                                })?;
                         Some(ExecutionEngine::new(provider))
                     }
                 };
@@ -552,9 +550,7 @@ async fn run_dag_loop(
 
                 match step.execution_mode.as_str() {
                     "room" => execute_room_step(&step_dag, step, dag_state).await,
-                    "for_each" => {
-                        execute_for_each_step(&step_dag, step, &agent, dag_state).await
-                    }
+                    "for_each" => execute_for_each_step(&step_dag, step, &agent, dag_state).await,
                     _ => execute_single_step(&step_dag, step, &agent, dag_state).await,
                 }
             }

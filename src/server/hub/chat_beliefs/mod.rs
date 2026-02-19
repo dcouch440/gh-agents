@@ -12,9 +12,7 @@ use uuid::Uuid;
 
 use crate::config::protocols::{roles, vars};
 use crate::db::{BeliefRow, ChatMessageRow};
-use crate::llm::{
-    LLMRequest, Message as LlmMessage,
-};
+use crate::llm::{LLMRequest, Message as LlmMessage};
 use crate::server::hub::protocols::json_utils::parse_structured_output;
 use crate::server::state::AppState;
 

@@ -2,9 +2,9 @@
 mod tests {
     //! Tests for Anthropic provider
 
-    use crate::llm::*;
     use crate::llm::anthropic::{parse_stop_reason, AnthropicAdapter};
     use crate::llm::sse_provider::SseProviderAdapter;
+    use crate::llm::*;
 
     /// Helper: create an adapter for testing provider-specific logic.
     fn test_adapter(api_key: &str, model: &str) -> AnthropicAdapter {
@@ -63,10 +63,7 @@ mod tests {
     #[test]
     fn endpoint_url_with_custom_base() {
         let adapter = test_adapter_with_base("test-key", "https://custom.api.com");
-        assert_eq!(
-            adapter.endpoint_url(),
-            "https://custom.api.com/v1/messages"
-        );
+        assert_eq!(adapter.endpoint_url(), "https://custom.api.com/v1/messages");
     }
 
     #[test]
@@ -405,8 +402,7 @@ mod tests {
     #[test]
     fn build_request_with_system_prompt() {
         let adapter = test_adapter("test-key", "model");
-        let request =
-            LLMRequest::new("model", vec![Message::user("Hi")]).with_system("Be helpful");
+        let request = LLMRequest::new("model", vec![Message::user("Hi")]).with_system("Be helpful");
         let body = adapter.build_request_body(&request, false);
 
         assert_eq!(body["system"], "Be helpful");
