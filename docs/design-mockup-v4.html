@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nexor — Design Mockup v4</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --pad: #eae5da;
+
+    --screen: #f0ebe3;
+    --screen-border: #d6cfc4;
+    --screen-frost: rgba(240, 235, 227, 0.8);
+
+    --charcoal: #3d3533;
+    --charcoal-light: #5c524e;
+    --charcoal-muted: #a09488;
+
+    --terracotta: #c4725a;
+    --terracotta-soft: #d4917d;
+    --terracotta-bg: rgba(196, 114, 90, 0.09);
+
+    --sage: #5a8a6e;
+    --sage-bg: rgba(90, 138, 110, 0.16);
+
+    --wheat: #d4a96a;
+    --wheat-bg: rgba(212, 169, 106, 0.14);
+
+    --user-bar: rgba(90, 138, 110, 0.09);
+
+    --accent: #5a8a6e;
+    --accent-soft: #7aa68e;
+    --accent-bg: rgba(90, 138, 110, 0.10);
+
+    --connector: #cdc6ba;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Nunito', sans-serif;
+    background: var(--pad);
+    color: var(--charcoal);
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .pad {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+    background:
+      radial-gradient(ellipse at 50% 50%, rgba(250, 248, 245, 0.25) 0%, transparent 65%),
+      var(--pad);
+  }
+
+  .pad::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at 50% 50%, transparent 55%, rgba(60, 50, 40, 0.06) 100%);
+    z-index: 100;
+  }
+
+  /* ── Connectors ── */
+  .connectors {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .conn {
+    fill: none;
+    stroke: var(--connector);
+    stroke-width: 5;
+    stroke-dasharray: 2 10;
+    stroke-linecap: round;
+  }
+
+  .conn-dot { fill: var(--connector); }
+
+  /* ── Screen ── */
+  .screen {
+    position: absolute;
+    background: var(--screen);
+    border: 1px solid var(--screen-border);
+    border-radius: 8px;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .screen.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(90, 138, 110, 0.18);
+  }
+
+  /* ── Floating Header (frosted) ── */
+  .screen-top {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--screen-frost);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 10px 12px 0;
+    flex-shrink: 0;
+  }
+
+  .screen-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .screen-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--charcoal);
+    flex: 1;
+  }
+
+  .status {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    flex-shrink: 0;
+  }
+
+  .status.done { background: var(--sage-bg); color: var(--sage); }
+  .status.running { background: var(--wheat-bg); color: var(--wheat); }
+  .status.room { background: var(--terracotta-bg); color: var(--terracotta); }
+
+  /* ── Floating Icons (frosted, part of header) ── */
+  .screen-icons {
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    padding: 6px 0 6px;
+  }
+
+  .icon-btn {
+    width: 26px;
+    height: 26px;
+    border: none;
+    background: transparent;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--charcoal-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .icon-btn:hover {
+    color: var(--accent);
+    background: var(--accent-bg);
+  }
+
+  .icon-btn.active {
+    color: var(--accent);
+    background: var(--accent-bg);
+  }
+
+  .icon-btn svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  /* ── Scrollable Content ── */
+  .screen-body {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  .screen-body::-webkit-scrollbar { width: 3px; }
+  .screen-body::-webkit-scrollbar-track { background: transparent; }
+  .screen-body::-webkit-scrollbar-thumb { background: var(--screen-border); border-radius: 2px; }
+
+  /* ── Role / Output ── */
+  .role-block { padding: 8px 12px; }
+
+  .role-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--charcoal-muted);
+    margin-bottom: 2px;
+  }
+
+  .role-text, .output-text {
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--charcoal-light);
+  }
+
+  .output-text { padding: 8px 12px; }
+
+  /* ── Chat Messages ── */
+  .msg {
+    padding: 3px 12px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .msg + .msg { padding-top: 2px; }
+
+  .msg.user {
+    background: var(--user-bar);
+    padding: 4px 12px;
+    margin: 1px 0;
+  }
+
+  .msg.user .msg-text { color: var(--charcoal); }
+  .msg.ai .msg-text { color: var(--charcoal-light); }
+  .msg-text strong { font-weight: 700; color: var(--charcoal); }
+
+  .msg-dispatch {
+    margin: 2px 0;
+    padding: 4px 8px;
+    background: var(--wheat-bg);
+    border-left: 2px solid var(--wheat);
+    border-radius: 0 3px 3px 0;
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--charcoal-light);
+  }
+
+  /* ── Input ── */
+  .input-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    flex-shrink: 0;
+  }
+
+  .input-bar input {
+    flex: 1;
+    border: none;
+    outline: none;
+    font-family: 'Nunito', sans-serif;
+    font-size: 11.5px;
+    color: var(--charcoal);
+    background: transparent;
+  }
+
+  .input-bar input::placeholder { color: var(--charcoal-muted); }
+
+  .in-btn {
+    width: 22px;
+    height: 22px;
+    border: none;
+    background: transparent;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--charcoal-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .in-btn:hover { color: var(--accent); }
+
+  .in-btn.send {
+    background: var(--accent);
+    color: #fff;
+    width: 20px;
+    height: 20px;
+  }
+
+  .in-btn.send:hover { background: var(--accent-soft); }
+  .in-btn svg { width: 11px; height: 11px; }
+
+  /* ── Room ── */
+  .room-bubble {
+    padding: 8px 12px;
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--charcoal-light);
+  }
+
+  .watermark {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    color: var(--charcoal-muted);
+    opacity: 0.35;
+    letter-spacing: 2px;
+    font-weight: 600;
+    z-index: 0;
+  }
+</style>
+</head>
+<body>
+<div class="pad">
+
+  <svg class="connectors" viewBox="0 0 1440 900" preserveAspectRatio="none">
+    <path class="conn" d="M 470 550 C 470 490, 350 460, 350 400"/>
+    <circle class="conn-dot" cx="350" cy="395" r="5"/>
+    <path class="conn" d="M 550 550 C 550 490, 680 460, 680 400"/>
+    <circle class="conn-dot" cx="680" cy="395" r="5"/>
+    <path class="conn" d="M 350 245 C 350 210, 500 190, 500 150"/>
+    <circle class="conn-dot" cx="500" cy="145" r="5"/>
+    <path class="conn" d="M 680 245 C 680 210, 530 190, 530 150"/>
+    <circle class="conn-dot" cx="530" cy="145" r="5"/>
+  </svg>
+
+  <!-- ── Synthesizer ── -->
+  <div class="screen" style="top: 28px; left: 380px; width: 260px; height: 120px;">
+    <div class="screen-top">
+      <div class="screen-head">
+        <div class="screen-title">Synthesizer</div>
+        <span class="status done">done</span>
+      </div>
+      <div class="screen-icons">
+        <button class="icon-btn active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></button>
+        <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      </div>
+    </div>
+    <div class="screen-body">
+      <div class="role-block">
+        <div class="role-label">Role</div>
+        <div class="role-text">Story integrator who weaves the park setting and characters into a single paragraph-length story.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SettingWriter ── -->
+  <div class="screen" style="top: 250px; left: 180px; width: 300px; height: 150px;">
+    <div class="screen-top">
+      <div class="screen-head">
+        <div class="screen-title">SettingWriter</div>
+        <span class="status done">done</span>
+      </div>
+      <div class="screen-icons">
+        <button class="icon-btn active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></button>
+        <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      </div>
+    </div>
+    <div class="screen-body">
+      <div class="output-text">The park breathes with the crisp hush of an early autumn morning, where frost-kissed leaves in shades of amber and crimson tumble from gnarled oaks, carpeting serpentine paths in a whispering mosaic.</div>
+    </div>
+  </div>
+
+  <!-- ── CharacterCreator ── -->
+  <div class="screen" style="top: 250px; left: 540px; width: 290px; height: 150px;">
+    <div class="screen-top">
+      <div class="screen-head">
+        <div class="screen-title">CharacterCreator</div>
+        <span class="status done">done</span>
+      </div>
+      <div class="screen-icons">
+        <button class="icon-btn active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></button>
+        <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></button>
+      </div>
+    </div>
+    <div class="screen-body">
+      <div class="output-text">Character designer who invents 2-3 simple characters, each with a name, key traits, and motivations, all suitable for a park story.</div>
+    </div>
+  </div>
+
+  <!-- ── Workforce Chat ── -->
+  <div class="screen selected" style="top: 450px; left: 180px; width: 500px; height: 420px;">
+    <div class="screen-top">
+      <div class="screen-head">
+        <div class="screen-title">New Workforce</div>
+        <span class="status done">done</span>
+      </div>
+      <div class="screen-icons">
+        <button class="icon-btn active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+        <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></button>
+        <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></button>
+        <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button>
+        <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      </div>
+    </div>
+    <div class="screen-body" style="flex:1;">
+      <div class="msg user"><div class="msg-text">Hi there I am the creator of nexor. I want to test the systems sequential system with a few super simple tasks.</div></div>
+      <div class="msg user"><div class="msg-text"><strong>Let's have a parallel layer and a final synthesizer.</strong> Something easy like "write a one paragraph story about walking in a park with no characters involvement", then another ones like "create characters for the following story", then editor combines the two into a story or something.</div></div>
+      <div class="msg ai"><div class="msg-text">Team config is dispatched. Setting up two parallel agents — park description and character creation — feeding into a synthesizer. Ready to run when you are.</div></div>
+      <div class="msg user"><div class="msg-text">How's it coming?</div></div>
+      <div class="msg user"><div class="msg-text">(no selections)</div></div>
+      <div class="msg ai"><div class="msg-text">The team setup is shown in the panel. Let me know if you want to make any changes or if you're ready to test.</div></div>
+      <div class="msg ai"><div class="msg-text">The configuration is complete — no changes requested via the panel. Team is ready: run the node to test the parallel setting/character agents feeding into the synthesizer. If you meant to select something, reply with details.</div></div>
+      <div class="msg user"><div class="msg-text">ty</div></div>
+      <div class="msg ai"><div class="msg-text">Team's configured and ready — run the node to test it. If you need tweaks, just say.</div></div>
+    </div>
+    <div class="input-bar">
+      <input type="text" placeholder="Type a message..." />
+      <button class="in-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
+      <button class="in-btn send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+    </div>
+  </div>
+
+  <!-- ── Room ── -->
+  <div class="screen" style="top: 390px; right: 80px; width: 280px; height: 280px;">
+    <div class="screen-top">
+      <div class="screen-head">
+        <div class="screen-title">New Room</div>
+        <span class="status room">room</span>
+      </div>
+      <div class="screen-icons">
+        <button class="icon-btn active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+        <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></button>
+        <button class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      </div>
+    </div>
+    <div class="screen-body" style="flex:1;">
+      <div class="room-bubble">Tell me about the meeting you want to set up.</div>
+    </div>
+    <div class="input-bar">
+      <input type="text" placeholder="Type a message..." />
+      <button class="in-btn send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
+    </div>
+  </div>
+
+  <div class="watermark">NEXOR</div>
+
+</div>
+</body>
+</html>
