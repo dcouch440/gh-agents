@@ -7,10 +7,13 @@ use crate::server::state::AppState;
 
 use super::config::StepChatContext;
 
-/// Universal tools available to all archetypes.
+/// Universal tools available to all archetypes in the conversational assistant.
+///
+/// Mutation tools (`set_node_name`, `set_node_description`) are intentionally
+/// excluded — the assistant must dispatch those to a background agent rather
+/// than calling them directly. They remain available to the dispatch strategy
+/// via `resolve_step_tools()`.
 const UNIVERSAL_TOOLS: &[&str] = &[
-    "set_node_name",
-    "set_node_description",
     "render_panel",
     "think",
     "update_notes",
@@ -18,35 +21,62 @@ const UNIVERSAL_TOOLS: &[&str] = &[
     "cancel_dispatch",
 ];
 
-/// Universal tool names handled by node_assistant.
+/// Node mutation tools — dispatch-only, not available to the conversational assistant.
+const NODE_MUTATION_TOOLS: &[&str] = &["set_node_name", "set_node_description"];
+
+/// Universal tool names handled by node_assistant (includes mutations for dispatch routing).
 const NODE_ASSISTANT_TOOLS: &[&str] = &["set_node_name", "set_node_description", "render_panel"];
 
 /// Tools excluded from the workforce assistant's chat session.
 /// The dispatch sub-agent owns note-taking for workforce nodes.
 const WORKFORCE_CHAT_EXCLUDED: &[&str] = &["update_notes"];
 
-/// Resolve tool definitions for step chat sessions.
+/// Resolve tool definitions for step chat sessions (the conversational assistant).
 ///
-/// For workforce mode, returns universal tools minus excluded tools — the
-/// assistant dispatches to the background agent instead of calling mutation
-/// tools directly. Notes are owned by the dispatch sub-agent.
-/// For other modes, delegates to `resolve_step_tools()` which includes
-/// both universal and archetype-specific tools.
+/// Returns universal tools plus archetype-specific tools, but excludes node
+/// mutation tools (`set_node_name`, `set_node_description`) — the assistant
+/// must dispatch those to a background agent.
+///
+/// For workforce mode, additionally excludes `update_notes` (dispatch sub-agent
+/// owns note-taking for workforce nodes).
 pub(crate) fn resolve_chat_step_tools(execution_mode: &str) -> Vec<Tool> {
-    match execution_mode {
-        "workforce" => UNIVERSAL_TOOLS
-            .iter()
-            .filter(|name| !WORKFORCE_CHAT_EXCLUDED.contains(name))
-            .filter_map(|name| crate::tools::registry::get_tool_definition(name))
-            .collect(),
-        _ => resolve_step_tools(execution_mode),
-    }
+    let archetype_specific: &[&str] = match execution_mode {
+        "belief_capture" => &[
+            "set_extraction_focus",
+            "set_tag_vocabulary",
+            "set_contradiction_handling",
+            "set_confidence_threshold",
+        ],
+        "room" => &[
+            "set_meeting_purpose",
+            "add_member",
+            "update_member",
+            "remove_member",
+            "set_max_turns",
+            "set_interaction_mode",
+        ],
+        "workforce" => &[],
+        _ => &[],
+    };
+    UNIVERSAL_TOOLS
+        .iter()
+        .chain(archetype_specific.iter())
+        .filter(|name| {
+            if execution_mode == "workforce" {
+                !WORKFORCE_CHAT_EXCLUDED.contains(name)
+            } else {
+                true
+            }
+        })
+        .filter_map(|name| crate::tools::registry::get_tool_definition(name))
+        .collect()
 }
 
 /// Resolve tool definitions by step execution mode.
 ///
-/// Always includes universal tools alongside archetype-specific ones.
-/// Used by DispatchStrategy (background agent) which needs the full tool set.
+/// Includes universal tools, node mutation tools, and archetype-specific ones.
+/// Used by DispatchStrategy (background agent) which needs the full tool set
+/// including mutations that the conversational assistant cannot call directly.
 pub(crate) fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
     let archetype_specific: &[&str] = match execution_mode {
         "belief_capture" => &[
@@ -77,6 +107,7 @@ pub(crate) fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
     };
     UNIVERSAL_TOOLS
         .iter()
+        .chain(NODE_MUTATION_TOOLS.iter())
         .chain(archetype_specific.iter())
         .filter_map(|name| crate::tools::registry::get_tool_definition(name))
         .collect()

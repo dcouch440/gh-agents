@@ -17,10 +17,11 @@ use crate::server::hub::dag::staging::{
     compute_next_executable_steps, execute_staged_step, reconstruct_dag_state_from_snapshots,
 };
 use crate::server::hub::dag::{
-    broadcast_workflow_event, prefetch_port_metadata, WorkflowExecutionContext,
+    broadcast_workflow_event, prefetch_port_metadata, versioning, WorkflowExecutionContext,
 };
 use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
+use crate::types::{ExecutionError, ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
 
 use super::types::{
     CreateWorkshopRequest, WorkshopResponse, WorkshopStatusResponse, WorkshopStepPath,
@@ -402,6 +403,33 @@ pub async fn execute_workshop_step(
                 }));
             }
             Err(e) => {
+                let error_msg = e.to_string();
+
+                // Snapshot a failure envelope so the error survives page reloads
+                let error_envelope = StepExecutionEnvelope {
+                    status: ExecutionStatus::Error,
+                    data: None,
+                    metadata: ExecutionMetadata::new(step_id),
+                    error: Some(ExecutionError {
+                        message: error_msg.clone(),
+                        error_type: "execution_failed".to_string(),
+                        retryable: true,
+                        details: None,
+                    }),
+                };
+                if let Ok(envelope_json) = serde_json::to_string(&error_envelope) {
+                    let _ = versioning::snapshot_content(
+                        &*bg_state.repos().content_versions,
+                        run_id,
+                        step_id,
+                        step_id,
+                        versioning::content_types::ENVELOPE,
+                        "output",
+                        &envelope_json,
+                    )
+                    .await;
+                }
+
                 broadcast_workflow_event(
                     &bg_state,
                     &bg_ctx,
@@ -409,11 +437,11 @@ pub async fn execute_workshop_step(
                     WorkflowEventKind::StepFailed {
                         step_id,
                         step_name: step_name.clone(),
-                        error: e.to_string(),
+                        error: error_msg.clone(),
                     },
                 );
 
-                let _ = tx.send(Err(e.to_string()));
+                let _ = tx.send(Err(error_msg));
             }
         }
     });
@@ -499,16 +527,27 @@ pub async fn get_workshop(
     .await
     .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    // Build completed steps list (include output from snapshots)
-    let completed_steps: Vec<WorkshopStepSummary> = dag_state
+    // Build steps list (completed + failed from snapshots)
+    let mut completed_steps: Vec<WorkshopStepSummary> = dag_state
         .completed
         .iter()
         .map(|(step_id, step_output)| WorkshopStepSummary {
             step_id: *step_id,
             status: "completed".to_string(),
             output: step_output.structured_output.clone(),
+            error: None,
         })
         .collect();
+
+    // Include failed steps so the frontend can surface prior errors
+    for (step_id, error_msg) in &dag_state.failed {
+        completed_steps.push(WorkshopStepSummary {
+            step_id: *step_id,
+            status: "failed".to_string(),
+            output: None,
+            error: Some(error_msg.clone()),
+        });
+    }
 
     // Compute next executable steps
     let next = compute_next_executable_steps(&steps, &edges, &dag_state);

@@ -8,6 +8,7 @@ const emptySession: StepSession = {
   isLoading: true,
   error: null,
   activePanel: null,
+  streaming: false,
 }
 
 const store = createStore<AssistantSessionState>(() => ({

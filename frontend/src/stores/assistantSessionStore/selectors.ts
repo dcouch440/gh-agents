@@ -36,6 +36,11 @@ const selectError =
   (s: AssistantSessionState): string | null =>
     s.byStep[stepId]?.error ?? null
 
+const selectStreaming =
+  (stepId: string) =>
+  (s: AssistantSessionState): boolean =>
+    s.byStep[stepId]?.streaming ?? false
+
 export {
   selectSession,
   selectMessages,
@@ -43,4 +48,5 @@ export {
   selectPanel,
   selectLoading,
   selectError,
+  selectStreaming,
 }

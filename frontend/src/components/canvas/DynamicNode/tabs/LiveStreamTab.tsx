@@ -67,6 +67,21 @@ function LiveStreamTab({ stepId }: LiveStreamTabProps) {
     return <PersistedOutputView output={persistedOutput} execStatus={execStatus} />
   }
 
+  // Step failed with no live streams and no output — show the error
+  const stepError = stepExec?.error ?? null
+  if (!hasSources && !isDesignerActive && execStatus === 'failed' && stepError !== null) {
+    return (
+      <Box className="nowheel nodrag nopan" sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+        <Box sx={{ px: 1.5, py: 0.75, borderBottom: 1, borderColor: 'divider', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <ExecutionStatusBadge status="failed" />
+        </Box>
+        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+          <StreamView content={stepError} status="failed" error={stepError} />
+        </Box>
+      </Box>
+    )
+  }
+
   return (
     <Box className="nowheel nodrag nopan" sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Overall progress bar */}

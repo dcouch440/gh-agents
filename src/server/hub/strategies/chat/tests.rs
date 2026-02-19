@@ -190,10 +190,12 @@ mod tests {
         // Has universal tools (minus update_notes which is dispatch-only)
         assert!(names.contains(&"dispatch"));
         assert!(names.contains(&"cancel_dispatch"));
-        assert!(names.contains(&"set_node_name"));
-        assert!(names.contains(&"set_node_description"));
         assert!(names.contains(&"render_panel"));
         assert!(names.contains(&"think"));
+
+        // Node mutation tools are dispatch-only — assistant must dispatch them
+        assert!(!names.contains(&"set_node_name"));
+        assert!(!names.contains(&"set_node_description"));
 
         // update_notes is owned by the dispatch sub-agent, not the assistant
         assert!(!names.contains(&"update_notes"));
@@ -217,6 +219,10 @@ mod tests {
         assert!(names.contains(&"set_meeting_purpose"));
         assert!(names.contains(&"add_member"));
         assert!(names.contains(&"dispatch"));
+
+        // Node mutation tools are dispatch-only
+        assert!(!names.contains(&"set_node_name"));
+        assert!(!names.contains(&"set_node_description"));
     }
 
     #[test]
@@ -227,6 +233,23 @@ mod tests {
 
         assert!(names.contains(&"set_task"));
         assert!(names.contains(&"add_agent"));
+    }
+
+    #[test]
+    fn resolve_step_tools_includes_node_mutations_for_dispatch() {
+        // DispatchStrategy uses resolve_step_tools — must include mutation tools
+        for mode in &["workforce", "belief_capture", "room", "single", ""] {
+            let tools = super::super::resolve_step_tools(mode);
+            let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
+            assert!(
+                names.contains(&"set_node_name"),
+                "set_node_name missing for dispatch execution_mode={mode}"
+            );
+            assert!(
+                names.contains(&"set_node_description"),
+                "set_node_description missing for dispatch execution_mode={mode}"
+            );
+        }
     }
 
     #[test]

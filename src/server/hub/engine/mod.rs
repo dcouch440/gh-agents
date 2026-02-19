@@ -178,12 +178,9 @@ impl ExecutionEngine {
                             if let LLMStreamChunk::ContentDelta { ref text, .. } = chunk {
                                 sink.token(text).await;
                             }
-                            if let LLMStreamChunk::ToolUseStart {
-                                ref name, ref id, ..
-                            } = chunk
-                            {
-                                sink.tool_start(name, id).await;
-                            }
+                            // Note: tool_start is NOT emitted here. The execution loop
+                            // (below) sends tool_start/tool_end when the tool actually
+                            // runs, avoiding duplicate events on the frontend.
                             accumulator.apply(&chunk);
                         }
                         Some(Err(e)) => {

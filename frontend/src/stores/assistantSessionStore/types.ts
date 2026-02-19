@@ -13,6 +13,7 @@ type StepSession = {
   isLoading: boolean
   error: string | null
   activePanel: PanelState | null
+  streaming: boolean
 }
 
 type AssistantSessionState = {

@@ -4254,7 +4254,8 @@ impl ContentVersionRepo for PgRepo {
             "SELECT rs.step_id, cv.content, rs.source_id \
              FROM run_snapshots rs \
              JOIN content_versions cv ON cv.id = rs.content_version_id \
-             WHERE rs.run_id = $1 AND rs.content_type = 'envelope' AND rs.role = 'output'",
+             WHERE rs.run_id = $1 AND rs.content_type = 'envelope' AND rs.role = 'output' \
+             ORDER BY rs.created_at ASC",
         )
         .bind(run_id)
         .fetch_all(&self.pool)

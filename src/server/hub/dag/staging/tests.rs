@@ -258,7 +258,7 @@ mod tests {
         completed_envelopes.insert(step_a, envelope);
 
         let dag_state =
-            DagExecutionState::from_snapshots(completed, HashMap::new(), completed_envelopes);
+            DagExecutionState::from_snapshots(completed, HashMap::new(), completed_envelopes, HashMap::new());
 
         let next = compute_next_executable_steps(&steps, &edges, &dag_state);
 
@@ -287,7 +287,7 @@ mod tests {
         completed_envelopes.insert(step_a, envelope);
 
         let dag_state =
-            DagExecutionState::from_snapshots(completed, HashMap::new(), completed_envelopes);
+            DagExecutionState::from_snapshots(completed, HashMap::new(), completed_envelopes, HashMap::new());
 
         let next = compute_next_executable_steps(&steps, &edges, &dag_state);
         assert!(next.is_empty());
