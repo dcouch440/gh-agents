@@ -74,7 +74,7 @@ pub async fn resume_workflow_via_engine(
     }
 
     // Pre-fetch port metadata
-    let port_meta = prefetch_port_metadata(state, steps).await;
+    let port_meta = prefetch_port_metadata(state, steps, edges).await;
 
     let dag = DagContext {
         engine,
@@ -131,7 +131,7 @@ pub async fn resume_dag_from_approval(
         .await
         .map_err(|e| HubError::Internal(anyhow!("edges load failed: {}", e)))?;
 
-    let port_meta = prefetch_port_metadata(state, &steps).await;
+    let port_meta = prefetch_port_metadata(state, &steps, &edges).await;
 
     // Find the paused workflow_execution via agent_executions
     let step_ids: Vec<Uuid> = steps.iter().map(|s| s.id).collect();

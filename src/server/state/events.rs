@@ -15,10 +15,11 @@ use crate::server::ws::events::{ServerEvent, Topic};
 
 /// Buffer size for the unified broadcast channel.
 ///
-/// 2048 provides ~10-20 seconds of buffer at peak throughput (room token streaming
-/// at ~100 tokens/sec). With `Arc<BroadcastEnvelope>`, each slot holds an Arc pointer
-/// (~8 bytes), so memory overhead is minimal (~16 KB).
-const UNIFIED_CHANNEL_CAPACITY: usize = 2048;
+/// 16,384 provides headroom for workforce nodes (Designer + N agents) nested inside
+/// a parent DAG, which generate bursts of designer-progress, agent-progress,
+/// step-started/completed, and sub-workflow events. With `Arc<BroadcastEnvelope>`,
+/// each slot holds an Arc pointer (~8 bytes), so memory overhead is ~128 KB.
+const UNIFIED_CHANNEL_CAPACITY: usize = 16_384;
 
 /// Pre-serialized event envelope for the broadcast channel.
 ///

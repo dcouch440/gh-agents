@@ -161,10 +161,12 @@ pub(crate) async fn capture_workflow_snapshot(
 
 /// Build PortMetadata from a deserialized snapshot (no DB queries needed).
 pub(crate) fn port_metadata_from_snapshot(snapshot: &WorkflowSnapshot) -> PortMetadata {
+    use super::build_incoming_edge_index;
     PortMetadata::new(
         snapshot.step_inputs.clone(),
         snapshot.step_outputs.clone(),
         snapshot.routing_rules.clone(),
+        build_incoming_edge_index(&snapshot.edges),
     )
 }
 

@@ -140,6 +140,9 @@ pub(crate) struct PortMetadata {
     pub step_inputs: HashMap<Uuid, Vec<StepInputRow>>,
     pub step_outputs: HashMap<Uuid, Vec<StepOutputRow>>,
     pub routing_rules: HashMap<Uuid, Vec<StepRoutingRuleRow>>,
+    /// Adjacency index: target step_id → incoming edges.
+    /// Built once at DAG start to avoid O(V × E) scanning in port resolution.
+    pub incoming_edges: HashMap<Uuid, Vec<WorkflowStepEdgeRow>>,
 }
 
 impl PortMetadata {
@@ -148,19 +151,37 @@ impl PortMetadata {
         step_inputs: HashMap<Uuid, Vec<StepInputRow>>,
         step_outputs: HashMap<Uuid, Vec<StepOutputRow>>,
         routing_rules: HashMap<Uuid, Vec<StepRoutingRuleRow>>,
+        incoming_edges: HashMap<Uuid, Vec<WorkflowStepEdgeRow>>,
     ) -> Self {
         Self {
             step_inputs,
             step_outputs,
             routing_rules,
+            incoming_edges,
         }
     }
 }
 
-/// Pre-fetch port metadata (inputs, outputs, routing rules) for all steps.
+/// Build an adjacency index from edges, grouping by target step_id.
+pub(crate) fn build_incoming_edge_index(
+    edges: &[WorkflowStepEdgeRow],
+) -> HashMap<Uuid, Vec<WorkflowStepEdgeRow>> {
+    let mut index: HashMap<Uuid, Vec<WorkflowStepEdgeRow>> = HashMap::new();
+    for edge in edges {
+        index
+            .entry(edge.to_step_id)
+            .or_default()
+            .push(edge.clone());
+    }
+    index
+}
+
+/// Pre-fetch port metadata (inputs, outputs, routing rules) for all steps,
+/// and build the incoming-edge adjacency index.
 pub(crate) async fn prefetch_port_metadata(
     state: &AppState,
     steps: &[WorkflowStepRow],
+    edges: &[WorkflowStepEdgeRow],
 ) -> PortMetadata {
     let mut step_inputs: HashMap<Uuid, Vec<StepInputRow>> = HashMap::new();
     let mut step_outputs: HashMap<Uuid, Vec<StepOutputRow>> = HashMap::new();
@@ -191,6 +212,7 @@ pub(crate) async fn prefetch_port_metadata(
         step_inputs,
         step_outputs,
         routing_rules,
+        incoming_edges: build_incoming_edge_index(edges),
     }
 }
 
@@ -269,16 +291,23 @@ pub(crate) fn step_display_name(step: &WorkflowStepRow) -> String {
 
 /// Resolve port inputs for a step, returning None if no input ports are defined
 /// or if resolution fails.
+///
+/// Uses the pre-built `incoming_edges` index in `PortMetadata` to avoid
+/// scanning all edges per step (O(1) lookup instead of O(E) scan).
 pub(crate) fn resolve_step_port_inputs(
     step: &WorkflowStepRow,
-    edges: &[WorkflowStepEdgeRow],
     port_meta: &PortMetadata,
     completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
 ) -> Option<HashMap<String, JsonValue>> {
     let inputs = port_meta.step_inputs.get(&step.id)?;
+    let incoming = port_meta
+        .incoming_edges
+        .get(&step.id)
+        .map(|v| v.as_slice())
+        .unwrap_or(&[]);
     match resolve_port_inputs(
         step.id,
-        edges,
+        incoming,
         inputs,
         &port_meta.step_outputs,
         completed_envelopes,

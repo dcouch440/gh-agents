@@ -131,9 +131,9 @@ pub(crate) mod versioning;
 pub(crate) mod workforce;
 
 pub(crate) use dag_state::{
-    broadcast_step_failure_if_real, prefetch_port_metadata, resolve_output_key,
-    resolve_step_port_inputs, step_display_name, wrap_in_agentless_envelope, wrap_in_envelope,
-    DagContext, DagExecutionState, PortMetadata,
+    broadcast_step_failure_if_real, build_incoming_edge_index, prefetch_port_metadata,
+    resolve_output_key, resolve_step_port_inputs, step_display_name, wrap_in_agentless_envelope,
+    wrap_in_envelope, DagContext, DagExecutionState, PortMetadata,
 };
 
 pub use utils::{
@@ -634,7 +634,7 @@ pub async fn execute_workflow_via_engine(
     // Pre-fetch port metadata: from snapshot if template-based, otherwise from live DB
     let port_meta = match &ctx.snapshot {
         Some(snap) => templates::port_metadata_from_snapshot(snap),
-        None => prefetch_port_metadata(state, steps).await,
+        None => prefetch_port_metadata(state, steps, edges).await,
     };
 
     // Broadcast: workflow started
