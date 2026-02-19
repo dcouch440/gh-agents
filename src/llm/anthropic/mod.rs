@@ -51,7 +51,7 @@ impl AnthropicConfig {
         })?;
 
         let model = std::env::var(crate::constants::ENV_ANTHROPIC_MODEL)
-            .unwrap_or_else(|_| crate::constants::DEFAULT_MODEL.to_string());
+            .unwrap_or_else(|_| crate::constants::ANTHROPIC_DEFAULT_MODEL.to_string());
 
         Ok(Self {
             api_key,
@@ -66,7 +66,7 @@ impl AnthropicConfig {
         Self {
             api_key: api_key.into(),
             base_url: DEFAULT_BASE_URL.to_string(),
-            model: crate::constants::DEFAULT_MODEL.to_string(),
+            model: crate::constants::ANTHROPIC_DEFAULT_MODEL.to_string(),
             timeout_secs: DEFAULT_TIMEOUT_SECS,
         }
     }

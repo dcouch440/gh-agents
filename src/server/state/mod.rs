@@ -293,31 +293,28 @@ impl AppState {
     }
 
     async fn init_providers() -> (Option<Arc<dyn LLMProvider + Send + Sync>>, ProviderRegistry) {
-        let mut registry = ProviderRegistry::new("anthropic");
+        let active = crate::constants::ACTIVE_PROVIDER;
+        let mut registry = ProviderRegistry::new(active);
 
-        // Initialize Anthropic provider (default)
-        let provider = match crate::llm::AnthropicClient::from_env() {
+        // Initialize Anthropic provider
+        match crate::llm::AnthropicClient::from_env() {
             Ok(p) => {
-                tracing::info!("Initialized LLM provider: {}", p.model_id().to_string());
+                tracing::info!("Initialized Anthropic provider: {}", p.model_id());
                 let provider: Arc<dyn LLMProvider + Send + Sync> =
                     Arc::new(crate::llm::SafeStreamProvider::new(
                         crate::llm::RetryingProvider::with_defaults(
                             crate::llm::RateLimitedProvider::with_defaults(p),
                         ),
                     ));
-
-                registry.register("anthropic", provider.clone());
-
-                Some(provider)
+                registry.register("anthropic", provider);
             }
             Err(e) => {
                 tracing::warn!(
-                    "Failed to initialize LLM provider: {}. Set ANTHROPIC_API_KEY.",
+                    "Anthropic provider not initialized: {}. Set ANTHROPIC_API_KEY.",
                     e
                 );
-                None
             }
-        };
+        }
 
         // Initialize Ollama provider if enabled
         let ollama_enabled = std::env::var(crate::constants::ENV_OLLAMA_ENABLED)
@@ -365,6 +362,41 @@ impl AppState {
             tracing::debug!(
                 "Ollama provider disabled (set {}=true to enable)",
                 crate::constants::ENV_OLLAMA_ENABLED
+            );
+        }
+
+        // Initialize xAI provider
+        match crate::llm::XaiClient::from_env() {
+            Ok(client) => {
+                tracing::info!(
+                    "Initialized xAI provider: {} ({})",
+                    client.model_id(),
+                    crate::constants::XAI_DEFAULT_BASE_URL
+                );
+                let xai_provider: Arc<dyn LLMProvider + Send + Sync> =
+                    Arc::new(crate::llm::SafeStreamProvider::new(
+                        crate::llm::RetryingProvider::with_defaults(
+                            crate::llm::RateLimitedProvider::with_defaults(client),
+                        ),
+                    ));
+                registry.register("xai", xai_provider);
+            }
+            Err(e) => {
+                tracing::debug!(
+                    "xAI provider not initialized: {}. Set {} to enable.",
+                    e,
+                    crate::constants::ENV_XAI_API_KEY
+                );
+            }
+        }
+
+        // Resolve the default provider from the active profile
+        let provider = registry.default_provider().cloned();
+        if provider.is_some() {
+            tracing::info!("Active provider profile: '{active}'");
+        } else {
+            tracing::warn!(
+                "Active provider '{active}' not available — no default LLM provider configured"
             );
         }
 

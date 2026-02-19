@@ -275,16 +275,11 @@ pub async fn send_room_message(
         members.push(crate::server::executors::room::RoomMemberWithAgent { member: m, agent });
     }
 
-    // Create LLM provider
+    // Get LLM provider from state registry
     let provider: std::sync::Arc<dyn crate::llm::LLMProvider + Send + Sync> =
-        match crate::llm::AnthropicClient::from_env() {
-            Ok(p) => std::sync::Arc::new(p),
-            Err(e) => {
-                return Err(AppError::ServiceUnavailable(format!(
-                    "LLM provider unavailable: {e}"
-                )))
-            }
-        };
+        state.provider().cloned().ok_or_else(|| {
+            AppError::ServiceUnavailable("LLM provider not configured".to_string())
+        })?;
 
     // Spawn background task to execute the turn
     let room_clone = room.clone();

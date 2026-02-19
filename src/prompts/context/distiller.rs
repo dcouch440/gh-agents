@@ -27,7 +27,7 @@ use tracing::warn;
 use crate::constants;
 use crate::db::DocumentRow;
 use crate::llm::{
-    AnthropicClient, AnthropicConfig, ContentBlock, LLMProvider, LLMRequest, Message,
+    ContentBlock, LLMRequest, Message,
 };
 
 // ---------------------------------------------------------------------------
@@ -104,11 +104,7 @@ pub async fn distill_true_context(
         .replace("{task_title}", task_title)
         .replace("{task_description}", task_description);
 
-    let response_text = if constants::DISTILLER_MODEL.starts_with("grok") {
-        distill_via_grok(&prompt).await?
-    } else {
-        distill_via_anthropic(&prompt).await?
-    };
+    let response_text = distill_via_utility(&prompt).await?;
 
     match parse_dynamic_context(&response_text, &tag_names) {
         Some(ctx) => Some(ctx),
@@ -207,9 +203,14 @@ fn strip_front_matter(content: &str) -> String {
 // Provider backends
 // ---------------------------------------------------------------------------
 
-async fn distill_via_anthropic(prompt: &str) -> Option<String> {
-    let config = AnthropicConfig::from_env().ok()?;
-    let client = AnthropicClient::new(config).ok()?;
+async fn distill_via_utility(prompt: &str) -> Option<String> {
+    let client = match crate::llm::create_utility_client() {
+        Ok(c) => c,
+        Err(e) => {
+            warn!(error = %e, "true-context distiller: utility client init failed");
+            return None;
+        }
+    };
 
     let request = LLMRequest {
         model: constants::DISTILLER_MODEL.to_string(),
@@ -223,7 +224,7 @@ async fn distill_via_anthropic(prompt: &str) -> Option<String> {
     let response = match client.send_message(request).await {
         Ok(r) => r,
         Err(e) => {
-            warn!(error = %e, "true-context distiller: Anthropic call failed");
+            warn!(error = %e, "true-context distiller: LLM call failed");
             return None;
         }
     };
@@ -232,34 +233,6 @@ async fn distill_via_anthropic(prompt: &str) -> Option<String> {
         ContentBlock::Text { text } => Some(text.clone()),
         _ => None,
     })
-}
-
-async fn distill_via_grok(prompt: &str) -> Option<String> {
-    use crate::llm::{GrokResearchClient, ResearchRequest};
-
-    let client = match GrokResearchClient::from_env() {
-        Ok(c) => c,
-        Err(e) => {
-            warn!(error = %e, "true-context distiller: Grok client init failed");
-            return None;
-        }
-    };
-
-    let request = ResearchRequest {
-        query: prompt.to_string(),
-        sources: vec![],
-        web_filters: None,
-        x_filters: None,
-        system_prompt: None,
-    };
-
-    match client.research(&request).await {
-        Ok(res) => Some(res.answer),
-        Err(e) => {
-            warn!(error = %e, "true-context distiller: Grok research call failed");
-            None
-        }
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -567,8 +540,8 @@ mod tests {
     // -- Constants -----------------------------------------------------------
 
     #[test]
-    fn distiller_model_default_is_haiku() {
-        assert_eq!(constants::DISTILLER_MODEL, constants::MODEL_HAIKU);
+    fn distiller_model_default_is_tier3() {
+        assert_eq!(constants::DISTILLER_MODEL, constants::MODEL_TIER3);
     }
 
     #[test]

@@ -25,7 +25,7 @@ const MAX_TOKENS_RUN_SUMMARY: u32 = 512;
 const MAX_OUTPUT_CHARS: usize = 50_000;
 
 /// Model to use for summarization. Uses the default utility model.
-const SUMMARIZER_MODEL: &str = crate::constants::MODEL_HAIKU;
+const SUMMARIZER_MODEL: &str = crate::constants::MODEL_TIER3;
 
 /// In-memory token map for cancel-and-replace semantics.
 /// Each step_id maps to a CancellationToken for the in-flight summarization.

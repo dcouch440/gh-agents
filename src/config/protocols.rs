@@ -56,6 +56,21 @@ impl ProtocolConfig {
             .get(role)
             .unwrap_or_else(|| panic!("Unknown agent role '{role}' in protocol config"))
     }
+
+    /// Resolve tier markers (`tier:1`, `tier:2`, `tier:3`) in `model_id` fields
+    /// to the concrete model IDs from the active provider profile in `constants.rs`.
+    ///
+    /// Called once during `Lazy` initialization so every consumer sees real model IDs.
+    fn resolve_model_tiers(&mut self) {
+        for agent in self.agents.values_mut() {
+            agent.model_id = match agent.model_id.as_str() {
+                "tier:1" => crate::constants::MODEL_TIER1.to_string(),
+                "tier:2" => crate::constants::MODEL_TIER2.to_string(),
+                "tier:3" => crate::constants::MODEL_TIER3.to_string(),
+                other => other.to_string(),
+            };
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -177,40 +192,54 @@ pub mod vars {
 // Config statics — parsed once on first access
 // ---------------------------------------------------------------------------
 
+/// Parse a protocol config YAML and resolve tier markers to concrete model IDs.
+fn load_protocol_config(yaml: &str, name: &str) -> ProtocolConfig {
+    let mut config: ProtocolConfig =
+        serde_yaml::from_str(yaml).unwrap_or_else(|e| panic!("Failed to parse {name}: {e}"));
+    config.resolve_model_tiers();
+    config
+}
+
 pub static MEETING: Lazy<ProtocolConfig> = Lazy::new(|| {
-    serde_yaml::from_str(include_str!("../../config/protocols/meeting/config.yaml"))
-        .expect("Failed to parse config/protocols/meeting/config.yaml")
+    load_protocol_config(
+        include_str!("../../config/protocols/meeting/config.yaml"),
+        "config/protocols/meeting/config.yaml",
+    )
 });
 
 pub static NODE_ASSISTANT: Lazy<ProtocolConfig> = Lazy::new(|| {
-    serde_yaml::from_str(include_str!(
-        "../../config/protocols/node_assistant/config.yaml"
-    ))
-    .expect("Failed to parse config/protocols/node_assistant/config.yaml")
+    load_protocol_config(
+        include_str!("../../config/protocols/node_assistant/config.yaml"),
+        "config/protocols/node_assistant/config.yaml",
+    )
 });
 
 pub static BELIEF_CAPTURE: Lazy<ProtocolConfig> = Lazy::new(|| {
-    serde_yaml::from_str(include_str!(
-        "../../config/protocols/belief_capture/config.yaml"
-    ))
-    .expect("Failed to parse config/protocols/belief_capture/config.yaml")
+    load_protocol_config(
+        include_str!("../../config/protocols/belief_capture/config.yaml"),
+        "config/protocols/belief_capture/config.yaml",
+    )
 });
 
 pub static WORKFORCE: Lazy<ProtocolConfig> = Lazy::new(|| {
-    serde_yaml::from_str(include_str!("../../config/protocols/workforce/config.yaml"))
-        .expect("Failed to parse config/protocols/workforce/config.yaml")
+    load_protocol_config(
+        include_str!("../../config/protocols/workforce/config.yaml"),
+        "config/protocols/workforce/config.yaml",
+    )
 });
 
 pub static AGENT_DESIGNER: Lazy<ProtocolConfig> = Lazy::new(|| {
-    serde_yaml::from_str(include_str!(
-        "../../config/protocols/agent_designer/config.yaml"
-    ))
-    .expect("Failed to parse config/protocols/agent_designer/config.yaml")
+    load_protocol_config(
+        include_str!("../../config/protocols/agent_designer/config.yaml"),
+        "config/protocols/agent_designer/config.yaml",
+    )
 });
 
 pub static DISPATCH: Lazy<ProtocolConfig> = Lazy::new(|| {
-    serde_yaml::from_str(include_str!("../../config/protocols/dispatch/config.yaml"))
-        .expect("Failed to parse config/protocols/dispatch/config.yaml")
+    load_protocol_config(
+        include_str!("../../config/protocols/dispatch/config.yaml"),
+        "config/protocols/dispatch/config.yaml",
+    )
 });
 
 // ---------------------------------------------------------------------------
@@ -303,7 +332,7 @@ mod tests {
     fn meeting_config_parses_gatekeeper() {
         let cfg = &*MEETING;
         let gk = cfg.agent("gatekeeper");
-        assert_eq!(gk.model_id, "claude-sonnet-4-20250514");
+        assert_eq!(gk.model_id, crate::constants::MODEL_TIER3);
         assert_eq!(gk.temperature, 0.3);
         assert_eq!(gk.max_tokens, 4096);
         assert_eq!(gk.max_rounds, 1);
@@ -444,7 +473,7 @@ mod tests {
     fn agent_designer_config_parses() {
         let cfg = &*AGENT_DESIGNER;
         let designer = cfg.agent("designer");
-        assert_eq!(designer.model_id, "claude-sonnet-4-5-20250929");
+        assert_eq!(designer.model_id, crate::constants::MODEL_TIER1);
         assert_eq!(designer.temperature, 0.4);
         assert_eq!(designer.max_tokens, 16384);
         assert_eq!(designer.max_rounds, 1);
@@ -455,7 +484,7 @@ mod tests {
     fn dispatch_config_parses() {
         let cfg = &*DISPATCH;
         let dispatcher = cfg.agent("dispatcher");
-        assert_eq!(dispatcher.model_id, "claude-sonnet-4-20250514");
+        assert_eq!(dispatcher.model_id, crate::constants::MODEL_TIER1);
         assert_eq!(dispatcher.temperature, 0.3);
         assert_eq!(dispatcher.max_tokens, 8192);
         assert_eq!(dispatcher.max_rounds, 15);

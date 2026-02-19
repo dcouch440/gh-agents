@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
-use crate::llm::{AnthropicClient, LLMProvider, RateLimitedProvider, RetryingProvider};
+use crate::llm::LLMProvider;
 use crate::server::hub::HubError;
 use crate::server::state::{AppState, ConsumerMessage, StreamChunk};
 
@@ -21,26 +21,25 @@ pub fn spawn_chat_consumer(
 }
 
 async fn run_chat_consumer(state: AppState, mut chat_rx: mpsc::Receiver<ConsumerMessage>) {
-    let provider: Arc<dyn LLMProvider + Send + Sync> = match AnthropicClient::from_env() {
-        Ok(p) => {
+    let provider: Arc<dyn LLMProvider + Send + Sync> = match state.provider() {
+        Some(p) => {
             info!(
-                "Chat consumer started with model: {}",
-                p.model_id().to_string()
+                "Chat consumer started with provider '{}', model: {}",
+                crate::constants::ACTIVE_PROVIDER,
+                p.model_id(),
             );
-            Arc::new(RetryingProvider::with_defaults(
-                RateLimitedProvider::with_defaults(p),
-            ))
+            p.clone()
         }
-        Err(e) => {
+        None => {
             error!(
-                "Failed to initialize LLM provider: {}. Chat will not work. Set ANTHROPIC_API_KEY.",
-                e
+                "No LLM provider configured for '{}'. Chat will not work.",
+                crate::constants::ACTIVE_PROVIDER,
             );
             while let Some(msg) = chat_rx.recv().await {
                 state.send_stream_chunk(
                     msg.id,
                     StreamChunk::Error(
-                        "LLM provider not configured. Set ANTHROPIC_API_KEY.".into(),
+                        "LLM provider not configured.".into(),
                     ),
                 );
                 let cleanup_state = state.clone();

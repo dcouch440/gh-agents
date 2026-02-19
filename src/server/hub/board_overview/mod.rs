@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::config::protocols::roles;
 use crate::llm::{
-    AnthropicClient, AnthropicConfig, LLMProvider, LLMRequest, Message as LlmMessage,
+    LLMRequest, Message as LlmMessage,
 };
 use crate::server::state::AppState;
 
@@ -66,12 +66,11 @@ async fn regenerate_board_overview(
     // 4. Format all notes as input for Haiku
     let formatted_input = format_notes_for_summarization(&notes_by_step);
 
-    // 5. Call Haiku
-    let config = AnthropicConfig::from_env()?;
-    let client = AnthropicClient::new(config)?;
+    // 5. Call utility model
+    let client = crate::llm::create_utility_client()?;
 
     let request = LLMRequest::new(
-        crate::constants::MODEL_HAIKU,
+        crate::constants::MODEL_TIER3,
         vec![LlmMessage::user(formatted_input)],
     )
     .with_system(roles::BOARD_OVERVIEW_SUMMARIZER)

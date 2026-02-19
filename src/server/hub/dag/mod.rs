@@ -555,10 +555,9 @@ async fn run_dag_loop(
                 })?
         };
 
-        // Resolve provider: use registry if agent targets non-default provider
-        let step_engine = if agent.model_provider == "anthropic" || agent.model_provider.is_empty()
-        {
-            None // Use default engine
+        // Resolve provider: empty → default engine, explicit name → named provider
+        let step_engine = if agent.model_provider.is_empty() {
+            None // Use default engine (ACTIVE_PROVIDER)
         } else {
             // Check runtime toggle for non-default providers
             if agent.model_provider == "ollama" && !dag.state.is_ollama_enabled().await {
@@ -568,15 +567,20 @@ async fn run_dag_loop(
                     agent_name: agent.name.clone(),
                 });
             }
-            let provider = dag
-                .state
-                .provider_for(&agent.model_provider)
-                .ok_or_else(|| HubError::ProviderUnavailable {
-                    provider: agent.model_provider.clone(),
-                    step_id: *step_id,
-                    agent_name: agent.name.clone(),
-                })?;
-            Some(ExecutionEngine::new(provider))
+            // If the agent's provider matches the active default, reuse the default engine
+            if agent.model_provider == crate::constants::ACTIVE_PROVIDER {
+                None
+            } else {
+                let provider = dag
+                    .state
+                    .provider_for(&agent.model_provider)
+                    .ok_or_else(|| HubError::ProviderUnavailable {
+                        provider: agent.model_provider.clone(),
+                        step_id: *step_id,
+                        agent_name: agent.name.clone(),
+                    })?;
+                Some(ExecutionEngine::new(provider))
+            }
         };
         let effective_engine = step_engine.as_ref().unwrap_or(dag.engine);
 
