@@ -20,11 +20,7 @@ async fn verify_ownership(
         .get_prompt_template(template_id)
         .await?
         .ok_or_else(|| ServiceError::not_found("Prompt template"))?;
-    match template.user_id {
-        Some(owner) if owner != user_id => return Err(ServiceError::not_found("Prompt template")),
-        None => return Err(ServiceError::not_found("Prompt template")),
-        _ => {}
-    }
+    super::ownership::check_strict_owner(template.user_id, user_id, "Prompt template")?;
     Ok(template)
 }
 

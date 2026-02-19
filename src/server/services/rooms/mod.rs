@@ -24,9 +24,7 @@ async fn verify_ownership(
         .get_room(room_id)
         .await?
         .ok_or_else(|| ServiceError::not_found("Room"))?;
-    if room.user_id != user_id {
-        return Err(ServiceError::not_found("Room"));
-    }
+    super::ownership::check_direct_owner(room.user_id, user_id, "Room")?;
     Ok(room)
 }
 

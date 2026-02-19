@@ -35,9 +35,7 @@ async fn verify_ownership(
         .get_document(doc_id)
         .await?
         .ok_or_else(|| ServiceError::not_found("Document"))?;
-    if doc.user_id != user_id {
-        return Err(ServiceError::not_found("Document"));
-    }
+    super::ownership::check_direct_owner(doc.user_id, user_id, "Document")?;
     Ok(doc)
 }
 

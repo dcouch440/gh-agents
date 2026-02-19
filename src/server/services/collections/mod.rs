@@ -20,9 +20,7 @@ async fn verify_ownership(
         .get_collection(collection_id)
         .await?
         .ok_or_else(|| ServiceError::not_found("Collection"))?;
-    if row.user_id != user_id {
-        return Err(ServiceError::not_found("Collection"));
-    }
+    super::ownership::check_direct_owner(row.user_id, user_id, "Collection")?;
     Ok(row)
 }
 
