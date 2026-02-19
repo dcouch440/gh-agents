@@ -125,26 +125,16 @@ impl ExecutionStrategy for RoomSpeakerStrategy {
     }
 
     async fn on_complete(&self, response: &str, usage: &TokenUsage) -> Result<(), HubError> {
-        super::log_token_usage(
-            &self.state,
-            self.config.user_id,
+        super::complete_agent_execution(
+            Some(&self.state),
+            Some(self.config.user_id),
             Some(self.config.agent_execution_id),
             &self.config.agent.model_id,
+            response,
             usage,
+            false,
         )
         .await;
-
-        // Update agent_execution with final status
-        let ae_repo = &self.state.repos().agent_executions;
-        let _ = ae_repo
-            .update_agent_execution_status(
-                self.config.agent_execution_id,
-                "completed",
-                Some(response.to_string()),
-                None,
-            )
-            .await;
-
         Ok(())
     }
 }

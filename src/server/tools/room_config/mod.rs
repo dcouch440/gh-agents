@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::db::traits::WorkflowRepo;
+use crate::server::tools::shared::{require_i64, require_str};
 
 mod tests;
 
@@ -43,8 +44,9 @@ async fn execute_set_meeting_purpose(
     repo: &dyn WorkflowRepo,
     ctx: &RoomConfigToolContext,
 ) -> Value {
-    let Some(description) = input["description"].as_str() else {
-        return json!({ "error": "Missing required parameter: description" });
+    let description = match require_str(input, "description") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     // Load existing config to preserve other fields, or use defaults
@@ -82,11 +84,13 @@ async fn execute_add_member(
     repo: &dyn WorkflowRepo,
     ctx: &RoomConfigToolContext,
 ) -> Value {
-    let Some(name) = input["name"].as_str() else {
-        return json!({ "error": "Missing required parameter: name" });
+    let name = match require_str(input, "name") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
-    let Some(role) = input["role"].as_str() else {
-        return json!({ "error": "Missing required parameter: role" });
+    let role = match require_str(input, "role") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
     let perspective = input["perspective"].as_str().unwrap_or("");
 
@@ -116,8 +120,9 @@ async fn execute_update_member(
     repo: &dyn WorkflowRepo,
     ctx: &RoomConfigToolContext,
 ) -> Value {
-    let Some(name) = input["name"].as_str() else {
-        return json!({ "error": "Missing required parameter: name" });
+    let name = match require_str(input, "name") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     // Find member by name (case-insensitive)
@@ -154,8 +159,9 @@ async fn execute_remove_member(
     repo: &dyn WorkflowRepo,
     ctx: &RoomConfigToolContext,
 ) -> Value {
-    let Some(name) = input["name"].as_str() else {
-        return json!({ "error": "Missing required parameter: name" });
+    let name = match require_str(input, "name") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     // Find member by name (case-insensitive)
@@ -183,8 +189,9 @@ async fn execute_set_max_turns(
     repo: &dyn WorkflowRepo,
     ctx: &RoomConfigToolContext,
 ) -> Value {
-    let Some(count) = input["count"].as_i64() else {
-        return json!({ "error": "Missing required parameter: count" });
+    let count = match require_i64(input, "count") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     if !(1..=100).contains(&count) {
@@ -225,8 +232,9 @@ async fn execute_set_interaction_mode(
     repo: &dyn WorkflowRepo,
     ctx: &RoomConfigToolContext,
 ) -> Value {
-    let Some(mode) = input["mode"].as_str() else {
-        return json!({ "error": "Missing required parameter: mode" });
+    let mode = match require_str(input, "mode") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     if !VALID_INTERACTION_MODES.contains(&mode) {

@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::db::traits::WorkflowRepo;
+use crate::server::tools::shared::{load_step_or_error, require_str};
 
 mod tests;
 
@@ -37,8 +38,9 @@ pub async fn execute_node_assistant_tool(
 }
 
 fn execute_render_panel(input: &Value) -> Value {
-    let Some(content) = input["content"].as_str() else {
-        return json!({ "error": "Missing required parameter: content" });
+    let content = match require_str(input, "content") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     let submit_label = input["submit_label"].as_str().unwrap_or("Submit");
@@ -55,8 +57,9 @@ async fn execute_set_archetype(
     repo: &dyn WorkflowRepo,
     ctx: &StepToolContext,
 ) -> Value {
-    let Some(archetype) = input["archetype"].as_str() else {
-        return json!({ "error": "Missing required parameter: archetype" });
+    let archetype = match require_str(input, "archetype") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     if !VALID_ARCHETYPES.contains(&archetype) {
@@ -69,10 +72,9 @@ async fn execute_set_archetype(
         });
     }
 
-    let mut step = match repo.get_step(ctx.step_id).await {
-        Ok(Some(s)) => s,
-        Ok(None) => return json!({ "error": "Step not found" }),
-        Err(e) => return json!({ "error": format!("Failed to load step: {}", e) }),
+    let mut step = match load_step_or_error(repo, ctx.step_id).await {
+        Ok(s) => s,
+        Err(e) => return e,
     };
 
     step.execution_mode = archetype.to_string();
@@ -87,14 +89,14 @@ async fn execute_set_archetype(
 }
 
 async fn execute_set_name(input: &Value, repo: &dyn WorkflowRepo, ctx: &StepToolContext) -> Value {
-    let Some(name) = input["name"].as_str() else {
-        return json!({ "error": "Missing required parameter: name" });
+    let name = match require_str(input, "name") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
-    let mut step = match repo.get_step(ctx.step_id).await {
-        Ok(Some(s)) => s,
-        Ok(None) => return json!({ "error": "Step not found" }),
-        Err(e) => return json!({ "error": format!("Failed to load step: {}", e) }),
+    let mut step = match load_step_or_error(repo, ctx.step_id).await {
+        Ok(s) => s,
+        Err(e) => return e,
     };
 
     step.name = Some(name.to_string());
@@ -113,14 +115,14 @@ async fn execute_set_description(
     repo: &dyn WorkflowRepo,
     ctx: &StepToolContext,
 ) -> Value {
-    let Some(description) = input["description"].as_str() else {
-        return json!({ "error": "Missing required parameter: description" });
+    let description = match require_str(input, "description") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
-    let mut step = match repo.get_step(ctx.step_id).await {
-        Ok(Some(s)) => s,
-        Ok(None) => return json!({ "error": "Step not found" }),
-        Err(e) => return json!({ "error": format!("Failed to load step: {}", e) }),
+    let mut step = match load_step_or_error(repo, ctx.step_id).await {
+        Ok(s) => s,
+        Err(e) => return e,
     };
 
     step.description = description.to_string();

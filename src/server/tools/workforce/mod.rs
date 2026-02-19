@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use crate::db::traits::{CreateWorkflowInput, WorkflowRepo};
 use crate::db::WorkflowStepEdgeRow;
+use crate::server::tools::shared::{require_array, require_str, require_uuid};
 
 mod tests;
 
@@ -252,8 +253,9 @@ async fn execute_set_task(
     repo: &dyn WorkflowRepo,
     ctx: &WorkforceToolContext,
 ) -> Value {
-    let Some(description) = input["description"].as_str() else {
-        return json!({ "error": "Missing required parameter: description" });
+    let description = match require_str(input, "description") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     let existing = repo.get_mission_brief(ctx.step_id).await.ok().flatten();
@@ -289,8 +291,9 @@ async fn execute_add_agent(
     repo: &dyn WorkflowRepo,
     ctx: &WorkforceToolContext,
 ) -> Value {
-    let Some(name) = input["name"].as_str() else {
-        return json!({ "error": "Missing required parameter: name" });
+    let name = match require_str(input, "name") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     let role = input["role"].as_str().unwrap_or("");
@@ -394,11 +397,9 @@ async fn execute_update_agent(
 ) -> Value {
     let _ = ctx; // Used in the future for context; suppress unused warning
 
-    let Some(id_str) = input["agent_id"].as_str() else {
-        return json!({ "error": "Missing required parameter: agent_id" });
-    };
-    let Ok(agent_id) = Uuid::parse_str(id_str) else {
-        return json!({ "error": format!("Invalid UUID: {}", id_str) });
+    let agent_id = match require_uuid(input, "agent_id") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     let name = input["name"].as_str().map(String::from);
@@ -447,11 +448,9 @@ async fn execute_remove_agent(
     repo: &dyn WorkflowRepo,
     ctx: &WorkforceToolContext,
 ) -> Value {
-    let Some(id_str) = input["agent_id"].as_str() else {
-        return json!({ "error": "Missing required parameter: agent_id" });
-    };
-    let Ok(agent_id) = Uuid::parse_str(id_str) else {
-        return json!({ "error": format!("Invalid UUID: {}", id_str) });
+    let agent_id = match require_uuid(input, "agent_id") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     // Load brief + roster to find the agent
@@ -523,8 +522,9 @@ async fn execute_set_capabilities(
     repo: &dyn WorkflowRepo,
     ctx: &WorkforceToolContext,
 ) -> Value {
-    let Some(caps_arr) = input["capabilities"].as_array() else {
-        return json!({ "error": "Missing required parameter: capabilities (array)" });
+    let caps_arr = match require_array(input, "capabilities") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
     let capabilities: Vec<String> = caps_arr
         .iter()
@@ -563,8 +563,9 @@ async fn execute_set_failure_mode(
     repo: &dyn WorkflowRepo,
     ctx: &WorkforceToolContext,
 ) -> Value {
-    let Some(mode) = input["mode"].as_str() else {
-        return json!({ "error": "Missing required parameter: mode" });
+    let mode = match require_str(input, "mode") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     if !VALID_FAILURE_MODES.contains(&mode) {
@@ -613,8 +614,9 @@ async fn execute_add_deliverable(
     repo: &dyn WorkflowRepo,
     ctx: &WorkforceToolContext,
 ) -> Value {
-    let Some(name) = input["name"].as_str() else {
-        return json!({ "error": "Missing required parameter: name" });
+    let name = match require_str(input, "name") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     let description = input["description"].as_str().unwrap_or("").to_string();
@@ -658,11 +660,9 @@ async fn execute_update_deliverable(
     repo: &dyn WorkflowRepo,
     ctx: &WorkforceToolContext,
 ) -> Value {
-    let Some(id_str) = input["deliverable_id"].as_str() else {
-        return json!({ "error": "Missing required parameter: deliverable_id" });
-    };
-    let Ok(def_id) = Uuid::parse_str(id_str) else {
-        return json!({ "error": format!("Invalid UUID: {}", id_str) });
+    let def_id = match require_uuid(input, "deliverable_id") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     let existing_defs = match repo.list_document_defs(ctx.step_id).await {
@@ -707,11 +707,9 @@ async fn execute_remove_deliverable(
     repo: &dyn WorkflowRepo,
     ctx: &WorkforceToolContext,
 ) -> Value {
-    let Some(id_str) = input["deliverable_id"].as_str() else {
-        return json!({ "error": "Missing required parameter: deliverable_id" });
-    };
-    let Ok(def_id) = Uuid::parse_str(id_str) else {
-        return json!({ "error": format!("Invalid UUID: {}", id_str) });
+    let def_id = match require_uuid(input, "deliverable_id") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     let def_name = repo
@@ -796,11 +794,13 @@ async fn execute_set_dependency(
     repo: &dyn WorkflowRepo,
     ctx: &WorkforceToolContext,
 ) -> Value {
-    let Some(from_name) = input["from_agent"].as_str() else {
-        return json!({ "error": "Missing required parameter: from_agent" });
+    let from_name = match require_str(input, "from_agent") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
-    let Some(to_name) = input["to_agent"].as_str() else {
-        return json!({ "error": "Missing required parameter: to_agent" });
+    let to_name = match require_str(input, "to_agent") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     // Load brief + roster
@@ -837,10 +837,9 @@ async fn execute_set_dependency(
     };
 
     // Get child workflow
-    let step = match repo.get_step(ctx.step_id).await {
-        Ok(Some(s)) => s,
-        Ok(None) => return json!({ "error": "Step not found" }),
-        Err(e) => return json!({ "error": e.to_string() }),
+    let step = match crate::server::tools::shared::load_step_or_error(repo, ctx.step_id).await {
+        Ok(s) => s,
+        Err(e) => return e,
     };
     let child_workflow_id = match step.child_workflow_id {
         Some(id) => id,
@@ -894,11 +893,13 @@ async fn execute_remove_dependency(
     repo: &dyn WorkflowRepo,
     ctx: &WorkforceToolContext,
 ) -> Value {
-    let Some(from_name) = input["from_agent"].as_str() else {
-        return json!({ "error": "Missing required parameter: from_agent" });
+    let from_name = match require_str(input, "from_agent") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
-    let Some(to_name) = input["to_agent"].as_str() else {
-        return json!({ "error": "Missing required parameter: to_agent" });
+    let to_name = match require_str(input, "to_agent") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     // Load brief + roster

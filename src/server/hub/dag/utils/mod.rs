@@ -29,5 +29,36 @@ pub use types::{
 };
 pub use variables::{extract_for_each_label, resolve_for_each_array, resolve_variables};
 
+use uuid::Uuid;
+
+use crate::server::hub::dag::dag_state::DagContext;
+use crate::server::hub::dag::dag_state::DagExecutionState;
+use crate::types::StepExecutionEnvelope;
+
+/// Record step output in DAG state and snapshot the envelope for run history.
+///
+/// Combines `dag_state.record_step_output()` + JSON serialization +
+/// `versioning::snapshot_content()` into a single call.
+pub(crate) async fn record_and_snapshot_output(
+    dag: &DagContext<'_>,
+    dag_state: &mut DagExecutionState,
+    step_id: Uuid,
+    output: StepOutput,
+    envelope: StepExecutionEnvelope,
+) {
+    let envelope_json = serde_json::to_string(&envelope).unwrap_or_default();
+    dag_state.record_step_output(step_id, output, envelope);
+    let _ = super::versioning::snapshot_content(
+        &*dag.state.repos().content_versions,
+        dag.ctx.run_id,
+        step_id,
+        step_id,
+        super::versioning::content_types::ENVELOPE,
+        "output",
+        &envelope_json,
+    )
+    .await;
+}
+
 #[cfg(test)]
 mod tests;
