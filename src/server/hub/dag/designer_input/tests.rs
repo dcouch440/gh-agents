@@ -256,4 +256,155 @@ mod tests {
             .additional_context
             .contains("Ensures user experience quality"));
     }
+
+    // ── Workforce dependency tests ───────────────────────────────────────────
+
+    use crate::db::traits::MockToolCapabilityRepo;
+    use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow, WorkflowStepEdgeRow};
+
+    fn make_brief(step_id: Uuid) -> TaskMissionBriefRow {
+        TaskMissionBriefRow {
+            id: Uuid::new_v4(),
+            step_id,
+            task_description: "Test mission".to_string(),
+            available_capabilities: vec![],
+            failure_mode: "fail_fast".to_string(),
+            ..Default::default()
+        }
+    }
+
+    fn make_roster_agent(
+        brief_id: Uuid,
+        name: &str,
+        order: i32,
+        child_step_id: Option<Uuid>,
+    ) -> TaskAgentRosterRow {
+        TaskAgentRosterRow {
+            id: Uuid::new_v4(),
+            mission_brief_id: brief_id,
+            name: name.to_string(),
+            role_description: format!("{} role", name),
+            capabilities: vec![],
+            execution_order: order,
+            child_step_id,
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn workforce_input_includes_dependencies() {
+        let step_id = Uuid::new_v4();
+        let brief = make_brief(step_id);
+        let scanner_child = Uuid::new_v4();
+        let analyzer_child = Uuid::new_v4();
+
+        let roster = vec![
+            make_roster_agent(brief.id, "Scanner", 0, Some(scanner_child)),
+            make_roster_agent(brief.id, "Analyzer", 1, Some(analyzer_child)),
+        ];
+
+        let child_edges = vec![WorkflowStepEdgeRow {
+            id: Uuid::new_v4(),
+            from_step_id: scanner_child,
+            to_step_id: analyzer_child,
+            workflow_id: Uuid::new_v4(),
+            ..Default::default()
+        }];
+
+        let mut tool_repo = MockToolCapabilityRepo::new();
+        tool_repo
+            .expect_get_tool_capabilities()
+            .returning(|| Ok(vec![]));
+
+        let input = workforce::build_workforce_designer_input(
+            &brief,
+            &roster,
+            &HashMap::new(),
+            &[],
+            None,
+            &tool_repo,
+            &child_edges,
+        )
+        .await;
+
+        assert_eq!(input.dependencies.len(), 1);
+        assert_eq!(input.dependencies[0].from_agent_name, "Scanner");
+        assert_eq!(input.dependencies[0].to_agent_name, "Analyzer");
+        assert!(input.archetype_guidance.contains("Scanner"));
+        assert!(input.archetype_guidance.contains("Analyzer"));
+        assert!(input.archetype_guidance.contains("receives_from"));
+    }
+
+    #[tokio::test]
+    async fn workforce_input_filters_designer_edges() {
+        let step_id = Uuid::new_v4();
+        let brief = make_brief(step_id);
+        let designer_step = Uuid::new_v4();
+        let scanner_child = Uuid::new_v4();
+
+        let roster = vec![make_roster_agent(
+            brief.id,
+            "Scanner",
+            0,
+            Some(scanner_child),
+        )];
+
+        // Designer → Scanner edge (should be filtered out)
+        let child_edges = vec![WorkflowStepEdgeRow {
+            id: Uuid::new_v4(),
+            from_step_id: designer_step,
+            to_step_id: scanner_child,
+            workflow_id: Uuid::new_v4(),
+            ..Default::default()
+        }];
+
+        let mut tool_repo = MockToolCapabilityRepo::new();
+        tool_repo
+            .expect_get_tool_capabilities()
+            .returning(|| Ok(vec![]));
+
+        let input = workforce::build_workforce_designer_input(
+            &brief,
+            &roster,
+            &HashMap::new(),
+            &[],
+            None,
+            &tool_repo,
+            &child_edges,
+        )
+        .await;
+
+        assert!(input.dependencies.is_empty());
+        assert!(input.archetype_guidance.contains("No inter-agent dependencies"));
+    }
+
+    #[tokio::test]
+    async fn workforce_input_no_dependencies() {
+        let step_id = Uuid::new_v4();
+        let brief = make_brief(step_id);
+
+        let roster = vec![
+            make_roster_agent(brief.id, "Scanner", 0, Some(Uuid::new_v4())),
+            make_roster_agent(brief.id, "Analyzer", 1, Some(Uuid::new_v4())),
+        ];
+
+        let mut tool_repo = MockToolCapabilityRepo::new();
+        tool_repo
+            .expect_get_tool_capabilities()
+            .returning(|| Ok(vec![]));
+
+        let input = workforce::build_workforce_designer_input(
+            &brief,
+            &roster,
+            &HashMap::new(),
+            &[],
+            None,
+            &tool_repo,
+            &[], // No edges
+        )
+        .await;
+
+        assert!(input.dependencies.is_empty());
+        assert!(input.archetype_guidance.contains("No inter-agent dependencies"));
+    }
 }

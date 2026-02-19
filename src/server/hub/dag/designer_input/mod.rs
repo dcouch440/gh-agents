@@ -41,6 +41,18 @@ pub struct DesignerInput {
     /// Extra instructions that vary by archetype (e.g., documenter phase info,
     /// room interaction mode, task force failure mode).
     pub archetype_guidance: String,
+
+    /// Dependency edges between agents. Each edge means
+    /// `from_agent` must complete before `to_agent` starts, and
+    /// `to_agent` should receive `from_agent`'s output.
+    pub dependencies: Vec<DependencyEdge>,
+}
+
+/// A dependency edge between two agents in the workforce graph.
+#[derive(Debug, Clone)]
+pub struct DependencyEdge {
+    pub from_agent_name: String,
+    pub to_agent_name: String,
 }
 
 /// One agent that needs a prompt pair designed.

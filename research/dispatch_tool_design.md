@@ -603,11 +603,7 @@ Provide 2-3 examples in the tool description showing minimal, moderate, and full
     "update": [{ "name": "analyst", "role": "Analyzes market data with focus on competitive positioning" }],
     "add": [{ "name": "fact_checker", "role": "Verifies all statistical claims and data citations" }]
   },
-  "deliverables": {
-    "update": [{ "name": "market_report", "assigned_agent": "writer" }]
-  },
-  "notes": "User wants more rigorous fact-checking. Add verification step before final report.",
-  "execution_order": ["analyst", "fact_checker", "writer"]
+  "execution_order": [...?]
 }
 ```
 

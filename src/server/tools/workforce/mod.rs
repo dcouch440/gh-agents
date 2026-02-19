@@ -5,11 +5,14 @@
 //! workflow attached to the workforce node. A Designer step is auto-managed
 //! (created with the first agent, removed with the last).
 
+use std::collections::{HashMap, HashSet, VecDeque};
+
 use chrono::Utc;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::db::traits::{CreateWorkflowInput, WorkflowRepo};
+use crate::db::WorkflowStepEdgeRow;
 
 mod tests;
 
@@ -745,6 +748,42 @@ fn find_agent_by_name<'a>(
         .find(|a| normalize_name(&a.name) == normalized)
 }
 
+/// Check if adding an edge from `from_step_id` to `to_step_id` would create a cycle.
+///
+/// Performs BFS from `to_step_id` following existing outgoing edges. If
+/// `from_step_id` is reachable, adding the proposed edge creates a cycle.
+fn would_create_cycle(
+    from_step_id: Uuid,
+    to_step_id: Uuid,
+    edges: &[WorkflowStepEdgeRow],
+) -> bool {
+    let mut adjacency: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
+    for edge in edges {
+        adjacency
+            .entry(edge.from_step_id)
+            .or_default()
+            .push(edge.to_step_id);
+    }
+
+    let mut visited = HashSet::new();
+    let mut queue = VecDeque::new();
+    queue.push_back(to_step_id);
+
+    while let Some(current) = queue.pop_front() {
+        if current == from_step_id {
+            return true;
+        }
+        if !visited.insert(current) {
+            continue;
+        }
+        if let Some(neighbors) = adjacency.get(&current) {
+            queue.extend(neighbors);
+        }
+    }
+
+    false
+}
+
 async fn execute_set_dependency(
     input: &Value,
     repo: &dyn WorkflowRepo,
@@ -811,6 +850,16 @@ async fn execute_set_dependency(
             "already_exists": true,
             "from": from_agent.name,
             "to": to_agent.name,
+        });
+    }
+
+    // Check for cycles
+    if would_create_cycle(from_child_step_id, to_child_step_id, &edges) {
+        return json!({
+            "error": format!(
+                "Adding dependency {} \u{2192} {} would create a cycle (there is already a path from {} to {})",
+                from_agent.name, to_agent.name, to_agent.name, from_agent.name
+            )
         });
     }
 
@@ -976,6 +1025,36 @@ pub async fn build_config_snapshot(
                         format!(" [{}]", agent.capabilities.join(", "))
                     }
                 ));
+            }
+        }
+
+        // Dependencies (agent-to-agent edges in the child workflow)
+        let child_edges = if let Some(child_wf_id) = step.child_workflow_id {
+            repo.list_edges(child_wf_id).await.unwrap_or_default()
+        } else {
+            vec![]
+        };
+
+        let child_step_to_name: HashMap<Uuid, &str> = roster
+            .iter()
+            .filter_map(|a| a.child_step_id.map(|csid| (csid, a.name.as_str())))
+            .collect();
+
+        let agent_edges: Vec<(&str, &str)> = child_edges
+            .iter()
+            .filter_map(|e| {
+                let from = child_step_to_name.get(&e.from_step_id)?;
+                let to = child_step_to_name.get(&e.to_step_id)?;
+                Some((*from, *to))
+            })
+            .collect();
+
+        out.push_str("\nDependencies:\n");
+        if agent_edges.is_empty() {
+            out.push_str("  (none)\n");
+        } else {
+            for (from, to) in &agent_edges {
+                out.push_str(&format!("  {} \u{2192} {}\n", from, to));
             }
         }
     } else {

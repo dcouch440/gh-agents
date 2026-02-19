@@ -21,18 +21,25 @@ checkout. A database resource means connection credentials are available.
 When the user runs this node, three phases execute in sequence:
 
 1. AGENT DESIGNER — A single LLM call reads the roster, your assistant
-   notes, and any upstream context from connected nodes. It generates a
-   tailored system prompt and task prompt for each agent, assigns tools
-   from the capability pool, and decides output routing (which agent's
-   output feeds to which downstream agent based on the dependency graph).
+   notes, the dependency graph, and any upstream context from connected
+   nodes. It generates a tailored system prompt and task prompt for each
+   agent, assigns tools from the capability pool, and sets output routing
+   based on the dependency graph (which agent's output feeds to which
+   downstream agent).
 
-2. SEQUENTIAL EXECUTION — Agents run in dependency order. Each agent
-   receives its designed prompts, its assigned tools, and relevant
-   outputs from upstream agents routed to it. Context from connected
-   nodes is available to all agents automatically.
+2. AGENT EXECUTION — Agents run one at a time in roster order. Each agent
+   receives its designed prompts, its assigned tools, and outputs from
+   upstream agents routed to it via dependencies. Without explicit
+   dependencies, an agent receives all prior agents' outputs. Context from
+   connected nodes is available to all agents automatically.
 
 3. OUTPUT ASSEMBLY — Each agent's output is collected. The combined
    output flows to downstream nodes.
+
+Dependencies control DATA ROUTING — they tell the Designer which outputs
+each agent needs, so it can scope prompts and inject the right context.
+Without dependencies, agents get everything, which works for small teams
+but dilutes focus for larger ones.
 
 The assistant notes feed the Agent Designer only. Agents never see raw
 notes. The Designer distills notes into specific instructions per agent.
@@ -57,6 +64,16 @@ Good dispatch instructions include:
 - Quality criteria for outputs (what "done well" looks like)
 - Any context the background agent should capture in notes for the
   Agent Designer (technical details, decisions, document references)
+
+CONVEYING DATA FLOW:
+When the user's request implies a specific work pattern, include that
+signal in your dispatch. The background agent uses these to set up the
+right dependency structure:
+- "Research independently then combine" → multiple independent agents
+  feeding a synthesizer
+- "Analyze first, then have reviewers check" → pipeline with fan-out
+- "Each specialist writes their section" → independent agents, no synthesis
+- "Step by step: gather, then analyze, then write" → linear pipeline
 
 When the user gives specific preferences about team composition ("I want
 a separate fact-checker" or "use three agents, not two"), relay those

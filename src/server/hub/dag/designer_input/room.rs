@@ -118,5 +118,6 @@ pub fn build_room_designer_input(
                direction. Members with \"open\" mode can speak freely.",
             meeting_purpose, interaction_mode, max_turns,
         ),
+        dependencies: vec![],
     }
 }
