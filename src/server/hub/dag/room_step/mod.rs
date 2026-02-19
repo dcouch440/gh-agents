@@ -97,18 +97,9 @@ pub(super) async fn execute_room_step(
                                     },
                                     error: None,
                                 };
-                                // Snapshot envelope for run history
-                                let envelope_json =
-                                    serde_json::to_string(&envelope).unwrap_or_default();
-                                dag_state.record_step_output(step.id, output, envelope);
-                                let _ = super::versioning::snapshot_content(
-                                    &*dag.state.repos().content_versions,
-                                    dag.ctx.run_id,
-                                    step.id,
-                                    step.id,
-                                    super::versioning::content_types::ENVELOPE,
-                                    "output",
-                                    &envelope_json,
+                                // Record output + snapshot envelope for run history
+                                super::utils::record_and_snapshot_output(
+                                    dag, dag_state, step.id, output, envelope,
                                 )
                                 .await;
                                 return Ok(());
@@ -471,19 +462,8 @@ pub(super) async fn execute_room_step(
         },
         error: None,
     };
-    // Snapshot envelope for run history
-    let envelope_json = serde_json::to_string(&envelope).unwrap_or_default();
-    dag_state.record_step_output(step.id, output, envelope);
-    let _ = super::versioning::snapshot_content(
-        &*dag.state.repos().content_versions,
-        dag.ctx.run_id,
-        step.id,
-        step.id,
-        super::versioning::content_types::ENVELOPE,
-        "output",
-        &envelope_json,
-    )
-    .await;
+    // Record output + snapshot envelope for run history
+    super::utils::record_and_snapshot_output(dag, dag_state, step.id, output, envelope).await;
 
     // Broadcast: step completed (room step)
     broadcast_workflow_event(

@@ -455,19 +455,8 @@ async fn run_dag_loop(
 
             let envelope = wrap_in_agentless_envelope(step.id, Some(value), 0, 0, 0, 0.0);
 
-            // Snapshot envelope for run history
-            let envelope_json = serde_json::to_string(&envelope).unwrap_or_default();
-            dag_state.record_step_output(step.id, output, envelope);
-            let _ = versioning::snapshot_content(
-                &*dag.state.repos().content_versions,
-                dag.ctx.run_id,
-                step.id,
-                step.id,
-                versioning::content_types::ENVELOPE,
-                "output",
-                &envelope_json,
-            )
-            .await;
+            // Record output + snapshot envelope for run history
+            utils::record_and_snapshot_output(dag, dag_state, step.id, output, envelope).await;
 
             broadcast_workflow_event(
                 dag.state,
@@ -490,112 +479,85 @@ async fn run_dag_loop(
             continue;
         }
 
-        // Belief capture steps — per-source LLM extraction, no agent_id needed
-        if step.execution_mode == "belief_capture" {
-            let step_result = execute_belief_capture_step(dag, step, dag_state).await;
+        // Dispatch based on execution mode
+        let step_result = match step.execution_mode.as_str() {
+            // Agentless modes — no agent_id needed
+            "belief_capture" => execute_belief_capture_step(dag, step, dag_state).await,
+            "sub_workflow" => execute_sub_workflow_step(dag, step, dag_state).await,
+            "workforce" => execute_workforce_step(dag, step, dag_state).await,
 
-            if let Err(ref e) = step_result {
-                broadcast_step_failure_if_real(dag.state, dag.ctx, workflow_id, step, e);
+            // Agent-based modes — load agent + resolve provider
+            _ => {
+                let agent_id = step.agent_id.ok_or_else(|| {
+                    HubError::Internal(anyhow::anyhow!(
+                        "step {} has no agent_id for mode '{}'",
+                        step_id,
+                        step.execution_mode
+                    ))
+                })?;
+                let agent = if let Some(snap) = &dag.ctx.snapshot {
+                    snap.agents
+                        .get(&agent_id)
+                        .cloned()
+                        .ok_or_else(|| HubError::AgentNotFound {
+                            step_id: *step_id,
+                            agent_id,
+                        })?
+                } else {
+                    dag.state
+                        .repos()
+                        .agents
+                        .get_persisted_agent(agent_id)
+                        .await
+                        .map_err(|e| anyhow::anyhow!("failed to load agent: {}", e))?
+                        .ok_or_else(|| HubError::AgentNotFound {
+                            step_id: *step_id,
+                            agent_id,
+                        })?
+                };
+
+                // Resolve provider: empty → default engine, explicit name → named provider
+                let step_engine = if agent.model_provider.is_empty() {
+                    None
+                } else {
+                    if agent.model_provider == "ollama"
+                        && !dag.state.is_ollama_enabled().await
+                    {
+                        return Err(HubError::ProviderUnavailable {
+                            provider: agent.model_provider.clone(),
+                            step_id: *step_id,
+                            agent_name: agent.name.clone(),
+                        });
+                    }
+                    if agent.model_provider == crate::constants::ACTIVE_PROVIDER {
+                        None
+                    } else {
+                        let provider = dag
+                            .state
+                            .provider_for(&agent.model_provider)
+                            .ok_or_else(|| HubError::ProviderUnavailable {
+                                provider: agent.model_provider.clone(),
+                                step_id: *step_id,
+                                agent_name: agent.name.clone(),
+                            })?;
+                        Some(ExecutionEngine::new(provider))
+                    }
+                };
+                let effective_engine = step_engine.as_ref().unwrap_or(dag.engine);
+
+                let step_dag = DagContext {
+                    engine: effective_engine,
+                    ..*dag
+                };
+
+                match step.execution_mode.as_str() {
+                    "room" => execute_room_step(&step_dag, step, dag_state).await,
+                    "for_each" => {
+                        execute_for_each_step(&step_dag, step, &agent, dag_state).await
+                    }
+                    _ => execute_single_step(&step_dag, step, &agent, dag_state).await,
+                }
             }
-            step_result?;
-            spawn_summarizer_if_completed(dag.state, step.id, dag_state);
-            continue;
-        }
-
-        // Sub-workflow steps — execute child workflow from template, no agent needed
-        if step.execution_mode == "sub_workflow" {
-            let step_result = execute_sub_workflow_step(dag, step, dag_state).await;
-
-            if let Err(ref e) = step_result {
-                broadcast_step_failure_if_real(dag.state, dag.ctx, workflow_id, step, e);
-            }
-            step_result?;
-            spawn_summarizer_if_completed(dag.state, step.id, dag_state);
-            continue;
-        }
-
-        // Workforce steps — designer + sequential agent execution with deliverables
-        if step.execution_mode == "workforce" {
-            let step_result = execute_workforce_step(dag, step, dag_state).await;
-
-            if let Err(ref e) = step_result {
-                broadcast_step_failure_if_real(dag.state, dag.ctx, workflow_id, step, e);
-            }
-            step_result?;
-            spawn_summarizer_if_completed(dag.state, step.id, dag_state);
-            continue;
-        }
-
-        // Load agent (from snapshot if template-based, else from live DB)
-        let agent_id = step.agent_id.ok_or_else(|| {
-            HubError::Internal(anyhow::anyhow!(
-                "step {} has no agent_id for mode '{}'",
-                step_id,
-                step.execution_mode
-            ))
-        })?;
-        let agent = if let Some(snap) = &dag.ctx.snapshot {
-            snap.agents
-                .get(&agent_id)
-                .cloned()
-                .ok_or_else(|| HubError::AgentNotFound {
-                    step_id: *step_id,
-                    agent_id,
-                })?
-        } else {
-            dag.state
-                .repos()
-                .agents
-                .get_persisted_agent(agent_id)
-                .await
-                .map_err(|e| anyhow::anyhow!("failed to load agent: {}", e))?
-                .ok_or_else(|| HubError::AgentNotFound {
-                    step_id: *step_id,
-                    agent_id,
-                })?
-        };
-
-        // Resolve provider: empty → default engine, explicit name → named provider
-        let step_engine = if agent.model_provider.is_empty() {
-            None // Use default engine (ACTIVE_PROVIDER)
-        } else {
-            // Check runtime toggle for non-default providers
-            if agent.model_provider == "ollama" && !dag.state.is_ollama_enabled().await {
-                return Err(HubError::ProviderUnavailable {
-                    provider: agent.model_provider.clone(),
-                    step_id: *step_id,
-                    agent_name: agent.name.clone(),
-                });
-            }
-            // If the agent's provider matches the active default, reuse the default engine
-            if agent.model_provider == crate::constants::ACTIVE_PROVIDER {
-                None
-            } else {
-                let provider = dag
-                    .state
-                    .provider_for(&agent.model_provider)
-                    .ok_or_else(|| HubError::ProviderUnavailable {
-                        provider: agent.model_provider.clone(),
-                        step_id: *step_id,
-                        agent_name: agent.name.clone(),
-                    })?;
-                Some(ExecutionEngine::new(provider))
-            }
-        };
-        let effective_engine = step_engine.as_ref().unwrap_or(dag.engine);
-
-        // Build a step-local DagContext with the effective engine for provider overrides
-        let step_dag = DagContext {
-            engine: effective_engine,
-            ..*dag
-        };
-
-        let step_result = if step.execution_mode == "room" {
-            execute_room_step(&step_dag, step, dag_state).await
-        } else if step.execution_mode == "for_each" {
-            execute_for_each_step(&step_dag, step, &agent, dag_state).await
-        } else {
-            execute_single_step(&step_dag, step, &agent, dag_state).await
         };
 
         if let Err(ref e) = step_result {

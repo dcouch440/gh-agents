@@ -9,6 +9,7 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::db::traits::WorkflowRepo;
+use crate::server::tools::shared::{require_array, require_str};
 
 mod tests;
 
@@ -45,8 +46,9 @@ async fn execute_set_extraction_focus(
     repo: &dyn WorkflowRepo,
     ctx: &BeliefCaptureToolContext,
 ) -> Value {
-    let Some(guidance) = input["guidance"].as_str() else {
-        return json!({ "error": "Missing required parameter: guidance" });
+    let guidance = match require_str(input, "guidance") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     // Load existing plan to preserve other fields, or create new
@@ -84,8 +86,9 @@ async fn execute_set_tag_vocabulary(
     repo: &dyn WorkflowRepo,
     ctx: &BeliefCaptureToolContext,
 ) -> Value {
-    let Some(tags_arr) = input["tags"].as_array() else {
-        return json!({ "error": "Missing required parameter: tags (array)" });
+    let tags_arr = match require_array(input, "tags") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
     let tags: Vec<String> = tags_arr
         .iter()
@@ -126,8 +129,9 @@ async fn execute_set_contradiction_handling(
     repo: &dyn WorkflowRepo,
     ctx: &BeliefCaptureToolContext,
 ) -> Value {
-    let Some(mode) = input["mode"].as_str() else {
-        return json!({ "error": "Missing required parameter: mode" });
+    let mode = match require_str(input, "mode") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     if !VALID_CONTRADICTION_MODES.contains(&mode) {
@@ -174,8 +178,9 @@ async fn execute_set_confidence_threshold(
     repo: &dyn WorkflowRepo,
     ctx: &BeliefCaptureToolContext,
 ) -> Value {
-    let Some(threshold) = input["threshold"].as_str() else {
-        return json!({ "error": "Missing required parameter: threshold" });
+    let threshold = match require_str(input, "threshold") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     if !VALID_CONFIDENCE_THRESHOLDS.contains(&threshold) {

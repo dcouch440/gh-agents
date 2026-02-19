@@ -47,6 +47,42 @@ pub async fn log_token_usage(
         .await;
 }
 
+/// Complete an agent execution: log token usage + update status.
+///
+/// Handles optional state/user_id/ae_id gracefully (skips if None).
+/// When `parse_structured` is true, attempts to parse JSON from the response.
+pub async fn complete_agent_execution(
+    state: Option<&AppState>,
+    user_id: Option<Uuid>,
+    agent_execution_id: Option<Uuid>,
+    model_id: &str,
+    response: &str,
+    usage: &TokenUsage,
+    parse_structured: bool,
+) {
+    if let (Some(state), Some(uid)) = (state, user_id) {
+        log_token_usage(state, uid, agent_execution_id, model_id, usage).await;
+    }
+
+    if let (Some(state), Some(ae_id)) = (state, agent_execution_id) {
+        let structured = if parse_structured {
+            crate::server::hub::protocols::json_utils::parse_structured_output(response)
+        } else {
+            None
+        };
+        let _ = state
+            .repos()
+            .agent_executions
+            .update_agent_execution_status(
+                ae_id,
+                "completed",
+                Some(response.to_string()),
+                structured,
+            )
+            .await;
+    }
+}
+
 /// Approximate cost computation per model ($/1M tokens).
 /// Local models (Ollama) are free — returns $0.00.
 pub fn compute_cost(model_id: &str, input_tokens: i64, output_tokens: i64) -> f32 {

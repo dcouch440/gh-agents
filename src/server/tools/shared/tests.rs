@@ -1,10 +1,13 @@
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
     use uuid::Uuid;
 
     use crate::db::WorkflowStepRow;
 
-    use crate::server::tools::shared::classify_content_status;
+    use crate::server::tools::shared::{
+        classify_content_status, require_array, require_i64, require_str, require_uuid,
+    };
 
     fn make_step(mode: &str) -> WorkflowStepRow {
         WorkflowStepRow {
@@ -62,5 +65,77 @@ mod tests {
 
         assert_eq!(status, "populated");
         assert_eq!(preview.unwrap().len(), 500);
+    }
+
+    // =====================================================================
+    // Parameter extraction helpers
+    // =====================================================================
+
+    #[test]
+    fn require_str_returns_value_when_present() {
+        let input = json!({ "name": "Alice" });
+        assert_eq!(require_str(&input, "name").unwrap(), "Alice");
+    }
+
+    #[test]
+    fn require_str_returns_error_when_missing() {
+        let input = json!({});
+        let err = require_str(&input, "name").unwrap_err();
+        assert_eq!(err["error"], "Missing required parameter: name");
+    }
+
+    #[test]
+    fn require_str_returns_error_when_wrong_type() {
+        let input = json!({ "name": 42 });
+        let err = require_str(&input, "name").unwrap_err();
+        assert_eq!(err["error"], "Missing required parameter: name");
+    }
+
+    #[test]
+    fn require_array_returns_value_when_present() {
+        let input = json!({ "tags": ["a", "b"] });
+        let arr = require_array(&input, "tags").unwrap();
+        assert_eq!(arr.len(), 2);
+    }
+
+    #[test]
+    fn require_array_returns_error_when_missing() {
+        let input = json!({});
+        let err = require_array(&input, "tags").unwrap_err();
+        assert_eq!(err["error"], "Missing required parameter: tags (array)");
+    }
+
+    #[test]
+    fn require_i64_returns_value_when_present() {
+        let input = json!({ "count": 42 });
+        assert_eq!(require_i64(&input, "count").unwrap(), 42);
+    }
+
+    #[test]
+    fn require_i64_returns_error_when_missing() {
+        let input = json!({});
+        let err = require_i64(&input, "count").unwrap_err();
+        assert_eq!(err["error"], "Missing required parameter: count");
+    }
+
+    #[test]
+    fn require_uuid_returns_value_when_valid() {
+        let id = Uuid::new_v4();
+        let input = json!({ "id": id.to_string() });
+        assert_eq!(require_uuid(&input, "id").unwrap(), id);
+    }
+
+    #[test]
+    fn require_uuid_returns_error_when_missing() {
+        let input = json!({});
+        let err = require_uuid(&input, "id").unwrap_err();
+        assert_eq!(err["error"], "Missing required parameter: id");
+    }
+
+    #[test]
+    fn require_uuid_returns_error_when_invalid() {
+        let input = json!({ "id": "not-a-uuid" });
+        let err = require_uuid(&input, "id").unwrap_err();
+        assert_eq!(err["error"], "Invalid UUID: not-a-uuid");
     }
 }

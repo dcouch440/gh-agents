@@ -12,7 +12,6 @@ use uuid::Uuid;
 
 use crate::llm::{Message, TokenUsage, Tool};
 use crate::server::hub::error::HubError;
-use crate::server::hub::protocols::json_utils::parse_structured_output;
 use crate::server::hub::strategies;
 use crate::server::hub::strategy::ExecutionStrategy;
 use crate::server::state::AppState;
@@ -102,34 +101,16 @@ impl ExecutionStrategy for AgentDesignerStrategy {
     }
 
     async fn on_complete(&self, response: &str, usage: &TokenUsage) -> Result<(), HubError> {
-        // Log token usage to ledger
-        if let (Some(state), Some(uid)) = (self.state(), self.user_id()) {
-            strategies::log_token_usage(
-                state,
-                uid,
-                self.agent_execution_id(),
-                self.model_id(),
-                usage,
-            )
-            .await;
-        }
-
-        // Update agent_execution with final status and output
-        if let (Some(state), Some(ae_id)) =
-            (self.config.state.as_ref(), self.config.agent_execution_id)
-        {
-            let ae_repo = &state.repos().agent_executions;
-            let structured = parse_structured_output(response);
-            let _ = ae_repo
-                .update_agent_execution_status(
-                    ae_id,
-                    "completed",
-                    Some(response.to_string()),
-                    structured,
-                )
-                .await;
-        }
-
+        strategies::complete_agent_execution(
+            self.config.state.as_ref(),
+            self.user_id(),
+            self.config.agent_execution_id,
+            self.model_id(),
+            response,
+            usage,
+            true,
+        )
+        .await;
         Ok(())
     }
 }

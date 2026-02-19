@@ -228,18 +228,9 @@ pub(super) async fn execute_sub_workflow_step(
             .unwrap_or_default(),
     };
 
-    let envelope_json = serde_json::to_string(&envelope).unwrap_or_default();
-    dag_state.record_step_output(step.id, output, envelope.clone());
-    let _ = super::versioning::snapshot_content(
-        &*dag.state.repos().content_versions,
-        dag.ctx.run_id,
-        step.id,
-        step.id,
-        super::versioning::content_types::ENVELOPE,
-        "output",
-        &envelope_json,
-    )
-    .await;
+    // Record output + snapshot envelope for run history
+    super::utils::record_and_snapshot_output(dag, dag_state, step.id, output, envelope.clone())
+        .await;
 
     // 15. Broadcast parent step completed or failed
     if envelope.status == ExecutionStatus::Success {
