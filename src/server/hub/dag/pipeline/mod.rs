@@ -1,13 +1,22 @@
-//! Workforce step execution within the DAG.
+//! Pipeline step execution within the DAG.
 //!
-//! When the DAG encounters a step with `execution_mode = "workforce"`, this
-//! module loads the mission brief and agent roster, runs the Agent Designer
-//! pre-lifecycle to generate optimized prompts, then executes each roster
-//! agent with designed prompts (parallel within levels, sequential across).
+//! A pipeline step owns a child workflow (via `child_workflow_id`) whose steps
+//! are executed as a unit. Two execution paths:
+//!
+//! - **Designed pipeline** (child workflow has a Designer step): Runs the Agent
+//!   Designer pre-lifecycle to generate optimized prompts, then executes each
+//!   roster agent with designed prompts (parallel within levels, sequential
+//!   across levels).
+//!
+//! - **Static pipeline** (no Designer step): Runs the child workflow through
+//!   the standard DAG loop. Each child step executes according to its own
+//!   `execution_mode`, agent, and prompt configuration. Used for protocol-driven
+//!   or manually-configured pipelines.
 
 mod agent_executor;
 mod designer;
 mod output;
+mod static_exec;
 mod tests;
 mod types;
 
@@ -44,12 +53,49 @@ use agent_executor::execute_agent_levels;
 use designer::run_designer_phase;
 use types::WorkforceStepEnv;
 
-/// Execute a workforce step within the DAG.
+/// Execute a pipeline step within the DAG.
 ///
-/// Loads the mission brief, agent roster, and deliverables, runs the Agent
-/// Designer pre-lifecycle, then executes each roster agent sequentially.
-/// The combined output includes agent results and deliverable metadata.
-pub(super) async fn execute_workforce_step(
+/// Loads child workflow steps, detects whether a Designer step exists,
+/// and dispatches to the appropriate execution path.
+pub(super) async fn execute_pipeline_step(
+    dag: &DagContext<'_>,
+    step: &WorkflowStepRow,
+    dag_state: &mut DagExecutionState,
+) -> Result<(), HubError> {
+    let child_workflow_id = step.child_workflow_id.ok_or_else(|| {
+        HubError::Internal(anyhow!(
+            "pipeline step {} has no child_workflow_id",
+            step.id
+        ))
+    })?;
+
+    // Load child workflow steps to detect Designer
+    let child_steps = dag
+        .state
+        .repos()
+        .workflows
+        .list_steps(child_workflow_id)
+        .await
+        .map_err(|e| HubError::Internal(anyhow!("failed to load pipeline steps: {}", e)))?;
+
+    let has_designer = child_steps.iter().any(|s| s.is_designer_step);
+
+    if has_designer {
+        // Designed pipeline: run designer pre-phase + level-based agent execution.
+        execute_designed_pipeline(dag, step, dag_state).await
+    } else {
+        // Static pipeline: run child workflow through the standard DAG loop.
+        static_exec::execute_static_pipeline(dag, step, dag_state, child_workflow_id, &child_steps)
+            .await
+    }
+}
+
+/// Execute a designed pipeline step (with Designer + roster).
+///
+/// Loads the mission brief, agent roster, runs the Agent Designer
+/// pre-lifecycle, then executes each roster agent (parallel within levels,
+/// sequential across levels).
+async fn execute_designed_pipeline(
     dag: &DagContext<'_>,
     step: &WorkflowStepRow,
     dag_state: &mut DagExecutionState,
@@ -78,7 +124,7 @@ pub(super) async fn execute_workforce_step(
         .await
         .map_err(|e| HubError::Internal(anyhow!("failed to load mission brief: {}", e)))?
         .ok_or_else(|| {
-            HubError::Internal(anyhow!("workforce step {} has no mission brief", step.id))
+            HubError::Internal(anyhow!("pipeline step {} has no mission brief", step.id))
         })?;
 
     // 3. Load agent roster (sorted by execution_order)
@@ -92,7 +138,7 @@ pub(super) async fn execute_workforce_step(
 
     if roster.is_empty() {
         return Err(HubError::Internal(anyhow!(
-            "workforce step {} has empty agent roster",
+            "pipeline step {} has empty agent roster",
             step.id
         )));
     }
@@ -102,7 +148,7 @@ pub(super) async fn execute_workforce_step(
         task = %brief.task_description,
         agents = roster.len(),
         failure_mode = %brief.failure_mode,
-        "Starting workforce step execution"
+        "Starting designed pipeline execution"
     );
 
     // 4. Resolve port inputs
@@ -139,7 +185,7 @@ pub(super) async fn execute_workforce_step(
     let managed_container = create_optional_container(
         dag.ctx.container_config.as_ref(),
         dag.ctx.wg_client.as_deref(),
-        "workforce",
+        "pipeline",
     )
     .await?;
 
@@ -241,7 +287,7 @@ pub(super) async fn execute_workforce_step(
         tokens_in = step_in_tokens,
         tokens_out = step_out_tokens,
         duration_ms = step_start.elapsed().as_millis(),
-        "Workforce step execution completed"
+        "Designed pipeline execution completed"
     );
 
     Ok(())

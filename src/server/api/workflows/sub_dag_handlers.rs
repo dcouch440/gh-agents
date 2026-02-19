@@ -141,7 +141,7 @@ pub async fn get_step_sub_dag(
             // Fallback: infer from execution_mode
             match step.execution_mode.as_str() {
                 "workforce" => Some("workforce".to_string()),
-                // documenter removed — workforce is the only protocol archetype
+                // documenter removed — workforce/pipeline are protocol archetypes
                 _ => None,
             }
         });

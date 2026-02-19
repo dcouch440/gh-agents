@@ -1,18 +1,19 @@
 //! Tool execution handlers for the workforce archetype.
 //!
-//! Unifies task force (agent roster) and documenter (deliverables) into
-//! a single archetype. Each agent becomes a sub-workflow step in a child
-//! workflow attached to the workforce node. A Designer step is auto-managed
-//! (created with the first agent, removed with the last).
+//! Each agent becomes a pipeline step in a child workflow attached to the
+//! workforce node. A Designer step is auto-managed via the pipeline service.
+//! Workforce tools orchestrate: roster management (workforce-specific) +
+//! pipeline CRUD (delegated to the pipeline service).
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 
 use chrono::Utc;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::db::traits::{CreateWorkflowInput, WorkflowRepo};
-use crate::db::{TaskMissionBriefRow, WorkflowStepEdgeRow};
+use crate::db::traits::WorkflowRepo;
+use crate::db::TaskMissionBriefRow;
+use crate::server::services::pipeline::{self, AddStepInput, PipelineContext, UpdateStepInput};
 use crate::server::tools::shared::{require_array, require_str, require_uuid};
 
 mod tests;
@@ -53,6 +54,27 @@ pub async fn execute_workforce_tool(
 // Helpers
 // =========================================================================
 
+/// Build a `PipelineContext` from the workforce tool context.
+fn pipeline_ctx(ctx: &WorkforceToolContext) -> PipelineContext {
+    PipelineContext {
+        parent_step_id: ctx.step_id,
+        parent_workflow_id: ctx.workflow_id,
+    }
+}
+
+/// Resolve user_id from the parent workflow.
+async fn resolve_user_id(
+    repo: &dyn WorkflowRepo,
+    ctx: &WorkforceToolContext,
+) -> Result<Uuid, Value> {
+    let workflow = repo
+        .get_workflow(ctx.workflow_id)
+        .await
+        .map_err(|e| json!({ "error": format!("Failed to load workflow: {}", e) }))?
+        .ok_or_else(|| json!({ "error": "Parent workflow not found" }))?;
+    Ok(workflow.user_id)
+}
+
 /// Ensure a mission brief exists for this step, creating one if needed.
 async fn ensure_mission_brief(
     repo: &dyn WorkflowRepo,
@@ -71,187 +93,7 @@ async fn ensure_mission_brief(
     }
 }
 
-/// Ensure a child workflow exists for this workforce step.
-/// Creates one if needed and updates the step's `child_workflow_id`.
-async fn ensure_child_workflow(
-    repo: &dyn WorkflowRepo,
-    ctx: &WorkforceToolContext,
-) -> Result<Uuid, Value> {
-    let step = repo
-        .get_step(ctx.step_id)
-        .await
-        .map_err(|e| json!({ "error": format!("Failed to load step: {}", e) }))?
-        .ok_or_else(|| json!({ "error": "Step not found" }))?;
-
-    if let Some(child_workflow_id) = step.child_workflow_id {
-        return Ok(child_workflow_id);
-    }
-
-    let parent_workflow = repo
-        .get_workflow(ctx.workflow_id)
-        .await
-        .map_err(|e| json!({ "error": format!("Failed to load workflow: {}", e) }))?
-        .ok_or_else(|| json!({ "error": "Parent workflow not found" }))?;
-
-    let step_name = step.name.clone().unwrap_or_else(|| "Workforce".to_string());
-    let child_workflow = repo
-        .create_workflow(CreateWorkflowInput {
-            user_id: parent_workflow.user_id,
-            name: format!("{} (child)", step_name),
-            description: String::new(),
-            container_enabled: false,
-            target_repo_url: None,
-            target_branch: None,
-            vpn_enabled: false,
-        })
-        .await
-        .map_err(|e| json!({ "error": format!("Failed to create child workflow: {}", e) }))?;
-
-    let mut updated_step = step;
-    updated_step.child_workflow_id = Some(child_workflow.id);
-    repo.update_step(updated_step)
-        .await
-        .map_err(|e| json!({ "error": format!("Failed to link child workflow: {}", e) }))?;
-
-    Ok(child_workflow.id)
-}
-
-/// Create the auto-managed Designer step in the child workflow.
-async fn create_designer_step(
-    repo: &dyn WorkflowRepo,
-    child_workflow_id: Uuid,
-) -> Result<crate::db::WorkflowStepRow, Value> {
-    let step = crate::db::WorkflowStepRow {
-        id: Uuid::new_v4(),
-        workflow_id: child_workflow_id,
-        agent_id: None,
-        execution_mode: "single".to_string(),
-        agent_execution_mode: None,
-        for_each_ref: None,
-        prompt_template_id: None,
-        prompt_template: String::new(),
-        output_schema_id: None,
-        output_variable_name: Some("designer_output".to_string()),
-        interactive_agent_id: None,
-        for_each_label_field: None,
-        room_id: None,
-        routing_mode: None,
-        routing_field: None,
-        display_order: 0,
-        version: 1,
-        reasoning_trace: false,
-        verification_agent_ids: None,
-        position_x: Some(0.0),
-        position_y: Some(0.0),
-        width: None,
-        height: None,
-        name: Some("Designer".to_string()),
-        system_prompt_suffix: None,
-        visible: true,
-        description: "Auto-managed Designer step".to_string(),
-        board_context_cache: String::new(),
-        board_context_updated_at: None,
-        goal_summary: String::new(),
-        goal_summary_updated_at: None,
-        sub_workflow_template_id: None,
-        child_workflow_id: None,
-        is_designer_step: true,
-        pinned: false,
-        run_results_summary: String::new(),
-    };
-
-    repo.create_step(step)
-        .await
-        .map_err(|e| json!({ "error": format!("Failed to create Designer step: {}", e) }))
-}
-
-/// Remove the Designer step from the child workflow.
-async fn remove_designer_step(
-    repo: &dyn WorkflowRepo,
-    child_workflow_id: Uuid,
-) -> Result<(), Value> {
-    let steps = repo
-        .list_steps(child_workflow_id)
-        .await
-        .map_err(|e| json!({ "error": format!("Failed to list steps: {}", e) }))?;
-
-    if let Some(designer) = steps.iter().find(|s| s.is_designer_step) {
-        let edges = repo
-            .list_edges(child_workflow_id)
-            .await
-            .map_err(|e| json!({ "error": format!("Failed to list edges: {}", e) }))?;
-
-        for edge in &edges {
-            if edge.from_step_id == designer.id || edge.to_step_id == designer.id {
-                repo.remove_edge(edge.from_step_id, edge.to_step_id)
-                    .await
-                    .map_err(|e| json!({ "error": format!("Failed to remove edge: {}", e) }))?;
-            }
-        }
-
-        repo.delete_step(designer.id)
-            .await
-            .map_err(|e| json!({ "error": format!("Failed to delete Designer step: {}", e) }))?;
-    }
-
-    Ok(())
-}
-
-/// Build a child workflow step for an agent.
-fn build_agent_child_step(
-    child_workflow_id: Uuid,
-    name: &str,
-    role: &str,
-    display_order: i32,
-) -> crate::db::WorkflowStepRow {
-    crate::db::WorkflowStepRow {
-        id: Uuid::new_v4(),
-        workflow_id: child_workflow_id,
-        agent_id: None,
-        execution_mode: "single".to_string(),
-        agent_execution_mode: None,
-        for_each_ref: None,
-        prompt_template_id: None,
-        prompt_template: String::new(),
-        output_schema_id: None,
-        output_variable_name: Some(crate::server::hub::dag::dag_state::to_snake_case(name)),
-        interactive_agent_id: None,
-        for_each_label_field: None,
-        room_id: None,
-        routing_mode: None,
-        routing_field: None,
-        display_order,
-        version: 1,
-        reasoning_trace: false,
-        verification_agent_ids: None,
-        position_x: Some(display_order as f64 * 200.0),
-        position_y: Some(0.0),
-        width: None,
-        height: None,
-        name: Some(name.to_string()),
-        system_prompt_suffix: None,
-        visible: true,
-        description: role.to_string(),
-        board_context_cache: String::new(),
-        board_context_updated_at: None,
-        goal_summary: String::new(),
-        goal_summary_updated_at: None,
-        sub_workflow_template_id: None,
-        child_workflow_id: None,
-        is_designer_step: false,
-        pinned: false,
-        run_results_summary: String::new(),
-    }
-}
-
-// =========================================================================
-// Tool Handlers — Mission Brief & Roster (shared with task_force pattern)
-// =========================================================================
-
 /// Read-preserve-write helper for mission brief fields.
-///
-/// Loads the existing brief (if any), merges in provided overrides, and upserts.
-/// Fields set to `None` keep their existing (or default) values.
 async fn upsert_mission_brief_field(
     repo: &dyn WorkflowRepo,
     step_id: Uuid,
@@ -286,6 +128,145 @@ async fn upsert_mission_brief_field(
         .await
         .map_err(|e| e.to_string())
 }
+
+/// Normalize an agent name for matching (case-insensitive, strip separators).
+fn normalize_name(name: &str) -> String {
+    name.chars()
+        .filter(|c| *c != ' ' && *c != '_' && *c != '-')
+        .flat_map(|c| c.to_lowercase())
+        .collect()
+}
+
+/// Find a roster agent by normalized name match.
+fn find_agent_by_name<'a>(
+    roster: &'a [crate::db::TaskAgentRosterRow],
+    name: &str,
+) -> Option<&'a crate::db::TaskAgentRosterRow> {
+    let normalized = normalize_name(name);
+    roster
+        .iter()
+        .find(|a| normalize_name(&a.name) == normalized)
+}
+
+/// Recompute execution_order for all roster agents from the dependency graph.
+///
+/// Uses Kahn's algorithm with a min-heap (tie-break by current execution_order
+/// for stability). Updates the DB and returns the ordered agent list for
+/// inclusion in tool responses.
+async fn recompute_execution_order(
+    repo: &dyn WorkflowRepo,
+    ctx: &WorkforceToolContext,
+) -> Result<Vec<Value>, Value> {
+    use std::cmp::Reverse;
+    use std::collections::BinaryHeap;
+
+    let brief = match repo.get_mission_brief(ctx.step_id).await {
+        Ok(Some(b)) => b,
+        Ok(None) => return Ok(vec![]),
+        Err(e) => return Err(json!({ "error": e.to_string() })),
+    };
+    let roster = repo
+        .list_agent_roster(brief.id)
+        .await
+        .map_err(|e| json!({ "error": e.to_string() }))?;
+    if roster.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let step = match repo.get_step(ctx.step_id).await {
+        Ok(Some(s)) => s,
+        Ok(None) => {
+            return Ok(roster
+                .iter()
+                .map(|a| json!({"name": a.name, "order": a.execution_order}))
+                .collect())
+        }
+        Err(e) => return Err(json!({ "error": e.to_string() })),
+    };
+    let child_workflow_id = match step.child_workflow_id {
+        Some(id) => id,
+        None => {
+            return Ok(roster
+                .iter()
+                .map(|a| json!({"name": a.name, "order": a.execution_order}))
+                .collect())
+        }
+    };
+
+    let edges = repo.list_edges(child_workflow_id).await.unwrap_or_default();
+
+    // Build child_step_id → roster index lookup
+    let step_to_roster: HashMap<Uuid, usize> = roster
+        .iter()
+        .enumerate()
+        .filter_map(|(i, a)| a.child_step_id.map(|sid| (sid, i)))
+        .collect();
+
+    // Filter to agent-to-agent edges only (exclude Designer → agent edges)
+    let agent_step_ids: HashSet<Uuid> = step_to_roster.keys().copied().collect();
+    let mut in_degree = vec![0usize; roster.len()];
+    let mut dependents: Vec<Vec<usize>> = vec![vec![]; roster.len()];
+
+    for edge in &edges {
+        if let (Some(&from_ri), Some(&to_ri)) = (
+            step_to_roster.get(&edge.from_step_id),
+            step_to_roster.get(&edge.to_step_id),
+        ) {
+            if agent_step_ids.contains(&edge.from_step_id)
+                && agent_step_ids.contains(&edge.to_step_id)
+            {
+                in_degree[to_ri] += 1;
+                dependents[from_ri].push(to_ri);
+            }
+        }
+    }
+
+    // Kahn's with min-heap (tie-break by current execution_order for stability)
+    let mut heap: BinaryHeap<Reverse<(i32, usize)>> = BinaryHeap::new();
+    for (i, &deg) in in_degree.iter().enumerate() {
+        if deg == 0 {
+            heap.push(Reverse((roster[i].execution_order, i)));
+        }
+    }
+
+    let mut sorted: Vec<usize> = Vec::with_capacity(roster.len());
+    while let Some(Reverse((_, ri))) = heap.pop() {
+        sorted.push(ri);
+        for &dep_ri in &dependents[ri] {
+            in_degree[dep_ri] -= 1;
+            if in_degree[dep_ri] == 0 {
+                heap.push(Reverse((roster[dep_ri].execution_order, dep_ri)));
+            }
+        }
+    }
+
+    // Update DB for agents whose order changed
+    let mut result = Vec::with_capacity(sorted.len());
+    for (new_order, &ri) in sorted.iter().enumerate() {
+        let agent = &roster[ri];
+        let new_order_i32 = new_order as i32;
+        if agent.execution_order != new_order_i32 {
+            let _ = repo
+                .update_roster_agent_order(agent.id, new_order_i32)
+                .await;
+        }
+        result.push(json!({"name": agent.name, "order": new_order_i32}));
+    }
+
+    // Include any agents not in sorted (shouldn't happen, but safety)
+    let sorted_set: HashSet<usize> = sorted.iter().copied().collect();
+    for (i, agent) in roster.iter().enumerate() {
+        if !sorted_set.contains(&i) {
+            result.push(json!({"name": agent.name, "order": agent.execution_order}));
+        }
+    }
+
+    Ok(result)
+}
+
+// =========================================================================
+// Tool Handlers — Mission Brief & Roster
+// =========================================================================
 
 async fn execute_set_task(
     input: &Value,
@@ -326,61 +307,46 @@ async fn execute_add_agent(
         })
         .unwrap_or_default();
 
-    // Ensure brief exists
+    // 1. Ensure brief exists (workforce-specific)
     let brief_id = match ensure_mission_brief(repo, ctx).await {
         Ok(id) => id,
         Err(e) => return e,
     };
 
-    // Ensure child workflow exists
-    let child_workflow_id = match ensure_child_workflow(repo, ctx).await {
+    // 2. Resolve user_id for pipeline creation
+    let user_id = match resolve_user_id(repo, ctx).await {
         Ok(id) => id,
         Err(e) => return e,
     };
 
-    // Get existing roster
+    // 3. Get existing roster for next_order
     let roster = repo.list_agent_roster(brief_id).await.unwrap_or_default();
     let next_order = roster.iter().map(|a| a.execution_order).max().unwrap_or(-1) + 1;
-    let is_first_agent = roster.is_empty();
 
-    // Create Designer if first agent
-    let designer_step = if is_first_agent {
-        match create_designer_step(repo, child_workflow_id).await {
-            Ok(s) => Some(s),
-            Err(e) => return e,
-        }
-    } else {
-        None
-    };
-
-    // Create child workflow step for the agent
-    let child_step = build_agent_child_step(child_workflow_id, name, role, next_order + 1);
-    let child_step = match repo.create_step(child_step).await {
-        Ok(s) => s,
-        Err(e) => return json!({ "error": format!("Failed to create child step: {}", e) }),
-    };
-
-    // Wire edge: Designer → new agent (fan-out, not linear chain)
-    let designer_id = if let Some(ref designer) = designer_step {
-        designer.id
-    } else {
-        // Find existing Designer step in child workflow
-        let child_steps = repo.list_steps(child_workflow_id).await.unwrap_or_default();
-        match child_steps.iter().find(|s| s.is_designer_step) {
-            Some(s) => s.id,
-            None => {
-                return json!({ "error": "Designer step not found in child workflow" });
-            }
-        }
-    };
-    if let Err(e) = repo
-        .add_edge(child_workflow_id, designer_id, child_step.id)
-        .await
+    // 4. Add step via pipeline service (handles: create pipeline + designer + step + edge)
+    let pip_ctx = pipeline_ctx(ctx);
+    let (step_added, _) = match pipeline::add_step(
+        repo,
+        &pip_ctx,
+        user_id,
+        AddStepInput {
+            name: name.to_string(),
+            description: role.to_string(),
+            execution_mode: "single".to_string(),
+            agent_id: None,
+            prompt_template: None,
+            output_variable_name: None,
+            display_order: Some(next_order + 1),
+        },
+        true, // include designer
+    )
+    .await
     {
-        return json!({ "error": format!("Failed to wire Designer edge: {}", e) });
-    }
+        Ok(result) => result,
+        Err(e) => return json!({ "error": format!("Pipeline error: {}", e) }),
+    };
 
-    // Create roster entry
+    // 5. Create roster entry (workforce-specific)
     let roster_agent = match repo
         .add_roster_agent(brief_id, name, role, &capabilities, next_order)
         .await
@@ -389,15 +355,15 @@ async fn execute_add_agent(
         Err(e) => return json!({ "error": e.to_string() }),
     };
 
-    // Link roster entry to child step
+    // 6. Link roster entry to pipeline step (workforce-specific bridge)
     if let Err(e) = repo
-        .link_roster_agent_to_child_step(roster_agent.id, Some(child_step.id))
+        .link_roster_agent_to_child_step(roster_agent.id, Some(step_added.step_id))
         .await
     {
         return json!({ "error": format!("Failed to link roster to child step: {}", e) });
     }
 
-    // Recompute execution order from dependency graph
+    // 7. Recompute roster execution order (workforce-specific)
     let execution_sequence = recompute_execution_order(repo, ctx)
         .await
         .unwrap_or_default();
@@ -407,7 +373,7 @@ async fn execute_add_agent(
         "name": roster_agent.name,
         "role": roster_agent.role_description,
         "capabilities": roster_agent.capabilities,
-        "child_step_id": child_step.id.to_string(),
+        "child_step_id": step_added.step_id.to_string(),
         "execution_sequence": execution_sequence,
     })
 }
@@ -417,8 +383,6 @@ async fn execute_update_agent(
     repo: &dyn WorkflowRepo,
     ctx: &WorkforceToolContext,
 ) -> Value {
-    let _ = ctx; // Used in the future for context; suppress unused warning
-
     let agent_id = match require_uuid(input, "agent_id") {
         Ok(v) => v,
         Err(e) => return e,
@@ -440,20 +404,21 @@ async fn execute_update_agent(
         Err(e) => return json!({ "error": e.to_string() }),
     };
 
-    // Also update the child step name/description if they changed
+    // Sync child step via pipeline service
     if let Some(child_step_id) = agent.child_step_id {
         if name.is_some() || role.is_some() {
-            if let Ok(Some(mut child_step)) = repo.get_step(child_step_id).await {
-                if let Some(ref new_name) = name {
-                    child_step.name = Some(new_name.clone());
-                    child_step.output_variable_name =
-                        Some(crate::server::hub::dag::dag_state::to_snake_case(new_name));
-                }
-                if let Some(ref new_role) = role {
-                    child_step.description = new_role.clone();
-                }
-                let _ = repo.update_step(child_step).await;
-            }
+            let pip_ctx = pipeline_ctx(ctx);
+            let _ = pipeline::update_step(
+                repo,
+                &pip_ctx,
+                child_step_id,
+                UpdateStepInput {
+                    name: name.clone(),
+                    description: role.clone(),
+                    ..Default::default()
+                },
+            )
+            .await;
         }
     }
 
@@ -489,21 +454,11 @@ async fn execute_remove_agent(
     };
     let agent_name = target.name.clone();
 
-    // Remove the child step and all its edges (no bridging — fan-in/fan-out topology)
+    // Remove the child step via pipeline service
     if let Some(child_step_id) = target.child_step_id {
-        let step = repo.get_step(ctx.step_id).await.ok().flatten();
-        if let Some(ref step) = step {
-            if let Some(child_workflow_id) = step.child_workflow_id {
-                let edges = repo.list_edges(child_workflow_id).await.unwrap_or_default();
-
-                for edge in &edges {
-                    if edge.from_step_id == child_step_id || edge.to_step_id == child_step_id {
-                        let _ = repo.remove_edge(edge.from_step_id, edge.to_step_id).await;
-                    }
-                }
-
-                let _ = repo.delete_step(child_step_id).await;
-            }
+        let pip_ctx = pipeline_ctx(ctx);
+        if let Err(e) = pipeline::remove_step(repo, &pip_ctx, child_step_id).await {
+            return json!({ "error": format!("Pipeline error: {}", e) });
         }
     }
 
@@ -512,23 +467,7 @@ async fn execute_remove_agent(
         return json!({ "error": e.to_string() });
     }
 
-    // If roster is now empty, remove Designer and clear child_workflow_id
-    let remaining = roster.len() - 1; // we already know we removed one
-    if remaining == 0 {
-        let step = repo.get_step(ctx.step_id).await.ok().flatten();
-        if let Some(ref step) = step {
-            if let Some(child_workflow_id) = step.child_workflow_id {
-                let _ = remove_designer_step(repo, child_workflow_id).await;
-            }
-        }
-        // Clear child_workflow_id on parent step
-        if let Some(mut step) = step {
-            step.child_workflow_id = None;
-            let _ = repo.update_step(step).await;
-        }
-    }
-
-    // Recompute execution order from dependency graph (closes gaps)
+    // Recompute roster execution order
     let execution_sequence = recompute_execution_order(repo, ctx)
         .await
         .unwrap_or_default();
@@ -721,57 +660,6 @@ async fn execute_remove_deliverable(
 // Tool Handlers — Agent Dependencies
 // =========================================================================
 
-/// Normalize an agent name for matching (case-insensitive, strip separators).
-fn normalize_name(name: &str) -> String {
-    name.chars()
-        .filter(|c| *c != ' ' && *c != '_' && *c != '-')
-        .flat_map(|c| c.to_lowercase())
-        .collect()
-}
-
-/// Find a roster agent by normalized name match.
-fn find_agent_by_name<'a>(
-    roster: &'a [crate::db::TaskAgentRosterRow],
-    name: &str,
-) -> Option<&'a crate::db::TaskAgentRosterRow> {
-    let normalized = normalize_name(name);
-    roster
-        .iter()
-        .find(|a| normalize_name(&a.name) == normalized)
-}
-
-/// Check if adding an edge from `from_step_id` to `to_step_id` would create a cycle.
-///
-/// Performs BFS from `to_step_id` following existing outgoing edges. If
-/// `from_step_id` is reachable, adding the proposed edge creates a cycle.
-fn would_create_cycle(from_step_id: Uuid, to_step_id: Uuid, edges: &[WorkflowStepEdgeRow]) -> bool {
-    let mut adjacency: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
-    for edge in edges {
-        adjacency
-            .entry(edge.from_step_id)
-            .or_default()
-            .push(edge.to_step_id);
-    }
-
-    let mut visited = HashSet::new();
-    let mut queue = VecDeque::new();
-    queue.push_back(to_step_id);
-
-    while let Some(current) = queue.pop_front() {
-        if current == from_step_id {
-            return true;
-        }
-        if !visited.insert(current) {
-            continue;
-        }
-        if let Some(neighbors) = adjacency.get(&current) {
-            queue.extend(neighbors);
-        }
-    }
-
-    false
-}
-
 async fn execute_set_dependency(
     input: &Value,
     repo: &dyn WorkflowRepo,
@@ -794,7 +682,7 @@ async fn execute_set_dependency(
     };
     let roster = repo.list_agent_roster(brief.id).await.unwrap_or_default();
 
-    // Resolve agent names
+    // Resolve agent names → child step IDs
     let from_agent = match find_agent_by_name(&roster, from_name) {
         Some(a) => a,
         None => return json!({ "error": format!("Agent '{}' not found in roster", from_name) }),
@@ -804,12 +692,10 @@ async fn execute_set_dependency(
         None => return json!({ "error": format!("Agent '{}' not found in roster", to_name) }),
     };
 
-    // Validate: no self-edges
     if from_agent.id == to_agent.id {
         return json!({ "error": "Cannot create a dependency from an agent to itself" });
     }
 
-    // Both must have child_step_id
     let from_child_step_id = match from_agent.child_step_id {
         Some(id) => id,
         None => return json!({ "error": format!("Agent '{}' has no child step", from_agent.name) }),
@@ -819,48 +705,31 @@ async fn execute_set_dependency(
         None => return json!({ "error": format!("Agent '{}' has no child step", to_agent.name) }),
     };
 
-    // Get child workflow
-    let step = match crate::server::tools::shared::load_step_or_error(repo, ctx.step_id).await {
-        Ok(s) => s,
-        Err(e) => return e,
-    };
-    let child_workflow_id = match step.child_workflow_id {
-        Some(id) => id,
-        None => return json!({ "error": "No child workflow exists" }),
-    };
-
-    // Check for duplicate edge
-    let edges = repo.list_edges(child_workflow_id).await.unwrap_or_default();
-    if edges
-        .iter()
-        .any(|e| e.from_step_id == from_child_step_id && e.to_step_id == to_child_step_id)
-    {
-        return json!({
-            "already_exists": true,
-            "from": from_agent.name,
-            "to": to_agent.name,
-        });
+    // Add edge via pipeline service (handles duplicate + cycle checks)
+    let pip_ctx = pipeline_ctx(ctx);
+    match pipeline::add_edge(repo, &pip_ctx, from_child_step_id, to_child_step_id).await {
+        Ok(_) => {}
+        Err(crate::server::services::ServiceError::Conflict(_)) => {
+            return json!({
+                "already_exists": true,
+                "from": from_agent.name,
+                "to": to_agent.name,
+            });
+        }
+        Err(crate::server::services::ServiceError::Validation(msg)) => {
+            return json!({
+                "error": format!(
+                    "Adding dependency {} \u{2192} {} would create a cycle: {}",
+                    from_agent.name, to_agent.name, msg
+                )
+            });
+        }
+        Err(e) => {
+            return json!({ "error": format!("Failed to create dependency: {}", e) });
+        }
     }
 
-    // Check for cycles
-    if would_create_cycle(from_child_step_id, to_child_step_id, &edges) {
-        return json!({
-            "error": format!(
-                "Adding dependency {} \u{2192} {} would create a cycle (there is already a path from {} to {})",
-                from_agent.name, to_agent.name, to_agent.name, from_agent.name
-            )
-        });
-    }
-
-    // Create the edge
-    if let Err(e) = repo
-        .add_edge(child_workflow_id, from_child_step_id, to_child_step_id)
-        .await
-    {
-        return json!({ "error": format!("Failed to create dependency: {}", e) });
-    }
-
-    // Recompute execution order from dependency graph
+    // Recompute roster execution order
     let execution_sequence = recompute_execution_order(repo, ctx)
         .await
         .unwrap_or_default();
@@ -895,7 +764,6 @@ async fn execute_remove_dependency(
     };
     let roster = repo.list_agent_roster(brief.id).await.unwrap_or_default();
 
-    // Resolve agent names
     let from_agent = match find_agent_by_name(&roster, from_name) {
         Some(a) => a,
         None => return json!({ "error": format!("Agent '{}' not found in roster", from_name) }),
@@ -914,12 +782,14 @@ async fn execute_remove_dependency(
         None => return json!({ "error": format!("Agent '{}' has no child step", to_agent.name) }),
     };
 
-    // Remove the edge
-    if let Err(e) = repo.remove_edge(from_child_step_id, to_child_step_id).await {
+    // Remove edge via pipeline service
+    let pip_ctx = pipeline_ctx(ctx);
+    if let Err(e) = pipeline::remove_edge(repo, &pip_ctx, from_child_step_id, to_child_step_id).await
+    {
         return json!({ "error": format!("Failed to remove dependency: {}", e) });
     }
 
-    // Recompute execution order from dependency graph
+    // Recompute roster execution order
     let execution_sequence = recompute_execution_order(repo, ctx)
         .await
         .unwrap_or_default();
@@ -930,127 +800,6 @@ async fn execute_remove_dependency(
         "to": to_agent.name,
         "execution_sequence": execution_sequence,
     })
-}
-
-// =========================================================================
-// Topology Recomputation
-// =========================================================================
-
-/// Recompute execution_order for all roster agents from the dependency graph.
-///
-/// Uses Kahn's algorithm with a min-heap (tie-break by current execution_order
-/// for stability). Updates the DB and returns the ordered agent list for
-/// inclusion in tool responses.
-async fn recompute_execution_order(
-    repo: &dyn WorkflowRepo,
-    ctx: &WorkforceToolContext,
-) -> Result<Vec<Value>, Value> {
-    use std::cmp::Reverse;
-    use std::collections::BinaryHeap;
-
-    let brief = match repo.get_mission_brief(ctx.step_id).await {
-        Ok(Some(b)) => b,
-        Ok(None) => return Ok(vec![]),
-        Err(e) => return Err(json!({ "error": e.to_string() })),
-    };
-    let roster = repo
-        .list_agent_roster(brief.id)
-        .await
-        .map_err(|e| json!({ "error": e.to_string() }))?;
-    if roster.is_empty() {
-        return Ok(vec![]);
-    }
-
-    let step = match repo.get_step(ctx.step_id).await {
-        Ok(Some(s)) => s,
-        Ok(None) => {
-            return Ok(roster
-                .iter()
-                .map(|a| json!({"name": a.name, "order": a.execution_order}))
-                .collect())
-        }
-        Err(e) => return Err(json!({ "error": e.to_string() })),
-    };
-    let child_workflow_id = match step.child_workflow_id {
-        Some(id) => id,
-        None => {
-            return Ok(roster
-                .iter()
-                .map(|a| json!({"name": a.name, "order": a.execution_order}))
-                .collect())
-        }
-    };
-
-    let edges = repo.list_edges(child_workflow_id).await.unwrap_or_default();
-
-    // Build child_step_id → roster index lookup
-    let step_to_roster: HashMap<Uuid, usize> = roster
-        .iter()
-        .enumerate()
-        .filter_map(|(i, a)| a.child_step_id.map(|sid| (sid, i)))
-        .collect();
-
-    // Filter to agent-to-agent edges only (exclude Designer → agent edges)
-    let agent_step_ids: HashSet<Uuid> = step_to_roster.keys().copied().collect();
-    let mut in_degree = vec![0usize; roster.len()];
-    let mut dependents: Vec<Vec<usize>> = vec![vec![]; roster.len()];
-
-    for edge in &edges {
-        if let (Some(&from_ri), Some(&to_ri)) = (
-            step_to_roster.get(&edge.from_step_id),
-            step_to_roster.get(&edge.to_step_id),
-        ) {
-            // Both endpoints are roster agents (not Designer)
-            if agent_step_ids.contains(&edge.from_step_id)
-                && agent_step_ids.contains(&edge.to_step_id)
-            {
-                in_degree[to_ri] += 1;
-                dependents[from_ri].push(to_ri);
-            }
-        }
-    }
-
-    // Kahn's with min-heap (tie-break by current execution_order for stability)
-    let mut heap: BinaryHeap<Reverse<(i32, usize)>> = BinaryHeap::new();
-    for (i, &deg) in in_degree.iter().enumerate() {
-        if deg == 0 {
-            heap.push(Reverse((roster[i].execution_order, i)));
-        }
-    }
-
-    let mut sorted: Vec<usize> = Vec::with_capacity(roster.len());
-    while let Some(Reverse((_, ri))) = heap.pop() {
-        sorted.push(ri);
-        for &dep_ri in &dependents[ri] {
-            in_degree[dep_ri] -= 1;
-            if in_degree[dep_ri] == 0 {
-                heap.push(Reverse((roster[dep_ri].execution_order, dep_ri)));
-            }
-        }
-    }
-
-    // Update DB for agents whose order changed
-    let mut result = Vec::with_capacity(sorted.len());
-    for (new_order, &ri) in sorted.iter().enumerate() {
-        let agent = &roster[ri];
-        let new_order_i32 = new_order as i32;
-        if agent.execution_order != new_order_i32 {
-            let _ = repo
-                .update_roster_agent_order(agent.id, new_order_i32)
-                .await;
-        }
-        result.push(json!({"name": agent.name, "order": new_order_i32}));
-    }
-
-    // Include any agents not in sorted (shouldn't happen, but safety)
-    let sorted_set: HashSet<usize> = sorted.iter().copied().collect();
-    for (i, agent) in roster.iter().enumerate() {
-        if !sorted_set.contains(&i) {
-            result.push(json!({"name": agent.name, "order": agent.execution_order}));
-        }
-    }
-
-    Ok(result)
 }
 
 // =========================================================================

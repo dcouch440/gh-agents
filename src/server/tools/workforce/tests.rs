@@ -208,6 +208,9 @@ mod tests {
         // recompute_execution_order: list_edges for child workflow
         repo.expect_list_edges().returning(|_| Ok(vec![]));
 
+        // Pipeline service: recompute_execution_order calls list_steps
+        repo.expect_list_steps().returning(|_| Ok(vec![]));
+
         let input = json!({
             "name": "Scanner",
             "role": "Scan codebase",
@@ -253,6 +256,10 @@ mod tests {
         let step_clone = step.clone();
         repo.expect_get_step()
             .returning(move |_| Ok(Some(step_clone.clone())));
+
+        // resolve_user_id
+        repo.expect_get_workflow()
+            .returning(move |_| Ok(Some(make_workflow(wf_id, Uuid::new_v4()))));
 
         let existing_agent_clone = existing_agent.clone();
         repo.expect_list_agent_roster()
@@ -434,6 +441,11 @@ mod tests {
             }])
         });
 
+        // Pipeline service: remove_step checks remaining steps + recompute
+        let remaining = make_step(Uuid::new_v4(), child_wf_id, "single");
+        repo.expect_list_steps()
+            .returning(move |_| Ok(vec![remaining.clone()]));
+
         // Remove edges only — no add_edge (no bridging)
         repo.expect_remove_edge().returning(|_, _| Ok(()));
         repo.expect_delete_step().returning(|_| Ok(()));
@@ -499,6 +511,9 @@ mod tests {
 
         // No existing edges between agents
         repo.expect_list_edges().returning(|_| Ok(vec![]));
+
+        // Pipeline service: recompute_execution_order calls list_steps
+        repo.expect_list_steps().returning(|_| Ok(vec![]));
 
         // Expect edge creation: Scanner → Analyzer
         repo.expect_add_edge()
@@ -774,6 +789,9 @@ mod tests {
             }])
         });
 
+        // Pipeline service: recompute_execution_order calls list_steps
+        repo.expect_list_steps().returning(|_| Ok(vec![]));
+
         repo.expect_add_edge()
             .withf(move |_, from, to| *from == a_child && *to == c_child)
             .returning(|wid, from, to| {
@@ -835,6 +853,9 @@ mod tests {
 
         // recompute_execution_order: list_edges (edge was just removed)
         repo.expect_list_edges().returning(|_| Ok(vec![]));
+
+        // Pipeline service: recompute_execution_order calls list_steps
+        repo.expect_list_steps().returning(|_| Ok(vec![]));
 
         let input = json!({ "from_agent": "Scanner", "to_agent": "Analyzer" });
         let result = execute_workforce_tool("remove_dependency", &input, &repo, &ctx).await;
