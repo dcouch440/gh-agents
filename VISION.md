@@ -151,18 +151,20 @@ The one new summarizer. After a node completes execution, Haiku summarizes what 
 
 ### What It Does
 
-- **Scope:** Per-node, injected into directly connected downstream nodes only (one hop). Upstream nodes do not receive downstream run context — data flows forward, not backward.
+- **Scope:** Per-node, injected into the node's own assistant AND directly connected downstream nodes (one hop). Upstream nodes do not receive downstream run context — data flows forward, not backward.
 - **Purpose:** "Here's what this node produces when it runs" — a forward-looking reference for what the data looks like coming through
 - **Trigger:** Fires after a node completes execution (success or failure)
 - **Output:** Compact summary of the node's output — shape, content, key data points. Stored on the step row (new column).
-- **Injection:** Connected downstream nodes' assistant system prompts as read-only reference context via `<run_context>`
+- **Injection:** The node's own assistant system prompt (so it can discuss its own results with the user) AND connected downstream nodes' assistant system prompts, both as read-only reference context via `<run_context>`
 - **Pattern:** Same `tokio::spawn` fire-and-forget background task pattern as existing board overview and chat beliefs summarizers
 
 ### Critical Distinction
 
-The run results summary is NOT something the assistant writes to its notes. It is injected as read-only reference context. The assistant sees it and understands what upstream nodes produce — the shape of the data, the content, the constraints — without having been told by the user. It uses this as a reference for what is GOING to happen when the workflow runs. It's forward-looking, not retrospective.
+The run results summary is NOT something the assistant writes to its notes. It is injected as read-only reference context. The assistant sees it and understands what its own node and upstream nodes produce — the shape of the data, the content, the constraints — without having been told by the user. It uses this as a reference for what is GOING to happen when the workflow runs. It's forward-looking, not retrospective.
 
-This means when a user is workshopping node B, the assistant can say: "Based on what node A produces, you'll want your synthesis agent to expect an array of findings with severity fields" — because the run results summary is in its system prompt.
+A node's own assistant receives its own run results summary so it can participate in post-run conversations. When the user says "that run looked good but the output was missing severity scores," the assistant already knows what the output looked like — it doesn't need the user to explain.
+
+For downstream nodes, this means when a user is workshopping node B, the assistant can say: "Based on what node A produces, you'll want your synthesis agent to expect an array of findings with severity fields" — because node A's run results summary is in B's system prompt.
 
 When the run results change (user tweaks node A, re-runs it), the summary is regenerated and node B's assistant automatically has the updated picture next time the user chats with it.
 
