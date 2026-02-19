@@ -3,11 +3,9 @@ mod tests {
     //! Integration tests for the DAG executor.
     //!
     //! Unit tests for specific modules live in colocated test files:
-    //! - Chain detection → `for_each/tests.rs`
-    //! - Room output extraction → `room_step/tests.rs`
     //! - resolve_output_key / to_snake_case → `dag_state/tests.rs`
 
-    use super::super::{resolve_for_each_array, resolve_variables, topological_sort};
+    use super::super::{resolve_variables, topological_sort};
     use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
     use serde_json::Value as JsonValue;
     use std::collections::HashMap;
@@ -102,34 +100,6 @@ mod tests {
     fn resolve_variables_unresolved_left_as_is() {
         let result = resolve_variables("Hello {unknown}!", &HashMap::new(), &HashMap::new());
         assert_eq!(result, "Hello {unknown}!");
-    }
-
-    // =========================================================================
-    // For-Each Array Resolution
-    // =========================================================================
-
-    #[test]
-    fn resolve_for_each_array_basic() {
-        let mut outputs = HashMap::new();
-        outputs.insert(
-            "items".to_string(),
-            serde_json::json!([{"name": "a"}, {"name": "b"}]),
-        );
-
-        let arr = resolve_for_each_array("items", &outputs, &HashMap::new()).unwrap();
-        assert_eq!(arr.len(), 2);
-    }
-
-    #[test]
-    fn resolve_for_each_array_nested() {
-        let mut outputs = HashMap::new();
-        outputs.insert(
-            "result".to_string(),
-            serde_json::json!({"data": {"items": [1, 2, 3]}}),
-        );
-
-        let arr = resolve_for_each_array("result.data.items", &outputs, &HashMap::new()).unwrap();
-        assert_eq!(arr.len(), 3);
     }
 
     // =========================================================================
@@ -358,27 +328,6 @@ mod tests {
             workflow_id: Uuid::new_v4(),
             agent_id: Some(agent_id),
             prompt_template: prompt.into(),
-            output_variable_name: var_name.map(|s| s.into()),
-            display_order: order,
-            ..Default::default()
-        }
-    }
-
-    fn make_for_each_integration_step(
-        id: Uuid,
-        agent_id: Uuid,
-        for_each_ref: &str,
-        var_name: Option<&str>,
-        order: i32,
-    ) -> WorkflowStepRow {
-        WorkflowStepRow {
-            id,
-            workflow_id: Uuid::new_v4(),
-            agent_id: Some(agent_id),
-            execution_mode: "for_each".into(),
-            agent_execution_mode: Some("parallel".into()),
-            for_each_ref: Some(for_each_ref.into()),
-            prompt_template: "Process item".into(),
             output_variable_name: var_name.map(|s| s.into()),
             display_order: order,
             ..Default::default()
@@ -804,52 +753,6 @@ mod tests {
         assert!(matches!(result, Err(HubError::Cancelled)));
     }
 
-    #[tokio::test]
-    async fn for_each_step_iterates_array() {
-        let agent_id = Uuid::new_v4();
-        let s1 = Uuid::new_v4();
-        let s2 = Uuid::new_v4();
-
-        let provider = Arc::new(SequentialProvider {
-            responses: vec![
-                // Step 1: returns a JSON array
-                make_llm_response(r#"[{"item":"a"},{"item":"b"},{"item":"c"}]"#, 10, 5),
-                // Step 2 iterations: each returns a simple object
-                make_llm_response(r#"{"processed":"ok"}"#, 8, 4),
-            ],
-            call_count: AtomicU32::new(0),
-        });
-        let harness = build_test_harness(agent_id, provider);
-        let ctx = make_ctx();
-
-        let steps = vec![
-            make_integration_step(s1, agent_id, "Generate items", Some("items"), 0),
-            make_for_each_integration_step(s2, agent_id, "items", Some("processed"), 1),
-        ];
-        let edges = vec![make_edge(s1, s2)];
-
-        let result = execute_workflow_via_engine(
-            &harness.engine,
-            &harness.state,
-            &ctx,
-            &steps,
-            &edges,
-            None,
-        )
-        .await
-        .unwrap();
-
-        assert_eq!(result.outputs.len(), 2);
-        // Outputs are keyed by step UUID
-        assert!(result.outputs.contains_key(&s1.to_string()));
-        assert!(result.outputs.contains_key(&s2.to_string()));
-        // 1 call for step 1 + 3 calls for step 2 (3 items)
-        // Step 1: 10 input, 5 output
-        // Step 2: 3 * 8 input = 24, 3 * 4 output = 12
-        assert_eq!(result.total_input_tokens, 34);
-        assert_eq!(result.total_output_tokens, 17);
-    }
-
     // ---------------------------------------------------------------------------
     // Pinned Step Tests
     // ---------------------------------------------------------------------------
@@ -1155,37 +1058,5 @@ mod tests {
         assert_eq!(result.total_input_tokens, 10);
         assert_eq!(result.total_output_tokens, 5);
         assert_eq!(result.outputs.len(), 3);
-    }
-
-    #[tokio::test]
-    async fn for_each_not_array_returns_error() {
-        let agent_id = Uuid::new_v4();
-        let s1 = Uuid::new_v4();
-        let s2 = Uuid::new_v4();
-
-        // Step 1 returns a plain string, not a JSON array
-        let provider = Arc::new(FixedProvider {
-            response: make_llm_response("just a string, not an array", 10, 5),
-        });
-        let harness = build_test_harness(agent_id, provider);
-        let ctx = make_ctx();
-
-        let steps = vec![
-            make_integration_step(s1, agent_id, "Generate", Some("items"), 0),
-            make_for_each_integration_step(s2, agent_id, "items", Some("processed"), 1),
-        ];
-        let edges = vec![make_edge(s1, s2)];
-
-        let result = execute_workflow_via_engine(
-            &harness.engine,
-            &harness.state,
-            &ctx,
-            &steps,
-            &edges,
-            None,
-        )
-        .await;
-
-        assert!(matches!(result, Err(HubError::ForEachNotArray { .. })));
     }
 }

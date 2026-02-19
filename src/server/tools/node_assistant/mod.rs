@@ -19,7 +19,7 @@ pub struct StepToolContext {
 }
 
 /// Valid archetype values that map to execution_mode.
-const VALID_ARCHETYPES: &[&str] = &["belief_capture", "room", "workforce"];
+const VALID_ARCHETYPES: &[&str] = &["workforce"];
 
 /// Execute a universal node assistant tool by name.
 pub async fn execute_node_assistant_tool(

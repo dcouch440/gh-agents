@@ -208,12 +208,6 @@ pub enum WorkflowEventKind {
         step_id: Uuid,
         step_name: String,
     },
-    ForEachProgress {
-        step_id: Uuid,
-        step_name: String,
-        completed: usize,
-        total: usize,
-    },
     /// Workforce agent execution progress (started, completed, failed).
     WorkforceAgentProgress {
         step_id: Uuid,
@@ -227,13 +221,6 @@ pub enum WorkflowEventKind {
     WorkforceDesignerProgress {
         step_id: Uuid,
         status: String,
-    },
-    BeliefExtractionProgress {
-        step_id: Uuid,
-        source_step_name: String,
-        sources_completed: usize,
-        sources_total: usize,
-        beliefs_extracted: usize,
     },
     Completed {
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -349,10 +336,8 @@ impl WorkflowEvent {
             WorkflowEventKind::StepCompleted { .. } => "step_completed",
             WorkflowEventKind::StepFailed { .. } => "step_failed",
             WorkflowEventKind::StepPaused { .. } => "step_paused",
-            WorkflowEventKind::ForEachProgress { .. } => "for_each_progress",
             WorkflowEventKind::WorkforceAgentProgress { .. } => "workforce_agent_progress",
             WorkflowEventKind::WorkforceDesignerProgress { .. } => "workforce_designer_progress",
-            WorkflowEventKind::BeliefExtractionProgress { .. } => "belief_extraction_progress",
             WorkflowEventKind::Completed { .. } => "completed",
             WorkflowEventKind::Failed { .. } => "failed",
             WorkflowEventKind::Resumed { .. } => "resumed",

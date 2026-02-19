@@ -72,7 +72,6 @@ pub(super) async fn execute_single_step(
         &repos,
         &dag_state.var_outputs,
         &dag.ctx.prior_outputs,
-        None,
         port_inputs.as_ref(),
     )
     .await;

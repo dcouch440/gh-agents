@@ -176,7 +176,6 @@ async fn execute_designed_pipeline(
         &repos,
         &dag_state.var_outputs,
         &dag.ctx.prior_outputs,
-        None,
         port_inputs.as_ref(),
     )
     .await;

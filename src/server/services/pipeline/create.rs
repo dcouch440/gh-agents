@@ -34,10 +34,7 @@ pub async fn create_pipeline(
         });
     }
 
-    let step_name = step
-        .name
-        .clone()
-        .unwrap_or_else(|| "Pipeline".to_string());
+    let step_name = step.name.clone().unwrap_or_else(|| "Pipeline".to_string());
 
     let child_workflow = repo
         .create_workflow(CreateWorkflowInput {

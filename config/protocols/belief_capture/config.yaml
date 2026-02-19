@@ -1,7 +1,0 @@
-agents:
-  extractor:
-    model_id: "tier:3"
-    max_tokens: 8192
-    temperature: 0.2
-    max_rounds: 1
-    context_budget: 200000

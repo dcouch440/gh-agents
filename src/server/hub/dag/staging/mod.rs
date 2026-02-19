@@ -18,13 +18,10 @@ use crate::server::hub::error::HubError;
 use crate::server::state::AppState;
 use crate::types::{ExecutionStatus, StepExecutionEnvelope};
 
-use super::belief_capture::execute_belief_capture_step;
 use super::dag_state::{
     resolve_output_key, wrap_in_agentless_envelope, DagContext, DagExecutionState, PortMetadata,
 };
-use super::for_each::execute_for_each_step;
 use super::pipeline::execute_pipeline_step;
-use super::room_step::execute_room_step;
 use super::single::execute_single_step;
 use super::utils::{check_step_readiness, StepOutput, StepReadiness, WorkflowExecutionContext};
 use super::versioning;
@@ -241,16 +238,12 @@ pub(crate) async fn execute_staged_step(
     };
 
     // Agentless modes — dispatch to existing executors
-    if matches!(step.execution_mode.as_str(), "belief_capture" | "workforce") {
+    if step.execution_mode == "workforce" {
         let pre_tokens_in = dag_state.total_input_tokens;
         let pre_tokens_out = dag_state.total_output_tokens;
         let pre_cost = dag_state.total_cost_usd;
 
-        match step.execution_mode.as_str() {
-            "belief_capture" => execute_belief_capture_step(&dag, step, dag_state).await?,
-            "workforce" => execute_pipeline_step(&dag, step, dag_state).await?,
-            _ => unreachable!(),
-        };
+        execute_pipeline_step(&dag, step, dag_state).await?;
 
         let output = dag_state
             .completed
@@ -313,13 +306,7 @@ pub(crate) async fn execute_staged_step(
     let pre_tokens_out = dag_state.total_output_tokens;
     let pre_cost = dag_state.total_cost_usd;
 
-    if step.execution_mode == "room" {
-        execute_room_step(&step_dag, step, dag_state).await?;
-    } else if step.execution_mode == "for_each" {
-        execute_for_each_step(&step_dag, step, &agent, dag_state).await?;
-    } else {
-        execute_single_step(&step_dag, step, &agent, dag_state).await?;
-    }
+    execute_single_step(&step_dag, step, &agent, dag_state).await?;
 
     let output = dag_state
         .completed

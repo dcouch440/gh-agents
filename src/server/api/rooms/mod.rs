@@ -227,88 +227,18 @@ pub async fn get_room_session(
 
 /// POST /api/room-sessions/:id/messages - Send a message to a room session.
 ///
-/// Triggers a full room turn: gatekeeper (if enabled) selects speakers,
-/// each speaker executes via the engine, responses stream via WebSocket.
-/// Returns immediately with turn status.
+/// Room turn execution is temporarily disabled while the meeting protocol is
+/// being redesigned. CRUD operations (rooms, members, sessions) remain available.
 pub async fn send_room_message(
-    State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
-    Path(session_id): Path<Uuid>,
-    Json(request): Json<RoomMessageRequest>,
+    State(_state): State<AppState>,
+    _auth: auth_utils::AuthUser,
+    Path(_session_id): Path<Uuid>,
+    Json(_request): Json<RoomMessageRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    if request.content.trim().is_empty() {
-        return Err(AppError::bad_request("Message content cannot be empty"));
-    }
-
-    let room_repo = &state.repos().rooms;
-
-    // Load session
-    let session = room_repo
-        .get_room_session(session_id)
-        .await?
-        .ok_or(AppError::not_found("RoomSession"))?;
-
-    if session.status != "active" {
-        return Err(AppError::Conflict("Room session is not active".to_string()));
-    }
-
-    // Load room
-    let room = room_repo
-        .get_room(session.room_id)
-        .await?
-        .ok_or(AppError::not_found("Room"))?;
-
-    // Load members + agents
-    let member_rows = room_repo.list_room_members(room.id).await?;
-
-    let mut members = Vec::new();
-    for m in member_rows {
-        let agent = state
-            .repos()
-            .agents
-            .get_persisted_agent(m.agent_id)
-            .await?
-            .ok_or(AppError::Internal(format!(
-                "Agent {} not found for room member",
-                m.agent_id
-            )))?;
-        members.push(crate::server::executors::room::RoomMemberWithAgent { member: m, agent });
-    }
-
-    // Get LLM provider from state registry
-    let provider: std::sync::Arc<dyn crate::llm::LLMProvider + Send + Sync> = state
-        .provider()
-        .cloned()
-        .ok_or_else(|| AppError::ServiceUnavailable("LLM provider not configured".to_string()))?;
-
-    // Spawn background task to execute the turn
-    let room_clone = room.clone();
-    let session_clone = session.clone();
-    let state_clone = state.clone();
-    let user_message = request.content.clone();
-    let user_id = auth.user_id.0;
-    tokio::spawn(async move {
-        if let Err(e) = crate::server::executors::room::execute_room_turn(
-            &state_clone,
-            provider,
-            &room_clone,
-            &session_clone,
-            &members,
-            &user_message,
-            user_id,
-            None,
-            None, // No designer prompts for API-driven turns
-        )
-        .await
-        {
-            eprintln!("Room turn execution error: {}", e);
-        }
-    });
-
-    Ok(Json(serde_json::json!({
-        "status": "processing",
-        "session_id": session_id,
-    })))
+    Err(AppError::ServiceUnavailable(
+        "Room execution is being rebuilt as the meeting protocol. CRUD operations remain available."
+            .to_string(),
+    ))
 }
 
 /// GET /api/room-sessions/:id/transcript - Get room transcript.

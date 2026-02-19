@@ -212,20 +212,6 @@ mod tests {
     }
 
     #[test]
-    fn resolve_chat_step_tools_room_keeps_direct_tools() {
-        let tools = super::super::resolve_chat_step_tools("room");
-        let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
-
-        assert!(names.contains(&"set_meeting_purpose"));
-        assert!(names.contains(&"add_member"));
-        assert!(names.contains(&"dispatch"));
-
-        // Node mutation tools are dispatch-only
-        assert!(!names.contains(&"set_node_name"));
-        assert!(!names.contains(&"set_node_description"));
-    }
-
-    #[test]
     fn resolve_step_tools_workforce_still_has_mutation_tools() {
         // DispatchStrategy uses resolve_step_tools, not resolve_chat_step_tools
         let tools = super::super::resolve_step_tools("workforce");
@@ -238,7 +224,7 @@ mod tests {
     #[test]
     fn resolve_step_tools_includes_node_mutations_for_dispatch() {
         // DispatchStrategy uses resolve_step_tools — must include mutation tools
-        for mode in &["workforce", "belief_capture", "room", "single", ""] {
+        for mode in &["workforce", "single", ""] {
             let tools = super::super::resolve_step_tools(mode);
             let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
             assert!(
@@ -254,7 +240,7 @@ mod tests {
 
     #[test]
     fn resolve_step_tools_includes_update_notes_for_all_archetypes() {
-        for mode in &["workforce", "belief_capture", "room", "single", ""] {
+        for mode in &["workforce", "single", ""] {
             let tools = super::super::resolve_step_tools(mode);
             let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
             assert!(

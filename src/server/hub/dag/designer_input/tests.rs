@@ -4,7 +4,6 @@ mod tests {
 
     use uuid::Uuid;
 
-    use crate::db::BeliefRow;
     use crate::types::{ExecutionMetadata, StepExecutionEnvelope};
 
     use super::super::*;
@@ -23,34 +22,6 @@ mod tests {
                 model: Some("test-model".to_string()),
                 ..Default::default()
             },
-            ..Default::default()
-        }
-    }
-
-    fn make_room_member(name: &str, role: &str, perspective: &str) -> RoomDesignerMember {
-        RoomDesignerMember {
-            id: Uuid::new_v4().to_string(),
-            name: name.to_string(),
-            role: role.to_string(),
-            perspective: perspective.to_string(),
-        }
-    }
-
-    fn make_belief(content: &str, belief_type: &str, confidence: &str) -> BeliefRow {
-        BeliefRow {
-            id: Uuid::new_v4(),
-            workflow_id: Uuid::new_v4(),
-            workflow_execution_id: Some(Uuid::new_v4()),
-            source_step_id: Uuid::new_v4(),
-            source_phase: "research".to_string(),
-            content: content.to_string(),
-            reasoning: "Test reasoning".to_string(),
-            belief_type: belief_type.to_string(),
-            confidence: confidence.to_string(),
-            source_step_name: "Test Source".to_string(),
-            extraction_model: "test-model".to_string(),
-            extraction_tokens_in: 100,
-            extraction_tokens_out: 50,
             ..Default::default()
         }
     }
@@ -120,141 +91,6 @@ mod tests {
         let truncated = truncate_for_context(content, 4);
         assert!(truncated.len() <= 4);
         assert!(truncated.is_char_boundary(truncated.len()));
-    }
-
-    // ── Room formatter tests ─────────────────────────────────────────────────
-
-    #[test]
-    fn test_room_input_basic() {
-        let members = vec![
-            make_room_member(
-                "Alice",
-                "Security Architect",
-                "Evaluates for vulnerabilities",
-            ),
-            make_room_member("Bob", "Product Manager", "Ensures UX quality"),
-        ];
-
-        let input = room::build_room_designer_input(
-            "Security Review",
-            "moderated",
-            12,
-            &members,
-            &[],
-            &HashMap::new(),
-            &[],
-            None,
-        );
-
-        assert_eq!(input.archetype, "room");
-        assert_eq!(input.agents.len(), 2);
-        assert_eq!(input.agents[0].name, "Alice");
-        assert_eq!(input.agents[1].name, "Bob");
-        assert!(input.available_tools.is_empty());
-        assert!(input.archetype_guidance.contains("Security Review"));
-        assert!(input.archetype_guidance.contains("moderated"));
-        assert!(input.archetype_guidance.contains("12"));
-    }
-
-    #[test]
-    fn test_room_input_without_beliefs() {
-        let members = vec![make_room_member(
-            "Alice",
-            "Engineer",
-            "Technical perspective",
-        )];
-
-        let input = room::build_room_designer_input(
-            "Review",
-            "moderated",
-            12,
-            &members,
-            &[],
-            &HashMap::new(),
-            &[],
-            None,
-        );
-
-        assert!(!input.agents[0]
-            .additional_context
-            .contains("Beliefs extracted"));
-        assert!(input.agents[0]
-            .additional_context
-            .contains("Technical perspective"));
-    }
-
-    #[test]
-    fn test_room_input_with_beliefs() {
-        let members = vec![
-            make_room_member(
-                "Alice",
-                "Security Architect",
-                "Evaluates for vulnerabilities",
-            ),
-            make_room_member("Bob", "Product Manager", "Ensures UX quality"),
-        ];
-        let beliefs = vec![
-            make_belief(
-                "OAuth 2.0 PKCE flow is recommended for mobile clients",
-                "fact",
-                "high",
-            ),
-            make_belief("Rate limiting should be per-user", "decision", "high"),
-        ];
-
-        let input = room::build_room_designer_input(
-            "Security Review",
-            "moderated",
-            12,
-            &members,
-            &beliefs,
-            &HashMap::new(),
-            &[],
-            None,
-        );
-
-        // Both members should have beliefs in their additional_context
-        for agent in &input.agents {
-            assert!(agent.additional_context.contains("Beliefs extracted"));
-            assert!(agent.additional_context.contains("OAuth 2.0 PKCE"));
-            assert!(agent.additional_context.contains("Rate limiting"));
-        }
-    }
-
-    // ── Assistant notes injection tests ─────────────────────────────────────
-
-    #[test]
-    fn test_room_input_includes_perspectives() {
-        let members = vec![
-            make_room_member(
-                "Security Architect",
-                "Security",
-                "Evaluates for vulnerabilities and attack surfaces",
-            ),
-            make_room_member(
-                "Product Manager",
-                "Product",
-                "Ensures user experience quality",
-            ),
-        ];
-
-        let input = room::build_room_designer_input(
-            "Review",
-            "moderated",
-            12,
-            &members,
-            &[],
-            &HashMap::new(),
-            &[],
-            None,
-        );
-
-        assert!(input.agents[0]
-            .additional_context
-            .contains("Evaluates for vulnerabilities"));
-        assert!(input.agents[1]
-            .additional_context
-            .contains("Ensures user experience quality"));
     }
 
     // ── Workforce dependency tests ───────────────────────────────────────────
