@@ -6,6 +6,12 @@
 //!
 //! The scanner is debounced: rapid deletions accumulate in a `DashMap` on
 //! `AppState` and are processed as a single batch after a 2-second delay.
+//!
+//! **DISABLED**: The scanner is currently detached from all call sites. The
+//! dispatcher updates assistant notes asynchronously, so when the scanner runs
+//! after a deletion the notes may not yet reflect the changes — leading to
+//! false-positive stale-reference reports. Re-enable once note updates are
+//! guaranteed to land before the scan fires.
 
 use std::time::Duration;
 
