@@ -261,7 +261,7 @@ mod tests {
     }
 
     #[test]
-    fn build_request_body_includes_inline_citations() {
+    fn build_request_body_omits_include_field() {
         let client = GrokResearchClient::new(GrokConfig {
             api_key: "test".to_string(),
             base_url: "https://api.x.ai".to_string(),
@@ -274,10 +274,10 @@ mod tests {
         let req = ResearchRequest::new("test");
         let body = client.build_request_body(&req);
 
+        // The Responses API returns inline citations by default;
+        // sending `include` causes a 400 error.
         let serialized = serde_json::to_value(&body).unwrap();
-        let include = serialized["include"].as_array().unwrap();
-        assert_eq!(include.len(), 1);
-        assert_eq!(include[0], "inline_citations");
+        assert!(serialized.get("include").is_none());
     }
 
     #[test]
