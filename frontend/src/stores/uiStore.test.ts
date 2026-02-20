@@ -60,7 +60,7 @@ import type { UIState } from './uiStore'
 
 const resetStore = () => {
   uiStore.store.setState({
-    theme: 'light',
+    theme: 'linen',
     toasts: [],
     commandPaletteOpen: false,
   })
@@ -108,33 +108,28 @@ describe('uiStore', () => {
 
   describe('theme', () => {
     it('setTheme updates state and persists to localStorage', () => {
-      uiStore.setTheme('dark')
+      uiStore.setTheme('midnight')
 
-      expect(getState().theme).toBe('dark')
-      expect(mockStorage.setItem).toHaveBeenCalledWith('nexor_theme', 'dark')
+      expect(getState().theme).toBe('midnight')
+      expect(mockStorage.setItem).toHaveBeenCalledWith('nexor_theme', 'midnight')
     })
 
-    it('toggleTheme flips light to dark', () => {
-      uiStore.store.setState({ theme: 'light' })
+    it('cycleTheme advances linen → midnight → slate → linen', () => {
+      uiStore.store.setState({ theme: 'linen' })
 
-      uiStore.toggleTheme()
+      uiStore.cycleTheme()
+      expect(getState().theme).toBe('midnight')
 
-      expect(getState().theme).toBe('dark')
-      expect(mockStorage.setItem).toHaveBeenCalledWith('nexor_theme', 'dark')
-    })
+      uiStore.cycleTheme()
+      expect(getState().theme).toBe('slate')
 
-    it('toggleTheme flips dark to light', () => {
-      uiStore.store.setState({ theme: 'dark' })
-
-      uiStore.toggleTheme()
-
-      expect(getState().theme).toBe('light')
-      expect(mockStorage.setItem).toHaveBeenCalledWith('nexor_theme', 'light')
+      uiStore.cycleTheme()
+      expect(getState().theme).toBe('linen')
     })
 
     it('selectTheme returns current theme', () => {
-      uiStore.store.setState({ theme: 'dark' })
-      expect(uiStore.selectTheme(getState())).toBe('dark')
+      uiStore.store.setState({ theme: 'slate' })
+      expect(uiStore.selectTheme(getState())).toBe('slate')
     })
   })
 
@@ -237,7 +232,7 @@ describe('uiStore', () => {
 
   describe('initSystemThemeListener', () => {
     it('updates theme when no stored preference exists', () => {
-      uiStore.store.setState({ theme: 'light' })
+      uiStore.store.setState({ theme: 'linen' })
       const cleanup = uiStore.initSystemThemeListener()
 
       expect(mediaChangeHandler).not.toBeNull()
@@ -245,19 +240,19 @@ describe('uiStore', () => {
       // Simulate system preference changing to dark
       mediaChangeHandler!({ matches: true } as MediaQueryListEvent)
 
-      expect(getState().theme).toBe('dark')
+      expect(getState().theme).toBe('midnight')
 
       cleanup()
     })
 
     it('ignores system change when stored preference exists', () => {
-      mockStorage.store.set('nexor_theme', 'light')
-      uiStore.store.setState({ theme: 'light' })
+      mockStorage.store.set('nexor_theme', 'linen')
+      uiStore.store.setState({ theme: 'linen' })
       const cleanup = uiStore.initSystemThemeListener()
 
       mediaChangeHandler!({ matches: true } as MediaQueryListEvent)
 
-      expect(getState().theme).toBe('light')
+      expect(getState().theme).toBe('linen')
 
       cleanup()
     })

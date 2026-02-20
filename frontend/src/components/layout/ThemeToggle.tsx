@@ -2,21 +2,31 @@ import IconButton from '@mui/material/IconButton'
 import { Tooltip } from '@/components/primitives/Tooltip'
 import LightModeOutlined from '@mui/icons-material/LightModeOutlined'
 import DarkModeOutlined from '@mui/icons-material/DarkModeOutlined'
+import ContrastOutlined from '@mui/icons-material/ContrastOutlined'
 import { useThemeMode } from '@/hooks/useThemeMode'
 import { ANIMATION } from '@/constants'
+import { THEMES } from '@/theme'
+import type { ThemeId } from '@/theme'
 
 type ThemeToggleProps = {
   tooltipPlacement?: 'top' | 'bottom' | 'left' | 'right'
 }
 
+const THEME_ICONS: Record<ThemeId, typeof LightModeOutlined> = {
+  linen: LightModeOutlined,
+  midnight: DarkModeOutlined,
+  slate: ContrastOutlined,
+}
+
 function ThemeToggle({ tooltipPlacement = 'bottom' }: ThemeToggleProps) {
-  const { mode, toggleMode } = useThemeMode()
-  const isDark = mode === 'dark'
+  const { themeId, cycleTheme } = useThemeMode()
+  const Icon = THEME_ICONS[themeId]
+  const label = THEMES[themeId].label
 
   return (
-    <Tooltip title={isDark ? 'Switch to light mode' : 'Switch to dark mode'} placement={tooltipPlacement}>
+    <Tooltip title={label} placement={tooltipPlacement}>
       <IconButton
-        onClick={toggleMode}
+        onClick={cycleTheme}
         size="small"
         sx={{
           color: 'text.secondary',
@@ -27,7 +37,7 @@ function ThemeToggle({ tooltipPlacement = 'bottom' }: ThemeToggleProps) {
           },
         }}
       >
-        {isDark ? <LightModeOutlined fontSize="small" /> : <DarkModeOutlined fontSize="small" />}
+        <Icon fontSize="small" />
       </IconButton>
     </Tooltip>
   )

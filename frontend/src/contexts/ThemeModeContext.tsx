@@ -1,25 +1,26 @@
 import { createContext, useMemo, type ReactNode } from 'react'
 import { useStore } from '@/stores/lib'
 import { uiStore } from '@/stores/uiStore'
+import type { ThemeId } from '@/theme'
 
 type ThemeModeState = {
-  mode: 'light' | 'dark'
-  toggleMode: () => void
-  setMode: (mode: 'light' | 'dark') => void
+  themeId: ThemeId
+  setTheme: (id: ThemeId) => void
+  cycleTheme: () => void
 }
 
 const ThemeModeContext = createContext<ThemeModeState | null>(null)
 
 function ThemeModeProvider({ children }: { children: ReactNode }) {
-  const mode = useStore(uiStore.store, uiStore.selectTheme)
+  const themeId = useStore(uiStore.store, uiStore.selectTheme)
 
   const value = useMemo<ThemeModeState>(
     () => ({
-      mode,
-      toggleMode: uiStore.toggleTheme,
-      setMode: uiStore.setTheme,
+      themeId,
+      setTheme: uiStore.setTheme,
+      cycleTheme: uiStore.cycleTheme,
     }),
-    [mode],
+    [themeId],
   )
 
   return <ThemeModeContext.Provider value={value}>{children}</ThemeModeContext.Provider>

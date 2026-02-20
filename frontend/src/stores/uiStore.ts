@@ -4,10 +4,10 @@
 
 import { createStore, lsGet, lsSet } from './lib'
 import { LS_THEME } from '@/constants'
+import { isValidThemeId, DEFAULT_THEME_ID, THEME_IDS } from '@/theme'
+import type { ThemeId } from '@/theme'
 
 // ── Types ────────────────────────────────────────────────────────────────────
-
-type ThemeMode = 'light' | 'dark'
 
 type ToastType = 'success' | 'error' | 'warning' | 'info'
 
@@ -26,24 +26,27 @@ type AddToastOptions = {
 }
 
 type UIState = {
-  theme: ThemeMode
+  theme: ThemeId
   toasts: Toast[]
   commandPaletteOpen: boolean
 }
 
 // ── Initialization helpers ───────────────────────────────────────────────────
 
-const getSystemPreference = (): ThemeMode => {
+const getSystemPreference = (): ThemeId => {
   try {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'midnight' : 'linen'
   } catch {
-    return 'light'
+    return DEFAULT_THEME_ID
   }
 }
 
-const getInitialTheme = (): ThemeMode => {
+const getInitialTheme = (): ThemeId => {
   const stored = lsGet(LS_THEME)
-  if (stored === 'light' || stored === 'dark') return stored
+  if (stored !== null && isValidThemeId(stored)) return stored
+  // Migrate legacy values
+  if (stored === 'light') return 'linen'
+  if (stored === 'dark') return 'midnight'
   return getSystemPreference()
 }
 
@@ -62,7 +65,7 @@ const nextToastId = (): string => `toast-${++toastCounter}`
 
 // ── Selectors ────────────────────────────────────────────────────────────────
 
-const selectTheme = (s: UIState): ThemeMode => s.theme
+const selectTheme = (s: UIState): ThemeId => s.theme
 
 const selectToasts = (s: UIState): Toast[] => s.toasts
 
@@ -70,15 +73,17 @@ const selectCommandPaletteOpen = (s: UIState): boolean => s.commandPaletteOpen
 
 // ── Theme ────────────────────────────────────────────────────────────────────
 
-const setTheme = (mode: ThemeMode): void => {
-  store.setState({ theme: mode })
-  lsSet(LS_THEME, mode)
-  document.documentElement.setAttribute('data-theme', mode)
+const setTheme = (id: ThemeId): void => {
+  store.setState({ theme: id })
+  lsSet(LS_THEME, id)
+  document.documentElement.setAttribute('data-theme', id)
 }
 
-const toggleTheme = (): void => {
+const cycleTheme = (): void => {
   const current = store.getState().theme
-  setTheme(current === 'light' ? 'dark' : 'light')
+  const idx = THEME_IDS.indexOf(current)
+  const next = THEME_IDS[(idx + 1) % THEME_IDS.length]!
+  setTheme(next)
 }
 
 // ── Toasts ───────────────────────────────────────────────────────────────────
@@ -127,7 +132,7 @@ const initSystemThemeListener = (): (() => void) => {
   const handler = (e: MediaQueryListEvent) => {
     const stored = lsGet(LS_THEME)
     if (!stored) {
-      store.setState({ theme: e.matches ? 'dark' : 'light' })
+      store.setState({ theme: e.matches ? 'midnight' : 'linen' })
     }
   }
   mediaQuery.addEventListener('change', handler)
@@ -148,7 +153,7 @@ export const uiStore = {
   selectToasts,
   selectCommandPaletteOpen,
   setTheme,
-  toggleTheme,
+  cycleTheme,
   addToast,
   dismissToast,
   openCommandPalette,
@@ -157,4 +162,4 @@ export const uiStore = {
   initSystemThemeListener,
 }
 
-export type { UIState, ThemeMode, Toast, ToastType, AddToastOptions }
+export type { UIState, ThemeId, Toast, ToastType, AddToastOptions }

@@ -7,14 +7,15 @@ import { uiStore } from '@/stores/uiStore'
 // ── Test consumer ────────────────────────────────────────────────────────────
 
 function TestConsumer() {
-  const { mode, toggleMode, setMode } = useThemeMode()
+  const { themeId, cycleTheme, setTheme } = useThemeMode()
 
   return (
     <div>
-      <div data-testid="mode">{mode}</div>
-      <button onClick={toggleMode}>toggle</button>
-      <button onClick={() => setMode('light')}>set-light</button>
-      <button onClick={() => setMode('dark')}>set-dark</button>
+      <div data-testid="theme">{themeId}</div>
+      <button onClick={cycleTheme}>cycle</button>
+      <button onClick={() => setTheme('linen')}>set-linen</button>
+      <button onClick={() => setTheme('midnight')}>set-midnight</button>
+      <button onClick={() => setTheme('slate')}>set-slate</button>
     </div>
   )
 }
@@ -25,7 +26,7 @@ describe('ThemeModeContext', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     uiStore.store.setState({
-      theme: 'light',
+      theme: 'linen',
       toasts: [],
       commandPaletteOpen: false,
     })
@@ -33,7 +34,7 @@ describe('ThemeModeContext', () => {
 
   describe('ThemeModeProvider', () => {
     it('renders with current store theme', () => {
-      uiStore.store.setState({ theme: 'dark' })
+      uiStore.store.setState({ theme: 'midnight' })
 
       render(
         <ThemeModeProvider>
@@ -41,42 +42,48 @@ describe('ThemeModeContext', () => {
         </ThemeModeProvider>,
       )
 
-      expect(screen.getByTestId('mode')).toHaveTextContent('dark')
+      expect(screen.getByTestId('theme')).toHaveTextContent('midnight')
     })
 
-    it('defaults to light theme', () => {
+    it('defaults to linen theme', () => {
       render(
         <ThemeModeProvider>
           <TestConsumer />
         </ThemeModeProvider>,
       )
 
-      expect(screen.getByTestId('mode')).toHaveTextContent('light')
+      expect(screen.getByTestId('theme')).toHaveTextContent('linen')
     })
 
-    it('toggles between light and dark mode', () => {
+    it('cycles through themes: linen → midnight → slate → linen', () => {
       render(
         <ThemeModeProvider>
           <TestConsumer />
         </ThemeModeProvider>,
       )
 
-      expect(screen.getByTestId('mode')).toHaveTextContent('light')
+      expect(screen.getByTestId('theme')).toHaveTextContent('linen')
 
       act(() => {
-        screen.getByText('toggle').click()
+        screen.getByText('cycle').click()
       })
 
-      expect(screen.getByTestId('mode')).toHaveTextContent('dark')
+      expect(screen.getByTestId('theme')).toHaveTextContent('midnight')
 
       act(() => {
-        screen.getByText('toggle').click()
+        screen.getByText('cycle').click()
       })
 
-      expect(screen.getByTestId('mode')).toHaveTextContent('light')
+      expect(screen.getByTestId('theme')).toHaveTextContent('slate')
+
+      act(() => {
+        screen.getByText('cycle').click()
+      })
+
+      expect(screen.getByTestId('theme')).toHaveTextContent('linen')
     })
 
-    it('sets mode directly via setMode', () => {
+    it('sets theme directly via setTheme', () => {
       render(
         <ThemeModeProvider>
           <TestConsumer />
@@ -84,16 +91,22 @@ describe('ThemeModeContext', () => {
       )
 
       act(() => {
-        screen.getByText('set-dark').click()
+        screen.getByText('set-midnight').click()
       })
 
-      expect(screen.getByTestId('mode')).toHaveTextContent('dark')
+      expect(screen.getByTestId('theme')).toHaveTextContent('midnight')
 
       act(() => {
-        screen.getByText('set-light').click()
+        screen.getByText('set-slate').click()
       })
 
-      expect(screen.getByTestId('mode')).toHaveTextContent('light')
+      expect(screen.getByTestId('theme')).toHaveTextContent('slate')
+
+      act(() => {
+        screen.getByText('set-linen').click()
+      })
+
+      expect(screen.getByTestId('theme')).toHaveTextContent('linen')
     })
 
     it('throws when useThemeMode is used outside provider', () => {

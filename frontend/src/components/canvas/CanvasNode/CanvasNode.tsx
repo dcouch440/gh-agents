@@ -5,14 +5,14 @@ import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { useStore, canvasStore } from '@/stores'
 import { CanvasHandle } from '../CanvasHandle'
-import { STEP_TYPE_COLORS, CANVAS, DetailLevel } from '../constants'
+import { CANVAS, DetailLevel } from '../constants'
 import { HighlightMode } from '../canvasKinds'
 import { getNodeHighlightStyles } from '../nodeHighlightStyles'
 import { useProtocolHighlight } from '../useProtocolHighlight'
 import { useCanvasLOD } from '../useCanvasLOD'
 import { MinimalNodeShell } from '../MinimalNodeShell'
 import { nodeDataEqual } from '../mappers'
-import { VARIANT_CONFIGS, ARCHETYPE_CONFIGS, Archetype } from './registry'
+import { VARIANT_CONFIGS } from './registry'
 import type { CanvasNodeData, TabbedNodeData, AgentNodeData, EditorNodeData, CardNodeData, CompactNodeData } from './types'
 import { TabbedLayout, EditorLayout, CardLayout, CompactLayout } from './layouts'
 
@@ -23,16 +23,8 @@ function CanvasNodeComponent({ id, data, selected }: NodeProps) {
   const variantConfig = VARIANT_CONFIGS[nodeData.variant]
   const isAgent = nodeData.variant === 'agent'
 
-  // Resolve accent color — tabbed variants use archetype config, others use step type colors
-  const resolveRawAccent = (): string => {
-    if (isAgent) return ARCHETYPE_CONFIGS[Archetype.AGENT].color
-    if (nodeData.variant === 'workforce') return ARCHETYPE_CONFIGS[Archetype.WORKFORCE].color
-    if (nodeData.variant === 'room') return ARCHETYPE_CONFIGS[Archetype.ROOM].color
-    if (nodeData.variant === 'blank') return ARCHETYPE_CONFIGS[Archetype.BLANK].color
-    return STEP_TYPE_COLORS[nodeData.variant] ?? variantConfig.color
-  }
-  const rawAccent = resolveRawAccent()
-  const accentColor = theme.palette.mode === 'light' ? theme.palette.custom.accent : rawAccent
+  // Accent color — resolved per-theme, per-variant from the active theme's node palette
+  const accentColor = theme.palette.nodePalette[nodeData.variant]
 
   // Highlight
   const protocolHighlight = useProtocolHighlight(
@@ -57,6 +49,8 @@ function CanvasNodeComponent({ id, data, selected }: NodeProps) {
     highlightMode,
     themeMode: theme.palette.mode,
     variant: variantConfig.highlightVariant,
+    screenBorder: theme.palette.custom.screenBorder,
+    accentRing: theme.palette.custom.accentRing,
   })
 
   // --- Minimal LOD ---

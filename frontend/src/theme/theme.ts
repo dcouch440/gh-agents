@@ -1,17 +1,17 @@
 import { createTheme, type ThemeOptions } from '@mui/material/styles'
-import { getPalette } from './palette'
 import { typography } from './typography'
-import { getShadows } from './shadows'
 import { getComponents } from './components'
-import { getCustomTokens } from './customTokens'
+import { THEMES } from './themes'
+import type { ThemeId } from './themes'
 
-const createAppTheme = (mode: 'light' | 'dark') => {
+const createAppTheme = (themeId: ThemeId) => {
+  const def = THEMES[themeId]
   const options: ThemeOptions = {
-    palette: { ...getPalette(mode), custom: getCustomTokens(mode) },
+    palette: { ...def.palette, custom: def.custom, nodePalette: def.nodePalette },
     typography,
     shape: { borderRadius: 10 },
-    shadows: getShadows(mode),
-    components: getComponents(mode),
+    shadows: def.shadows,
+    components: getComponents(def.muiMode, def.custom),
   }
   return createTheme(options)
 }

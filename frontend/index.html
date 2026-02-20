@@ -3,17 +3,22 @@
   <head>
     <meta charset="UTF-8" />
 
-    <!-- Theme detection — must run before first paint (mirrors uiStore.ts:46-58) -->
+    <!-- Theme detection — must run before first paint (mirrors uiStore.ts) -->
     <script>
       (function() {
-        var t = 'dark';
+        var valid = { linen: 1, midnight: 1, slate: 1 };
+        var t = 'linen';
         try {
           var s = localStorage.getItem('nexor_theme');
-          if (s === 'light' || s === 'dark') t = s;
-          else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) t = 'light';
+          if (s && valid[s]) t = s;
+          // Migrate legacy values
+          else if (s === 'light') t = 'linen';
+          else if (s === 'dark') t = 'midnight';
+          else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) t = 'midnight';
         } catch(e) {}
         document.documentElement.setAttribute('data-theme', t);
-        document.documentElement.style.backgroundColor = t === 'dark' ? '#080c12' : '#F9F6F1';
+        var bg = { linen: '#F9F6F1', midnight: '#080c12', slate: '#1e2433' };
+        document.documentElement.style.backgroundColor = bg[t] || '#F9F6F1';
       })();
     </script>
 
@@ -22,19 +27,26 @@
       html, body { margin: 0; padding: 0; }
 
       /* Theme tokens — consumed by splash SVG and text */
-      html[data-theme="dark"] {
+      html[data-theme="midnight"] {
         --splash-bg: #080c12;
         --splash-gear-1: #3b82f6;
         --splash-gear-2: #2dd4bf;
         --splash-glow-opacity: 0.55;
         --splash-wordmark: #3b82f6;
       }
-      html[data-theme="light"] {
+      html[data-theme="linen"] {
         --splash-bg: #F9F6F1;
         --splash-gear-1: #FF964F;
         --splash-gear-2: #D47830;
         --splash-glow-opacity: 0.4;
         --splash-wordmark: #D47830;
+      }
+      html[data-theme="slate"] {
+        --splash-bg: #1e2433;
+        --splash-gear-1: #818cf8;
+        --splash-gear-2: #22d3ee;
+        --splash-glow-opacity: 0.5;
+        --splash-wordmark: #818cf8;
       }
 
       #nexor-splash {
@@ -105,12 +117,12 @@
       <svg class="nexor-gear" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <linearGradient id="gear-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#3b82f6" />
-            <stop offset="100%" stop-color="#2dd4bf" />
+            <stop offset="0%" stop-color="var(--splash-gear-1, #3b82f6)" />
+            <stop offset="100%" stop-color="var(--splash-gear-2, #2dd4bf)" />
           </linearGradient>
           <filter id="gear-glow" x="-50%" y="-50%" width="200%" height="200%">
             <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="blur" />
-            <feFlood flood-color="#3b82f6" flood-opacity="0.55" />
+            <feFlood flood-color="var(--splash-gear-1, #3b82f6)" flood-opacity="var(--splash-glow-opacity, 0.55)" />
             <feComposite in2="blur" operator="in" result="glow" />
             <feMerge>
               <feMergeNode in="glow" />
@@ -147,18 +159,6 @@
         </g>
       </svg>
       <div class="nexor-wordmark">nexor</div>
-      <script>
-        (function() {
-          var dark = document.documentElement.getAttribute('data-theme') !== 'light';
-          if (dark) return; // SVG defaults are already dark-themed
-          var stops = document.querySelectorAll('#gear-grad stop');
-          stops[0].setAttribute('stop-color', '#FF964F');
-          stops[1].setAttribute('stop-color', '#D47830');
-          var flood = document.querySelector('#gear-glow feFlood');
-          flood.setAttribute('flood-color', '#FF964F');
-          flood.setAttribute('flood-opacity', '0.4');
-        })();
-      </script>
     </div>
 
     <div id="root"></div>
