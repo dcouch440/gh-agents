@@ -1,8 +1,9 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
+import { useTheme } from '@mui/material/styles'
 import { PropertyRow, PropertySelect, AccentBarRow } from '@/components/primitives'
 import { DESIGN } from '@/constants'
-import { STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR } from '@/components/canvas/constants'
+import { GREYSCALE_ACCENT } from '@/components/canvas/constants'
 import { SECTION_LABEL_SX, SCHEMA_PREVIEW_SX } from './constants'
 import type { WorkflowStep } from '@/types/workflow'
 import type { OutputSchema } from '@/types/schema'
@@ -18,6 +19,8 @@ type OutputTabProps = {
 }
 
 function OutputTab({ step, readOnly, downstreamSteps, selectedSchema, schemaOptions, onSchemaChange }: OutputTabProps) {
+  const theme = useTheme()
+  const nodePalette = theme.palette.nodePalette
   return (
     <Box sx={{ flex: 1, overflow: 'auto' }}>
       {/* Outgoing connections */}
@@ -27,7 +30,7 @@ function OutputTab({ step, readOnly, downstreamSteps, selectedSchema, schemaOpti
           {downstreamSteps.map((s) => (
             <AccentBarRow
               key={s.id}
-              barColor={STEP_TYPE_COLORS[s.execution_mode] ?? DEFAULT_STEP_TYPE_COLOR}
+              barColor={(nodePalette as Record<string, string>)[s.execution_mode] ?? GREYSCALE_ACCENT}
               primary={s.name ?? 'Unnamed'}
               secondary={s.execution_mode}
             />

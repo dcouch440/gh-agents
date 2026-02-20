@@ -60,7 +60,8 @@ function WorkflowCanvasInner() {
 
   // Map store data to RF format
   const rfNodes = useMemo(() => toRFNodes(steps, lookups), [steps, lookups])
-  const rfEdges = useMemo(() => [...toRFEdges(edges, protocolGroups, protocolsByStepLookup, steps), ...toAgentEdges(steps, lookups)], [edges, protocolGroups, protocolsByStepLookup, steps, lookups])
+  const nodePalette = theme.palette.nodePalette
+  const rfEdges = useMemo(() => [...toRFEdges(edges, protocolGroups, protocolsByStepLookup, steps, nodePalette), ...toAgentEdges(steps, lookups, nodePalette)], [edges, protocolGroups, protocolsByStepLookup, steps, lookups, nodePalette])
 
   // Push store updates into RF — only touch data + position, never clobber selection
   useCanvasSync(rfNodes, rfEdges, setNodes, setEdges)
@@ -249,7 +250,7 @@ function WorkflowCanvasInner() {
         {minimapVisible && (
           <MiniMap
             nodeStrokeColor={theme.palette.primary.main}
-            nodeColor={theme.palette.background.paper}
+            nodeColor={theme.palette.custom.surfaceBg}
             nodeBorderRadius={8}
             maskColor={theme.palette.custom.minimapMask}
           />

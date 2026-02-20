@@ -1,25 +1,23 @@
 import type { Components, Theme } from '@mui/material/styles'
 import type { CustomTokens } from './customTokens'
 
-const getComponents = (mode: 'light' | 'dark', custom: CustomTokens): Components<Theme> => {
-  const isDark = mode === 'dark'
-
+const getComponents = (_mode: 'light' | 'dark', custom: CustomTokens): Components<Theme> => {
   return {
     MuiCssBaseline: {
       styleOverrides: {
         body: {
           '& ::selection': {
-            backgroundColor: isDark ? 'rgba(59, 130, 246, 0.3)' : 'rgba(90, 138, 110, 0.25)',
+            backgroundColor: `${custom.accent}40`,
             color: 'inherit',
           },
-          scrollbarColor: isDark ? `#3a3f4b ${custom.screenBg}` : `#BFB3A3 ${custom.screenBg}`,
+          scrollbarColor: `${custom.textFaint} ${custom.screenBg}`,
           '&::-webkit-scrollbar, & *::-webkit-scrollbar': {
             width: 6,
             height: 6,
           },
           '&::-webkit-scrollbar-thumb, & *::-webkit-scrollbar-thumb': {
             borderRadius: 6,
-            backgroundColor: isDark ? '#3a3f4b' : '#BFB3A3',
+            backgroundColor: custom.textFaint,
           },
           '&::-webkit-scrollbar-track, & *::-webkit-scrollbar-track': {
             backgroundColor: 'transparent',
@@ -89,14 +87,14 @@ const getComponents = (mode: 'light' | 'dark', custom: CustomTokens): Components
           padding: '10px 16px',
           fontSize: '0.8125rem',
         }),
-        head: {
+        head: ({ theme }) => ({
           fontWeight: 600,
           fontSize: '0.75rem',
           textTransform: 'uppercase' as const,
           letterSpacing: '0.04em',
-          color: isDark ? '#7d8590' : '#6B5742',
-          backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : '#F4F0EA',
-        },
+          color: theme.palette.text.secondary,
+          backgroundColor: custom.bgHeader,
+        }),
       },
     },
     MuiTextField: {
@@ -113,7 +111,7 @@ const getComponents = (mode: 'light' | 'dark', custom: CustomTokens): Components
             borderColor: theme.palette.divider,
           },
           '&:hover .MuiOutlinedInput-notchedOutline': {
-            borderColor: isDark ? 'rgba(240, 246, 252, 0.15)' : 'rgba(45, 27, 14, 0.18)',
+            borderColor: custom.borderHover,
           },
           '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
             borderColor: theme.palette.primary.main,
@@ -172,17 +170,17 @@ const getComponents = (mode: 'light' | 'dark', custom: CustomTokens): Components
         enterNextDelay: 100,
       },
       styleOverrides: {
-        tooltip: {
+        tooltip: ({ theme }) => ({
           fontSize: '0.6875rem',
           fontWeight: 500,
           letterSpacing: '0.01em',
           borderRadius: 8,
           padding: '6px 12px',
-          backgroundColor: isDark ? custom.elevatedBg : '#2D1B0E',
-          border: `1px solid ${isDark ? 'rgba(240, 246, 252, 0.08)' : 'rgba(45, 27, 14, 0.12)'}`,
+          backgroundColor: theme.palette.mode === 'light' ? '#2D1B0E' : custom.elevatedBg,
+          border: `1px solid ${custom.floatingPanelBorder}`,
           backdropFilter: 'blur(8px)',
-          boxShadow: isDark ? '0 4px 12px rgba(0, 0, 0, 0.4)' : '0 4px 12px rgba(0, 0, 0, 0.08)',
-        },
+          boxShadow: theme.shadows[4],
+        }),
       },
     },
     MuiMenu: {
@@ -191,7 +189,7 @@ const getComponents = (mode: 'light' | 'dark', custom: CustomTokens): Components
           backgroundColor: custom.elevatedBg,
           border: `1px solid ${theme.palette.divider}`,
           borderRadius: 10,
-          boxShadow: isDark ? '0 8px 24px rgba(0, 0, 0, 0.4)' : '0 8px 24px rgba(0, 0, 0, 0.08)',
+          boxShadow: theme.shadows[8],
         }),
       },
     },
@@ -207,9 +205,9 @@ const getComponents = (mode: 'light' | 'dark', custom: CustomTokens): Components
     },
     MuiDivider: {
       styleOverrides: {
-        root: {
-          borderColor: isDark ? 'rgba(240, 246, 252, 0.06)' : 'rgba(45, 27, 14, 0.10)',
-        },
+        root: ({ theme }) => ({
+          borderColor: theme.palette.divider,
+        }),
       },
     },
     MuiIconButton: {

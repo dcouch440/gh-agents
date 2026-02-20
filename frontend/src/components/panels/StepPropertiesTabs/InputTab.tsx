@@ -1,7 +1,8 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
+import { useTheme } from '@mui/material/styles'
 import { AccentBarRow, EmptyState } from '@/components/primitives'
-import { STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR } from '@/components/canvas/constants'
+import { GREYSCALE_ACCENT } from '@/components/canvas/constants'
 import { SCHEMA_PREVIEW_SX } from './constants'
 import type { WorkflowStep } from '@/types/workflow'
 import type { OutputSchema } from '@/types/schema'
@@ -12,6 +13,8 @@ type InputTabProps = {
 }
 
 function InputTab({ incomingSteps, schemasMap }: InputTabProps) {
+  const theme = useTheme()
+  const nodePalette = theme.palette.nodePalette
   if (incomingSteps.length === 0) {
     return (
       <Box sx={{ flex: 1, overflow: 'auto' }}>
@@ -27,7 +30,7 @@ function InputTab({ incomingSteps, schemasMap }: InputTabProps) {
         return (
           <Box key={s.id} sx={{ borderBottom: 1, borderColor: 'divider' }}>
             <AccentBarRow
-              barColor={STEP_TYPE_COLORS[s.execution_mode] ?? DEFAULT_STEP_TYPE_COLOR}
+              barColor={(nodePalette as Record<string, string>)[s.execution_mode] ?? GREYSCALE_ACCENT}
               primary={s.name ?? 'Unnamed'}
               secondary={s.execution_mode}
             />

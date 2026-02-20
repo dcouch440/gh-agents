@@ -2,7 +2,6 @@ import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { useStore, workflowStore } from '@/stores'
 import { FOCUS_MODE } from '@/constants'
-import { ARCHETYPE_CONFIGS } from '@/components/canvas/CanvasNode/registry'
 import type { Archetype as ArchetypeType } from '@/components/canvas/CanvasNode/registry'
 import { useStepStoreData } from '@/components/canvas/CanvasNode/hooks'
 import { buildStepTabs } from '@/components/canvas/CanvasNode/tabs/buildStepTabs'
@@ -26,8 +25,7 @@ function FocusNodeView({
   onTabChange,
 }: FocusNodeViewProps) {
   const theme = useTheme()
-  const config = ARCHETYPE_CONFIGS[archetype]
-  const accentColor = config.color
+  const accentColor = theme.palette.nodePalette[archetype]
 
   const { roomStepMembers, stepIssues } = useStepStoreData(stepId)
   const rosterAgents = useStore(workflowStore.store, workflowStore.selectStepRoster(stepId))
@@ -52,7 +50,7 @@ function FocusNodeView({
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        backgroundColor: theme.palette.background.default,
+        backgroundColor: theme.palette.custom.cavityBg,
       }}
     >
       <Box

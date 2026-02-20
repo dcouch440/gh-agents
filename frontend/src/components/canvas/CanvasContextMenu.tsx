@@ -2,8 +2,9 @@ import { useCallback } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import type { SxProps, Theme } from '@mui/material/styles'
+import { useTheme } from '@mui/material/styles'
 import { workflowStore, canvasStore, shareStore } from '@/stores'
-import { DEFAULT_STEP_TYPE_COLOR, STEP_TYPE_COLORS, SECTION_LABEL_SX, COLOR_DOT_SX } from './constants'
+import { SECTION_LABEL_SX, COLOR_DOT_SX } from './constants'
 import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from './CanvasNode/registry'
 import type { Archetype as ArchetypeType } from './CanvasNode/registry'
 import { buildShareableFields } from './buildShareableFields'
@@ -41,6 +42,8 @@ const ARCHETYPE_MENU_ORDER: ArchetypeType[] = [
 ]
 
 function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
+  const theme = useTheme()
+  const nodePalette = theme.palette.nodePalette
   // Callback ref: clamp menu position to stay within viewport after mount
   const menuRef = useCallback((node: HTMLDivElement | null) => {
     if (!node) return
@@ -187,7 +190,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
                 }}
                 sx={MENU_ITEM_SX}
               >
-                <Box sx={{ ...COLOR_DOT_SX, backgroundColor: config.color }} />
+                <Box sx={{ ...COLOR_DOT_SX, backgroundColor: nodePalette[archetype] }} />
                 <Typography sx={{ fontSize: 12, color: 'text.primary' }}>{config.label}</Typography>
               </Box>
             )
@@ -195,11 +198,11 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
           <Box sx={{ mx: 1.5, my: 0.5, borderTop: 1, borderColor: 'divider' }} />
           <Typography sx={SECTION_LABEL_SX}>Utilities</Typography>
           <Box data-testid="ctx-add-context" onClick={handleAddContext} sx={MENU_ITEM_SX}>
-            <Box sx={{ ...COLOR_DOT_SX, backgroundColor: STEP_TYPE_COLORS['context'] ?? DEFAULT_STEP_TYPE_COLOR }} />
+            <Box sx={{ ...COLOR_DOT_SX, backgroundColor: nodePalette.context }} />
             <Typography sx={{ fontSize: 12, color: 'text.primary' }}>Context</Typography>
           </Box>
           <Box data-testid="ctx-add-input" onClick={handleAddInput} sx={MENU_ITEM_SX}>
-            <Box sx={{ ...COLOR_DOT_SX, backgroundColor: STEP_TYPE_COLORS['input'] ?? DEFAULT_STEP_TYPE_COLOR }} />
+            <Box sx={{ ...COLOR_DOT_SX, backgroundColor: nodePalette.input }} />
             <Typography sx={{ fontSize: 12, color: 'text.primary' }}>Input</Typography>
           </Box>
         </>

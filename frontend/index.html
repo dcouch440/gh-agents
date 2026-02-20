@@ -17,7 +17,7 @@
           else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) t = 'midnight';
         } catch(e) {}
         document.documentElement.setAttribute('data-theme', t);
-        var bg = { linen: '#F9F6F1', midnight: '#080c12', slate: '#1e2433' };
+        var bg = { linen: '#F9F6F1', midnight: '#0d1117', slate: '#1a1f2e' };
         document.documentElement.style.backgroundColor = bg[t] || '#F9F6F1';
       })();
     </script>
@@ -28,7 +28,7 @@
 
       /* Theme tokens — consumed by splash SVG and text */
       html[data-theme="midnight"] {
-        --splash-bg: #080c12;
+        --splash-bg: #0d1117;
         --splash-gear-1: #3b82f6;
         --splash-gear-2: #2dd4bf;
         --splash-glow-opacity: 0.55;
@@ -42,7 +42,7 @@
         --splash-wordmark: #D47830;
       }
       html[data-theme="slate"] {
-        --splash-bg: #1e2433;
+        --splash-bg: #1a1f2e;
         --splash-gear-1: #818cf8;
         --splash-gear-2: #22d3ee;
         --splash-glow-opacity: 0.5;

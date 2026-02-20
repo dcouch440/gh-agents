@@ -11,8 +11,8 @@ import type { ArtifactKind } from '@/stores'
 import { FOCUS_MODE } from '@/constants'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { useFocusNavigation } from '@/hooks/useFocusNavigation'
-import { resolveArchetype, ARCHETYPE_CONFIGS } from '@/components/canvas/CanvasNode/registry'
-import { STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR } from '@/components/canvas/constants'
+import { resolveArchetype, resolveVariant } from '@/components/canvas/CanvasNode/registry'
+import { GREYSCALE_ACCENT } from '@/components/canvas/constants'
 import { Collections } from '@/utils/collections'
 import { ArtifactBar } from './ArtifactBar'
 import type { StepSection, CardEntry } from './ArtifactBar'
@@ -80,7 +80,7 @@ function FocusModeOverlay() {
     return map
   }, [protocolsByStep])
 
-  // Resolve archetype for current step
+  // Resolve archetype for current step (used for tabs, subtitle, header)
   const currentArchetype = useMemo(() => {
     if (!currentStep) return null
     return resolveArchetype(currentStep, protocolsMap, currentStep.id)
@@ -89,6 +89,7 @@ function FocusModeOverlay() {
   // Pre-compute lookup maps for O(1) access in downstream memos
   const stepsById = useMemo(() => Collections.keyBy(steps, (s) => s.id), [steps])
   const edgesByFromId = useMemo(() => Collections.groupBy(edges, (e) => e.from_step_id), [edges])
+  const nodePalette = theme.palette.nodePalette
 
   // Compute accent colors for nav dots (protocol steps only — no input/context)
   const accentColors = useMemo(() => {
@@ -97,14 +98,14 @@ function FocusModeOverlay() {
       const id = orderedStepIds[i]!
       const step = stepsById.get(id)
       if (step) {
-        const arch = resolveArchetype(step, protocolsMap, id)
-        colors.push(ARCHETYPE_CONFIGS[arch].color)
+        const variant = resolveVariant(step, protocolsMap, id)
+        colors.push(nodePalette[variant])
       } else {
-        colors.push('#7d8590')
+        colors.push(GREYSCALE_ACCENT)
       }
     }
     return colors
-  }, [orderedStepIds, stepsById, protocolsMap])
+  }, [orderedStepIds, stepsById, protocolsMap, nodePalette])
 
   // Build per-step sections for the artifact bar, grouping input/context into their protocol
   const stepSections = useMemo((): readonly StepSection[] => {
@@ -113,7 +114,7 @@ function FocusModeOverlay() {
     for (let i = 0; i < steps.length; i++) {
       const step = steps[i]!
       if (step.execution_mode !== 'input' && step.execution_mode !== 'context') continue
-      const color = STEP_TYPE_COLORS[step.execution_mode] ?? DEFAULT_STEP_TYPE_COLOR
+      const color = (nodePalette as Record<string, string>)[step.execution_mode] ?? GREYSCALE_ACCENT
       const outEdges = edgesByFromId.get(step.id) ?? []
       if (outEdges.length > 0) {
         const edge = outEdges[0]!
@@ -175,7 +176,7 @@ function FocusModeOverlay() {
       sections.push({ stepId: id, stepName, sectionLabel: executionModeLabel(step.execution_mode), accentColor: color, cards })
     }
     return sections
-  }, [orderedStepIds, steps, stepsById, edgesByFromId, accentColors, rosterByStep, roomMembersByStep])
+  }, [orderedStepIds, steps, stepsById, edgesByFromId, accentColors, rosterByStep, roomMembersByStep, nodePalette])
 
   const handleCardClick = useCallback((stepId: string, cardId: string, kind: ArtifactKind) => {
     const idx = orderedStepIds.indexOf(stepId)
@@ -206,7 +207,7 @@ function FocusModeOverlay() {
         zIndex: FOCUS_MODE.Z_INDEX,
         display: 'flex',
         flexDirection: 'column',
-        backgroundColor: theme.palette.background.default,
+        backgroundColor: theme.palette.custom.cavityBg,
         outline: 'none',
       }}
     >
@@ -229,10 +230,10 @@ function FocusModeOverlay() {
               height: 32,
               zIndex: 1,
               color: 'text.secondary',
-              backgroundColor: theme.palette.background.default,
+              backgroundColor: theme.palette.custom.cavityBg,
               border: 1,
               borderColor: 'divider',
-              '&:hover': { color: 'text.primary', backgroundColor: theme.palette.background.paper },
+              '&:hover': { color: 'text.primary', backgroundColor: theme.palette.custom.surfaceBg },
             }}
           >
             <CloseOutlined sx={{ fontSize: 18 }} />

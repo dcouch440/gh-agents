@@ -2,6 +2,19 @@ import { describe, it, expect } from 'vitest'
 import { toRFNodes, toRFEdges, toAgentEdges, nodeDataEqual, computeProtocolGroups } from '.'
 import type { StepNodeLookups, ProtocolStepInfo } from '.'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
+import type { NodePalette } from '@/theme'
+
+/** Test palette — uses Midnight values for backward-compat with existing assertions. */
+const testPalette: NodePalette = {
+  workforce: '#3b82f6',
+  room: '#a78bfa',
+  blank: '#7d8590',
+  agent: '#06b6d4',
+  context: '#10b981',
+  input: '#f59e0b',
+  step: '#7d8590',
+  sub_workflow: '#10b981',
+}
 
 const step1: WorkflowStep = {
   id: 'step-001',
@@ -150,7 +163,7 @@ describe('toRFEdges', () => {
   const emptyProtocols: ReadonlyMap<string, ProtocolStepInfo> = new Map()
 
   it('maps WorkflowStepEdge array to React Flow edges with source color', () => {
-    const edges = toRFEdges([edge1], emptyGroups, emptyProtocols, [step1, step2])
+    const edges = toRFEdges([edge1], emptyGroups, emptyProtocols, [step1, step2], testPalette)
 
     expect(edges).toHaveLength(1)
     expect(edges[0]).toEqual({
@@ -158,20 +171,21 @@ describe('toRFEdges', () => {
       type: 'stepEdge',
       source: 'step-001',
       target: 'step-002',
-      data: { sourceColor: '#3b82f6', isProtocolEdge: false },
+      data: { sourceColor: '#7d8590', isProtocolEdge: false },
     })
   })
 
   it('returns empty array for empty input', () => {
-    expect(toRFEdges([], emptyGroups, emptyProtocols, [])).toEqual([])
+    expect(toRFEdges([], emptyGroups, emptyProtocols, [], testPalette)).toEqual([])
   })
 
   it('resolves sourceColor from protocol step type', () => {
     const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
       ['step-001', { protocol_type: 'workforce', name: 'Doc', portNames: [] }],
     ])
-    const edges = toRFEdges([edge1], emptyGroups, protocols, [step1, step2])
-    expect(edges[0]?.data?.sourceColor).toBe('#3b82f6')
+    const edges = toRFEdges([edge1], emptyGroups, protocols, [step1, step2], testPalette)
+    // step1 execution_mode is 'single' → variant 'step' → grey
+    expect(edges[0]?.data?.sourceColor).toBe('#7d8590')
     expect(edges[0]?.data?.isProtocolEdge).toBe(true)
   })
 
@@ -179,8 +193,9 @@ describe('toRFEdges', () => {
     const protocols: ReadonlyMap<string, ProtocolStepInfo> = new Map([
       ['step-002', { protocol_type: 'workforce', name: 'Doc', portNames: [] }],
     ])
-    const edges = toRFEdges([edge1], emptyGroups, protocols, [step1, step2])
-    expect(edges[0]?.data?.sourceColor).toBe('#3b82f6')
+    const edges = toRFEdges([edge1], emptyGroups, protocols, [step1, step2], testPalette)
+    // step1 execution_mode is 'single' → variant 'step' → grey
+    expect(edges[0]?.data?.sourceColor).toBe('#7d8590')
     expect(edges[0]?.data?.isProtocolEdge).toBe(true)
   })
 
@@ -188,9 +203,9 @@ describe('toRFEdges', () => {
     const groups = new Map([
       ['step-001', { protocolColor: '#3b82f6', protocolStepId: 'proto-1' }],
     ])
-    const edges = toRFEdges([edge1], groups, emptyProtocols, [step1, step2])
-    // Source is a 'single' step → uses its own step type color, not the group color
-    expect(edges[0]?.data?.sourceColor).toBe('#3b82f6')
+    const edges = toRFEdges([edge1], groups, emptyProtocols, [step1, step2], testPalette)
+    // Source is a 'single' step → resolveVariant maps to 'step' variant
+    expect(edges[0]?.data?.sourceColor).toBe('#7d8590')
     expect(edges[0]?.data?.isProtocolEdge).toBe(true)
   })
 
@@ -198,7 +213,7 @@ describe('toRFEdges', () => {
     const workforceA: WorkflowStep = { ...step1, id: 'doc-a', execution_mode: 'workforce' }
     const workforceB: WorkflowStep = { ...step1, id: 'doc-b', execution_mode: 'workforce' }
     const edge: WorkflowStepEdge = { id: 'edge-doc', from_step_id: 'doc-a', to_step_id: 'doc-b' }
-    const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [workforceA, workforceB])
+    const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [workforceA, workforceB], testPalette)
     expect(edges[0]?.data?.sourceColor).toBe('#3b82f6')
     expect(edges[0]?.data?.isProtocolEdge).toBe(true)
   })
@@ -206,8 +221,9 @@ describe('toRFEdges', () => {
   it('resolves sourceColor from step type for non-protocol edges', () => {
     const forEachStep: WorkflowStep = { ...step1, id: 'fe-1', execution_mode: 'for_each' }
     const edge: WorkflowStepEdge = { id: 'edge-fe', from_step_id: 'fe-1', to_step_id: 'step-002' }
-    const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [forEachStep, step2])
-    expect(edges[0]?.data?.sourceColor).toBe('#2dd4bf')
+    const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [forEachStep, step2], testPalette)
+    // for_each → variant 'step' → grey
+    expect(edges[0]?.data?.sourceColor).toBe('#7d8590')
     expect(edges[0]?.data?.isProtocolEdge).toBe(false)
   })
 
@@ -215,7 +231,7 @@ describe('toRFEdges', () => {
     const inputStep: WorkflowStep = { ...step1, id: 'input-1', execution_mode: 'input' }
     const protocolStep: WorkflowStep = { ...step1, id: 'proto-1', execution_mode: 'workforce' }
     const edge: WorkflowStepEdge = { id: 'edge-input', from_step_id: 'input-1', to_step_id: 'proto-1' }
-    const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [inputStep, protocolStep])
+    const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [inputStep, protocolStep], testPalette)
     expect(edges[0]?.targetHandle).toBeUndefined()
   })
 
@@ -223,7 +239,7 @@ describe('toRFEdges', () => {
     const ctxStep: WorkflowStep = { ...step1, id: 'ctx-1', execution_mode: 'context' }
     const protocolStep: WorkflowStep = { ...step1, id: 'proto-1', execution_mode: 'workforce' }
     const edge: WorkflowStepEdge = { id: 'edge-ctx', from_step_id: 'ctx-1', to_step_id: 'proto-1' }
-    const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [ctxStep, protocolStep])
+    const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [ctxStep, protocolStep], testPalette)
     expect(edges[0]?.targetHandle).toBeUndefined()
   })
 })
@@ -577,7 +593,7 @@ describe('toAgentEdges', () => {
       },
       protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
     }
-    const edges = toAgentEdges([workforceStep], lookups)
+    const edges = toAgentEdges([workforceStep], lookups, testPalette)
     expect(edges).toHaveLength(1)
     expect(edges[0]).toEqual({
       id: 'agent-edge-agent-1',
@@ -604,7 +620,7 @@ describe('toAgentEdges', () => {
       },
       protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
     }
-    const edges = toAgentEdges([workforceStep], lookups)
+    const edges = toAgentEdges([workforceStep], lookups, testPalette)
     // 2 root edges + 2 dependency edges = 4
     expect(edges).toHaveLength(4)
     // Root agents fan from protocol
@@ -665,7 +681,7 @@ describe('toAgentEdges', () => {
       },
       protocolsByStep: new Map([['wf-step', { protocol_type: 'workforce', name: 'Team', portNames: [] }]]),
     }
-    const edges = toAgentEdges([workforceStep], lookups)
+    const edges = toAgentEdges([workforceStep], lookups, testPalette)
     expect(edges).toEqual([])
   })
 
@@ -678,7 +694,7 @@ describe('toAgentEdges', () => {
         ],
       },
     }
-    const edges = toAgentEdges([step1], lookups)
+    const edges = toAgentEdges([step1], lookups, testPalette)
     expect(edges).toEqual([])
   })
 })

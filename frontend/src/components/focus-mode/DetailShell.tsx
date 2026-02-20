@@ -24,7 +24,7 @@ function DetailShell({ title, accentColor, onClose, children }: DetailShellProps
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        backgroundColor: theme.palette.background.default,
+        backgroundColor: theme.palette.custom.cavityBg,
         animation: `slideDown ${ANIMATION.NORMAL}ms ease`,
         '@keyframes slideDown': {
           from: { opacity: 0, transform: 'translateY(-16px)' },
