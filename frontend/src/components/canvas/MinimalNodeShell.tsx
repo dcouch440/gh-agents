@@ -1,5 +1,6 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
+import { useTheme } from '@mui/material/styles'
 import { LOD } from './constants'
 
 type MinimalNodeShellProps = {
@@ -9,29 +10,25 @@ type MinimalNodeShellProps = {
   boxShadow: string
 }
 
-function MinimalNodeShell({ label, accentColor, borderColor, boxShadow }: MinimalNodeShellProps) {
+function MinimalNodeShell({ label, borderColor, boxShadow }: MinimalNodeShellProps) {
+  const theme = useTheme()
+
   return (
     <Box
       sx={{
         width: '100%',
         height: '100%',
-        borderRadius: '12px',
-        backgroundColor: 'background.paper',
-        border: 2,
+        borderRadius: '8px',
+        backgroundColor: theme.palette.custom.screenBg,
+        border: 1,
         borderColor,
         boxShadow,
         overflow: 'hidden',
         display: 'flex',
-        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}
     >
-      <Box
-        sx={{
-          width: LOD.ACCENT_STRIPE_WIDTH,
-          backgroundColor: accentColor,
-          flexShrink: 0,
-        }}
-      />
       <Box
         sx={{
           flex: 1,

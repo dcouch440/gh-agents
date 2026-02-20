@@ -59,12 +59,9 @@ function CanvasFormNodeComponent({
           sx={{
             height: headerHeight,
             overflow: 'hidden',
-            borderBottom: 1,
-            borderColor: 'divider',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: theme.palette.custom.bgHeader,
             flexShrink: 0,
             cursor: 'grab',
             '&:active': { cursor: 'grabbing' },

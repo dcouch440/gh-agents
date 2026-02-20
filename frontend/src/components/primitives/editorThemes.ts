@@ -13,13 +13,13 @@ const lightEditorTheme = EditorView.theme(
       color: '#2D1B0E',
     },
     '.cm-content': {
-      caretColor: '#FF964F',
+      caretColor: '#5a8a6e',
     },
     '.cm-cursor, .cm-dropCursor': {
-      borderLeftColor: '#FF964F',
+      borderLeftColor: '#5a8a6e',
     },
     '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
-      backgroundColor: 'rgba(255, 150, 79, 0.14)',
+      backgroundColor: 'rgba(90, 138, 110, 0.20)',
     },
     '.cm-panels': {
       backgroundColor: '#F4F0EA',
@@ -32,8 +32,8 @@ const lightEditorTheme = EditorView.theme(
       borderTop: '1px solid rgba(45, 27, 14, 0.10)',
     },
     '.cm-searchMatch': {
-      backgroundColor: 'rgba(255, 150, 79, 0.18)',
-      outline: '1px solid rgba(255, 150, 79, 0.35)',
+      backgroundColor: 'rgba(90, 138, 110, 0.18)',
+      outline: '1px solid rgba(90, 138, 110, 0.35)',
     },
     '.cm-searchMatch.cm-searchMatch-selected': {
       backgroundColor: 'rgba(78, 138, 90, 0.22)',
@@ -42,7 +42,7 @@ const lightEditorTheme = EditorView.theme(
       backgroundColor: 'rgba(45, 27, 14, 0.03)',
     },
     '.cm-selectionMatch': {
-      backgroundColor: 'rgba(255, 150, 79, 0.10)',
+      backgroundColor: 'rgba(90, 138, 110, 0.12)',
     },
     '&.cm-focused .cm-matchingBracket, &.cm-focused .cm-nonmatchingBracket': {
       backgroundColor: 'rgba(78, 138, 90, 0.28)',
@@ -74,7 +74,7 @@ const lightEditorTheme = EditorView.theme(
     },
     '.cm-tooltip-autocomplete': {
       '& > ul > li[aria-selected]': {
-        backgroundColor: 'rgba(255, 150, 79, 0.12)',
+        backgroundColor: 'rgba(90, 138, 110, 0.15)',
         color: '#2D1B0E',
       },
     },

@@ -11,7 +11,7 @@ import type { ResizableNodeShellProps } from './types'
 function ResizableNodeShell({
   nodeId,
   selected,
-  accentColor,
+  accentColor: _accentColor,
   highlight,
   constraints,
   children,
@@ -40,9 +40,9 @@ function ResizableNodeShell({
       sx={{
         width: '100%',
         height: '100%',
-        borderRadius: '12px',
-        backgroundColor: theme.palette.mode === 'light' ? theme.palette.custom.cavityBg : 'background.paper',
-        border: 2,
+        borderRadius: '8px',
+        backgroundColor: theme.palette.custom.screenBg,
+        border: 1,
         borderColor: highlight.borderColor,
         boxShadow: highlight.boxShadow,
         transition: 'border-color 150ms ease',
@@ -64,8 +64,8 @@ function ResizableNodeShell({
           width: 10,
           height: 10,
           borderRadius: 2,
-          backgroundColor: accentColor,
-          borderColor: accentColor,
+          backgroundColor: theme.palette.custom.accent,
+          borderColor: theme.palette.custom.accent,
           opacity: 0.6,
         }}
       />

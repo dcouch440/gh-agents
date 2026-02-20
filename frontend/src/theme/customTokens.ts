@@ -25,6 +25,15 @@ type CustomTokens = {
   chromeTextHover: string
   chromeActiveGlow: string
   chromeActiveBar: string
+  screenBg: string
+  screenBorder: string
+  screenFrost: string
+  canvasBg: string
+  accent: string
+  accentBg: string
+  accentRing: string
+  userBarBg: string
+  connectorColor: string
 }
 
 const lightCustomTokens: CustomTokens = {
@@ -42,9 +51,9 @@ const lightCustomTokens: CustomTokens = {
   activeGradient: 'linear-gradient(90deg, #FF964F, #4E8A5A)',
   activeGradientVertical: 'linear-gradient(180deg, #FF964F, #4E8A5A)',
   activeGlow: 'drop-shadow(0 0 6px rgba(255, 150, 79, 0.35))',
-  gridDotColor: 'rgba(45, 27, 14, 0.18)',
-  gridLineColor: 'rgba(45, 27, 14, 0.07)',
-  canvasVignette: 'rgba(45, 27, 14, 0.06)',
+  gridDotColor: 'rgba(180, 170, 158, 0.15)',
+  gridLineColor: 'rgba(180, 170, 158, 0.06)',
+  canvasVignette: 'rgba(60, 50, 40, 0.06)',
   minimapBg: 'rgba(240, 235, 227, 0.9)',
   minimapMask: 'rgba(249, 246, 241, 0.7)',
   floatingPanelBg: 'rgba(254, 252, 250, 0.96)',
@@ -54,6 +63,15 @@ const lightCustomTokens: CustomTokens = {
   chromeTextHover: 'rgba(254, 252, 250, 0.90)',
   chromeActiveGlow: 'drop-shadow(0 0 4px rgba(255, 150, 79, 0.4))',
   chromeActiveBar: '#FEFCFA',
+  screenBg: '#f0ebe3',
+  screenBorder: '#d6cfc4',
+  screenFrost: 'rgba(240, 235, 227, 0.8)',
+  canvasBg: '#eae5da',
+  accent: '#5a8a6e',
+  accentBg: 'rgba(90, 138, 110, 0.10)',
+  accentRing: 'rgba(90, 138, 110, 0.18)',
+  userBarBg: 'rgba(90, 138, 110, 0.09)',
+  connectorColor: '#cdc6ba',
 }
 
 const darkCustomTokens: CustomTokens = {
@@ -83,6 +101,15 @@ const darkCustomTokens: CustomTokens = {
   chromeTextHover: '#f0f6fc',
   chromeActiveGlow: 'drop-shadow(0 0 4px rgba(59, 130, 246, 0.4))',
   chromeActiveBar: '#3b82f6',
+  screenBg: '#060a10',
+  screenBorder: 'rgba(240, 246, 252, 0.08)',
+  screenFrost: 'rgba(13, 16, 23, 0.8)',
+  canvasBg: '#060a10',
+  accent: '#3b82f6',
+  accentBg: 'rgba(59, 130, 246, 0.08)',
+  accentRing: 'rgba(59, 130, 246, 0.2)',
+  userBarBg: 'rgba(59, 130, 246, 0.06)',
+  connectorColor: '#2d333b',
 }
 
 const getCustomTokens = (mode: 'light' | 'dark'): CustomTokens => (mode === 'light' ? lightCustomTokens : darkCustomTokens)

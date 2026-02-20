@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
+import { render } from '@/test/render'
 import userEvent from '@testing-library/user-event'
 import { StepEdge } from './StepEdge'
 
@@ -23,12 +24,12 @@ vi.mock('./edges/bezierPath', () => ({
 vi.mock('./useCanvasLOD', () => ({ useCanvasLOD: () => 'full' }))
 
 vi.mock('./PipeEdgePath', () => ({
-  PipeEdgePath: (props: { edgePath: string; color: string; selected: boolean; isProtocol: boolean }) => (
+  PipeEdgePath: (props: { edgePath: string; selected: boolean; sourceX: number; sourceY: number; targetX: number; targetY: number }) => (
     <g
       data-testid="pipe-edge"
-      data-color={props.color}
       data-selected={String(props.selected)}
-      data-is-protocol={String(props.isProtocol)}
+      data-source-x={String(props.sourceX)}
+      data-target-x={String(props.targetX)}
     />
   ),
 }))
@@ -45,7 +46,7 @@ const baseProps = {
   targetPosition: 'left' as const,
   selected: false,
   animated: false,
-  data: { sourceColor: '#3b82f6', isProtocolEdge: false },
+  data: {},
   interactionWidth: 20,
   sourceHandleId: null,
   targetHandleId: null,
@@ -78,18 +79,17 @@ describe('StepEdge', () => {
     const pipe = screen.getByTestId('pipe-edge')
     expect(pipe).toBeInTheDocument()
     expect(pipe).toHaveAttribute('data-selected', 'false')
-    expect(pipe).toHaveAttribute('data-is-protocol', 'false')
   })
 
-  it('passes source color and protocol flag when present', () => {
+  it('passes source/target coordinates to PipeEdgePath', () => {
     render(
       <svg>
-        <StepEdge {...baseProps} data={{ sourceColor: '#3b82f6', isProtocolEdge: true }} />
+        <StepEdge {...baseProps} />
       </svg>,
     )
     const pipe = screen.getByTestId('pipe-edge')
-    expect(pipe).toHaveAttribute('data-color', '#3b82f6')
-    expect(pipe).toHaveAttribute('data-is-protocol', 'true')
+    expect(pipe).toHaveAttribute('data-source-x', '0')
+    expect(pipe).toHaveAttribute('data-target-x', '100')
   })
 
   it('passes selected state to PipeEdgePath', () => {

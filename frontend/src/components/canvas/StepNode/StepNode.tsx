@@ -29,7 +29,8 @@ function StepNodeComponent({ id, data, selected }: NodeProps) {
   const detailLevel = useCanvasLOD()
   const nodeData = data as StepNodeData
   const highlightMode = useProtocolHighlight(CanvasNodeKind.STEP, id, nodeData.protocolStepId)
-  const accentColor = STEP_TYPE_COLORS[nodeData.stepType] ?? GREYSCALE_ACCENT
+  const rawAccent = STEP_TYPE_COLORS[nodeData.stepType] ?? GREYSCALE_ACCENT
+  const accentColor = theme.palette.mode === 'light' ? theme.palette.custom.accent : rawAccent
   const IconComponent = STEP_TYPE_ICONS[nodeData.stepType] ?? DEFAULT_STEP_TYPE_ICON
 
   // Execution state
@@ -82,9 +83,9 @@ function StepNodeComponent({ id, data, selected }: NodeProps) {
     <Box
       sx={{
         width: CANVAS.NODE_WIDTH,
-        borderRadius: '12px',
-        backgroundColor: 'background.paper',
-        border: 2,
+        borderRadius: '8px',
+        backgroundColor: theme.palette.custom.screenBg,
+        border: 1,
         borderColor: highlight.borderColor,
         boxShadow: highlight.boxShadow,
         transition: 'border-color 150ms ease',
@@ -96,7 +97,7 @@ function StepNodeComponent({ id, data, selected }: NodeProps) {
         sx={{
           px: 0,
           py: 1,
-          backgroundColor: theme.palette.custom.bgHeader,
+          backgroundColor: theme.palette.custom.screenBg,
           borderBottom: hasBody ? 1 : 0,
           borderColor: 'divider',
         }}
@@ -235,7 +236,7 @@ function StepNodeComponent({ id, data, selected }: NodeProps) {
       )}
 
       {/* Live stream */}
-      {hasStream && activeSource !== null && (
+      {hasStream && activeSource && (
         <Box
           className="nowheel nodrag nopan"
           sx={{ borderTop: 1, borderColor: 'divider', maxHeight: 160, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}

@@ -1,27 +1,23 @@
 import { memo } from 'react'
 import type { EdgeProps } from '@xyflow/react'
-import { PIPE, GREYSCALE_ACCENT } from './constants'
+import { CONNECTOR } from './constants'
 import { PipeEdgePath } from './PipeEdgePath'
 import { computeBezierPath } from './edges/bezierPath'
 
-type ArtifactEdgeData = {
-  color: string
-}
-
 function ArtifactEdgeComponent(props: EdgeProps) {
-  const { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data } = props
-  const rawData = data as Partial<ArtifactEdgeData> | undefined
-  const color = rawData?.color ?? GREYSCALE_ACCENT
+  const { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition } = props
 
   const edgePath = computeBezierPath(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition)
 
   return (
     <PipeEdgePath
       edgePath={edgePath}
-      color={color}
       selected={false}
-      isProtocol={true}
-      interactionWidth={PIPE.INTERACTION_WIDTH}
+      interactionWidth={CONNECTOR.INTERACTION_WIDTH}
+      sourceX={sourceX}
+      sourceY={sourceY}
+      targetX={targetX}
+      targetY={targetY}
     />
   )
 }

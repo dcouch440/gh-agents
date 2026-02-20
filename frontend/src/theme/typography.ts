@@ -3,7 +3,7 @@ import type { ThemeOptions } from '@mui/material/styles'
 type TypographyConfig = NonNullable<ThemeOptions['typography']>
 
 const typography: TypographyConfig = {
-  fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+  fontFamily: '"Nunito", "Inter", "Roboto", "Helvetica", "Arial", sans-serif',
   fontSize: 13,
   fontWeightLight: 300,
   fontWeightRegular: 400,

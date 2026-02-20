@@ -10,6 +10,10 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
     MuiCssBaseline: {
       styleOverrides: {
         body: {
+          '& ::selection': {
+            backgroundColor: isDark ? 'rgba(59, 130, 246, 0.3)' : 'rgba(90, 138, 110, 0.25)',
+            color: 'inherit',
+          },
           scrollbarColor: isDark ? '#3a3f4b #111318' : '#BFB3A3 #F9F6F1',
           '&::-webkit-scrollbar, & *::-webkit-scrollbar': {
             width: 6,

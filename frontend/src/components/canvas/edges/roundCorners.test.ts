@@ -75,7 +75,7 @@ describe('roundCorners', () => {
     expect(result).toMatch(/L 200 -500$/)
   })
 
-  it('uses default CORNER_RADIUS from PIPE constant', () => {
+  it('uses default CORNER_RADIUS from CONNECTOR constant', () => {
     // When no radius specified, should still produce rounded corners
     const result = roundCorners('M 0 0 L 100 0 L 100 100')
     expect(result).toContain('Q')

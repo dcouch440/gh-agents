@@ -1,24 +1,32 @@
 import { memo } from 'react'
-import { DetailLevel, LOD, PIPE } from './constants'
-import { brightenHex, computePipeOpacities } from './pipeEdgeUtils'
+import { useTheme } from '@mui/material/styles'
+import { DetailLevel, LOD, CONNECTOR } from './constants'
 import { useCanvasLOD } from './useCanvasLOD'
 
 type PipeEdgePathProps = {
   edgePath: string
-  color: string
+  color?: string
   selected: boolean
-  isProtocol: boolean
   interactionWidth: number
+  sourceX: number
+  sourceY: number
+  targetX: number
+  targetY: number
 }
 
 function PipeEdgePathComponent({
   edgePath,
   color,
   selected,
-  isProtocol,
   interactionWidth,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
 }: PipeEdgePathProps) {
+  const theme = useTheme()
   const detailLevel = useCanvasLOD()
+  const resolvedColor = color ?? theme.palette.custom.connectorColor
 
   if (detailLevel === DetailLevel.MINIMAL) {
     return (
@@ -33,7 +41,7 @@ function PipeEdgePathComponent({
         <path
           d={edgePath}
           fill="none"
-          stroke={color}
+          stroke={resolvedColor}
           strokeWidth={LOD.MINIMAL_EDGE_WIDTH}
           strokeOpacity={LOD.MINIMAL_EDGE_OPACITY}
           strokeLinecap="round"
@@ -42,12 +50,7 @@ function PipeEdgePathComponent({
     )
   }
 
-  const opacities = computePipeOpacities(isProtocol, selected)
-  const coreColor = brightenHex(color, PIPE.CORE_BRIGHTEN)
-  const showGlow = opacities.glow > 0
-
-  const bodyWidth = isProtocol || selected ? PIPE.BODY_WIDTH : PIPE.BODY_WIDTH_DIM
-  const coreWidth = isProtocol || selected ? PIPE.CORE_WIDTH : PIPE.CORE_WIDTH_DIM
+  const strokeColor = selected ? theme.palette.custom.accent : resolvedColor
 
   return (
     <g>
@@ -60,37 +63,19 @@ function PipeEdgePathComponent({
         className="react-flow__edge-interaction"
       />
 
-      {/* Outer glow — subtle halo */}
-      {showGlow && (
-        <path
-          d={edgePath}
-          fill="none"
-          stroke={color}
-          strokeWidth={PIPE.GLOW_WIDTH}
-          strokeOpacity={opacities.glow}
-          strokeLinecap="round"
-        />
-      )}
-
-      {/* Pipe body */}
+      {/* Dotted connector */}
       <path
         d={edgePath}
         fill="none"
-        stroke={color}
-        strokeWidth={bodyWidth}
-        strokeOpacity={opacities.body}
+        stroke={strokeColor}
+        strokeWidth={CONNECTOR.STROKE_WIDTH}
+        strokeDasharray={CONNECTOR.DASH_ARRAY}
         strokeLinecap="round"
       />
 
-      {/* Inner core highlight */}
-      <path
-        d={edgePath}
-        fill="none"
-        stroke={coreColor}
-        strokeWidth={coreWidth}
-        strokeOpacity={opacities.core}
-        strokeLinecap="round"
-      />
+      {/* Endpoint dots */}
+      <circle cx={sourceX} cy={sourceY} r={CONNECTOR.DOT_RADIUS} fill={strokeColor} />
+      <circle cx={targetX} cy={targetY} r={CONNECTOR.DOT_RADIUS} fill={strokeColor} />
     </g>
   )
 }
@@ -98,3 +83,4 @@ function PipeEdgePathComponent({
 const PipeEdgePath = memo(PipeEdgePathComponent)
 
 export { PipeEdgePath }
+export type { PipeEdgePathProps }

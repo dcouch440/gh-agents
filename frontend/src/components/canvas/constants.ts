@@ -71,34 +71,10 @@ export const LOD = {
   MINIMAL_EDGE_OPACITY: 0.5,
 } as const
 
-export const PIPE = {
-  // Layer widths (px)
-  GLOW_WIDTH: 10,
-  BODY_WIDTH: 6,
-  CORE_WIDTH: 2,
-  BODY_WIDTH_DIM: 4,
-  CORE_WIDTH_DIM: 1.5,
-
-  // Opacities — protocol edges
-  GLOW_OPACITY: 0.1,
-  BODY_OPACITY: 0.35,
-  CORE_OPACITY: 0.7,
-
-  // Opacities — non-protocol edges
-  BODY_OPACITY_DIM: 0.15,
-  CORE_OPACITY_DIM: 0.3,
-
-  // Opacities — selected state
-  GLOW_OPACITY_SELECTED: 0.2,
-  BODY_OPACITY_SELECTED: 0.5,
-  CORE_OPACITY_SELECTED: 0.9,
-
-  // Inner core brightness boost (0..1 — how much to mix toward white)
-  CORE_BRIGHTEN: 0.4,
-
-  // Interaction hit area
+export const CONNECTOR = {
+  STROKE_WIDTH: 6,
+  DASH_ARRAY: '0.1 20',
+  DOT_RADIUS: 6,
   INTERACTION_WIDTH: 20,
-
-  // Corner rounding radius (px) for orthogonal pipe bends
   CORNER_RADIUS: 8,
 } as const

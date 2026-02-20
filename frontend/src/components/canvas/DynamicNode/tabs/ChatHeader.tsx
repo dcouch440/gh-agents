@@ -1,5 +1,3 @@
-import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
 import DeleteOutlined from '@mui/icons-material/DeleteOutlined'
 
@@ -10,31 +8,23 @@ type ChatHeaderProps = {
 
 function ChatHeader({ onClear, disabled }: ChatHeaderProps) {
   return (
-    <Box
+    <IconButton
+      className="nodrag"
+      size="small"
+      onClick={onClear}
+      disabled={disabled}
       sx={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        px: 1.5,
-        py: 0.25,
-        position: 'relative',
-        '&::after': {
-          content: '""',
-          position: 'absolute',
-          bottom: 0,
-          left: 12,
-          right: 12,
-          height: '1px',
-          bgcolor: 'divider',
-          opacity: 0.5,
-        },
+        position: 'absolute',
+        top: 4,
+        right: 8,
+        zIndex: 1,
+        p: 0.25,
+        opacity: 0.5,
+        '&:hover': { opacity: 1 },
       }}
     >
-      <Typography sx={{ fontSize: 11, fontWeight: 500, color: 'text.secondary', opacity: 0.7 }}>Chat</Typography>
-      <IconButton size="small" onClick={onClear} disabled={disabled} sx={{ p: 0.25 }}>
-        <DeleteOutlined sx={{ fontSize: 14 }} />
-      </IconButton>
-    </Box>
+      <DeleteOutlined sx={{ fontSize: 14 }} />
+    </IconButton>
   )
 }
 

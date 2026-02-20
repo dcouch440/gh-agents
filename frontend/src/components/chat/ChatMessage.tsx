@@ -47,10 +47,10 @@ function ChatMessage({ role, content, streaming }: ChatMessageProps) {
           px: 1.5,
           mx: -1.5,
           bgcolor: (theme) =>
-            theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.02)' : 'rgba(255, 255, 255, 0.03)',
+            theme.palette.mode === 'light' ? 'rgba(90, 138, 110, 0.08)' : 'rgba(255, 255, 255, 0.03)',
           boxShadow: (theme) =>
             theme.palette.mode === 'light'
-              ? 'inset 0 1px 2px rgba(0, 0, 0, 0.03), inset 0 -1px 1px rgba(0, 0, 0, 0.02)'
+              ? 'inset 0 1px 2px rgba(90, 138, 110, 0.06), inset 0 -1px 1px rgba(90, 138, 110, 0.04)'
               : 'inset 0 1px 2px rgba(0, 0, 0, 0.12), inset 0 -1px 1px rgba(0, 0, 0, 0.08)',
         }}
       >
