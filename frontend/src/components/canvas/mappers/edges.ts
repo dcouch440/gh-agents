@@ -1,20 +1,20 @@
 import type { Edge } from '@xyflow/react'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 import { Collections } from '@/utils/collections'
-import { STEP_TYPE_COLORS, GREYSCALE_ACCENT } from '../constants'
-import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from '../CanvasNode/registry'
+import { GREYSCALE_ACCENT } from '../constants'
+import { resolveVariant } from '../CanvasNode/registry'
+import type { NodePalette } from '@/theme'
 import type { ProtocolStepInfo, ProtocolGroupEntry, StepNodeLookups, StepEdgeData } from './types'
 import { isWorkforceStep } from './protocolGroups'
 
-/** Resolve the intrinsic color for a step based on its archetype or execution mode. */
+/** Resolve the themed color for a step via its node variant. */
 const resolveStepColor = (
   step: WorkflowStep,
   protocolsByStep: ReadonlyMap<string, ProtocolStepInfo>,
+  nodePalette: NodePalette,
 ): string => {
-  const archetype = resolveArchetype(step, protocolsByStep, step.id)
-  if (archetype !== Archetype.BLANK) return ARCHETYPE_CONFIGS[archetype].color
-
-  return STEP_TYPE_COLORS[step.execution_mode] ?? GREYSCALE_ACCENT
+  const variant = resolveVariant(step, protocolsByStep, step.id)
+  return nodePalette[variant]
 }
 
 const toRFEdges = (
@@ -22,13 +22,14 @@ const toRFEdges = (
   protocolGroups: ReadonlyMap<string, ProtocolGroupEntry>,
   protocolsByStep: ReadonlyMap<string, ProtocolStepInfo>,
   steps: readonly WorkflowStep[],
+  nodePalette: NodePalette,
 ): Edge[] => {
   const stepsById = Collections.keyBy(steps, (s) => s.id)
 
   return Collections.mapBy(edges, (edge) => {
     const sourceStep = stepsById.get(edge.from_step_id)
     const sourceColor = sourceStep
-      ? resolveStepColor(sourceStep, protocolsByStep)
+      ? resolveStepColor(sourceStep, protocolsByStep, nodePalette)
       : GREYSCALE_ACCENT
 
     // Edge is protocol-connected if either end is a protocol step, in a protocol group, or a workforce step
@@ -50,8 +51,9 @@ const toRFEdges = (
   })
 }
 
-const toAgentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] => {
+const toAgentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups, nodePalette: NodePalette): Edge[] => {
   const edges: Edge[] = []
+  const agentColor = nodePalette.agent
   for (const step of steps) {
     if (!isWorkforceStep(step, lookups.protocolsByStep)) continue
 
@@ -68,7 +70,7 @@ const toAgentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] =
         edges.push({
           id: `agent-edge-${agent.id}`,
           type: 'artifactEdge',
-          data: { color: ARCHETYPE_CONFIGS[Archetype.AGENT].color },
+          data: { color: agentColor },
           source: step.id,
           sourceHandle: 'agents',
           target: `agent-artifact-${agent.id}`,
@@ -82,7 +84,7 @@ const toAgentEdges = (steps: WorkflowStep[], lookups: StepNodeLookups): Edge[] =
           edges.push({
             id: `agent-dep-${depId}-${agent.id}`,
             type: 'artifactEdge',
-            data: { color: ARCHETYPE_CONFIGS[Archetype.AGENT].color },
+            data: { color: agentColor },
             source: `agent-artifact-${depId}`,
             sourceHandle: 'agent-output',
             target: `agent-artifact-${agent.id}`,

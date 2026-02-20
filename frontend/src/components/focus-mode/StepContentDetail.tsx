@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 import Box from '@mui/material/Box'
+import { useTheme } from '@mui/material/styles'
 import { useStore, workflowStore } from '@/stores'
-import { STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR } from '@/components/canvas/constants'
 import { CodeEditor } from '@/components/primitives/CodeEditor'
 import { MarkdownPreview } from '@/components/primitives/MarkdownPreview'
 import { DetailShell } from './DetailShell'
@@ -15,10 +15,11 @@ type StepContentDetailProps = {
 }
 
 function StepContentDetail({ stepId, kind, onClose }: StepContentDetailProps) {
+  const theme = useTheme()
   const step = useStore(workflowStore.store, workflowStore.selectStepById(stepId))
   const [viewMode, setViewMode] = useState<ContentViewMode>('raw')
 
-  const accentColor = STEP_TYPE_COLORS[kind] ?? DEFAULT_STEP_TYPE_COLOR
+  const accentColor = theme.palette.nodePalette[kind]
   const title = step?.name ?? (kind === 'input' ? 'Input' : 'Context')
   const content = step?.prompt_template ?? ''
 

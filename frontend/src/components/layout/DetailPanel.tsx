@@ -130,8 +130,8 @@ function DetailPanel({
           py: 1,
           minHeight: 44,
           borderBottom: 1,
-          borderColor: theme.palette.mode === 'light' ? 'rgba(0, 0, 0, 0.1)' : 'divider',
-          backgroundColor: theme.palette.mode === 'light' ? theme.palette.custom.chromeBg : 'transparent',
+          borderColor: 'divider',
+          backgroundColor: theme.palette.custom.bgHeader,
           opacity: isOpen ? 1 : 0,
           transition: `opacity ${ANIMATION.FAST}ms ease`,
         }}
@@ -142,7 +142,7 @@ function DetailPanel({
             fontWeight: 600,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
-            color: theme.palette.mode === 'light' ? theme.palette.custom.chromeTextActive : 'text.primary',
+            color: 'text.primary',
           }}
         >
           {title}
@@ -154,17 +154,17 @@ function DetailPanel({
             width: 24,
             height: 24,
             borderRadius: '50%',
-            color: theme.palette.mode === 'light' ? theme.palette.custom.chromeText : 'text.disabled',
+            color: 'text.disabled',
             backgroundColor: 'transparent',
             transition: `all ${ANIMATION.FAST}ms ease`,
             '&:hover': {
-              color: theme.palette.mode === 'light' ? theme.palette.custom.chromeTextHover : 'text.secondary',
-              backgroundColor: theme.palette.mode === 'light' ? 'rgba(61,43,31,0.1)' : theme.palette.custom.activeTintStrong,
+              color: 'text.secondary',
+              backgroundColor: theme.palette.custom.activeTintStrong,
               transform: 'scale(1.05)',
             },
             '&:active': {
               transform: 'scale(0.95)',
-              backgroundColor: theme.palette.mode === 'light' ? 'rgba(61,43,31,0.15)' : theme.palette.custom.borderHover,
+              backgroundColor: theme.palette.custom.borderHover,
             },
           }}
         >

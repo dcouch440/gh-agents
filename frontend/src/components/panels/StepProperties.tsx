@@ -7,7 +7,7 @@ import { useStore, agentStore, promptTemplateStore, outputSchemaStore, workflowS
 import { Collections } from '@/utils/collections'
 import { useTheme } from '@mui/material/styles'
 import { DESIGN } from '@/constants'
-import { STEP_TYPE_COLORS, DEFAULT_STEP_TYPE_COLOR } from '@/components/canvas/constants'
+import { GREYSCALE_ACCENT } from '@/components/canvas/constants'
 import { SystemTab, TemplateTab, InputTab, OutputTab, ProtocolTab } from './StepPropertiesTabs'
 import { useStepFieldHandlers } from './useStepFieldHandlers'
 import { useStepVariableContext } from './useStepVariableContext'
@@ -108,7 +108,7 @@ function StepProperties({ step, steps, readOnly = false }: StepPropertiesProps) 
 
   // ── Mode badge color ────────────────────────────────────────────────────────
 
-  const modeColor = STEP_TYPE_COLORS[step.execution_mode] ?? DEFAULT_STEP_TYPE_COLOR
+  const modeColor = (theme.palette.nodePalette as Record<string, string>)[step.execution_mode] ?? GREYSCALE_ACCENT
 
   // ── Resolved output schema for the Output tab ─────────────────────────────
 
