@@ -137,7 +137,6 @@ pub async fn create_step(
         goal_summary_updated_at: None,
         sub_workflow_template_id: p.sub_workflow_template_id,
         child_workflow_id: None,
-        is_designer_step: false,
         pinned: false,
         run_results_summary: String::new(),
     };
@@ -255,7 +254,6 @@ pub async fn update_step(
             .sub_workflow_template_id
             .or(existing.sub_workflow_template_id),
         child_workflow_id: existing.child_workflow_id,
-        is_designer_step: existing.is_designer_step,
         pinned: existing.pinned,
         run_results_summary: existing.run_results_summary.clone(),
     };

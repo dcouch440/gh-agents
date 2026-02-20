@@ -11,11 +11,11 @@ use crate::server::services::ServiceError;
 
 use super::types::ExecutionOrderEntry;
 
-/// Recompute the topological execution order for all non-designer steps
-/// in a pipeline using Kahn's algorithm with a min-heap tie-break.
+/// Recompute the topological execution order for all steps in a pipeline
+/// using Kahn's algorithm with a min-heap tie-break.
 ///
 /// Updates `display_order` on each child step in the DB and returns the
-/// ordered sequence. Designer steps are excluded from ordering.
+/// ordered sequence.
 pub async fn recompute_execution_order(
     repo: &dyn WorkflowRepo,
     pipeline_id: Uuid,
@@ -25,8 +25,7 @@ pub async fn recompute_execution_order(
         .await
         .map_err(|e| ServiceError::Internal(e.into()))?;
 
-    // Filter to non-designer steps only
-    let pipeline_steps: Vec<_> = steps.iter().filter(|s| !s.is_designer_step).collect();
+    let pipeline_steps: Vec<_> = steps.iter().collect();
     if pipeline_steps.is_empty() {
         return Ok(vec![]);
     }
@@ -58,7 +57,7 @@ async fn compute_and_persist(
     let mut in_degree = vec![0usize; n];
     let mut dependents: Vec<Vec<usize>> = vec![vec![]; n];
 
-    // Only count edges between non-designer pipeline steps
+    // Only count edges between pipeline steps
     for edge in edges {
         if let (Some(&from_i), Some(&to_i)) = (
             step_index.get(&edge.from_step_id),

@@ -1137,8 +1137,8 @@ impl WorkflowRepo for PgRepo {
     async fn create_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow> {
         let row: WorkflowStepRow = sqlx::query_as(
             r#"
-            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, for_each_label_field, display_order, reasoning_trace, verification_agent_ids, position_x, position_y, width, height, name, system_prompt_suffix, visible, description, child_workflow_id, is_designer_step)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, for_each_label_field, display_order, reasoning_trace, verification_agent_ids, position_x, position_y, width, height, name, system_prompt_suffix, visible, description, child_workflow_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
             RETURNING *
             "#,
         )
@@ -1165,7 +1165,6 @@ impl WorkflowRepo for PgRepo {
         .bind(step.visible)
         .bind(&step.description)
         .bind(step.child_workflow_id)
-        .bind(step.is_designer_step)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -1197,9 +1196,9 @@ impl WorkflowRepo for PgRepo {
             SET agent_id = $1, execution_mode = $2, for_each_ref = $3, prompt_template_id = $4, prompt_template = $5,
                 output_schema_id = $6, output_variable_name = $7, interactive_agent_id = $8, for_each_label_field = $9, display_order = $10,
                 reasoning_trace = $11, verification_agent_ids = $12, position_x = $13, position_y = $14, width = $15, height = $16,
-                name = $17, system_prompt_suffix = $18, visible = $19, description = $20, child_workflow_id = $21, is_designer_step = $22,
+                name = $17, system_prompt_suffix = $18, visible = $19, description = $20, child_workflow_id = $21,
                 version = version + 1
-            WHERE id = $23
+            WHERE id = $22
             RETURNING *
             "#,
         )
@@ -1224,7 +1223,6 @@ impl WorkflowRepo for PgRepo {
         .bind(step.visible)
         .bind(&step.description)
         .bind(step.child_workflow_id)
-        .bind(step.is_designer_step)
         .bind(step.id)
         .fetch_one(&self.pool)
         .await?;

@@ -12,17 +12,15 @@ use super::types::{AddStepInput, ExecutionOrderEntry, PipelineContext, StepAdded
 
 /// Add a step to the pipeline. Auto-creates the pipeline if it doesn't exist.
 ///
-/// If a Designer step exists, wires a Designer → new step edge.
 /// Returns the created step and the recomputed execution sequence.
 pub async fn add_step(
     repo: &dyn WorkflowRepo,
     ctx: &PipelineContext,
     user_id: Uuid,
     input: AddStepInput,
-    include_designer: bool,
 ) -> Result<(StepAdded, Vec<ExecutionOrderEntry>), ServiceError> {
     // Ensure pipeline exists
-    let pipeline = super::create::create_pipeline(repo, ctx, user_id, include_designer).await?;
+    let pipeline = super::create::create_pipeline(repo, ctx, user_id).await?;
     let pipeline_id = pipeline.pipeline_id;
 
     // Determine display_order
@@ -33,12 +31,7 @@ pub async fn add_step(
                 .list_steps(pipeline_id)
                 .await
                 .map_err(|e| ServiceError::Internal(e.into()))?;
-            let max_order = steps
-                .iter()
-                .filter(|s| !s.is_designer_step)
-                .map(|s| s.display_order)
-                .max()
-                .unwrap_or(0);
+            let max_order = steps.iter().map(|s| s.display_order).max().unwrap_or(0);
             max_order + 1
         }
     };
@@ -82,7 +75,6 @@ pub async fn add_step(
         goal_summary_updated_at: None,
         sub_workflow_template_id: None,
         child_workflow_id: None,
-        is_designer_step: false,
         pinned: false,
         run_results_summary: String::new(),
     };
@@ -91,13 +83,6 @@ pub async fn add_step(
         .create_step(child_step)
         .await
         .map_err(|e| ServiceError::Internal(e.into()))?;
-
-    // Wire Designer → new step edge (fan-out)
-    if let Some(designer_step_id) = pipeline.designer_step_id {
-        repo.add_edge(pipeline_id, designer_step_id, created.id)
-            .await
-            .map_err(|e| ServiceError::Internal(e.into()))?;
-    }
 
     // Recompute execution order
     let sequence = recompute_execution_order(repo, pipeline_id).await?;

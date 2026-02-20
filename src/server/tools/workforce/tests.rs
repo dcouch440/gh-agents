@@ -124,11 +124,11 @@ mod tests {
     }
 
     // =========================================================================
-    // add_agent (workforce-specific: creates child step + Designer)
+    // add_agent (workforce-specific: creates pipeline + child step)
     // =========================================================================
 
     #[tokio::test]
-    async fn add_agent_first_agent_creates_designer_and_child_step() {
+    async fn add_agent_first_agent_creates_pipeline_and_child_step() {
         let ctx = make_ctx();
         let brief = make_brief(ctx.step_id);
         let brief_id = brief.id;
@@ -147,7 +147,7 @@ mod tests {
         repo.expect_get_mission_brief()
             .returning(move |_| Ok(Some(brief_clone.clone())));
 
-        // ensure_child_workflow: get_step returns step without child_workflow_id
+        // create_pipeline: get_step returns step without child_workflow_id
         let step_clone = step.clone();
         repo.expect_get_step()
             .returning(move |_| Ok(Some(step_clone.clone())));
@@ -170,19 +170,8 @@ mod tests {
         // list_agent_roster: empty (first agent)
         repo.expect_list_agent_roster().returning(|_| Ok(vec![]));
 
-        // create_designer_step + create agent step
-        repo.expect_create_step().times(2).returning(|s| Ok(s));
-
-        // Wire Designer → agent edge
-        repo.expect_add_edge().returning(|wid, from, to| {
-            Ok(WorkflowStepEdgeRow {
-                id: Uuid::new_v4(),
-                from_step_id: from,
-                to_step_id: to,
-                workflow_id: wid,
-                ..Default::default()
-            })
-        });
+        // create agent step (single step, no designer)
+        repo.expect_create_step().times(1).returning(|s| Ok(s));
 
         // add_roster_agent
         repo.expect_add_roster_agent()
@@ -205,10 +194,8 @@ mod tests {
         repo.expect_link_roster_agent_to_child_step()
             .returning(|_, _| Ok(()));
 
-        // recompute_execution_order: list_edges for child workflow
+        // recompute_execution_order: list_edges + list_steps for child workflow
         repo.expect_list_edges().returning(|_| Ok(vec![]));
-
-        // Pipeline service: recompute_execution_order calls list_steps
         repo.expect_list_steps().returning(|_| Ok(vec![]));
 
         let input = json!({
@@ -225,17 +212,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn add_agent_subsequent_agent_fans_out_from_designer() {
+    async fn add_agent_subsequent_agent_appends_to_pipeline() {
         let ctx = make_ctx();
         let brief = make_brief(ctx.step_id);
         let brief_id = brief.id;
         let child_wf_id = Uuid::new_v4();
-        let designer_step_id = Uuid::new_v4();
         let prev_child_step_id = Uuid::new_v4();
         let step_id = ctx.step_id;
         let wf_id = ctx.workflow_id;
 
-        // Step already has child_workflow_id
+        // Step already has child_workflow_id (pipeline exists)
         let mut step = make_step(step_id, wf_id, "workforce");
         step.child_workflow_id = Some(child_wf_id);
 
@@ -243,16 +229,13 @@ mod tests {
         let mut existing_agent = make_roster_agent(brief_id, "Agent1", 0);
         existing_agent.child_step_id = Some(prev_child_step_id);
 
-        // Designer step exists in child workflow
-        let mut designer = make_step(designer_step_id, child_wf_id, "single");
-        designer.is_designer_step = true;
-
         let mut repo = MockWorkflowRepo::new();
 
         let brief_clone = brief.clone();
         repo.expect_get_mission_brief()
             .returning(move |_| Ok(Some(brief_clone.clone())));
 
+        // create_pipeline: get_step returns step with child_workflow_id (returns existing)
         let step_clone = step.clone();
         repo.expect_get_step()
             .returning(move |_| Ok(Some(step_clone.clone())));
@@ -265,26 +248,12 @@ mod tests {
         repo.expect_list_agent_roster()
             .returning(move |_| Ok(vec![existing_agent_clone.clone()]));
 
-        // list_steps returns Designer + existing agent step
-        let designer_clone = designer.clone();
-        repo.expect_list_steps()
-            .returning(move |_| Ok(vec![designer_clone.clone()]));
-
-        // create agent step (no Designer creation this time)
+        // create agent step (pipeline already exists, just adds step)
         repo.expect_create_step().times(1).returning(|s| Ok(s));
 
-        // Wire from Designer (fan-out), NOT from previous agent
-        repo.expect_add_edge()
-            .withf(move |_, from, _| *from == designer_step_id)
-            .returning(|wid, from, to| {
-                Ok(WorkflowStepEdgeRow {
-                    id: Uuid::new_v4(),
-                    from_step_id: from,
-                    to_step_id: to,
-                    workflow_id: wid,
-                    ..Default::default()
-                })
-            });
+        // recompute_execution_order: list_steps + list_edges
+        repo.expect_list_steps().returning(|_| Ok(vec![]));
+        repo.expect_list_edges().returning(|_| Ok(vec![]));
 
         repo.expect_add_roster_agent()
             .returning(move |bid, name, role, caps, order| {
@@ -302,9 +271,6 @@ mod tests {
 
         repo.expect_link_roster_agent_to_child_step()
             .returning(|_, _| Ok(()));
-
-        // recompute_execution_order: list_edges for child workflow
-        repo.expect_list_edges().returning(|_| Ok(vec![]));
 
         let input = json!({ "name": "Agent2", "role": "Writer" });
         let result = execute_workforce_tool("add_agent", &input, &repo, &ctx).await;

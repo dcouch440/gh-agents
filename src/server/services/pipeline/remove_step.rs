@@ -10,9 +10,9 @@ use super::types::{ExecutionOrderEntry, PipelineContext};
 
 /// Remove a step from the pipeline. Removes all edges touching it.
 ///
-/// If the pipeline has no remaining non-designer steps after removal,
-/// destroys the entire pipeline (Designer step, child workflow, and
-/// clears `child_workflow_id` on the parent step).
+/// If the pipeline has no remaining steps after removal, destroys
+/// the entire pipeline (child workflow and clears `child_workflow_id`
+/// on the parent step).
 ///
 /// Returns the recomputed execution sequence (empty if pipeline was destroyed).
 pub async fn remove_step(
@@ -49,15 +49,13 @@ pub async fn remove_step(
         .await
         .map_err(|e| ServiceError::Internal(e.into()))?;
 
-    // Check if pipeline is now empty (no non-designer steps)
+    // Check if pipeline is now empty
     let remaining_steps = repo
         .list_steps(pipeline_id)
         .await
         .map_err(|e| ServiceError::Internal(e.into()))?;
 
-    let has_non_designer = remaining_steps.iter().any(|s| !s.is_designer_step);
-
-    if !has_non_designer {
+    if remaining_steps.is_empty() {
         // Destroy the entire pipeline
         super::destroy::destroy_pipeline(repo, ctx).await?;
         return Ok(vec![]);

@@ -213,8 +213,6 @@ pub struct WorkflowStepRow {
     pub sub_workflow_template_id: Option<Uuid>,
     /// Live child workflow for workforce steps (edited at design time, snapshotted at execution).
     pub child_workflow_id: Option<Uuid>,
-    /// Marks the auto-managed Designer step within a workforce child workflow.
-    pub is_designer_step: bool,
     /// Whether this step's output is frozen (replayed instead of re-executed).
     pub pinned: bool,
     /// Haiku-generated summary of this step's last execution output.
@@ -809,7 +807,6 @@ impl Default for WorkflowStepRow {
             goal_summary_updated_at: None,
             sub_workflow_template_id: None,
             child_workflow_id: None,
-            is_designer_step: false,
             pinned: false,
             run_results_summary: String::new(),
         }
