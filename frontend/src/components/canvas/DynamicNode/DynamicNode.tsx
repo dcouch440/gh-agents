@@ -32,7 +32,6 @@ import type { Archetype as ArchetypeType } from './archetypes'
 import { useDynamicNodeExecution } from './useDynamicNodeExecution'
 import { useStepStoreData } from './useStepStoreData'
 import { buildStepTabs } from './buildStepTabs'
-import { resolveSubtitle } from './resolveSubtitle'
 import { AgentStreamTab } from './tabs/AgentStreamTab'
 import { AgentInfoTab } from './tabs/AgentInfoTab'
 
@@ -69,7 +68,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   // --- Extracted hooks ---
   const { isExecuting, resolvedExecStatus, agentSourceStatus, stepExecStatus } =
     useDynamicNodeExecution(id, isAgent, nodeData.rosterAgentId, nodeData.protocolStepId)
-  const { roomStepMembers, stepIssues } = useStepStoreData(id)
+  const { stepIssues } = useStepStoreData(id)
 
   // --- Highlight ---
   const protocolHighlight = useProtocolHighlight(
@@ -121,12 +120,6 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   [isAgent, id, nodeData.archetype, nodeData.rosterAgentId, nodeData.protocolStepId, nodeData.label, nodeData.roleDescription, nodeData.capabilities])
 
   // --- Header ---
-  const subtitle = resolveSubtitle({
-    archetype: nodeData.archetype,
-    rosterNames: nodeData.rosterNames,
-    roomMemberNames: roomStepMembers.map((m) => m.name),
-    parentStepName: nodeData.parentStepName,
-  })
 
   const enterFocusMode = useEnterFocusMode()
   const handleEnterFocusMode = useCallback(() => { enterFocusMode(id) }, [enterFocusMode, id])
@@ -222,7 +215,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
     <NodeHeader
       icon={<IconComponent sx={{ fontSize: isAgent ? 18 : 20, color: accentColor }} />}
       title={nodeData.label}
-      subtitle={subtitle}
+      subtitle={null}
       accentColor={accentColor}
       size={isAgent ? 'standard' : 'large'}
       badge={headerBadge}

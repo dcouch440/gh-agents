@@ -31,7 +31,6 @@ function NodeHeader({
           width: config.iconBox,
           height: config.iconBox,
           borderRadius: '6px',
-          backgroundColor: `${accentColor}33`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

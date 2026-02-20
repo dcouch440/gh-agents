@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { api } from './api'
 
 const NAMESPACE_KEYS = [
-  'auth', 'agents', 'tasks', 'tools', 'documents', 'sessions',
+  'auth', 'agents', 'tools', 'documents', 'sessions',
   'chat', 'config', 'stats', 'agentExecutions', 'outputSchemas', 'promptTemplates',
   'costs', 'results', 'workflows', 'contextResponse', 'modes',
   'rooms', 'roomSessions', 'collections', 'protocols',

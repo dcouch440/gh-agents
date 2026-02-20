@@ -54,6 +54,24 @@ vi.mock('@/components/DocumentSelector', () => ({
   DocumentSelector: () => null,
 }))
 
+const _emptySchemas: never[] = []
+vi.mock('@/stores', async () => {
+  const actual = await vi.importActual('@/stores')
+  const { createStore } = await vi.importActual('zustand/vanilla') as { createStore: <T>(fn: () => T) => unknown }
+  const emptyStore = createStore(() => ({ items: { byId: {}, ids: [] }, loading: false, error: null, lastFetched: null }))
+  return {
+    ...actual,
+    outputSchemaStore: {
+      store: emptyStore,
+      selectAll: () => _emptySchemas,
+      selectLoading: () => false,
+      selectError: () => null,
+      fetchAll: vi.fn(),
+      fetchIfStale: vi.fn(),
+    },
+  }
+})
+
 const renderPage = () =>
   render(
     <MemoryRouter>

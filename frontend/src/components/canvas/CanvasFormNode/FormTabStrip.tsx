@@ -13,6 +13,7 @@ type FormTabStripProps = {
 
 function FormTabStrip({ tabs, activeTabId, onTabChange }: FormTabStripProps) {
   const theme = useTheme()
+  const activeTab = tabs.find((t) => t.id === activeTabId)
 
   return (
     <Box
@@ -69,6 +70,11 @@ function FormTabStrip({ tabs, activeTabId, onTabChange }: FormTabStripProps) {
           </Tooltip>
         )
       })}
+      {activeTab?.actions !== undefined && (
+        <Box sx={{ marginLeft: 'auto', display: 'flex', alignItems: 'center' }}>
+          {activeTab.actions}
+        </Box>
+      )}
     </Box>
   )
 }
