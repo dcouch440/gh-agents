@@ -62,7 +62,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   const isAgent = nodeData.archetype === Archetype.AGENT
 
   const config = ARCHETYPE_CONFIGS[nodeData.archetype]
-  const accentColor = config.color
+  const accentColor = theme.palette.mode === 'light' ? theme.palette.custom.accent : config.color
 
   const [activeTabId, setActiveTabId] = useState(isAgent ? 'info' : 'chat')
 
@@ -195,7 +195,7 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
       </span>
     </Tooltip>
   ) : nodeData.archetype !== Archetype.BLANK ? (
-    <ProtocolBadge color={config.color} label={config.label} animated />
+    <ProtocolBadge color={accentColor} label={config.label} animated />
   ) : undefined
 
   const workshopRunning = workshopStatus === 'running' || workshopStatus === 'initializing'
@@ -220,10 +220,10 @@ function DynamicNodeComponent({ id, data, selected }: NodeProps) {
   const IconComponent = config.icon
   const headerElement = (
     <NodeHeader
-      icon={<IconComponent sx={{ fontSize: isAgent ? 18 : 20, color: config.color }} />}
+      icon={<IconComponent sx={{ fontSize: isAgent ? 18 : 20, color: accentColor }} />}
       title={nodeData.label}
       subtitle={subtitle}
-      accentColor={config.color}
+      accentColor={accentColor}
       size={isAgent ? 'standard' : 'large'}
       badge={headerBadge}
       actions={headerActions}

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
+import { render } from '@/test/render'
 import { MinimalNodeShell } from './MinimalNodeShell'
 
 const baseProps = {
@@ -15,11 +16,11 @@ describe('MinimalNodeShell', () => {
     expect(screen.getByText('Test Node')).toBeInTheDocument()
   })
 
-  it('renders the accent stripe', () => {
+  it('renders the flat node shell without accent stripe', () => {
     const { container } = render(<MinimalNodeShell {...baseProps} />)
     const boxes = container.querySelectorAll('div')
-    // Outer box > stripe box + label container box
-    expect(boxes.length).toBeGreaterThanOrEqual(3)
+    // Outer box > label container box (no stripe)
+    expect(boxes.length).toBeGreaterThanOrEqual(2)
   })
 
   it('displays the provided label', () => {

@@ -19,7 +19,9 @@ type NodeHighlightOutput = {
   boxShadow: string
 }
 
-const getNodeBorderColor = (
+/* ── Dark mode (unchanged) ── */
+
+const getNodeBorderColorDark = (
   selected: boolean,
   accentColor: string,
   highlightMode: HighlightMode,
@@ -34,25 +36,22 @@ type ShadowPreset = { dark: string; light: string }
 
 const STEP_DEFAULT_SHADOW: ShadowPreset = {
   dark: '0 4px 24px rgba(0, 0, 0, 0.4)',
-  light: '0 4px 24px rgba(45, 27, 14, 0.12)',
+  light: 'none',
 }
 
 const RESIZABLE_DEFAULT_SHADOW: ShadowPreset = {
   dark: '0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)',
-  light: '0 8px 32px rgba(45, 27, 14, 0.14), 0 2px 8px rgba(45, 27, 14, 0.08)',
+  light: 'none',
 }
 
-const getBoxShadow = (
+const getBoxShadowDark = (
   selected: boolean,
   accentColor: string,
   highlightMode: HighlightMode,
-  isDark: boolean,
   defaultPreset: ShadowPreset,
 ): string => {
   if (selected) {
-    return isDark
-      ? `0 0 0 2px ${accentColor}, 0 0 20px ${accentColor}40, 0 8px 32px ${accentColor}30`
-      : `0 0 0 2px ${accentColor}, 0 0 16px ${accentColor}30, 0 8px 32px rgba(45, 27, 14, 0.14)`
+    return `0 0 0 2px ${accentColor}, 0 0 20px ${accentColor}40, 0 8px 32px ${accentColor}30`
   }
   if (highlightMode === HighlightMode.SELECT) {
     return `0 0 0 1px ${accentColor}40, 0 8px 32px ${accentColor}22`
@@ -60,8 +59,13 @@ const getBoxShadow = (
   if (highlightMode === HighlightMode.HOVER) {
     return `0 0 0 1px ${accentColor}20, 0 6px 24px ${accentColor}14`
   }
-  return isDark ? defaultPreset.dark : defaultPreset.light
+  return defaultPreset.dark
 }
+
+/* ── Light mode (flat design matching mockup) ── */
+
+const SCREEN_BORDER = '#d6cfc4'
+const ACCENT_RING = 'rgba(90, 138, 110, 0.18)'
 
 const getNodeHighlightStyles = ({
   selected,
@@ -70,12 +74,36 @@ const getNodeHighlightStyles = ({
   themeMode,
   variant = 'step',
 }: NodeHighlightInput): NodeHighlightOutput => {
-  const isDark = themeMode === 'dark'
-  const borderColor = getNodeBorderColor(selected, accentColor, highlightMode)
-  const preset = variant === 'step' ? STEP_DEFAULT_SHADOW : RESIZABLE_DEFAULT_SHADOW
-  const boxShadow = getBoxShadow(selected, accentColor, highlightMode, isDark, preset)
+  if (themeMode === 'dark') {
+    const borderColor = getNodeBorderColorDark(selected, accentColor, highlightMode)
+    const preset = variant === 'step' ? STEP_DEFAULT_SHADOW : RESIZABLE_DEFAULT_SHADOW
+    const boxShadow = getBoxShadowDark(selected, accentColor, highlightMode, preset)
+    return { borderColor, boxShadow }
+  }
 
-  return { borderColor, boxShadow }
+  // Light mode — flat, minimal
+  if (selected) {
+    return {
+      borderColor: accentColor,
+      boxShadow: `0 0 0 2px ${ACCENT_RING}`,
+    }
+  }
+  if (highlightMode === HighlightMode.SELECT) {
+    return {
+      borderColor: `${accentColor}60`,
+      boxShadow: 'none',
+    }
+  }
+  if (highlightMode === HighlightMode.HOVER) {
+    return {
+      borderColor: `${accentColor}40`,
+      boxShadow: 'none',
+    }
+  }
+  return {
+    borderColor: SCREEN_BORDER,
+    boxShadow: 'none',
+  }
 }
 
 export { getNodeHighlightStyles }

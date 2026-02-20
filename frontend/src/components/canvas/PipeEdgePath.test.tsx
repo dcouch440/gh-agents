@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render } from '@testing-library/react'
+import { render } from '@/test/render'
 import { PipeEdgePath } from './PipeEdgePath'
 
 const mockUseCanvasLOD = vi.hoisted(() => vi.fn(() => 'full'))
@@ -12,10 +12,13 @@ const testPath = 'M 0 0 C 50 0, 50 100, 100 100'
 
 const baseProps = {
   edgePath: testPath,
-  color: '#3b82f6',
+  color: '#cdc6ba',
   selected: false,
-  isProtocol: true,
   interactionWidth: 20,
+  sourceX: 0,
+  sourceY: 0,
+  targetX: 100,
+  targetY: 100,
 }
 
 const renderPipe = (overrides: Partial<typeof baseProps> = {}) => {
@@ -29,58 +32,52 @@ const renderPipe = (overrides: Partial<typeof baseProps> = {}) => {
 
 describe('PipeEdgePath', () => {
   describe('full detail', () => {
-    it('renders 4 layers for protocol edges (interaction + glow + body + core)', () => {
+    it('renders interaction path + dotted path + 2 endpoint dots', () => {
       mockUseCanvasLOD.mockReturnValue('full')
-      const container = renderPipe({ isProtocol: true })
+      const container = renderPipe()
       const paths = container.querySelectorAll('path')
-      expect(paths).toHaveLength(4)
+      const circles = container.querySelectorAll('circle')
+      expect(paths).toHaveLength(2) // interaction + dotted
+      expect(circles).toHaveLength(2) // source + target dots
     })
 
-    it('renders 3 layers for non-protocol edges (interaction + body + core, no glow)', () => {
+    it('applies dash array to the connector path', () => {
       mockUseCanvasLOD.mockReturnValue('full')
-      const container = renderPipe({ isProtocol: false, selected: false })
+      const container = renderPipe()
       const paths = container.querySelectorAll('path')
-      expect(paths).toHaveLength(3)
+      const connectorPath = paths[1]
+      expect(connectorPath?.getAttribute('stroke-dasharray')).toBe('0.1 20')
     })
 
-    it('renders 4 layers when selected even if not protocol', () => {
-      mockUseCanvasLOD.mockReturnValue('full')
-      const container = renderPipe({ isProtocol: false, selected: true })
-      const paths = container.querySelectorAll('path')
-      expect(paths).toHaveLength(4)
-    })
-
-    it('renders glow as a wide semi-transparent stroke', () => {
-      mockUseCanvasLOD.mockReturnValue('full')
-      const container = renderPipe({ isProtocol: true, color: '#3b82f6' })
-      const paths = container.querySelectorAll('path')
-      const glowPath = paths[1]
-      expect(glowPath?.getAttribute('stroke')).toBe('#3b82f6')
-      expect(glowPath?.getAttribute('filter')).toBeNull()
-    })
-
-    it('applies the color to glow and body layers', () => {
+    it('applies the color to connector path and endpoint dots', () => {
       mockUseCanvasLOD.mockReturnValue('full')
       const container = renderPipe({ color: '#f85149' })
       const paths = container.querySelectorAll('path')
+      const circles = container.querySelectorAll('circle')
       expect(paths[1]?.getAttribute('stroke')).toBe('#f85149')
-      expect(paths[2]?.getAttribute('stroke')).toBe('#f85149')
+      expect(circles[0]?.getAttribute('fill')).toBe('#f85149')
+      expect(circles[1]?.getAttribute('fill')).toBe('#f85149')
     })
 
-    it('applies a brightened color to the core layer', () => {
+    it('places endpoint dots at source and target coordinates', () => {
       mockUseCanvasLOD.mockReturnValue('full')
-      const container = renderPipe({ color: '#000000' })
-      const paths = container.querySelectorAll('path')
-      expect(paths[3]?.getAttribute('stroke')).toBe('#666666')
+      const container = renderPipe({ sourceX: 10, sourceY: 20, targetX: 90, targetY: 80 })
+      const circles = container.querySelectorAll('circle')
+      expect(circles[0]?.getAttribute('cx')).toBe('10')
+      expect(circles[0]?.getAttribute('cy')).toBe('20')
+      expect(circles[1]?.getAttribute('cx')).toBe('90')
+      expect(circles[1]?.getAttribute('cy')).toBe('80')
     })
   })
 
   describe('minimal detail', () => {
-    it('renders only 2 paths (interaction + body)', () => {
+    it('renders only 2 paths (interaction + body), no circles', () => {
       mockUseCanvasLOD.mockReturnValue('minimal')
-      const container = renderPipe({ isProtocol: true })
+      const container = renderPipe()
       const paths = container.querySelectorAll('path')
+      const circles = container.querySelectorAll('circle')
       expect(paths).toHaveLength(2)
+      expect(circles).toHaveLength(0)
     })
 
     it('keeps the interaction hit area', () => {

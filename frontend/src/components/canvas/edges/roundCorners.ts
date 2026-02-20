@@ -1,4 +1,4 @@
-import { PIPE } from '../constants'
+import { CONNECTOR } from '../constants'
 
 type Point = { x: number; y: number }
 
@@ -36,7 +36,7 @@ const lerp = (a: Point, b: Point, distance: number): Point => {
  * The radius is clamped per-corner to not exceed half the length of either
  * adjacent segment, ensuring the curve never overshoots.
  */
-const roundCorners = (path: string, radius: number = PIPE.CORNER_RADIUS): string => {
+const roundCorners = (path: string, radius: number = CONNECTOR.CORNER_RADIUS): string => {
   if (radius <= 0) return path
 
   const points = parseWaypoints(path)

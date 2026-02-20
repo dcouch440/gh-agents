@@ -11,7 +11,7 @@ type FormTabStripProps = {
   accentColor: string
 }
 
-function FormTabStrip({ tabs, activeTabId, onTabChange, accentColor }: FormTabStripProps) {
+function FormTabStrip({ tabs, activeTabId, onTabChange }: FormTabStripProps) {
   const theme = useTheme()
 
   return (
@@ -24,9 +24,7 @@ function FormTabStrip({ tabs, activeTabId, onTabChange, accentColor }: FormTabSt
         alignItems: 'center',
         gap: 0.25,
         px: 0.5,
-        borderBottom: 1,
-        borderColor: 'divider',
-        backgroundColor: theme.palette.custom.bgHeader,
+        backgroundColor: 'transparent',
         flexShrink: 0,
       }}
     >
@@ -53,32 +51,17 @@ function FormTabStrip({ tabs, activeTabId, onTabChange, accentColor }: FormTabSt
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderRadius: '4px',
+                borderRadius: '5px',
                 cursor: 'pointer',
-                position: 'relative',
-                backgroundColor: isActive ? theme.palette.custom.activeTint : 'transparent',
-                transition: 'background-color 120ms ease',
-                '&:hover': isActive ? {} : { backgroundColor: theme.palette.custom.hoverOverlay },
-                ...(isActive
-                  ? {
-                      '&::after': {
-                        content: '""',
-                        position: 'absolute',
-                        bottom: -4,
-                        left: 4,
-                        right: 4,
-                        height: 2,
-                        borderRadius: 1,
-                        backgroundColor: accentColor,
-                      },
-                    }
-                  : {}),
+                backgroundColor: isActive ? theme.palette.custom.accentBg : 'transparent',
+                transition: 'background-color 120ms ease, color 120ms ease',
+                '&:hover': isActive ? {} : { backgroundColor: theme.palette.custom.accentBg },
               }}
             >
               <IconComponent
                 sx={{
                   fontSize: 16,
-                  color: isActive ? accentColor : 'text.secondary',
+                  color: isActive ? theme.palette.custom.accent : theme.palette.text.disabled,
                   transition: 'color 120ms ease',
                 }}
               />

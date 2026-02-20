@@ -26,7 +26,8 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
   const detailLevel = useCanvasLOD()
   const nodeData = data as ContextNodeData
   const highlightMode = useProtocolHighlight(CanvasNodeKind.CONTEXT, id, nodeData.protocolStepId)
-  const accentColor = STEP_TYPE_COLORS['context'] ?? GREYSCALE_ACCENT
+  const rawAccent = STEP_TYPE_COLORS['context'] ?? GREYSCALE_ACCENT
+  const accentColor = theme.palette.mode === 'light' ? theme.palette.custom.accent : rawAccent
   const isShareSource = useStore(shareStore.store, (s) => s.active && s.sourceStepId === id)
   const highlight = getNodeHighlightStyles({
     selected: selected === true,
@@ -75,7 +76,7 @@ function ContextNodeComponent({ id, data, selected }: NodeProps) {
           borderColor: 'divider',
           display: 'flex',
           alignItems: 'center',
-          backgroundColor: theme.palette.custom.bgHeader,
+          backgroundColor: theme.palette.custom.screenBg,
           flexShrink: 0,
           cursor: 'grab',
           '&:active': { cursor: 'grabbing' },

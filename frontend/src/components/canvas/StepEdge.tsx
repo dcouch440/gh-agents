@@ -4,30 +4,18 @@ import type { EdgeProps } from '@xyflow/react'
 import CloseIcon from '@mui/icons-material/Close'
 import IconButton from '@mui/material/IconButton'
 import { useTheme } from '@mui/material/styles'
-import { PIPE } from './constants'
+import { CONNECTOR } from './constants'
 import { PipeEdgePath } from './PipeEdgePath'
 import { computeBezierPath, computeBezierLabel } from './edges/bezierPath'
 
-type StepEdgeNodeData = {
-  sourceColor: string
-  isProtocolEdge: boolean
-}
-
 function StepEdgeComponent(props: EdgeProps) {
-  const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, selected, data } = props
-  const rawData = data as Partial<StepEdgeNodeData> | undefined
-  const sourceColor = rawData?.sourceColor ?? null
-  const isProtocolEdge = rawData?.isProtocolEdge ?? false
+  const { id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, selected } = props
 
   const theme = useTheme()
   const { deleteElements } = useReactFlow()
 
   const edgePath = computeBezierPath(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition)
   const { labelX, labelY } = computeBezierLabel(sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition)
-
-  const color = selected
-    ? theme.palette.primary.main
-    : sourceColor ?? theme.palette.text.secondary
 
   const handleDelete = (event: React.MouseEvent) => {
     event.stopPropagation()
@@ -39,10 +27,12 @@ function StepEdgeComponent(props: EdgeProps) {
     <>
       <PipeEdgePath
         edgePath={edgePath}
-        color={color}
         selected={selected ?? false}
-        isProtocol={isProtocolEdge}
-        interactionWidth={PIPE.INTERACTION_WIDTH}
+        interactionWidth={CONNECTOR.INTERACTION_WIDTH}
+        sourceX={sourceX}
+        sourceY={sourceY}
+        targetX={targetX}
+        targetY={targetY}
       />
       <EdgeLabelRenderer>
         <div
@@ -66,18 +56,18 @@ function StepEdgeComponent(props: EdgeProps) {
             sx={{
               width: 12,
               height: 12,
-              backgroundColor: theme.palette.text.secondary,
-              color: theme.palette.background.paper,
+              backgroundColor: theme.palette.custom.connectorColor,
+              color: theme.palette.custom.screenBg,
               opacity: selected ? 1 : 0,
               transition: 'opacity 150ms ease, background-color 150ms ease',
               pointerEvents: 'auto',
               willChange: 'opacity, background-color',
               '&:hover': {
                 opacity: 1,
-                backgroundColor: theme.palette.text.disabled,
+                backgroundColor: theme.palette.custom.accent,
               },
               '&:active': {
-                backgroundColor: theme.palette.text.secondary,
+                backgroundColor: theme.palette.custom.accent,
               },
             }}
           >

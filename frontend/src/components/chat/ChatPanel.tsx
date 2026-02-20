@@ -33,7 +33,6 @@ function ChatPanel({ messages, onSend, onCancel, streaming, disabled, emptyMessa
         flexDirection: 'column',
         flex: 1,
         minHeight: 0,
-        bgcolor: 'background.default',
         cursor: 'text',
       }}
     >
