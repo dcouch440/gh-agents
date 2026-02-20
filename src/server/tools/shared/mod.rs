@@ -27,7 +27,7 @@ pub(crate) fn require_str<'a>(input: &'a Value, field: &str) -> Result<&'a str, 
 /// Extract a required array parameter from tool input.
 ///
 /// Returns the array reference on success, or a JSON error value on failure.
-pub fn require_array<'a>(input: &'a Value, field: &str) -> Result<&'a Vec<Value>, Value> {
+pub(crate) fn require_array<'a>(input: &'a Value, field: &str) -> Result<&'a Vec<Value>, Value> {
     input[field]
         .as_array()
         .ok_or_else(|| json!({ "error": format!("Missing required parameter: {} (array)", field) }))
@@ -36,7 +36,7 @@ pub fn require_array<'a>(input: &'a Value, field: &str) -> Result<&'a Vec<Value>
 /// Extract a required i64 parameter from tool input.
 ///
 /// Returns the integer on success, or a JSON error value on failure.
-pub fn require_i64(input: &Value, field: &str) -> Result<i64, Value> {
+pub(crate) fn require_i64(input: &Value, field: &str) -> Result<i64, Value> {
     input[field]
         .as_i64()
         .ok_or_else(|| json!({ "error": format!("Missing required parameter: {}", field) }))
@@ -45,13 +45,13 @@ pub fn require_i64(input: &Value, field: &str) -> Result<i64, Value> {
 /// Extract a required string parameter and parse it as a UUID.
 ///
 /// Returns the UUID on success, or a JSON error value on failure.
-pub fn require_uuid(input: &Value, field: &str) -> Result<Uuid, Value> {
+pub(crate) fn require_uuid(input: &Value, field: &str) -> Result<Uuid, Value> {
     let s = require_str(input, field)?;
     Uuid::parse_str(s).map_err(|_| json!({ "error": format!("Invalid UUID: {}", s) }))
 }
 
 /// Load a workflow step by ID, returning a JSON error if not found.
-pub async fn load_step_or_error(
+pub(crate) async fn load_step_or_error(
     repo: &dyn WorkflowRepo,
     step_id: Uuid,
 ) -> Result<WorkflowStepRow, Value> {
@@ -67,7 +67,7 @@ pub async fn load_step_or_error(
 /// - `context` with non-empty `prompt_template` -> "populated" (include preview + word count)
 /// - `context` with empty `prompt_template` -> "empty"
 /// - All other execution modes -> "pending"
-pub fn classify_content_status(
+pub(crate) fn classify_content_status(
     step: &crate::db::WorkflowStepRow,
 ) -> (&'static str, Option<String>, Option<usize>) {
     if step.execution_mode == "context" {

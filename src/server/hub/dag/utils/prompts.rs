@@ -176,7 +176,7 @@ pub(crate) async fn compose_prompt(
 ///
 /// Appended to a planner step's prompt to inform the LLM about valid label
 /// values, their meanings, and which agents handle each route.
-pub fn build_routing_instruction_block(ctx: &DownstreamRoutingContext) -> String {
+pub(crate) fn build_routing_instruction_block(ctx: &DownstreamRoutingContext) -> String {
     let mut block = String::new();
 
     block.push_str("\n\n<routing>\n");

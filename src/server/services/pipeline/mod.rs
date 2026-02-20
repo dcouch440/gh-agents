@@ -27,7 +27,7 @@ mod tests;
 pub use add_edge::add_edge;
 pub use add_step::add_step;
 pub use create::create_pipeline;
-pub use cycle::would_create_cycle;
+pub(crate) use cycle::would_create_cycle;
 pub use destroy::destroy_pipeline;
 pub use recompute::recompute_execution_order;
 pub use remove_edge::remove_edge;

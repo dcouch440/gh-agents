@@ -131,14 +131,14 @@ pub(crate) use dag_state::{
     wrap_in_envelope, DagContext, DagExecutionState, PortMetadata,
 };
 
+pub(crate) use utils::{build_routing_instruction_block, compose_prompt, DagPaused, PromptRepos};
 pub use utils::{
-    build_routing_instruction_block, check_step_readiness, collect_upstream_context_data,
-    compute_dead_path_steps, evaluate_edge_condition, find_entry_steps, get_child_steps,
-    get_parent_steps, resolve_dot_path, resolve_port_inputs, resolve_variables, topological_sort,
-    ContainerExecutionConfig, DagPaused, PortResolutionError, StepOutput, StepReadiness,
-    WorkflowExecutionContext, WorkflowExecutionResult,
+    check_step_readiness, collect_upstream_context_data, compute_dead_path_steps,
+    evaluate_edge_condition, find_entry_steps, get_child_steps, get_parent_steps, resolve_dot_path,
+    resolve_port_inputs, resolve_variables, topological_sort, ContainerExecutionConfig,
+    PortResolutionError, StepOutput, StepReadiness, WorkflowExecutionContext,
+    WorkflowExecutionResult,
 };
-pub(crate) use utils::{compose_prompt, PromptRepos};
 
 // Re-export public functions from submodules
 pub use resume::{resume_dag_from_approval, resume_workflow_via_engine, ResumeState};

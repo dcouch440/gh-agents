@@ -211,7 +211,7 @@ where
         let any_paused = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
         // Spawn entry workflows
-        let mut handles = Vec::new();
+        let mut handles = Vec::with_capacity(ready.len());
         for workflow_id in ready {
             let handle = self.spawn_workflow_with_cascade(
                 run_id,

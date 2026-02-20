@@ -10,7 +10,11 @@ use crate::db::WorkflowStepEdgeRow;
 ///
 /// Performs BFS from `to_id` following existing outgoing edges. If
 /// `from_id` is reachable, adding the proposed edge creates a cycle.
-pub fn would_create_cycle(from_id: Uuid, to_id: Uuid, edges: &[WorkflowStepEdgeRow]) -> bool {
+pub(crate) fn would_create_cycle(
+    from_id: Uuid,
+    to_id: Uuid,
+    edges: &[WorkflowStepEdgeRow],
+) -> bool {
     let mut adjacency: HashMap<Uuid, Vec<Uuid>> = HashMap::new();
     for edge in edges {
         adjacency

@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::BeliefRow;
     use crate::server::hub::chat_beliefs::{
         format_beliefs_as_board_context, format_beliefs_for_extraction, parse_extraction_output,
@@ -14,27 +14,17 @@ mod tests {
         belief_type: &str,
         confidence: &str,
     ) -> BeliefRow {
+        let wf_id = Uuid::new_v4();
+        let step_id = Uuid::new_v4();
         BeliefRow {
-            id: Uuid::new_v4(),
-            workflow_id: Uuid::new_v4(),
-            workflow_execution_id: None,
-            source_step_id: Uuid::new_v4(),
-            source_document_title: None,
-            source_document_def_id: None,
-            source_phase: "chat".to_string(),
             content: content.to_string(),
             reasoning: "test".to_string(),
             belief_type: belief_type.to_string(),
             confidence: confidence.to_string(),
-            confidence_justification: None,
-            semantic_tags: vec![],
-            emotional_tone: None,
-            cross_source_tension: None,
+            source_phase: "chat".to_string(),
             source_step_name: node_name.to_string(),
             extraction_model: "test".to_string(),
-            extraction_tokens_in: 0,
-            extraction_tokens_out: 0,
-            created_at: Utc::now(),
+            ..belief(wf_id, step_id)
         }
     }
 

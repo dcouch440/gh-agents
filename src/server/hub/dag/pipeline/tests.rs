@@ -2,6 +2,7 @@
 mod tests {
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::TaskAgentRosterRow;
     use crate::server::hub::dag::pipeline::{
         build_filtered_outputs_block, build_team_roster_string, compose_workforce_output,
@@ -12,13 +13,8 @@ mod tests {
 
     fn make_roster_agent(name: &str, order: i32) -> TaskAgentRosterRow {
         TaskAgentRosterRow {
-            id: Uuid::new_v4(),
-            mission_brief_id: Uuid::new_v4(),
-            name: name.to_string(),
-            role_description: format!("{} role", name),
             capabilities: vec!["file_read".to_string()],
-            execution_order: order,
-            ..Default::default()
+            ..roster_agent(Uuid::new_v4(), name, order)
         }
     }
 

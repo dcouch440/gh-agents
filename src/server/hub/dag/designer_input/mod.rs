@@ -20,7 +20,7 @@ use crate::types::StepExecutionEnvelope;
 /// Archetype-agnostic input for the Agent Designer.
 /// Each archetype builds this from its own configuration.
 #[derive(Debug, Clone)]
-pub struct DesignerInput {
+pub(crate) struct DesignerInput {
     /// Which archetype is requesting design ("workforce").
     pub archetype: String,
 
@@ -49,14 +49,14 @@ pub struct DesignerInput {
 
 /// A dependency edge between two agents in the workforce graph.
 #[derive(Debug, Clone)]
-pub struct DependencyEdge {
+pub(crate) struct DependencyEdge {
     pub from_agent_name: String,
     pub to_agent_name: String,
 }
 
 /// One agent that needs a prompt pair designed.
 #[derive(Debug, Clone)]
-pub struct AgentDefinition {
+pub(crate) struct AgentDefinition {
     /// Stable identifier — roster entry ID, etc.
     pub id: String,
     /// Human-readable name for the agent.
@@ -73,7 +73,7 @@ pub struct AgentDefinition {
 
 /// Upstream content available to the agents.
 #[derive(Debug, Clone)]
-pub struct UpstreamContext {
+pub(crate) struct UpstreamContext {
     /// Name of the upstream source.
     pub source_name: String,
     /// Type of upstream (context, workforce, room).
@@ -84,7 +84,7 @@ pub struct UpstreamContext {
 
 /// Description of an available tool/capability.
 #[derive(Debug, Clone)]
-pub struct ToolDescription {
+pub(crate) struct ToolDescription {
     pub name: String,
     pub description: String,
 }

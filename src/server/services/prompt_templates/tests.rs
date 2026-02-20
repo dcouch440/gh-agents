@@ -3,6 +3,7 @@ mod tests {
     use chrono::Utc;
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::MockPromptTemplateRepo;
     use crate::db::PromptTemplateRow;
     use crate::server::services::prompt_templates::*;
@@ -10,12 +11,9 @@ mod tests {
 
     fn make_template(user_id: Option<Uuid>, name: &str) -> PromptTemplateRow {
         PromptTemplateRow {
-            id: Uuid::new_v4(),
             user_id,
             name: name.to_string(),
-            content: "Some prompt content".to_string(),
-            created_at: Utc::now(),
-            version: 1,
+            ..prompt_template(user_id.unwrap_or_else(Uuid::new_v4))
         }
     }
 
