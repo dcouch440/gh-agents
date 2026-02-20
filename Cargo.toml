@@ -7,7 +7,7 @@ description = "AI Agent Orchestration for GitHub Workflows"
 
 [dependencies]
 # Async runtime
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "sync", "signal", "io-util", "fs", "process"] }
 tokio-util = "0.7"
 
 # Web server

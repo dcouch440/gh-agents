@@ -2,7 +2,8 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::db::{StepInputRow, StepOutputRow, WorkflowStepEdgeRow, WorkflowStepRow};
+    use crate::db::fixtures::fixtures::*;
+    use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
     use crate::server::hub::dag::utils::{
         collect_upstream_context_data, find_entry_steps, get_child_steps, get_parent_steps,
         resolve_dot_path, resolve_port_inputs, resolve_variables, topological_sort, DagPaused,
@@ -15,65 +16,9 @@ mod tests {
     // Fixtures
     // =========================================================================
 
+    /// Step with specific id and display_order (maps to shared `step_with`).
     fn make_step(id: Uuid, display_order: i32) -> WorkflowStepRow {
-        WorkflowStepRow {
-            id,
-            workflow_id: Uuid::new_v4(),
-            agent_id: Some(Uuid::new_v4()),
-            prompt_template: "Test prompt".to_string(),
-            output_variable_name: Some("output".to_string()),
-            display_order,
-            ..Default::default()
-        }
-    }
-
-    fn make_edge(from: Uuid, to: Uuid) -> WorkflowStepEdgeRow {
-        WorkflowStepEdgeRow {
-            id: Uuid::new_v4(),
-            from_step_id: from,
-            to_step_id: to,
-            workflow_id: Uuid::new_v4(),
-            ..Default::default()
-        }
-    }
-
-    fn make_port_edge(from: Uuid, to: Uuid, from_port: &str, to_port: &str) -> WorkflowStepEdgeRow {
-        WorkflowStepEdgeRow {
-            from_output_port: Some(from_port.to_string()),
-            to_input_port: Some(to_port.to_string()),
-            ..make_edge(from, to)
-        }
-    }
-
-    fn make_step_input(step_id: Uuid, port_name: &str, required: bool) -> StepInputRow {
-        StepInputRow {
-            id: Uuid::new_v4(),
-            workflow_step_id: step_id,
-            port_name: port_name.to_string(),
-            port_type: "string".to_string(),
-            required,
-            ..Default::default()
-        }
-    }
-
-    fn make_step_output(step_id: Uuid, port_name: &str, json_path: &str) -> StepOutputRow {
-        StepOutputRow {
-            id: Uuid::new_v4(),
-            workflow_step_id: step_id,
-            port_name: port_name.to_string(),
-            port_type: "string".to_string(),
-            json_path: json_path.to_string(),
-            ..Default::default()
-        }
-    }
-
-    fn make_envelope(data: serde_json::Value) -> StepExecutionEnvelope {
-        StepExecutionEnvelope {
-            status: ExecutionStatus::Success,
-            data: Some(data),
-            metadata: ExecutionMetadata::new(Uuid::new_v4()),
-            error: None,
-        }
+        step_with(id, "Test prompt", Some("output"), display_order)
     }
 
     // =========================================================================
@@ -88,7 +33,7 @@ mod tests {
         let c = Uuid::parse_str("00000000-0000-0000-0000-000000000003").unwrap();
 
         let steps = vec![make_step(a, 0), make_step(b, 1), make_step(c, 2)];
-        let edges = vec![make_edge(a, b), make_edge(b, c)];
+        let edges = vec![edge(a, b), edge(b, c)];
 
         let sorted = topological_sort(&steps, &edges).unwrap();
 
@@ -116,12 +61,7 @@ mod tests {
             make_step(c, 2),
             make_step(d, 3),
         ];
-        let edges = vec![
-            make_edge(a, b),
-            make_edge(a, c),
-            make_edge(b, d),
-            make_edge(c, d),
-        ];
+        let edges = vec![edge(a, b), edge(a, c), edge(b, d), edge(c, d)];
 
         let sorted = topological_sort(&steps, &edges).unwrap();
 
@@ -147,7 +87,7 @@ mod tests {
         let c = Uuid::parse_str("00000000-0000-0000-0000-000000000003").unwrap();
 
         let steps = vec![make_step(a, 0), make_step(b, 1), make_step(c, 2)];
-        let edges = vec![make_edge(a, b), make_edge(b, c), make_edge(c, a)];
+        let edges = vec![edge(a, b), edge(b, c), edge(c, a)];
 
         let result = topological_sort(&steps, &edges);
         assert!(result.is_err());
@@ -183,7 +123,7 @@ mod tests {
         let c = Uuid::parse_str("00000000-0000-0000-0000-000000000003").unwrap();
 
         let steps = vec![make_step(a, 0), make_step(b, 1), make_step(c, 2)];
-        let edges = vec![make_edge(a, c), make_edge(b, c)];
+        let edges = vec![edge(a, c), edge(b, c)];
 
         let sorted = topological_sort(&steps, &edges).unwrap();
 
@@ -229,7 +169,7 @@ mod tests {
         let c = Uuid::new_v4();
 
         let steps = vec![make_step(a, 0), make_step(b, 1), make_step(c, 2)];
-        let edges = vec![make_edge(a, b), make_edge(b, c)];
+        let edges = vec![edge(a, b), edge(b, c)];
 
         let entries = find_entry_steps(&steps, &edges);
         assert_eq!(entries, vec![a]);
@@ -242,7 +182,7 @@ mod tests {
         let c = Uuid::new_v4();
 
         let steps = vec![make_step(a, 0), make_step(b, 1), make_step(c, 2)];
-        let edges = vec![make_edge(a, c), make_edge(b, c)];
+        let edges = vec![edge(a, c), edge(b, c)];
 
         let entries = find_entry_steps(&steps, &edges);
         assert_eq!(entries.len(), 2);
@@ -272,7 +212,7 @@ mod tests {
         let b = Uuid::new_v4();
         let c = Uuid::new_v4();
 
-        let edges = vec![make_edge(a, c), make_edge(b, c)];
+        let edges = vec![edge(a, c), edge(b, c)];
 
         let parents = get_parent_steps(c, &edges);
         assert_eq!(parents.len(), 2);
@@ -285,7 +225,7 @@ mod tests {
         let a = Uuid::new_v4();
         let b = Uuid::new_v4();
 
-        let edges = vec![make_edge(a, b)];
+        let edges = vec![edge(a, b)];
 
         let parents = get_parent_steps(a, &edges);
         assert!(parents.is_empty());
@@ -297,7 +237,7 @@ mod tests {
         let b = Uuid::new_v4();
         let c = Uuid::new_v4();
 
-        let edges = vec![make_edge(a, b), make_edge(a, c)];
+        let edges = vec![edge(a, b), edge(a, c)];
 
         let children = get_child_steps(a, &edges);
         assert_eq!(children.len(), 2);
@@ -310,7 +250,7 @@ mod tests {
         let a = Uuid::new_v4();
         let b = Uuid::new_v4();
 
-        let edges = vec![make_edge(a, b)];
+        let edges = vec![edge(a, b)];
 
         let children = get_child_steps(b, &edges);
         assert!(children.is_empty());
@@ -521,20 +461,20 @@ mod tests {
         let step_b = Uuid::new_v4();
 
         // Edge: step_a:result -> step_b:context
-        let edges = vec![make_port_edge(step_a, step_b, "result", "context")];
+        let edges = vec![port_edge(step_a, step_b, "result", "context")];
 
         // step_b has one input port
-        let step_inputs = vec![make_step_input(step_b, "context", true)];
+        let step_inputs = vec![step_input(step_b, "context", true)];
 
         // step_a has one output port with json_path "summary"
         let mut source_outputs = HashMap::new();
-        source_outputs.insert(step_a, vec![make_step_output(step_a, "result", "summary")]);
+        source_outputs.insert(step_a, vec![step_output(step_a, "result", "summary")]);
 
         // step_a completed with data containing "summary" field
         let mut completed = HashMap::new();
         completed.insert(
             step_a,
-            make_envelope(serde_json::json!({"summary": "Hello world"})),
+            envelope(serde_json::json!({"summary": "Hello world"})),
         );
 
         let result =
@@ -549,20 +489,20 @@ mod tests {
         let step_a = Uuid::new_v4();
         let step_b = Uuid::new_v4();
 
-        let edges = vec![make_port_edge(step_a, step_b, "analysis", "input_data")];
-        let step_inputs = vec![make_step_input(step_b, "input_data", true)];
+        let edges = vec![port_edge(step_a, step_b, "analysis", "input_data")];
+        let step_inputs = vec![step_input(step_b, "input_data", true)];
 
         // Output port with nested json_path
         let mut source_outputs = HashMap::new();
         source_outputs.insert(
             step_a,
-            vec![make_step_output(step_a, "analysis", "results.data.items")],
+            vec![step_output(step_a, "analysis", "results.data.items")],
         );
 
         let mut completed = HashMap::new();
         completed.insert(
             step_a,
-            make_envelope(serde_json::json!({
+            envelope(serde_json::json!({
                 "results": {
                     "data": {
                         "items": [1, 2, 3]
@@ -583,19 +523,19 @@ mod tests {
         let step_b = Uuid::new_v4();
 
         // Edge with a transform
-        let mut edge = make_port_edge(step_a, step_b, "output", "input");
+        let mut edge = port_edge(step_a, step_b, "output", "input");
         edge.transform_jsonpath = Some("name".to_string());
 
         let edges = vec![edge];
-        let step_inputs = vec![make_step_input(step_b, "input", true)];
+        let step_inputs = vec![step_input(step_b, "input", true)];
 
         let mut source_outputs = HashMap::new();
-        source_outputs.insert(step_a, vec![make_step_output(step_a, "output", "data")]);
+        source_outputs.insert(step_a, vec![step_output(step_a, "output", "data")]);
 
         let mut completed = HashMap::new();
         completed.insert(
             step_a,
-            make_envelope(serde_json::json!({
+            envelope(serde_json::json!({
                 "data": {"name": "Alice", "age": 30}
             })),
         );
@@ -613,7 +553,7 @@ mod tests {
 
         // No edges — input has a default value
         let edges: Vec<WorkflowStepEdgeRow> = vec![];
-        let mut input = make_step_input(step_b, "config", false);
+        let mut input = step_input(step_b, "config", false);
         input.default_value = Some(serde_json::json!({"timeout": 30}));
         let step_inputs = vec![input];
 
@@ -635,7 +575,7 @@ mod tests {
 
         // No edges, required input, no default
         let edges: Vec<WorkflowStepEdgeRow> = vec![];
-        let step_inputs = vec![make_step_input(step_b, "required_data", true)];
+        let step_inputs = vec![step_input(step_b, "required_data", true)];
 
         let result = resolve_port_inputs(
             step_b,
@@ -667,8 +607,8 @@ mod tests {
         let step_a = Uuid::new_v4();
         let step_b = Uuid::new_v4();
 
-        let edges = vec![make_port_edge(step_a, step_b, "output", "input")];
-        let step_inputs = vec![make_step_input(step_b, "input", true)];
+        let edges = vec![port_edge(step_a, step_b, "output", "input")];
+        let step_inputs = vec![step_input(step_b, "input", true)];
 
         // No completed envelopes — step_a hasn't run
         let result = resolve_port_inputs(
@@ -692,28 +632,22 @@ mod tests {
 
         // Two edges into step_c from different sources
         let edges = vec![
-            make_port_edge(step_a, step_c, "result", "left"),
-            make_port_edge(step_b, step_c, "result", "right"),
+            port_edge(step_a, step_c, "result", "left"),
+            port_edge(step_b, step_c, "result", "right"),
         ];
 
         let step_inputs = vec![
-            make_step_input(step_c, "left", true),
-            make_step_input(step_c, "right", true),
+            step_input(step_c, "left", true),
+            step_input(step_c, "right", true),
         ];
 
         let mut source_outputs = HashMap::new();
-        source_outputs.insert(step_a, vec![make_step_output(step_a, "result", "value")]);
-        source_outputs.insert(step_b, vec![make_step_output(step_b, "result", "value")]);
+        source_outputs.insert(step_a, vec![step_output(step_a, "result", "value")]);
+        source_outputs.insert(step_b, vec![step_output(step_b, "result", "value")]);
 
         let mut completed = HashMap::new();
-        completed.insert(
-            step_a,
-            make_envelope(serde_json::json!({"value": "from_a"})),
-        );
-        completed.insert(
-            step_b,
-            make_envelope(serde_json::json!({"value": "from_b"})),
-        );
+        completed.insert(step_a, envelope(serde_json::json!({"value": "from_a"})));
+        completed.insert(step_b, envelope(serde_json::json!({"value": "from_b"})));
 
         let result =
             resolve_port_inputs(step_c, &edges, &step_inputs, &source_outputs, &completed).unwrap();
@@ -926,8 +860,8 @@ mod tests {
 
     #[test]
     fn evaluate_edge_condition_unconditional_returns_true() {
-        let edge = make_edge(Uuid::new_v4(), Uuid::new_v4());
-        let envelope = make_envelope(serde_json::json!({"anything": "value"}));
+        let edge = edge(Uuid::new_v4(), Uuid::new_v4());
+        let envelope = envelope(serde_json::json!({"anything": "value"}));
         assert!(evaluate_edge_condition(&edge, &envelope));
     }
 
@@ -942,7 +876,7 @@ mod tests {
             "port",
             serde_json::json!("frontend"),
         );
-        let envelope = make_envelope(serde_json::json!({"port": "frontend", "content": "stuff"}));
+        let envelope = envelope(serde_json::json!({"port": "frontend", "content": "stuff"}));
         assert!(evaluate_edge_condition(&edge, &envelope));
     }
 
@@ -957,7 +891,7 @@ mod tests {
             "port",
             serde_json::json!("frontend"),
         );
-        let envelope = make_envelope(serde_json::json!({"port": "backend", "content": "stuff"}));
+        let envelope = envelope(serde_json::json!({"port": "backend", "content": "stuff"}));
         assert!(!evaluate_edge_condition(&edge, &envelope));
     }
 
@@ -967,7 +901,7 @@ mod tests {
         let to = Uuid::new_v4();
         let edge =
             make_conditional_edge(from, to, "equals", "decision", serde_json::json!("approve"));
-        let envelope = make_envelope(serde_json::json!({"decision": "approve"}));
+        let envelope = envelope(serde_json::json!({"decision": "approve"}));
         assert!(evaluate_edge_condition(&edge, &envelope));
     }
 
@@ -977,7 +911,7 @@ mod tests {
         let to = Uuid::new_v4();
         let edge =
             make_conditional_edge(from, to, "equals", "decision", serde_json::json!("approve"));
-        let envelope = make_envelope(serde_json::json!({"decision": "reject"}));
+        let envelope = envelope(serde_json::json!({"decision": "reject"}));
         assert!(!evaluate_edge_condition(&edge, &envelope));
     }
 
@@ -987,7 +921,7 @@ mod tests {
         let to = Uuid::new_v4();
         let edge =
             make_conditional_edge(from, to, "unknown_type", "field", serde_json::json!("val"));
-        let envelope = make_envelope(serde_json::json!({"field": "val"}));
+        let envelope = envelope(serde_json::json!({"field": "val"}));
         assert!(!evaluate_edge_condition(&edge, &envelope));
     }
 
@@ -1002,7 +936,7 @@ mod tests {
             "missing_field",
             serde_json::json!("val"),
         );
-        let envelope = make_envelope(serde_json::json!({"other_field": "val"}));
+        let envelope = envelope(serde_json::json!({"other_field": "val"}));
         assert!(!evaluate_edge_condition(&edge, &envelope));
     }
 
@@ -1044,7 +978,7 @@ mod tests {
         let to = Uuid::new_v4();
         let mut edge = make_conditional_edge(from, to, "equals", "field", serde_json::json!("val"));
         edge.condition_value = None; // Has condition_type but no condition_value
-        let envelope = make_envelope(serde_json::json!({"field": "val"}));
+        let envelope = envelope(serde_json::json!({"field": "val"}));
         assert!(!evaluate_edge_condition(&edge, &envelope));
     }
 
@@ -1053,7 +987,7 @@ mod tests {
         let from = Uuid::new_v4();
         let to = Uuid::new_v4();
         let edge = make_conditional_edge(from, to, "equals", "score", serde_json::json!(42));
-        let envelope = make_envelope(serde_json::json!({"score": 42}));
+        let envelope = envelope(serde_json::json!({"score": 42}));
         assert!(evaluate_edge_condition(&edge, &envelope));
     }
 
@@ -1062,7 +996,7 @@ mod tests {
         let from = Uuid::new_v4();
         let to = Uuid::new_v4();
         let edge = make_conditional_edge(from, to, "equals", "score", serde_json::json!(42));
-        let envelope = make_envelope(serde_json::json!({"score": 99}));
+        let envelope = envelope(serde_json::json!({"score": 99}));
         assert!(!evaluate_edge_condition(&edge, &envelope));
     }
 
@@ -1087,7 +1021,7 @@ mod tests {
     fn readiness_unconditional_parent_not_done_waiting() {
         let parent = Uuid::new_v4();
         let child = Uuid::new_v4();
-        let edges = vec![make_edge(parent, child)];
+        let edges = vec![edge(parent, child)];
         let completed = HashMap::new();
         let envelopes = HashMap::new();
 
@@ -1101,7 +1035,7 @@ mod tests {
     fn readiness_unconditional_parent_done_ready() {
         let parent = Uuid::new_v4();
         let child = Uuid::new_v4();
-        let edges = vec![make_edge(parent, child)];
+        let edges = vec![edge(parent, child)];
 
         let mut completed = HashMap::new();
         completed.insert(
@@ -1114,7 +1048,7 @@ mod tests {
         );
 
         let mut envelopes = HashMap::new();
-        envelopes.insert(parent, make_envelope(serde_json::json!({"result": "ok"})));
+        envelopes.insert(parent, envelope(serde_json::json!({"result": "ok"})));
 
         assert_eq!(
             check_step_readiness(child, &edges, &completed, &envelopes),
@@ -1145,10 +1079,7 @@ mod tests {
         );
 
         let mut envelopes = HashMap::new();
-        envelopes.insert(
-            parent,
-            make_envelope(serde_json::json!({"port": "frontend"})),
-        );
+        envelopes.insert(parent, envelope(serde_json::json!({"port": "frontend"})));
 
         assert_eq!(
             check_step_readiness(child, &edges, &completed, &envelopes),
@@ -1179,10 +1110,7 @@ mod tests {
         );
 
         let mut envelopes = HashMap::new();
-        envelopes.insert(
-            parent,
-            make_envelope(serde_json::json!({"port": "backend"})),
-        );
+        envelopes.insert(parent, envelope(serde_json::json!({"port": "backend"})));
 
         assert_eq!(
             check_step_readiness(child, &edges, &completed, &envelopes),
@@ -1221,7 +1149,7 @@ mod tests {
         let child = Uuid::new_v4();
 
         let edges = vec![
-            make_edge(parent_a, child),
+            edge(parent_a, child),
             make_conditional_edge(
                 parent_b,
                 child,
@@ -1250,10 +1178,7 @@ mod tests {
         );
 
         let mut envelopes = HashMap::new();
-        envelopes.insert(
-            parent_b,
-            make_envelope(serde_json::json!({"port": "frontend"})),
-        );
+        envelopes.insert(parent_b, envelope(serde_json::json!({"port": "frontend"})));
 
         // Both parents done, conditional matches => Ready
         assert_eq!(
@@ -1269,7 +1194,7 @@ mod tests {
         let child = Uuid::new_v4();
 
         let edges = vec![
-            make_edge(parent_a, child),
+            edge(parent_a, child),
             make_conditional_edge(
                 parent_b,
                 child,
@@ -1291,10 +1216,7 @@ mod tests {
         );
 
         let mut envelopes = HashMap::new();
-        envelopes.insert(
-            parent_b,
-            make_envelope(serde_json::json!({"port": "frontend"})),
-        );
+        envelopes.insert(parent_b, envelope(serde_json::json!({"port": "frontend"})));
 
         // Unconditional parent not done => Waiting
         assert_eq!(
@@ -1338,10 +1260,7 @@ mod tests {
         );
 
         let mut envelopes = HashMap::new();
-        envelopes.insert(
-            parent,
-            make_envelope(serde_json::json!({"port": "frontend"})),
-        );
+        envelopes.insert(parent, envelope(serde_json::json!({"port": "frontend"})));
 
         // child_a matches, child_b doesn't
         assert_eq!(
@@ -1390,19 +1309,19 @@ mod tests {
         let edges = vec![edge];
 
         let step_inputs = vec![{
-            let mut input = make_step_input(step_b, "input", false);
+            let mut input = step_input(step_b, "input", false);
             input.default_value = Some(serde_json::json!("fallback"));
             input
         }];
 
         let mut source_outputs = HashMap::new();
-        source_outputs.insert(step_a, vec![make_step_output(step_a, "result", "value")]);
+        source_outputs.insert(step_a, vec![step_output(step_a, "result", "value")]);
 
         let mut completed = HashMap::new();
         // Parent output has port=backend, NOT frontend
         completed.insert(
             step_a,
-            make_envelope(serde_json::json!({"port": "backend", "value": "data"})),
+            envelope(serde_json::json!({"port": "backend", "value": "data"})),
         );
 
         let result =
@@ -1429,16 +1348,16 @@ mod tests {
         );
         let edges = vec![edge];
 
-        let step_inputs = vec![make_step_input(step_b, "input", true)];
+        let step_inputs = vec![step_input(step_b, "input", true)];
 
         let mut source_outputs = HashMap::new();
-        source_outputs.insert(step_a, vec![make_step_output(step_a, "result", "value")]);
+        source_outputs.insert(step_a, vec![step_output(step_a, "result", "value")]);
 
         let mut completed = HashMap::new();
         // Parent output has port=frontend => matches
         completed.insert(
             step_a,
-            make_envelope(serde_json::json!({"port": "frontend", "value": "matched_data"})),
+            envelope(serde_json::json!({"port": "frontend", "value": "matched_data"})),
         );
 
         let result =
@@ -1453,16 +1372,16 @@ mod tests {
         let step_b = Uuid::new_v4();
 
         // Plain unconditional port edge
-        let edges = vec![make_port_edge(step_a, step_b, "result", "input")];
-        let step_inputs = vec![make_step_input(step_b, "input", true)];
+        let edges = vec![port_edge(step_a, step_b, "result", "input")];
+        let step_inputs = vec![step_input(step_b, "input", true)];
 
         let mut source_outputs = HashMap::new();
-        source_outputs.insert(step_a, vec![make_step_output(step_a, "result", "value")]);
+        source_outputs.insert(step_a, vec![step_output(step_a, "result", "value")]);
 
         let mut completed = HashMap::new();
         completed.insert(
             step_a,
-            make_envelope(serde_json::json!({"value": "normal_data"})),
+            envelope(serde_json::json!({"value": "normal_data"})),
         );
 
         let result =
@@ -1590,13 +1509,13 @@ mod tests {
         ctx_step.name = Some("Project Spec".to_string());
 
         let doc_step = make_step(doc_id, 1);
-        let edges = vec![make_edge(ctx_id, doc_id)];
+        let edges = vec![edge(ctx_id, doc_id)];
         let steps = vec![ctx_step, doc_step];
 
         let mut envelopes = HashMap::new();
         envelopes.insert(
             ctx_id,
-            make_envelope(serde_json::json!("This is the context content")),
+            envelope(serde_json::json!("This is the context content")),
         );
 
         let result = collect_upstream_context_data(&edges, &steps, &envelopes);
@@ -1613,11 +1532,11 @@ mod tests {
         // Source step is "single" mode, not "context"
         let agent_step = make_step(agent_id, 0);
         let doc_step = make_step(doc_id, 1);
-        let edges = vec![make_edge(agent_id, doc_id)];
+        let edges = vec![edge(agent_id, doc_id)];
         let steps = vec![agent_step, doc_step];
 
         let mut envelopes = HashMap::new();
-        envelopes.insert(agent_id, make_envelope(serde_json::json!("Agent output")));
+        envelopes.insert(agent_id, envelope(serde_json::json!("Agent output")));
 
         let result = collect_upstream_context_data(&edges, &steps, &envelopes);
         assert!(result.is_empty());
@@ -1634,11 +1553,11 @@ mod tests {
 
         let doc_step = make_step(doc_id, 1);
         // Port-wired edge — should be skipped by collect_upstream_context_data
-        let edges = vec![make_port_edge(ctx_id, doc_id, "output", "input")];
+        let edges = vec![port_edge(ctx_id, doc_id, "output", "input")];
         let steps = vec![ctx_step, doc_step];
 
         let mut envelopes = HashMap::new();
-        envelopes.insert(ctx_id, make_envelope(serde_json::json!("Port data")));
+        envelopes.insert(ctx_id, envelope(serde_json::json!("Port data")));
 
         let result = collect_upstream_context_data(&edges, &steps, &envelopes);
         assert!(result.is_empty());
@@ -1659,17 +1578,14 @@ mod tests {
         ctx2.name = Some("API Reference".to_string());
 
         let doc_step = make_step(doc_id, 2);
-        let edges = vec![make_edge(ctx1_id, doc_id), make_edge(ctx2_id, doc_id)];
+        let edges = vec![edge(ctx1_id, doc_id), edge(ctx2_id, doc_id)];
         let steps = vec![ctx1, ctx2, doc_step];
 
         let mut envelopes = HashMap::new();
-        envelopes.insert(
-            ctx1_id,
-            make_envelope(serde_json::json!("Design content here")),
-        );
+        envelopes.insert(ctx1_id, envelope(serde_json::json!("Design content here")));
         envelopes.insert(
             ctx2_id,
-            make_envelope(serde_json::json!("API reference content")),
+            envelope(serde_json::json!("API reference content")),
         );
 
         let result = collect_upstream_context_data(&edges, &steps, &envelopes);
@@ -1724,7 +1640,7 @@ mod tests {
         let c = Uuid::new_v4();
         let mut steps = vec![make_step(a, 0), make_step(b, 1), make_step(c, 2)];
         steps[2].pinned = true;
-        let edges = vec![make_edge(a, b), make_edge(b, c)];
+        let edges = vec![edge(a, b), edge(b, c)];
 
         let dead = compute_dead_path_steps(&steps, &edges);
         assert!(dead.contains(&a));
@@ -1740,7 +1656,7 @@ mod tests {
         let c = Uuid::new_v4();
         let mut steps = vec![make_step(a, 0), make_step(b, 1), make_step(c, 2)];
         steps[1].pinned = true;
-        let edges = vec![make_edge(a, b), make_edge(a, c)];
+        let edges = vec![edge(a, b), edge(a, c)];
 
         let dead = compute_dead_path_steps(&steps, &edges);
         assert!(!dead.contains(&a)); // C is unpinned, so A must execute
@@ -1775,7 +1691,7 @@ mod tests {
         ];
         steps[1].pinned = true;
         steps[2].pinned = true;
-        let edges = vec![make_edge(a, b), make_edge(a, c), make_edge(d, c)];
+        let edges = vec![edge(a, b), edge(a, c), edge(d, c)];
 
         let dead = compute_dead_path_steps(&steps, &edges);
         assert!(dead.contains(&a));
@@ -1790,7 +1706,7 @@ mod tests {
         let a = Uuid::new_v4();
         let b = Uuid::new_v4();
         let steps = vec![make_step(a, 0), make_step(b, 1)];
-        let edges = vec![make_edge(a, b)];
+        let edges = vec![edge(a, b)];
 
         let dead = compute_dead_path_steps(&steps, &edges);
         assert!(dead.is_empty());

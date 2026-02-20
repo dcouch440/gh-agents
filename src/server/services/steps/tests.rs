@@ -2,27 +2,10 @@
 mod tests {
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::MockWorkflowRepo;
-    use crate::db::{WorkflowRow, WorkflowStepRow};
     use crate::server::services::steps::*;
     use crate::server::services::ServiceError;
-
-    fn make_workflow(user_id: Uuid) -> WorkflowRow {
-        WorkflowRow {
-            id: Uuid::new_v4(),
-            user_id,
-            name: "wf".to_string(),
-            ..Default::default()
-        }
-    }
-
-    fn make_step(workflow_id: Uuid) -> WorkflowStepRow {
-        WorkflowStepRow {
-            id: Uuid::new_v4(),
-            workflow_id,
-            ..Default::default()
-        }
-    }
 
     // ── verify_step_access ────────────────────────────────────────────
 
@@ -30,9 +13,9 @@ mod tests {
     async fn verify_access_rejects_wrong_owner() {
         let owner = Uuid::new_v4();
         let attacker = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
-        let step = make_step(wf_id);
+        let step = step_in(wf_id);
         let step_id = step.id;
 
         let mut repo = MockWorkflowRepo::new();
@@ -46,10 +29,10 @@ mod tests {
     #[tokio::test]
     async fn verify_access_rejects_step_not_in_workflow() {
         let owner = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
         let other_workflow_id = Uuid::new_v4();
-        let step = make_step(other_workflow_id); // step belongs to a different workflow
+        let step = step_in(other_workflow_id); // step belongs to a different workflow
         let step_id = step.id;
 
         let mut repo = MockWorkflowRepo::new();
@@ -67,7 +50,7 @@ mod tests {
     #[tokio::test]
     async fn create_applies_defaults() {
         let owner = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
 
         let mut repo = MockWorkflowRepo::new();
@@ -116,7 +99,7 @@ mod tests {
     #[tokio::test]
     async fn create_context_step_clears_agent_id() {
         let owner = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
         let explicit_agent = Uuid::new_v4();
 
@@ -167,9 +150,9 @@ mod tests {
     async fn get_rejects_wrong_owner() {
         let owner = Uuid::new_v4();
         let attacker = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
-        let step = make_step(wf_id);
+        let step = step_in(wf_id);
         let step_id = step.id;
 
         let mut repo = MockWorkflowRepo::new();

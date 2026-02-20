@@ -2,27 +2,11 @@
 mod tests {
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::MockWorkflowRepo;
-    use crate::db::{StepInputRow, WorkflowRow, WorkflowStepRow};
+    use crate::db::StepInputRow;
     use crate::server::services::step_ports::*;
     use crate::server::services::ServiceError;
-
-    fn make_workflow(user_id: Uuid) -> WorkflowRow {
-        WorkflowRow {
-            id: Uuid::new_v4(),
-            user_id,
-            name: "wf".to_string(),
-            ..Default::default()
-        }
-    }
-
-    fn make_step(workflow_id: Uuid) -> WorkflowStepRow {
-        WorkflowStepRow {
-            id: Uuid::new_v4(),
-            workflow_id,
-            ..Default::default()
-        }
-    }
 
     #[tokio::test]
     async fn create_input_rejects_empty_port_name() {
@@ -69,7 +53,7 @@ mod tests {
     async fn create_input_rejects_wrong_owner() {
         let owner = Uuid::new_v4();
         let attacker = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
 
         let mut repo = MockWorkflowRepo::new();
@@ -97,9 +81,9 @@ mod tests {
     #[tokio::test]
     async fn list_inputs_succeeds_for_owner() {
         let owner = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
-        let step = make_step(wf_id);
+        let step = step_in(wf_id);
         let step_id = step.id;
 
         let mut repo = MockWorkflowRepo::new();
@@ -128,9 +112,9 @@ mod tests {
     #[tokio::test]
     async fn delete_input_succeeds_for_owner() {
         let owner = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
-        let step = make_step(wf_id);
+        let step = step_in(wf_id);
         let step_id = step.id;
 
         let mut repo = MockWorkflowRepo::new();

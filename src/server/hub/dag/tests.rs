@@ -6,37 +6,11 @@ mod tests {
     //! - resolve_output_key / to_snake_case → `dag_state/tests.rs`
 
     use super::super::{resolve_variables, topological_sort};
-    use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
+    use crate::db::fixtures::fixtures::*;
+    use crate::db::WorkflowStepRow;
     use serde_json::Value as JsonValue;
     use std::collections::HashMap;
     use uuid::Uuid;
-
-    fn make_step(
-        id: Uuid,
-        prompt: &str,
-        var_name: Option<&str>,
-        display_order: i32,
-    ) -> WorkflowStepRow {
-        WorkflowStepRow {
-            id,
-            workflow_id: Uuid::new_v4(),
-            agent_id: Some(Uuid::new_v4()),
-            prompt_template: prompt.into(),
-            output_variable_name: var_name.map(|s| s.into()),
-            display_order,
-            ..Default::default()
-        }
-    }
-
-    fn make_edge(from: Uuid, to: Uuid) -> WorkflowStepEdgeRow {
-        WorkflowStepEdgeRow {
-            id: Uuid::new_v4(),
-            from_step_id: from,
-            to_step_id: to,
-            workflow_id: Uuid::new_v4(),
-            ..Default::default()
-        }
-    }
 
     // =========================================================================
     // Topological Sort
@@ -47,10 +21,10 @@ mod tests {
         let s1 = Uuid::new_v4();
         let s2 = Uuid::new_v4();
         let steps = vec![
-            make_step(s1, "p1", Some("v1"), 0),
-            make_step(s2, "p2", Some("v2"), 1),
+            step_with(s1, "p1", Some("v1"), 0),
+            step_with(s2, "p2", Some("v2"), 1),
         ];
-        let edges = vec![make_edge(s1, s2)];
+        let edges = vec![edge(s1, s2)];
 
         let sorted = topological_sort(&steps, &edges).unwrap();
         assert_eq!(sorted[0], s1);
@@ -61,8 +35,8 @@ mod tests {
     fn topo_sort_cycle_detected() {
         let s1 = Uuid::new_v4();
         let s2 = Uuid::new_v4();
-        let steps = vec![make_step(s1, "p", None, 0), make_step(s2, "p", None, 1)];
-        let edges = vec![make_edge(s1, s2), make_edge(s2, s1)];
+        let steps = vec![step_with(s1, "p", None, 0), step_with(s2, "p", None, 1)];
+        let edges = vec![edge(s1, s2), edge(s2, s1)];
 
         assert!(topological_sort(&steps, &edges).is_err());
     }
@@ -115,10 +89,7 @@ mod tests {
         MockAgentExecutionRepo, MockAgentRepo, MockContentVersionRepo, MockTokenLedgerRepo,
         MockToolRepo, MockWorkflowRepo,
     };
-    use crate::db::{
-        AgentExecutionRow, AgentRow, ContentVersionRow, ExecutionMessageRow, RunSnapshotRow,
-        TokenLedgerRow,
-    };
+    use crate::db::{ContentVersionRow, RunSnapshotRow};
     use crate::llm::{
         LLMError, LLMProvider, LLMRequest, LLMResponse, StopReason, StreamChunk, TokenUsage,
     };
@@ -272,49 +243,8 @@ mod tests {
     }
 
     // ---------------------------------------------------------------------------
-    // Dummy Row Factories
-    // ---------------------------------------------------------------------------
-
-    fn dummy_ae_row() -> AgentExecutionRow {
-        AgentExecutionRow {
-            id: Uuid::new_v4(),
-            agent_id: Some(Uuid::new_v4()),
-            status: "running".into(),
-            ..Default::default()
-        }
-    }
-
-    fn dummy_msg_row() -> ExecutionMessageRow {
-        ExecutionMessageRow {
-            id: Uuid::new_v4(),
-            agent_execution_id: Uuid::new_v4(),
-            role: "system".into(),
-            ..Default::default()
-        }
-    }
-
-    fn dummy_tl_row() -> TokenLedgerRow {
-        TokenLedgerRow {
-            id: Uuid::new_v4(),
-            user_id: Uuid::new_v4(),
-            model_id: "test-model".into(),
-            ..Default::default()
-        }
-    }
-
-    // ---------------------------------------------------------------------------
     // Test Helpers
     // ---------------------------------------------------------------------------
-
-    fn make_test_agent(id: Uuid) -> AgentRow {
-        AgentRow {
-            id,
-            name: "Test Agent".into(),
-            system_prompt: "You are a test agent.".into(),
-            status: Some("active".into()),
-            ..Default::default()
-        }
-    }
 
     fn make_integration_step(
         id: Uuid,
@@ -379,7 +309,7 @@ mod tests {
         agent_id: Uuid,
         provider: Arc<dyn LLMProvider + Send + Sync>,
     ) -> TestHarness {
-        let agent = make_test_agent(agent_id);
+        let agent = agent(agent_id);
 
         // MockAgentRepo
         let mut agent_repo = MockAgentRepo::new();
@@ -419,13 +349,13 @@ mod tests {
         let mut ae_repo = MockAgentExecutionRepo::new();
         ae_repo
             .expect_create_agent_execution()
-            .returning(|_| Ok(dummy_ae_row()));
+            .returning(|_| Ok(agent_execution()));
         ae_repo
             .expect_create_execution_message()
-            .returning(|_, _, _, _, _, _| Ok(dummy_msg_row()));
+            .returning(|_, _, _, _, _, _| Ok(execution_message(Uuid::new_v4())));
         ae_repo
             .expect_update_agent_execution_status()
-            .returning(|_, _, _, _| Ok(dummy_ae_row()));
+            .returning(|_, _, _, _| Ok(agent_execution()));
         ae_repo
             .expect_list_exemplary_executions()
             .returning(|_, _, _| Ok(vec![]));
@@ -434,7 +364,7 @@ mod tests {
         let mut tl_repo = MockTokenLedgerRepo::new();
         tl_repo
             .expect_insert_ledger_entry()
-            .returning(|_, _, _, _, _, _| Ok(dummy_tl_row()));
+            .returning(|_, _, _, _, _, _| Ok(token_ledger(Uuid::new_v4())));
 
         // MockContentVersionRepo — permissive (snapshotting is fire-and-forget)
         let mut cv_repo = MockContentVersionRepo::new();
@@ -556,7 +486,7 @@ mod tests {
                 1,
             ),
         ];
-        let edges = vec![make_edge(s1, s2)];
+        let edges = vec![edge(s1, s2)];
 
         let result = execute_workflow_via_engine(
             &harness.engine,
@@ -596,12 +526,7 @@ mod tests {
             make_integration_step(s3, agent_id, "Branch B", Some("branch_b"), 2),
             make_integration_step(s4, agent_id, "Merge", Some("merged"), 3),
         ];
-        let edges = vec![
-            make_edge(s1, s2),
-            make_edge(s1, s3),
-            make_edge(s2, s4),
-            make_edge(s3, s4),
-        ];
+        let edges = vec![edge(s1, s2), edge(s1, s3), edge(s2, s4), edge(s3, s4)];
 
         let result = execute_workflow_via_engine(
             &harness.engine,
@@ -635,7 +560,7 @@ mod tests {
             make_integration_step(s1, agent_id, "A", None, 0),
             make_integration_step(s2, agent_id, "B", None, 1),
         ];
-        let edges = vec![make_edge(s1, s2), make_edge(s2, s1)];
+        let edges = vec![edge(s1, s2), edge(s2, s1)];
 
         let result = execute_workflow_via_engine(
             &harness.engine,
@@ -738,7 +663,7 @@ mod tests {
             make_integration_step(s1, agent_id, "Step 1", Some("s1_out"), 0),
             make_integration_step(s2, agent_id, "Step 2", Some("s2_out"), 1),
         ];
-        let edges = vec![make_edge(s1, s2)];
+        let edges = vec![edge(s1, s2)];
 
         let result = execute_workflow_via_engine(
             &harness.engine,
@@ -777,7 +702,7 @@ mod tests {
         provider: Arc<dyn LLMProvider + Send + Sync>,
         envelope_json: Option<String>,
     ) -> TestHarness {
-        let agent = make_test_agent(agent_id);
+        let agent = agent(agent_id);
 
         let mut agent_repo = MockAgentRepo::new();
         let agent_clone = agent.clone();
@@ -813,13 +738,13 @@ mod tests {
         let mut ae_repo = MockAgentExecutionRepo::new();
         ae_repo
             .expect_create_agent_execution()
-            .returning(|_| Ok(dummy_ae_row()));
+            .returning(|_| Ok(agent_execution()));
         ae_repo
             .expect_create_execution_message()
-            .returning(|_, _, _, _, _, _| Ok(dummy_msg_row()));
+            .returning(|_, _, _, _, _, _| Ok(execution_message(Uuid::new_v4())));
         ae_repo
             .expect_update_agent_execution_status()
-            .returning(|_, _, _, _| Ok(dummy_ae_row()));
+            .returning(|_, _, _, _| Ok(agent_execution()));
         ae_repo
             .expect_list_exemplary_executions()
             .returning(|_, _, _| Ok(vec![]));
@@ -827,7 +752,7 @@ mod tests {
         let mut tl_repo = MockTokenLedgerRepo::new();
         tl_repo
             .expect_insert_ledger_entry()
-            .returning(|_, _, _, _, _, _| Ok(dummy_tl_row()));
+            .returning(|_, _, _, _, _, _| Ok(token_ledger(Uuid::new_v4())));
 
         let mut cv_repo = MockContentVersionRepo::new();
         cv_repo.expect_find_or_create_version().returning(
@@ -1041,7 +966,7 @@ mod tests {
             make_integration_step(s_c, agent_id, "Step C uses {b_out}", Some("c_out"), 2);
 
         let steps = vec![s_a_step, s_b_step, s_c_step];
-        let edges = vec![make_edge(s_a, s_b), make_edge(s_b, s_c)];
+        let edges = vec![edge(s_a, s_b), edge(s_b, s_c)];
 
         let result = execute_workflow_via_engine(
             &harness.engine,

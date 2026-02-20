@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests {
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::MockContentVersionRepo;
-    use crate::db::{EnvelopeSnapshotRow, WorkflowStepEdgeRow, WorkflowStepRow};
+    use crate::db::{EnvelopeSnapshotRow, WorkflowStepRow};
     use crate::server::hub::dag::dag_state::{DagExecutionState, PortMetadata};
     use crate::server::hub::dag::utils::StepOutput;
     use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
@@ -15,38 +16,9 @@ mod tests {
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     fn make_step(id: Uuid, mode: &str, var_name: Option<&str>, order: i32) -> WorkflowStepRow {
-        WorkflowStepRow {
-            id,
-            workflow_id: Uuid::new_v4(),
-            agent_id: Some(Uuid::new_v4()),
-            execution_mode: mode.to_string(),
-            output_variable_name: var_name.map(String::from),
-            display_order: order,
-            ..Default::default()
-        }
-    }
-
-    fn make_envelope(data: Option<serde_json::Value>) -> StepExecutionEnvelope {
-        StepExecutionEnvelope {
-            status: if data.is_some() {
-                ExecutionStatus::Success
-            } else {
-                ExecutionStatus::Error
-            },
-            data,
-            metadata: ExecutionMetadata::new(Uuid::new_v4()),
-            error: None,
-        }
-    }
-
-    fn make_edge(from: Uuid, to: Uuid) -> WorkflowStepEdgeRow {
-        WorkflowStepEdgeRow {
-            id: Uuid::new_v4(),
-            workflow_id: Uuid::new_v4(),
-            from_step_id: from,
-            to_step_id: to,
-            ..Default::default()
-        }
+        let mut s = step_with(id, "", var_name, order);
+        s.execution_mode = mode.to_string();
+        s
     }
 
     fn empty_port_meta() -> PortMetadata {
@@ -88,7 +60,7 @@ mod tests {
         let run_id = Uuid::new_v4();
         let steps = vec![make_step(step_id, "default", Some("result"), 0)];
 
-        let envelope = make_envelope(Some(json!({"answer": 42})));
+        let envelope = envelope(json!({"answer": 42}));
         let snapshots = vec![EnvelopeSnapshotRow {
             step_id,
             content: serde_json::to_string(&envelope).unwrap(),
@@ -118,8 +90,8 @@ mod tests {
             make_step(step_b, "default", Some("summary"), 1),
         ];
 
-        let env_a = make_envelope(Some(json!({"data": "analysis result"})));
-        let env_b = make_envelope(Some(json!({"data": "summary result"})));
+        let env_a = envelope(json!({"data": "analysis result"}));
+        let env_b = envelope(json!({"data": "summary result"}));
 
         let snapshots = vec![
             EnvelopeSnapshotRow {
@@ -164,7 +136,7 @@ mod tests {
                 details: None,
             }),
         };
-        let success_env = make_envelope(Some(json!({"retried": true})));
+        let success_env = envelope(json!({"retried": true}));
 
         // Snapshots ordered chronologically: error first, then success retry
         let snapshots = vec![
@@ -203,7 +175,7 @@ mod tests {
             make_step(step_a, "context", None, 0),
             make_step(step_b, "default", Some("out"), 1),
         ];
-        let edges = vec![make_edge(step_a, step_b)];
+        let edges = vec![edge(step_a, step_b)];
         let dag_state = DagExecutionState::new();
 
         let next = next_executable_steps(&steps, &edges, &dag_state);
@@ -220,9 +192,9 @@ mod tests {
             make_step(step_a, "context", None, 0),
             make_step(step_b, "default", Some("out"), 1),
         ];
-        let edges = vec![make_edge(step_a, step_b)];
+        let edges = vec![edge(step_a, step_b)];
 
-        let envelope = make_envelope(Some(json!("context data")));
+        let envelope = envelope(json!("context data"));
         let mut completed = HashMap::new();
         completed.insert(
             step_a,
@@ -254,7 +226,7 @@ mod tests {
         let steps = vec![make_step(step_a, "context", None, 0)];
         let edges = vec![];
 
-        let envelope = make_envelope(Some(json!("data")));
+        let envelope = envelope(json!("data"));
         let mut completed = HashMap::new();
         completed.insert(
             step_a,
@@ -288,7 +260,7 @@ mod tests {
             make_step(step_b, "default", Some("middle"), 1),
             make_step(step_c, "default", Some("end"), 2),
         ];
-        let edges = vec![make_edge(step_a, step_b), make_edge(step_b, step_c)];
+        let edges = vec![edge(step_a, step_b), edge(step_b, step_c)];
         let dag_state = DagExecutionState::new();
 
         let next = next_executable_steps(&steps, &edges, &dag_state);

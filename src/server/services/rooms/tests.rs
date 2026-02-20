@@ -3,8 +3,9 @@ mod tests {
     use chrono::Utc;
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::{CreateRoomInput, MockRoomRepo};
-    use crate::db::{RoomRow, RoomTranscriptEntry, WorkflowStepRow};
+    use crate::db::{RoomRow, RoomTranscriptEntry};
     use crate::server::services::rooms::*;
     use crate::server::services::ServiceError;
 
@@ -21,17 +22,6 @@ mod tests {
             tools_enabled: false,
             created_at: Utc::now(),
             updated_at: Utc::now(),
-        }
-    }
-
-    fn make_step(name: &str, output_var: Option<&str>) -> WorkflowStepRow {
-        WorkflowStepRow {
-            id: Uuid::new_v4(),
-            workflow_id: Uuid::new_v4(),
-            execution_mode: "room".to_string(),
-            output_variable_name: output_var.map(|s| s.to_string()),
-            name: Some(name.to_string()),
-            ..Default::default()
         }
     }
 
@@ -116,7 +106,10 @@ mod tests {
 
     #[tokio::test]
     async fn build_room_step_output_groups_by_agent_last_message() {
-        let step = make_step("debate", Some("debate_output"));
+        let mut s = step();
+        s.execution_mode = "room".into();
+        s.output_variable_name = Some("debate_output".into());
+        s.name = Some("debate".into());
 
         let transcript = vec![
             RoomTranscriptEntry {
@@ -142,7 +135,7 @@ mod tests {
             },
         ];
 
-        let output = build_room_step_output(&transcript, &step);
+        let output = build_room_step_output(&transcript, &s);
 
         assert_eq!(output.variable_name, "debate_output");
 
@@ -162,10 +155,13 @@ mod tests {
 
     #[tokio::test]
     async fn build_room_step_output_defaults_variable_name() {
-        let step = make_step("room_step", None);
+        let mut s = step();
+        s.execution_mode = "room".into();
+        s.name = Some("room_step".into());
+
         let transcript = vec![];
 
-        let output = build_room_step_output(&transcript, &step);
+        let output = build_room_step_output(&transcript, &s);
         assert_eq!(output.variable_name, "");
         assert!(output
             .structured_output

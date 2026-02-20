@@ -23,7 +23,7 @@ pub use haiku::{haiku_extract_context, haiku_read_file, haiku_summarize, haiku_s
 
 /// Return tool definitions filtered by allowed names.
 /// If `allowed` is empty, returns all tools.
-pub fn filtered_tools(allowed: &[String]) -> Vec<Tool> {
+pub(crate) fn filtered_tools(allowed: &[String]) -> Vec<Tool> {
     let all = agent_tools();
     if allowed.is_empty() {
         return all;
@@ -35,7 +35,7 @@ pub fn filtered_tools(allowed: &[String]) -> Vec<Tool> {
 
 /// Return tool definitions for the Anthropic API.
 /// LEGACY: Agent pool and pipeline tools removed. Use chat/session API instead.
-pub fn agent_tools() -> Vec<Tool> {
+pub(crate) fn agent_tools() -> Vec<Tool> {
     vec![
         // --- Codebase exploration tools (read-only) ---
         Tool {
@@ -233,7 +233,7 @@ pub fn agent_tools() -> Vec<Tool> {
 /// Execute a tool by name with the given JSON input.
 ///
 /// Returns a JSON value describing the result.
-pub async fn execute_tool(
+pub(crate) async fn execute_tool(
     name: &str,
     input: &Value,
     state: &AppState,
