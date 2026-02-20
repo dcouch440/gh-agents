@@ -174,7 +174,11 @@ describe('executionStore', () => {
 
       await executionStore.sendMessage('e1', 'Hi')
 
-      expect(executionStore.store.getState().activeStreams['e1']).toBe(mockAbort)
+      const storedFn = executionStore.store.getState().activeStreams['e1']
+      expect(typeof storedFn).toBe('function')
+      // Calling the stored stop function should invoke the underlying abort
+      storedFn?.()
+      expect(mockAbort).toHaveBeenCalled()
     })
   })
 

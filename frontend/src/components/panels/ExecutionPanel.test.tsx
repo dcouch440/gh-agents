@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { ExecutionPanel } from './ExecutionPanel'
 import type { StepExecutionState, StepTimelineEvent } from '@/stores'
 import type { WorkflowExecutionSummary } from '@/types'
@@ -110,7 +111,7 @@ beforeEach(() => {
 
 describe('ExecutionPanel', () => {
   it('renders empty state when no runId and no history', () => {
-    render(<ExecutionPanel />)
+    render(<MemoryRouter><ExecutionPanel /></MemoryRouter>)
     expect(screen.getByText('Run a workflow to see execution details')).toBeInTheDocument()
   })
 
@@ -136,12 +137,13 @@ describe('ExecutionPanel', () => {
         outputTokens: 5,
         durationMs: 100,
         forEachProgress: null,
+        subWorkflowProgress: null,
         startedAt: '2025-01-01T00:00:01Z',
         completedAt: '2025-01-01T00:00:02Z',
       },
     }
 
-    render(<ExecutionPanel />)
+    render(<MemoryRouter><ExecutionPanel /></MemoryRouter>)
     expect(screen.getByText('Running...')).toBeInTheDocument()
     expect(screen.getByText('1 / 3 steps')).toBeInTheDocument()
     expect(screen.getByText('Step A')).toBeInTheDocument()
@@ -155,7 +157,7 @@ describe('ExecutionPanel', () => {
     _error.value = 'LLM timeout'
     _completedAt.value = '2025-01-01T00:01:00Z'
 
-    render(<ExecutionPanel />)
+    render(<MemoryRouter><ExecutionPanel /></MemoryRouter>)
     expect(screen.getByText('Failed')).toBeInTheDocument()
     expect(screen.getByText('LLM timeout')).toBeInTheDocument()
   })
@@ -168,7 +170,7 @@ describe('ExecutionPanel', () => {
     _durationMs.value = 3000
     _completedAt.value = '2025-01-01T00:01:00Z'
 
-    render(<ExecutionPanel />)
+    render(<MemoryRouter><ExecutionPanel /></MemoryRouter>)
     expect(screen.getByText('Completed')).toBeInTheDocument()
     expect(screen.getByText('2 / 2 steps')).toBeInTheDocument()
     expect(screen.getByText('3.0s')).toBeInTheDocument()
@@ -176,7 +178,7 @@ describe('ExecutionPanel', () => {
 
   it('shows run selector with truncated run ID', () => {
     _runId.value = 'abcdef12-3456-7890'
-    render(<ExecutionPanel />)
+    render(<MemoryRouter><ExecutionPanel /></MemoryRouter>)
     expect(screen.getByText('Run abcdef12')).toBeInTheDocument()
   })
 
@@ -192,13 +194,13 @@ describe('ExecutionPanel', () => {
         error: null,
       },
     ]
-    render(<ExecutionPanel />)
+    render(<MemoryRouter><ExecutionPanel /></MemoryRouter>)
     expect(screen.queryByText('Run a workflow to see execution details')).not.toBeInTheDocument()
   })
 
   it('shows error message when history fetch fails', () => {
     _historyError.value = '404 Not Found'
-    render(<ExecutionPanel />)
+    render(<MemoryRouter><ExecutionPanel /></MemoryRouter>)
     expect(screen.getByText('Failed to load history: 404 Not Found')).toBeInTheDocument()
   })
 
@@ -216,7 +218,7 @@ describe('ExecutionPanel', () => {
     _runs.value = [_historicalRun.value]
     _selectedHistoricalRunId.value = 'run-hist'
 
-    render(<ExecutionPanel />)
+    render(<MemoryRouter><ExecutionPanel /></MemoryRouter>)
     // Should not show the live timeline
     expect(screen.queryByText('Running...')).not.toBeInTheDocument()
   })

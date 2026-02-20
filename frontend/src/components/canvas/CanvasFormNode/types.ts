@@ -12,6 +12,8 @@ type CanvasFormTab = {
   icon: typeof SettingsOutlined
   tooltip: string
   content: ReactNode
+  /** Trailing actions rendered in the tab strip when this tab is active. */
+  actions?: ReactNode
 }
 
 type CanvasFormNodeProps = {

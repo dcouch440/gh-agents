@@ -8,6 +8,7 @@ import type { CanvasFormTab } from '../CanvasFormNode'
 import type { Archetype as ArchetypeType } from './archetypes'
 import { Archetype } from './archetypes'
 import { ChatTab } from './tabs/ChatTab'
+import { ChatClearButton } from './tabs/ChatClearButton'
 import { LiveStreamTab } from './tabs/LiveStreamTab'
 import { AgentRosterTab } from './tabs/AgentRosterTab'
 import { RoomMembersTab } from './tabs/RoomMembersTab'
@@ -33,6 +34,7 @@ const buildStepTabs = ({
       icon: AutoAwesomeOutlined,
       tooltip: 'Chat',
       content: <ChatTab stepId={stepId} archetype={archetype} focusMode={focusMode} />,
+      actions: <ChatClearButton stepId={stepId} />,
     },
   ]
 

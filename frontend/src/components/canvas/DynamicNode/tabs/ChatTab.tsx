@@ -7,7 +7,6 @@ import { useAssistantSession } from '@/hooks/useAssistantSession'
 import { ChatPanel, StreamingMessage } from '@/components/chat'
 import { ARCHETYPE_CONFIGS } from '../archetypes'
 import type { Archetype } from '../archetypes'
-import { ChatHeader } from './ChatHeader'
 import { PanelOverlay } from './panel'
 
 type ChatTabProps = {
@@ -18,13 +17,7 @@ type ChatTabProps = {
 
 function ChatTab({ stepId, archetype, focusMode }: ChatTabProps) {
   const workflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
-  const { messages, streamingSegments, isLoading, error, streaming, activePanel, sendMessage, cancelGeneration, clearHistory, dismissPanel, submitPanelSelections } = useAssistantSession(workflowId, stepId)
-
-  const handleClear = useCallback(() => {
-    if (window.confirm('Clear chat history?')) {
-      clearHistory()
-    }
-  }, [clearHistory])
+  const { messages, streamingSegments, isLoading, error, streaming, activePanel, sendMessage, cancelGeneration, dismissPanel, submitPanelSelections } = useAssistantSession(workflowId, stepId)
 
   const handleSend = useCallback(
     (message: string) => {
@@ -74,7 +67,6 @@ function ChatTab({ stepId, archetype, focusMode }: ChatTabProps) {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
-      {!focusMode && <ChatHeader onClear={handleClear} disabled={streaming || messages.length === 0} />}
       <ChatPanel
         messages={messages}
         onSend={handleSend}
