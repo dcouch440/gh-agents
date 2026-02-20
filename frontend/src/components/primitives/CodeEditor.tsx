@@ -35,6 +35,9 @@ function CodeEditor({
 }: CodeEditorProps) {
   const theme = useTheme()
   const mode = theme.palette.mode
+  const editorTokens = mode === 'dark'
+    ? { bgEditor: theme.palette.custom.bgEditor, textPrimary: theme.palette.text.primary, accent: theme.palette.custom.accent }
+    : undefined
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const isUpdatingRef = useRef(false)
@@ -59,7 +62,7 @@ function CodeEditor({
     const baseExtensions: Extension[] = [
       keymap.of([...completionKeymap, ...defaultKeymap, ...historyKeymap]),
       history(),
-      ...getEditorThemeExtensions(mode),
+      ...getEditorThemeExtensions(mode, editorTokens),
       EditorView.lineWrapping,
       tooltips({ parent: document.body }),
       updateListener,
@@ -97,9 +100,9 @@ function CodeEditor({
       viewRef.current = null
       editorViewRef?.(null)
     }
-    // Rebuild when theme mode changes; other deps intentionally omitted
+    // Rebuild when theme changes; other deps intentionally omitted
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode])
+  }, [mode, editorTokens?.bgEditor])
 
   // Sync external value changes
   useEffect(() => {
