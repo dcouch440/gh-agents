@@ -24,7 +24,6 @@ use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
 
 #[cfg(test)]
 mod tests;
-
 // ── Types ──────────────────────────────────────────────────────────────────
 
 /// A deleted item that should be checked for stale references in notes.
