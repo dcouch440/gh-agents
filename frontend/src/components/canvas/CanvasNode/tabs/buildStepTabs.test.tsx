@@ -1,12 +1,12 @@
 import { describe, it, expect, vi } from 'vitest'
 import { buildStepTabs } from './buildStepTabs'
-import { Archetype } from './archetypes'
-vi.mock('./tabs/ChatTab', () => ({ ChatTab: () => null }))
-vi.mock('./tabs/LiveStreamTab', () => ({ LiveStreamTab: () => null }))
-vi.mock('./tabs/AgentRosterTab', () => ({ AgentRosterTab: () => null }))
-vi.mock('./tabs/RoomMembersTab', () => ({ RoomMembersTab: () => null }))
-vi.mock('./tabs/DebugLogTab', () => ({ DebugLogTab: () => null }))
-vi.mock('./tabs/NotesTab', () => ({ NotesTab: () => null }))
+import { Archetype } from '../registry'
+vi.mock('./ChatTab', () => ({ ChatTab: () => null }))
+vi.mock('./LiveStreamTab', () => ({ LiveStreamTab: () => null }))
+vi.mock('./AgentRosterTab', () => ({ AgentRosterTab: () => null }))
+vi.mock('./RoomMembersTab', () => ({ RoomMembersTab: () => null }))
+vi.mock('./DebugLogTab', () => ({ DebugLogTab: () => null }))
+vi.mock('./NotesTab', () => ({ NotesTab: () => null }))
 
 const baseParams = {
   stepId: 'step-1',

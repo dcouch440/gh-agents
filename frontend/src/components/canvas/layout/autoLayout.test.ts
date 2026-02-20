@@ -3,7 +3,7 @@ import { computeTowerPositions, computeAllTowerPositions, buildTieredTower, comp
 import type { ProtocolDimensions, NodeDimensions } from './autoLayout'
 import type { StepNodeLookups, RosterAgentInfo } from '../mappers/types'
 import { TOWER_LAYOUT } from './autoLayoutConfig'
-import { AGENT_DEFAULTS } from '../DynamicNode/archetypes'
+import { AGENT_DEFAULTS } from '../CanvasNode/registry'
 
 // ============================================================================
 // Helpers

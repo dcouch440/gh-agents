@@ -4,8 +4,8 @@
 
 import type { ShareableField } from '@/stores/shareStore'
 import type { WorkflowStep, RosterAgent, RoomStepMember } from '@/types/workflow'
-import type { Archetype } from './DynamicNode/archetypes'
-import { Archetype as ArchetypeEnum, ARCHETYPE_CONFIGS } from './DynamicNode/archetypes'
+import type { Archetype } from './CanvasNode/registry'
+import { Archetype as ArchetypeEnum, ARCHETYPE_CONFIGS } from './CanvasNode/registry'
 
 type BuildShareableFieldsInput = {
   stepId: string

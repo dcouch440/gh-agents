@@ -1,7 +1,7 @@
 import { Collections } from '@/utils/collections'
 import type { Point } from '@/utils/geometry'
 import type { StepNodeLookups, RosterAgentInfo } from '../mappers/types'
-import { AGENT_DEFAULTS } from '../DynamicNode/archetypes'
+import { AGENT_DEFAULTS } from '../CanvasNode/registry'
 import { TOWER_LAYOUT } from './autoLayoutConfig'
 
 // ============================================================================

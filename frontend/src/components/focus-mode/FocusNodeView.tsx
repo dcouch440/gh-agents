@@ -2,13 +2,13 @@ import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { useStore, workflowStore } from '@/stores'
 import { FOCUS_MODE } from '@/constants'
-import { ARCHETYPE_CONFIGS } from '@/components/canvas/DynamicNode/archetypes'
-import type { Archetype as ArchetypeType } from '@/components/canvas/DynamicNode/archetypes'
-import { useStepStoreData } from '@/components/canvas/DynamicNode/useStepStoreData'
-import { buildStepTabs } from '@/components/canvas/DynamicNode/buildStepTabs'
-import { resolveSubtitle } from '@/components/canvas/DynamicNode/resolveSubtitle'
+import { ARCHETYPE_CONFIGS } from '@/components/canvas/CanvasNode/registry'
+import type { Archetype as ArchetypeType } from '@/components/canvas/CanvasNode/registry'
+import { useStepStoreData } from '@/components/canvas/CanvasNode/hooks'
+import { buildStepTabs } from '@/components/canvas/CanvasNode/tabs/buildStepTabs'
+import { resolveSubtitle } from '@/components/canvas/CanvasNode/resolveSubtitle'
 import { FocusHeader } from './FocusHeader'
-import { FocusTabStrip } from './FocusTabStrip'
+import { TabStrip } from '@/components/canvas/CanvasNode/shell'
 
 type FocusNodeViewProps = {
   stepId: string
@@ -73,11 +73,12 @@ function FocusNodeView({
           issueDescriptions={stepIssues.map((i) => i.description)}
         />
 
-        <FocusTabStrip
+        <TabStrip
           tabs={tabs}
           activeTabId={activeTabId}
           onTabChange={onTabChange}
           accentColor={accentColor}
+          variant="full"
         />
 
         <Box

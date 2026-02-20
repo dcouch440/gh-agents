@@ -5,7 +5,7 @@ import IconButton from '@mui/material/IconButton'
 import CloseOutlined from '@mui/icons-material/CloseOutlined'
 import { useTheme } from '@mui/material/styles'
 import { LAYOUT, ANIMATION } from '@/constants'
-import { FormTabStrip } from '../CanvasFormNode'
+import { TabStrip } from '../CanvasNode/shell'
 import type { CanvasFormTab } from '../CanvasFormNode'
 
 type NodeExpandedModalProps = {
@@ -85,7 +85,7 @@ function NodeExpandedModal({
       </Box>
 
       {/* Tab strip */}
-      <FormTabStrip
+      <TabStrip
         tabs={tabs}
         activeTabId={activeTabId}
         onTabChange={onTabChange}

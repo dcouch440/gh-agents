@@ -7,7 +7,7 @@ import { HighlightMode } from '../canvasKinds'
 import { getNodeHighlightStyles } from '../nodeHighlightStyles'
 import { ResizableNodeShell, toConstraints } from '../ResizableNodeShell'
 import { FORM_NODE } from './constants'
-import { FormTabStrip } from './FormTabStrip'
+import { TabStrip } from '../CanvasNode/shell'
 import type { CanvasFormNodeProps } from './types'
 
 function CanvasFormNodeComponent({
@@ -77,7 +77,7 @@ function CanvasFormNodeComponent({
         </Box>
       ) : (
         <>
-          <FormTabStrip tabs={tabs} activeTabId={activeTabId} onTabChange={onTabChange} accentColor={resolvedAccent} />
+          <TabStrip tabs={tabs} activeTabId={activeTabId} onTabChange={onTabChange} accentColor={resolvedAccent} />
           {/* Content area — full-bleed, no padding, interactive */}
           <Box className="nowheel nodrag nopan" sx={{ flex: 1, minHeight: 0, overflow: 'hidden', position: 'relative', cursor: 'text', userSelect: 'text' }}>
             {activeTab?.content}
