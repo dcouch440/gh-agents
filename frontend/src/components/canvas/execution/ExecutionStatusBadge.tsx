@@ -28,10 +28,9 @@ function ExecutionStatusBadge({ status }: ExecutionStatusBadgeProps) {
         px: 1.25,
         py: 0.5,
         borderRadius: '100px',
-        background: `linear-gradient(135deg, ${color}14, ${color}22)`,
+        background: `${color}12`,
         border: 1,
-        borderColor: `${color}35`,
-        boxShadow: `0 0 8px ${color}18, inset 0 1px 0 ${color}10`,
+        borderColor: `${color}25`,
       }}
     >
       <Box
@@ -40,7 +39,6 @@ function ExecutionStatusBadge({ status }: ExecutionStatusBadgeProps) {
           height: 6,
           borderRadius: '50%',
           backgroundColor: color,
-          boxShadow: `0 0 4px ${color}80`,
           flexShrink: 0,
           position: 'relative',
           ...(animated && {

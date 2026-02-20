@@ -80,7 +80,6 @@ type VariantConfig = {
   defaultWidth: number
   defaultHeight: number
   constraints: ResizeSizeConstraints | null
-  highlightVariant: 'step' | 'resizable'
 }
 
 const VARIANT_CONFIGS: Record<NodeVariant, VariantConfig> = {
@@ -93,7 +92,7 @@ const VARIANT_CONFIGS: Record<NodeVariant, VariantConfig> = {
     defaultWidth: 560,
     defaultHeight: 500,
     constraints: { minWidth: 360, minHeight: 300, maxWidth: 1800, maxHeight: 1600 },
-    highlightVariant: 'resizable',
+
   },
   room: {
     label: 'Room',
@@ -104,7 +103,7 @@ const VARIANT_CONFIGS: Record<NodeVariant, VariantConfig> = {
     defaultWidth: 560,
     defaultHeight: 500,
     constraints: { minWidth: 360, minHeight: 300, maxWidth: 1800, maxHeight: 1600 },
-    highlightVariant: 'resizable',
+
   },
   blank: {
     label: 'Blank',
@@ -115,7 +114,7 @@ const VARIANT_CONFIGS: Record<NodeVariant, VariantConfig> = {
     defaultWidth: 560,
     defaultHeight: 500,
     constraints: { minWidth: 360, minHeight: 300, maxWidth: 1800, maxHeight: 1600 },
-    highlightVariant: 'resizable',
+
   },
   agent: {
     label: 'Agent',
@@ -126,7 +125,7 @@ const VARIANT_CONFIGS: Record<NodeVariant, VariantConfig> = {
     defaultWidth: 420,
     defaultHeight: 360,
     constraints: { minWidth: 360, minHeight: 300, maxWidth: 1200, maxHeight: 1000 },
-    highlightVariant: 'resizable',
+
   },
   context: {
     label: 'Context',
@@ -137,7 +136,7 @@ const VARIANT_CONFIGS: Record<NodeVariant, VariantConfig> = {
     defaultWidth: 560,
     defaultHeight: 500,
     constraints: { minWidth: 360, minHeight: 300, maxWidth: 1800, maxHeight: 1600 },
-    highlightVariant: 'resizable',
+
   },
   input: {
     label: 'Input',
@@ -148,7 +147,7 @@ const VARIANT_CONFIGS: Record<NodeVariant, VariantConfig> = {
     defaultWidth: 560,
     defaultHeight: 500,
     constraints: { minWidth: 360, minHeight: 300, maxWidth: 1800, maxHeight: 1600 },
-    highlightVariant: 'resizable',
+
   },
   step: {
     label: 'Step',
@@ -159,7 +158,7 @@ const VARIANT_CONFIGS: Record<NodeVariant, VariantConfig> = {
     defaultWidth: 260,
     defaultHeight: 0, // Auto-height
     constraints: null,
-    highlightVariant: 'step',
+
   },
   sub_workflow: {
     label: 'Sub-Workflow',
@@ -170,7 +169,7 @@ const VARIANT_CONFIGS: Record<NodeVariant, VariantConfig> = {
     defaultWidth: 180,
     defaultHeight: 56,
     constraints: null,
-    highlightVariant: 'step',
+
   },
 }
 

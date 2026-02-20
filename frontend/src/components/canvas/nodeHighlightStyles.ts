@@ -1,20 +1,12 @@
 import { HighlightMode } from './canvasKinds'
 
-/**
- * 'step' — StepNode: simpler selected/default shadows (no accent glow ring)
- * 'resizable' — ContextNode, DocumentNode: accent-glow ring on selected, heavier default shadow
- */
-type NodeHighlightVariant = 'step' | 'resizable'
-
 type NodeHighlightInput = {
   selected: boolean
   accentColor: string
   highlightMode: HighlightMode
-  themeMode: 'light' | 'dark'
-  variant?: NodeHighlightVariant
-  /** Default border color for light mode (from theme token). */
+  /** Default border color (from theme token). */
   screenBorder: string
-  /** Accent ring opacity for light mode selected state (from theme token). */
+  /** Accent ring opacity for selected state (from theme token). */
   accentRing: string
 }
 
@@ -23,68 +15,15 @@ type NodeHighlightOutput = {
   boxShadow: string
 }
 
-/* ── Dark mode (unchanged) ── */
-
-const getNodeBorderColorDark = (
-  selected: boolean,
-  accentColor: string,
-  highlightMode: HighlightMode,
-): string => {
-  if (selected) return accentColor
-  if (highlightMode === HighlightMode.SELECT) return accentColor
-  if (highlightMode === HighlightMode.HOVER) return `${accentColor}80`
-  return `${accentColor}30`
-}
-
-type ShadowPreset = { dark: string; light: string }
-
-const STEP_DEFAULT_SHADOW: ShadowPreset = {
-  dark: '0 4px 24px rgba(0, 0, 0, 0.4)',
-  light: 'none',
-}
-
-const RESIZABLE_DEFAULT_SHADOW: ShadowPreset = {
-  dark: '0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)',
-  light: 'none',
-}
-
-const getBoxShadowDark = (
-  selected: boolean,
-  accentColor: string,
-  highlightMode: HighlightMode,
-  defaultPreset: ShadowPreset,
-): string => {
-  if (selected) {
-    return `0 0 0 2px ${accentColor}, 0 0 20px ${accentColor}40, 0 8px 32px ${accentColor}30`
-  }
-  if (highlightMode === HighlightMode.SELECT) {
-    return `0 0 0 1px ${accentColor}40, 0 8px 32px ${accentColor}22`
-  }
-  if (highlightMode === HighlightMode.HOVER) {
-    return `0 0 0 1px ${accentColor}20, 0 6px 24px ${accentColor}14`
-  }
-  return defaultPreset.dark
-}
-
-/* ── Light mode (flat design) ── */
+/* ── Flat design — identical for light & dark modes ── */
 
 const getNodeHighlightStyles = ({
   selected,
   accentColor,
   highlightMode,
-  themeMode,
-  variant = 'step',
   screenBorder,
   accentRing,
 }: NodeHighlightInput): NodeHighlightOutput => {
-  if (themeMode === 'dark') {
-    const borderColor = getNodeBorderColorDark(selected, accentColor, highlightMode)
-    const preset = variant === 'step' ? STEP_DEFAULT_SHADOW : RESIZABLE_DEFAULT_SHADOW
-    const boxShadow = getBoxShadowDark(selected, accentColor, highlightMode, preset)
-    return { borderColor, boxShadow }
-  }
-
-  // Light mode — flat, minimal
   if (selected) {
     return {
       borderColor: accentColor,
@@ -110,4 +49,4 @@ const getNodeHighlightStyles = ({
 }
 
 export { getNodeHighlightStyles }
-export type { NodeHighlightInput, NodeHighlightOutput, NodeHighlightVariant }
+export type { NodeHighlightInput, NodeHighlightOutput }
