@@ -9,20 +9,20 @@ use super::config::StepChatContext;
 
 /// Universal tools available to all archetypes in the conversational assistant.
 ///
-/// Mutation tools (`set_node_name`, `set_node_description`) are intentionally
-/// excluded — the assistant must dispatch those to a background agent rather
-/// than calling them directly. They remain available to the dispatch strategy
-/// via `resolve_step_tools()`.
+/// `set_node_description` is intentionally excluded — the assistant must
+/// dispatch that to a background agent rather than calling it directly.
+/// It remains available to the dispatch strategy via `resolve_step_tools()`.
 const UNIVERSAL_TOOLS: &[&str] = &[
     "render_panel",
     "think",
     "update_notes",
     "dispatch",
     "cancel_dispatch",
+    "set_node_name",
 ];
 
 /// Node mutation tools — dispatch-only, not available to the conversational assistant.
-const NODE_MUTATION_TOOLS: &[&str] = &["set_node_name", "set_node_description"];
+const NODE_MUTATION_TOOLS: &[&str] = &["set_node_description"];
 
 /// Universal tool names handled by node_assistant (includes mutations for dispatch routing).
 const NODE_ASSISTANT_TOOLS: &[&str] = &["set_node_name", "set_node_description", "render_panel"];
@@ -33,9 +33,9 @@ const WORKFORCE_CHAT_EXCLUDED: &[&str] = &["update_notes"];
 
 /// Resolve tool definitions for step chat sessions (the conversational assistant).
 ///
-/// Returns universal tools plus archetype-specific tools, but excludes node
-/// mutation tools (`set_node_name`, `set_node_description`) — the assistant
-/// must dispatch those to a background agent.
+/// Returns universal tools plus archetype-specific tools, but excludes
+/// `set_node_description` — the assistant must dispatch that to a background
+/// agent.
 ///
 /// For workforce mode, additionally excludes `update_notes` (dispatch sub-agent
 /// owns note-taking for workforce nodes).
