@@ -1,34 +1,11 @@
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::{MockAgentRepo, MockToolRepo};
-    use crate::db::{AgentRow, ToolRow};
     use crate::server::services::tools::*;
     use crate::server::services::ServiceError;
-
-    fn make_tool(name: &str) -> ToolRow {
-        ToolRow {
-            id: Uuid::new_v4(),
-            name: name.to_string(),
-            display_name: name.to_string(),
-            description: String::new(),
-            parameters: serde_json::json!({}),
-            created_at: Utc::now(),
-            version: 1,
-        }
-    }
-
-    fn make_agent(id: Uuid, owner_id: Uuid) -> AgentRow {
-        AgentRow {
-            id,
-            user_id: Some(owner_id),
-            name: "test".to_string(),
-            status: Some("idle".to_string()),
-            ..Default::default()
-        }
-    }
 
     #[tokio::test]
     async fn create_rejects_non_admin() {
@@ -126,7 +103,7 @@ mod tests {
 
     #[tokio::test]
     async fn update_merges_partial_fields() {
-        let tool = make_tool("original");
+        let tool = tool_row("original");
         let tool_id = tool.id;
         let tool_clone = tool.clone();
 
@@ -164,7 +141,7 @@ mod tests {
         let owner_id = Uuid::new_v4();
         let attacker_id = Uuid::new_v4();
         let agent_id = Uuid::new_v4();
-        let agent = make_agent(agent_id, owner_id);
+        let agent = agent_owned(agent_id, owner_id);
 
         let tool_repo = MockToolRepo::new();
         let mut agent_repo = MockAgentRepo::new();
@@ -180,8 +157,8 @@ mod tests {
     async fn get_agent_tools_succeeds_for_owner() {
         let user_id = Uuid::new_v4();
         let agent_id = Uuid::new_v4();
-        let agent = make_agent(agent_id, user_id);
-        let tool = make_tool("search");
+        let agent = agent_owned(agent_id, user_id);
+        let tool = tool_row("search");
 
         let mut tool_repo = MockToolRepo::new();
         tool_repo
@@ -203,7 +180,7 @@ mod tests {
     async fn set_agent_tools_rejects_invalid_uuid() {
         let user_id = Uuid::new_v4();
         let agent_id = Uuid::new_v4();
-        let agent = make_agent(agent_id, user_id);
+        let agent = agent_owned(agent_id, user_id);
 
         let tool_repo = MockToolRepo::new();
         let mut agent_repo = MockAgentRepo::new();

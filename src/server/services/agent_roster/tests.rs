@@ -2,42 +2,17 @@
 mod tests {
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::MockWorkflowRepo;
-    use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow, WorkflowRow, WorkflowStepRow};
+    use crate::db::TaskAgentRosterRow;
     use crate::server::services::agent_roster::*;
     use crate::server::services::ServiceError;
-
-    fn make_workflow(user_id: Uuid) -> WorkflowRow {
-        WorkflowRow {
-            id: Uuid::new_v4(),
-            user_id,
-            name: "wf".to_string(),
-            ..Default::default()
-        }
-    }
-
-    fn make_step(workflow_id: Uuid) -> WorkflowStepRow {
-        WorkflowStepRow {
-            id: Uuid::new_v4(),
-            workflow_id,
-            name: Some("Workforce".to_string()),
-            ..Default::default()
-        }
-    }
-
-    fn make_brief(step_id: Uuid) -> TaskMissionBriefRow {
-        TaskMissionBriefRow {
-            id: Uuid::new_v4(),
-            step_id,
-            ..Default::default()
-        }
-    }
 
     #[tokio::test]
     async fn create_rejects_wrong_owner() {
         let owner = Uuid::new_v4();
         let attacker = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
 
         let mut repo = MockWorkflowRepo::new();
@@ -63,12 +38,13 @@ mod tests {
     #[tokio::test]
     async fn create_auto_creates_mission_brief() {
         let owner = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
-        let step = make_step(wf_id);
+        let mut step = step_in(wf_id);
+        step.name = Some("Workforce".into());
         let step_id = step.id;
-        let brief = make_brief(step_id);
-        let brief_id = brief.id;
+        let b = brief(step_id);
+        let brief_id = b.id;
 
         let mut repo = MockWorkflowRepo::new();
         repo.expect_get_workflow()
@@ -76,7 +52,7 @@ mod tests {
         repo.expect_get_step()
             .returning(move |_| Ok(Some(step.clone())));
         repo.expect_upsert_mission_brief()
-            .returning(move |_, _, _, _, _| Ok(brief.clone()));
+            .returning(move |_, _, _, _, _| Ok(b.clone()));
         repo.expect_add_roster_agent()
             .returning(move |bid, name, role, caps, order| {
                 Ok(TaskAgentRosterRow {
@@ -111,9 +87,10 @@ mod tests {
     #[tokio::test]
     async fn list_returns_empty_when_no_brief() {
         let owner = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
-        let step = make_step(wf_id);
+        let mut step = step_in(wf_id);
+        step.name = Some("Workforce".into());
         let step_id = step.id;
 
         let mut repo = MockWorkflowRepo::new();

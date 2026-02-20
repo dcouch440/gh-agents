@@ -3,27 +3,11 @@ mod tests {
     use chrono::Utc;
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::{CreateWorkflowInput, MockWorkflowRepo, UpdateWorkflowInput};
     use crate::db::WorkflowRow;
     use crate::server::services::workflows::*;
     use crate::server::services::ServiceError;
-
-    fn make_workflow(user_id: Uuid) -> WorkflowRow {
-        WorkflowRow {
-            id: Uuid::new_v4(),
-            user_id,
-            name: "test-workflow".to_string(),
-            description: String::new(),
-            execution_mode: "dag".to_string(),
-            version: 1,
-            container_enabled: false,
-            target_repo_url: None,
-            target_branch: None,
-            vpn_enabled: false,
-            created_at: Utc::now(),
-            board_overview_summary: String::new(),
-        }
-    }
 
     // ── create_workflow ───────────────────────────────────────────────
 
@@ -89,7 +73,7 @@ mod tests {
     async fn get_rejects_wrong_owner() {
         let owner = Uuid::new_v4();
         let attacker = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
 
         let mut repo = MockWorkflowRepo::new();
@@ -105,7 +89,7 @@ mod tests {
     #[tokio::test]
     async fn update_merges_partial_fields() {
         let owner = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
         let wf_clone = wf.clone();
 
@@ -161,7 +145,7 @@ mod tests {
     async fn delete_rejects_wrong_owner() {
         let owner = Uuid::new_v4();
         let attacker = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
 
         let mut repo = MockWorkflowRepo::new();

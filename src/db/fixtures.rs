@@ -59,6 +59,15 @@ pub mod fixtures {
         }
     }
 
+    /// Step scoped to a specific workflow.
+    pub fn step_in(workflow_id: Uuid) -> WorkflowStepRow {
+        WorkflowStepRow {
+            id: Uuid::new_v4(),
+            workflow_id,
+            ..Default::default()
+        }
+    }
+
     // ── WorkflowStepEdgeRow ────────────────────────────────────────
 
     /// Edge between two steps (auto-generated IDs).
@@ -88,6 +97,44 @@ pub mod fixtures {
         WorkflowStepEdgeRow {
             from_output_port: Some(from_port.into()),
             to_input_port: Some(to_port.into()),
+            ..edge(from, to)
+        }
+    }
+
+    /// Edge with condition fields.
+    pub fn conditional_edge(
+        from: Uuid,
+        to: Uuid,
+        condition_type: &str,
+        condition_field: &str,
+        condition_value: &str,
+    ) -> WorkflowStepEdgeRow {
+        WorkflowStepEdgeRow {
+            condition_type: Some(condition_type.into()),
+            condition_value: Some(
+                serde_json::json!({ "field": condition_field, "value": condition_value }),
+            ),
+            ..edge(from, to)
+        }
+    }
+
+    /// Edge with both port mapping and conditions.
+    pub fn conditional_port_edge(
+        from: Uuid,
+        to: Uuid,
+        from_port: &str,
+        to_port: &str,
+        condition_type: &str,
+        condition_field: &str,
+        condition_value: &str,
+    ) -> WorkflowStepEdgeRow {
+        WorkflowStepEdgeRow {
+            from_output_port: Some(from_port.into()),
+            to_input_port: Some(to_port.into()),
+            condition_type: Some(condition_type.into()),
+            condition_value: Some(
+                serde_json::json!({ "field": condition_field, "value": condition_value }),
+            ),
             ..edge(from, to)
         }
     }
@@ -123,6 +170,24 @@ pub mod fixtures {
             name: "Test Agent".into(),
             system_prompt: "You are a test agent.".into(),
             ..Default::default()
+        }
+    }
+
+    /// Agent owned by a specific user.
+    pub fn agent_owned(id: Uuid, user_id: Uuid) -> AgentRow {
+        AgentRow {
+            user_id: Some(user_id),
+            status: Some("idle".into()),
+            ..agent(id)
+        }
+    }
+
+    /// System agent (no owner, is_system = true).
+    pub fn system_agent(id: Uuid) -> AgentRow {
+        AgentRow {
+            user_id: None,
+            is_system: true,
+            ..agent(id)
         }
     }
 
@@ -229,6 +294,36 @@ pub mod fixtures {
             workflow_id,
             source_step_id,
             ..Default::default()
+        }
+    }
+
+    // ── ToolRow ─────────────────────────────────────────────────────
+
+    /// Tool with a given name.
+    pub fn tool_row(name: &str) -> ToolRow {
+        ToolRow {
+            id: Uuid::new_v4(),
+            name: name.into(),
+            display_name: name.into(),
+            description: String::new(),
+            parameters: serde_json::json!({}),
+            created_at: chrono::Utc::now(),
+            version: 1,
+        }
+    }
+
+    // ── StepRoutingRuleRow ─────────────────────────────────────────
+
+    /// Routing rule for a step.
+    pub fn routing_rule(step_id: Uuid) -> StepRoutingRuleRow {
+        StepRoutingRuleRow {
+            id: Uuid::new_v4(),
+            workflow_step_id: step_id,
+            label_value: "default".into(),
+            description: None,
+            agent_id: Uuid::new_v4(),
+            display_order: 0,
+            created_at: chrono::Utc::now(),
         }
     }
 }

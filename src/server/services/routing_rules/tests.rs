@@ -3,39 +3,11 @@ mod tests {
     use chrono::Utc;
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::MockWorkflowRepo;
-    use crate::db::{StepRoutingRuleRow, WorkflowRow, WorkflowStepRow};
+    use crate::db::StepRoutingRuleRow;
     use crate::server::services::routing_rules::*;
     use crate::server::services::ServiceError;
-
-    fn make_workflow(user_id: Uuid) -> WorkflowRow {
-        WorkflowRow {
-            id: Uuid::new_v4(),
-            user_id,
-            name: "wf".to_string(),
-            ..Default::default()
-        }
-    }
-
-    fn make_step(workflow_id: Uuid) -> WorkflowStepRow {
-        WorkflowStepRow {
-            id: Uuid::new_v4(),
-            workflow_id,
-            ..Default::default()
-        }
-    }
-
-    fn make_rule(step_id: Uuid) -> StepRoutingRuleRow {
-        StepRoutingRuleRow {
-            id: Uuid::new_v4(),
-            workflow_step_id: step_id,
-            label_value: "frontend".to_string(),
-            description: Some("UI work".to_string()),
-            agent_id: Uuid::new_v4(),
-            display_order: 0,
-            created_at: Utc::now(),
-        }
-    }
 
     #[tokio::test]
     async fn create_rejects_empty_label() {
@@ -60,7 +32,7 @@ mod tests {
     async fn create_rejects_wrong_owner() {
         let owner = Uuid::new_v4();
         let attacker = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
 
         let mut repo = MockWorkflowRepo::new();
@@ -86,9 +58,9 @@ mod tests {
     #[tokio::test]
     async fn create_succeeds_for_owner() {
         let owner = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
-        let step = make_step(wf_id);
+        let step = step_in(wf_id);
         let step_id = step.id;
 
         let mut repo = MockWorkflowRepo::new();
@@ -130,11 +102,13 @@ mod tests {
     #[tokio::test]
     async fn list_returns_rules_for_owner() {
         let owner = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
-        let step = make_step(wf_id);
+        let step = step_in(wf_id);
         let step_id = step.id;
-        let rule = make_rule(step_id);
+        let mut rule = routing_rule(step_id);
+        rule.label_value = "frontend".into();
+        rule.description = Some("UI work".into());
 
         let mut repo = MockWorkflowRepo::new();
         repo.expect_get_workflow()
@@ -153,9 +127,9 @@ mod tests {
     #[tokio::test]
     async fn delete_succeeds_for_owner() {
         let owner = Uuid::new_v4();
-        let wf = make_workflow(owner);
+        let wf = workflow(owner);
         let wf_id = wf.id;
-        let step = make_step(wf_id);
+        let step = step_in(wf_id);
         let step_id = step.id;
         let rule_id = Uuid::new_v4();
 

@@ -18,7 +18,7 @@ mod tests;
 /// Extract a required string parameter from tool input.
 ///
 /// Returns the string slice on success, or a JSON error value on failure.
-pub fn require_str<'a>(input: &'a Value, field: &str) -> Result<&'a str, Value> {
+pub(crate) fn require_str<'a>(input: &'a Value, field: &str) -> Result<&'a str, Value> {
     input[field]
         .as_str()
         .ok_or_else(|| json!({ "error": format!("Missing required parameter: {}", field) }))
