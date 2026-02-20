@@ -5,17 +5,17 @@ import Fade from '@mui/material/Fade'
 import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined'
 import CheckCircleOutline from '@mui/icons-material/CheckCircleOutline'
 import ErrorOutline from '@mui/icons-material/ErrorOutline'
+import { useTheme } from '@mui/material/styles'
 import { useStore, workflowStore } from '@/stores'
 import { useWorkflowRun } from '../../useWorkflowRun'
-import { VARIANT_CONFIGS } from '../registry'
-
-const INPUT_ACCENT = VARIANT_CONFIGS.input.color
 
 type InputNodeRunButtonProps = {
   stepId: string
 }
 
 function InputNodeRunButton({ stepId }: InputNodeRunButtonProps) {
+  const theme = useTheme()
+  const inputAccent = theme.palette.nodePalette.input
   const activeWorkflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
   const step = useStore(workflowStore.store, workflowStore.selectStepById(stepId))
   const promptTemplate = step?.prompt_template ?? ''
@@ -40,7 +40,7 @@ function InputNodeRunButton({ stepId }: InputNodeRunButtonProps) {
       ? '#22c55e'
       : status === 'error'
         ? '#ef4444'
-        : `${INPUT_ACCENT}30`
+        : `${inputAccent}30`
 
   return (
     <Tooltip title={tooltipText} TransitionComponent={Fade} enterDelay={300} placement="top">
@@ -53,9 +53,9 @@ function InputNodeRunButton({ stepId }: InputNodeRunButtonProps) {
           height: 28,
           borderRadius: '6px',
           backgroundColor: bgColor,
-          color: status === 'completed' || status === 'error' ? '#fff' : INPUT_ACCENT,
-          '&:hover': { backgroundColor: `${INPUT_ACCENT}50` },
-          '&.Mui-disabled': { backgroundColor: `${INPUT_ACCENT}20`, color: `${INPUT_ACCENT}80` },
+          color: status === 'completed' || status === 'error' ? '#fff' : inputAccent,
+          '&:hover': { backgroundColor: `${inputAccent}50` },
+          '&.Mui-disabled': { backgroundColor: `${inputAccent}20`, color: `${inputAccent}80` },
           transition: 'background-color 150ms ease, color 150ms ease',
         }}
       >

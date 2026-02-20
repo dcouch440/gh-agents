@@ -15,8 +15,8 @@ import { setupAuthInterceptor } from './api/authInterceptor'
 import { dismissSplash } from './utils/splash'
 
 function AppInner() {
-  const { mode } = useThemeMode()
-  const theme = useMemo(() => createAppTheme(mode), [mode])
+  const { themeId } = useThemeMode()
+  const theme = useMemo(() => createAppTheme(themeId), [themeId])
 
   useEffect(() => {
     setupAuthInterceptor()

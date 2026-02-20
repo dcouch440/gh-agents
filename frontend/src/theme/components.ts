@@ -1,10 +1,8 @@
 import type { Components, Theme } from '@mui/material/styles'
+import type { CustomTokens } from './customTokens'
 
-const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
+const getComponents = (mode: 'light' | 'dark', custom: CustomTokens): Components<Theme> => {
   const isDark = mode === 'dark'
-
-  const surfaceBg = isDark ? '#15181e' : '#FEFCFA'
-  const elevatedBg = isDark ? '#1a1d25' : '#FEFCFA'
 
   return {
     MuiCssBaseline: {
@@ -14,7 +12,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
             backgroundColor: isDark ? 'rgba(59, 130, 246, 0.3)' : 'rgba(90, 138, 110, 0.25)',
             color: 'inherit',
           },
-          scrollbarColor: isDark ? '#3a3f4b #111318' : '#BFB3A3 #F9F6F1',
+          scrollbarColor: isDark ? `#3a3f4b ${custom.screenBg}` : `#BFB3A3 ${custom.screenBg}`,
           '&::-webkit-scrollbar, & *::-webkit-scrollbar': {
             width: 6,
             height: 6,
@@ -65,7 +63,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       styleOverrides: {
         root: ({ theme }) => ({
           backgroundImage: 'none',
-          backgroundColor: surfaceBg,
+          backgroundColor: custom.surfaceBg,
           border: `1px solid ${theme.palette.divider}`,
           borderRadius: 12,
         }),
@@ -78,7 +76,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       styleOverrides: {
         root: ({ theme }) => ({
           backgroundImage: 'none',
-          backgroundColor: surfaceBg,
+          backgroundColor: custom.surfaceBg,
           border: `1px solid ${theme.palette.divider}`,
           borderRadius: 12,
         }),
@@ -141,7 +139,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       styleOverrides: {
         paper: ({ theme }) => ({
           backgroundImage: 'none',
-          backgroundColor: isDark ? '#111318' : '#FEFCFA',
+          backgroundColor: custom.elevatedBg,
           border: `1px solid ${theme.palette.divider}`,
           borderRadius: 16,
         }),
@@ -153,7 +151,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
       },
       styleOverrides: {
         root: ({ theme }) => ({
-          backgroundColor: isDark ? '#09090b' : '#F4F0EA',
+          backgroundColor: custom.appBarBg,
           backdropFilter: 'blur(12px)',
           borderBottom: `1px solid ${theme.palette.divider}`,
         }),
@@ -162,7 +160,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
     MuiDrawer: {
       styleOverrides: {
         paper: ({ theme }) => ({
-          backgroundColor: isDark ? '#0d0f14' : '#FEFCFA',
+          backgroundColor: custom.appBarBg,
           borderRight: `1px solid ${theme.palette.divider}`,
         }),
       },
@@ -180,7 +178,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
           letterSpacing: '0.01em',
           borderRadius: 8,
           padding: '6px 12px',
-          backgroundColor: isDark ? '#1a1d25' : '#2D1B0E',
+          backgroundColor: isDark ? custom.elevatedBg : '#2D1B0E',
           border: `1px solid ${isDark ? 'rgba(240, 246, 252, 0.08)' : 'rgba(45, 27, 14, 0.12)'}`,
           backdropFilter: 'blur(8px)',
           boxShadow: isDark ? '0 4px 12px rgba(0, 0, 0, 0.4)' : '0 4px 12px rgba(0, 0, 0, 0.08)',
@@ -190,7 +188,7 @@ const getComponents = (mode: 'light' | 'dark'): Components<Theme> => {
     MuiMenu: {
       styleOverrides: {
         paper: ({ theme }) => ({
-          backgroundColor: elevatedBg,
+          backgroundColor: custom.elevatedBg,
           border: `1px solid ${theme.palette.divider}`,
           borderRadius: 10,
           boxShadow: isDark ? '0 8px 24px rgba(0, 0, 0, 0.4)' : '0 8px 24px rgba(0, 0, 0, 0.08)',

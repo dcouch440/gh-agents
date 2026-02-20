@@ -4,7 +4,7 @@ import { render, type RenderOptions } from '@testing-library/react'
 import { ThemeProvider } from '@mui/material/styles'
 import { createAppTheme } from '@/theme'
 
-const testTheme = createAppTheme('dark')
+const testTheme = createAppTheme('midnight')
 
 function TestProviders({ children }: { children: React.ReactNode }) {
   return <ThemeProvider theme={testTheme}>{children}</ThemeProvider>

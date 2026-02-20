@@ -33,6 +33,8 @@ function CanvasFormNodeComponent({
     highlightMode,
     themeMode: theme.palette.mode,
     variant: 'resizable',
+    screenBorder: theme.palette.custom.screenBorder,
+    accentRing: theme.palette.custom.accentRing,
   })
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? tabs[0]
 

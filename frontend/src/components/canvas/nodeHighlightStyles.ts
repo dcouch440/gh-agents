@@ -12,6 +12,10 @@ type NodeHighlightInput = {
   highlightMode: HighlightMode
   themeMode: 'light' | 'dark'
   variant?: NodeHighlightVariant
+  /** Default border color for light mode (from theme token). */
+  screenBorder: string
+  /** Accent ring opacity for light mode selected state (from theme token). */
+  accentRing: string
 }
 
 type NodeHighlightOutput = {
@@ -62,10 +66,7 @@ const getBoxShadowDark = (
   return defaultPreset.dark
 }
 
-/* ── Light mode (flat design matching mockup) ── */
-
-const SCREEN_BORDER = '#d6cfc4'
-const ACCENT_RING = 'rgba(90, 138, 110, 0.18)'
+/* ── Light mode (flat design) ── */
 
 const getNodeHighlightStyles = ({
   selected,
@@ -73,6 +74,8 @@ const getNodeHighlightStyles = ({
   highlightMode,
   themeMode,
   variant = 'step',
+  screenBorder,
+  accentRing,
 }: NodeHighlightInput): NodeHighlightOutput => {
   if (themeMode === 'dark') {
     const borderColor = getNodeBorderColorDark(selected, accentColor, highlightMode)
@@ -85,7 +88,7 @@ const getNodeHighlightStyles = ({
   if (selected) {
     return {
       borderColor: accentColor,
-      boxShadow: `0 0 0 2px ${ACCENT_RING}`,
+      boxShadow: `0 0 0 2px ${accentRing}`,
     }
   }
   if (highlightMode === HighlightMode.SELECT) {
@@ -101,11 +104,10 @@ const getNodeHighlightStyles = ({
     }
   }
   return {
-    borderColor: SCREEN_BORDER,
+    borderColor: screenBorder,
     boxShadow: 'none',
   }
 }
 
 export { getNodeHighlightStyles }
-export type { NodeHighlightOutput, NodeHighlightVariant }
 export type { NodeHighlightInput, NodeHighlightOutput, NodeHighlightVariant }
