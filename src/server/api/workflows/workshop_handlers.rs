@@ -1,10 +1,12 @@
-//! Workshop (node-by-node) workflow execution handlers
+//! Workshop (node-by-node) workflow execution handlers.
+//!
+//! Thin HTTP layer — validation, auth, response formatting.
+//! Domain logic lives in `hub::dag::workshop`.
 
 use axum::{
     extract::{Path, State},
     Json,
 };
-use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::warn;
 use uuid::Uuid;
@@ -13,15 +15,16 @@ use crate::db::pg_repo::PgRepo;
 use crate::db::traits::WorkflowCollectionRepo;
 use crate::server::api::AppError;
 use crate::server::auth as auth_utils;
-use crate::server::hub::dag::staging::{
-    compute_next_executable_steps, execute_staged_step, reconstruct_dag_state_from_snapshots,
+use crate::server::hub::dag::workshop::{
+    build_execution_context, execute_step, next_executable_steps, reconstruct_state,
+    replay_pinned_step, snapshot_error_envelope,
 };
 use crate::server::hub::dag::{
-    broadcast_workflow_event, prefetch_port_metadata, versioning, WorkflowExecutionContext,
+    broadcast_workflow_event, check_step_readiness, prefetch_port_metadata, versioning,
+    StepReadiness,
 };
 use crate::server::state::AppState;
 use crate::server::ws::events::WorkflowEventKind;
-use crate::types::{ExecutionError, ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
 
 use super::types::{
     CreateWorkshopRequest, WorkshopResponse, WorkshopStatusResponse, WorkshopStepPath,
@@ -65,11 +68,7 @@ pub async fn get_or_create_workshop(
     }
 
     // Get or create the workshop execution row
-    let db = state
-        .db()
-        .ok_or(AppError::Internal("Database not available".into()))?
-        .clone();
-    let collection_repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
+    let collection_repo = make_collection_repo(&state)?;
     let workshop = collection_repo
         .get_or_create_workshop(id, auth.user_id.0)
         .await
@@ -78,7 +77,7 @@ pub async fn get_or_create_workshop(
     // Store initial_input if provided, so workshop steps can reference it
     let initial_input = body.and_then(|b| b.0.initial_input).unwrap_or_default();
     if !initial_input.is_empty() {
-        let _ = crate::server::hub::dag::versioning::snapshot_content(
+        let _ = versioning::snapshot_content(
             &*state.repos().content_versions,
             workshop.id,
             Uuid::nil(),
@@ -130,11 +129,7 @@ pub async fn execute_workshop_step(
     }
 
     // Look up the workshop for this workflow
-    let db = state
-        .db()
-        .ok_or(AppError::Internal("Database not available".into()))?
-        .clone();
-    let collection_repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
+    let collection_repo = make_collection_repo(&state)?;
     let workshop = collection_repo
         .get_or_create_workshop(path.id, auth.user_id.0)
         .await
@@ -142,14 +137,9 @@ pub async fn execute_workshop_step(
 
     let run_id = workshop.id;
 
-    // Concurrency guard: must be "workshop" (not running another step).
-    // Auto-recover stale "workshop_running" — the spawned task always resets
-    // status on completion, so a stuck status means the server crashed.
+    // Concurrency guard — auto-recover stale locks from server crashes
     if workshop.status == "workshop_running" {
-        warn!(
-            run_id = %run_id,
-            "Workshop stuck in 'workshop_running' — auto-recovering stale lock"
-        );
+        warn!(run_id = %run_id, "Workshop stuck in 'workshop_running' — auto-recovering");
         let _ = collection_repo
             .update_workflow_execution_status(run_id, "workshop", None, None)
             .await;
@@ -160,42 +150,30 @@ pub async fn execute_workshop_step(
         )));
     }
 
-    // Load steps + edges
+    // Load workflow graph
     let steps = workflow_repo.list_steps(path.id).await?;
     let edges = workflow_repo.list_edges(path.id).await?;
-
-    // Find target step
     let step = steps
         .iter()
         .find(|s| s.id == path.step_id)
         .ok_or(AppError::not_found("Step"))?;
 
-    // Pre-fetch port metadata
     let port_meta = prefetch_port_metadata(&state, &steps, &edges).await;
 
-    // Reconstruct DagState from snapshots
-    let dag_state = reconstruct_dag_state_from_snapshots(
-        &*state.repos().content_versions,
-        &steps,
-        &port_meta,
-        run_id,
-    )
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    // Reconstruct state from snapshots
+    let dag_state = reconstruct_state(&*state.repos().content_versions, &steps, &port_meta, run_id)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     // Check step readiness
-    use crate::server::hub::dag::check_step_readiness;
-    use crate::server::hub::dag::StepReadiness;
-
     match check_step_readiness(
         path.step_id,
         &edges,
         &dag_state.completed,
         &dag_state.completed_envelopes,
     ) {
-        StepReadiness::Ready => { /* proceed */ }
+        StepReadiness::Ready => {}
         StepReadiness::Waiting => {
-            // Compute which upstream steps are missing
             let parents: Vec<Uuid> = edges
                 .iter()
                 .filter(|e| e.to_step_id == path.step_id)
@@ -214,56 +192,24 @@ pub async fn execute_workshop_step(
         }
     }
 
-    // Pinned steps replay their last output — skip execution entirely
+    // Pinned steps replay their last output
     if step.pinned {
-        let envelope_json = state
-            .repos()
-            .content_versions
-            .get_latest_envelope_for_step(path.step_id)
+        if let Some((result, output_data)) = replay_pinned_step(&state, run_id, step)
             .await
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-
-        if let Some(json_str) = envelope_json {
-            let envelope: crate::types::StepExecutionEnvelope = serde_json::from_str(&json_str)
-                .map_err(|e| AppError::Internal(format!("Bad pinned envelope: {}", e)))?;
-
-            // Re-snapshot the replayed envelope for this run
-            let _ = crate::server::hub::dag::versioning::snapshot_content(
-                &*state.repos().content_versions,
-                run_id,
-                path.step_id,
-                path.step_id,
-                "envelope",
-                "output",
-                &json_str,
-            )
-            .await;
-
-            let next = compute_next_executable_steps(&steps, &edges, &dag_state);
+            .map_err(|e| AppError::Internal(e.to_string()))?
+        {
+            let next = next_executable_steps(&steps, &edges, &dag_state);
+            let ctx = build_execution_context(run_id, auth.user_id.0, &dag_state);
 
             broadcast_workflow_event(
                 &state,
-                &WorkflowExecutionContext {
-                    stage_execution_id: run_id,
-                    run_id,
-                    user_id: auth.user_id.0,
-                    initial_input: String::new(),
-                    prior_outputs: HashMap::new(),
-                    execution_context: None,
-                    container_config: None,
-                    wg_client: None,
-                    snapshot: None,
-                    parent_context: None,
-                },
+                &ctx,
                 path.id,
                 WorkflowEventKind::StepCompleted {
                     step_id: path.step_id,
-                    step_name: step
-                        .output_variable_name
-                        .clone()
-                        .unwrap_or_else(|| path.step_id.to_string()),
+                    step_name: step_display_name(step, path.step_id),
                     agent_id: step.agent_id,
-                    output: envelope.data.as_ref().map(|v| v.to_string()),
+                    output: Some(output_data.to_string()),
                     input_tokens: Some(0),
                     output_tokens: Some(0),
                     duration_ms: Some(0),
@@ -271,56 +217,31 @@ pub async fn execute_workshop_step(
             );
 
             return Ok(Json(WorkshopStepResponse {
-                step_id: path.step_id,
-                status: "completed".to_string(),
-                output: envelope.data,
-                tokens_in: 0,
-                tokens_out: 0,
-                cost_usd: 0.0,
-                duration_ms: 0,
+                step_id: result.step_id,
+                status: result.status,
+                output: result.output,
+                tokens_in: result.tokens_in,
+                tokens_out: result.tokens_out,
+                cost_usd: result.cost_usd,
+                duration_ms: result.duration_ms,
                 next_executable_steps: next,
             }));
         }
-        // No prior output — fall through to normal execution
-        warn!(step_id = %path.step_id, "Pinned step has no prior output, executing normally");
     }
 
-    // Mark as running
+    // Mark as running (concurrency guard)
     let _ = collection_repo
         .update_workflow_execution_status(run_id, "workshop_running", None, None)
         .await;
 
-    // Build execution context
-    let initial_input = String::new();
-    let mut prior_outputs = HashMap::new();
-    for (key, val) in &dag_state.var_outputs {
-        prior_outputs.insert(key.clone(), val.clone());
-    }
-
-    let ctx = WorkflowExecutionContext {
-        stage_execution_id: run_id,
-        run_id,
-        user_id: auth.user_id.0,
-        initial_input,
-        prior_outputs,
-        execution_context: None,
-        container_config: None,
-        wg_client: None,
-        snapshot: None,
-        parent_context: None,
-    };
-
-    // Extract data needed for broadcast before moving into spawn
+    let ctx = build_execution_context(run_id, auth.user_id.0, &dag_state);
     let step_clone = step.clone();
-    let step_name = step
-        .output_variable_name
-        .clone()
-        .unwrap_or_else(|| path.step_id.to_string());
+    let step_name = step_display_name(step, path.step_id);
     let step_agent_id = step.agent_id;
     let workflow_id = path.id;
     let step_id = path.step_id;
 
-    // Broadcast step started (before spawn so it's immediate)
+    // Broadcast step started before spawning
     broadcast_workflow_event(
         &state,
         &ctx,
@@ -333,10 +254,7 @@ pub async fn execute_workshop_step(
         },
     );
 
-    // Spawn execution in a background task so it survives client disconnect.
-    // Long-running steps (workforce, for_each) can take minutes; if the user
-    // navigates away, the spawned task still runs to completion and snapshots
-    // the result for later hydration.
+    // Spawn background task — survives client disconnect
     let (tx, rx) = tokio::sync::oneshot::channel();
     let bg_state = state.clone();
     let bg_ctx = ctx.clone();
@@ -344,7 +262,7 @@ pub async fn execute_workshop_step(
     tokio::spawn(async move {
         let mut dag_state = dag_state;
 
-        let result = execute_staged_step(
+        let result = execute_step(
             &bg_state,
             &bg_ctx,
             &step_clone,
@@ -362,7 +280,7 @@ pub async fn execute_workshop_step(
 
         match result {
             Ok(step_result) => {
-                let next = compute_next_executable_steps(&steps, &edges, &dag_state);
+                let next = next_executable_steps(&steps, &edges, &dag_state);
 
                 broadcast_workflow_event(
                     &bg_state,
@@ -379,7 +297,7 @@ pub async fn execute_workshop_step(
                     },
                 );
 
-                // Spawn run results summarizer for workshop step
+                // Spawn run results summarizer
                 if let Some(output) = dag_state.completed.get(&step_id) {
                     if !output.raw_output.is_empty() {
                         crate::server::hub::run_results::spawn_run_results_summary(
@@ -404,31 +322,7 @@ pub async fn execute_workshop_step(
             }
             Err(e) => {
                 let error_msg = e.to_string();
-
-                // Snapshot a failure envelope so the error survives page reloads
-                let error_envelope = StepExecutionEnvelope {
-                    status: ExecutionStatus::Error,
-                    data: None,
-                    metadata: ExecutionMetadata::new(step_id),
-                    error: Some(ExecutionError {
-                        message: error_msg.clone(),
-                        error_type: "execution_failed".to_string(),
-                        retryable: true,
-                        details: None,
-                    }),
-                };
-                if let Ok(envelope_json) = serde_json::to_string(&error_envelope) {
-                    let _ = versioning::snapshot_content(
-                        &*bg_state.repos().content_versions,
-                        run_id,
-                        step_id,
-                        step_id,
-                        versioning::content_types::ENVELOPE,
-                        "output",
-                        &envelope_json,
-                    )
-                    .await;
-                }
+                snapshot_error_envelope(&bg_state, run_id, step_id, &error_msg).await;
 
                 broadcast_workflow_event(
                     &bg_state,
@@ -446,8 +340,6 @@ pub async fn execute_workshop_step(
         }
     });
 
-    // Await result — if client disconnects, the spawned task still runs to
-    // completion and saves the snapshot for later hydration.
     match rx.await {
         Ok(Ok(response)) => Ok(Json(response)),
         Ok(Err(e)) => Err(AppError::Internal(e)),
@@ -487,12 +379,7 @@ pub async fn get_workshop(
         return Err(AppError::not_found("Workflow"));
     }
 
-    // Get or create the workshop
-    let db = state
-        .db()
-        .ok_or(AppError::Internal("Database not available".into()))?
-        .clone();
-    let collection_repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
+    let collection_repo = make_collection_repo(&state)?;
     let workshop = collection_repo
         .get_or_create_workshop(id, auth.user_id.0)
         .await
@@ -502,30 +389,19 @@ pub async fn get_workshop(
 
     // Auto-recover stale workshop_running on page load
     if workshop.status == "workshop_running" {
-        warn!(
-            run_id = %run_id,
-            "Workshop stuck in 'workshop_running' on GET — auto-recovering"
-        );
+        warn!(run_id = %run_id, "Workshop stuck in 'workshop_running' on GET — auto-recovering");
         let _ = collection_repo
             .update_workflow_execution_status(run_id, "workshop", None, None)
             .await;
     }
 
-    // Load steps + edges
     let steps = workflow_repo.list_steps(id).await?;
     let edges = workflow_repo.list_edges(id).await?;
-
     let port_meta = prefetch_port_metadata(&state, &steps, &edges).await;
 
-    // Reconstruct DagState from snapshots
-    let dag_state = reconstruct_dag_state_from_snapshots(
-        &*state.repos().content_versions,
-        &steps,
-        &port_meta,
-        run_id,
-    )
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    let dag_state = reconstruct_state(&*state.repos().content_versions, &steps, &port_meta, run_id)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     // Build steps list (completed + failed from snapshots)
     let mut completed_steps: Vec<WorkshopStepSummary> = dag_state
@@ -539,7 +415,6 @@ pub async fn get_workshop(
         })
         .collect();
 
-    // Include failed steps so the frontend can surface prior errors
     for (step_id, error_msg) in &dag_state.failed {
         completed_steps.push(WorkshopStepSummary {
             step_id: *step_id,
@@ -549,8 +424,7 @@ pub async fn get_workshop(
         });
     }
 
-    // Compute next executable steps
-    let next = compute_next_executable_steps(&steps, &edges, &dag_state);
+    let next = next_executable_steps(&steps, &edges, &dag_state);
 
     Ok(Json(WorkshopStatusResponse {
         run_id,
@@ -559,4 +433,20 @@ pub async fn get_workshop(
         completed_steps,
         next_executable_steps: next,
     }))
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+fn make_collection_repo(state: &AppState) -> Result<Arc<dyn WorkflowCollectionRepo>, AppError> {
+    let db = state
+        .db()
+        .ok_or(AppError::Internal("Database not available".into()))?
+        .clone();
+    Ok(Arc::new(PgRepo::new(db)))
+}
+
+fn step_display_name(step: &crate::db::WorkflowStepRow, fallback: Uuid) -> String {
+    step.output_variable_name
+        .clone()
+        .unwrap_or_else(|| fallback.to_string())
 }

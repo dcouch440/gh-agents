@@ -120,10 +120,10 @@ pub(crate) mod designer_input;
 pub(crate) mod pipeline;
 pub(crate) mod resume;
 pub(crate) mod single;
-pub(crate) mod staging;
 pub mod templates;
 pub(crate) mod utils;
 pub(crate) mod versioning;
+pub(crate) mod workshop;
 
 pub(crate) use dag_state::{
     broadcast_step_failure_if_real, build_incoming_edge_index, prefetch_port_metadata,
