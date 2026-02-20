@@ -1,7 +1,7 @@
 import { EditorView } from '@codemirror/view'
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language'
 import { tags } from '@lezer/highlight'
-import { oneDarkTheme, oneDarkHighlightStyle } from '@codemirror/theme-one-dark'
+import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark'
 import type { Extension } from '@codemirror/state'
 
 /* ── Light earthy theme ─────────────────────────────────── */
@@ -110,13 +110,105 @@ const lightHighlightStyle = HighlightStyle.define([
   { tag: tags.invalid, color: '#BF3326' },
 ])
 
+/* ── Dark theme (parameterised background) ────────────── */
+
+const createDarkEditorTheme = (bg: string, textColor: string, accentColor: string) =>
+  EditorView.theme(
+    {
+      '&': {
+        backgroundColor: bg,
+        color: textColor,
+      },
+      '.cm-content': {
+        caretColor: accentColor,
+      },
+      '.cm-cursor, .cm-dropCursor': {
+        borderLeftColor: accentColor,
+      },
+      '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
+        backgroundColor: `${accentColor}30`,
+      },
+      '.cm-panels': {
+        backgroundColor: bg,
+        color: textColor,
+      },
+      '.cm-panels.cm-panels-top': {
+        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+      },
+      '.cm-panels.cm-panels-bottom': {
+        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+      },
+      '.cm-searchMatch': {
+        backgroundColor: `${accentColor}25`,
+        outline: `1px solid ${accentColor}50`,
+      },
+      '.cm-searchMatch.cm-searchMatch-selected': {
+        backgroundColor: `${accentColor}35`,
+      },
+      '.cm-activeLine': {
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+      },
+      '.cm-selectionMatch': {
+        backgroundColor: `${accentColor}18`,
+      },
+      '&.cm-focused .cm-matchingBracket, &.cm-focused .cm-nonmatchingBracket': {
+        backgroundColor: `${accentColor}35`,
+      },
+      '.cm-gutters': {
+        backgroundColor: bg,
+        color: 'rgba(255, 255, 255, 0.3)',
+        borderRight: '1px solid rgba(255, 255, 255, 0.06)',
+      },
+      '.cm-activeLineGutter': {
+        backgroundColor: 'rgba(255, 255, 255, 0.04)',
+      },
+      '.cm-foldPlaceholder': {
+        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        border: 'none',
+        color: 'rgba(255, 255, 255, 0.5)',
+      },
+      '.cm-tooltip': {
+        backgroundColor: bg,
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+      },
+      '.cm-tooltip .cm-tooltip-arrow:before': {
+        borderTopColor: 'rgba(255, 255, 255, 0.1)',
+        borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+      },
+      '.cm-tooltip .cm-tooltip-arrow:after': {
+        borderTopColor: bg,
+        borderBottomColor: bg,
+      },
+      '.cm-tooltip-autocomplete': {
+        '& > ul > li[aria-selected]': {
+          backgroundColor: `${accentColor}20`,
+          color: textColor,
+        },
+      },
+      '.cm-placeholder': {
+        color: 'rgba(255, 255, 255, 0.35)',
+      },
+    },
+    { dark: true },
+  )
+
 /* ── Public API ──────────────────────────────────────────── */
 
-const getEditorThemeExtensions = (mode: 'light' | 'dark'): Extension[] => {
+type EditorThemeTokens = {
+  bgEditor: string
+  textPrimary: string
+  accent: string
+}
+
+const getEditorThemeExtensions = (mode: 'light' | 'dark', tokens?: EditorThemeTokens): Extension[] => {
   if (mode === 'light') {
     return [lightEditorTheme, syntaxHighlighting(lightHighlightStyle)]
   }
-  return [oneDarkTheme, syntaxHighlighting(oneDarkHighlightStyle)]
+  const bg = tokens?.bgEditor ?? '#161b22'
+  const text = tokens?.textPrimary ?? '#f0f6fc'
+  const accent = tokens?.accent ?? '#3b82f6'
+  return [createDarkEditorTheme(bg, text, accent), syntaxHighlighting(oneDarkHighlightStyle)]
 }
 
 export { getEditorThemeExtensions }
+export type { EditorThemeTokens }

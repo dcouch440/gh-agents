@@ -61,7 +61,10 @@ function WorkflowCanvasInner() {
   // Map store data to RF format
   const rfNodes = useMemo(() => toRFNodes(steps, lookups), [steps, lookups])
   const nodePalette = theme.palette.nodePalette
-  const rfEdges = useMemo(() => [...toRFEdges(edges, protocolGroups, protocolsByStepLookup, steps, nodePalette), ...toAgentEdges(steps, lookups, nodePalette)], [edges, protocolGroups, protocolsByStepLookup, steps, lookups, nodePalette])
+  const rfEdges = useMemo(
+    () => [...toRFEdges(edges, protocolGroups, protocolsByStepLookup, steps, nodePalette), ...toAgentEdges(steps, lookups, nodePalette)],
+    [edges, protocolGroups, protocolsByStepLookup, steps, lookups, nodePalette],
+  )
 
   // Push store updates into RF — only touch data + position, never clobber selection
   useCanvasSync(rfNodes, rfEdges, setNodes, setEdges)
@@ -153,14 +156,17 @@ function WorkflowCanvasInner() {
     closeMenu()
   }, [closeMenu])
 
-  const onNodeClick = useCallback((_event: React.MouseEvent, node: { id: string }) => {
-    if (shareStore.store.getState().active) {
-      if (node.id.startsWith('agent-artifact-')) return
-      shareStore.commitShare(node.id)
-      return
-    }
-    closeMenu()
-  }, [closeMenu])
+  const onNodeClick = useCallback(
+    (_event: React.MouseEvent, node: { id: string }) => {
+      if (shareStore.store.getState().active) {
+        if (node.id.startsWith('agent-artifact-')) return
+        shareStore.commitShare(node.id)
+        return
+      }
+      closeMenu()
+    },
+    [closeMenu],
+  )
 
   // Protocol hover tracking for group highlighting.
   // Self-hover is instant; group hover triggers after a 300ms delay.
@@ -185,10 +191,6 @@ function WorkflowCanvasInner() {
           inset: 0,
           pointerEvents: 'none',
           zIndex: 0,
-          background: [
-            'radial-gradient(ellipse at 50% 50%, rgba(250, 248, 245, 0.25) 0%, transparent 65%)',
-            `radial-gradient(ellipse at 50% 50%, transparent 55%, ${theme.palette.custom.canvasVignette} 100%)`,
-          ].join(', '),
         },
         '& .react-flow': {
           '--xy-background-color': theme.palette.custom.canvasBg,
@@ -258,10 +260,7 @@ function WorkflowCanvasInner() {
       </ReactFlow>
       <OptionTray autoSaveFlush={autoSave.flush} autoSaveSaving={autoSave.saving} onAutoLayout={restackTowers} />
       {shareActive && <ShareModeBanner />}
-      <CanvasContextMenu
-        position={contextMenu}
-        onClose={closeMenu}
-      />
+      <CanvasContextMenu position={contextMenu} onClose={closeMenu} />
       <FocusModeOverlay />
     </Box>
   )

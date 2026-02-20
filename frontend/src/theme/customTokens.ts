@@ -16,6 +16,8 @@ type CustomTokens = {
   gridDotColor: string
   gridLineColor: string
   canvasVignette: string
+  /** Radial center glow on canvas — warm for light themes, transparent/subtle for dark */
+  canvasGlow: string
   minimapBg: string
   minimapMask: string
   floatingPanelBg: string
