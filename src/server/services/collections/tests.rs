@@ -1,24 +1,16 @@
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
     use mockall::predicate::*;
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::MockWorkflowCollectionRepo;
     use crate::db::WorkflowCollectionRow;
     use crate::server::services::collections::*;
     use crate::server::services::ServiceError;
 
     fn make_collection_row(user_id: Uuid) -> WorkflowCollectionRow {
-        WorkflowCollectionRow {
-            id: Uuid::new_v4(),
-            user_id,
-            name: "Test Collection".to_string(),
-            description: Some("A test collection".to_string()),
-            execution_mode: "sequential".to_string(),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        }
+        collection(user_id)
     }
 
     #[tokio::test]

@@ -1,23 +1,14 @@
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::MockResultRepo;
-    use crate::db::ResultRow;
     use crate::server::services::results::*;
     use crate::server::services::ServiceError;
 
     fn make_result(user_id: Uuid) -> ResultRow {
-        ResultRow {
-            id: Uuid::new_v4(),
-            user_id,
-            agent_execution_id: Uuid::new_v4(),
-            output_schema_id: None,
-            name: "test result".to_string(),
-            data: serde_json::json!({"key": "value"}),
-            created_at: Utc::now(),
-        }
+        result_row(user_id)
     }
 
     #[tokio::test]

@@ -2,8 +2,9 @@
 mod tests {
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::MockWorkflowRepo;
-    use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
+    use crate::db::WorkflowStepRow;
 
     use super::super::build_graph_context;
 
@@ -13,16 +14,6 @@ mod tests {
             workflow_id,
             execution_mode: mode.to_string(),
             name: Some(name.to_string()),
-            ..Default::default()
-        }
-    }
-
-    fn make_edge(workflow_id: Uuid, from: Uuid, to: Uuid) -> WorkflowStepEdgeRow {
-        WorkflowStepEdgeRow {
-            id: Uuid::new_v4(),
-            workflow_id,
-            from_step_id: from,
-            to_step_id: to,
             ..Default::default()
         }
     }
@@ -39,7 +30,7 @@ mod tests {
             make_step(s2, wid, "documenter", "Doc Gen"),
             make_step(s3, wid, "single", "Reviewer"),
         ];
-        let edges = vec![make_edge(wid, s1, s2), make_edge(wid, s2, s3)];
+        let edges = vec![edge_in(wid, s1, s2), edge_in(wid, s2, s3)];
 
         let steps_clone = steps.clone();
         let edges_clone = edges.clone();

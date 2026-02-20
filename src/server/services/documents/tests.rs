@@ -3,29 +3,14 @@ mod tests {
     use chrono::Utc;
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::MockDocumentRepo;
     use crate::db::DocumentRow;
     use crate::server::services::documents::*;
     use crate::server::services::ServiceError;
 
     fn make_document(user_id: Uuid) -> DocumentRow {
-        DocumentRow {
-            id: Uuid::new_v4(),
-            user_id,
-            session_id: None,
-            title: "Test Document".to_string(),
-            content: "Some content".to_string(),
-            summary: None,
-            doc_type: Some("architecture".to_string()),
-            ref_tag: None,
-            tags: None,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-            workflow_id: None,
-            target_length: None,
-            is_static: None,
-            source_protocol_step_id: None,
-        }
+        document(user_id)
     }
 
     #[tokio::test]

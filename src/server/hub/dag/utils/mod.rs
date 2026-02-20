@@ -21,10 +21,10 @@ pub use graph::{
 pub use ports::{
     collect_upstream_context_data, resolve_dot_path, resolve_port_inputs, PortResolutionError,
 };
-pub use prompts::build_routing_instruction_block;
-pub(crate) use prompts::{compose_prompt, PromptRepos};
+pub(crate) use prompts::{build_routing_instruction_block, compose_prompt, PromptRepos};
+pub(crate) use types::DagPaused;
 pub use types::{
-    ContainerExecutionConfig, DagPaused, StepOutput, StepReadiness, SubWorkflowParentContext,
+    ContainerExecutionConfig, StepOutput, StepReadiness, SubWorkflowParentContext,
     WorkflowExecutionContext, WorkflowExecutionResult,
 };
 pub use variables::resolve_variables;

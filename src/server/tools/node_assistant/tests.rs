@@ -3,6 +3,7 @@ mod tests {
     use serde_json::json;
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::MockWorkflowRepo;
     use crate::db::WorkflowStepRow;
 
@@ -21,7 +22,7 @@ mod tests {
             workflow_id,
             name: Some("Test Step".to_string()),
             description: "Test description".to_string(),
-            ..Default::default()
+            ..step_in(workflow_id)
         }
     }
 

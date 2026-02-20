@@ -3,6 +3,7 @@ mod tests {
     use serde_json::json;
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::MockWorkflowRepo;
     use crate::db::{
         TaskAgentRosterRow, TaskMissionBriefRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
@@ -26,39 +27,32 @@ mod tests {
             execution_mode: mode.to_string(),
             name: Some("Test Workforce".to_string()),
             description: "Test description".to_string(),
-            ..Default::default()
+            ..step_in(workflow_id)
         }
     }
 
     fn make_workflow(id: Uuid, user_id: Uuid) -> WorkflowRow {
         WorkflowRow {
             id,
-            user_id,
-            name: "Parent Workflow".to_string(),
             execution_mode: "sequential".to_string(),
-            ..Default::default()
+            name: "Parent Workflow".to_string(),
+            ..workflow(user_id)
         }
     }
 
     fn make_brief(step_id: Uuid) -> TaskMissionBriefRow {
         TaskMissionBriefRow {
-            id: Uuid::new_v4(),
-            step_id,
             task_description: "Build the system".to_string(),
             available_capabilities: vec!["code_gen".to_string()],
-            ..Default::default()
+            ..brief(step_id)
         }
     }
 
     fn make_roster_agent(brief_id: Uuid, name: &str, order: i32) -> TaskAgentRosterRow {
         TaskAgentRosterRow {
-            id: Uuid::new_v4(),
-            mission_brief_id: brief_id,
-            name: name.to_string(),
             role_description: "Worker".to_string(),
             capabilities: vec!["code_gen".to_string()],
-            execution_order: order,
-            ..Default::default()
+            ..roster_agent(brief_id, name, order)
         }
     }
 

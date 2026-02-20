@@ -38,7 +38,7 @@ pub enum StepReadiness {
 
 /// Sentinel error: the DAG paused because a step is awaiting interactive user input.
 #[derive(Debug)]
-pub struct DagPaused {
+pub(crate) struct DagPaused {
     pub step_id: Uuid,
     pub execution_id: Uuid,
 }

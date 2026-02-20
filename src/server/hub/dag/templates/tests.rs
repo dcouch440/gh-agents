@@ -4,10 +4,8 @@ mod tests {
 
     use uuid::Uuid;
 
-    use crate::db::{
-        AgentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, WorkflowStepEdgeRow,
-        WorkflowStepRow,
-    };
+    use crate::db::fixtures::fixtures::*;
+    use crate::db::{AgentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, WorkflowStepRow};
 
     use super::super::{port_metadata_from_snapshot, WorkflowSnapshot};
 
@@ -24,16 +22,6 @@ mod tests {
         }
     }
 
-    fn make_edge(from_id: Uuid, to_id: Uuid, workflow_id: Uuid) -> WorkflowStepEdgeRow {
-        WorkflowStepEdgeRow {
-            id: Uuid::new_v4(),
-            from_step_id: from_id,
-            to_step_id: to_id,
-            workflow_id,
-            ..Default::default()
-        }
-    }
-
     fn make_snapshot() -> WorkflowSnapshot {
         let wf_id = Uuid::new_v4();
         let step1_id = Uuid::new_v4();
@@ -44,7 +32,7 @@ mod tests {
         step1.agent_id = Some(agent_id);
 
         let step2 = make_step(step2_id, wf_id);
-        let edge = make_edge(step1_id, step2_id, wf_id);
+        let e = edge_in(wf_id, step1_id, step2_id);
 
         let agent = AgentRow {
             id: agent_id,
@@ -85,7 +73,7 @@ mod tests {
 
         WorkflowSnapshot {
             steps: vec![step1, step2],
-            edges: vec![edge],
+            edges: vec![e],
             step_inputs,
             step_outputs,
             routing_rules: HashMap::new(),

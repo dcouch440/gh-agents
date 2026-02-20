@@ -1,26 +1,15 @@
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::{MockAgentRepo, MockSessionRepo};
-    use crate::db::SessionRow;
     use crate::server::services::sessions::*;
     use crate::server::services::ServiceError;
     use crate::types::UserId;
 
     fn make_session(user_id: Uuid) -> SessionRow {
-        SessionRow {
-            id: Uuid::new_v4(),
-            user_id,
-            mode_id: "home".to_string(),
-            title: "Test session".to_string(),
-            summary: String::new(),
-            agent_id: None,
-            draft_config: None,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        }
+        session(user_id)
     }
 
     #[tokio::test]

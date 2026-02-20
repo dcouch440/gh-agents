@@ -1,28 +1,16 @@
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
     use mockall::predicate::*;
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::MockProtocolRepo;
     use crate::db::ProtocolRow;
     use crate::server::services::protocols::*;
     use crate::server::services::ServiceError;
 
     fn make_protocol_row() -> ProtocolRow {
-        ProtocolRow {
-            id: Uuid::new_v4(),
-            name: "Test Protocol".to_string(),
-            description: "A test protocol".to_string(),
-            protocol_type: "documenter".to_string(),
-            config: serde_json::json!({}),
-            version: 1,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-            agent_id: None,
-            output_schema_id: None,
-            prompt_template_id: None,
-        }
+        protocol_row()
     }
 
     // ====================================================================

@@ -63,7 +63,7 @@ pub(super) async fn execute_agent_levels(
     managed_container: &Option<super::super::container::ManagedContainer>,
 ) -> Result<LevelExecutionResult, HubError> {
     let levels = compute_execution_levels(designed_prompts);
-    let mut agent_outputs: Vec<(String, String)> = Vec::new();
+    let mut agent_outputs: Vec<(String, String)> = Vec::with_capacity(designed_prompts.len());
     let mut input_tokens: i64 = 0;
     let mut output_tokens: i64 = 0;
     let mut cost_usd: f32 = 0.0;

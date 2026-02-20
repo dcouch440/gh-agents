@@ -3,6 +3,7 @@ mod tests {
     use serde_json::json;
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::WorkflowStepRow;
 
     use crate::server::tools::shared::{
@@ -11,12 +12,10 @@ mod tests {
 
     fn make_step(mode: &str) -> WorkflowStepRow {
         WorkflowStepRow {
-            id: Uuid::new_v4(),
-            workflow_id: Uuid::new_v4(),
             execution_mode: mode.to_string(),
             name: Some("Test Step".to_string()),
             description: "Test description".to_string(),
-            ..Default::default()
+            ..step()
         }
     }
 

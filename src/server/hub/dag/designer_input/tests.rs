@@ -4,27 +4,10 @@ mod tests {
 
     use uuid::Uuid;
 
-    use crate::types::{ExecutionMetadata, StepExecutionEnvelope};
+    use crate::db::fixtures::fixtures::*;
+    use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow, WorkflowStepEdgeRow};
 
     use super::super::*;
-
-    // ── Test helpers ─────────────────────────────────────────────────────────
-
-    fn make_envelope(data: serde_json::Value) -> StepExecutionEnvelope {
-        StepExecutionEnvelope {
-            data: Some(data),
-            metadata: ExecutionMetadata {
-                execution_id: Uuid::new_v4(),
-                execution_time_ms: 100,
-                tokens_in: Some(50),
-                tokens_out: Some(25),
-                cost_usd: Some(0.001),
-                model: Some("test-model".to_string()),
-                ..Default::default()
-            },
-            ..Default::default()
-        }
-    }
 
     // ── Shared utility tests ─────────────────────────────────────────────────
 
@@ -61,7 +44,7 @@ mod tests {
     fn test_format_envelopes_as_upstream_with_data() {
         let mut envelopes = HashMap::new();
         let id = Uuid::new_v4();
-        envelopes.insert(id, make_envelope(serde_json::json!({"key": "value"})));
+        envelopes.insert(id, envelope(serde_json::json!({"key": "value"})));
 
         let result = format_envelopes_as_upstream(&envelopes, &[]);
         assert_eq!(result.len(), 1);
@@ -96,16 +79,12 @@ mod tests {
     // ── Workforce dependency tests ───────────────────────────────────────────
 
     use crate::db::traits::MockToolCapabilityRepo;
-    use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow, WorkflowStepEdgeRow};
 
     fn make_brief(step_id: Uuid) -> TaskMissionBriefRow {
         TaskMissionBriefRow {
-            id: Uuid::new_v4(),
-            step_id,
             task_description: "Test mission".to_string(),
-            available_capabilities: vec![],
             failure_mode: "fail_fast".to_string(),
-            ..Default::default()
+            ..brief(step_id)
         }
     }
 
@@ -116,14 +95,8 @@ mod tests {
         child_step_id: Option<Uuid>,
     ) -> TaskAgentRosterRow {
         TaskAgentRosterRow {
-            id: Uuid::new_v4(),
-            mission_brief_id: brief_id,
-            name: name.to_string(),
-            role_description: format!("{} role", name),
-            capabilities: vec![],
-            execution_order: order,
             child_step_id,
-            ..Default::default()
+            ..roster_agent(brief_id, name, order)
         }
     }
 

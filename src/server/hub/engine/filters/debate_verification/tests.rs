@@ -8,6 +8,7 @@ mod tests {
     use std::pin::Pin;
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::{AgentExecutionRepo, AgentRepo, TokenLedgerRepo};
     use crate::db::{AgentExecutionRow, AgentRow, TokenLedgerRow};
     use crate::llm::{
@@ -127,32 +128,28 @@ mod tests {
 
     fn make_agent(id: Uuid, name: &str) -> AgentRow {
         AgentRow {
-            id,
             name: name.to_string(),
             system_prompt: format!("You are {name}, an expert reviewer."),
             model_id: "claude-3".to_string(),
             model_temperature: 0.0,
-            ..Default::default()
+            ..agent(id)
         }
     }
 
     fn make_ae_row(agent_id: Uuid) -> AgentExecutionRow {
         AgentExecutionRow {
-            id: Uuid::new_v4(),
             agent_id: Some(agent_id),
-            ..Default::default()
+            ..agent_execution()
         }
     }
 
     fn make_tl_row(user_id: Uuid) -> TokenLedgerRow {
         TokenLedgerRow {
-            id: Uuid::new_v4(),
-            user_id,
             model_id: "claude-3".to_string(),
             input_tokens: 100,
             output_tokens: 50,
             cost_usd: 0.001,
-            ..Default::default()
+            ..token_ledger(user_id)
         }
     }
 

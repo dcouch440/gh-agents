@@ -3,6 +3,7 @@ mod tests {
     use chrono::Utc;
     use uuid::Uuid;
 
+    use crate::db::fixtures::fixtures::*;
     use crate::db::traits::MockOutputSchemaRepo;
     use crate::db::OutputSchemaRow;
     use crate::server::services::output_schemas::*;
@@ -10,12 +11,8 @@ mod tests {
 
     fn make_schema(user_id: Option<Uuid>) -> OutputSchemaRow {
         OutputSchemaRow {
-            id: Uuid::new_v4(),
             user_id,
-            name: "Test Schema".to_string(),
-            schema: serde_json::json!({"type": "object"}),
-            created_at: Utc::now(),
-            version: 1,
+            ..output_schema(user_id.unwrap_or_else(Uuid::new_v4))
         }
     }
 

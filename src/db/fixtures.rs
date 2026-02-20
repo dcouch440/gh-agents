@@ -326,4 +326,121 @@ pub mod fixtures {
             created_at: chrono::Utc::now(),
         }
     }
+
+    // ── PromptTemplateRow ────────────────────────────────────────
+
+    /// Prompt template owned by a given user.
+    pub fn prompt_template(user_id: Uuid) -> PromptTemplateRow {
+        PromptTemplateRow {
+            id: Uuid::new_v4(),
+            user_id: Some(user_id),
+            name: "Test Template".into(),
+            content: "Some prompt content".into(),
+            created_at: chrono::Utc::now(),
+            version: 1,
+        }
+    }
+
+    // ── OutputSchemaRow ──────────────────────────────────────────
+
+    /// Output schema owned by a given user.
+    pub fn output_schema(user_id: Uuid) -> OutputSchemaRow {
+        OutputSchemaRow {
+            id: Uuid::new_v4(),
+            user_id: Some(user_id),
+            name: "Test Schema".into(),
+            schema: serde_json::json!({"type": "object"}),
+            created_at: chrono::Utc::now(),
+            version: 1,
+        }
+    }
+
+    // ── ProtocolRow ──────────────────────────────────────────────
+
+    /// Protocol with sensible defaults.
+    pub fn protocol_row() -> ProtocolRow {
+        ProtocolRow {
+            id: Uuid::new_v4(),
+            name: "Test Protocol".into(),
+            description: "A test protocol".into(),
+            protocol_type: "documenter".into(),
+            config: serde_json::json!({}),
+            version: 1,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            agent_id: None,
+            output_schema_id: None,
+            prompt_template_id: None,
+        }
+    }
+
+    // ── ResultRow ────────────────────────────────────────────────
+
+    /// Result owned by a given user.
+    pub fn result_row(user_id: Uuid) -> ResultRow {
+        ResultRow {
+            id: Uuid::new_v4(),
+            user_id,
+            agent_execution_id: Uuid::new_v4(),
+            output_schema_id: None,
+            name: "test result".into(),
+            data: serde_json::json!({"key": "value"}),
+            created_at: chrono::Utc::now(),
+        }
+    }
+
+    // ── SessionRow ───────────────────────────────────────────────
+
+    /// Chat session for a given user.
+    pub fn session(user_id: Uuid) -> SessionRow {
+        SessionRow {
+            id: Uuid::new_v4(),
+            user_id,
+            mode_id: "home".into(),
+            title: "Test session".into(),
+            summary: String::new(),
+            agent_id: None,
+            draft_config: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        }
+    }
+
+    // ── DocumentRow ──────────────────────────────────────────────
+
+    /// Document owned by a given user.
+    pub fn document(user_id: Uuid) -> DocumentRow {
+        DocumentRow {
+            id: Uuid::new_v4(),
+            user_id,
+            session_id: None,
+            title: "Test Document".into(),
+            content: "Some content".into(),
+            summary: None,
+            doc_type: Some("architecture".into()),
+            ref_tag: None,
+            tags: None,
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+            workflow_id: None,
+            target_length: None,
+            is_static: None,
+            source_protocol_step_id: None,
+        }
+    }
+
+    // ── WorkflowCollectionRow ────────────────────────────────────
+
+    /// Collection owned by a given user.
+    pub fn collection(user_id: Uuid) -> WorkflowCollectionRow {
+        WorkflowCollectionRow {
+            id: Uuid::new_v4(),
+            user_id,
+            name: "Test Collection".into(),
+            description: Some("A test collection".into()),
+            execution_mode: "sequential".into(),
+            created_at: chrono::Utc::now(),
+            updated_at: chrono::Utc::now(),
+        }
+    }
 }
