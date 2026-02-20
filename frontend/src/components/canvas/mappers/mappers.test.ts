@@ -66,9 +66,10 @@ describe('toRFNodes', () => {
     expect(nodes).toHaveLength(2)
     expect(nodes[0]).toEqual({
       id: 'step-001',
-      type: 'stepNode',
+      type: 'canvasNode',
       position: { x: 100, y: 200 },
       data: {
+        variant: 'step',
         kind: 'step',
         label: 'First Step',
         stepType: 'single',
@@ -454,10 +455,11 @@ describe('toRFNodes — input nodes', () => {
     expect(nodes).toHaveLength(1)
     expect(nodes[0]).toEqual({
       id: 'input-001',
-      type: 'inputNode',
+      type: 'canvasNode',
       position: { x: 50, y: 75 },
       style: { width: 560, height: 500 },
       data: {
+        variant: 'input',
         kind: 'input',
         label: 'User Input',
         content: 'Project contains 2 categories.',
@@ -516,7 +518,7 @@ describe('toRFNodes — agent nodes', () => {
     const agentNode2 = nodes.find((n) => n.id === 'agent-artifact-agent-2')
 
     expect(agentNode1).toBeDefined()
-    expect(agentNode1?.type).toBe('dynamicNode')
+    expect(agentNode1?.type).toBe('canvasNode')
     expect(agentNode1?.data.kind).toBe('agent')
     expect(agentNode1?.data.label).toBe('Researcher')
     expect(agentNode1?.data.roleDescription).toBe('Does research')

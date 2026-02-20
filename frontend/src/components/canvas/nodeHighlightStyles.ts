@@ -107,4 +107,5 @@ const getNodeHighlightStyles = ({
 }
 
 export { getNodeHighlightStyles }
+export type { NodeHighlightOutput, NodeHighlightVariant }
 export type { NodeHighlightInput, NodeHighlightOutput, NodeHighlightVariant }

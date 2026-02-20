@@ -3,6 +3,7 @@ import GroupsOutlined from '@mui/icons-material/GroupsOutlined'
 import ForumOutlined from '@mui/icons-material/ForumOutlined'
 import RadioButtonUncheckedOutlined from '@mui/icons-material/RadioButtonUncheckedOutlined'
 import SmartToyOutlined from '@mui/icons-material/SmartToyOutlined'
+import RepeatOutlined from '@mui/icons-material/RepeatOutlined'
 import SettingsOutlined from '@mui/icons-material/SettingsOutlined'
 import type { ResizeSizeConstraints } from '../CanvasFormNode'
 import type { ProtocolStepInfo } from '../mappers/types'
@@ -212,12 +213,26 @@ const resolveVariant = (
   return 'step'
 }
 
+// ---------------------------------------------------------------------------
+// Step type icons (card layout)
+// ---------------------------------------------------------------------------
+
+const STEP_TYPE_ICONS: Record<string, SvgIconComponent> = {
+  single: SmartToyOutlined,
+  for_each: RepeatOutlined,
+  room: ForumOutlined,
+}
+
+const DEFAULT_STEP_TYPE_ICON: SvgIconComponent = SettingsOutlined
+
 export {
   Archetype,
   ARCHETYPE_CONFIGS,
   AGENT_DEFAULTS,
   AGENT_CONSTRAINTS,
   VARIANT_CONFIGS,
+  STEP_TYPE_ICONS,
+  DEFAULT_STEP_TYPE_ICON,
   resolveArchetype,
   resolveVariant,
 }
