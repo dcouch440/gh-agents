@@ -2,7 +2,7 @@ import { useState } from 'react'
 import Box from '@mui/material/Box'
 import { MarkdownPreview } from '@/components/primitives/MarkdownPreview'
 import { CodeEditor } from '@/components/primitives/CodeEditor'
-import { CONTEXT_NODE } from '../../ContextNode/constants'
+import { VARIANT_CONFIGS } from '../registry'
 
 type ContentViewMode = 'raw' | 'md'
 
@@ -12,7 +12,7 @@ type ContextNodeContentProps = {
   onChange: (value: string) => void
 }
 
-function ContextNodeContent({ content, accentColor = CONTEXT_NODE.ACCENT_COLOR, onChange }: ContextNodeContentProps) {
+function ContextNodeContent({ content, accentColor = VARIANT_CONFIGS.context.color, onChange }: ContextNodeContentProps) {
   const [viewMode, setViewMode] = useState<ContentViewMode>('raw')
 
   return (

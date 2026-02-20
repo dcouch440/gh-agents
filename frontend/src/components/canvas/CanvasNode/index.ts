@@ -1,3 +1,9 @@
+// Component
+export { CanvasNode } from './CanvasNode'
+
+// Layouts
+export { TabbedLayout, EditorLayout, CardLayout, CompactLayout } from './layouts'
+
 // Types
 export type {
   CanvasNodeData,

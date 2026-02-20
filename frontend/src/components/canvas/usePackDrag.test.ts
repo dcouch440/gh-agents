@@ -25,18 +25,11 @@ const makePackNode = (id: string, kind: CanvasNodeKind, protocolStepId: string |
   protocolStepId,
 })
 
-const RF_TYPE_TO_KIND: Record<string, CanvasNodeKind> = {
-  contextNode: CanvasNodeKind.CONTEXT,
-  documentNode: CanvasNodeKind.DOCUMENT,
-  dynamicNode: CanvasNodeKind.PROTOCOL,
-  stepNode: CanvasNodeKind.STEP,
-}
-
-const makeRFNode = (id: string, type: string, x: number, y: number, protocolStepId: string | null = null): Node => ({
+const makeRFNode = (id: string, kind: CanvasNodeKind, x: number, y: number, protocolStepId: string | null = null): Node => ({
   id,
-  type,
+  type: 'canvasNode',
   position: { x, y },
-  data: { kind: RF_TYPE_TO_KIND[type] ?? CanvasNodeKind.STEP, protocolStepId },
+  data: { kind, protocolStepId },
 })
 
 describe('resolvePackMembers', () => {
@@ -176,9 +169,9 @@ describe('usePackDrag', () => {
 
   it('moves pack members when dragging a protocol node', () => {
     const rfNodes: Node[] = [
-      makeRFNode('proto-1', 'dynamicNode', 100, 100, null),
-      makeRFNode('doc-1', 'documentNode', 200, 50, 'proto-1'),
-      makeRFNode('ctx-1', 'contextNode', 300, 50, 'proto-1'),
+      makeRFNode('proto-1', CanvasNodeKind.PROTOCOL, 100, 100, null),
+      makeRFNode('doc-1', CanvasNodeKind.DOCUMENT, 200, 50, 'proto-1'),
+      makeRFNode('ctx-1', CanvasNodeKind.CONTEXT, 300, 50, 'proto-1'),
     ]
     const getNodes = vi.fn<() => Node[]>(() => rfNodes)
     const setNodes = vi.fn()
@@ -216,8 +209,8 @@ describe('usePackDrag', () => {
 
   it('does not call setNodes when dragging a solo document node', () => {
     const rfNodes: Node[] = [
-      makeRFNode('proto-1', 'dynamicNode', 100, 100, null),
-      makeRFNode('doc-1', 'documentNode', 200, 50, 'proto-1'),
+      makeRFNode('proto-1', CanvasNodeKind.PROTOCOL, 100, 100, null),
+      makeRFNode('doc-1', CanvasNodeKind.DOCUMENT, 200, 50, 'proto-1'),
     ]
     const getNodes = vi.fn<() => Node[]>(() => rfNodes)
     const setNodes = vi.fn()
@@ -242,9 +235,9 @@ describe('usePackDrag', () => {
 
   it('persists all pack member positions on drag stop', () => {
     const rfNodes: Node[] = [
-      makeRFNode('proto-1', 'dynamicNode', 100, 100, null),
-      makeRFNode('doc-1', 'documentNode', 250, 80, 'proto-1'),
-      makeRFNode('ctx-1', 'contextNode', 350, 80, 'proto-1'),
+      makeRFNode('proto-1', CanvasNodeKind.PROTOCOL, 100, 100, null),
+      makeRFNode('doc-1', CanvasNodeKind.DOCUMENT, 250, 80, 'proto-1'),
+      makeRFNode('ctx-1', CanvasNodeKind.CONTEXT, 350, 80, 'proto-1'),
     ]
     const getNodes = vi.fn<() => Node[]>(() => rfNodes)
     const setNodes = vi.fn()
@@ -273,7 +266,7 @@ describe('usePackDrag', () => {
 
   it('persists only the dragged node on solo drag stop', () => {
     const rfNodes: Node[] = [
-      makeRFNode('ctx-1', 'contextNode', 200, 100, 'proto-1'),
+      makeRFNode('ctx-1', CanvasNodeKind.CONTEXT, 200, 100, 'proto-1'),
     ]
     const getNodes = vi.fn<() => Node[]>(() => rfNodes)
     const setNodes = vi.fn()
@@ -298,7 +291,7 @@ describe('usePackDrag', () => {
 
   it('skips persistence for doc-artifact nodes', () => {
     const rfNodes: Node[] = [
-      makeRFNode('doc-artifact-123', 'documentNode', 200, 50, 'proto-1'),
+      makeRFNode('doc-artifact-123', CanvasNodeKind.DOCUMENT, 200, 50, 'proto-1'),
     ]
     const getNodes = vi.fn<() => Node[]>(() => rfNodes)
     const setNodes = vi.fn()

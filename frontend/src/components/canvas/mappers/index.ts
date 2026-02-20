@@ -10,6 +10,3 @@ export type {
   ProtocolGroupEntry,
   ProtocolStepInfo,
 } from './types'
-
-// Re-export ContextNodeData for backwards compatibility
-export type { ContextNodeData } from '../ContextNode'

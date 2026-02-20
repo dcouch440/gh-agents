@@ -1,8 +1,8 @@
 import type { Node } from '@xyflow/react'
 import type { WorkflowStep } from '@/types/workflow'
 import { CanvasNodeKind } from '../canvasKinds'
-import { Archetype, AGENT_DEFAULTS } from '../CanvasNode/registry'
-import type { DynamicNodeData } from '../DynamicNode/DynamicNode'
+import { AGENT_DEFAULTS } from '../CanvasNode/registry'
+import type { AgentNodeData } from '../CanvasNode/types'
 import { getStoredDimensions, getStoredPosition } from '../nodeResizeStorage'
 import type { StepNodeLookups, AgentPositionMap } from './types'
 import { isWorkforceStep } from './protocolGroups'
@@ -22,18 +22,10 @@ const toAgentArtifactNodes = (
       const agent = roster[i]!
       if (!agent.child_step_id) continue
 
-      const agentData: DynamicNodeData = {
+      const agentData: AgentNodeData = {
+        variant: 'agent',
         kind: CanvasNodeKind.AGENT,
-        archetype: Archetype.AGENT,
         label: agent.name,
-        description: '',
-        documentNames: [],
-        rosterNames: [],
-        roomId: null,
-        upstreamStepNames: [],
-        promptValue: '',
-        modelId: null,
-        agentName: null,
         rosterAgentId: agent.id,
         roleDescription: agent.role_description,
         capabilities: [],
@@ -51,7 +43,7 @@ const toAgentArtifactNodes = (
       agentPositionByRosterId.set(agent.id, position)
       agentNodes.push({
         id: agentNodeId,
-        type: 'dynamicNode',
+        type: 'canvasNode',
         position,
         style: {
           width: agentDims?.width ?? AGENT_DEFAULTS.DEFAULT_WIDTH,

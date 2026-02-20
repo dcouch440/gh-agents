@@ -1,48 +1,18 @@
-import { memo } from 'react'
 import { Position } from '@xyflow/react'
-import type { NodeProps } from '@xyflow/react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import SmartToyOutlined from '@mui/icons-material/SmartToyOutlined'
-import { useTheme } from '@mui/material/styles'
-import { CanvasHandle } from '../CanvasHandle'
-import { DetailLevel } from '../constants'
-import { SUB_WORKFLOW_NODE } from './constants'
-import type { SubWorkflowNodeData } from './types'
-import { nodeDataEqual } from '../mappers'
-import { useCanvasLOD } from '../useCanvasLOD'
-import { MinimalNodeShell } from '../MinimalNodeShell'
-import { getNodeHighlightStyles } from '../nodeHighlightStyles'
+import { CanvasHandle } from '../../CanvasHandle'
+import type { CompactNodeData } from '../types'
+import type { NodeHighlightOutput } from '../../nodeHighlightStyles'
 
-function SubWorkflowNodeComponent({ data, selected }: NodeProps) {
-  const theme = useTheme()
-  const detailLevel = useCanvasLOD()
-  const nodeData = data as SubWorkflowNodeData
-  const accentColor = SUB_WORKFLOW_NODE.ACCENT_COLOR
+type CompactLayoutProps = {
+  data: CompactNodeData
+  accentColor: string
+  highlight: NodeHighlightOutput
+}
 
-  const highlight = getNodeHighlightStyles({
-    selected: selected === true,
-    accentColor,
-    highlightMode: 'none',
-    themeMode: theme.palette.mode,
-    variant: 'step',
-  })
-
-  if (detailLevel === DetailLevel.MINIMAL) {
-    return (
-      <Box sx={{ width: '100%', height: '100%' }}>
-        <MinimalNodeShell
-          label={nodeData.label}
-          accentColor={accentColor}
-          borderColor={highlight.borderColor}
-          boxShadow={highlight.boxShadow}
-        />
-        <CanvasHandle type="target" position={Position.Left} color={accentColor} variant="small" />
-        <CanvasHandle type="source" position={Position.Right} color={accentColor} variant="small" />
-      </Box>
-    )
-  }
-
+function CompactLayout({ data, accentColor, highlight }: CompactLayoutProps) {
   return (
     <Box
       sx={{
@@ -89,9 +59,9 @@ function SubWorkflowNodeComponent({ data, selected }: NodeProps) {
             lineHeight: 1.3,
           }}
         >
-          {nodeData.label}
+          {data.label}
         </Typography>
-        {nodeData.templateName !== null && (
+        {data.templateName !== null && (
           <Typography
             sx={{
               fontSize: 9,
@@ -102,7 +72,7 @@ function SubWorkflowNodeComponent({ data, selected }: NodeProps) {
               lineHeight: 1.2,
             }}
           >
-            {nodeData.templateName}
+            {data.templateName}
           </Typography>
         )}
       </Box>
@@ -113,9 +83,5 @@ function SubWorkflowNodeComponent({ data, selected }: NodeProps) {
   )
 }
 
-const subWorkflowNodeEqual = (prev: NodeProps, next: NodeProps): boolean =>
-  prev.selected === next.selected && prev.id === next.id && nodeDataEqual(prev.data, next.data)
-
-const SubWorkflowNode = memo(SubWorkflowNodeComponent, subWorkflowNodeEqual)
-
-export { SubWorkflowNode }
+export { CompactLayout }
+export type { CompactLayoutProps }
