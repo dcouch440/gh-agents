@@ -5,6 +5,7 @@ export { RichChatInput } from './RichChatInput'
 export { MessageList } from './MessageList'
 export { ToolIndicator } from './ToolIndicator'
 export { StreamingMessage } from './StreamingMessage'
+export { ThinkingIndicator } from './ThinkingIndicator'
 
 export type { ChatMessageProps } from './ChatMessage'
 export type { ChatInputProps } from './ChatInput'

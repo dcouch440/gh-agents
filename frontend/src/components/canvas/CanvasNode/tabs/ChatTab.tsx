@@ -4,7 +4,7 @@ import Typography from '@mui/material/Typography'
 import CircularProgress from '@mui/material/CircularProgress'
 import { useStore, workflowStore, contextMentionStore } from '@/stores'
 import { useAssistantSession } from '@/hooks/useAssistantSession'
-import { ChatPanel, StreamingMessage } from '@/components/chat'
+import { ChatPanel, StreamingMessage, ThinkingIndicator } from '@/components/chat'
 import { ARCHETYPE_CONFIGS } from '../registry'
 import type { Archetype } from '../registry'
 import { PanelOverlay } from './panel'
@@ -60,10 +60,13 @@ function ChatTab({ stepId, archetype, focusMode }: ChatTabProps) {
     )
   }
 
-  const streamingContent =
-    streaming && streamingSegments.length > 0 ? (
+  const streamingContent = streaming ? (
+    streamingSegments.length > 0 ? (
       <StreamingMessage segments={streamingSegments} streaming />
-    ) : undefined
+    ) : (
+      <ThinkingIndicator />
+    )
+  ) : undefined
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
