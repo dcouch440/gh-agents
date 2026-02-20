@@ -144,7 +144,7 @@ pub(crate) use utils::{compose_prompt, PromptRepos};
 pub use resume::{resume_dag_from_approval, resume_workflow_via_engine, ResumeState};
 
 // Internal imports for the main orchestration loop
-use pipeline::execute_pipeline_step;
+use pipeline::{DesignerPhase, Pipeline};
 use single::execute_single_step;
 
 // ── Routing Context ─────────────────────────────────────────────────────────
@@ -469,7 +469,12 @@ async fn run_dag_loop(
         // Dispatch based on execution mode
         let step_result = match step.execution_mode.as_str() {
             // Agentless modes — no agent_id needed
-            "workforce" => execute_pipeline_step(dag, step, dag_state).await,
+            "workforce" => {
+                Pipeline::new()
+                    .before(DesignerPhase)
+                    .execute(dag, step, dag_state)
+                    .await
+            }
 
             // Agent-based modes — load agent + resolve provider
             _ => {

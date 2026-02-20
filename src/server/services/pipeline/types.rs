@@ -44,8 +44,6 @@ pub struct UpdateStepInput {
 pub struct PipelineCreated {
     /// The child workflow ID (the pipeline itself).
     pub pipeline_id: Uuid,
-    /// The auto-managed Designer step, if requested.
-    pub designer_step_id: Option<Uuid>,
 }
 
 /// Result of adding a step to the pipeline.

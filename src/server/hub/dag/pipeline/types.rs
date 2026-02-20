@@ -28,15 +28,6 @@ pub(crate) struct AgentExecutionResult {
     pub roster_agent_id: Uuid,
 }
 
-/// Token usage from the designer call, for accumulating into step totals.
-pub(crate) struct DesignerTokenUsage {
-    pub input_tokens: i64,
-    pub output_tokens: i64,
-    pub cost_usd: f32,
-    /// The designer run ID for linking agent phases back to their designer.
-    pub run_id: Uuid,
-}
-
 /// Per-step execution environment for workforce agent dispatch.
 ///
 /// Bundles values constant across all agents in a workforce step.

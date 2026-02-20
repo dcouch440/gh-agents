@@ -498,7 +498,6 @@ pub async fn apply_protocol(
             goal_summary_updated_at: None,
             sub_workflow_template_id: None,
             child_workflow_id: None,
-            is_designer_step: false,
             pinned: false,
             run_results_summary: String::new(),
         };

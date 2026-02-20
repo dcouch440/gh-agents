@@ -1,26 +1,24 @@
 //! Pipeline step execution within the DAG.
 //!
-//! A pipeline step owns a child workflow (via `child_workflow_id`) whose steps
-//! are executed as a unit. Two execution paths:
+//! A pipeline step owns a child workflow (via `child_workflow_id`) whose
+//! roster agents are executed as a unit. Lifecycle phases (before/after)
+//! can be composed via the `Pipeline` builder:
 //!
-//! - **Designed pipeline** (child workflow has a Designer step): Runs the Agent
-//!   Designer pre-lifecycle to generate optimized prompts, then executes each
-//!   roster agent with designed prompts (parallel within levels, sequential
-//!   across levels).
-//!
-//! - **Static pipeline** (no Designer step): Runs the child workflow through
-//!   the standard DAG loop. Each child step executes according to its own
-//!   `execution_mode`, agent, and prompt configuration. Used for protocol-driven
-//!   or manually-configured pipelines.
+//! ```ignore
+//! Pipeline::new()
+//!     .before(DesignerPhase)
+//!     .execute(dag, step, dag_state)
+//!     .await
+//! ```
 
 mod agent_executor;
 mod designer;
+pub(crate) mod lifecycle;
 mod output;
-mod static_exec;
 mod tests;
 mod types;
 
-// Re-export used by the orchestrator in this file
+// Re-export used by the orchestrator and workshop dispatch
 pub(crate) use output::compose_workforce_output;
 
 // Re-exports for test access (tests.rs imports via crate path)
@@ -50,244 +48,245 @@ use super::{
 };
 
 use agent_executor::execute_agent_levels;
-use designer::run_designer_phase;
+pub(crate) use designer::DesignerPhase;
+use designer::{build_static_fallback_prompts, build_user_notes_block};
+use lifecycle::{PhaseOutput, PhaseTokenUsage, PipelineExecutionContext, PipelinePhase};
 use types::WorkforceStepEnv;
 
-/// Execute a pipeline step within the DAG.
+/// Composable pipeline executor with lifecycle phases.
 ///
-/// Loads child workflow steps, detects whether a Designer step exists,
-/// and dispatches to the appropriate execution path.
-pub(super) async fn execute_pipeline_step(
-    dag: &DagContext<'_>,
-    step: &WorkflowStepRow,
-    dag_state: &mut DagExecutionState,
-) -> Result<(), HubError> {
-    let child_workflow_id = step.child_workflow_id.ok_or_else(|| {
-        HubError::Internal(anyhow!(
-            "pipeline step {} has no child_workflow_id",
-            step.id
-        ))
-    })?;
-
-    // Load child workflow steps to detect Designer
-    let child_steps = dag
-        .state
-        .repos()
-        .workflows
-        .list_steps(child_workflow_id)
-        .await
-        .map_err(|e| HubError::Internal(anyhow!("failed to load pipeline steps: {}", e)))?;
-
-    let has_designer = child_steps.iter().any(|s| s.is_designer_step);
-
-    if has_designer {
-        // Designed pipeline: run designer pre-phase + level-based agent execution.
-        execute_designed_pipeline(dag, step, dag_state).await
-    } else {
-        // Static pipeline: run child workflow through the standard DAG loop.
-        static_exec::execute_static_pipeline(dag, step, dag_state, child_workflow_id, &child_steps)
-            .await
-    }
+/// Phases registered via `.before()` run before agent execution.
+/// If no before-phase produces designed prompts, static fallback
+/// prompts are used automatically.
+pub(crate) struct Pipeline {
+    before_phases: Vec<Box<dyn PipelinePhase>>,
 }
 
-/// Execute a designed pipeline step (with Designer + roster).
-///
-/// Loads the mission brief, agent roster, runs the Agent Designer
-/// pre-lifecycle, then executes each roster agent (parallel within levels,
-/// sequential across levels).
-async fn execute_designed_pipeline(
-    dag: &DagContext<'_>,
-    step: &WorkflowStepRow,
-    dag_state: &mut DagExecutionState,
-) -> Result<(), HubError> {
-    let step_start = std::time::Instant::now();
-
-    // 1. Broadcast step started
-    broadcast_workflow_event(
-        dag.state,
-        dag.ctx,
-        step.workflow_id,
-        WorkflowEventKind::StepStarted {
-            step_id: step.id,
-            step_name: step_display_name(step),
-            agent_id: None,
-            execution_id: None,
-        },
-    );
-
-    // 2. Load mission brief
-    let brief = dag
-        .state
-        .repos()
-        .workflows
-        .get_mission_brief(step.id)
-        .await
-        .map_err(|e| HubError::Internal(anyhow!("failed to load mission brief: {}", e)))?
-        .ok_or_else(|| {
-            HubError::Internal(anyhow!("pipeline step {} has no mission brief", step.id))
-        })?;
-
-    // 3. Load agent roster (sorted by execution_order)
-    let roster = dag
-        .state
-        .repos()
-        .workflows
-        .list_agent_roster(brief.id)
-        .await
-        .map_err(|e| HubError::Internal(anyhow!("failed to load agent roster: {}", e)))?;
-
-    if roster.is_empty() {
-        return Err(HubError::Internal(anyhow!(
-            "pipeline step {} has empty agent roster",
-            step.id
-        )));
+impl Pipeline {
+    pub fn new() -> Self {
+        Self {
+            before_phases: vec![],
+        }
     }
 
-    info!(
-        step_id = %step.id,
-        task = %brief.task_description,
-        agents = roster.len(),
-        failure_mode = %brief.failure_mode,
-        "Starting designed pipeline execution"
-    );
+    pub fn before(mut self, phase: impl PipelinePhase + 'static) -> Self {
+        self.before_phases.push(Box::new(phase));
+        self
+    }
 
-    // 4. Resolve port inputs
-    let port_inputs = resolve_step_port_inputs(step, dag.port_meta, &dag_state.completed_envelopes);
+    /// Execute the pipeline: run lifecycle phases, then agent levels.
+    pub async fn execute(
+        &self,
+        dag: &DagContext<'_>,
+        step: &WorkflowStepRow,
+        dag_state: &mut DagExecutionState,
+    ) -> Result<(), HubError> {
+        let step_start = std::time::Instant::now();
 
-    // 5. Collect upstream context from context nodes
-    let incoming = dag
-        .port_meta
-        .incoming_edges
-        .get(&step.id)
-        .map(|v| v.as_slice())
-        .unwrap_or(&[]);
-    let upstream_context =
-        collect_upstream_context_data(incoming, dag.steps, &dag_state.completed_envelopes);
+        // 1. Broadcast step started
+        broadcast_workflow_event(
+            dag.state,
+            dag.ctx,
+            step.workflow_id,
+            WorkflowEventKind::StepStarted {
+                step_id: step.id,
+                step_name: step_display_name(step),
+                agent_id: None,
+                execution_id: None,
+            },
+        );
 
-    // 6. Compose base prompt
-    let repos = PromptRepos {
-        prompt_template_repo: Some(&*dag.state.repos().prompt_templates),
-        doc_repo: Some(&*dag.state.repos().documents),
-        workflow_repo: Some(&*dag.state.repos().workflows),
-        agent_repo: &*dag.state.repos().agents,
-    };
-    let prompt = compose_prompt(
-        step,
-        &repos,
-        &dag_state.var_outputs,
-        &dag.ctx.prior_outputs,
-        port_inputs.as_ref(),
-    )
-    .await;
+        // 2. Load mission brief
+        let brief = dag
+            .state
+            .repos()
+            .workflows
+            .get_mission_brief(step.id)
+            .await
+            .map_err(|e| HubError::Internal(anyhow!("failed to load mission brief: {}", e)))?
+            .ok_or_else(|| {
+                HubError::Internal(anyhow!("pipeline step {} has no mission brief", step.id))
+            })?;
 
-    // 7. Create optional container
-    let managed_container = create_optional_container(
-        dag.ctx.container_config.as_ref(),
-        dag.ctx.wg_client.as_deref(),
-        "pipeline",
-    )
-    .await?;
+        // 3. Load agent roster (sorted by execution_order)
+        let roster = dag
+            .state
+            .repos()
+            .workflows
+            .list_agent_roster(brief.id)
+            .await
+            .map_err(|e| HubError::Internal(anyhow!("failed to load agent roster: {}", e)))?;
 
-    // 8. Run Agent Designer pre-lifecycle + build user notes
-    let (designed_prompts, designer_usage, user_notes_block) = run_designer_phase(
-        dag,
-        step,
-        &brief,
-        &roster,
-        &dag_state.completed_envelopes,
-        &prompt,
-        &upstream_context,
-    )
-    .await?;
+        if roster.is_empty() {
+            return Err(HubError::Internal(anyhow!(
+                "pipeline step {} has empty agent roster",
+                step.id
+            )));
+        }
 
-    // 9. Build env + execute agent levels
-    let designer_run_id = if designer_usage.run_id.is_nil() {
-        None
-    } else {
-        Some(designer_usage.run_id)
-    };
+        info!(
+            step_id = %step.id,
+            task = %brief.task_description,
+            agents = roster.len(),
+            failure_mode = %brief.failure_mode,
+            "Starting pipeline execution"
+        );
 
-    let env = WorkforceStepEnv {
-        state: dag.state.clone(),
-        ctx: dag.ctx.clone(),
-        user_notes_block,
-        original_prompt: prompt.clone(),
-        step_id: step.id,
-        workflow_id: step.workflow_id,
-        designer_run_id,
-        total_agents: designed_prompts.len(),
-        container_handle: managed_container.as_ref().map(|mc| mc.agent_handle.clone()),
-        cancel: dag.cancel.cloned(),
-    };
+        // 4. Resolve port inputs
+        let port_inputs =
+            resolve_step_port_inputs(step, dag.port_meta, &dag_state.completed_envelopes);
 
-    let level_result = execute_agent_levels(
-        &env,
-        dag,
-        &designed_prompts,
-        &brief.failure_mode,
-        &managed_container,
-    )
-    .await?;
+        // 5. Collect upstream context from context nodes
+        let incoming = dag
+            .port_meta
+            .incoming_edges
+            .get(&step.id)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[]);
+        let upstream_context =
+            collect_upstream_context_data(incoming, dag.steps, &dag_state.completed_envelopes);
 
-    // 10. Destroy optional container
-    destroy_optional_container(&managed_container, dag.ctx.wg_client.as_deref()).await;
+        // 6. Compose base prompt
+        let repos = PromptRepos {
+            prompt_template_repo: Some(&*dag.state.repos().prompt_templates),
+            doc_repo: Some(&*dag.state.repos().documents),
+            workflow_repo: Some(&*dag.state.repos().workflows),
+            agent_repo: &*dag.state.repos().agents,
+        };
+        let prompt = compose_prompt(
+            step,
+            &repos,
+            &dag_state.var_outputs,
+            &dag.ctx.prior_outputs,
+            port_inputs.as_ref(),
+        )
+        .await;
 
-    // 11. Compose combined output + store results
-    let step_in_tokens = designer_usage.input_tokens + level_result.input_tokens;
-    let step_out_tokens = designer_usage.output_tokens + level_result.output_tokens;
-    let step_cost = designer_usage.cost_usd + level_result.cost_usd;
+        // 7. Build pipeline execution context
+        let pipeline_ctx = PipelineExecutionContext {
+            step: step.clone(),
+            brief: brief.clone(),
+            roster: roster.clone(),
+            base_prompt: prompt.clone(),
+            upstream_context: upstream_context.clone(),
+            completed_envelopes: dag_state.completed_envelopes.clone(),
+        };
 
-    let combined_data = compose_workforce_output(&level_result.agent_outputs);
-    let output_key = resolve_output_key(step, &dag.port_meta.step_outputs);
+        // 8. Run before phases (or static fallback if none registered)
+        let phase_output = if self.before_phases.is_empty() {
+            let prompts = build_static_fallback_prompts(&brief, &roster, &prompt);
+            let user_notes_block = build_user_notes_block(&upstream_context);
+            PhaseOutput {
+                designed_prompts: prompts,
+                user_notes_block,
+                token_usage: PhaseTokenUsage {
+                    input_tokens: 0,
+                    output_tokens: 0,
+                    cost_usd: 0.0,
+                    run_id: None,
+                },
+            }
+        } else {
+            // Run each before-phase; last one's output is used for agent execution
+            let mut output = None;
+            for phase in &self.before_phases {
+                info!(phase = phase.name(), step_id = %step.id, "Running pipeline phase");
+                output = Some(phase.execute(dag, &pipeline_ctx).await?);
+            }
+            output.unwrap()
+        };
 
-    dag_state.accumulate_tokens(step_in_tokens, step_out_tokens, step_cost);
+        // 9. Create optional container
+        let managed_container = create_optional_container(
+            dag.ctx.container_config.as_ref(),
+            dag.ctx.wg_client.as_deref(),
+            "pipeline",
+        )
+        .await?;
 
-    let output = StepOutput {
-        variable_name: output_key,
-        raw_output: serde_json::to_string(&combined_data).unwrap_or_default(),
-        structured_output: Some(combined_data.clone()),
-    };
-
-    let envelope = StepExecutionEnvelope {
-        status: ExecutionStatus::Success,
-        data: Some(combined_data),
-        metadata: ExecutionMetadata {
-            execution_time_ms: step_start.elapsed().as_millis() as u64,
-            tokens_in: Some(step_in_tokens as i32),
-            tokens_out: Some(step_out_tokens as i32),
-            cost_usd: Some(step_cost as f64),
-            model: Some(WORKFORCE.agent("agent").model_id.clone()),
-            ..ExecutionMetadata::new(step.id)
-        },
-        error: None,
-    };
-
-    super::utils::record_and_snapshot_output(dag, dag_state, step.id, output, envelope).await;
-
-    // 12. Broadcast step completed
-    broadcast_workflow_event(
-        dag.state,
-        dag.ctx,
-        step.workflow_id,
-        WorkflowEventKind::StepCompleted {
+        // 10. Build env + execute agent levels
+        let env = WorkforceStepEnv {
+            state: dag.state.clone(),
+            ctx: dag.ctx.clone(),
+            user_notes_block: phase_output.user_notes_block,
+            original_prompt: prompt.clone(),
             step_id: step.id,
-            step_name: step_display_name(step),
-            agent_id: None,
-            output: None,
-            input_tokens: Some(step_in_tokens as u64),
-            output_tokens: Some(step_out_tokens as u64),
-            duration_ms: Some(step_start.elapsed().as_millis() as u64),
-        },
-    );
+            workflow_id: step.workflow_id,
+            designer_run_id: phase_output.token_usage.run_id,
+            total_agents: phase_output.designed_prompts.len(),
+            container_handle: managed_container.as_ref().map(|mc| mc.agent_handle.clone()),
+            cancel: dag.cancel.cloned(),
+        };
 
-    info!(
-        step_id = %step.id,
-        agents = env.total_agents,
-        tokens_in = step_in_tokens,
-        tokens_out = step_out_tokens,
-        duration_ms = step_start.elapsed().as_millis(),
-        "Designed pipeline execution completed"
-    );
+        let level_result = execute_agent_levels(
+            &env,
+            dag,
+            &phase_output.designed_prompts,
+            &brief.failure_mode,
+            &managed_container,
+        )
+        .await?;
 
-    Ok(())
+        // 11. Destroy optional container
+        destroy_optional_container(&managed_container, dag.ctx.wg_client.as_deref()).await;
+
+        // 12. Compose combined output + store results
+        let step_in_tokens = phase_output.token_usage.input_tokens + level_result.input_tokens;
+        let step_out_tokens = phase_output.token_usage.output_tokens + level_result.output_tokens;
+        let step_cost = phase_output.token_usage.cost_usd + level_result.cost_usd;
+
+        let combined_data = compose_workforce_output(&level_result.agent_outputs);
+        let output_key = resolve_output_key(step, &dag.port_meta.step_outputs);
+
+        dag_state.accumulate_tokens(step_in_tokens, step_out_tokens, step_cost);
+
+        let output = StepOutput {
+            variable_name: output_key,
+            raw_output: serde_json::to_string(&combined_data).unwrap_or_default(),
+            structured_output: Some(combined_data.clone()),
+        };
+
+        let envelope = StepExecutionEnvelope {
+            status: ExecutionStatus::Success,
+            data: Some(combined_data),
+            metadata: ExecutionMetadata {
+                execution_time_ms: step_start.elapsed().as_millis() as u64,
+                tokens_in: Some(step_in_tokens as i32),
+                tokens_out: Some(step_out_tokens as i32),
+                cost_usd: Some(step_cost as f64),
+                model: Some(WORKFORCE.agent("agent").model_id.clone()),
+                ..ExecutionMetadata::new(step.id)
+            },
+            error: None,
+        };
+
+        super::utils::record_and_snapshot_output(dag, dag_state, step.id, output, envelope).await;
+
+        // 13. Broadcast step completed
+        broadcast_workflow_event(
+            dag.state,
+            dag.ctx,
+            step.workflow_id,
+            WorkflowEventKind::StepCompleted {
+                step_id: step.id,
+                step_name: step_display_name(step),
+                agent_id: None,
+                output: None,
+                input_tokens: Some(step_in_tokens as u64),
+                output_tokens: Some(step_out_tokens as u64),
+                duration_ms: Some(step_start.elapsed().as_millis() as u64),
+            },
+        );
+
+        info!(
+            step_id = %step.id,
+            agents = env.total_agents,
+            tokens_in = step_in_tokens,
+            tokens_out = step_out_tokens,
+            duration_ms = step_start.elapsed().as_millis(),
+            "Pipeline execution completed"
+        );
+
+        Ok(())
+    }
 }

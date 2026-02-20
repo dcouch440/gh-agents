@@ -1,7 +1,8 @@
-//! Agent Designer pre-lifecycle for the workforce step.
+//! Agent Designer lifecycle phase for the workforce pipeline.
 //!
-//! Runs the designer to generate optimized prompts for each roster agent,
-//! with a static fallback when the designer fails.
+//! Implements `PipelinePhase` to generate optimized prompts for each
+//! roster agent via the Agent Designer LLM call. Falls back to static
+//! prompts when the designer fails — never propagates a designer error.
 
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
@@ -9,7 +10,6 @@ use std::hash::{Hash, Hasher};
 
 use anyhow::anyhow;
 use tracing::warn;
-use uuid::Uuid;
 
 use crate::config::protocols::{roles, vars, AGENT_DESIGNER};
 use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow};
@@ -19,222 +19,210 @@ use crate::server::hub::protocols::execution_recorder::{
     PhaseCompletion, ProtocolExecutionRecorder,
 };
 use crate::server::ws::events::WorkflowEventKind;
-use crate::types::StepExecutionEnvelope;
 
 use super::super::agent_designer;
 use super::super::designer_input::workforce::build_workforce_designer_input;
 use super::super::{broadcast_workflow_event, DagContext};
+use super::lifecycle::{PhaseOutput, PhaseTokenUsage, PipelineExecutionContext, PipelinePhase};
 use super::output::build_team_roster_string;
-use super::types::{DesignedAgentPrompt, DesignerTokenUsage};
+use super::types::DesignedAgentPrompt;
 
-/// Run the Agent Designer pre-lifecycle and build the user notes block.
+/// Designer lifecycle phase — generates optimized prompts for workforce agents.
 ///
-/// On designer success, maps results to `DesignedAgentPrompt`s. On failure,
-/// falls back to static prompts (never propagates a designer error).
-/// Returns `(designed_prompts, designer_usage, user_notes_block)`.
-pub(super) async fn run_designer_phase(
-    dag: &DagContext<'_>,
-    step: &crate::db::WorkflowStepRow,
-    brief: &TaskMissionBriefRow,
-    roster: &[TaskAgentRosterRow],
-    completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
-    base_prompt: &str,
-    upstream_context: &[(String, String)],
-) -> Result<(Vec<DesignedAgentPrompt>, DesignerTokenUsage, String), HubError> {
-    let recorder =
-        ProtocolExecutionRecorder::new(&*dag.state.repos().protocols, step.id, dag.ctx.run_id);
-    let designer_phase = recorder
-        .create_phase_with_context("designer", None, None, None, Some("workforce"), None)
-        .await?;
+/// On success, maps Agent Designer LLM output to `DesignedAgentPrompt`s.
+/// On failure, degrades gracefully to static prompts (never errors out).
+pub(crate) struct DesignerPhase;
 
-    broadcast_workflow_event(
-        dag.state,
-        dag.ctx,
-        step.workflow_id,
-        WorkflowEventKind::WorkforceDesignerProgress {
-            step_id: step.id,
-            status: "started".to_string(),
-        },
-    );
-
-    let child_edges = if let Some(child_wf_id) = step.child_workflow_id {
-        dag.state
-            .repos()
-            .workflows
-            .list_edges(child_wf_id)
-            .await
-            .unwrap_or_default()
-    } else {
-        vec![]
-    };
-
-    let designer_input = build_workforce_designer_input(
-        brief,
-        roster,
-        completed_envelopes,
-        dag.steps,
-        dag.state
-            .repos()
-            .workflows
-            .get_assistant_notes(step.id)
-            .await
-            .unwrap_or_default()
-            .as_deref(),
-        &*dag.state.repos().tool_capabilities,
-        &child_edges,
-    )
-    .await;
-
-    let (designed_prompts, designer_usage) = match agent_designer::run_agent_designer(
-        dag.engine,
-        dag.state,
-        dag.ctx,
-        step,
-        designer_input,
-        "",
-        dag.cancel,
-        Some(designer_phase.id),
-    )
-    .await
-    {
-        Ok(result) => {
-            recorder
-                .update_phase(
-                    designer_phase.id,
-                    PhaseCompletion {
-                        status: "complete",
-                        output_content: None,
-                        error_message: None,
-                        tokens_in: result.input_tokens,
-                        tokens_out: result.output_tokens,
-                        cost_usd: result.cost_usd,
-                        model: Some(&AGENT_DESIGNER.agent("designer").model_id),
-                    },
-                )
-                .await;
-
-            let prompts = map_designer_results(&result, roster)?;
-
-            let usage = DesignerTokenUsage {
-                input_tokens: result.input_tokens,
-                output_tokens: result.output_tokens,
-                cost_usd: result.cost_usd,
-                run_id: result.run_id,
-            };
-
-            broadcast_workflow_event(
-                dag.state,
-                dag.ctx,
-                step.workflow_id,
-                WorkflowEventKind::WorkforceDesignerProgress {
-                    step_id: step.id,
-                    status: "completed".to_string(),
-                },
-            );
-
-            (prompts, usage)
-        }
-        Err(e) => {
-            recorder
-                .update_phase(
-                    designer_phase.id,
-                    PhaseCompletion {
-                        status: "failed",
-                        output_content: None,
-                        error_message: Some(&e.to_string()),
-                        tokens_in: 0,
-                        tokens_out: 0,
-                        cost_usd: 0.0,
-                        model: None,
-                    },
-                )
-                .await;
-
-            broadcast_workflow_event(
-                dag.state,
-                dag.ctx,
-                step.workflow_id,
-                WorkflowEventKind::WorkforceDesignerProgress {
-                    step_id: step.id,
-                    status: "failed".to_string(),
-                },
-            );
-
-            warn!(
-                step_id = %step.id,
-                error = %e,
-                "Workforce designer failed, using static prompts"
-            );
-            let fallback = build_static_fallback_prompts(brief, roster, base_prompt);
-            let usage = DesignerTokenUsage {
-                input_tokens: 0,
-                output_tokens: 0,
-                cost_usd: 0.0,
-                run_id: Uuid::nil(),
-            };
-            (fallback, usage)
-        }
-    };
-
-    // Build user_notes block from upstream context nodes
-    let user_notes_block = if upstream_context.is_empty() {
-        String::new()
-    } else {
-        let docs: Vec<ContextDocument> = upstream_context
-            .iter()
-            .map(|(title, content)| {
-                let mut hasher = DefaultHasher::new();
-                title.hash(&mut hasher);
-                let short_id = format!("{:08x}", hasher.finish() & 0xFFFF_FFFF);
-                ContextDocument {
-                    short_id,
-                    title: title.clone(),
-                    content: content.clone(),
-                }
-            })
-            .collect();
-        let inner = build_context_block(&[], &docs);
-        format!("<user_notes>\n{inner}\n</user_notes>")
-    };
-
-    Ok((designed_prompts, designer_usage, user_notes_block))
-}
-
-/// Map generic designer results to workforce `DesignedAgentPrompt`s.
-fn map_designer_results(
-    result: &agent_designer::DesignerResult,
-    roster: &[TaskAgentRosterRow],
-) -> Result<Vec<DesignedAgentPrompt>, HubError> {
-    let roster_by_id: HashMap<String, &TaskAgentRosterRow> =
-        roster.iter().map(|r| (r.id.to_string(), r)).collect();
-
-    let mut prompts = Vec::with_capacity(result.prompts.len());
-
-    for entry in &result.prompts {
-        let roster_entry = roster_by_id.get(&entry.agent_id).ok_or_else(|| {
-            HubError::Internal(anyhow!(
-                "Designer referenced unknown agent_id: {}",
-                entry.agent_id
-            ))
-        })?;
-
-        prompts.push(DesignedAgentPrompt {
-            agent_roster_entry_id: roster_entry.id,
-            agent_name: entry.agent_name.clone(),
-            tools: entry.tools.clone(),
-            system_prompt: entry.system_prompt.clone(),
-            task_prompt: entry.task_prompt.clone(),
-            execution_order: roster_entry.execution_order,
-            receives_from: entry.receives_from.clone(),
-        });
+#[async_trait::async_trait]
+impl PipelinePhase for DesignerPhase {
+    fn name(&self) -> &str {
+        "designer"
     }
 
-    prompts.sort_by_key(|p| p.execution_order);
-    Ok(prompts)
+    async fn execute(
+        &self,
+        dag: &DagContext<'_>,
+        ctx: &PipelineExecutionContext,
+    ) -> Result<PhaseOutput, HubError> {
+        let recorder = ProtocolExecutionRecorder::new(
+            &*dag.state.repos().protocols,
+            ctx.step.id,
+            dag.ctx.run_id,
+        );
+        let designer_phase = recorder
+            .create_phase_with_context("designer", None, None, None, Some("workforce"), None)
+            .await?;
+
+        broadcast_workflow_event(
+            dag.state,
+            dag.ctx,
+            ctx.step.workflow_id,
+            WorkflowEventKind::WorkforceDesignerProgress {
+                step_id: ctx.step.id,
+                status: "started".to_string(),
+            },
+        );
+
+        let child_edges = if let Some(child_wf_id) = ctx.step.child_workflow_id {
+            dag.state
+                .repos()
+                .workflows
+                .list_edges(child_wf_id)
+                .await
+                .unwrap_or_default()
+        } else {
+            vec![]
+        };
+
+        let designer_input = build_workforce_designer_input(
+            &ctx.brief,
+            &ctx.roster,
+            &ctx.completed_envelopes,
+            dag.steps,
+            dag.state
+                .repos()
+                .workflows
+                .get_assistant_notes(ctx.step.id)
+                .await
+                .unwrap_or_default()
+                .as_deref(),
+            &*dag.state.repos().tool_capabilities,
+            &child_edges,
+        )
+        .await;
+
+        let (designed_prompts, token_usage) = match agent_designer::run_agent_designer(
+            dag.engine,
+            dag.state,
+            dag.ctx,
+            &ctx.step,
+            designer_input,
+            "",
+            dag.cancel,
+            Some(designer_phase.id),
+        )
+        .await
+        {
+            Ok(result) => {
+                recorder
+                    .update_phase(
+                        designer_phase.id,
+                        PhaseCompletion {
+                            status: "complete",
+                            output_content: None,
+                            error_message: None,
+                            tokens_in: result.input_tokens,
+                            tokens_out: result.output_tokens,
+                            cost_usd: result.cost_usd,
+                            model: Some(&AGENT_DESIGNER.agent("designer").model_id),
+                        },
+                    )
+                    .await;
+
+                let prompts = map_designer_results(&result, &ctx.roster)?;
+
+                let usage = PhaseTokenUsage {
+                    input_tokens: result.input_tokens,
+                    output_tokens: result.output_tokens,
+                    cost_usd: result.cost_usd,
+                    run_id: Some(result.run_id),
+                };
+
+                broadcast_workflow_event(
+                    dag.state,
+                    dag.ctx,
+                    ctx.step.workflow_id,
+                    WorkflowEventKind::WorkforceDesignerProgress {
+                        step_id: ctx.step.id,
+                        status: "completed".to_string(),
+                    },
+                );
+
+                (prompts, usage)
+            }
+            Err(e) => {
+                recorder
+                    .update_phase(
+                        designer_phase.id,
+                        PhaseCompletion {
+                            status: "failed",
+                            output_content: None,
+                            error_message: Some(&e.to_string()),
+                            tokens_in: 0,
+                            tokens_out: 0,
+                            cost_usd: 0.0,
+                            model: None,
+                        },
+                    )
+                    .await;
+
+                broadcast_workflow_event(
+                    dag.state,
+                    dag.ctx,
+                    ctx.step.workflow_id,
+                    WorkflowEventKind::WorkforceDesignerProgress {
+                        step_id: ctx.step.id,
+                        status: "failed".to_string(),
+                    },
+                );
+
+                warn!(
+                    step_id = %ctx.step.id,
+                    error = %e,
+                    "Workforce designer failed, using static prompts"
+                );
+                let fallback =
+                    build_static_fallback_prompts(&ctx.brief, &ctx.roster, &ctx.base_prompt);
+                let usage = PhaseTokenUsage {
+                    input_tokens: 0,
+                    output_tokens: 0,
+                    cost_usd: 0.0,
+                    run_id: None,
+                };
+                (fallback, usage)
+            }
+        };
+
+        let user_notes_block = build_user_notes_block(&ctx.upstream_context);
+
+        Ok(PhaseOutput {
+            designed_prompts,
+            user_notes_block,
+            token_usage,
+        })
+    }
 }
 
-/// Build static fallback prompts when the Agent Designer fails.
-fn build_static_fallback_prompts(
+// ── Shared Helpers ──────────────────────────────────────────────────────────
+
+/// Build user notes block from upstream context node data.
+///
+/// Used by lifecycle phases to inject upstream context into agent task prompts.
+pub(super) fn build_user_notes_block(upstream_context: &[(String, String)]) -> String {
+    if upstream_context.is_empty() {
+        return String::new();
+    }
+
+    let docs: Vec<ContextDocument> = upstream_context
+        .iter()
+        .map(|(title, content)| {
+            let mut hasher = DefaultHasher::new();
+            title.hash(&mut hasher);
+            let short_id = format!("{:08x}", hasher.finish() & 0xFFFF_FFFF);
+            ContextDocument {
+                short_id,
+                title: title.clone(),
+                content: content.clone(),
+            }
+        })
+        .collect();
+    let inner = build_context_block(&[], &docs);
+    format!("<user_notes>\n{inner}\n</user_notes>")
+}
+
+/// Build static fallback prompts when no designer phase runs or when the
+/// designer fails. Maps roster agents directly to prompts using role templates.
+pub(super) fn build_static_fallback_prompts(
     brief: &TaskMissionBriefRow,
     roster: &[TaskAgentRosterRow],
     base_prompt: &str,
@@ -273,4 +261,39 @@ fn build_static_fallback_prompts(
             }
         })
         .collect()
+}
+
+// ── Private Helpers ─────────────────────────────────────────────────────────
+
+/// Map generic designer results to workforce `DesignedAgentPrompt`s.
+fn map_designer_results(
+    result: &agent_designer::DesignerResult,
+    roster: &[TaskAgentRosterRow],
+) -> Result<Vec<DesignedAgentPrompt>, HubError> {
+    let roster_by_id: HashMap<String, &TaskAgentRosterRow> =
+        roster.iter().map(|r| (r.id.to_string(), r)).collect();
+
+    let mut prompts = Vec::with_capacity(result.prompts.len());
+
+    for entry in &result.prompts {
+        let roster_entry = roster_by_id.get(&entry.agent_id).ok_or_else(|| {
+            HubError::Internal(anyhow!(
+                "Designer referenced unknown agent_id: {}",
+                entry.agent_id
+            ))
+        })?;
+
+        prompts.push(DesignedAgentPrompt {
+            agent_roster_entry_id: roster_entry.id,
+            agent_name: entry.agent_name.clone(),
+            tools: entry.tools.clone(),
+            system_prompt: entry.system_prompt.clone(),
+            task_prompt: entry.task_prompt.clone(),
+            execution_order: roster_entry.execution_order,
+            receives_from: entry.receives_from.clone(),
+        });
+    }
+
+    prompts.sort_by_key(|p| p.execution_order);
+    Ok(prompts)
 }

@@ -323,7 +323,7 @@ async fn execute_add_agent(
     let roster = repo.list_agent_roster(brief_id).await.unwrap_or_default();
     let next_order = roster.iter().map(|a| a.execution_order).max().unwrap_or(-1) + 1;
 
-    // 4. Add step via pipeline service (handles: create pipeline + designer + step + edge)
+    // 4. Add step via pipeline service (handles: create pipeline + step)
     let pip_ctx = pipeline_ctx(ctx);
     let (step_added, _) = match pipeline::add_step(
         repo,
@@ -338,7 +338,6 @@ async fn execute_add_agent(
             output_variable_name: None,
             display_order: Some(next_order + 1),
         },
-        true, // include designer
     )
     .await
     {

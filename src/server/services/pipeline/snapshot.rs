@@ -38,8 +38,7 @@ pub async fn build_snapshot(
         .await
         .map_err(|e| ServiceError::Internal(e.into()))?;
 
-    // Separate designer from pipeline steps
-    let pipeline_steps: Vec<_> = child_steps.iter().filter(|s| !s.is_designer_step).collect();
+    let pipeline_steps: Vec<_> = child_steps.iter().collect();
 
     // Build step ID → name lookup
     let step_to_name: HashMap<Uuid, &str> = pipeline_steps
