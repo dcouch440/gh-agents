@@ -31,8 +31,6 @@ function CanvasFormNodeComponent({
     selected,
     accentColor: resolvedAccent,
     highlightMode,
-    themeMode: theme.palette.mode,
-    variant: 'resizable',
     screenBorder: theme.palette.custom.screenBorder,
     accentRing: theme.palette.custom.accentRing,
   })

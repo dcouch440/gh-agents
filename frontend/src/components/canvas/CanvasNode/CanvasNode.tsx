@@ -47,8 +47,6 @@ function CanvasNodeComponent({ id, data, selected }: NodeProps) {
     selected: selected === true,
     accentColor,
     highlightMode,
-    themeMode: theme.palette.mode,
-    variant: variantConfig.highlightVariant,
     screenBorder: theme.palette.custom.screenBorder,
     accentRing: theme.palette.custom.accentRing,
   })
