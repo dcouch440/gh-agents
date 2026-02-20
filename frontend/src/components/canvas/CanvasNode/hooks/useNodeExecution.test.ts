@@ -16,7 +16,7 @@ vi.mock('@/stores', () => ({
   },
 }))
 
-vi.mock('../execution', () => ({
+vi.mock('../../execution', () => ({
   toExecutionStatus: (status: string | undefined) => {
     if (!status || status === 'idle') return 'idle'
     if (status === 'success') return 'completed'
@@ -25,7 +25,7 @@ vi.mock('../execution', () => ({
   },
 }))
 
-const { useDynamicNodeExecution } = await import('./useDynamicNodeExecution')
+const { useDynamicNodeExecution } = await import('./useNodeExecution')
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 

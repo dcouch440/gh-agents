@@ -1,7 +1,7 @@
 import type { Node } from '@xyflow/react'
 import type { WorkflowStep } from '@/types/workflow'
 import { CanvasNodeKind } from '../canvasKinds'
-import { Archetype, AGENT_DEFAULTS } from '../DynamicNode/archetypes'
+import { Archetype, AGENT_DEFAULTS } from '../CanvasNode/registry'
 import type { DynamicNodeData } from '../DynamicNode/DynamicNode'
 import { getStoredDimensions, getStoredPosition } from '../nodeResizeStorage'
 import type { StepNodeLookups, AgentPositionMap } from './types'

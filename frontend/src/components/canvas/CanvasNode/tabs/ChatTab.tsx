@@ -5,8 +5,8 @@ import CircularProgress from '@mui/material/CircularProgress'
 import { useStore, workflowStore, contextMentionStore } from '@/stores'
 import { useAssistantSession } from '@/hooks/useAssistantSession'
 import { ChatPanel, StreamingMessage } from '@/components/chat'
-import { ARCHETYPE_CONFIGS } from '../archetypes'
-import type { Archetype } from '../archetypes'
+import { ARCHETYPE_CONFIGS } from '../registry'
+import type { Archetype } from '../registry'
 import { PanelOverlay } from './panel'
 
 type ChatTabProps = {

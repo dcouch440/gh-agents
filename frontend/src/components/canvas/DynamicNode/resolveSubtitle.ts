@@ -1,28 +1,3 @@
-import { Archetype } from './archetypes'
-import type { Archetype as ArchetypeType } from './archetypes'
-
-type ResolveSubtitleParams = {
-  archetype: ArchetypeType
-  rosterNames: readonly string[]
-  roomMemberNames: readonly string[]
-  parentStepName?: string | null
-}
-
-const resolveSubtitle = ({
-  archetype,
-  rosterNames,
-  roomMemberNames,
-  parentStepName,
-}: ResolveSubtitleParams): string | null => {
-  if (archetype === Archetype.AGENT) return parentStepName ?? null
-  if (archetype === Archetype.WORKFORCE) {
-    return rosterNames.length > 0 ? rosterNames.join(' \u00b7 ') : null
-  }
-  if (archetype === Archetype.ROOM && roomMemberNames.length > 0) {
-    return roomMemberNames.join(' \u00b7 ')
-  }
-  return null
-}
-
-export { resolveSubtitle }
-export type { ResolveSubtitleParams }
+// Backward-compat shim — canonical location is CanvasNode/resolveSubtitle.ts
+export { resolveSubtitle } from '../CanvasNode/resolveSubtitle'
+export type { ResolveSubtitleParams } from '../CanvasNode/resolveSubtitle'

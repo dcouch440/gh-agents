@@ -6,7 +6,7 @@ import { isVirtualNode, setStoredPosition } from './nodeResizeStorage'
 import { isWorkforceStep } from './mappers/protocolGroups'
 import { NODE_DIMENSIONS } from './nodeDimensions'
 import { CanvasNodeKind } from './canvasKinds'
-import { AGENT_DEFAULTS } from './DynamicNode/archetypes'
+import { AGENT_DEFAULTS } from './CanvasNode/registry'
 import type { StepNodeLookups } from './mappers/types'
 import type { WorkflowStep } from '@/types/workflow'
 

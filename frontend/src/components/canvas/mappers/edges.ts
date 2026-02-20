@@ -2,7 +2,7 @@ import type { Edge } from '@xyflow/react'
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 import { Collections } from '@/utils/collections'
 import { STEP_TYPE_COLORS, GREYSCALE_ACCENT } from '../constants'
-import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from '../DynamicNode/archetypes'
+import { Archetype, ARCHETYPE_CONFIGS, resolveArchetype } from '../CanvasNode/registry'
 import type { ProtocolStepInfo, ProtocolGroupEntry, StepNodeLookups, StepEdgeData } from './types'
 import { isWorkforceStep } from './protocolGroups'
 

@@ -1,8 +1,6 @@
 export { CanvasFormNode } from './CanvasFormNode'
-export { FormTabStrip } from './FormTabStrip'
 export { FORM_NODE } from './constants'
 export { resolveScaleNotch, resolveScaleFactor } from './scaleNotch'
 export type { ScaleNotch } from './constants'
 export type { CanvasFormTab, CanvasFormNodeProps } from './types'
 export type { ResizeSizeConstraints } from '../ResizableNodeShell'
-export type { FormTabStripProps } from './FormTabStrip'

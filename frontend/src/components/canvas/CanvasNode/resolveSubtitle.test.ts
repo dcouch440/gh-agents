@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { resolveSubtitle } from './resolveSubtitle'
-import { Archetype } from './archetypes'
+import { Archetype } from './registry'
 
 const defaults = {
   rosterNames: [] as string[],
