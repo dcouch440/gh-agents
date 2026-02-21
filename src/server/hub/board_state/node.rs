@@ -5,7 +5,7 @@
 
 use super::agent;
 use super::port;
-use super::render::XmlBuilder;
+use crate::markup::XmlBuilder;
 use super::types::*;
 
 /// Render a [`NodeSnapshot`] as a `<node>` XML element for the given variant.
