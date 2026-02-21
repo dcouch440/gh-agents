@@ -97,21 +97,22 @@ Do not dispatch while a previous dispatch is still active.
 <dispatch_status>
   {{#if active_dispatch}}
   <dispatch id="{{active_dispatch.id}}" instruction="{{active_dispatch.description}}"
-            status="in_progress" started="{{active_dispatch.elapsed}}">
-    {{#each active_dispatch.tasks}}
-    <task node="{{this.node}}" status="{{this.status}}" />
-    {{/each}}
-  </dispatch>
+            status="in_progress" started="{{active_dispatch.elapsed}}" />
   {{/if}}
   {{#if last_dispatch}}
   <dispatch id="{{last_dispatch.id}}" instruction="{{last_dispatch.description}}"
-            status="{{last_dispatch.status}}" completed="{{last_dispatch.ago}}">
-    {{#each last_dispatch.tasks}}
-    <task node="{{this.node}}" status="{{this.status}}" />
-    {{/each}}
-  </dispatch>
+            status="{{last_dispatch.status}}" completed="{{last_dispatch.ago}}"
+            result="{{last_dispatch.result}}" />
   {{/if}}
 </dispatch_status>
+
+<check_dispatch_guidance>
+The dispatch_status above shows a flat summary — whether your builder is
+running or recently finished. Use check_dispatch() to get detailed
+per-node breakdowns: which nodes the builder dispatched to, their
+individual status, and any results or errors. Only call it when you need
+the detail — board_state node statuses already signal high-level progress.
+</check_dispatch_guidance>
 
 <examples>
 user: "I want to monitor competitor pricing weekly and get reports"
@@ -152,7 +153,7 @@ assistant: All three nodes are configured. Analyzer is asking — should
 anomaly alerts go to Slack or email?
 </examples>
 
-Tools: dispatch(), think()
+Tools: dispatch(), check_dispatch(), think()
 ```
 
 ---
@@ -446,6 +447,13 @@ Do not dispatch while a previous dispatch is still active.
   {{/if}}
 </dispatch_status>
 
+<check_dispatch_guidance>
+The dispatch_status above shows whether your background builder is running
+or recently finished. Use check_dispatch() to see exactly what the builder
+changed — agents added, task set, capabilities configured, etc. Only call
+when you need the detail.
+</check_dispatch_guidance>
+
 <incoming_messages>
 You may receive messages from multiple sources:
 
@@ -502,7 +510,7 @@ flags for Reporter."]
 assistant: Configured. No further questions.
 </examples>
 
-Tools: dispatch(), think(), render_panel(), set_node_name()
+Tools: dispatch(), check_dispatch(), think(), render_panel(), set_node_name()
 ```
 
 ---
@@ -628,8 +636,8 @@ anomaly flags."
 │                                                             │
 │  Sees: <protocols> available protocol types                 │
 │        <board_state> role + status + <asking> per node      │
-│        <dispatch_status> active/last dispatch               │
-│  Tools: dispatch(), think()                                 │
+│        <dispatch_status> active/last (flat)                 │
+│  Tools: dispatch(), check_dispatch(), think()               │
 │  Context size: Small — summaries only                       │
 │                                                             │
 │  ┌─────────────────────────────────────────────────────┐    │
@@ -659,7 +667,10 @@ anomaly flags."
 │  │  (own node + agents)│    │  (own node + agents) │         │
 │  │  <your_notes>       │    │  <your_notes>        │         │
 │  │  <dispatch_status>  │    │  <dispatch_status>   │         │
+│  │  (flat, on-demand   │    │  (flat, on-demand    │         │
+│  │   detail via tool)  │    │   detail via tool)   │         │
 │  │ Tools: dispatch,    │    │ Tools: dispatch,     │         │
+│  │  check_dispatch,    │    │  check_dispatch,     │         │
 │  │  think, render_panel│    │  think, render_panel │         │
 │  │  set_node_name      │    │  set_node_name       │         │
 │  │                     │    │                      │         │
