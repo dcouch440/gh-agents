@@ -1309,8 +1309,7 @@ impl WorkflowRepo for PgRepo {
             "SELECT e.id, e.from_step_id, e.to_step_id, e.from_output_port, e.to_input_port, \
              e.transform_jsonpath, e.condition_type, e.condition_value, e.edge_label, e.workflow_id \
              FROM workflow_step_edges e \
-             JOIN workflow_steps s ON e.from_step_id = s.id \
-             WHERE s.workflow_id = $1"
+             WHERE e.workflow_id = $1"
         )
             .bind(workflow_id)
             .fetch_all(&self.pool)
