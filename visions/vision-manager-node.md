@@ -183,7 +183,7 @@ Reporter: "Who's the audience? What delivery format?"
 
 ### Phase 3: Synthesis (Questions → Manager → User)
 
-Step assistant questions are synthesized and injected into the manager's system prompt as **current pending questions**:
+Each step auto-responds to its changeset (background LLM call). Haiku compresses each response into a 1-2 sentence status + optional pending question. These go directly into the manager's prompt — no deduplication pipeline, the manager LLM handles that naturally in conversation.
 
 ```
 Manager System Prompt (dynamically updated):
@@ -191,28 +191,21 @@ Manager System Prompt (dynamically updated):
 You are the manager for this workflow. Help the user
 define what they need through natural conversation.
 
-Board state (summaries only):
-  - Collector (initial instruction sent, has questions)
-  - Analyzer (initial instruction sent, has questions)
-  - Reporter (initial instruction sent, has questions)
+Your team:
+  Collector:
+    Status: "Ready for web scraping, weekly cadence"
+    Question: "Need competitor names, URLs, and which tiers"
 
-Current pending questions from your team:
+  Analyzer:
+    Status: "Configured for pricing analysis"
+    Question: "Compare current or historical? What % threshold?"
 
-COLLECTOR:
-  - Which competitors? Need names and URLs.
-  - Which products/tiers to track?
+  Reporter:
+    Status: "Waiting on details"
+    Question: "Who's the audience? What format?"
 
-ANALYZER:
-  - Compare against our current or historical prices?
-  - What % change counts as an anomaly?
-  - What scale for positioning scores?
-
-REPORTER:
-  - Who's the target audience?
-  - What delivery format?
-
-Guide the conversation to resolve these naturally.
-When you have enough, dispatch the answers.
+Guide the conversation to resolve pending questions
+naturally. When you have enough, dispatch the answers.
 ```
 
 The manager weaves these into organic dialogue — not a checklist:
@@ -461,6 +454,20 @@ User clicks "Run"
         │   ├─ Are all required fields configured?
         │   └─ Pass / Fail / Warning
         │
+        ├─ Question gate (fresh, not cached):
+        │   ├─ Run extraction on ALL steps — no cache,
+        │   │   this is a verification gate
+        │   ├─ Any step has unresolved questions?
+        │   │    YES → Block run
+        │   │    "Collector still needs scraping URLs"
+        │   │    "Analyzer needs clarification on tier comparison"
+        │   │    NO  → Pass
+        │   │
+        │   Why fresh? A step's questions could have been
+        │   answered seconds ago via direct conversation.
+        │   The cache might not reflect that. The gate is
+        │   the one place you pay for a full sweep.
+        │
         ├─ All pass → Execute
         │
         ├─ Failures → Block run, show what's broken
@@ -473,7 +480,7 @@ User clicks "Run"
              trend data. Run anyway?"
 ```
 
-If nothing changed since last configuration, every step is green. The check is instant — nothing to verify. It only fires for steps with unacknowledged beliefs.
+If nothing changed since last configuration and no questions are open, every step is green. The check is instant — nothing to verify. The question gate and belief check only fire for steps with activity since last verification.
 
 ### Phase 8: Execution
 
@@ -572,6 +579,75 @@ question           → Flows to synthesis → manager's system prompt
 
 After responding, the step assistant reads its updated context and relays current status and any new pending questions back to the manager.
 
+## Question Framework
+
+Questions are the feedback loop between steps and the manager. The design is simple: compress each step's response, show it to the manager, let the LLM handle the rest.
+
+### How It Works
+
+When a changeset lands on a step, the step assistant auto-responds (background LLM call). Haiku compresses that response into 1-2 sentences: a **status** and an optional **pending question**.
+
+```
+Collector responds: "I'll need competitor names and URLs to
+  scrape. Which products or tiers should I track? I can
+  handle weekly cadence, my scraping tools support..."
+
+Haiku compresses:
+  Status:   "Ready for web scraping, weekly cadence"
+  Question: "Need competitor names, URLs, and which tiers"
+```
+
+One cheap Haiku call per step response. No batch pass. No structured dedup.
+
+### What the Manager Sees
+
+The compressed status + question for every step goes directly into the manager's prompt:
+
+```
+Your team:
+  Collector:
+    Status: "Ready for web scraping, weekly cadence"
+    Question: "Need competitor names, URLs, and which tiers"
+
+  Analyzer:
+    Status: "Configured for pricing analysis"
+    Question: "Compare current or historical? What % threshold?"
+
+  Reporter:
+    Status: "Waiting on details"
+    Question: "Who's the audience? What format?"
+```
+
+The manager LLM naturally deduplicates in conversation. It reads "Collector needs competitor names" and "Analyzer needs company names" and asks the user one question that covers both. No binder pipeline needed — that's what LLMs are good at.
+
+### Questions Are Generational
+
+Questions are **derived** from each step's latest conversational state. Every time a step's conversation advances — user message, changeset, builder completion — the compression re-runs on the new state.
+
+No invalidation logic. No staleness checks. No expiration timers. The step's current state IS the question list.
+
+| Scenario | What happens |
+|----------|-------------|
+| User talks to step directly, answers questions | Step's state advances → re-compress → question gone → manager sees updated status on next prompt build |
+| New changeset supersedes old context | Step gets new message → state advances → old status/question replaced |
+| User pivots the entire workflow | New changesets to all steps → all states advance → everything reflects new direction |
+
+### Dispatch State Tracking
+
+The builder tracks progress through a changeset round:
+
+```
+dispatch_pending    → changesets sent, waiting on responses
+  ├─ 1 of 3 responded → Haiku compresses immediately
+  ├─ 2 of 3 responded → Haiku compresses immediately
+  ├─ 3 of 3 responded → all_responded
+  │
+  ▼
+questions_ready     → manager prompt updated, ready for conversation
+```
+
+The manager sees "dispatch active" during the window, so it doesn't try to send more instructions while steps are still responding.
+
 ## What the Manager Assistant Sees
 
 ```
@@ -579,30 +655,46 @@ System Prompt:
   You are the manager for this workflow. Help the user
   define what they need through natural conversation.
 
-  Board state (summaries only):
-    - Collector: "Scrapes Acme + Widget enterprise pricing weekly"
-    - Analyzer: "Compares against $50/seat, flags 10%+ changes"
-    - Reporter: "Executive briefing for VP Product"
+  Dispatch Status:
+    - Active: none
+    - Last completed: #m1f1 (3 min ago)
+      "Sent initial instructions to Collector, Analyzer, Reporter"
+      Result: success — changesets delivered to 3 steps
 
-  Current pending questions from your team:
-    - Collector: "What are the URLs for Acme and Widget Inc?"
-    - Analyzer: (no questions — configured)
-    - Reporter: (no questions — configured)
+  Your team:
+    Collector:
+      Status: "Configured for Acme + Widget, enterprise tier"
+      Question: "Need scraping URLs for both competitors"
+
+    Analyzer:
+      Status: "Configured. Pricing analysis, 10% threshold."
+      Question: none
+
+    Reporter:
+      Status: "Configured. Executive briefing for VP Product."
+      Question: none
 
   Guide the conversation to resolve pending questions
   naturally. When you have enough, dispatch the answers.
+  Do not dispatch while a dispatch is active.
 
 Tools: dispatch(), think()
 Nothing else. No mutation tools. No board detail.
 ```
 
-The manager sees summaries, not configs. It forms questions naturally, doesn't present checklists. It dispatches plain English — the builder handles the technical translation and decides which steps to notify.
+The manager sees compressed dispatch responses, not raw configs. Each step's status and question are derived from its last response via Haiku compression. The manager forms questions naturally, doesn't present checklists. It dispatches plain English — the builder handles the technical translation and decides which steps to notify.
 
 ## What a Step Assistant Sees
 
 ```
 System Prompt:
   You are the assistant for the "Analyzer" step.
+
+  Dispatch Status:
+    - Active: none
+    - Last completed: #d4f2 (2 min ago)
+      "Configured output schema and capabilities"
+      Result: success
 
   Board Context:
     Workflow: "Competitor Pricing Monitor"
@@ -638,6 +730,7 @@ System Prompt:
     - Review it against your board context
     - Respond: "no_changes_needed", dispatch an update, or
       ask a question (it will reach the manager)
+    - Do not dispatch while a dispatch is active
     - After any dispatch completes, read your updated context
       and relay your status and any new questions
 
@@ -796,13 +889,13 @@ No step needs runtime data to be configured. Port summaries are the interface co
 
 3. **Port summary generation**: Summarizer that produces human-readable descriptions of port contents from structured config (schemas, capabilities, agent roster). Regenerates on dispatch completion or roster change. Summaries appear in step assistant board context and in the manager's board state.
 
-4. **Question synthesis**: Aggregates pending questions from step assistant responses, organizes by step, and injects into the manager's system prompt. Updates dynamically as steps confirm configuration or raise new questions.
+4. **Question framework**: Haiku-powered compression of each step assistant's response into 1-2 sentence status + optional pending question. Generational — re-derived from latest step state on every manager prompt build. No deduplication pipeline; the manager LLM handles that naturally in conversation.
 
 5. **Changeset system**: Structured message format for builder-to-step communication. Messages appear in step sessions as `[From Agent: Workflow Manager]`. Includes types (`initial_instruction`, `update`, `upstream_change`, `feedback`, `peer_message`), response contracts, and state tracking.
 
 6. **Belief change tracking**: Records output port changes as beliefs with per-step acknowledgment state. Beliefs surface at context load time (next conversation), not in real time. Integrates with existing belief extraction system.
 
-7. **Pre-run verification**: Build-step gate that checks all steps for unacknowledged beliefs, port mismatches, and missing configuration before workflow execution. Instant pass if nothing changed. Blocks on failures, warns on stale configuration.
+7. **Pre-run verification**: Build-step gate that checks all steps for unacknowledged beliefs, port mismatches, missing configuration, and **unresolved questions** (fresh extraction, not cached) before workflow execution. Instant pass if nothing changed and no questions are open. Blocks on failures, warns on stale configuration.
 
 8. **Cross-session messaging**: Ability for the manager's builder to write messages to step sessions, and for step assistants to message each other. Same format as user messages. Routed through existing chat message infrastructure.
 
