@@ -74,7 +74,7 @@ Scope is enforced by the tool set, not by prompt instructions. This is the same 
 | Agent | Tools | Scope |
 |-------|-------|-------|
 | Manager Assistant | `dispatch()`, `think()` | Can only dispatch — cannot touch any config |
-| Manager's Builder | **Patterns:** `create_pipeline`, `create_parallel`, `insert_step` **Adjustments:** `remove_step`, `update_step`, `wire_edge` **Comms:** `dispatch_to_steps`, `validate_dag` | Workflow topology only — cannot configure node internals |
+| Manager's Builder | **Patterns:** `create_pipeline`, `create_parallel`, `insert_node` **Adjustments:** `remove_node`, `update_node`, `wire_edge` **Comms:** `dispatch_to_nodes`, `validate_dag` | Workflow topology only — cannot configure node internals |
 | Node Assistant | `dispatch()`, `think()` | Can only dispatch — cannot touch its own config |
 | Node's Builder | `set_task`, `set_prompt`, `set_output_schema`, `add_agent`, `set_dependency`, `set_capabilities`, `update_notes` | Its own node only — cannot touch other nodes |
 
@@ -89,7 +89,7 @@ Individual tool calls per node and edge burn through round budgets fast — a si
 Every node the manager creates is a **protocol node** — workforce today, room/meeting in the future. The protocol gives each node its internal structure: assistant session, designer pipeline, agent roster. No `mode` field needed; all nodes are workforce by default.
 
 ```
-create_pipeline(steps: [
+create_pipeline(nodes: [
   { name: "Collector" },
   { name: "Analyzer" },
   { name: "Reporter" }
@@ -109,9 +109,9 @@ create_parallel(
 → Fan-out from source, fan-in to target
 → 1 round instead of 12+
 
-insert_step(
+insert_node(
   between: { from: "Collector", to: "Analyzer" },
-  step: { name: "Validator" }
+  node: { name: "Validator" }
 )
 → Splices into existing edge, rewires automatically
 → 1 round instead of 4
@@ -120,21 +120,21 @@ insert_step(
 ### Adjustment Tools (for tweaks after patterns)
 
 ```
-remove_step(name: "Validator", reconnect: true)
+remove_node(name: "Validator", reconnect: true)
 → Removes node, reconnects neighbors
 
-update_step(name: "Analyzer", protocol: "meeting")
+update_node(name: "Analyzer", protocol: "meeting")
 → Change protocol or properties on existing node
 
-wire_edge(from: "StepA", to: "StepB")
+wire_edge(from: "Collector", to: "Analyzer")
 → Add a single connection
 ```
 
 ### Communication (always batched)
 
 ```
-dispatch_to_steps(
-  steps: ["Collector", "Analyzer", "Reporter"],
+dispatch_to_nodes(
+  nodes: ["Collector", "Analyzer", "Reporter"],
   changeset_type: "initial_instruction",
   context: "Competitor pricing monitoring workflow..."
 )
@@ -167,14 +167,14 @@ User intent: "Three researchers from different angles,
   )
 
 User intent: "Add a fact-checker between research and analysis"
-→ insert_step(
+→ insert_node(
     between: { from: "Researcher", to: "Analyzer" },
-    step: { name: "FactChecker" }
+    node: { name: "FactChecker" }
   )
 
 User intent: "Make the meeting node a room for discussion"
-→ update_step(name: "ReviewMeeting", protocol: "meeting")
-→ dispatch_to_steps(
+→ update_node(name: "ReviewMeeting", protocol: "meeting")
+→ dispatch_to_nodes(
     nodes: ["ReviewMeeting"],
     changeset_type: "update",
     context: "Converting to meeting protocol. Set up
@@ -199,7 +199,7 @@ wire_edge(from: "Collector", to: "Analyzer")
 set_task("Analyze competitor pricing trends...")
 → "Task already set to this value. No changes made."
 
-dispatch_to_steps(["Collector"], "initial_instruction", ...)
+dispatch_to_nodes(["Collector"], "initial_instruction", ...)
 → "Collector already received initial instruction. No changes made."
 ```
 
@@ -748,6 +748,23 @@ Your team:
 
 The manager LLM naturally deduplicates in conversation. It reads "Collector needs competitor names" and "Analyzer needs company names" and asks the user one question that covers both. No binder pipeline needed — that's what LLMs are good at.
 
+### What the Builder Sees
+
+The builder's `<board_state>` reuses the same compressed status combined with the board overview role (what the node does). No full notes, no port schemas, no json_path — just a one-liner per node:
+
+```
+<node name="Collector" protocol="workforce" status="configured"
+      agents="WebScraper, DataCleaner">
+  Scrapes competitor pricing data weekly — Configured for Acme + Widget, enterprise tier
+</node>
+<node name="Analyzer" protocol="workforce" status="configured" receives="Collector"
+      agents="TrendAnalyzer, AnomalyDetector">
+  Identifies pricing trends and anomalies — Configured, 10% threshold, $50/seat baseline
+</node>
+```
+
+The `role` comes from the board overview summary (already exists). The `compressed_status` comes from the question framework compression. Concatenated at prompt build time — no extra LLM call.
+
 ### Questions Are Generational
 
 Questions are **derived** from each node's latest conversational state. Every time a node's conversation advances — user message, changeset, builder completion — the compression re-runs on the new state.
@@ -776,163 +793,18 @@ questions_ready     → manager prompt updated, ready for conversation
 
 The manager sees "dispatch active" during the window, so it doesn't try to send more instructions while nodes are still responding.
 
-## What the Manager Assistant Sees
+## Prompt Hierarchy
 
-```
-System Prompt:
-  You are the manager for this workflow. Help the user
-  define what they need through natural conversation.
+Full system prompts for all four layers are defined in [`manager-node-prompts.md`](manager-node-prompts.md).
 
-  Dispatch Status:
-    - Active: none
-    - Last completed: #m1f1 (3 min ago)
-      "Sent initial instructions to Collector, Analyzer, Reporter"
-      Result: success — changesets delivered to 3 nodes
+| Layer | Agent | Key Sections | Context Size |
+|-------|-------|-------------|-------------|
+| **1** | Manager Assistant | `<team>` status/questions, `<dispatch_status>`, `<protocols>` | Small — summaries only |
+| **2** | Manager's Builder | `<board_state>` full detail, `<protocols>` detailed, `<examples>` | Large — full board |
+| **3** | Node Assistant | `<board_context>`, `<your_notes>`, `<pending_beliefs>`, `<execution_pipeline>` | Own neighborhood |
+| **4** | Node's Builder | `<node_config>` full detail, `<examples>` | Own node only |
 
-  Your team:
-    Collector:
-      Status: "Configured for Acme + Widget, enterprise tier"
-      Question: "Need scraping URLs for both competitors"
-
-    Analyzer:
-      Status: "Configured. Pricing analysis, 10% threshold."
-      Question: none
-
-    Reporter:
-      Status: "Configured. Executive briefing for VP Product."
-      Question: none
-
-  Guide the conversation to resolve pending questions
-  naturally. When you have enough, dispatch the answers.
-  Do not dispatch while a dispatch is active.
-
-Tools: dispatch(), think()
-Nothing else. No mutation tools. No board detail.
-```
-
-The manager sees compressed dispatch responses, not raw configs. Each node's status and question are derived from its last response via Haiku compression. The manager forms questions naturally, doesn't present checklists. It dispatches plain English — the builder handles the technical translation and decides which nodes to notify.
-
-## What a Node Assistant Sees
-
-```
-System Prompt:
-  You are the assistant for the "Analyzer" node.
-
-  Dispatch Status:
-    - Active: none
-    - Last completed: #d4f2 (2 min ago)
-      "Configured output schema and capabilities"
-      Result: success
-
-  Board Context:
-    Workflow: "Competitor Pricing Monitor"
-    Position: Node 2 of 3
-    Upstream: Collector → you
-    Downstream: you → Reporter
-
-  Incoming Ports:
-    - "raw_data" (from Collector): "Weekly scraped pricing
-       for enterprise SaaS tiers. JSON array of
-       {competitor, product, price, date, tier}.
-       ~50-200 records per run."
-
-  Outgoing Ports:
-    - "analysis" (to Reporter): "Structured analysis with
-       trend data, anomaly flags, and positioning scores."
-
-  Connected Resources:
-    - "pricing_db": "PostgreSQL — 2 tables: price_history
-       (50k rows), our_pricing (12 rows, product/tier/price)"
-
-  Capabilities: [data_analysis, database]
-
-  Pending Beliefs:
-    - (none, or listed if unacknowledged changes exist)
-
-  You may receive messages from:
-    - The Workflow Manager (changesets — instructions, updates)
-    - Other node assistants (cross-node issues)
-    - The user directly (if they open your session)
-
-  When you receive a changeset:
-    - Review it against your board context
-    - Respond: "no_changes_needed", dispatch an update, or
-      ask a question (it will reach the manager)
-    - Do not dispatch while a dispatch is active
-    - After any dispatch completes, read your updated context
-      and relay your status and any new questions
-
-Messages:
-  [From Agent: Workflow Manager]
-  Changeset #c8f2 | type: initial_instruction
-  "You are the analysis node. You'll receive raw pricing
-   data from Collector and identify trends, anomalies,
-   and competitive positioning."
-
-  You: "I can see I'm getting records with competitor,
-   product, price, date, tier from Collector. I need
-   to know: compare against current or historical?
-   What % change counts as an anomaly?"
-
-  [From Agent: Workflow Manager]
-  Changeset #c8f5 | type: update
-  "Compare against current pricing, baseline $50/seat.
-   Anomaly threshold: 10%+. Enterprise tier only."
-
-  You: "Clear. Dispatching configuration update."
-  → dispatch completes
-  You: "Configured. No further questions."
-
-Tools: dispatch(), think()
-Nothing else.
-```
-
-## What the Builders See
-
-**Manager's Builder:**
-```
-System Prompt:
-  You are the workflow architect. You have full access to
-  the board topology, node configs, port schemas, and
-  available protocols.
-
-  Current board state:
-    (full detail — every node's config, ports, schemas,
-     capabilities, connection topology)
-
-  Available protocols: [workforce, meeting (future)]
-  Available capabilities: (from capabilities.yaml)
-
-  When writing changesets to node sessions, include enough
-  context for the node assistant to evaluate the impact.
-  Report back to the manager what you sent and to which nodes.
-
-Patterns: create_pipeline, create_parallel, insert_step
-Adjustments: remove_step, update_step, wire_edge
-Comms: dispatch_to_steps, validate_dag
-
-Instruction: (plain English from manager)
-Budget: max_rounds, max_tokens, context_budget
-```
-
-**Node's Builder:**
-```
-System Prompt:
-  You are configuring the "Analyzer" node.
-
-  Current node configuration:
-    (full detail — prompt, schema, capabilities, ports,
-     agent roster if workforce, dependencies)
-
-Tools: set_task, set_prompt, set_output_schema,
-       add_agent, set_dependency, set_capabilities,
-       update_notes
-
-Instruction: (plain English from node assistant)
-Budget: max_rounds, max_tokens, context_budget
-```
-
-Tools are scoped — the node builder cannot touch other nodes. The manager's builder cannot configure node internals. Scope is structural, enforced by the tool set, not by prompt instructions. Same proven pattern as workforce.
+Scope is enforced structurally — talkers (Layers 1, 3) get only `dispatch()` and `think()`. Builders (Layers 2, 4) get mutation tools scoped to their level. The manager's builder cannot configure node internals; the node's builder cannot touch other nodes.
 
 ## Agent-to-Agent Communication
 
@@ -941,7 +813,7 @@ Every node is a session. Every session is addressable. Messages between agents u
 ```
 Sources of messages to any node assistant:
   - User (opens the session in the UI)
-  - Manager's builder (changesets via dispatch_to_steps)
+  - Manager's builder (changesets via dispatch_to_nodes)
   - Other node assistants (cross-node issues or requests)
   - System (belief notifications at context load time)
 ```
@@ -1010,13 +882,13 @@ No node needs runtime data to be configured. Port summaries are the interface co
 
 ## What Needs To Be Built
 
-1. **Composite topology tools**: Pattern tools (`create_pipeline`, `create_parallel`, `insert_step`) that handle 80% of topology operations in 1 call. Adjustment tools (`remove_step`, `update_step`, `wire_edge`) for tweaks. Batched communication (`dispatch_to_steps`). Few-shot examples in builder prompt for common workflow patterns. Thin wrappers around existing services.
+1. **Composite topology tools**: Pattern tools (`create_pipeline`, `create_parallel`, `insert_node`) that handle 80% of topology operations in 1 call. Adjustment tools (`remove_node`, `update_node`, `wire_edge`) for tweaks. Batched communication (`dispatch_to_nodes`). Few-shot examples in builder prompt for common workflow patterns. Thin wrappers around existing services.
 
 2. **Manager strategy**: A new `DispatchStrategy` variant with workflow-scoped tools. System prompt includes full board detail for the builder. Budget controlled by protocol config.
 
-3. **Port summary generation**: Summarizer that produces human-readable descriptions of port contents from structured config (schemas, capabilities, agent roster). Regenerates on dispatch completion or roster change. Summaries appear in node assistant board context and in the manager's board state.
+3. **Board overview roles**: One-liner descriptions of what each node does, derived from board overview summary (`get_board_overview_summary()` already exists). Combined with compressed status at prompt build time to produce the builder's `<board_state>` — no full notes, no port schemas, just role + state per node.
 
-4. **Question framework**: Haiku-powered compression of each node assistant's response into 1-2 sentence status + optional pending question. Generational — re-derived from latest node state on every manager prompt build. No deduplication pipeline; the manager LLM handles that naturally in conversation.
+4. **Question framework**: Haiku-powered compression of each node assistant's response into 1-2 sentence status + optional pending question. Generational — re-derived from latest node state on every manager prompt build. Feeds both the manager's `<team>` block (status + question) and the builder's `<board_state>` (compressed status). No deduplication pipeline; the manager LLM handles that naturally in conversation.
 
 5. **Changeset system**: Structured message format for builder-to-node communication. Messages appear in node sessions as `[From Agent: Workflow Manager]`. Includes types (`initial_instruction`, `update`, `upstream_change`, `feedback`, `peer_message`), response contracts, and state tracking.
 
