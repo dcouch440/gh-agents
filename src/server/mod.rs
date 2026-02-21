@@ -64,6 +64,13 @@ pub async fn start_server(db: PgPool, config: AppConfig, addr: SocketAddr) -> Re
         state.shutdown_token().clone(),
     );
 
+    // Spawn periodic task registry cleanup (prune terminal dispatch entries older than 1 hour)
+    let _task_cleanup_handle = spawn_task_registry_cleanup(
+        state.clone(),
+        std::time::Duration::from_secs(300),
+        chrono::Duration::hours(1),
+    );
+
     let shutdown_state = state.clone();
     let app = create_router(state.clone());
 
@@ -685,6 +692,27 @@ async fn drain_active_executions(state: &AppState, timeout: std::time::Duration)
         }
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
+}
+
+/// Spawn a background task that periodically prunes terminal dispatch entries
+/// from the task registry. Runs every `interval` and removes completed/failed/cancelled
+/// entries older than `max_age`. Stops when the shutdown token is cancelled.
+fn spawn_task_registry_cleanup(
+    state: AppState,
+    interval: std::time::Duration,
+    max_age: chrono::Duration,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let shutdown = state.shutdown_token().clone();
+        loop {
+            tokio::select! {
+                _ = tokio::time::sleep(interval) => {}
+                _ = shutdown.cancelled() => break,
+            }
+            let cutoff = chrono::Utc::now() - max_age;
+            state.task_registry().cleanup_before(cutoff);
+        }
+    })
 }
 
 #[cfg(test)]

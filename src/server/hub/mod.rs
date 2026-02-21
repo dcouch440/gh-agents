@@ -11,6 +11,7 @@ pub mod capability_resolver;
 pub mod chat_beliefs;
 pub mod consistency_scanner;
 pub mod dag;
+pub mod dispatch_status;
 pub mod engine;
 pub mod error;
 pub mod graph_context;
@@ -269,7 +270,7 @@ pub async fn build_step_system_prompt(
     };
 
     // 2b. Build dispatch task status for this step
-    let dispatch_status = build_dispatch_status(state, step_id);
+    let dispatch_status = dispatch_status::build(state.task_registry(), step_id);
 
     // 2c. Build run context (run results summaries from self + connected steps)
     let run_context = build_run_context(state, workflow_id, step_id).await;
@@ -290,69 +291,6 @@ pub async fn build_step_system_prompt(
     let resolved = roles::ASSISTANT_BASE.resolve(&vars_map);
 
     Ok(resolved.system_prompt)
-}
-
-/// Build a concise summary of active and recent dispatch tasks for a step.
-///
-/// Injected into the system prompt so the assistant knows what background
-/// work is in flight or recently completed. Returns empty string when no
-/// tasks exist (blank line collapsing removes the placeholder).
-pub(crate) fn build_dispatch_status(state: &AppState, step_id: Uuid) -> String {
-    use crate::server::state::task_registry::TaskStatus;
-
-    let tasks = state.task_registry().list_tasks_for_step(step_id);
-    if tasks.is_empty() {
-        return String::new();
-    }
-
-    let mut lines = Vec::new();
-
-    for task in &tasks {
-        if task.status != TaskStatus::Running {
-            continue;
-        }
-        lines.push(format!(
-            "RUNNING [{}]: {}",
-            &task.execution_id.to_string()[..8],
-            truncate_str(&task.instruction, 120),
-        ));
-    }
-
-    let recent: Vec<_> = tasks
-        .iter()
-        .filter(|t| t.status != TaskStatus::Running)
-        .take(3)
-        .collect();
-
-    for task in &recent {
-        let label = match task.status {
-            TaskStatus::Completed => "DONE",
-            TaskStatus::Failed => "FAILED",
-            TaskStatus::Cancelled => "CANCELLED",
-            TaskStatus::Running => unreachable!(),
-        };
-        let result_suffix = task
-            .result
-            .as_deref()
-            .map(|r| format!(" — {}", truncate_str(r, 80)))
-            .unwrap_or_default();
-        lines.push(format!(
-            "{} [{}]: {}{}",
-            label,
-            &task.execution_id.to_string()[..8],
-            truncate_str(&task.instruction, 120),
-            result_suffix,
-        ));
-    }
-
-    if lines.is_empty() {
-        return String::new();
-    }
-
-    format!(
-        "<dispatch_status>\n{}\n</dispatch_status>",
-        lines.join("\n")
-    )
 }
 
 /// Build the `<run_context>` block from run results summaries of the step
