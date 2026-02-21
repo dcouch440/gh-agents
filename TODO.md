@@ -28,7 +28,30 @@ With that said, what I think a "room" should be...
 
 
 
-    Pre-run check (Analyzer only):
-      ├─ Upstream beliefs: all acknowledged ✓
-      ├─ Input ports: raw_data connected ✓
-      └─ Run single node
+# NEW agent dispatch tool
+
+Dispatch Detail Mapping system.
+Summerize all dispatches in the last x time, results, tasks, input descriptions, everything.
+Create detail map where details given are on a scaling pattern for relevence to the applications completness.
+1: Made Agent
+2: Made an agent for the Analyzer Workforce.
+3: Dispatched xyz, this, then that
+4: ... full transcript.
+
+This can be used simalarly to grep | tail. A way to investigate what has happend.
+
+Assistant asks the question in a dispatch, which spawns a summerizer agent in the background.
+notification sent to assistant that its complete, allowing the manager to read the outputs for conversations with the user or to track down an error in the system to make changes.
+
+Tool UI example for the user to watch the exploration live.
+Check Dispatch History L3:
+  ├─ Dispatched -> User requirests that we...
+  |                ...
+  |                ...
+  ├─ Builder -> ...
+  └─ Task 1: ...
+  ...
+
+
+  We worked really hard on our manager-node-prompts. It also has the L3 Assistant  
+  and L4 builder prompts.  
