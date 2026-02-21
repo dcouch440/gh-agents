@@ -53,5 +53,4 @@ Check Dispatch History L3:
   ...
 
 
-  We worked really hard on our manager-node-prompts. It also has the L3 Assistant  
-  and L4 builder prompts.  
+We worked really hard on our manager-node-prompts. It also has the L3 Assistant  and L4 builder prompts.
