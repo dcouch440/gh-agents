@@ -24,7 +24,7 @@ Collection DAG  (src/server/executors/collection_dag/)
 
 - **Collection**: DAG of entire workflows. Topological sort, sequential or parallel execution, output forwarding between workflows via `$workflow_{name}` variables.
 - **Workflow**: DAG of steps. Topological sort, port-based data flow (json_path extraction), variable interpolation (`{variable.path}`), edge conditions, label-based routing.
-- **Step execution modes**: `single`, `for_each`, `for_each_chain`, `workforce`, `belief_capture`, `room`, `sub_workflow`, `agent_designer`, `container`.
+- **Step execution modes**: `single`, `workforce`, `sub_workflow`, `agent_designer`, `container`. Pass-through modes: `context`, `input`.
 
 ### Assistant Dispatch Model
 
