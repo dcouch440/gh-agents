@@ -61,6 +61,7 @@ pub(crate) fn resolve_chat_step_tools(execution_mode: &str) -> Vec<Tool> {
 pub(crate) fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
     let archetype_specific: &[&str] = match execution_mode {
         "workforce" => &[
+            "configure_team",
             "set_task",
             "add_agent",
             "update_agent",
@@ -134,6 +135,7 @@ pub(super) async fn dispatch_step_tool(
     match ctx.execution_mode.as_str() {
         "workforce" => {
             const WORKFORCE_TOOLS: &[&str] = &[
+                "configure_team",
                 "set_task",
                 "add_agent",
                 "update_agent",
