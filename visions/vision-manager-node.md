@@ -2,7 +2,7 @@
 
 ## What It Is
 
-The manager node is a conversational orchestrator that sits above the workflow DAG. It talks to the user in natural dialogue, architects the workflow topology, and coordinates step configuration — all through plain English dispatch. The user never touches a config screen. They have a conversation, and the workflow materializes around them.
+The manager node is a conversational orchestrator that sits above the workflow DAG. It talks to the user in natural dialogue, architects the workflow topology, and coordinates node configuration — all through plain English dispatch. The user never touches a config screen. They have a conversation, and the workflow materializes around them.
 
 ## Core Principle: Talker / Builder Separation
 
@@ -10,16 +10,16 @@ Every agent in the system is either a **talker** (conversational, user-facing) o
 
 | Layer | Talker | Builder |
 |-------|--------|---------|
-| **Manager** | Manager Assistant — converses with user, dispatches intent | Manager's Dispatched Agent — creates nodes, wires topology, writes changesets to step sessions |
-| **Step** | Step Assistant — discusses its domain, asks clarifying questions | Step's Dispatched Agent — configures prompt, schema, capabilities, roster |
+| **Manager** | Manager Assistant — converses with user, dispatches intent | Manager's Dispatched Agent — creates nodes, wires topology, writes changesets to node sessions |
+| **Node** | Node Assistant — discusses its domain, asks clarifying questions | Node's Dispatched Agent — configures prompt, schema, capabilities, roster |
 
 Talkers stay conversational — small context, natural language, no system internals. Builders stay precise — full config access, mutation tools, no conversation skills. Dispatch is the bridge between them.
 
-This is the same pattern the workforce archetype already uses. The step assistant is the talker, the dispatch agent is the builder. The manager node adds one layer above: a workflow-level talker/builder pair that coordinates the step-level pairs.
+This is the same pattern the workforce archetype already uses. The node assistant is the talker, the dispatch agent is the builder. The manager node adds one layer above: a workflow-level talker/builder pair that coordinates the node-level pairs.
 
 ## The Dispatch Chain
 
-Every interaction flows through two layers of dispatch. The manager never talks directly to step assistants. The builder does.
+Every interaction flows through two layers of dispatch. The manager never talks directly to node assistants. The builder does.
 
 ```
 User ←→ Manager Assistant (talker)
@@ -30,19 +30,19 @@ User ←→ Manager Assistant (talker)
          Manager's Builder (builder)
               │
               ├─ Has full board detail (configs, ports, schemas)
-              ├─ Decides which steps are affected
-              ├─ Writes changesets to affected step sessions
+              ├─ Decides which nodes are affected
+              ├─ Writes changesets to affected node sessions
               ├─ Reports back to Manager what was sent
               │
               ▼
-         Step Assistants receive changesets as session messages
+         Node Assistants receive changesets as session messages
               │
               ├─ Evaluate against their board context
               ├─ Respond: no changes / dispatching update / question
-              ├─ If dispatching: step dispatches to its own builder
+              ├─ If dispatching: node dispatches to its own builder
               │
               ▼
-         Step assistant reads updated context after dispatch
+         Node assistant reads updated context after dispatch
               │
               ├─ Relays status + any new questions back
               │
@@ -54,7 +54,7 @@ User ←→ Manager Assistant (talker)
 
 ### Why Two Layers
 
-The manager sees **summaries** — one-liner descriptions of each step. Enough to converse, not enough to make technical decisions.
+The manager sees **summaries** — one-liner descriptions of each node. Enough to converse, not enough to make technical decisions.
 
 ```
 Manager's board view:
@@ -63,9 +63,9 @@ Manager's board view:
   - Reporter: "Executive briefing for VP Product, weekly email"
 ```
 
-The builder sees **everything** — full step configs, port schemas, capabilities, connection topology. It makes the technical judgment calls: which steps are affected, what changesets to write, how to wire ports.
+The builder sees **everything** — full node configs, port schemas, capabilities, connection topology. It makes the technical judgment calls: which nodes are affected, what changesets to write, how to wire ports.
 
-The manager makes the call to act. The builder makes the call on what to do. Same separation as the workforce dispatch agent having full access to `set_task`, `add_agent`, `set_dependency` while the step assistant just talks.
+The manager makes the call to act. The builder makes the call on what to do. Same separation as the workforce dispatch agent having full access to `set_task`, `add_agent`, `set_dependency` while the node assistant just talks.
 
 ## Structural Scope Enforcement
 
@@ -74,9 +74,9 @@ Scope is enforced by the tool set, not by prompt instructions. This is the same 
 | Agent | Tools | Scope |
 |-------|-------|-------|
 | Manager Assistant | `dispatch()`, `think()` | Can only dispatch — cannot touch any config |
-| Manager's Builder | **Patterns:** `create_pipeline`, `create_parallel`, `insert_step` **Adjustments:** `remove_step`, `update_step`, `wire_edge` **Comms:** `dispatch_to_steps`, `validate_dag` | Workflow topology only — cannot configure step internals |
-| Step Assistant | `dispatch()`, `think()` | Can only dispatch — cannot touch its own config |
-| Step's Builder | `set_task`, `set_prompt`, `set_output_schema`, `add_agent`, `set_dependency`, `set_capabilities`, `update_notes` | Its own step only — cannot touch other steps |
+| Manager's Builder | **Patterns:** `create_pipeline`, `create_parallel`, `insert_step` **Adjustments:** `remove_step`, `update_step`, `wire_edge` **Comms:** `dispatch_to_steps`, `validate_dag` | Workflow topology only — cannot configure node internals |
+| Node Assistant | `dispatch()`, `think()` | Can only dispatch — cannot touch its own config |
+| Node's Builder | `set_task`, `set_prompt`, `set_output_schema`, `add_agent`, `set_dependency`, `set_capabilities`, `update_notes` | Its own node only — cannot touch other nodes |
 
 Budget controls (token limits, max rounds, time limits) apply to builders the same way workforce protocol config already defines them via `max_rounds`, `max_tokens`, and `context_budget`.
 
@@ -86,7 +86,7 @@ Individual tool calls per node and edge burn through round budgets fast — a si
 
 ### Topology Patterns (1 call each)
 
-Every node the manager creates is a **protocol node** — workforce today, room/meeting in the future. The protocol gives each node its internal topology: assistant session, designer pipeline, agent roster. No `mode` field needed; all nodes are workforce by default.
+Every node the manager creates is a **protocol node** — workforce today, room/meeting in the future. The protocol gives each node its internal structure: assistant session, designer pipeline, agent roster. No `mode` field needed; all nodes are workforce by default.
 
 ```
 create_pipeline(steps: [
@@ -121,10 +121,10 @@ insert_step(
 
 ```
 remove_step(name: "Validator", reconnect: true)
-→ Removes step, reconnects neighbors
+→ Removes node, reconnects neighbors
 
 update_step(name: "Analyzer", protocol: "meeting")
-→ Change protocol or properties on existing step
+→ Change protocol or properties on existing node
 
 wire_edge(from: "StepA", to: "StepB")
 → Add a single connection
@@ -175,7 +175,7 @@ User intent: "Add a fact-checker between research and analysis"
 User intent: "Make the meeting node a room for discussion"
 → update_step(name: "ReviewMeeting", protocol: "meeting")
 → dispatch_to_steps(
-    steps: ["ReviewMeeting"],
+    nodes: ["ReviewMeeting"],
     changeset_type: "update",
     context: "Converting to meeting protocol. Set up
               roles and discussion agenda..."
@@ -227,25 +227,25 @@ Manager dispatches → Builder creates:
 
 The manager doesn't know about protocols, execution modes, or port schemas. It describes what's needed in plain English. The builder translates that into system primitives.
 
-### Phase 2: Requirements Gathering (Manager → Builder → Step Assistants)
+### Phase 2: Requirements Gathering (Manager → Builder → Node Assistants)
 
-The manager dispatches to its builder. The builder writes changesets to each step assistant's session.
+The manager dispatches to its builder. The builder writes changesets to each node assistant's session.
 
 ```
 Manager dispatches:
-  "Set up each step for competitor pricing monitoring.
+  "Set up each node for competitor pricing monitoring.
    Collector gathers data, Analyzer finds trends,
    Reporter produces briefings."
 ```
 
-The builder has full board context. It writes targeted changesets to each step session:
+The builder has full board context. It writes targeted changesets to each node session:
 
 **Collector's session receives:**
 ```
 [From Agent: Workflow Manager]
 Changeset #c8f1 | type: initial_instruction
 
-You are the data collection step in a competitor pricing
+You are the data collection node in a competitor pricing
 monitoring workflow. Your job is to gather competitor
 pricing data from the web on a weekly basis.
 
@@ -261,7 +261,7 @@ about what you need to get started.
 [From Agent: Workflow Manager]
 Changeset #c8f2 | type: initial_instruction
 
-You are the analysis step in a competitor pricing
+You are the analysis node in a competitor pricing
 monitoring workflow. You'll receive raw pricing data
 from Collector and identify trends, anomalies, and
 competitive positioning.
@@ -277,7 +277,7 @@ Please review your board context and flag any questions.
 [From Agent: Workflow Manager]
 Changeset #c8f3 | type: initial_instruction
 
-You are the reporting step in a competitor pricing
+You are the reporting node in a competitor pricing
 monitoring workflow. You'll receive analysis from Analyzer
 and produce executive-ready weekly briefings.
 
@@ -287,14 +287,14 @@ Please review your board context and flag any questions.
 The builder reports back to the manager what was sent:
 ```
 Builder → Manager:
-  "Sent initial instructions to 3 steps:
+  "Sent initial instructions to 3 nodes:
    - Collector: data gathering role
    - Analyzer: trend/anomaly analysis role
    - Reporter: executive briefing role
    Waiting on responses."
 ```
 
-Each step assistant sees its **board context** — where it sits in the DAG, incoming port summaries, outgoing port summaries, connected resources — and responds with informed questions:
+Each node assistant sees its **board context** — where it sits in the DAG, incoming port summaries, outgoing port summaries, connected resources — and responds with informed questions:
 
 ```
 Collector: "I'll need competitor names and URLs to
@@ -310,7 +310,7 @@ Reporter: "Who's the audience? What delivery format?"
 
 ### Phase 3: Synthesis (Questions → Manager → User)
 
-Each step auto-responds to its changeset (background LLM call). Haiku compresses each response into a 1-2 sentence status + optional pending question. These go directly into the manager's prompt — no deduplication pipeline, the manager LLM handles that naturally in conversation.
+Each node auto-responds to its changeset (background LLM call). Haiku compresses each response into a 1-2 sentence status + optional pending question. These go directly into the manager's prompt — no deduplication pipeline, the manager LLM handles that naturally in conversation.
 
 ```
 Manager System Prompt (dynamically updated):
@@ -355,9 +355,9 @@ User: "VP of Product. She wants to know if we should
  adjust our pricing."
 ```
 
-### Phase 4: Step Configuration (Manager → Builder → Steps → Step Builders)
+### Phase 4: Node Configuration (Manager → Builder → Nodes → Node Builders)
 
-When the manager has enough information, it dispatches. The builder writes update changesets to the relevant step sessions.
+When the manager has enough information, it dispatches. The builder writes update changesets to the relevant node sessions.
 
 ```
 Manager dispatches:
@@ -400,11 +400,11 @@ Purpose: Inform pricing adjustment decisions
 Format: Executive briefing, weekly
 ```
 
-Each step assistant reads the changeset, verifies it has enough to configure itself, and dispatches to its own builder:
+Each node assistant reads the changeset, verifies it has enough to configure itself, and dispatches to its own builder:
 
 ```
 Analyzer Assistant → dispatch:
-  "Configure this step to analyze enterprise SaaS pricing.
+  "Configure this node to analyze enterprise SaaS pricing.
    Compare against our baseline of $50/seat. Flag changes
    over 10%. Input is raw pricing records from Collector.
    Output positioning scores and anomaly flags to Reporter."
@@ -416,7 +416,7 @@ Analyzer's Builder:
   - update_notes("Threshold: 10%, baseline: $50/seat...")
 ```
 
-After each builder completes, the step assistant reads its updated context and follows up — relaying status and any new questions as **current pending questions** back to the manager:
+After each builder completes, the node assistant reads its updated context and follows up — relaying status and any new questions as **current pending questions** back to the manager:
 
 ```
 Analyzer: "Configured. No further questions."
@@ -430,7 +430,7 @@ Collector: "Configured for Acme and Widget enterprise tier.
 
 ### Phase 5: Mid-Conversation Changes
 
-The user changes their mind. The flow is the same — manager dispatches, builder evaluates blast radius with full detail, writes changesets, step assistants verify.
+The user changes their mind. The flow is the same — manager dispatches, builder evaluates blast radius with full detail, writes changesets, node assistants verify.
 
 ```
 User: "Actually, I want to track 5 competitors now
@@ -441,7 +441,7 @@ Manager dispatches:
    free tier pricing alongside enterprise."
 ```
 
-The builder evaluates with full knowledge — it sees every config, port, and schema. It makes the judgment call on which steps are affected:
+The builder evaluates with full knowledge — it sees every config, port, and schema. It makes the judgment call on which nodes are affected:
 
 **Collector's session:**
 ```
@@ -485,7 +485,7 @@ Your current format produces executive briefings.
 Flagging in case report structure needs to change.
 ```
 
-Step assistants verify against the changeset. This is evaluation, not automatic action — sometimes the answer is "I'm fine":
+Node assistants verify against the changeset. This is evaluation, not automatic action — sometimes the answer is "I'm fine":
 
 ```
 Collector: "I can handle more competitors. Need the
@@ -503,13 +503,13 @@ The builder reports back to the manager what it sent. Questions flow into the ma
 
 ### Phase 6: Belief-Based Change Propagation
 
-When a step's builder reconfigures and the output port changes, the change is recorded as a **belief** — not cascaded in real time.
+When a node's builder reconfigures and the output port changes, the change is recorded as a **belief** — not cascaded in real time.
 
 #### Why Not Real-Time Cascading
 
 Broadcasting changes immediately creates problems:
 - Cascading updates — one change triggers downstream changes that trigger more changes
-- User interruption — the user might be focused on a different step
+- User interruption — the user might be focused on a different node
 - Ordering issues — responses arrive out of sequence
 - Research shows proactive agent actions are more disruptive than helpful
 
@@ -519,11 +519,12 @@ Broadcasting changes immediately creates problems:
 Collector's builder finishes → output port "raw_data" schema changed
   → Belief recorded: "Collector now outputs historical pricing data.
      New fields: price_history[]. Previous: current prices only."
-  → Affected steps: [Analyzer]
+  → Affected nodes: [Analyzer]
   → Belief state: unacknowledged
 ```
 
 The belief is not dispatched. It sits on the board. When any conversation touches an affected area — user opens the session, builder writes a changeset, or pre-run verification runs — the belief is already in context.
+
 
 ```
 User opens Analyzer's session later:
@@ -548,7 +549,7 @@ Belief: "Collector now outputs historical pricing"
   state: partially_acknowledged
 ```
 
-When acknowledged, the belief doesn't propagate further — unless the acknowledging step's output port also changes, creating a new belief downstream.
+When acknowledged, the belief doesn't propagate further — unless the acknowledging node's output port also changes, creating a new belief downstream.
 
 #### Propagation Control
 
@@ -566,7 +567,7 @@ Analyzer reconfigures in response to upstream change:
 
 ### Phase 7: Pre-Run Verification
 
-Before execution, the system verifies that all steps are current. This is a **build step** — the workflow has to pass the test before it can run.
+Before execution, the system verifies that all nodes are current. This is a build gate — the workflow has to pass the test before it can run.
 
 ```
 User clicks "Run"
@@ -574,7 +575,7 @@ User clicks "Run"
         ▼
   Pre-run verification
         │
-        ├─ For each step:
+        ├─ For each node:
         │   ├─ Are all required input ports connected?
         │   ├─ Do upstream output schemas match expectations?
         │   ├─ Are there unacknowledged belief changes?
@@ -582,15 +583,15 @@ User clicks "Run"
         │   └─ Pass / Fail / Warning
         │
         ├─ Question gate (fresh, not cached):
-        │   ├─ Run extraction on ALL steps — no cache,
+        │   ├─ Run extraction on ALL nodes — no cache,
         │   │   this is a verification gate
-        │   ├─ Any step has unresolved questions?
+        │   ├─ Any node has unresolved questions?
         │   │    YES → Block run
         │   │    "Collector still needs scraping URLs"
         │   │    "Analyzer needs clarification on tier comparison"
         │   │    NO  → Pass
         │   │
-        │   Why fresh? A step's questions could have been
+        │   Why fresh? A node's questions could have been
         │   answered seconds ago via direct conversation.
         │   The cache might not reflect that. The gate is
         │   the one place you pay for a full sweep.
@@ -607,7 +608,7 @@ User clicks "Run"
              trend data. Run anyway?"
 ```
 
-If nothing changed since last configuration and no questions are open, every step is green. The check is instant — nothing to verify. The question gate and belief check only fire for steps with activity since last verification.
+If nothing changed since last configuration and no questions are open, every node is green. The check is instant — nothing to verify. The question gate and belief check only fire for nodes with activity since last verification.
 
 ### Phase 8: Execution
 
@@ -617,18 +618,18 @@ The workflow runs through the normal DAG — topological sort, port resolution, 
 
 > **Future consideration:** Simulation mode, dry-run capabilities, and manager-initiated test runs are deferred. The execution and testing model will be designed once the core conversation and configuration patterns are proven.
 
-After a run, step assistants see results and can message each other or the manager:
+After a run, node assistants see results and can message each other or the manager:
 
 ```
 Analyzer → Collector: "12 of 187 records had missing price
  fields. Consider adding validation before output."
 
 Analyzer → Manager: "Run complete. 3 anomalies flagged
- but 2 were data errors. Might need a data quality step
+ but 2 were data errors. Might need a data quality node
  between Collector and me."
 
 Manager ←→ User: "The team found some data quality issues.
- Want me to add a validation step between collection
+ Want me to add a validation node between collection
  and analysis?"
 ```
 
@@ -636,11 +637,11 @@ The workflow evolves through conversation, not reconfiguration.
 
 ## Changesets: The Universal Message Format
 
-All communication from the manager's builder to step sessions uses **changesets** — a structured message format that appears in the step's session as an agent message.
+All communication from the manager's builder to node sessions uses **changesets** — a structured message format that appears in the node's session as an agent message.
 
 ### Message Format in Session
 
-Changesets appear in step sessions as messages from the Workflow Manager:
+Changesets appear in node sessions as messages from the Workflow Manager:
 
 ```
 [From Agent: Workflow Manager]
@@ -652,14 +653,14 @@ Answers to your questions:
   - Enterprise tier only
 ```
 
-The step assistant processes this the same way it processes any other message — from the user, from another step, from a scheduled event. One input path, one processing model. The user can open any step's session and see every changeset received, every response sent, every dispatch triggered.
+The node assistant processes this the same way it processes any other message — from the user, from another node, from a scheduled event. One input path, one processing model. The user can open any node's session and see every changeset received, every response sent, every dispatch triggered.
 
 ### Changeset Structure
 
 ```
 Changeset {
   id: uuid
-  source: "manager" | "step:{step_name}" | "system"
+  source: "manager" | "node:{node_name}" | "system"
   type: "initial_instruction" | "update" | "upstream_change"
         | "feedback" | "peer_message"
 
@@ -673,7 +674,7 @@ Changeset {
     }
   }
 
-  affected_steps: ["analyzer"]
+  affected_nodes: ["analyzer"]
 
   expects_response: true
   response_options: ["no_changes_needed", "dispatching_update", "question"]
@@ -684,19 +685,19 @@ Changeset {
 
 | Type | When | Example |
 |------|------|---------|
-| `initial_instruction` | Builder first assigns the step | "You are the analysis step..." |
+| `initial_instruction` | Builder first assigns the node | "You are the analysis node..." |
 | `update` | Builder sends answers from user | "Threshold is 10%, baseline $50/seat" |
 | `upstream_change` | A connected port's config changed | "Collector now includes free tier data" |
 | `feedback` | Post-run results | "Last run: 3 anomalies, 2 were false positives" |
-| `peer_message` | Another step sends a message | "Collector says: added data validation" |
+| `peer_message` | Another node sends a message | "Collector says: added data validation" |
 
 ### Response Contract
 
-Step assistants respond to changesets with one of:
+Node assistants respond to changesets with one of:
 
 ```
 no_changes_needed  → Belief acknowledged. No propagation.
-dispatching_update → Step dispatches to its own builder.
+dispatching_update → Node dispatches to its own builder.
                      After completion, system checks if output
                      port changed. If yes, new belief created.
                      If not, propagation stops.
@@ -704,15 +705,15 @@ question           → Flows to synthesis → manager's system prompt
                      → manager → user → answer dispatched back.
 ```
 
-After responding, the step assistant reads its updated context and relays current status and any new pending questions back to the manager.
+After responding, the node assistant reads its updated context and relays current status and any new pending questions back to the manager.
 
 ## Question Framework
 
-Questions are the feedback loop between steps and the manager. The design is simple: compress each step's response, show it to the manager, let the LLM handle the rest.
+Questions are the feedback loop between nodes and the manager. The design is simple: compress each node's response, show it to the manager, let the LLM handle the rest.
 
 ### How It Works
 
-When a changeset lands on a step, the step assistant auto-responds (background LLM call). Haiku compresses that response into 1-2 sentences: a **status** and an optional **pending question**.
+When a changeset lands on a node, the node assistant auto-responds (background LLM call). Haiku compresses that response into 1-2 sentences: a **status** and an optional **pending question**.
 
 ```
 Collector responds: "I'll need competitor names and URLs to
@@ -724,11 +725,11 @@ Haiku compresses:
   Question: "Need competitor names, URLs, and which tiers"
 ```
 
-One cheap Haiku call per step response. No batch pass. No structured dedup.
+One cheap Haiku call per node response. No batch pass. No structured dedup.
 
 ### What the Manager Sees
 
-The compressed status + question for every step goes directly into the manager's prompt:
+The compressed status + question for every node goes directly into the manager's prompt:
 
 ```
 Your team:
@@ -749,15 +750,15 @@ The manager LLM naturally deduplicates in conversation. It reads "Collector need
 
 ### Questions Are Generational
 
-Questions are **derived** from each step's latest conversational state. Every time a step's conversation advances — user message, changeset, builder completion — the compression re-runs on the new state.
+Questions are **derived** from each node's latest conversational state. Every time a node's conversation advances — user message, changeset, builder completion — the compression re-runs on the new state.
 
-No invalidation logic. No staleness checks. No expiration timers. The step's current state IS the question list.
+No invalidation logic. No staleness checks. No expiration timers. The node's current state IS the question list.
 
 | Scenario | What happens |
 |----------|-------------|
-| User talks to step directly, answers questions | Step's state advances → re-compress → question gone → manager sees updated status on next prompt build |
-| New changeset supersedes old context | Step gets new message → state advances → old status/question replaced |
-| User pivots the entire workflow | New changesets to all steps → all states advance → everything reflects new direction |
+| User talks to node directly, answers questions | Node's state advances → re-compress → question gone → manager sees updated status on next prompt build |
+| New changeset supersedes old context | Node gets new message → state advances → old status/question replaced |
+| User pivots the entire workflow | New changesets to all nodes → all states advance → everything reflects new direction |
 
 ### Dispatch State Tracking
 
@@ -773,7 +774,7 @@ dispatch_pending    → changesets sent, waiting on responses
 questions_ready     → manager prompt updated, ready for conversation
 ```
 
-The manager sees "dispatch active" during the window, so it doesn't try to send more instructions while steps are still responding.
+The manager sees "dispatch active" during the window, so it doesn't try to send more instructions while nodes are still responding.
 
 ## What the Manager Assistant Sees
 
@@ -786,7 +787,7 @@ System Prompt:
     - Active: none
     - Last completed: #m1f1 (3 min ago)
       "Sent initial instructions to Collector, Analyzer, Reporter"
-      Result: success — changesets delivered to 3 steps
+      Result: success — changesets delivered to 3 nodes
 
   Your team:
     Collector:
@@ -809,13 +810,13 @@ Tools: dispatch(), think()
 Nothing else. No mutation tools. No board detail.
 ```
 
-The manager sees compressed dispatch responses, not raw configs. Each step's status and question are derived from its last response via Haiku compression. The manager forms questions naturally, doesn't present checklists. It dispatches plain English — the builder handles the technical translation and decides which steps to notify.
+The manager sees compressed dispatch responses, not raw configs. Each node's status and question are derived from its last response via Haiku compression. The manager forms questions naturally, doesn't present checklists. It dispatches plain English — the builder handles the technical translation and decides which nodes to notify.
 
-## What a Step Assistant Sees
+## What a Node Assistant Sees
 
 ```
 System Prompt:
-  You are the assistant for the "Analyzer" step.
+  You are the assistant for the "Analyzer" node.
 
   Dispatch Status:
     - Active: none
@@ -825,7 +826,7 @@ System Prompt:
 
   Board Context:
     Workflow: "Competitor Pricing Monitor"
-    Position: Step 2 of 3
+    Position: Node 2 of 3
     Upstream: Collector → you
     Downstream: you → Reporter
 
@@ -850,7 +851,7 @@ System Prompt:
 
   You may receive messages from:
     - The Workflow Manager (changesets — instructions, updates)
-    - Other step assistants (cross-step issues)
+    - Other node assistants (cross-node issues)
     - The user directly (if they open your session)
 
   When you receive a changeset:
@@ -864,7 +865,7 @@ System Prompt:
 Messages:
   [From Agent: Workflow Manager]
   Changeset #c8f2 | type: initial_instruction
-  "You are the analysis step. You'll receive raw pricing
+  "You are the analysis node. You'll receive raw pricing
    data from Collector and identify trends, anomalies,
    and competitive positioning."
 
@@ -892,19 +893,19 @@ Nothing else.
 ```
 System Prompt:
   You are the workflow architect. You have full access to
-  the board topology, step configs, port schemas, and
+  the board topology, node configs, port schemas, and
   available protocols.
 
   Current board state:
-    (full detail — every step's config, ports, schemas,
+    (full detail — every node's config, ports, schemas,
      capabilities, connection topology)
 
   Available protocols: [workforce, meeting (future)]
   Available capabilities: (from capabilities.yaml)
 
-  When writing changesets to step sessions, include enough
-  context for the step assistant to evaluate the impact.
-  Report back to the manager what you sent and to which steps.
+  When writing changesets to node sessions, include enough
+  context for the node assistant to evaluate the impact.
+  Report back to the manager what you sent and to which nodes.
 
 Patterns: create_pipeline, create_parallel, insert_step
 Adjustments: remove_step, update_step, wire_edge
@@ -914,12 +915,12 @@ Instruction: (plain English from manager)
 Budget: max_rounds, max_tokens, context_budget
 ```
 
-**Step's Builder:**
+**Node's Builder:**
 ```
 System Prompt:
-  You are configuring the "Analyzer" step.
+  You are configuring the "Analyzer" node.
 
-  Current step configuration:
+  Current node configuration:
     (full detail — prompt, schema, capabilities, ports,
      agent roster if workforce, dependencies)
 
@@ -927,21 +928,21 @@ Tools: set_task, set_prompt, set_output_schema,
        add_agent, set_dependency, set_capabilities,
        update_notes
 
-Instruction: (plain English from step assistant)
+Instruction: (plain English from node assistant)
 Budget: max_rounds, max_tokens, context_budget
 ```
 
-Tools are scoped — the step builder cannot touch other steps. The manager's builder cannot configure step internals. Scope is structural, enforced by the tool set, not by prompt instructions. Same proven pattern as workforce.
+Tools are scoped — the node builder cannot touch other nodes. The manager's builder cannot configure node internals. Scope is structural, enforced by the tool set, not by prompt instructions. Same proven pattern as workforce.
 
 ## Agent-to-Agent Communication
 
-Every step is a session. Every session is addressable. Messages between agents use the same format as user messages.
+Every node is a session. Every session is addressable. Messages between agents use the same format as user messages.
 
 ```
-Sources of messages to any step assistant:
+Sources of messages to any node assistant:
   - User (opens the session in the UI)
-  - Manager's builder (changesets via dispatch_to_step)
-  - Other step assistants (cross-step issues or requests)
+  - Manager's builder (changesets via dispatch_to_steps)
+  - Other node assistants (cross-node issues or requests)
   - System (belief notifications at context load time)
 ```
 
@@ -970,9 +971,9 @@ The manager node is not a regular DAG node with edges. It sits **above** the DAG
 
 Two visual layers:
 - **Data edges** (solid): Port-wired DAG connections. The execution path.
-- **Conversation channels** (ambient): The manager's presence. No explicit lines — maybe a glow or highlight showing which steps have active threads.
+- **Conversation channels** (ambient): The manager's presence. No explicit lines — maybe a glow or highlight showing which nodes have active threads.
 
-Step nodes show indicators for:
+Nodes show indicators for:
 - Active conversation threads
 - Unacknowledged beliefs (pending changes)
 - Pre-run verification status (pass/fail/warning)
@@ -980,9 +981,9 @@ Step nodes show indicators for:
 
 The manager might not even need visible connections. Its presence on the board implies it can talk to anything.
 
-## Build Order: One Step at a Time
+## Build Order: One Node at a Time
 
-The manager walks the user through steps sequentially, following the natural flow of the DAG. By the time a downstream step is being configured, all upstream steps already have port summaries defined.
+The manager walks the user through nodes sequentially, following the natural flow of the DAG. By the time a downstream node is being configured, all upstream nodes already have port summaries defined.
 
 ```
 1. Manager creates Collector → user configures it
@@ -990,20 +991,20 @@ The manager walks the user through steps sequentially, following the natural flo
 3. Manager creates Reporter → sees Analyzer's output summary
 ```
 
-No step needs runtime data to be configured. Port summaries are the interface contract. Runtime data matters later — for feedback, iteration, and the self-improvement loop after the first run.
+No node needs runtime data to be configured. Port summaries are the interface contract. Runtime data matters later — for feedback, iteration, and the self-improvement loop after the first run.
 
 ## What Already Exists
 
 - **Dispatch model**: Chat assistant → dispatch → background builder agent. Working pattern for workforce today.
-- **Structural scope enforcement**: Workforce builders get only step-scoped tools. Same pattern extends to manager.
+- **Structural scope enforcement**: Workforce builders get only node-scoped tools. Same pattern extends to manager.
 - **Budget controls**: Protocol config defines `max_rounds`, `max_tokens`, `context_budget` per builder.
-- **Step chat sessions**: Every step can have a conversational session. Messages stored, history preserved.
-- **Workforce tools**: `set_task`, `add_agent`, `set_dependency`, `update_notes` — mutation tools for step builders.
+- **Chat sessions**: Every node can have a conversational session (`chat_sessions` table). Messages stored, history preserved.
+- **Workforce tools**: `set_task`, `add_agent`, `set_dependency`, `update_notes` — mutation tools for node builders.
 - **Pipeline service**: Child workflow CRUD, topological sort, cycle detection.
 - **Port system**: Typed ports with json_path extraction, conditional edges, variable interpolation.
 - **Protocol engine**: `ProtocolCompiler` trait, `ProtocolExpansion` output, `apply_protocol` materializer.
 - **Templates**: `WorkflowSnapshot` captures and restores full workflow configurations.
-- **WebSocket events**: Live broadcast of dispatch progress, step updates, configuration changes.
+- **WebSocket events**: Live broadcast of dispatch progress, node updates, configuration changes.
 - **Belief extraction**: Existing system for summarizing conversations into small truths that persist across sessions.
 - **Capability safety levels**: `safe`, `caution`, `unsafe` classifications in `config/capabilities.yaml`.
 
@@ -1013,16 +1014,16 @@ No step needs runtime data to be configured. Port summaries are the interface co
 
 2. **Manager strategy**: A new `DispatchStrategy` variant with workflow-scoped tools. System prompt includes full board detail for the builder. Budget controlled by protocol config.
 
-3. **Port summary generation**: Summarizer that produces human-readable descriptions of port contents from structured config (schemas, capabilities, agent roster). Regenerates on dispatch completion or roster change. Summaries appear in step assistant board context and in the manager's board state.
+3. **Port summary generation**: Summarizer that produces human-readable descriptions of port contents from structured config (schemas, capabilities, agent roster). Regenerates on dispatch completion or roster change. Summaries appear in node assistant board context and in the manager's board state.
 
-4. **Question framework**: Haiku-powered compression of each step assistant's response into 1-2 sentence status + optional pending question. Generational — re-derived from latest step state on every manager prompt build. No deduplication pipeline; the manager LLM handles that naturally in conversation.
+4. **Question framework**: Haiku-powered compression of each node assistant's response into 1-2 sentence status + optional pending question. Generational — re-derived from latest node state on every manager prompt build. No deduplication pipeline; the manager LLM handles that naturally in conversation.
 
-5. **Changeset system**: Structured message format for builder-to-step communication. Messages appear in step sessions as `[From Agent: Workflow Manager]`. Includes types (`initial_instruction`, `update`, `upstream_change`, `feedback`, `peer_message`), response contracts, and state tracking.
+5. **Changeset system**: Structured message format for builder-to-node communication. Messages appear in node sessions as `[From Agent: Workflow Manager]`. Includes types (`initial_instruction`, `update`, `upstream_change`, `feedback`, `peer_message`), response contracts, and state tracking.
 
-6. **Belief change tracking**: Records output port changes as beliefs with per-step acknowledgment state. Beliefs surface at context load time (next conversation), not in real time. Integrates with existing belief extraction system.
+6. **Belief change tracking**: Records output port changes as beliefs with per-node acknowledgment state. Beliefs surface at context load time (next conversation), not in real time. Integrates with existing belief extraction system.
 
-7. **Pre-run verification**: Build-step gate that checks all steps for unacknowledged beliefs, port mismatches, missing configuration, and **unresolved questions** (fresh extraction, not cached) before workflow execution. Instant pass if nothing changed and no questions are open. Blocks on failures, warns on stale configuration.
+7. **Pre-run verification**: Build gate that checks all nodes for unacknowledged beliefs, port mismatches, missing configuration, and **unresolved questions** (fresh extraction, not cached) before workflow execution. Instant pass if nothing changed and no questions are open. Blocks on failures, warns on stale configuration.
 
-8. **Cross-session messaging**: Ability for the manager's builder to write messages to step sessions, and for step assistants to message each other. Same format as user messages. Routed through existing chat message infrastructure.
+8. **Cross-session messaging**: Ability for the manager's builder to write messages to node sessions, and for node assistants to message each other. Same format as user messages. Routed through existing chat message infrastructure.
 
-9. **Manager visualization**: Board-level UI for the manager node — ambient connections, active conversation indicators, belief status per step, pre-run verification status, configuration completeness.
+9. **Manager visualization**: Board-level UI for the manager node — ambient connections, active conversation indicators, belief status per node, pre-run verification status, configuration completeness.
