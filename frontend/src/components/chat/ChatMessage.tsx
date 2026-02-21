@@ -34,7 +34,20 @@ function ChatMessage({ role, content, streaming }: ChatMessageProps) {
         >
           SYSTEM PROMPT
         </Typography>
-        <MarkdownPreview content={content} />
+        <Typography
+          component="pre"
+          sx={{
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            fontFamily: 'monospace',
+            fontSize: '0.8125rem',
+            lineHeight: 1.5,
+            color: 'text.secondary',
+            m: 0,
+          }}
+        >
+          {content}
+        </Typography>
       </Box>
     )
   }

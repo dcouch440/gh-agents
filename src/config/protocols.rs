@@ -169,7 +169,7 @@ pub mod vars {
         pub const REQUESTED_DOCUMENTS: &str = "System.requested_documents";
         pub const AVAILABLE_CAPABILITIES: &str = "System.available_capabilities";
         pub const CONTEXT_DOCUMENTS_INSTRUCTION: &str = "System.context_documents_instruction";
-        pub const CURRENT_CONFIG: &str = "System.current_config";
+        pub const BOARD_STATE: &str = "System.board_state";
         pub const GRAPH_CONTEXT: &str = "System.graph_context";
         pub const BOARD_CONTEXT: &str = "System.board_context";
         pub const ARCHETYPE_BLOCK: &str = "System.archetype_block";
@@ -433,7 +433,7 @@ mod tests {
             vars::system::ARCHETYPE_BLOCK.to_string(),
             roles::WORKFORCE_ARCHETYPE.to_string(),
         );
-        vars.insert(vars::system::CURRENT_CONFIG.to_string(), String::new());
+        vars.insert(vars::system::BOARD_STATE.to_string(), String::new());
 
         let ctx = roles::ASSISTANT_BASE.resolve(&vars);
         assert!(
@@ -464,7 +464,7 @@ mod tests {
             vars::system::REQUESTED_DOCUMENTS,
             vars::system::AVAILABLE_CAPABILITIES,
             vars::system::CONTEXT_DOCUMENTS_INSTRUCTION,
-            vars::system::CURRENT_CONFIG,
+            vars::system::BOARD_STATE,
             vars::system::GRAPH_CONTEXT,
             vars::system::BOARD_CONTEXT,
             vars::system::ARCHETYPE_BLOCK,

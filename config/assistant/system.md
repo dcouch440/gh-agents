@@ -52,7 +52,7 @@ so the background agent can record them as required reading.
 
 {{.System.run_context}}
 
-{{.System.current_config}}
+{{.System.board_state}}
 
 <examples>
 user: "I need this team to scan repos for security issues"

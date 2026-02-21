@@ -22,7 +22,7 @@
 //! ```
 //!
 //! The returned string is ready for injection into a system prompt
-//! template variable (e.g. `{{.System.current_config}}`).
+//! template variable (e.g. `{{.System.board_state}}`).
 
 use anyhow::Result;
 use uuid::Uuid;
