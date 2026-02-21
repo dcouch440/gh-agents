@@ -129,6 +129,22 @@ impl ExecutionStrategy for DispatchStrategy {
         Some(&self.state)
     }
 
+    async fn rebuild_system_prompt(&self) -> Result<Option<String>, HubError> {
+        let ctx = WorkforceToolContext {
+            workflow_id: self.workflow_id,
+            step_id: self.step_id,
+        };
+        let snapshot =
+            workforce::build_config_snapshot(self.state.repos().workflows.as_ref(), &ctx)
+                .await
+                .map_err(|e| HubError::Internal(anyhow::anyhow!(e)))?;
+
+        let mut vars = HashMap::new();
+        vars.insert("System.current_config".to_string(), snapshot);
+
+        Ok(Some(resolve_template(roles::WORKFORCE_BUILDER_SYSTEM, &vars)))
+    }
+
     async fn build_messages(&self, _input: &str) -> Result<Vec<Message>, HubError> {
         Ok(vec![Message::user(&self.instruction)])
     }
