@@ -33,7 +33,9 @@ mod tests {
     #[test]
     fn render_empty() {
         let result = render::render(&[]);
-        assert!(result.is_empty());
+        assert!(result.contains("<dispatch_status>"));
+        assert!(result.contains("No active dispatches."));
+        assert!(result.contains("</dispatch_status>"));
     }
 
     #[test]
@@ -179,7 +181,7 @@ mod tests {
     fn build_empty_registry() {
         let registry = TaskRegistry::new();
         let result = crate::server::hub::dispatch_status::build(&registry, Uuid::new_v4());
-        assert!(result.is_empty());
+        assert!(result.contains("No active dispatches."));
     }
 
     #[test]
@@ -232,6 +234,7 @@ mod tests {
         );
 
         let result = crate::server::hub::dispatch_status::build(&registry, step_b);
-        assert!(result.is_empty());
+        assert!(result.contains("No active dispatches."));
+        assert!(!result.contains("task for step A"));
     }
 }

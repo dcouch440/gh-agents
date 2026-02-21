@@ -9,11 +9,11 @@ use super::types::{DispatchSnapshot, DispatchStatus};
 
 /// Render dispatch snapshots as `<dispatch_status>` XML.
 ///
-/// Returns empty string when no snapshots exist — blank-line collapsing
-/// in the template engine removes the placeholder.
+/// Always returns a `<dispatch_status>` block so the assistant knows
+/// the dispatch system exists even when nothing is in flight.
 pub fn render(snapshots: &[DispatchSnapshot]) -> String {
     if snapshots.is_empty() {
-        return String::new();
+        return "<dispatch_status>\nNo active dispatches.\n</dispatch_status>\n".to_string();
     }
 
     let mut root = XmlBuilder::new("dispatch_status", 0);
