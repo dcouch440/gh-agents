@@ -12,6 +12,15 @@ import { buildProtocolsByStep } from './canvasContextMenuUtils'
 
 const VIEWPORT_PADDING = 8
 
+const nextName = (base: string): string => {
+  const steps = workflowStore.selectSteps(workflowStore.store.getState())
+  const existing = new Set(steps.map((s) => s.name))
+  if (!existing.has(base)) return base
+  let n = 2
+  while (existing.has(`${base} ${n}`)) n++
+  return `${base} ${n}`
+}
+
 type MenuPosition = {
   x: number
   y: number
@@ -66,7 +75,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     const config = ARCHETYPE_CONFIGS[archetype]
 
     void workflowStore.createStep({
-      name: `New ${config.label}`,
+      name: nextName(`New ${config.label}`),
       execution_mode: config.executionMode,
       prompt_template: '',
       position_x: Math.round(position.flowX),
@@ -80,7 +89,7 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     event.stopPropagation()
     event.preventDefault()
     void workflowStore.createStep({
-      name: 'Context',
+      name: nextName('Context'),
       execution_mode: 'context',
       position_x: Math.round(position.flowX),
       position_y: Math.round(position.flowY),
