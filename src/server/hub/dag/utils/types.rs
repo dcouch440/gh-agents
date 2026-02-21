@@ -23,6 +23,19 @@ impl StepOutput {
             raw_output: String::new(),
         }
     }
+
+    /// Build a pass-through output for context/input steps (no LLM call).
+    ///
+    /// Returns the output and its JSON value (needed for envelope construction).
+    pub fn passthrough(output_key: String, content: String) -> (Self, JsonValue) {
+        let value = JsonValue::String(content.clone());
+        let output = Self {
+            variable_name: output_key,
+            structured_output: Some(value.clone()),
+            raw_output: content,
+        };
+        (output, value)
+    }
 }
 
 /// The readiness state of a step in the DAG.
