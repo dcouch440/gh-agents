@@ -166,29 +166,15 @@ back what you did and to which nodes.
 </protocols>
 
 <board_state>
+  <!-- role: from board_overview_summary (what the node does)
+       status: from question framework compression (current state) -->
   <workflow name="{{workflow_name}}" id="{{workflow_id}}">
     {{#each nodes}}
     <node name="{{this.name}}" id="{{this.id}}" protocol="{{this.protocol}}"
-          {{#if this.receives}}receives="{{this.receives}}"{{/if}}>
-      <task>{{this.task}}</task>
-      <capabilities>{{this.capabilities}}</capabilities>
-      <input_ports>
-        {{#each this.input_ports}}
-        <port name="{{this.name}}" from="{{this.source_node}}">
-          <schema>{{this.schema}}</schema>
-          <json_path>{{this.json_path}}</json_path>
-        </port>
-        {{/each}}
-      </input_ports>
-      <output_ports>
-        {{#each this.output_ports}}
-        <port name="{{this.name}}" to="{{this.target_node}}">
-          <schema>{{this.schema}}</schema>
-        </port>
-        {{/each}}
-      </output_ports>
-      <notes>{{this.notes}}</notes>
-      <session_state>{{this.session_state}}</session_state>
+          {{#if this.receives}}receives="{{this.receives}}"{{/if}}
+          status="{{this.status}}"
+          {{#if this.agents}}agents="{{this.agents}}"{{/if}}>
+      {{this.role}} — {{this.compressed_status}}
     </node>
     {{/each}}
   </workflow>
@@ -206,6 +192,7 @@ back what you did and to which nodes.
 <budget>
   max_rounds: {{max_rounds}}
   max_tokens: {{max_tokens}}
+  context_budget: {{context_budget}}
 </budget>
 
 <examples>
@@ -216,8 +203,8 @@ Three stages: collect, analyze, report."
     { name: "Analyzer" },
     { name: "Reporter" }
   ])
-→ dispatch_to_steps(
-    steps: ["Collector", "Analyzer", "Reporter"],
+→ dispatch_to_nodes(
+    nodes: ["Collector", "Analyzer", "Reporter"],
     changeset_type: "initial_instruction",
     context: "Competitor pricing monitoring workflow. Collector
       gathers pricing data weekly. Analyzer identifies trends and
@@ -228,12 +215,12 @@ Three stages: collect, analyze, report."
    Sent initial instructions to all three. Waiting on responses."
 
 instruction: "Insert a data validation node between Collector and Analyzer"
-→ insert_step(
+→ insert_node(
     between: { from: "Collector", to: "Analyzer" },
-    step: { name: "Validator" }
+    node: { name: "Validator" }
   )
-→ dispatch_to_steps(
-    steps: ["Validator", "Analyzer"],
+→ dispatch_to_nodes(
+    nodes: ["Validator", "Analyzer"],
     changeset_type: "upstream_change",
     context: "Validator: You are a new data validation node between
       Collector and Analyzer. Verify pricing records have required
@@ -257,8 +244,7 @@ port summaries, notes, incoming changesets. Has no mutation tools.
 ```xml
 <identity>
 You help the user design this node on their workflow board. The user sees
-updates live on the canvas. Use render_panel to present structured options
-or plans visually instead of describing them in chat.
+updates live on the canvas.
 </identity>
 
 <voice>
@@ -288,7 +274,6 @@ and update the notes based on your instruction and the current configuration.
     {{#each nodes}}
     <node name="{{this.name}}" protocol="{{this.protocol}}" status="{{this.status}}"
           {{#if this.receives}}receives="{{this.receives}}"{{/if}}
-          {{#if this.feeds}}feeds="{{this.feeds}}"{{/if}}
           {{#if this.is_you}}agent="you"{{/if}} />
     {{/each}}
   </workflow>
@@ -400,9 +385,9 @@ When you receive a changeset from the Workflow Manager:
 </run_context>
 {{/if}}
 
-Name: {{step_name}}
-Task: {{step_task}}
-Capabilities: {{step_capabilities}}
+Name: {{node_name}}
+Task: {{node_task}}
+Capabilities: {{node_capabilities}}
 
 {{#if agent_roster}}
 Execution sequence:
@@ -524,7 +509,7 @@ After completing changes, summarize what you did.
 </node_config>
 
 <instruction>
-{{step_dispatch_text}}
+{{node_dispatch_text}}
 </instruction>
 
 <!-- Tools are provided via API tool definitions with 3-4 sentence descriptions
@@ -533,6 +518,7 @@ After completing changes, summarize what you did.
 <budget>
   max_rounds: {{max_rounds}}
   max_tokens: {{max_tokens}}
+  context_budget: {{context_budget}}
 </budget>
 
 <examples>
@@ -589,8 +575,8 @@ anomaly flags."
 │  │        <board_state> FULL detail — every node's      │    │
 │  │        config, ports, schemas, inline edges           │    │
 │  │  Tools: create_pipeline, create_parallel,            │    │
-│  │         insert_step, remove_step, update_step,       │    │
-│  │         wire_edge, dispatch_to_steps, validate_dag   │    │
+│  │         insert_node, remove_node, update_node,       │    │
+│  │         wire_edge, dispatch_to_nodes, validate_dag   │    │
 │  │  Context size: Large — full board                    │    │
 │  │                                                     │    │
 │  │          ┌──── dispatches changesets to ────┐        │    │
@@ -630,7 +616,7 @@ anomaly flags."
 Information gradient:
   Layer 1  →  Compressed (1-2 sentence status per node, protocol types)
   Layer 2  →  Full board (every config, port, schema, inline edges)
-  Layer 3  →  Own neighborhood (board context, notes, receives/feeds)
+  Layer 3  →  Own neighborhood (board context, notes, receives)
   Layer 4  →  Own node only (full config, roster, schema)
 
 Scope enforcement:
