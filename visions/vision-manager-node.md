@@ -74,11 +74,138 @@ Scope is enforced by the tool set, not by prompt instructions. This is the same 
 | Agent | Tools | Scope |
 |-------|-------|-------|
 | Manager Assistant | `dispatch()`, `think()` | Can only dispatch — cannot touch any config |
-| Manager's Builder | `create_node`, `remove_node`, `wire_ports`, `set_step_mode`, `dispatch_to_step`, `preview_topology`, `validate_dag` | Workflow topology only — cannot configure step internals |
+| Manager's Builder | **Patterns:** `create_pipeline`, `create_parallel`, `insert_step` **Adjustments:** `remove_step`, `update_step`, `wire_edge` **Comms:** `dispatch_to_steps`, `validate_dag` | Workflow topology only — cannot configure step internals |
 | Step Assistant | `dispatch()`, `think()` | Can only dispatch — cannot touch its own config |
 | Step's Builder | `set_task`, `set_prompt`, `set_output_schema`, `add_agent`, `set_dependency`, `set_capabilities`, `update_notes` | Its own step only — cannot touch other steps |
 
 Budget controls (token limits, max rounds, time limits) apply to builders the same way workforce protocol config already defines them via `max_rounds`, `max_tokens`, and `context_budget`.
+
+## Composite Tools: Pattern-Based Topology
+
+Individual tool calls per node and edge burn through round budgets fast — a simple 3-node pipeline takes 12+ rounds with atomic operations. The manager's builder uses **composite tools** that match how humans think about workflow structure. Each pattern is one call.
+
+### Topology Patterns (1 call each)
+
+Every node the manager creates is a **protocol node** — workforce today, room/meeting in the future. The protocol gives each node its internal topology: assistant session, designer pipeline, agent roster. No `mode` field needed; all nodes are workforce by default.
+
+```
+create_pipeline(steps: [
+  { name: "Collector" },
+  { name: "Analyzer" },
+  { name: "Reporter" }
+])
+→ Creates 3 workforce nodes, auto-wires edges in order
+→ 1 round instead of 9
+
+create_parallel(
+  source: "Collector",
+  parallel: [
+    { name: "PriceAnalyzer" },
+    { name: "FeatureAnalyzer" },
+    { name: "SentimentAnalyzer" }
+  ],
+  target: "Synthesizer"
+)
+→ Fan-out from source, fan-in to target
+→ 1 round instead of 12+
+
+insert_step(
+  between: { from: "Collector", to: "Analyzer" },
+  step: { name: "Validator" }
+)
+→ Splices into existing edge, rewires automatically
+→ 1 round instead of 4
+```
+
+### Adjustment Tools (for tweaks after patterns)
+
+```
+remove_step(name: "Validator", reconnect: true)
+→ Removes step, reconnects neighbors
+
+update_step(name: "Analyzer", protocol: "meeting")
+→ Change protocol or properties on existing step
+
+wire_edge(from: "StepA", to: "StepB")
+→ Add a single connection
+```
+
+### Communication (always batched)
+
+```
+dispatch_to_steps(
+  steps: ["Collector", "Analyzer", "Reporter"],
+  changeset_type: "initial_instruction",
+  context: "Competitor pricing monitoring workflow..."
+)
+→ All changesets in 1 round instead of N
+```
+
+### Few-Shot Examples (in builder prompt)
+
+The builder's prompt includes pattern examples so it picks the right composite tool for common intents:
+
+```
+<examples>
+User intent: "I need research, analysis, and a report"
+→ create_pipeline([
+    { name: "Researcher" },
+    { name: "Analyzer" },
+    { name: "Reporter" }
+  ])
+
+User intent: "Three researchers from different angles,
+              then pull it together"
+→ create_parallel(
+    source: null,
+    parallel: [
+      { name: "MarketResearcher" },
+      { name: "TechResearcher" },
+      { name: "CompetitorResearcher" }
+    ],
+    target: { name: "Synthesizer" }
+  )
+
+User intent: "Add a fact-checker between research and analysis"
+→ insert_step(
+    between: { from: "Researcher", to: "Analyzer" },
+    step: { name: "FactChecker" }
+  )
+
+User intent: "Make the meeting node a room for discussion"
+→ update_step(name: "ReviewMeeting", protocol: "meeting")
+→ dispatch_to_steps(
+    steps: ["ReviewMeeting"],
+    changeset_type: "update",
+    context: "Converting to meeting protocol. Set up
+              roles and discussion agenda..."
+  )
+</examples>
+```
+
+Patterns handle 80% of cases in 1-2 calls. Adjustment tools handle the remaining 20%. A typical builder session goes from 12-25 rounds down to 2-4.
+
+### Idempotent Disregard
+
+Every tool checks current state before mutating. If the request matches what already exists, the tool returns a disregard response — no error, no duplicate, just acknowledgment:
+
+```
+create_pipeline([{name: "Collector"}, {name: "Analyzer"}, {name: "Reporter"}])
+→ "Pipeline already exists: Collector → Analyzer → Reporter. No changes made."
+
+wire_edge(from: "Collector", to: "Analyzer")
+→ "Edge already exists. No changes made."
+
+set_task("Analyze competitor pricing trends...")
+→ "Task already set to this value. No changes made."
+
+dispatch_to_steps(["Collector"], "initial_instruction", ...)
+→ "Collector already received initial instruction. No changes made."
+```
+
+The builder sees "already done" and moves on — no wasted rounds. This protects against user repetition (manager dispatches the same thing twice), belief cycles re-triggering processed changesets, and builder retries after partial failures.
+
+The principle: **check before mutate, disregard if unchanged.**
 
 ## How It Works
 
@@ -772,17 +899,16 @@ System Prompt:
     (full detail — every step's config, ports, schemas,
      capabilities, connection topology)
 
-  Available protocols: [workforce, single, sub_workflow...]
+  Available protocols: [workforce, meeting (future)]
   Available capabilities: (from capabilities.yaml)
-  Capability safety levels: safe, caution, unsafe
 
   When writing changesets to step sessions, include enough
   context for the step assistant to evaluate the impact.
   Report back to the manager what you sent and to which steps.
 
-Tools: create_node, remove_node, wire_ports,
-       set_step_mode, dispatch_to_step, preview_topology,
-       validate_dag
+Patterns: create_pipeline, create_parallel, insert_step
+Adjustments: remove_step, update_step, wire_edge
+Comms: dispatch_to_steps, validate_dag
 
 Instruction: (plain English from manager)
 Budget: max_rounds, max_tokens, context_budget
@@ -883,7 +1009,7 @@ No step needs runtime data to be configured. Port summaries are the interface co
 
 ## What Needs To Be Built
 
-1. **Workflow-level mutation tools**: `create_node`, `remove_node`, `wire_ports`, `set_step_mode`, `dispatch_to_step`, `preview_topology`, `validate_dag` — thin wrappers around existing services for the manager's builder. Same structural scope pattern as workforce tools.
+1. **Composite topology tools**: Pattern tools (`create_pipeline`, `create_parallel`, `insert_step`) that handle 80% of topology operations in 1 call. Adjustment tools (`remove_step`, `update_step`, `wire_edge`) for tweaks. Batched communication (`dispatch_to_steps`). Few-shot examples in builder prompt for common workflow patterns. Thin wrappers around existing services.
 
 2. **Manager strategy**: A new `DispatchStrategy` variant with workflow-scoped tools. System prompt includes full board detail for the builder. Budget controlled by protocol config.
 
