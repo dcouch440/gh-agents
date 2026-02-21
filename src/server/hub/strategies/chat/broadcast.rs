@@ -42,7 +42,9 @@ impl ToolEffect {
             | "set_max_turns"
             | "set_interaction_mode" => Some(Self::ConfigUpdated),
 
-            "add_agent" | "update_agent" | "remove_agent" => Some(Self::RosterChanged),
+            "add_agent" | "update_agent" | "remove_agent" | "configure_team" => {
+                Some(Self::RosterChanged)
+            }
             "add_member" | "update_member" | "remove_member" => Some(Self::MembersChanged),
 
             "update_notes" => Some(Self::NotesUpdated),

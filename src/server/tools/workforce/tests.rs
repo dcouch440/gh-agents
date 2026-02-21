@@ -898,4 +898,744 @@ mod tests {
             .unwrap()
             .contains("Unknown workforce tool"));
     }
+
+    // =========================================================================
+    // configure_team — input validation
+    // =========================================================================
+
+    #[tokio::test]
+    async fn configure_team_missing_task_returns_error() {
+        let ctx = make_ctx();
+        let repo = MockWorkflowRepo::new();
+
+        let input = json!({ "agents": [] });
+        let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
+
+        assert!(result["error"]
+            .as_str()
+            .unwrap()
+            .contains("Missing required parameter: task"));
+    }
+
+    #[tokio::test]
+    async fn configure_team_missing_agents_returns_error() {
+        let ctx = make_ctx();
+        let repo = MockWorkflowRepo::new();
+
+        let input = json!({ "task": "Do stuff" });
+        let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
+
+        assert!(result["error"]
+            .as_str()
+            .unwrap()
+            .contains("Missing required parameter: agents"));
+    }
+
+    #[tokio::test]
+    async fn configure_team_duplicate_agent_names_returns_error() {
+        let ctx = make_ctx();
+        let repo = MockWorkflowRepo::new();
+
+        let input = json!({
+            "task": "Scan repos",
+            "agents": [
+                { "name": "Scanner", "role_description": "Scans code" },
+                { "name": "scanner", "role_description": "Also scans code" }
+            ]
+        });
+        let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
+
+        assert!(result["error"]
+            .as_str()
+            .unwrap()
+            .contains("Duplicate agent name"));
+    }
+
+    #[tokio::test]
+    async fn configure_team_dependency_unknown_agent_returns_error() {
+        let ctx = make_ctx();
+        let repo = MockWorkflowRepo::new();
+
+        let input = json!({
+            "task": "Scan repos",
+            "agents": [
+                { "name": "Scanner", "role_description": "Scans code" }
+            ],
+            "dependencies": [
+                { "from": "Scanner", "to": "Ghost" }
+            ]
+        });
+        let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
+
+        assert!(result["error"]
+            .as_str()
+            .unwrap()
+            .contains("unknown agent"));
+    }
+
+    #[tokio::test]
+    async fn configure_team_self_dependency_returns_error() {
+        let ctx = make_ctx();
+        let repo = MockWorkflowRepo::new();
+
+        let input = json!({
+            "task": "Scan repos",
+            "agents": [
+                { "name": "Scanner", "role_description": "Scans code" }
+            ],
+            "dependencies": [
+                { "from": "Scanner", "to": "Scanner" }
+            ]
+        });
+        let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
+
+        assert!(result["error"]
+            .as_str()
+            .unwrap()
+            .contains("Self-dependency not allowed"));
+    }
+
+    // =========================================================================
+    // configure_team — fresh team (empty node)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn configure_team_fresh_creates_all_agents() {
+        let ctx = make_ctx();
+        // Empty brief — simulates a freshly created node
+        let mut brief = make_brief(ctx.step_id);
+        brief.task_description = String::new();
+        brief.available_capabilities = vec![];
+        let brief_id = brief.id;
+        let step_id = ctx.step_id;
+        let wf_id = ctx.workflow_id;
+        let user_id = Uuid::new_v4();
+        let child_wf_id = Uuid::new_v4();
+
+        let mut parent_step = make_step(step_id, wf_id, "workforce");
+        parent_step.child_workflow_id = Some(child_wf_id);
+
+        let mut repo = MockWorkflowRepo::new();
+
+        // ensure_mission_brief — brief exists but is empty
+        let brief_clone = brief.clone();
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(brief_clone.clone())));
+
+        // Task diff — empty task means "created"
+        repo.expect_upsert_mission_brief()
+            .returning(|sid, desc, _, _, _| {
+                Ok(TaskMissionBriefRow {
+                    id: Uuid::new_v4(),
+                    step_id: sid,
+                    task_description: desc.to_string(),
+                    ..Default::default()
+                })
+            });
+
+        // Empty current roster
+        repo.expect_list_agent_roster().returning(|_| Ok(vec![]));
+
+        // resolve_user_id
+        repo.expect_get_workflow()
+            .returning(move |_| Ok(Some(make_workflow(wf_id, user_id))));
+
+        // Pipeline: get_step returns step with child_workflow_id
+        let parent_step_clone = parent_step.clone();
+        repo.expect_get_step()
+            .returning(move |_| Ok(Some(parent_step_clone.clone())));
+
+        // Pipeline: create_step for each agent
+        repo.expect_create_step().returning(|s| Ok(s));
+
+        // add_roster_agent called for each agent
+        repo.expect_add_roster_agent()
+            .returning(move |bid, name, role, caps, order| {
+                Ok(TaskAgentRosterRow {
+                    id: Uuid::new_v4(),
+                    mission_brief_id: bid,
+                    name: name.to_string(),
+                    role_description: role.to_string(),
+                    capabilities: caps.to_vec(),
+                    execution_order: order,
+                    child_step_id: Some(Uuid::new_v4()),
+                    ..Default::default()
+                })
+            });
+
+        repo.expect_link_roster_agent_to_child_step()
+            .returning(|_, _| Ok(()));
+
+        // No edges to diff (fresh team, no deps requested)
+        repo.expect_list_edges().returning(|_| Ok(vec![]));
+        repo.expect_list_steps().returning(|_| Ok(vec![]));
+
+        // recompute: update_roster_agent_order
+        repo.expect_update_roster_agent_order()
+            .returning(|_, _| Ok(()));
+
+        let input = json!({
+            "task": "Scan repositories for vulnerabilities",
+            "agents": [
+                { "name": "Scanner", "role_description": "Scans code for vulns", "capabilities": ["file_read"] },
+                { "name": "Analyzer", "role_description": "Analyzes scan results", "capabilities": ["file_read", "web_search"] }
+            ]
+        });
+        let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
+
+        // Task
+        assert_eq!(result["task"]["status"], "created");
+        assert_eq!(
+            result["task"]["description"],
+            "Scan repositories for vulnerabilities"
+        );
+
+        // Agents
+        let agents = result["agents"].as_array().unwrap();
+        assert_eq!(agents.len(), 2);
+        assert_eq!(agents[0]["name"], "Scanner");
+        assert_eq!(agents[0]["status"], "created");
+        assert_eq!(agents[1]["name"], "Analyzer");
+        assert_eq!(agents[1]["status"], "created");
+    }
+
+    // =========================================================================
+    // configure_team — idempotent (same call twice)
+    // =========================================================================
+
+    #[tokio::test]
+    async fn configure_team_idempotent_returns_unchanged() {
+        let ctx = make_ctx();
+        let brief = make_brief(ctx.step_id);
+        let brief_id = brief.id;
+        let step_id = ctx.step_id;
+        let wf_id = ctx.workflow_id;
+        let user_id = Uuid::new_v4();
+        let child_wf_id = Uuid::new_v4();
+
+        // Brief already has the same task
+        let mut existing_brief = brief.clone();
+        existing_brief.task_description = "Scan repos".to_string();
+
+        // Roster already has the agent with same role + caps
+        let mut scanner = make_roster_agent(brief_id, "Scanner", 0);
+        scanner.role_description = "Scans code".to_string();
+        scanner.capabilities = vec!["file_read".to_string()];
+        scanner.child_step_id = Some(Uuid::new_v4());
+
+        let mut parent_step = make_step(step_id, wf_id, "workforce");
+        parent_step.child_workflow_id = Some(child_wf_id);
+
+        let mut repo = MockWorkflowRepo::new();
+
+        let existing_brief_clone = existing_brief.clone();
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(existing_brief_clone.clone())));
+
+        let scanner_clone = scanner.clone();
+        repo.expect_list_agent_roster()
+            .returning(move |_| Ok(vec![scanner_clone.clone()]));
+
+        repo.expect_get_workflow()
+            .returning(move |_| Ok(Some(make_workflow(wf_id, user_id))));
+
+        let parent_step_clone = parent_step.clone();
+        repo.expect_get_step()
+            .returning(move |_| Ok(Some(parent_step_clone.clone())));
+
+        // No edges (no deps in input or current)
+        repo.expect_list_edges().returning(|_| Ok(vec![]));
+        repo.expect_list_steps().returning(|_| Ok(vec![]));
+
+        let input = json!({
+            "task": "Scan repos",
+            "agents": [
+                { "name": "Scanner", "role_description": "Scans code", "capabilities": ["file_read"] }
+            ]
+        });
+        let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
+
+        assert!(result.get("error").is_none());
+        assert_eq!(result["task"]["status"], "unchanged");
+
+        let agents = result["agents"].as_array().unwrap();
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0]["status"], "unchanged");
+    }
+
+    // =========================================================================
+    // configure_team — add agent to existing team
+    // =========================================================================
+
+    #[tokio::test]
+    async fn configure_team_adds_new_agent_keeps_existing() {
+        let ctx = make_ctx();
+        let brief = make_brief(ctx.step_id);
+        let brief_id = brief.id;
+        let step_id = ctx.step_id;
+        let wf_id = ctx.workflow_id;
+        let user_id = Uuid::new_v4();
+        let child_wf_id = Uuid::new_v4();
+
+        let mut existing_brief = brief.clone();
+        existing_brief.task_description = "Scan repos".to_string();
+
+        // One existing agent
+        let mut scanner = make_roster_agent(brief_id, "Scanner", 0);
+        scanner.role_description = "Scans code".to_string();
+        scanner.capabilities = vec!["file_read".to_string()];
+        scanner.child_step_id = Some(Uuid::new_v4());
+
+        let mut parent_step = make_step(step_id, wf_id, "workforce");
+        parent_step.child_workflow_id = Some(child_wf_id);
+
+        let mut repo = MockWorkflowRepo::new();
+
+        let existing_brief_clone = existing_brief.clone();
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(existing_brief_clone.clone())));
+
+        let scanner_clone = scanner.clone();
+        repo.expect_list_agent_roster()
+            .returning(move |_| Ok(vec![scanner_clone.clone()]));
+
+        repo.expect_get_workflow()
+            .returning(move |_| Ok(Some(make_workflow(wf_id, user_id))));
+
+        let parent_step_clone = parent_step.clone();
+        repo.expect_get_step()
+            .returning(move |_| Ok(Some(parent_step_clone.clone())));
+
+        // Pipeline: create step for the new agent
+        repo.expect_create_step().returning(|s| Ok(s));
+
+        repo.expect_add_roster_agent()
+            .returning(move |bid, name, role, caps, order| {
+                assert_eq!(name, "Analyzer");
+                Ok(TaskAgentRosterRow {
+                    id: Uuid::new_v4(),
+                    mission_brief_id: bid,
+                    name: name.to_string(),
+                    role_description: role.to_string(),
+                    capabilities: caps.to_vec(),
+                    execution_order: order,
+                    child_step_id: Some(Uuid::new_v4()),
+                    ..Default::default()
+                })
+            });
+
+        repo.expect_link_roster_agent_to_child_step()
+            .returning(|_, _| Ok(()));
+
+        repo.expect_list_edges().returning(|_| Ok(vec![]));
+        repo.expect_list_steps().returning(|_| Ok(vec![]));
+        repo.expect_update_roster_agent_order()
+            .returning(|_, _| Ok(()));
+
+        let input = json!({
+            "task": "Scan repos",
+            "agents": [
+                { "name": "Scanner", "role_description": "Scans code", "capabilities": ["file_read"] },
+                { "name": "Analyzer", "role_description": "Analyzes results", "capabilities": ["web_search"] }
+            ]
+        });
+        let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
+
+        assert!(result.get("error").is_none());
+        assert_eq!(result["task"]["status"], "unchanged");
+
+        let agents = result["agents"].as_array().unwrap();
+        assert_eq!(agents.len(), 2);
+        assert_eq!(agents[0]["name"], "Scanner");
+        assert_eq!(agents[0]["status"], "unchanged");
+        assert_eq!(agents[1]["name"], "Analyzer");
+        assert_eq!(agents[1]["status"], "created");
+    }
+
+    // =========================================================================
+    // configure_team — remove agent from existing team
+    // =========================================================================
+
+    #[tokio::test]
+    async fn configure_team_removes_agent_not_in_spec() {
+        let ctx = make_ctx();
+        let brief = make_brief(ctx.step_id);
+        let brief_id = brief.id;
+        let step_id = ctx.step_id;
+        let wf_id = ctx.workflow_id;
+        let user_id = Uuid::new_v4();
+        let child_wf_id = Uuid::new_v4();
+        let old_agent_child_step = Uuid::new_v4();
+
+        let mut existing_brief = brief.clone();
+        existing_brief.task_description = "Scan repos".to_string();
+
+        // Two existing agents — we'll keep Scanner but remove OldAgent
+        let mut scanner = make_roster_agent(brief_id, "Scanner", 0);
+        scanner.role_description = "Scans code".to_string();
+        scanner.capabilities = vec!["file_read".to_string()];
+        scanner.child_step_id = Some(Uuid::new_v4());
+
+        let mut old_agent = make_roster_agent(brief_id, "OldAgent", 1);
+        old_agent.child_step_id = Some(old_agent_child_step);
+
+        let mut parent_step = make_step(step_id, wf_id, "workforce");
+        parent_step.child_workflow_id = Some(child_wf_id);
+
+        let mut repo = MockWorkflowRepo::new();
+
+        let existing_brief_clone = existing_brief.clone();
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(existing_brief_clone.clone())));
+
+        let scanner_clone = scanner.clone();
+        let old_agent_clone = old_agent.clone();
+        repo.expect_list_agent_roster()
+            .returning(move |_| Ok(vec![scanner_clone.clone(), old_agent_clone.clone()]));
+
+        repo.expect_get_workflow()
+            .returning(move |_| Ok(Some(make_workflow(wf_id, user_id))));
+
+        let parent_step_clone = parent_step.clone();
+        repo.expect_get_step()
+            .returning(move |_| Ok(Some(parent_step_clone.clone())));
+
+        // Pipeline remove_step for OldAgent's child step
+        repo.expect_list_edges().returning(|_| Ok(vec![]));
+        repo.expect_list_steps().returning(|_| Ok(vec![]));
+        repo.expect_remove_edge().returning(|_, _| Ok(()));
+        repo.expect_delete_step().returning(|_| Ok(()));
+        repo.expect_update_step().returning(|s| Ok(s));
+
+        repo.expect_remove_roster_agent().returning(|_| Ok(()));
+
+        let input = json!({
+            "task": "Scan repos",
+            "agents": [
+                { "name": "Scanner", "role_description": "Scans code", "capabilities": ["file_read"] }
+            ]
+        });
+        let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
+
+        assert!(result.get("error").is_none());
+
+        let agents = result["agents"].as_array().unwrap();
+        assert_eq!(agents.len(), 2);
+        assert_eq!(agents[0]["name"], "Scanner");
+        assert_eq!(agents[0]["status"], "unchanged");
+        assert_eq!(agents[1]["name"], "OldAgent");
+        assert_eq!(agents[1]["status"], "removed");
+    }
+
+    // =========================================================================
+    // configure_team — update agent role/capabilities
+    // =========================================================================
+
+    #[tokio::test]
+    async fn configure_team_updates_agent_role() {
+        let ctx = make_ctx();
+        let brief = make_brief(ctx.step_id);
+        let brief_id = brief.id;
+        let step_id = ctx.step_id;
+        let wf_id = ctx.workflow_id;
+        let user_id = Uuid::new_v4();
+        let child_wf_id = Uuid::new_v4();
+        let scanner_child = Uuid::new_v4();
+
+        let mut existing_brief = brief.clone();
+        existing_brief.task_description = "Scan repos".to_string();
+
+        let mut scanner = make_roster_agent(brief_id, "Scanner", 0);
+        scanner.role_description = "Old role".to_string();
+        scanner.capabilities = vec!["file_read".to_string()];
+        scanner.child_step_id = Some(scanner_child);
+
+        let mut parent_step = make_step(step_id, wf_id, "workforce");
+        parent_step.child_workflow_id = Some(child_wf_id);
+
+        let mut repo = MockWorkflowRepo::new();
+
+        let existing_brief_clone = existing_brief.clone();
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(existing_brief_clone.clone())));
+
+        let scanner_clone = scanner.clone();
+        repo.expect_list_agent_roster()
+            .returning(move |_| Ok(vec![scanner_clone.clone()]));
+
+        repo.expect_get_workflow()
+            .returning(move |_| Ok(Some(make_workflow(wf_id, user_id))));
+
+        let parent_step_clone = parent_step.clone();
+        repo.expect_get_step()
+            .returning(move |_| Ok(Some(parent_step_clone.clone())));
+
+        // update_roster_agent called with new role
+        repo.expect_update_roster_agent()
+            .returning(|id, name, role, caps| {
+                assert!(role.is_some());
+                assert_eq!(role.as_deref().unwrap(), "New deep scanner role");
+                assert!(caps.is_none()); // caps unchanged
+                Ok(TaskAgentRosterRow {
+                    id,
+                    name: name.unwrap_or_else(|| "Scanner".to_string()),
+                    role_description: role.unwrap_or_default(),
+                    ..Default::default()
+                })
+            });
+
+        // update child step description
+        repo.expect_update_step().returning(|s| Ok(s));
+
+        repo.expect_list_edges().returning(|_| Ok(vec![]));
+        repo.expect_list_steps().returning(|_| Ok(vec![]));
+
+        let input = json!({
+            "task": "Scan repos",
+            "agents": [
+                { "name": "Scanner", "role_description": "New deep scanner role", "capabilities": ["file_read"] }
+            ]
+        });
+        let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
+
+        assert!(result.get("error").is_none());
+
+        let agents = result["agents"].as_array().unwrap();
+        assert_eq!(agents.len(), 1);
+        assert_eq!(agents[0]["name"], "Scanner");
+        assert_eq!(agents[0]["status"], "updated");
+    }
+
+    // =========================================================================
+    // configure_team — case-insensitive name matching
+    // =========================================================================
+
+    #[tokio::test]
+    async fn configure_team_case_insensitive_name_matching() {
+        let ctx = make_ctx();
+        let brief = make_brief(ctx.step_id);
+        let brief_id = brief.id;
+        let step_id = ctx.step_id;
+        let wf_id = ctx.workflow_id;
+        let user_id = Uuid::new_v4();
+        let child_wf_id = Uuid::new_v4();
+
+        let mut existing_brief = brief.clone();
+        existing_brief.task_description = "Scan repos".to_string();
+
+        // Existing agent named "Scanner" (title case)
+        let mut scanner = make_roster_agent(brief_id, "Scanner", 0);
+        scanner.role_description = "Scans code".to_string();
+        scanner.capabilities = vec!["file_read".to_string()];
+        scanner.child_step_id = Some(Uuid::new_v4());
+
+        let mut parent_step = make_step(step_id, wf_id, "workforce");
+        parent_step.child_workflow_id = Some(child_wf_id);
+
+        let mut repo = MockWorkflowRepo::new();
+
+        let existing_brief_clone = existing_brief.clone();
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(existing_brief_clone.clone())));
+
+        let scanner_clone = scanner.clone();
+        repo.expect_list_agent_roster()
+            .returning(move |_| Ok(vec![scanner_clone.clone()]));
+
+        repo.expect_get_workflow()
+            .returning(move |_| Ok(Some(make_workflow(wf_id, user_id))));
+
+        let parent_step_clone = parent_step.clone();
+        repo.expect_get_step()
+            .returning(move |_| Ok(Some(parent_step_clone.clone())));
+
+        repo.expect_list_edges().returning(|_| Ok(vec![]));
+        repo.expect_list_steps().returning(|_| Ok(vec![]));
+
+        // Input uses "SCANNER" (all caps) — should match existing "Scanner"
+        let input = json!({
+            "task": "Scan repos",
+            "agents": [
+                { "name": "SCANNER", "role_description": "Scans code", "capabilities": ["file_read"] }
+            ]
+        });
+        let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
+
+        assert!(result.get("error").is_none());
+
+        let agents = result["agents"].as_array().unwrap();
+        assert_eq!(agents.len(), 1);
+        // Matched by normalized name — not created as new
+        assert_eq!(agents[0]["status"], "unchanged");
+    }
+
+    // =========================================================================
+    // configure_team — dependency creation
+    // =========================================================================
+
+    #[tokio::test]
+    async fn configure_team_creates_dependencies() {
+        let ctx = make_ctx();
+        let brief = make_brief(ctx.step_id);
+        let brief_id = brief.id;
+        let step_id = ctx.step_id;
+        let wf_id = ctx.workflow_id;
+        let user_id = Uuid::new_v4();
+        let child_wf_id = Uuid::new_v4();
+        let scanner_child = Uuid::new_v4();
+        let analyzer_child = Uuid::new_v4();
+
+        let mut existing_brief = brief.clone();
+        existing_brief.task_description = "Scan repos".to_string();
+
+        let mut scanner = make_roster_agent(brief_id, "Scanner", 0);
+        scanner.role_description = "Scans code".to_string();
+        scanner.capabilities = vec![];
+        scanner.child_step_id = Some(scanner_child);
+
+        let mut analyzer = make_roster_agent(brief_id, "Analyzer", 1);
+        analyzer.role_description = "Analyzes results".to_string();
+        analyzer.capabilities = vec![];
+        analyzer.child_step_id = Some(analyzer_child);
+
+        let mut parent_step = make_step(step_id, wf_id, "workforce");
+        parent_step.child_workflow_id = Some(child_wf_id);
+
+        let mut repo = MockWorkflowRepo::new();
+
+        let existing_brief_clone = existing_brief.clone();
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(existing_brief_clone.clone())));
+
+        let scanner_clone = scanner.clone();
+        let analyzer_clone = analyzer.clone();
+        repo.expect_list_agent_roster()
+            .returning(move |_| Ok(vec![scanner_clone.clone(), analyzer_clone.clone()]));
+
+        repo.expect_get_workflow()
+            .returning(move |_| Ok(Some(make_workflow(wf_id, user_id))));
+
+        let parent_step_clone = parent_step.clone();
+        repo.expect_get_step()
+            .returning(move |_| Ok(Some(parent_step_clone.clone())));
+
+        // No existing edges
+        repo.expect_list_edges().returning(|_| Ok(vec![]));
+        repo.expect_list_steps().returning(|_| Ok(vec![]));
+
+        // Edge creation: Scanner → Analyzer
+        repo.expect_add_edge().returning(|wid, from, to| {
+            Ok(WorkflowStepEdgeRow {
+                id: Uuid::new_v4(),
+                from_step_id: from,
+                to_step_id: to,
+                workflow_id: wid,
+                ..Default::default()
+            })
+        });
+
+        let input = json!({
+            "task": "Scan repos",
+            "agents": [
+                { "name": "Scanner", "role_description": "Scans code" },
+                { "name": "Analyzer", "role_description": "Analyzes results" }
+            ],
+            "dependencies": [
+                { "from": "Scanner", "to": "Analyzer" }
+            ]
+        });
+        let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
+
+        assert!(result.get("error").is_none());
+
+        let deps = result["dependencies"].as_array().unwrap();
+        assert_eq!(deps.len(), 1);
+        assert_eq!(deps[0]["from"], "Scanner");
+        assert_eq!(deps[0]["to"], "Analyzer");
+        assert_eq!(deps[0]["status"], "created");
+    }
+
+    // =========================================================================
+    // configure_team — dependency removal
+    // =========================================================================
+
+    #[tokio::test]
+    async fn configure_team_removes_extra_dependencies() {
+        let ctx = make_ctx();
+        let brief = make_brief(ctx.step_id);
+        let brief_id = brief.id;
+        let step_id = ctx.step_id;
+        let wf_id = ctx.workflow_id;
+        let user_id = Uuid::new_v4();
+        let child_wf_id = Uuid::new_v4();
+        let scanner_child = Uuid::new_v4();
+        let analyzer_child = Uuid::new_v4();
+
+        let mut existing_brief = brief.clone();
+        existing_brief.task_description = "Scan repos".to_string();
+
+        let mut scanner = make_roster_agent(brief_id, "Scanner", 0);
+        scanner.role_description = "Scans code".to_string();
+        scanner.capabilities = vec![];
+        scanner.child_step_id = Some(scanner_child);
+
+        let mut analyzer = make_roster_agent(brief_id, "Analyzer", 1);
+        analyzer.role_description = "Analyzes results".to_string();
+        analyzer.capabilities = vec![];
+        analyzer.child_step_id = Some(analyzer_child);
+
+        let mut parent_step = make_step(step_id, wf_id, "workforce");
+        parent_step.child_workflow_id = Some(child_wf_id);
+
+        let mut repo = MockWorkflowRepo::new();
+
+        let existing_brief_clone = existing_brief.clone();
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(existing_brief_clone.clone())));
+
+        let scanner_clone = scanner.clone();
+        let analyzer_clone = analyzer.clone();
+        repo.expect_list_agent_roster()
+            .returning(move |_| Ok(vec![scanner_clone.clone(), analyzer_clone.clone()]));
+
+        repo.expect_get_workflow()
+            .returning(move |_| Ok(Some(make_workflow(wf_id, user_id))));
+
+        let parent_step_clone = parent_step.clone();
+        repo.expect_get_step()
+            .returning(move |_| Ok(Some(parent_step_clone.clone())));
+
+        // Existing edge Scanner → Analyzer — but desired spec has NO dependencies
+        repo.expect_list_edges().returning(move |_| {
+            Ok(vec![WorkflowStepEdgeRow {
+                id: Uuid::new_v4(),
+                from_step_id: scanner_child,
+                to_step_id: analyzer_child,
+                workflow_id: child_wf_id,
+                ..Default::default()
+            }])
+        });
+
+        repo.expect_list_steps().returning(|_| Ok(vec![]));
+
+        // Edge removal
+        repo.expect_remove_edge()
+            .withf(move |from, to| *from == scanner_child && *to == analyzer_child)
+            .returning(|_, _| Ok(()));
+
+        let input = json!({
+            "task": "Scan repos",
+            "agents": [
+                { "name": "Scanner", "role_description": "Scans code" },
+                { "name": "Analyzer", "role_description": "Analyzes results" }
+            ]
+        });
+        let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
+
+        assert!(result.get("error").is_none());
+
+        let deps = result["dependencies"].as_array().unwrap();
+        assert_eq!(deps.len(), 1);
+        assert_eq!(deps[0]["status"], "removed");
+    }
 }

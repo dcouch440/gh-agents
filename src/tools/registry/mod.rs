@@ -63,6 +63,7 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "set_capabilities" => Some(set_capabilities_tool()),
         "set_failure_mode" => Some(set_failure_mode_tool()),
 
+        "configure_team" => Some(configure_team_tool()),
         "set_dependency" => Some(set_dependency_tool()),
         "remove_dependency" => Some(remove_dependency_tool()),
 
@@ -770,6 +771,74 @@ fn set_failure_mode_tool() -> Tool {
                 }
             },
             "required": ["mode"]
+        }),
+    }
+}
+
+fn configure_team_tool() -> Tool {
+    Tool {
+        name: "configure_team".into(),
+        description: concat!(
+            "Declaratively configure the full team for this node in a single call. ",
+            "Provide the complete desired state: task description, agent roster, and ",
+            "dependencies. The tool diffs against the current state and applies only ",
+            "the changes needed — creating new agents, removing agents not in the spec, ",
+            "updating agents whose role or capabilities changed, and reconciling ",
+            "dependencies. Use this for initial team setup or full rebuilds. For ",
+            "single-agent tweaks after setup, use add_agent/update_agent/remove_agent. ",
+            "Notes are managed separately via update_notes.",
+        )
+        .into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "task": {
+                    "type": "string",
+                    "description": "Mission description: what the team produces, what inputs they work from, what success looks like"
+                },
+                "agents": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Agent name (e.g. 'Scanner', 'Analyzer', 'Reporter')"
+                            },
+                            "role_description": {
+                                "type": "string",
+                                "description": "What this agent does — domain expertise, approach, scope boundaries, output expectations"
+                            },
+                            "capabilities": {
+                                "type": "array",
+                                "items": { "type": "string" },
+                                "description": "Tool capabilities: file_read, file_write, content_search, shell, web_search, document_read, database_query"
+                            }
+                        },
+                        "required": ["name", "role_description"]
+                    },
+                    "description": "Complete agent roster in data-flow order (producers before consumers)"
+                },
+                "dependencies": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "from": {
+                                "type": "string",
+                                "description": "Upstream agent name (produces output)"
+                            },
+                            "to": {
+                                "type": "string",
+                                "description": "Downstream agent name (receives output)"
+                            }
+                        },
+                        "required": ["from", "to"]
+                    },
+                    "description": "Data routing between agents. Each dependency means to_agent receives from_agent's output"
+                }
+            },
+            "required": ["task", "agents"]
         }),
     }
 }
