@@ -193,8 +193,9 @@ mod tests {
         assert!(names.contains(&"render_panel"));
         assert!(names.contains(&"think"));
 
-        // Node mutation tools are dispatch-only — assistant must dispatch them
-        assert!(!names.contains(&"set_node_name"));
+        // set_node_name is a universal tool (quick rename is allowed in chat)
+        assert!(names.contains(&"set_node_name"));
+        // set_node_description is dispatch-only — assistant must dispatch it
         assert!(!names.contains(&"set_node_description"));
 
         // update_notes is owned by the dispatch sub-agent, not the assistant
