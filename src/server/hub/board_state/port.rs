@@ -5,7 +5,7 @@
 //! - [`render_input_port`]: L4 typed input with schema and json_path
 //! - [`render_output_port`]: L4 typed output with schema
 
-use super::render::XmlBuilder;
+use crate::markup::XmlBuilder;
 use super::types::*;
 
 /// Render an [`IncomingContextSnapshot`] as a `<port>` element (L3 style).

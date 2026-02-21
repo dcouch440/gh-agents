@@ -3,6 +3,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::server::hub::board_state::render;
+    use crate::markup::{xml_escape, XmlBuilder};
     use crate::server::hub::board_state::types::*;
 
     // ========================================================================
@@ -315,9 +316,8 @@ mod tests {
 
     #[test]
     fn xml_escape_special_chars() {
-        use crate::server::hub::board_state::render::xml_escape;
-
-        assert_eq!(xml_escape("a & b"), "a &amp; b");
+        
+assert_eq!(xml_escape("a & b"), "a &amp; b");
         assert_eq!(xml_escape("<script>"), "&lt;script&gt;");
         assert_eq!(xml_escape(r#"say "hello""#), "say &quot;hello&quot;");
         assert_eq!(xml_escape("clean text"), "clean text");
@@ -329,25 +329,22 @@ mod tests {
 
     #[test]
     fn builder_self_closing() {
-        use crate::server::hub::board_state::render::XmlBuilder;
-
-        let xml = XmlBuilder::new("empty", 0).build();
+        
+let xml = XmlBuilder::new("empty", 0).build();
         assert_eq!(xml, "<empty />\n");
     }
 
     #[test]
     fn builder_inline_text() {
-        use crate::server::hub::board_state::render::XmlBuilder;
-
-        let xml = XmlBuilder::new("tag", 0).text("hello").build();
+        
+let xml = XmlBuilder::new("tag", 0).text("hello").build();
         assert_eq!(xml, "<tag>hello</tag>\n");
     }
 
     #[test]
     fn builder_attrs_and_children() {
-        use crate::server::hub::board_state::render::XmlBuilder;
-
-        let xml = XmlBuilder::new("node", 0)
+        
+let xml = XmlBuilder::new("node", 0)
             .attr("name", "Test")
             .text("summary")
             .raw(&XmlBuilder::new("child", 1).text("inner").build())
@@ -361,9 +358,8 @@ mod tests {
 
     #[test]
     fn builder_indent() {
-        use crate::server::hub::board_state::render::XmlBuilder;
-
-        let xml = XmlBuilder::new("deep", 3).attr("x", "1").build();
+        
+let xml = XmlBuilder::new("deep", 3).attr("x", "1").build();
         assert!(xml.starts_with("      <deep")); // 3 * 2 spaces
     }
 }

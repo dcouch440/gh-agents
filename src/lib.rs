@@ -11,6 +11,7 @@ pub mod execution;
 pub mod github;
 pub mod llm;
 pub mod logging;
+pub mod markup;
 pub mod prompts;
 pub mod server;
 pub mod tools;
