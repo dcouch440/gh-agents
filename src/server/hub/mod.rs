@@ -6,6 +6,7 @@
 //! sessions, DAG workflow steps, and tool routing.
 
 pub mod board_overview;
+pub mod board_state;
 pub mod capability_resolver;
 pub mod chat_beliefs;
 pub mod consistency_scanner;
