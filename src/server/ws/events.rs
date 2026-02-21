@@ -509,6 +509,13 @@ pub enum SessionEventKind {
         execution_id: Uuid,
         step_id: Uuid,
     },
+    /// An agent-sourced message was injected into this session.
+    AgentMessage {
+        message_id: Uuid,
+        from_agent: String,
+        message_type: String,
+        content_preview: String,
+    },
 }
 
 impl SessionEvent {
@@ -522,6 +529,7 @@ impl SessionEvent {
             SessionEventKind::DispatchCompleted { .. } => "dispatch_completed",
             SessionEventKind::DispatchFailed { .. } => "dispatch_failed",
             SessionEventKind::DispatchCancelled { .. } => "dispatch_cancelled",
+            SessionEventKind::AgentMessage { .. } => "agent_message",
         }
     }
 

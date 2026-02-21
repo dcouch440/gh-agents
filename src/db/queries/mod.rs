@@ -18,6 +18,8 @@ pub struct ChatMessageRow {
     pub role: String,
     pub content: String,
     pub timestamp: DateTime<Utc>,
+    /// Message source: None = human, Some("agent") = agent-injected, Some("system") = system notification.
+    pub source_type: Option<String>,
 }
 
 /// Insert a new chat message
@@ -51,7 +53,7 @@ pub async fn get_chat_history(
     let limit = limit.min(1000) as i64;
     let offset = offset as i64;
 
-    let rows: Vec<ChatMessageRow> = sqlx::query_as("SELECT id, role, content, timestamp FROM chat_messages WHERE user_id = $1 ORDER BY timestamp ASC LIMIT $2 OFFSET $3")
+    let rows: Vec<ChatMessageRow> = sqlx::query_as("SELECT id, role, content, timestamp, source_type FROM chat_messages WHERE user_id = $1 ORDER BY timestamp ASC LIMIT $2 OFFSET $3")
         .bind(user_id.0)
         .bind(limit)
         .bind(offset)
@@ -182,6 +184,30 @@ pub async fn insert_session_message(
     Ok(())
 }
 
+/// Insert an agent-sourced message into a session.
+pub async fn insert_agent_session_message(
+    pool: &PgPool,
+    user_id: UserId,
+    session_id: Uuid,
+    id: &Uuid,
+    role: &str,
+    content: &str,
+    source_type: &str,
+) -> Result<()> {
+    sqlx::query("INSERT INTO chat_messages (id, user_id, session_id, role, content, timestamp, source_type) VALUES ($1, $2, $3, $4, $5, $6, $7)")
+        .bind(id)
+        .bind(user_id.0)
+        .bind(session_id)
+        .bind(role)
+        .bind(content)
+        .bind(Utc::now())
+        .bind(source_type)
+        .execute(pool)
+        .await
+        .context("Failed to insert agent session message")?;
+    Ok(())
+}
+
 /// Get chat history for a session
 pub async fn get_session_history(
     pool: &PgPool,
@@ -189,7 +215,7 @@ pub async fn get_session_history(
     limit: u32,
 ) -> Result<Vec<ChatMessageRow>> {
     let limit = limit.min(1000) as i64;
-    let rows: Vec<ChatMessageRow> = sqlx::query_as("SELECT id, role, content, timestamp FROM chat_messages WHERE session_id = $1 ORDER BY timestamp ASC LIMIT $2")
+    let rows: Vec<ChatMessageRow> = sqlx::query_as("SELECT id, role, content, timestamp, source_type FROM chat_messages WHERE session_id = $1 ORDER BY timestamp ASC LIMIT $2")
         .bind(session_id)
         .bind(limit)
         .fetch_all(pool)

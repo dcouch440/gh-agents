@@ -47,6 +47,7 @@ mod tests {
             role: "user".to_string(),
             content: "Hello!".to_string(),
             timestamp: Utc::now(),
+            source_type: None,
         };
         let json = serde_json::to_string(&message).unwrap();
         assert!(json.contains("\"role\":\"user\""));

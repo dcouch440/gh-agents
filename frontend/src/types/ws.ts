@@ -193,11 +193,19 @@ export const SESSION_EVENT = {
   CREATED: 'created',
   UPDATED: 'updated',
   DELETED: 'deleted',
+  AGENT_MESSAGE: 'agent_message',
 } as const
 
 export type SessionCreatedData = { session_id: string; title: string; mode_id: string }
 export type SessionUpdatedData = { session_id: string; title: string | null; mode_id: string | null }
 export type SessionDeletedData = { session_id: string }
+export type AgentMessageData = {
+  session_id: string
+  message_id: string
+  from_agent: string
+  message_type: string
+  content_preview: string
+}
 
 // ============================================================================
 // Handler Type

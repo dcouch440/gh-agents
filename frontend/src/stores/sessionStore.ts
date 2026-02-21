@@ -116,6 +116,15 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         store.setState((s) => ({ items: nmDelete(s.items, sessionId) }))
         break
       }
+      case SESSION_EVENT.AGENT_MESSAGE: {
+        const sessionId = data.session_id as string
+        store.setState((s) => {
+          const existing = nmGet(s.items, sessionId)
+          if (!existing) return s
+          return { items: nmSet(s.items, sessionId, { ...existing, updated_at: msg.ts }) }
+        })
+        break
+      }
     }
   } catch (err) {
     console.error(`[sessionStore] WS handler error on "${msg.event}":`, err)

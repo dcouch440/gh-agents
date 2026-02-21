@@ -304,6 +304,7 @@ function AgentWorkshopPage() {
           id: msg.id,
           role: msg.role,
           content: msg.content,
+          source_type: msg.source_type,
         }))
 
         if (session.agent_id) {

@@ -386,6 +386,7 @@ pub async fn get_session_history(
             role: row.role,
             content: row.content,
             timestamp: row.timestamp,
+            source_type: row.source_type,
         })
         .collect();
 

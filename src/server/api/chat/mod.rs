@@ -47,6 +47,7 @@ pub struct ChatMessage {
     pub role: String,
     pub content: String,
     pub timestamp: DateTime<Utc>,
+    pub source_type: Option<String>,
 }
 
 /// Send a chat message to the orchestrator
@@ -145,6 +146,7 @@ pub async fn get_chat_history(
             role: row.role,
             content: row.content,
             timestamp: row.timestamp,
+            source_type: row.source_type,
         })
         .collect();
 
