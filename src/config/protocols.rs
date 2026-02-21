@@ -1,8 +1,11 @@
-//! Protocol configuration and role definitions loaded from `config/protocols/`.
+//! Protocol configuration and role definitions loaded from `config/`.
 //!
-//! Each protocol folder contains a `config.yaml` with per-role agent settings
-//! (model, temperature, token limits) and role subdirectories with the LLM
-//! contract files (`system.md`, `prompt.md`, `response.json`).
+//! Layout:
+//! - `config/assistant/`          — shared conversational layer (all protocols)
+//! - `config/designer/`           — shared Agent Designer pre-lifecycle
+//! - `config/protocols/<name>/`   — protocol-specific (archetype, builder, agent)
+//! - `config/services/<name>/`    — utility LLM services (belief extraction, etc.)
+//! - `config/system/`             — platform config synced to DB at runtime
 //!
 //! All content is embedded at compile time via `include_str!()`. YAML configs
 //! are parsed once on first access via `Lazy`. Role definitions are resolved
@@ -77,9 +80,8 @@ impl ProtocolConfig {
 // Role definition types
 // ---------------------------------------------------------------------------
 
-/// Raw compile-time content for a protocol role's LLM contract.
+/// Raw compile-time content for a role's LLM contract.
 ///
-/// Each field holds the content of a file from `config/protocols/<proto>/<role>/`:
 /// - `system` — `system.md`: persona and instructions (system prompt)
 /// - `prompt` — `prompt.md`: user message template with `{{.var}}` placeholders
 /// - `response` — `response.json`: optional JSON schema for structured output
@@ -190,31 +192,35 @@ fn load_protocol_config(yaml: &str, name: &str) -> ProtocolConfig {
     config
 }
 
-pub static NODE_ASSISTANT: Lazy<ProtocolConfig> = Lazy::new(|| {
+/// Shared node assistant config (conversational layer, all protocols).
+pub static ASSISTANT: Lazy<ProtocolConfig> = Lazy::new(|| {
     load_protocol_config(
-        include_str!("../../config/protocols/node_assistant/config.yaml"),
-        "config/protocols/node_assistant/config.yaml",
+        include_str!("../../config/assistant/config.yaml"),
+        "config/assistant/config.yaml",
     )
 });
 
+/// Workforce runtime agent config.
 pub static WORKFORCE: Lazy<ProtocolConfig> = Lazy::new(|| {
     load_protocol_config(
-        include_str!("../../config/protocols/workforce/config.yaml"),
-        "config/protocols/workforce/config.yaml",
+        include_str!("../../config/protocols/workforce/agent/config.yaml"),
+        "config/protocols/workforce/agent/config.yaml",
     )
 });
 
-pub static AGENT_DESIGNER: Lazy<ProtocolConfig> = Lazy::new(|| {
+/// Shared Agent Designer config (pre-lifecycle prompt generation).
+pub static DESIGNER: Lazy<ProtocolConfig> = Lazy::new(|| {
     load_protocol_config(
-        include_str!("../../config/protocols/agent_designer/config.yaml"),
-        "config/protocols/agent_designer/config.yaml",
+        include_str!("../../config/designer/config.yaml"),
+        "config/designer/config.yaml",
     )
 });
 
-pub static DISPATCH: Lazy<ProtocolConfig> = Lazy::new(|| {
+/// Workforce builder config (background configuration agent).
+pub static WORKFORCE_BUILDER: Lazy<ProtocolConfig> = Lazy::new(|| {
     load_protocol_config(
-        include_str!("../../config/protocols/dispatch/config.yaml"),
-        "config/protocols/dispatch/config.yaml",
+        include_str!("../../config/protocols/workforce/builder/config.yaml"),
+        "config/protocols/workforce/builder/config.yaml",
     )
 });
 
@@ -225,18 +231,20 @@ pub static DISPATCH: Lazy<ProtocolConfig> = Lazy::new(|| {
 pub mod roles {
     use super::RoleDefinition;
 
-    pub static NODE_ASSISTANT_BASE: RoleDefinition = RoleDefinition {
-        system: include_str!("../../config/protocols/node_assistant/base/system.md"),
-        prompt: include_str!("../../config/protocols/node_assistant/base/prompt.md"),
+    /// Shared assistant base template (all protocols inject archetype blocks).
+    pub static ASSISTANT_BASE: RoleDefinition = RoleDefinition {
+        system: include_str!("../../config/assistant/system.md"),
+        prompt: include_str!("../../config/assistant/prompt.md"),
         response: None,
     };
 
     /// Workforce archetype block, injected via `{{.System.archetype_block}}`.
-    pub const NODE_ASSISTANT_WORKFORCE_BLOCK: &str =
-        include_str!("../../config/protocols/node_assistant/workforce/block.md");
+    pub const WORKFORCE_ARCHETYPE: &str =
+        include_str!("../../config/protocols/workforce/archetype.md");
 
-    /// Dispatch background agent system prompt template.
-    pub const DISPATCH_SYSTEM: &str = include_str!("../../config/protocols/dispatch/system.md");
+    /// Workforce builder system prompt (background configuration agent).
+    pub const WORKFORCE_BUILDER_SYSTEM: &str =
+        include_str!("../../config/protocols/workforce/builder/system.md");
 
     /// Workforce runtime agent prompt template.
     pub static WORKFORCE_AGENT: RoleDefinition = RoleDefinition {
@@ -246,28 +254,28 @@ pub mod roles {
     };
 
     /// Chat belief extractor: reads chat conversations and extracts user beliefs.
-    pub static CHAT_BELIEF_EXTRACTOR: RoleDefinition = RoleDefinition {
-        system: include_str!("../../config/protocols/chat_belief_extraction/system.md"),
-        prompt: include_str!("../../config/protocols/chat_belief_extraction/prompt.md"),
+    pub static BELIEF_EXTRACTOR: RoleDefinition = RoleDefinition {
+        system: include_str!("../../config/services/belief_extraction/system.md"),
+        prompt: include_str!("../../config/services/belief_extraction/prompt.md"),
         response: Some(include_str!(
-            "../../config/protocols/chat_belief_extraction/response.json"
+            "../../config/services/belief_extraction/response.json"
         )),
     };
 
-    /// Agent Designer: generates optimized prompt pairs for task force agents.
-    pub static AGENT_DESIGNER_DESIGNER: RoleDefinition = RoleDefinition {
-        system: include_str!("../../config/protocols/agent_designer/designer/system.md"),
-        prompt: include_str!("../../config/protocols/agent_designer/designer/prompt.md"),
+    /// Agent Designer: generates optimized prompt pairs for agents.
+    pub static DESIGNER: RoleDefinition = RoleDefinition {
+        system: include_str!("../../config/designer/system.md"),
+        prompt: include_str!("../../config/designer/prompt.md"),
         response: None,
     };
 
     /// Run results summarizer: distills step output into a 2-4 sentence summary.
     pub const RUN_RESULTS_SUMMARIZER: &str =
-        include_str!("../../config/protocols/run_results/system.md");
+        include_str!("../../config/services/run_results/system.md");
 
     /// Board overview summarizer: distills all assistant notes into a board-wide summary.
     pub const BOARD_OVERVIEW_SUMMARIZER: &str =
-        include_str!("../../config/protocols/board_overview/system.md");
+        include_str!("../../config/services/board_overview/system.md");
 }
 
 // ---------------------------------------------------------------------------
@@ -283,7 +291,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "Unknown agent role")]
     fn unknown_role_panics() {
-        NODE_ASSISTANT.agent("nonexistent");
+        ASSISTANT.agent("nonexistent");
     }
 
     // ── RoleDefinition / ProtocolContext tests ───────────────────────────
@@ -354,28 +362,29 @@ mod tests {
 
     #[test]
     fn all_role_statics_load() {
-        assert!(!roles::NODE_ASSISTANT_BASE.system.is_empty());
-        assert!(!roles::NODE_ASSISTANT_BASE.prompt.is_empty());
-        assert!(roles::NODE_ASSISTANT_BASE.response.is_none());
+        assert!(!roles::ASSISTANT_BASE.system.is_empty());
+        assert!(!roles::ASSISTANT_BASE.prompt.is_empty());
+        assert!(roles::ASSISTANT_BASE.response.is_none());
 
-        assert!(!roles::NODE_ASSISTANT_WORKFORCE_BLOCK.is_empty());
+        assert!(!roles::WORKFORCE_ARCHETYPE.is_empty());
+        assert!(!roles::WORKFORCE_BUILDER_SYSTEM.is_empty());
 
         assert!(!roles::WORKFORCE_AGENT.system.is_empty());
         assert!(!roles::WORKFORCE_AGENT.prompt.is_empty());
         assert!(roles::WORKFORCE_AGENT.response.is_none());
 
-        assert!(!roles::CHAT_BELIEF_EXTRACTOR.system.is_empty());
-        assert!(!roles::CHAT_BELIEF_EXTRACTOR.prompt.is_empty());
-        assert!(roles::CHAT_BELIEF_EXTRACTOR.response.is_some());
+        assert!(!roles::BELIEF_EXTRACTOR.system.is_empty());
+        assert!(!roles::BELIEF_EXTRACTOR.prompt.is_empty());
+        assert!(roles::BELIEF_EXTRACTOR.response.is_some());
 
-        assert!(!roles::AGENT_DESIGNER_DESIGNER.system.is_empty());
-        assert!(!roles::AGENT_DESIGNER_DESIGNER.prompt.is_empty());
-        assert!(roles::AGENT_DESIGNER_DESIGNER.response.is_none());
+        assert!(!roles::DESIGNER.system.is_empty());
+        assert!(!roles::DESIGNER.prompt.is_empty());
+        assert!(roles::DESIGNER.response.is_none());
     }
 
     #[test]
-    fn node_assistant_config_parses() {
-        let cfg = &*NODE_ASSISTANT;
+    fn assistant_config_parses() {
+        let cfg = &*ASSISTANT;
         let assistant = cfg.agent("assistant");
         assert_eq!(assistant.temperature, 0.4);
         assert_eq!(assistant.max_rounds, 15);
@@ -392,8 +401,8 @@ mod tests {
     }
 
     #[test]
-    fn agent_designer_config_parses() {
-        let cfg = &*AGENT_DESIGNER;
+    fn designer_config_parses() {
+        let cfg = &*DESIGNER;
         let designer = cfg.agent("designer");
         assert_eq!(designer.model_id, crate::constants::MODEL_TIER1);
         assert_eq!(designer.temperature, 0.4);
@@ -403,8 +412,8 @@ mod tests {
     }
 
     #[test]
-    fn dispatch_config_parses() {
-        let cfg = &*DISPATCH;
+    fn workforce_builder_config_parses() {
+        let cfg = &*WORKFORCE_BUILDER;
         let dispatcher = cfg.agent("dispatcher");
         assert_eq!(dispatcher.model_id, crate::constants::MODEL_TIER1);
         assert_eq!(dispatcher.temperature, 0.3);
@@ -414,7 +423,7 @@ mod tests {
     }
 
     #[test]
-    fn node_assistant_base_resolves_with_archetype_block() {
+    fn assistant_base_resolves_with_archetype_block() {
         let mut vars = HashMap::new();
         vars.insert(
             vars::system::BOARD_CONTEXT.to_string(),
@@ -422,11 +431,11 @@ mod tests {
         );
         vars.insert(
             vars::system::ARCHETYPE_BLOCK.to_string(),
-            roles::NODE_ASSISTANT_WORKFORCE_BLOCK.to_string(),
+            roles::WORKFORCE_ARCHETYPE.to_string(),
         );
         vars.insert(vars::system::CURRENT_CONFIG.to_string(), String::new());
 
-        let ctx = roles::NODE_ASSISTANT_BASE.resolve(&vars);
+        let ctx = roles::ASSISTANT_BASE.resolve(&vars);
         assert!(
             ctx.system_prompt.contains("help the user design this node"),
             "should contain focused identity"
@@ -481,10 +490,10 @@ mod tests {
         ]);
 
         let all_roles: &[(&str, &RoleDefinition)] = &[
-            ("node_assistant", &roles::NODE_ASSISTANT_BASE),
+            ("assistant", &roles::ASSISTANT_BASE),
             ("workforce_agent", &roles::WORKFORCE_AGENT),
-            ("chat_belief_extractor", &roles::CHAT_BELIEF_EXTRACTOR),
-            ("agent_designer", &roles::AGENT_DESIGNER_DESIGNER),
+            ("belief_extractor", &roles::BELIEF_EXTRACTOR),
+            ("designer", &roles::DESIGNER),
         ];
 
         let re = regex::Regex::new(r"\{\{\.([^}]+)\}\}").unwrap();

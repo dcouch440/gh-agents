@@ -11,7 +11,7 @@ use std::hash::{Hash, Hasher};
 use anyhow::anyhow;
 use tracing::warn;
 
-use crate::config::protocols::{roles, vars, AGENT_DESIGNER};
+use crate::config::protocols::{roles, vars, DESIGNER};
 use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow};
 use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::context::{build_context_block, ContextDocument};
@@ -114,7 +114,7 @@ impl PipelinePhase for DesignerPhase {
                             tokens_in: result.input_tokens,
                             tokens_out: result.output_tokens,
                             cost_usd: result.cost_usd,
-                            model: Some(&AGENT_DESIGNER.agent("designer").model_id),
+                            model: Some(&DESIGNER.agent("designer").model_id),
                         },
                     )
                     .await;

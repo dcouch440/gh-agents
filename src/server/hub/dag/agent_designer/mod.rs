@@ -19,7 +19,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::config::protocols::{roles, vars, AGENT_DESIGNER};
+use crate::config::protocols::{roles, vars, DESIGNER};
 use crate::db::traits::{CreateAgentExecutionInput, CreateDesignerOutputGenericInput};
 use crate::db::WorkflowStepRow;
 use crate::server::hub::engine::filters::{FilterContext, ReasoningTraceFilter};
@@ -146,7 +146,7 @@ pub(crate) async fn run_agent_designer(
     cancel: Option<&CancellationToken>,
     protocol_execution_id: Option<Uuid>,
 ) -> Result<DesignerResult, HubError> {
-    let designer_cfg = AGENT_DESIGNER.agent("designer");
+    let designer_cfg = DESIGNER.agent("designer");
 
     // 1. Build template variables from the generic input
     let template_vars = HashMap::from([
@@ -177,7 +177,7 @@ pub(crate) async fn run_agent_designer(
     ]);
 
     // 2. Resolve the Agent Designer's own prompts
-    let protocol_ctx = roles::AGENT_DESIGNER_DESIGNER.resolve(&template_vars);
+    let protocol_ctx = roles::DESIGNER.resolve(&template_vars);
 
     // 3. Create designer run record for token tracking
     let run_row = state
