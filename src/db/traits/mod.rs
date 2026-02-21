@@ -132,6 +132,17 @@ pub trait SessionRepo: Send + Sync {
         content: String,
     ) -> Result<()>;
 
+    /// Insert an agent-sourced message into a session.
+    async fn insert_agent_message(
+        &self,
+        user_id: UserId,
+        session_id: Uuid,
+        id: Uuid,
+        role: String,
+        content: String,
+        source_type: String,
+    ) -> Result<()>;
+
     /// Get chat history for a session.
     async fn get_session_history(
         &self,

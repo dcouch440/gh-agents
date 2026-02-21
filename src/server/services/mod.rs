@@ -14,6 +14,7 @@ pub mod costs;
 pub mod documents;
 pub mod edges;
 pub mod error;
+pub mod messaging;
 pub mod output_schemas;
 pub mod ownership;
 pub mod pipeline;

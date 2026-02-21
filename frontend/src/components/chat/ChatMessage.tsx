@@ -5,9 +5,41 @@ type ChatMessageProps = {
   role: 'user' | 'assistant' | 'system'
   content: string
   streaming?: boolean
+  sourceType?: string | null
 }
 
-function ChatMessage({ role, content, streaming }: ChatMessageProps) {
+function ChatMessage({ role, content, streaming, sourceType }: ChatMessageProps) {
+  if (role === 'user' && sourceType === 'agent') {
+    return (
+      <Box
+        sx={{
+          py: 1,
+          px: 1.5,
+          mx: -1.5,
+          mb: 1,
+          borderLeft: 2,
+          borderColor: 'warning.main',
+          bgcolor: (theme) =>
+            theme.palette.mode === 'light' ? 'rgba(245, 158, 11, 0.06)' : 'rgba(245, 158, 11, 0.10)',
+        }}
+      >
+        <Typography
+          variant="caption"
+          sx={{
+            fontWeight: 600,
+            mb: 0.5,
+            display: 'block',
+            color: 'warning.main',
+            letterSpacing: '0.05em',
+          }}
+        >
+          AGENT
+        </Typography>
+        <MarkdownPreview content={content} />
+      </Box>
+    )
+  }
+
   if (role === 'system') {
     return (
       <Box

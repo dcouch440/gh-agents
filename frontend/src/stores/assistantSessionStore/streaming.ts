@@ -75,6 +75,7 @@ const mapHistory = (history: readonly ChatMessage[]): ChatMessageData[] =>
     id: m.id,
     role: m.role,
     content: m.content,
+    source_type: m.source_type,
   }))
 
 const parseTokenText = (data: string): string => {

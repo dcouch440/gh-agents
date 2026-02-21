@@ -39,6 +39,7 @@ mod tests {
                 role,
                 content,
                 timestamp: Utc::now(),
+                source_type: None,
             });
             Ok(())
         }

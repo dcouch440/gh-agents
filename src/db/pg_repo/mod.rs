@@ -494,6 +494,27 @@ impl SessionRepo for PgRepo {
             .await
     }
 
+    async fn insert_agent_message(
+        &self,
+        user_id: UserId,
+        session_id: Uuid,
+        id: Uuid,
+        role: String,
+        content: String,
+        source_type: String,
+    ) -> Result<()> {
+        crate::db::insert_agent_session_message(
+            &self.pool,
+            user_id,
+            session_id,
+            &id,
+            &role,
+            &content,
+            &source_type,
+        )
+        .await
+    }
+
     async fn get_session_history(
         &self,
         session_id: Uuid,

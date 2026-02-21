@@ -105,14 +105,14 @@ describe('assistantSessionStore', () => {
     describe('mapHistory', () => {
       it('maps ChatMessage to ChatMessageData', () => {
         const history: ChatMessage[] = [
-          { id: 'msg-1', role: 'user', content: 'hello', timestamp: '2025-01-01T00:00:00Z' },
-          { id: 'msg-2', role: 'assistant', content: 'hi', timestamp: '2025-01-01T00:00:01Z' },
+          { id: 'msg-1', role: 'user', content: 'hello', timestamp: '2025-01-01T00:00:00Z', source_type: null },
+          { id: 'msg-2', role: 'assistant', content: 'hi', timestamp: '2025-01-01T00:00:01Z', source_type: null },
         ]
         const result = mapHistory(history)
 
         expect(result).toEqual([
-          { id: 'msg-1', role: 'user', content: 'hello' },
-          { id: 'msg-2', role: 'assistant', content: 'hi' },
+          { id: 'msg-1', role: 'user', content: 'hello', source_type: null },
+          { id: 'msg-2', role: 'assistant', content: 'hi', source_type: null },
         ])
       })
     })

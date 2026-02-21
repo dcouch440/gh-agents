@@ -6,6 +6,7 @@ export type ChatMessageData = {
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string
+  source_type?: string | null
 }
 
 export type MessageListProps = {
@@ -74,6 +75,7 @@ function MessageList({ messages, emptyMessage, streamingContent, streaming, focu
                 role={message.role}
                 content={message.content}
                 streaming={isLastAssistant ? streaming : undefined}
+                sourceType={message.source_type}
               />
             )
           })}

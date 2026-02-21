@@ -71,6 +71,9 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "dispatch" => Some(dispatch_tool()),
         "cancel_dispatch" => Some(cancel_dispatch_tool()),
 
+        // Agent messaging tools
+        "send_message" => Some(send_message_tool()),
+
         _ => None,
     }
 }
@@ -930,6 +933,43 @@ fn cancel_dispatch_tool() -> Tool {
                 }
             },
             "required": ["execution_id"]
+        }),
+    }
+}
+
+// ============================================================================
+// Agent Messaging Tool Definitions
+// ============================================================================
+
+fn send_message_tool() -> Tool {
+    Tool {
+        name: "send_message".into(),
+        description: concat!(
+            "Send a message to a node assistant's chat session. The message is delivered in ",
+            "real-time and appears in the node's conversation history. The node assistant ",
+            "processes it on its next turn and can respond, dispatch configuration changes, ",
+            "or raise questions. Use this to provide instructions, context, or updates to ",
+            "individual nodes.",
+        )
+        .into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "step_id": {
+                    "type": "string",
+                    "description": "UUID of the target workflow step (node) to send the message to"
+                },
+                "message_type": {
+                    "type": "string",
+                    "enum": ["initial_instruction", "update", "upstream_change", "coordination", "feedback"],
+                    "description": "Type of message: initial_instruction (first contact), update (new info or answers), upstream_change (a connected node changed), coordination (cross-node), feedback (post-run results)"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "The message content to deliver to the node assistant"
+                }
+            },
+            "required": ["step_id", "message_type", "content"]
         }),
     }
 }

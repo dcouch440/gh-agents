@@ -22,6 +22,7 @@ type ChatMessage = {
   role: 'user' | 'assistant'
   content: string
   timestamp: string
+  source_type: string | null
 }
 
 type Mode = {
