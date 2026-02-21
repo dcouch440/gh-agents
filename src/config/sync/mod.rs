@@ -71,9 +71,9 @@ pub async fn sync_config(
     Ok(stats)
 }
 
-/// Load capabilities.yaml
+/// Load capabilities.yaml from the system/ subdirectory.
 fn load_capabilities(config_dir: &Path, verbose: bool) -> Result<CapabilitiesYaml> {
-    let path = config_dir.join("capabilities.yaml");
+    let path = config_dir.join("system/capabilities.yaml");
     if verbose {
         println!("  - Loading {}", path.display());
     }
@@ -83,9 +83,9 @@ fn load_capabilities(config_dir: &Path, verbose: bool) -> Result<CapabilitiesYam
     serde_yaml::from_str(&content).with_context(|| format!("Failed to parse {}", path.display()))
 }
 
-/// Load tool_assignments.yaml
+/// Load tool_assignments.yaml from the system/ subdirectory.
 fn load_tool_assignments(config_dir: &Path, verbose: bool) -> Result<ToolAssignmentsYaml> {
-    let path = config_dir.join("tool_assignments.yaml");
+    let path = config_dir.join("system/tool_assignments.yaml");
     if verbose {
         println!("  - Loading {}", path.display());
     }

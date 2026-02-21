@@ -196,14 +196,10 @@ pub async fn run_step_chat(
 
 /// Build the system prompt for a step chat session.
 ///
-/// Uses the base+archetype-block architecture: the `NODE_ASSISTANT_BASE` role
-/// definition is resolved with graph context, an archetype-specific block, and
-/// the live config snapshot injected via template variables.
-///
-/// For `documenter` steps, the archetype block is loaded from
-/// `NODE_ASSISTANT_DOCUMENTER_BLOCK` and the config snapshot from
-/// `build_config_snapshot()`. Other modes get an empty archetype block
-/// (skeleton for future phases).
+/// Uses the base+archetype-block architecture: the `ASSISTANT_BASE` role
+/// definition is resolved with graph context, an archetype-specific block
+/// (e.g. `WORKFORCE_ARCHETYPE`), and the live config snapshot injected via
+/// template variables.
 pub async fn build_step_system_prompt(
     state: &AppState,
     workflow_id: Uuid,
@@ -260,7 +256,7 @@ pub async fn build_step_system_prompt(
             .await
             .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
 
-            (roles::NODE_ASSISTANT_WORKFORCE_BLOCK.to_string(), snapshot)
+            (roles::WORKFORCE_ARCHETYPE.to_string(), snapshot)
         }
         _ => {
             return Err(HubError::Internal(anyhow::anyhow!(
@@ -290,7 +286,7 @@ pub async fn build_step_system_prompt(
     vars_map.insert(vars::system::DISPATCH_STATUS.to_string(), dispatch_status);
     vars_map.insert(vars::system::RUN_CONTEXT.to_string(), run_context);
 
-    let resolved = roles::NODE_ASSISTANT_BASE.resolve(&vars_map);
+    let resolved = roles::ASSISTANT_BASE.resolve(&vars_map);
 
     Ok(resolved.system_prompt)
 }

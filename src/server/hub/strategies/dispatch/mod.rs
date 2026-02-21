@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use serde_json::Value;
 use uuid::Uuid;
 
-use crate::config::protocols::{roles, AgentConfig, DISPATCH};
+use crate::config::protocols::{roles, AgentConfig, WORKFORCE_BUILDER};
 use crate::llm::{Message, Tool};
 use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::template_resolve::resolve_template;
@@ -38,7 +38,7 @@ pub struct DispatchStrategy {
 impl DispatchStrategy {
     /// Protocol config for the dispatcher agent role.
     fn config(&self) -> &AgentConfig {
-        DISPATCH.agent("dispatcher")
+        WORKFORCE_BUILDER.agent("dispatcher")
     }
 
     /// Broadcast a workflow event after a tool mutation.
@@ -83,7 +83,7 @@ impl DispatchStrategy {
         let mut vars = HashMap::new();
         vars.insert("System.current_config".to_string(), snapshot);
 
-        let system_prompt = resolve_template(roles::DISPATCH_SYSTEM, &vars);
+        let system_prompt = resolve_template(roles::WORKFORCE_BUILDER_SYSTEM, &vars);
 
         Ok(Self {
             system_prompt,

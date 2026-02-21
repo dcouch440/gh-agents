@@ -114,7 +114,7 @@ async fn extract_and_replace_beliefs(
         board_beliefs_text,
     );
 
-    let resolved = roles::CHAT_BELIEF_EXTRACTOR.resolve(&vars_map);
+    let resolved = roles::BELIEF_EXTRACTOR.resolve(&vars_map);
 
     // 6. Call utility model
     let client = crate::llm::create_utility_client()?;
