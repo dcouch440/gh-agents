@@ -198,6 +198,4 @@ TOOL CALLS:
 </example>
 </examples>
 
-<current_config>
-{{.System.current_config}}
-</current_config>
+{{.System.board_state}}

@@ -72,16 +72,17 @@ impl DispatchStrategy {
         workflow_id: Uuid,
         instruction: String,
     ) -> Result<Self, String> {
-        let ctx = WorkforceToolContext {
+        let board_state_xml = crate::server::hub::board_state::build(
+            state.repos().workflows.as_ref(),
+            crate::server::hub::board_state::BoardStateVariant::Dispatch,
             workflow_id,
             step_id,
-        };
-
-        let snapshot =
-            workforce::build_config_snapshot(state.repos().workflows.as_ref(), &ctx).await?;
+        )
+        .await
+        .map_err(|e| e.to_string())?;
 
         let mut vars = HashMap::new();
-        vars.insert("System.current_config".to_string(), snapshot);
+        vars.insert("System.board_state".to_string(), board_state_xml);
 
         let system_prompt = resolve_template(roles::WORKFORCE_BUILDER_SYSTEM, &vars);
 
@@ -130,17 +131,17 @@ impl ExecutionStrategy for DispatchStrategy {
     }
 
     async fn rebuild_system_prompt(&self) -> Result<Option<String>, HubError> {
-        let ctx = WorkforceToolContext {
-            workflow_id: self.workflow_id,
-            step_id: self.step_id,
-        };
-        let snapshot =
-            workforce::build_config_snapshot(self.state.repos().workflows.as_ref(), &ctx)
-                .await
-                .map_err(|e| HubError::Internal(anyhow::anyhow!(e)))?;
+        let board_state_xml = crate::server::hub::board_state::build(
+            self.state.repos().workflows.as_ref(),
+            crate::server::hub::board_state::BoardStateVariant::Dispatch,
+            self.workflow_id,
+            self.step_id,
+        )
+        .await
+        .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
 
         let mut vars = HashMap::new();
-        vars.insert("System.current_config".to_string(), snapshot);
+        vars.insert("System.board_state".to_string(), board_state_xml);
 
         Ok(Some(resolve_template(roles::WORKFORCE_BUILDER_SYSTEM, &vars)))
     }

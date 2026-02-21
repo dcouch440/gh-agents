@@ -244,21 +244,19 @@ pub async fn build_step_system_prompt(
             "No notes yet. Use update_notes to record important discoveries.".to_string()
         });
 
-    // 2. Build archetype block + config snapshot based on execution mode
-    let (archetype_block, config_snapshot) = match execution_mode {
+    // 2. Build archetype block + board state based on execution mode
+    let (archetype_block, board_state_xml) = match execution_mode {
         "workforce" => {
-            let ctx = crate::server::tools::workforce::WorkforceToolContext {
+            let xml = board_state::build(
+                state.repos().workflows.as_ref(),
+                board_state::BoardStateVariant::NodeAssistant,
                 workflow_id,
                 step_id,
-            };
-            let snapshot = crate::server::tools::workforce::build_config_snapshot(
-                state.repos().workflows.as_ref(),
-                &ctx,
             )
             .await
             .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
 
-            (roles::WORKFORCE_ARCHETYPE.to_string(), snapshot)
+            (roles::WORKFORCE_ARCHETYPE.to_string(), xml)
         }
         _ => {
             return Err(HubError::Internal(anyhow::anyhow!(
@@ -279,7 +277,7 @@ pub async fn build_step_system_prompt(
     let mut vars_map = std::collections::HashMap::new();
     vars_map.insert(vars::system::BOARD_CONTEXT.to_string(), board_context);
     vars_map.insert(vars::system::ARCHETYPE_BLOCK.to_string(), archetype_block);
-    vars_map.insert(vars::system::CURRENT_CONFIG.to_string(), config_snapshot);
+    vars_map.insert(vars::system::BOARD_STATE.to_string(), board_state_xml);
     vars_map.insert(
         vars::system::BOARD_OVERVIEW.to_string(),
         board_overview_text,
