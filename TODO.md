@@ -27,4 +27,8 @@ With that said, what I think a "room" should be...
   would require a deep system allowing for long time step activation with lots of turns.
 
 
-ALways update protocol name
+
+    Pre-run check (Analyzer only):
+      ├─ Upstream beliefs: all acknowledged ✓
+      ├─ Input ports: raw_data connected ✓
+      └─ Run single node
