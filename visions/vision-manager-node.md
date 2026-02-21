@@ -800,9 +800,9 @@ Full system prompts for all four layers are defined in [`manager-node-prompts.md
 | Layer | Agent | Key Sections | Context Size |
 |-------|-------|-------------|-------------|
 | **1** | Manager Assistant | `<board_state>` role + status + `<asking>`, `<dispatch_status>`, `<protocols>` | Small — summaries only |
-| **2** | Manager's Builder | `<board_state>` full detail, `<protocols>` detailed, `<examples>` | Large — full board |
-| **3** | Node Assistant | `<board_context>`, `<your_notes>`, `<pending_beliefs>`, `<execution_pipeline>` | Own neighborhood |
-| **4** | Node's Builder | `<node_config>` full detail, `<examples>` | Own node only |
+| **2** | Manager's Builder | `<board_state>` lean per-node status, `<dispatch_status>`, `<protocols>` detailed | Full board (lean) |
+| **3** | Node Assistant | `<board_state>` own node + agents, `<your_notes>`, `<dispatch_status>`, `<execution_pipeline>` | Own node |
+| **4** | Node's Builder | `<board_state>` own node full detail (ports, roster, schema), `<examples>` | Own node only |
 
 Scope is enforced structurally — talkers (Layers 1, 3) get only `dispatch()` and `think()`. Builders (Layers 2, 4) get mutation tools scoped to their level. The manager's builder cannot configure node internals; the node's builder cannot touch other nodes.
 
