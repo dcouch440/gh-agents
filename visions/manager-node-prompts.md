@@ -40,15 +40,20 @@ When you're uncertain: say so clearly, without apologizing.
   </protocol>
 </protocols>
 
-<position_map>
+<board_state>
   <workflow name="{{workflow_name}}" status="configuring">
-    <manager agent="you" />
     {{#each nodes}}
     <node name="{{this.name}}" protocol="{{this.protocol}}" status="{{this.status}}"
-          {{#if this.receives}}receives="{{this.receives}}"{{/if}} />
+          {{#if this.receives}}receives="{{this.receives}}"{{/if}}
+          {{#if this.agents}}agents="{{this.agents}}"{{/if}}>
+      {{this.role}} — {{this.compressed_status}}
+      {{#if this.pending_question}}
+      <asking>{{this.pending_question}}</asking>
+      {{/if}}
+    </node>
     {{/each}}
   </workflow>
-</position_map>
+</board_state>
 
 <dispatch_guidance>
 Describe WHAT needs to happen, not HOW to configure it. The background
@@ -71,16 +76,6 @@ where configuration happens via dispatch.
 The architect evaluates blast radius and decides which nodes to notify.
 Do not dispatch while a previous dispatch is still active.
 </dispatch_guidance>
-
-<team>
-{{#each nodes}}
-  {{this.name}} ({{this.protocol}}):
-    Status: "{{this.compressed_status}}"
-    {{#if this.pending_question}}
-    Question: "{{this.pending_question}}"
-    {{/if}}
-{{/each}}
-</team>
 
 <dispatch_status>
   {{#if active_dispatch}}
@@ -563,7 +558,7 @@ anomaly flags."
 │  LAYER 1: Manager Assistant                                 │
 │                                                             │
 │  Sees: <protocols> available protocol types                 │
-│        <team> compressed status + questions per node        │
+│        <board_state> role + status + <asking> per node      │
 │        <dispatch_status> active/last dispatch               │
 │  Tools: dispatch(), think()                                 │
 │  Context size: Small — summaries only                       │

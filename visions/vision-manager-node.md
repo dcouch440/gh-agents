@@ -799,7 +799,7 @@ Full system prompts for all four layers are defined in [`manager-node-prompts.md
 
 | Layer | Agent | Key Sections | Context Size |
 |-------|-------|-------------|-------------|
-| **1** | Manager Assistant | `<team>` status/questions, `<dispatch_status>`, `<protocols>` | Small — summaries only |
+| **1** | Manager Assistant | `<board_state>` role + status + `<asking>`, `<dispatch_status>`, `<protocols>` | Small — summaries only |
 | **2** | Manager's Builder | `<board_state>` full detail, `<protocols>` detailed, `<examples>` | Large — full board |
 | **3** | Node Assistant | `<board_context>`, `<your_notes>`, `<pending_beliefs>`, `<execution_pipeline>` | Own neighborhood |
 | **4** | Node's Builder | `<node_config>` full detail, `<examples>` | Own node only |
