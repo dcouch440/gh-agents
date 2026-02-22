@@ -158,6 +158,175 @@ describe('topologyClassifier', () => {
       expect(intents[0]!.width).toBe(800)
       expect(intents[0]!.height).toBe(600)
     })
+
+    it('defaults fanOutSourceId and spliceDownstreamId to null for pipeline', () => {
+      const steps = [
+        makeStep({ id: 'a', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'b' }),
+      ]
+      const edges = [makeEdge('a', 'b')]
+      const intents = classifyPlacements(steps, edges)
+
+      expect(intents[0]!.fanOutSourceId).toBeNull()
+      expect(intents[0]!.spliceDownstreamId).toBeNull()
+    })
+
+    it('defaults fanOutSourceId and spliceDownstreamId to null for free_space', () => {
+      const steps = [makeStep({ id: 'a' })]
+      const intents = classifyPlacements(steps, [])
+
+      expect(intents[0]!.fanOutSourceId).toBeNull()
+      expect(intents[0]!.spliceDownstreamId).toBeNull()
+    })
+  })
+
+  describe('classifyPlacements — fan_out detection', () => {
+    it('classifies 2+ unplaced children of placed source as fan_out', () => {
+      const steps = [
+        makeStep({ id: 'source', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'a' }),
+        makeStep({ id: 'b' }),
+      ]
+      const edges = [makeEdge('source', 'a'), makeEdge('source', 'b')]
+      const intents = classifyPlacements(steps, edges)
+
+      expect(intents).toHaveLength(2)
+      expect(intents[0]!.strategy).toBe('fan_out')
+      expect(intents[1]!.strategy).toBe('fan_out')
+    })
+
+    it('sets fanOutSourceId to the placed parent ID', () => {
+      const steps = [
+        makeStep({ id: 'source', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'a' }),
+        makeStep({ id: 'b' }),
+        makeStep({ id: 'c' }),
+      ]
+      const edges = [
+        makeEdge('source', 'a'),
+        makeEdge('source', 'b'),
+        makeEdge('source', 'c'),
+      ]
+      const intents = classifyPlacements(steps, edges)
+
+      for (const intent of intents) {
+        expect(intent.fanOutSourceId).toBe('source')
+      }
+    })
+
+    it('does not classify single child as fan_out (stays pipeline)', () => {
+      const steps = [
+        makeStep({ id: 'source', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'a' }),
+      ]
+      const edges = [makeEdge('source', 'a')]
+      const intents = classifyPlacements(steps, edges)
+
+      expect(intents).toHaveLength(1)
+      expect(intents[0]!.strategy).toBe('pipeline')
+      expect(intents[0]!.fanOutSourceId).toBeNull()
+    })
+
+    it('handles fan-out siblings mixed with unrelated free_space node', () => {
+      const steps = [
+        makeStep({ id: 'source', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'a' }),
+        makeStep({ id: 'b' }),
+        makeStep({ id: 'orphan' }), // no edges
+      ]
+      const edges = [makeEdge('source', 'a'), makeEdge('source', 'b')]
+      const intents = classifyPlacements(steps, edges)
+
+      expect(intents).toHaveLength(3)
+      const fanOuts = intents.filter((i) => i.strategy === 'fan_out')
+      const freeSpace = intents.filter((i) => i.strategy === 'free_space')
+      expect(fanOuts).toHaveLength(2)
+      expect(freeSpace).toHaveLength(1)
+    })
+
+    it('classifies convergence target as pipeline (not fan_out)', () => {
+      const steps = [
+        makeStep({ id: 'source', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'a' }),
+        makeStep({ id: 'b' }),
+        makeStep({ id: 'target' }), // convergence target
+      ]
+      const edges = [
+        makeEdge('source', 'a'),
+        makeEdge('source', 'b'),
+        makeEdge('a', 'target'),
+        makeEdge('b', 'target'),
+      ]
+      const intents = classifyPlacements(steps, edges)
+
+      expect(intents).toHaveLength(3)
+      const fanOuts = intents.filter((i) => i.strategy === 'fan_out')
+      expect(fanOuts).toHaveLength(2)
+
+      // Target comes last in topo order, classified as pipeline
+      // (its upstreams a,b are effectively-placed fan_out siblings)
+      const targetIntent = intents.find((i) => i.stepId === 'target')!
+      expect(targetIntent.strategy).toBe('pipeline')
+    })
+  })
+
+  describe('classifyPlacements — splice detection', () => {
+    it('classifies node with placed upstream AND placed downstream as splice', () => {
+      const steps = [
+        makeStep({ id: 'a', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'new' }),
+        makeStep({ id: 'b', position_x: 800, position_y: 0 }),
+      ]
+      // insert_node topology: a→new, new→b (old a→b edge removed)
+      const edges = [makeEdge('a', 'new'), makeEdge('new', 'b')]
+      const intents = classifyPlacements(steps, edges)
+
+      expect(intents).toHaveLength(1)
+      expect(intents[0]!.stepId).toBe('new')
+      expect(intents[0]!.strategy).toBe('splice')
+    })
+
+    it('sets spliceDownstreamId to the placed downstream ID', () => {
+      const steps = [
+        makeStep({ id: 'a', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'new' }),
+        makeStep({ id: 'b', position_x: 800, position_y: 0 }),
+      ]
+      const edges = [makeEdge('a', 'new'), makeEdge('new', 'b')]
+      const intents = classifyPlacements(steps, edges)
+
+      expect(intents[0]!.spliceDownstreamId).toBe('b')
+    })
+
+    it('does not classify as splice when only upstream is placed (stays pipeline)', () => {
+      const steps = [
+        makeStep({ id: 'a', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'new' }),
+        makeStep({ id: 'b' }), // NOT placed
+      ]
+      const edges = [makeEdge('a', 'new'), makeEdge('new', 'b')]
+      const intents = classifyPlacements(steps, edges)
+
+      const newIntent = intents.find((i) => i.stepId === 'new')!
+      expect(newIntent.strategy).toBe('pipeline')
+      expect(newIntent.spliceDownstreamId).toBeNull()
+    })
+
+    it('does not classify as splice when no upstream exists (stays free_space)', () => {
+      const steps = [
+        makeStep({ id: 'new' }),
+        makeStep({ id: 'b', position_x: 800, position_y: 0 }),
+      ]
+      // new has placed downstream b, but NO upstream at all
+      const edges = [makeEdge('new', 'b')]
+      const intents = classifyPlacements(steps, edges)
+
+      expect(intents).toHaveLength(1)
+      const newIntent = intents[0]!
+      // No upstream → upstreamStepId is null → can't be splice
+      expect(newIntent.strategy).toBe('free_space')
+      expect(newIntent.spliceDownstreamId).toBeNull()
+    })
   })
 
   describe('resolveStepDimensions', () => {

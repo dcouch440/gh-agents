@@ -16,7 +16,7 @@ type OccupiedRect = {
 // Placement Strategy — How to position an unplaced node
 // ============================================================================
 
-type PlacementStrategy = 'pipeline' | 'free_space'
+type PlacementStrategy = 'pipeline' | 'fan_out' | 'splice' | 'free_space'
 
 // ============================================================================
 // Placement Intent — Classification of an unplaced step
@@ -35,6 +35,10 @@ type PlacementIntent = {
   readonly upstreamStepId: string | null
   /** Step IDs downstream from this step (populated from edge adjacency). */
   readonly downstreamStepIds: readonly string[]
+  /** Fan-out: the placed source node ID (for grouping siblings). null otherwise. */
+  readonly fanOutSourceId: string | null
+  /** Splice: the placed downstream node ID to potentially shift. null otherwise. */
+  readonly spliceDownstreamId: string | null
 }
 
 // ============================================================================
@@ -47,4 +51,37 @@ type PlacementResult = {
   readonly position: Point
 }
 
-export type { OccupiedRect, PlacementStrategy, PlacementIntent, PlacementResult }
+// ============================================================================
+// Placement Shift — Position adjustment for an existing node (splice only)
+// ============================================================================
+
+/** A position delta for an existing (already-placed) node shifted by splice. */
+type PlacementShift = {
+  readonly stepId: string
+  readonly dx: number
+  readonly dy: number
+}
+
+// ============================================================================
+// Placement Output — Complete result from the placement engine
+// ============================================================================
+
+/** Complete output from the placement engine. */
+type PlacementOutput = {
+  /** Positions for newly placed nodes. */
+  readonly placements: readonly PlacementResult[]
+  /** Position shifts for existing nodes (splice nudging). */
+  readonly shifts: readonly PlacementShift[]
+}
+
+// ============================================================================
+// Splice Result — Output from the splice placer
+// ============================================================================
+
+/** Result of placing a splice node, with an optional shift for the downstream node. */
+type SpliceResult = {
+  readonly placement: PlacementResult
+  readonly shift: PlacementShift | null
+}
+
+export type { OccupiedRect, PlacementStrategy, PlacementIntent, PlacementResult, PlacementShift, PlacementOutput, SpliceResult }

@@ -42,27 +42,31 @@ const makeEdge = (from: string, to: string): WorkflowStepEdge => ({
 })
 
 describe('placementEngine', () => {
-  describe('computePlacements', () => {
-    it('returns empty array when all steps have positions', () => {
+  describe('computePlacements — pipeline (Phase 1)', () => {
+    it('returns empty output when all steps have positions', () => {
       const steps = [
         makeStep({ id: 'a', position_x: 0, position_y: 0 }),
         makeStep({ id: 'b', position_x: 700, position_y: 0 }),
       ]
-      expect(computePlacements(steps, [])).toHaveLength(0)
+      const output = computePlacements(steps, [])
+      expect(output.placements).toHaveLength(0)
+      expect(output.shifts).toHaveLength(0)
     })
 
-    it('returns empty array when no steps exist', () => {
-      expect(computePlacements([], [])).toHaveLength(0)
+    it('returns empty output when no steps exist', () => {
+      const output = computePlacements([], [])
+      expect(output.placements).toHaveLength(0)
+      expect(output.shifts).toHaveLength(0)
     })
 
     it('places single orphan step at origin', () => {
       const steps = [makeStep({ id: 'a' })]
-      const results = computePlacements(steps, [])
+      const output = computePlacements(steps, [])
 
-      expect(results).toHaveLength(1)
-      expect(results[0]!.stepId).toBe('a')
-      expect(results[0]!.position.x % PLACEMENT.GRID_SIZE).toBe(0)
-      expect(results[0]!.position.y % PLACEMENT.GRID_SIZE).toBe(0)
+      expect(output.placements).toHaveLength(1)
+      expect(output.placements[0]!.stepId).toBe('a')
+      expect(output.placements[0]!.position.x % PLACEMENT.GRID_SIZE).toBe(0)
+      expect(output.placements[0]!.position.y % PLACEMENT.GRID_SIZE).toBe(0)
     })
 
     it('places single step to the right of placed upstream', () => {
@@ -71,13 +75,13 @@ describe('placementEngine', () => {
         makeStep({ id: 'b' }),
       ]
       const edges = [makeEdge('a', 'b')]
-      const results = computePlacements(steps, edges)
+      const output = computePlacements(steps, edges)
 
-      expect(results).toHaveLength(1)
-      expect(results[0]!.stepId).toBe('b')
+      expect(output.placements).toHaveLength(1)
+      expect(output.placements[0]!.stepId).toBe('b')
       // 560 + 96 = 656 → snapToGrid(656, 24) = 648
-      expect(results[0]!.position.x).toBe(648)
-      expect(results[0]!.position.y).toBe(0)
+      expect(output.placements[0]!.position.x).toBe(648)
+      expect(output.placements[0]!.position.y).toBe(0)
     })
 
     it('places chain of 3 unplaced steps left-to-right', () => {
@@ -87,20 +91,15 @@ describe('placementEngine', () => {
         makeStep({ id: 'c' }),
       ]
       const edges = [makeEdge('a', 'b'), makeEdge('b', 'c')]
-      const results = computePlacements(steps, edges)
+      const output = computePlacements(steps, edges)
 
-      expect(results).toHaveLength(2)
+      expect(output.placements).toHaveLength(2)
 
-      const bResult = results.find((r) => r.stepId === 'b')!
-      const cResult = results.find((r) => r.stepId === 'c')!
+      const bResult = output.placements.find((r) => r.stepId === 'b')!
+      const cResult = output.placements.find((r) => r.stepId === 'c')!
 
-      // b is to the right of a
       expect(bResult.position.x).toBeGreaterThan(0)
-
-      // c is to the right of b
       expect(cResult.position.x).toBeGreaterThan(bResult.position.x)
-
-      // All grid-aligned
       expect(bResult.position.x % PLACEMENT.GRID_SIZE).toBe(0)
       expect(cResult.position.x % PLACEMENT.GRID_SIZE).toBe(0)
     })
@@ -108,18 +107,17 @@ describe('placementEngine', () => {
     it('places mixed pipeline and orphan without overlap', () => {
       const steps = [
         makeStep({ id: 'a', position_x: 0, position_y: 0 }),
-        makeStep({ id: 'b' }), // connected to a
-        makeStep({ id: 'c' }), // disconnected
+        makeStep({ id: 'b' }),
+        makeStep({ id: 'c' }),
       ]
       const edges = [makeEdge('a', 'b')]
-      const results = computePlacements(steps, edges)
+      const output = computePlacements(steps, edges)
 
-      expect(results).toHaveLength(2)
+      expect(output.placements).toHaveLength(2)
 
-      const bResult = results.find((r) => r.stepId === 'b')!
-      const cResult = results.find((r) => r.stepId === 'c')!
+      const bResult = output.placements.find((r) => r.stepId === 'b')!
+      const cResult = output.placements.find((r) => r.stepId === 'c')!
 
-      // They should not overlap (accounting for default dimensions)
       const bRect: Rect = { x: bResult.position.x, y: bResult.position.y, width: 560, height: 500 }
       const cRect: Rect = { x: cResult.position.x, y: cResult.position.y, width: 560, height: 500 }
       expect(Geometry.rectsOverlap(bRect, cRect)).toBe(false)
@@ -132,12 +130,11 @@ describe('placementEngine', () => {
         makeStep({ id: 'c' }),
       ]
       const edges = [makeEdge('a', 'b'), makeEdge('b', 'c')]
-      const results = computePlacements(steps, edges)
+      const output = computePlacements(steps, edges)
 
-      expect(results).toHaveLength(3)
+      expect(output.placements).toHaveLength(3)
 
-      // Should be in left-to-right order
-      const positions = results.map((r) => r.position.x)
+      const positions = output.placements.map((r) => r.position.x)
       for (let i = 1; i < positions.length; i++) {
         expect(positions[i]!).toBeGreaterThan(positions[i - 1]!)
       }
@@ -154,12 +151,11 @@ describe('placementEngine', () => {
         edges.push(makeEdge(`s${i - 1}`, `s${i}`))
       }
 
-      const results = computePlacements(steps, edges)
-      expect(results).toHaveLength(10)
+      const output = computePlacements(steps, edges)
+      expect(output.placements).toHaveLength(10)
 
-      // Check no overlaps between any pair of results + the original placed node
       const allRects: Rect[] = [{ x: 0, y: 0, width: 560, height: 500 }]
-      for (const r of results) {
+      for (const r of output.placements) {
         allRects.push({ x: r.position.x, y: r.position.y, width: 560, height: 500 })
       }
 
@@ -178,10 +174,10 @@ describe('placementEngine', () => {
       ]
       const edges = [makeEdge('a', 'b'), makeEdge('b', 'c')]
 
-      const results1 = computePlacements(steps, edges)
-      const results2 = computePlacements(steps, edges)
+      const output1 = computePlacements(steps, edges)
+      const output2 = computePlacements(steps, edges)
 
-      expect(results1).toEqual(results2)
+      expect(output1).toEqual(output2)
     })
 
     it('all positions are grid-aligned', () => {
@@ -191,12 +187,203 @@ describe('placementEngine', () => {
         makeStep({ id: 'c' }),
       ]
       const edges = [makeEdge('a', 'b'), makeEdge('b', 'c')]
-      const results = computePlacements(steps, edges)
+      const output = computePlacements(steps, edges)
 
-      for (const r of results) {
+      for (const r of output.placements) {
         expect(r.position.x % PLACEMENT.GRID_SIZE).toBe(0)
         expect(r.position.y % PLACEMENT.GRID_SIZE).toBe(0)
       }
+    })
+
+    it('returns empty shifts for pipeline-only placements', () => {
+      const steps = [
+        makeStep({ id: 'a', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'b' }),
+      ]
+      const edges = [makeEdge('a', 'b')]
+      const output = computePlacements(steps, edges)
+
+      expect(output.shifts).toHaveLength(0)
+    })
+  })
+
+  describe('computePlacements — fan_out topology', () => {
+    it('places fan-out children in vertical stack', () => {
+      const steps = [
+        makeStep({ id: 'source', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'a' }),
+        makeStep({ id: 'b' }),
+        makeStep({ id: 'c' }),
+      ]
+      const edges = [
+        makeEdge('source', 'a'),
+        makeEdge('source', 'b'),
+        makeEdge('source', 'c'),
+      ]
+      const output = computePlacements(steps, edges)
+
+      expect(output.placements).toHaveLength(3)
+
+      // All at same X (to the right of source)
+      const xs = output.placements.map((r) => r.position.x)
+      expect(new Set(xs).size).toBe(1)
+      expect(xs[0]!).toBeGreaterThan(0)
+
+      // Vertically ordered
+      const ys = output.placements.map((r) => r.position.y)
+      for (let i = 1; i < ys.length; i++) {
+        expect(ys[i]!).toBeGreaterThan(ys[i - 1]!)
+      }
+    })
+
+    it('places fan-out with convergence target to the right of stack', () => {
+      const steps = [
+        makeStep({ id: 'source', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'a' }),
+        makeStep({ id: 'b' }),
+        makeStep({ id: 'target' }),
+      ]
+      const edges = [
+        makeEdge('source', 'a'),
+        makeEdge('source', 'b'),
+        makeEdge('a', 'target'),
+        makeEdge('b', 'target'),
+      ]
+      const output = computePlacements(steps, edges)
+
+      expect(output.placements).toHaveLength(3) // a, b, target
+
+      const targetResult = output.placements.find((r) => r.stepId === 'target')!
+      const siblingResults = output.placements.filter((r) => r.stepId !== 'target')
+
+      // Target should be further right than siblings
+      for (const sib of siblingResults) {
+        expect(targetResult.position.x).toBeGreaterThan(sib.position.x)
+      }
+    })
+
+    it('no overlaps in complete fan-out/fan-in pattern', () => {
+      const steps = [
+        makeStep({ id: 'source', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'a' }),
+        makeStep({ id: 'b' }),
+        makeStep({ id: 'c' }),
+        makeStep({ id: 'target' }),
+      ]
+      const edges = [
+        makeEdge('source', 'a'),
+        makeEdge('source', 'b'),
+        makeEdge('source', 'c'),
+        makeEdge('a', 'target'),
+        makeEdge('b', 'target'),
+        makeEdge('c', 'target'),
+      ]
+      const output = computePlacements(steps, edges)
+
+      const allRects: Rect[] = [{ x: 0, y: 0, width: 560, height: 500 }]
+      for (const r of output.placements) {
+        allRects.push({ x: r.position.x, y: r.position.y, width: 560, height: 500 })
+      }
+
+      for (let i = 0; i < allRects.length; i++) {
+        for (let j = i + 1; j < allRects.length; j++) {
+          expect(Geometry.rectsOverlap(allRects[i]!, allRects[j]!)).toBe(false)
+        }
+      }
+    })
+  })
+
+  describe('computePlacements — splice topology', () => {
+    it('places splice node between two placed nodes with sufficient gap', () => {
+      const steps = [
+        makeStep({ id: 'a', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'new' }),
+        makeStep({ id: 'b', position_x: 1500, position_y: 0 }),
+      ]
+      const edges = [makeEdge('a', 'new'), makeEdge('new', 'b')]
+      const output = computePlacements(steps, edges)
+
+      expect(output.placements).toHaveLength(1)
+      expect(output.placements[0]!.stepId).toBe('new')
+      // Should be between a and b
+      expect(output.placements[0]!.position.x).toBeGreaterThan(0)
+      expect(output.placements[0]!.position.x).toBeLessThan(1500)
+      expect(output.shifts).toHaveLength(0)
+    })
+
+    it('shifts downstream when gap insufficient and node is shiftable', () => {
+      const steps = [
+        makeStep({ id: 'a', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'new' }),
+        makeStep({ id: 'b', position_x: 660, position_y: 0 }),
+      ]
+      const edges = [makeEdge('a', 'new'), makeEdge('new', 'b')]
+      const shiftableIds = new Set(['b'])
+      const output = computePlacements(steps, edges, shiftableIds)
+
+      expect(output.placements).toHaveLength(1)
+      expect(output.shifts).toHaveLength(1)
+      expect(output.shifts[0]!.stepId).toBe('b')
+      expect(output.shifts[0]!.dx).toBeGreaterThan(0)
+    })
+
+    it('does not shift non-shiftable downstream nodes', () => {
+      const steps = [
+        makeStep({ id: 'a', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'new' }),
+        makeStep({ id: 'b', position_x: 660, position_y: 0 }),
+      ]
+      const edges = [makeEdge('a', 'new'), makeEdge('new', 'b')]
+      // Empty shiftableIds — b is NOT shiftable
+      const output = computePlacements(steps, edges)
+
+      expect(output.placements).toHaveLength(1)
+      expect(output.shifts).toHaveLength(0)
+      // b should NOT have moved (not in shifts)
+    })
+
+    it('all positions grid-aligned after splice', () => {
+      const steps = [
+        makeStep({ id: 'a', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'new' }),
+        makeStep({ id: 'b', position_x: 1500, position_y: 0 }),
+      ]
+      const edges = [makeEdge('a', 'new'), makeEdge('new', 'b')]
+      const output = computePlacements(steps, edges)
+
+      for (const r of output.placements) {
+        expect(r.position.x % PLACEMENT.GRID_SIZE).toBe(0)
+        expect(r.position.y % PLACEMENT.GRID_SIZE).toBe(0)
+      }
+    })
+  })
+
+  describe('computePlacements — mixed topologies', () => {
+    it('handles pipeline + fan_out in same batch', () => {
+      const steps = [
+        makeStep({ id: 'root', position_x: 0, position_y: 0 }),
+        makeStep({ id: 'pipe' }),   // pipeline from root
+        makeStep({ id: 'fan-source', position_x: 0, position_y: 600 }),
+        makeStep({ id: 'fa' }),     // fan-out from fan-source
+        makeStep({ id: 'fb' }),     // fan-out from fan-source
+      ]
+      const edges = [
+        makeEdge('root', 'pipe'),
+        makeEdge('fan-source', 'fa'),
+        makeEdge('fan-source', 'fb'),
+      ]
+      const output = computePlacements(steps, edges)
+
+      expect(output.placements).toHaveLength(3)
+      const pipeResult = output.placements.find((r) => r.stepId === 'pipe')!
+      const faResult = output.placements.find((r) => r.stepId === 'fa')!
+      const fbResult = output.placements.find((r) => r.stepId === 'fb')!
+
+      // Pipeline should be right of root
+      expect(pipeResult.position.x).toBeGreaterThan(0)
+
+      // Fan-out siblings should share same X
+      expect(faResult.position.x).toBe(fbResult.position.x)
     })
   })
 })

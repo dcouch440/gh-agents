@@ -1,6 +1,6 @@
 import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 import { resolveVariant, VARIANT_CONFIGS } from '../CanvasNode/registry'
-import type { PlacementIntent } from './types'
+import type { PlacementIntent, PlacementStrategy } from './types'
 
 // ============================================================================
 // Topology Classifier — Classify Unplaced Steps into Placement Intents
@@ -104,6 +104,20 @@ const classifyPlacements = (
     if (!sorted.includes(id)) sorted.push(id)
   }
 
+  // Pre-compute fan-out groups: for each placed node, how many unplaced children?
+  const unplacedChildrenOfPlaced = new Map<string, string[]>()
+  for (const id of unplacedIds) {
+    const ups = upstreamMap.get(id) ?? []
+    for (let j = 0; j < ups.length; j++) {
+      const upId = ups[j]!
+      if (placedIds.has(upId)) {
+        const children = unplacedChildrenOfPlaced.get(upId) ?? []
+        children.push(id)
+        unplacedChildrenOfPlaced.set(upId, children)
+      }
+    }
+  }
+
   // Build intents in topo order
   // Track which IDs will be "effectively placed" as we process (for chained pipelines)
   const effectivelyPlaced = new Set(placedIds)
@@ -125,7 +139,36 @@ const classifyPlacements = (
       }
     }
 
-    const strategy = upstreamStepId !== null ? 'pipeline' as const : 'free_space' as const
+    // Find a placed (originally placed, not effectively placed) downstream neighbor
+    let placedDownstreamId: string | null = null
+    for (let j = 0; j < downs.length; j++) {
+      if (placedIds.has(downs[j]!)) {
+        placedDownstreamId = downs[j]!
+        break
+      }
+    }
+
+    // Classification priority: splice > fan_out > pipeline > free_space
+    let strategy: PlacementStrategy
+    let fanOutSourceId: string | null = null
+    let spliceDownstreamId: string | null = null
+
+    if (upstreamStepId !== null && placedDownstreamId !== null) {
+      // Both upstream and downstream are placed → splice (insert-between)
+      strategy = 'splice'
+      spliceDownstreamId = placedDownstreamId
+    } else if (upstreamStepId !== null) {
+      // Only upstream is placed — check for fan-out
+      const siblingCount = (unplacedChildrenOfPlaced.get(upstreamStepId) ?? []).length
+      if (siblingCount >= 2 && placedIds.has(upstreamStepId)) {
+        strategy = 'fan_out'
+        fanOutSourceId = upstreamStepId
+      } else {
+        strategy = 'pipeline'
+      }
+    } else {
+      strategy = 'free_space'
+    }
 
     intents.push({
       stepId,
@@ -134,6 +177,8 @@ const classifyPlacements = (
       strategy,
       upstreamStepId,
       downstreamStepIds: downs,
+      fanOutSourceId,
+      spliceDownstreamId,
     })
 
     // Mark this step as effectively placed for downstream chain processing
