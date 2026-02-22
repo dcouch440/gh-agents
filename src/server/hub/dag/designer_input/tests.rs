@@ -4,33 +4,13 @@ mod tests {
 
     use uuid::Uuid;
 
+    use crate::config::capability_registry::CapabilityRegistry;
     use crate::db::fixtures::fixtures::*;
     use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow, WorkflowStepEdgeRow};
 
     use super::super::*;
 
     // ── Shared utility tests ─────────────────────────────────────────────────
-
-    #[test]
-    fn test_build_tool_descriptions_known_capabilities() {
-        let tools = build_tool_descriptions(&[
-            "file_read".to_string(),
-            "content_search".to_string(),
-            "shell_execution".to_string(),
-        ]);
-        assert_eq!(tools.len(), 3);
-        assert!(tools[0].description.contains("Read file contents"));
-        assert!(tools[1].description.contains("Search file contents"));
-        assert!(tools[2].description.contains("Execute shell commands"));
-    }
-
-    #[test]
-    fn test_build_tool_descriptions_unknown_capability() {
-        let tools = build_tool_descriptions(&["custom_tool".to_string()]);
-        assert_eq!(tools.len(), 1);
-        assert_eq!(tools[0].name, "custom_tool");
-        assert_eq!(tools[0].description, "custom_tool");
-    }
 
     #[test]
     fn test_format_envelopes_as_upstream_empty() {
@@ -78,8 +58,6 @@ mod tests {
 
     // ── Workforce dependency tests ───────────────────────────────────────────
 
-    use crate::db::traits::MockToolCapabilityRepo;
-
     fn make_brief(step_id: Uuid) -> TaskMissionBriefRow {
         TaskMissionBriefRow {
             task_description: "Test mission".to_string(),
@@ -100,8 +78,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn workforce_input_includes_dependencies() {
+    #[test]
+    fn workforce_input_includes_dependencies() {
         let step_id = Uuid::new_v4();
         let brief = make_brief(step_id);
         let scanner_child = Uuid::new_v4();
@@ -120,10 +98,7 @@ mod tests {
             ..Default::default()
         }];
 
-        let mut tool_repo = MockToolCapabilityRepo::new();
-        tool_repo
-            .expect_get_tool_capabilities()
-            .returning(|| Ok(vec![]));
+        let registry = CapabilityRegistry::empty();
 
         let input = workforce::build_workforce_designer_input(
             &brief,
@@ -131,10 +106,9 @@ mod tests {
             &HashMap::new(),
             &[],
             None,
-            &tool_repo,
+            &registry,
             &child_edges,
-        )
-        .await;
+        );
 
         assert_eq!(input.dependencies.len(), 1);
         assert_eq!(input.dependencies[0].from_agent_name, "Scanner");
@@ -144,8 +118,8 @@ mod tests {
         assert!(input.archetype_guidance.contains("receives_from"));
     }
 
-    #[tokio::test]
-    async fn workforce_input_filters_designer_edges() {
+    #[test]
+    fn workforce_input_filters_designer_edges() {
         let step_id = Uuid::new_v4();
         let brief = make_brief(step_id);
         let designer_step = Uuid::new_v4();
@@ -167,10 +141,7 @@ mod tests {
             ..Default::default()
         }];
 
-        let mut tool_repo = MockToolCapabilityRepo::new();
-        tool_repo
-            .expect_get_tool_capabilities()
-            .returning(|| Ok(vec![]));
+        let registry = CapabilityRegistry::empty();
 
         let input = workforce::build_workforce_designer_input(
             &brief,
@@ -178,10 +149,9 @@ mod tests {
             &HashMap::new(),
             &[],
             None,
-            &tool_repo,
+            &registry,
             &child_edges,
-        )
-        .await;
+        );
 
         assert!(input.dependencies.is_empty());
         assert!(input
@@ -189,8 +159,8 @@ mod tests {
             .contains("No inter-agent dependencies"));
     }
 
-    #[tokio::test]
-    async fn workforce_input_no_dependencies() {
+    #[test]
+    fn workforce_input_no_dependencies() {
         let step_id = Uuid::new_v4();
         let brief = make_brief(step_id);
 
@@ -199,10 +169,7 @@ mod tests {
             make_roster_agent(brief.id, "Analyzer", 1, Some(Uuid::new_v4())),
         ];
 
-        let mut tool_repo = MockToolCapabilityRepo::new();
-        tool_repo
-            .expect_get_tool_capabilities()
-            .returning(|| Ok(vec![]));
+        let registry = CapabilityRegistry::empty();
 
         let input = workforce::build_workforce_designer_input(
             &brief,
@@ -210,10 +177,9 @@ mod tests {
             &HashMap::new(),
             &[],
             None,
-            &tool_repo,
+            &registry,
             &[], // No edges
-        )
-        .await;
+        );
 
         assert!(input.dependencies.is_empty());
         assert!(input

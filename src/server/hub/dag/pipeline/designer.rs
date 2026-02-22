@@ -86,10 +86,9 @@ impl PipelinePhase for DesignerPhase {
                 .await
                 .unwrap_or_default()
                 .as_deref(),
-            &*dag.state.repos().tool_capabilities,
+            dag.state.capability_registry(),
             &child_edges,
-        )
-        .await;
+        );
 
         let (designed_prompts, token_usage) = match agent_designer::run_agent_designer(
             dag.engine,

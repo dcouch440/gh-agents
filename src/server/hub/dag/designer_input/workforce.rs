@@ -7,23 +7,20 @@ use std::collections::HashMap;
 
 use uuid::Uuid;
 
-use crate::db::traits::ToolCapabilityRepo;
+use crate::config::capability_registry::CapabilityRegistry;
 use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow, WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::types::StepExecutionEnvelope;
 
-use super::{
-    build_tool_descriptions_from_db, format_envelopes_as_upstream, AgentDefinition, DependencyEdge,
-    DesignerInput,
-};
+use super::{format_envelopes_as_upstream, AgentDefinition, DependencyEdge, DesignerInput};
 
 /// Build a `DesignerInput` from a workforce configuration.
-pub async fn build_workforce_designer_input(
+pub fn build_workforce_designer_input(
     brief: &TaskMissionBriefRow,
     roster: &[TaskAgentRosterRow],
     completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
     steps: &[WorkflowStepRow],
     plan: Option<&str>,
-    tool_cap_repo: &dyn ToolCapabilityRepo,
+    capability_registry: &CapabilityRegistry,
     child_edges: &[WorkflowStepEdgeRow],
 ) -> DesignerInput {
     let agents = roster
@@ -102,11 +99,7 @@ pub async fn build_workforce_designer_input(
         ),
         agents,
         upstream,
-        available_tools: build_tool_descriptions_from_db(
-            &brief.available_capabilities,
-            tool_cap_repo,
-        )
-        .await,
+        available_tools: capability_registry.tool_descriptions(&brief.available_capabilities),
         archetype_guidance: guidance,
         dependencies,
     }
