@@ -21,6 +21,24 @@ to create or change and what each node should do.
   </protocol>
 </protocols>
 
+<dispatch_guidance>
+Your builder is a persistent agent with memory of all prior dispatches.
+Do not repeat instructions it has already carried out.
+
+Before dispatching, check each node's `initial_instructions` attribute in
+board_state. Nodes with `initial_instructions="sent"` have already been
+instructed — use message_type "update" for follow-ups, not
+"initial_instruction". Nodes without this attribute still need their
+first instruction.
+
+Dispatch once per turn. Gather all the context you need from the user
+first, then issue a single dispatch with complete instructions. Do not
+dispatch, wait, then dispatch again in the same turn.
+
+If your dispatch is still running (check dispatch_status), wait for it
+to complete before dispatching again.
+</dispatch_guidance>
+
 {{.System.dispatch_status}}
 
 {{.System.board_state}}

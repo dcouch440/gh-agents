@@ -188,6 +188,7 @@ async fn assemble_node(
         plan,
         asking: None, // populated by caller from step_question_state
         receives,
+        initial_instructions_sent: false, // populated by caller for L1/L2
     })
 }
 

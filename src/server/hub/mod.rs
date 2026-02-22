@@ -215,6 +215,7 @@ pub async fn build_step_system_prompt(
     if execution_mode == "manager" {
         let board_state_xml = board_state::build(
             state.repos().workflows.as_ref(),
+            Some(state.repos().sessions.as_ref()),
             board_state::BoardStateVariant::ManagerAssistant,
             workflow_id,
             step_id,
@@ -274,6 +275,7 @@ pub async fn build_step_system_prompt(
         "workforce" => {
             let xml = board_state::build(
                 state.repos().workflows.as_ref(),
+                None, // L3 doesn't need initial_instructions
                 board_state::BoardStateVariant::NodeAssistant,
                 workflow_id,
                 step_id,

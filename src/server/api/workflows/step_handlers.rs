@@ -199,9 +199,7 @@ pub async fn get_workflow_plans(
         workflow_id,
     )
     .await?;
-    let notes = repo
-        .get_all_plans_for_workflow(workflow_id)
-        .await?;
+    let notes = repo.get_all_plans_for_workflow(workflow_id).await?;
     let entries: Vec<WorkflowNoteEntry> = notes
         .into_iter()
         .map(|(step_id, _name, _mode, content)| WorkflowNoteEntry {

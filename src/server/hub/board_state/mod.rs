@@ -27,7 +27,7 @@
 use anyhow::Result;
 use uuid::Uuid;
 
-use crate::db::traits::WorkflowRepo;
+use crate::db::traits::{SessionRepo, WorkflowRepo};
 
 mod agent;
 mod fetch;
@@ -47,13 +47,18 @@ mod tests;
 ///
 /// For `OwnNode` scope (L3/L4), fetches the single step and its detail.
 /// For `AllNodes` scope (L1/L2), bulk-loads all visible steps in the workflow.
+///
+/// When `sessions` is provided and the variant includes initial_instructions,
+/// batch-checks which nodes have received initial instructions and sets the
+/// `initial_instructions_sent` flag on the corresponding `NodeSnapshot`s.
 pub async fn build(
     repo: &dyn WorkflowRepo,
+    sessions: Option<&dyn SessionRepo>,
     variant: BoardStateVariant,
     workflow_id: Uuid,
     step_id: Uuid,
 ) -> Result<String> {
-    let snapshot = match variant.scope() {
+    let mut snapshot = match variant.scope() {
         Scope::OwnNode => {
             let node = fetch::fetch_node(repo, workflow_id, step_id).await?;
             BoardSnapshot {
@@ -65,6 +70,20 @@ pub async fn build(
         }
         Scope::AllNodes => fetch::fetch_board(repo, workflow_id).await?,
     };
+
+    // Populate initial_instructions_sent for L1/L2 variants.
+    if variant.include_initial_instructions() {
+        if let Some(sessions) = sessions {
+            let step_ids: Vec<Uuid> = snapshot.nodes.iter().map(|n| n.id).collect();
+            if let Ok(instructed) = sessions.check_initial_instructions_sent(&step_ids).await {
+                for node in &mut snapshot.nodes {
+                    if instructed.contains(&node.id) {
+                        node.initial_instructions_sent = true;
+                    }
+                }
+            }
+        }
+    }
 
     Ok(render::render(&snapshot, variant))
 }

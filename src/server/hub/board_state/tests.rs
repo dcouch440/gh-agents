@@ -48,6 +48,7 @@ mod tests {
             plan: String::new(),
             asking: None,
             receives: None,
+            initial_instructions_sent: false,
         }
     }
 
@@ -316,6 +317,52 @@ mod tests {
     }
 
     // ========================================================================
+    // Initial Instructions Flag
+    // ========================================================================
+
+    #[test]
+    fn render_l1_shows_initial_instructions_sent() {
+        let mut node = make_node("Configured", vec![make_agent("Worker", &[], &[], "Works")]);
+        node.initial_instructions_sent = true;
+
+        let snapshot = make_board(vec![node]);
+        let xml = render::render(&snapshot, BoardStateVariant::ManagerAssistant);
+
+        assert!(xml.contains("initial_instructions=\"sent\""));
+    }
+
+    #[test]
+    fn render_l1_hides_initial_instructions_when_not_sent() {
+        let node = make_node("Unconfigured", vec![]);
+        let snapshot = make_board(vec![node]);
+        let xml = render::render(&snapshot, BoardStateVariant::ManagerAssistant);
+
+        assert!(!xml.contains("initial_instructions"));
+    }
+
+    #[test]
+    fn render_l2_shows_initial_instructions_sent() {
+        let mut node = make_node("Configured", vec![make_agent("Worker", &[], &[], "Works")]);
+        node.initial_instructions_sent = true;
+
+        let snapshot = make_board(vec![node]);
+        let xml = render::render(&snapshot, BoardStateVariant::ManagerBuilder);
+
+        assert!(xml.contains("initial_instructions=\"sent\""));
+    }
+
+    #[test]
+    fn render_l3_hides_initial_instructions() {
+        let mut node = make_node("Worker", vec![make_agent("Agent", &[], &[], "Works")]);
+        node.initial_instructions_sent = true;
+
+        let snapshot = make_own_node_snapshot(node);
+        let xml = render::render(&snapshot, BoardStateVariant::NodeAssistant);
+
+        assert!(!xml.contains("initial_instructions"));
+    }
+
+    // ========================================================================
     // Variant methods
     // ========================================================================
 
@@ -353,6 +400,12 @@ mod tests {
         assert!(BoardStateVariant::Dispatch.include_agent_ids());
         assert!(BoardStateVariant::Dispatch.include_port_schemas());
         assert!(BoardStateVariant::Dispatch.include_plan());
+
+        // initial_instructions — L1/L2 only
+        assert!(BoardStateVariant::ManagerAssistant.include_initial_instructions());
+        assert!(BoardStateVariant::ManagerBuilder.include_initial_instructions());
+        assert!(!BoardStateVariant::NodeAssistant.include_initial_instructions());
+        assert!(!BoardStateVariant::Dispatch.include_initial_instructions());
     }
 
     // ========================================================================

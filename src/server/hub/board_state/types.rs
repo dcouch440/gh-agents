@@ -77,12 +77,18 @@ impl BoardStateVariant {
     /// Whether individual `<agent>` child elements are rendered inside `<node>`.
     /// L1 shows agents as a summary attribute instead.
     pub fn include_agent_children(&self) -> bool {
-        matches!(self, Self::ManagerBuilder | Self::NodeAssistant | Self::Dispatch)
+        matches!(
+            self,
+            Self::ManagerBuilder | Self::NodeAssistant | Self::Dispatch
+        )
     }
 
     /// Whether agent role descriptions are included in agent elements.
     pub fn include_agent_descriptions(&self) -> bool {
-        matches!(self, Self::ManagerBuilder | Self::NodeAssistant | Self::Dispatch)
+        matches!(
+            self,
+            Self::ManagerBuilder | Self::NodeAssistant | Self::Dispatch
+        )
     }
 
     /// Whether incoming port/context details are included.
@@ -98,6 +104,11 @@ impl BoardStateVariant {
     /// Whether the step plan is included (L4 only).
     pub fn include_plan(&self) -> bool {
         matches!(self, Self::Dispatch)
+    }
+
+    /// Whether the `initial_instructions` attribute is rendered on nodes.
+    pub fn include_initial_instructions(&self) -> bool {
+        matches!(self, Self::ManagerAssistant | Self::ManagerBuilder)
     }
 }
 
@@ -141,6 +152,9 @@ pub struct NodeSnapshot {
     pub asking: Option<String>,
     /// Comma-separated upstream node names.
     pub receives: Option<String>,
+    /// Whether this node has received initial instructions from a dispatch.
+    /// Rendered for L1/L2 variants as `initial_instructions="sent"`.
+    pub initial_instructions_sent: bool,
 }
 
 /// Snapshot of an agent in a workforce roster.
