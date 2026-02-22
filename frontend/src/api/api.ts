@@ -79,6 +79,8 @@ import type {
   WorkshopResponse,
   WorkshopStepResponse,
   WorkshopStatusResponse,
+  DispatchTraceResponse,
+  DispatchTasksResponse,
 } from '@/types'
 
 // ============================================================================
@@ -442,6 +444,14 @@ const protocols = freeze({
   preview: (id: string, config?: RequestConfig) => baseApi.post<unknown>(API.PROTOCOL_PREVIEW(id), undefined, config),
 })
 
+const dispatch = freeze({
+  trace: (executionId: string, config?: RequestConfig) =>
+    baseApi.get<DispatchTraceResponse>(API.DISPATCH_TRACE(executionId), config),
+
+  listForStep: (stepId: string, config?: RequestConfig) =>
+    baseApi.get<DispatchTasksResponse>(API.DISPATCH_STEP_TASKS(stepId), config),
+})
+
 // ============================================================================
 // Merge base API methods with typed endpoints into single `api` export
 // ============================================================================
@@ -475,6 +485,7 @@ export const api = Object.freeze({
   roomSessions,
   collections,
   protocols,
+  dispatch,
 })
 
 export type Api = typeof api

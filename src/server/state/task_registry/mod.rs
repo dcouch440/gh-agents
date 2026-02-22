@@ -5,6 +5,8 @@
 
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+use serde::Serialize;
+use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -19,6 +21,43 @@ pub enum TaskStatus {
     Failed,
 }
 
+impl TaskStatus {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Running => "running",
+            Self::Completed => "completed",
+            Self::Cancelled => "cancelled",
+            Self::Failed => "failed",
+        }
+    }
+}
+
+/// A single trace event recorded during dispatch execution.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum TraceEvent {
+    Token {
+        content: String,
+        ts: DateTime<Utc>,
+    },
+    ToolStart {
+        tool_name: String,
+        tool_id: String,
+        input: Value,
+        ts: DateTime<Utc>,
+    },
+    ToolEnd {
+        tool_name: String,
+        tool_id: String,
+        result: Value,
+        ts: DateTime<Utc>,
+    },
+    Error {
+        error: String,
+        ts: DateTime<Utc>,
+    },
+}
+
 /// A single background dispatch task entry.
 #[derive(Debug, Clone)]
 pub struct TaskEntry {
@@ -31,6 +70,8 @@ pub struct TaskEntry {
     pub cancel_token: CancellationToken,
     pub created_at: DateTime<Utc>,
     pub result: Option<String>,
+    /// Execution trace — tokens, tool calls, errors.
+    pub trace: Vec<TraceEvent>,
 }
 
 /// Centralized registry for background dispatch tasks.
@@ -72,6 +113,7 @@ impl TaskRegistry {
                 cancel_token: cancel_token.clone(),
                 created_at: Utc::now(),
                 result: None,
+                trace: Vec::new(),
             },
         );
 
@@ -140,6 +182,13 @@ impl TaskRegistry {
     pub fn cleanup_before(&self, cutoff: DateTime<Utc>) {
         self.tasks
             .retain(|_, entry| entry.status == TaskStatus::Running || entry.created_at >= cutoff);
+    }
+
+    /// Append a trace event to a running task.
+    pub fn append_trace(&self, execution_id: Uuid, event: TraceEvent) {
+        if let Some(mut entry) = self.tasks.get_mut(&execution_id) {
+            entry.trace.push(event);
+        }
     }
 
     /// Return the number of currently running tasks.

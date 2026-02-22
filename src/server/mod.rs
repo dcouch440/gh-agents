@@ -477,6 +477,15 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::PROTOCOL_EXECUTIONS,
             get(api::list_protocol_executions),
         )
+        // Dispatch trace
+        .route(
+            routes::DISPATCH_TRACE,
+            get(api::get_dispatch_trace),
+        )
+        .route(
+            routes::DISPATCH_STEP_TASKS,
+            get(api::list_dispatch_tasks),
+        )
         .layer(middleware::from_fn_with_state(state.clone(), require_auth))
 }
 

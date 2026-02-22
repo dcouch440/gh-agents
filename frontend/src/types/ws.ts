@@ -199,6 +199,11 @@ export const SESSION_EVENT = {
   DISPATCH_COMPLETED: 'dispatch_completed',
   DISPATCH_FAILED: 'dispatch_failed',
   DISPATCH_CANCELLED: 'dispatch_cancelled',
+  // Dispatch streaming events
+  DISPATCH_STREAM_TOKEN: 'dispatch_stream_token',
+  DISPATCH_STREAM_TOOL_START: 'dispatch_stream_tool_start',
+  DISPATCH_STREAM_TOOL_END: 'dispatch_stream_tool_end',
+  DISPATCH_STREAM_ERROR: 'dispatch_stream_error',
 } as const
 
 export type SessionCreatedData = { session_id: string; title: string; mode_id: string }
@@ -218,6 +223,22 @@ export type DispatchProgressData = { session_id: string; execution_id: string; s
 export type DispatchCompletedData = { session_id: string; execution_id: string; step_id: string; summary: string }
 export type DispatchFailedData = { session_id: string; execution_id: string; step_id: string; error: string }
 export type DispatchCancelledData = { session_id: string; execution_id: string; step_id: string }
+
+// Dispatch streaming events
+export type DispatchStreamTokenData = {
+  session_id: string; execution_id: string; step_id: string; content: string
+}
+export type DispatchStreamToolStartData = {
+  session_id: string; execution_id: string; step_id: string
+  tool_name: string; tool_id: string; input: Record<string, unknown>
+}
+export type DispatchStreamToolEndData = {
+  session_id: string; execution_id: string; step_id: string
+  tool_name: string; tool_id: string; result: unknown
+}
+export type DispatchStreamErrorData = {
+  session_id: string; execution_id: string; step_id: string; error: string
+}
 
 // ============================================================================
 // Handler Type

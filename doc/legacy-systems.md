@@ -99,8 +99,6 @@
 - ✅ `create_doc` - Document creation
 - ✅ `update_doc` - Document updates
 - ✅ `search_docs` - Document search
-- ✅ `submit_prd` - PRD submission
-- ✅ `submit_ticket` - Ticket submission
 
 **Status:**
 - ❌ Agent management tools reference `state.pool` and `state.dispatcher`

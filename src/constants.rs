@@ -394,6 +394,10 @@ pub mod routes {
     pub const PROTOCOL_UNAPPLY: &str = "/protocols/:protocol_id/unapply/:step_id";
     pub const PROTOCOL_EXECUTIONS: &str = "/protocols/:id/executions";
 
+    // Dispatch trace
+    pub const DISPATCH_TRACE: &str = "/dispatch/:execution_id/trace";
+    pub const DISPATCH_STEP_TASKS: &str = "/dispatch/step/:step_id";
+
     // WebSocket
     pub const WS: &str = "/ws";
 }

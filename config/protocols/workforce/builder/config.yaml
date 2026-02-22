@@ -3,5 +3,5 @@ agents:
     model_id: "tier:1"
     max_tokens: 8192
     temperature: 0.3
-    max_rounds: 4
+    max_rounds: 6
     context_budget: 200000

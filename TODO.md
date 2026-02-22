@@ -55,3 +55,5 @@ Check Dispatch History L3:
 Builder built node without agents.
 
 Add expansion layer between L2 and L3.
+
+Few shot examples need to display tools instead.

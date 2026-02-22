@@ -9,7 +9,7 @@ use uuid::Uuid;
 use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::recorder::ExecutionRecorder;
 use crate::server::hub::strategies::DispatchStrategy;
-use crate::server::hub::NullSink;
+use crate::server::hub::streaming::DispatchStreamSink;
 use crate::server::state::AppState;
 use crate::server::ws::events::{SessionEvent, SessionEventKind};
 use crate::types::UserId;
@@ -128,12 +128,13 @@ pub async fn run_dispatch_task(
         None,
         None,
     );
+    let sink = DispatchStreamSink::new(state.clone(), execution_id, step_id);
 
     let result = engine
         .execute(
             &strategy,
             &instruction,
-            &NullSink,
+            &sink,
             &recorder,
             Some(&cancel_token),
         )

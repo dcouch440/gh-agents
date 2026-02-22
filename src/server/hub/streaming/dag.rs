@@ -4,6 +4,7 @@
 //! `DagStreamSink` to route LLM token/tool events through the event bus.
 
 use async_trait::async_trait;
+use serde_json::Value;
 use uuid::Uuid;
 
 use super::StreamSink;
@@ -60,7 +61,7 @@ impl StreamSink for DagStreamSink {
         );
     }
 
-    async fn tool_start(&self, name: &str, tool_id: &str) {
+    async fn tool_start(&self, name: &str, tool_id: &str, _input: &Value) {
         broadcast_workflow_event(
             &self.state,
             &self.ctx,
@@ -75,7 +76,7 @@ impl StreamSink for DagStreamSink {
         );
     }
 
-    async fn tool_end(&self, name: &str, tool_id: &str) {
+    async fn tool_end(&self, name: &str, tool_id: &str, _result: &Value) {
         broadcast_workflow_event(
             &self.state,
             &self.ctx,

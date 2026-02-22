@@ -101,6 +101,11 @@ pub(super) async fn dispatch_step_tool(
     state: &AppState,
     ctx: &StepChatContext,
 ) -> Option<Value> {
+    // think — no-op reasoning scratchpad
+    if name == "think" {
+        return Some(serde_json::json!({ "thought_recorded": true }));
+    }
+
     // update_plan — needs state for board overview spawn
     if name == "update_plan" {
         let content = input["content"].as_str().unwrap_or("");

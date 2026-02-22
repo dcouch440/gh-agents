@@ -35,29 +35,6 @@ mod tests {
     }
 
     #[test]
-    fn test_all_orchestrator_tools_mapped() {
-        let orchestrator_tools = vec![
-            "read_file",
-            "list_files",
-            "search_files",
-            "think",
-            "create_doc",
-            "update_doc",
-            "search_docs",
-        ];
-
-        for tool_name in orchestrator_tools {
-            let tool = get_tool_definition(tool_name);
-            assert!(
-                tool.is_some(),
-                "Orchestrator tool '{}' not found in registry",
-                tool_name
-            );
-            assert_eq!(tool.unwrap().name, tool_name);
-        }
-    }
-
-    #[test]
     fn test_unknown_tool_returns_none() {
         assert!(get_tool_definition("unknown_tool").is_none());
         assert!(get_tool_definition("").is_none());
@@ -80,7 +57,6 @@ mod tests {
             "run_command",
             "web_research",
             "read_document",
-            "search_files",
             "think",
             "create_doc",
             "update_doc",
@@ -94,7 +70,7 @@ mod tests {
             "remove_edge",
         ];
 
-        assert_eq!(all_names.len(), 24);
+        assert_eq!(all_names.len(), 23);
 
         // Verify all map to tools
         for name in all_names {
@@ -126,7 +102,6 @@ mod tests {
             "run_command",
             "web_research",
             "read_document",
-            "search_files",
             "think",
             "create_doc",
             "update_doc",

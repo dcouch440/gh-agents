@@ -257,9 +257,9 @@ impl ExecutionEngine {
                             return Err(HubError::Cancelled);
                         }
                         debug!(round, tool = %tool_name, "executing tool");
-                        sink.tool_start(tool_name, tool_id).await;
+                        sink.tool_start(tool_name, tool_id, tool_input).await;
                         let result = strategy.execute_tool(tool_name, tool_input).await;
-                        sink.tool_end(tool_name, tool_id).await;
+                        sink.tool_end(tool_name, tool_id, &result).await;
 
                         let result_str = match &result {
                             serde_json::Value::String(s) => s.clone(),
