@@ -46,8 +46,8 @@ vi.mock('@/components/primitives/CodeEditor', () => ({
   ),
 }))
 
-vi.mock('@/components/primitives/MarkdownPreview', () => ({
-  MarkdownPreview: ({ content }: { content: string }) => <div data-testid="markdown-preview">{content}</div>,
+vi.mock('@/components/primitives/terminal-renderer', () => ({
+  TerminalBlock: ({ content }: { content: string }) => <div data-testid="markdown-preview">{content}</div>,
 }))
 
 vi.mock('@/components/DocumentSelector', () => ({

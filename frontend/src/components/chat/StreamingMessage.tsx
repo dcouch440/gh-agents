@@ -1,5 +1,5 @@
 import Box from '@mui/material/Box'
-import { MarkdownPreview } from '@/components/primitives/MarkdownPreview'
+import { TerminalBlock } from '@/components/primitives/terminal-renderer'
 import { ToolIndicator } from './ToolIndicator'
 import type { MessageSegment } from '@/types'
 
@@ -19,7 +19,7 @@ function StreamingMessage({ segments, streaming }: StreamingMessageProps) {
 
         switch (segment.type) {
           case 'text':
-            return <MarkdownPreview key={key} content={segment.content} />
+            return <TerminalBlock key={key} content={segment.content} />
           case 'tool':
             return (
               <Box key={key} sx={{ display: 'block' }}>

@@ -6,7 +6,7 @@
 //
 // Only `- [ ]` / `- [x]` checkboxes are interactive. Regular markdown
 // (bullets, paragraphs, tables, etc.) flows into bodyMarkdown for
-// MarkdownPreview rendering.
+// TerminalBlock rendering.
 
 type PanelInteractiveItem = {
   type: 'checkbox'

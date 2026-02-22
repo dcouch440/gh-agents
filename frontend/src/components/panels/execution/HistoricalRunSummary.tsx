@@ -1,6 +1,7 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import { StatusBadge, MarkdownPreview } from '@/components/primitives'
+import { StatusBadge } from '@/components/primitives'
+import { TerminalBlock } from '@/components/primitives/terminal-renderer'
 import type { WorkflowExecutionSummary } from '@/types'
 import type { BadgeVariant } from '@/components/primitives/StatusBadge'
 
@@ -86,7 +87,7 @@ function HistoricalRunSummary({ run }: HistoricalRunSummaryProps) {
 
       {outputText ? (
         <Box sx={{ maxHeight: 500, overflow: 'auto' }}>
-          <MarkdownPreview content={outputText} />
+          <TerminalBlock content={outputText} />
         </Box>
       ) : (
         <Typography variant="body2" sx={{ color: 'text.disabled', fontStyle: 'italic' }}>

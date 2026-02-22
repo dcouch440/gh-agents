@@ -2,8 +2,8 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { ExecutionStepOutput } from './ExecutionStepOutput'
 
-vi.mock('@/components/primitives', () => ({
-  MarkdownPreview: ({ content }: { content: string }) => <div data-testid="markdown">{content}</div>,
+vi.mock('@/components/primitives/terminal-renderer', () => ({
+  TerminalBlock: ({ content }: { content: string }) => <div data-testid="markdown">{content}</div>,
 }))
 
 describe('ExecutionStepOutput', () => {

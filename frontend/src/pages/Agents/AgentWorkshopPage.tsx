@@ -6,7 +6,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import { PageHeader } from '@/components/primitives'
 import { SplitPane } from '@/components/primitives/SplitPane'
 import { CodeEditor } from '@/components/primitives/CodeEditor'
-import { MarkdownPreview } from '@/components/primitives/MarkdownPreview'
+import { TerminalBlock } from '@/components/primitives/terminal-renderer'
 import { EditorToolbar } from '@/components/primitives/EditorToolbar'
 import { ToggleGroup } from '@/components/primitives/ToggleGroup'
 import { ChatPanel } from '@/components/chat/ChatPanel'
@@ -673,7 +673,7 @@ function AgentWorkshopPage() {
                     height="100%"
                   />
                 ) : (
-                  <MarkdownPreview content={state.systemPrompt} />
+                  <TerminalBlock content={state.systemPrompt} />
                 )}
               </Box>
               <Box

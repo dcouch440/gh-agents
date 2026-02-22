@@ -1,5 +1,5 @@
 import { Box, Typography } from '@mui/material'
-import { MarkdownPreview } from '@/components/primitives/MarkdownPreview'
+import { TerminalBlock } from '@/components/primitives/terminal-renderer'
 
 type ChatMessageProps = {
   role: 'user' | 'assistant' | 'system'
@@ -35,7 +35,7 @@ function ChatMessage({ role, content, streaming, sourceType }: ChatMessageProps)
         >
           AGENT
         </Typography>
-        <MarkdownPreview content={content} />
+        <TerminalBlock content={content} />
       </Box>
     )
   }
@@ -115,7 +115,7 @@ function ChatMessage({ role, content, streaming, sourceType }: ChatMessageProps)
 
   return (
     <Box sx={{ py: 0.25 }}>
-      <MarkdownPreview content={content} />
+      <TerminalBlock content={content} />
       {streaming && content ? (
         <Box
           component="span"

@@ -1,5 +1,5 @@
 import { Checkbox, FormControlLabel } from '@mui/material'
-import { InlineMarkdown } from './InlineMarkdown'
+import { TerminalInline } from './terminal-renderer'
 
 type PanelCheckboxProps = {
   label: string
@@ -18,7 +18,7 @@ function PanelCheckbox({ label, checked, onChange }: PanelCheckboxProps) {
           sx={{ py: 0.25 }}
         />
       }
-      label={<InlineMarkdown content={label} />}
+      label={<TerminalInline content={label} />}
       sx={{
         mx: 0,
         '& .MuiFormControlLabel-label': {

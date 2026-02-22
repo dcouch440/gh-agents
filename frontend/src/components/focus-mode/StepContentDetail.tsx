@@ -3,7 +3,7 @@ import Box from '@mui/material/Box'
 import { useTheme } from '@mui/material/styles'
 import { useStore, workflowStore } from '@/stores'
 import { CodeEditor } from '@/components/primitives/CodeEditor'
-import { MarkdownPreview } from '@/components/primitives/MarkdownPreview'
+import { TerminalBlock } from '@/components/primitives/terminal-renderer'
 import { DetailShell } from './DetailShell'
 
 type ContentViewMode = 'raw' | 'md'
@@ -68,7 +68,7 @@ function StepContentDetail({ stepId, kind, onClose }: StepContentDetailProps) {
             />
           ) : (
             <Box sx={{ overflow: 'auto', height: '100%' }}>
-              <MarkdownPreview content={content} />
+              <TerminalBlock content={content} />
             </Box>
           )}
         </Box>

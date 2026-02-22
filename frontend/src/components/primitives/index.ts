@@ -31,8 +31,9 @@ export type { JsonEditorProps } from './JsonEditor'
 export { SplitPane } from './SplitPane'
 export type { SplitPaneProps } from './SplitPane'
 
-export { MarkdownPreview } from './MarkdownPreview'
-export type { MarkdownPreviewProps } from './MarkdownPreview'
+export { TerminalBlock, TerminalInline, TerminalThemeProvider } from './terminal-renderer'
+export type { TerminalBlockProps, TerminalInlineProps, TerminalTheme } from './terminal-renderer'
+
 
 export { EditorToolbar } from './EditorToolbar'
 export type { EditorToolbarProps } from './EditorToolbar'

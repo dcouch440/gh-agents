@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import Box from '@mui/material/Box'
-import { MarkdownPreview } from '@/components/primitives/MarkdownPreview'
+import { TerminalBlock } from '@/components/primitives/terminal-renderer'
 import { CodeEditor } from '@/components/primitives/CodeEditor'
 import { VARIANT_CONFIGS } from '../registry'
 
@@ -64,7 +64,7 @@ function ContextNodeContent({ content, accentColor = VARIANT_CONFIGS.context.col
           />
         ) : (
           <Box sx={{ px: 1, py: 0.5, overflow: 'auto', height: '100%' }}>
-            <MarkdownPreview content={content} />
+            <TerminalBlock content={content} />
           </Box>
         )}
       </Box>

@@ -2,8 +2,9 @@ import { render, screen } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import { ChatMessage } from './ChatMessage'
 
-vi.mock('@/components/primitives/MarkdownPreview', () => ({
-  MarkdownPreview: ({ content }: { content: string }) => <div data-testid="markdown-preview">{content}</div>,
+vi.mock('@/components/primitives/terminal-renderer', () => ({
+  TerminalBlock: ({ content }: { content: string }) => <div data-testid="markdown-preview">{content}</div>,
+  TerminalInline: ({ content }: { content: string }) => <span data-testid="inline-markdown">{content}</span>,
 }))
 
 describe('ChatMessage', () => {
