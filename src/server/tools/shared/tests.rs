@@ -44,7 +44,7 @@ mod tests {
 
     #[test]
     fn classify_non_context_mode_is_pending() {
-        for mode in &["single", "for_each", "documenter", "room"] {
+        for mode in &["single", "workforce", "sub_workflow", "container"] {
             let step = make_step(mode);
 
             let (status, preview, word_count) = classify_content_status(&step);

@@ -27,7 +27,7 @@ mod tests {
 
         let steps = vec![
             make_step(s1, wid, "context", "Requirements"),
-            make_step(s2, wid, "documenter", "Doc Gen"),
+            make_step(s2, wid, "workforce", "Doc Gen"),
             make_step(s3, wid, "single", "Reviewer"),
         ];
         let edges = vec![edge_in(wid, s1, s2), edge_in(wid, s2, s3)];
@@ -44,7 +44,7 @@ mod tests {
         let result = build_graph_context(&repo, wid, s2).await.unwrap();
 
         assert!(result.contains("Requirements (context)"));
-        assert!(result.contains("Doc Gen (documenter) [SELECTED]"));
+        assert!(result.contains("Doc Gen (workforce) [SELECTED]"));
         assert!(result.contains("Reviewer (single)"));
         assert!(result.contains("Requirements -> Doc Gen"));
         assert!(result.contains("Doc Gen -> Reviewer"));

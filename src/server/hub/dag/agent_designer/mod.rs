@@ -5,7 +5,7 @@
 //! tool assignment) tuples for each agent. This invests one LLM call in
 //! prompt quality so agents produce better results.
 //!
-//! Any archetype (task_force, documenter, room) can call `run_agent_designer()`
+//! Any archetype (workforce) can call `run_agent_designer()`
 //! by building a `DesignerInput` via the formatters in `designer_input`.
 
 mod tests;

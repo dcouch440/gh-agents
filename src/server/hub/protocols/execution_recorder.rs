@@ -1,7 +1,7 @@
 //! Protocol execution recorder — shared phase tracking for protocol executors.
 //!
 //! Wraps `ProtocolRepo` operations for creating and updating execution rows.
-//! Used by all protocol executors (documenter, future protocols) to record
+//! Used by all protocol executors (workforce, future protocols) to record
 //! phase-level execution metadata (tokens, cost, status, output).
 
 use anyhow::anyhow;
@@ -91,7 +91,7 @@ impl<'a> ProtocolExecutionRecorder<'a> {
 
     /// Create a new execution row with extended context (agent name, archetype, designer link).
     ///
-    /// Used by task_force and other protocols that need to track agent-level phases.
+    /// Used by workforce and other protocols that need to track agent-level phases.
     pub async fn create_phase_with_context(
         &self,
         phase: &str,
@@ -163,7 +163,7 @@ mod tests {
         let run_id = Uuid::new_v4();
 
         // Use a minimal assertion — the real tests are integration-level
-        // via the documenter executor tests.
+        // via the protocol executor tests.
         assert_ne!(step_id, run_id);
     }
 }

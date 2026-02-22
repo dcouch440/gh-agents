@@ -117,7 +117,7 @@ impl ProtocolEngine {
 
     /// Register all built-in protocol compilers.
     fn register_builtins(&mut self) {
-        // No built-in compilers — documenter was removed in favor of workforce.
+        // No built-in compilers — workforce uses direct execution, not protocol compilation.
         // Future protocol types will register their compilers here.
     }
 }

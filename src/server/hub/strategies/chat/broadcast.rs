@@ -3,8 +3,6 @@
 use serde_json::Value;
 use uuid::Uuid;
 
-// Consistency scanner disabled — see consistency_scanner/mod.rs for details.
-// use crate::server::hub::consistency_scanner::{self, DeletedItem, DeletedItemType};
 use crate::server::state::AppState;
 use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
 use crate::types::UserId;
@@ -18,7 +16,6 @@ enum ToolEffect {
     DescriptionUpdated,
     ConfigUpdated,
     RosterChanged,
-    MembersChanged,
     NotesUpdated,
 }
 
@@ -30,22 +27,11 @@ impl ToolEffect {
             "set_node_name" => Some(Self::NameUpdated),
             "set_node_description" => Some(Self::DescriptionUpdated),
 
-            "update_config"
-            | "set_task"
-            | "set_capabilities"
-            | "set_failure_mode"
-            | "set_extraction_focus"
-            | "set_tag_vocabulary"
-            | "set_contradiction_handling"
-            | "set_confidence_threshold"
-            | "set_meeting_purpose"
-            | "set_max_turns"
-            | "set_interaction_mode" => Some(Self::ConfigUpdated),
+            "set_task" | "set_capabilities" | "set_failure_mode" => Some(Self::ConfigUpdated),
 
             "add_agent" | "update_agent" | "remove_agent" | "configure_team" => {
                 Some(Self::RosterChanged)
             }
-            "add_member" | "update_member" | "remove_member" => Some(Self::MembersChanged),
 
             "update_notes" => Some(Self::NotesUpdated),
 
@@ -72,7 +58,6 @@ impl ToolEffect {
                 WorkflowEventKind::StepConfigUpdated { step_id }
             }
             Self::RosterChanged => WorkflowEventKind::RosterChanged { step_id },
-            Self::MembersChanged => WorkflowEventKind::RoomMembersChanged { step_id },
             Self::NotesUpdated => {
                 let content = input["content"].as_str().unwrap_or("").to_string();
                 WorkflowEventKind::AssistantNotesUpdated { step_id, content }
@@ -84,7 +69,7 @@ impl ToolEffect {
 /// Broadcast a workflow event when a step tool mutates data.
 ///
 /// Handles both universal tools (archetype, name, description) and
-/// archetype-specific tools (doc defs, config). Only emits if the
+/// archetype-specific tools (config, roster). Only emits if the
 /// step context is present and the tool result indicates success.
 ///
 /// Called from both ChatStrategy (interactive) and DispatchStrategy
@@ -118,6 +103,3 @@ pub(crate) fn broadcast_step_event(
         kind,
     });
 }
-
-// Consistency scanner disabled — see consistency_scanner/mod.rs for details.
-// fn schedule_consistency_scan_if_deletion(..)

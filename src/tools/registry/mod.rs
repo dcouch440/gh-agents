@@ -36,17 +36,13 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "run_command" => Some(run_command_tool()),
         "web_research" => Some(web_research_tool()),
 
-        // Orchestrator tools (8 additional unique)
+        // Orchestrator tools
         "search_files" => Some(search_files_tool()),
         "think" => Some(think_tool()),
         "create_doc" => Some(create_doc_tool()),
         "update_doc" => Some(update_doc_tool()),
         "search_docs" => Some(search_docs_tool()),
         "read_document" => Some(read_document_tool()),
-        "submit_prd" => Some(submit_prd_tool()),
-        "submit_ticket" => Some(submit_ticket_tool()),
-
-        "update_config" => Some(update_config_tool()),
 
         // Universal node assistant tools (5)
         "set_node_archetype" => Some(set_node_archetype_tool()),
@@ -55,7 +51,7 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "render_panel" => Some(render_panel_tool()),
         "update_notes" => Some(update_notes_tool()),
 
-        // Task force archetype tools (6)
+        // Workforce archetype tools (6)
         "set_task" => Some(set_task_tool()),
         "add_agent" => Some(add_agent_tool()),
         "update_agent" => Some(update_agent_tool()),
@@ -438,103 +434,6 @@ fn read_document_tool() -> Tool {
     }
 }
 
-fn submit_prd_tool() -> Tool {
-    Tool {
-        name: "submit_prd".into(),
-        description: "Submit a Product Requirements Document with validation.".into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "title": {
-                    "type": "string",
-                    "description": "PRD title"
-                },
-                "problem_statement": {
-                    "type": "string",
-                    "description": "What problem does this solve?"
-                },
-                "goals": {
-                    "type": "array",
-                    "items": { "type": "string" },
-                    "description": "List of goals"
-                },
-                "milestones": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": { "type": "string" },
-                            "deliverables": {
-                                "type": "array",
-                                "items": { "type": "string" }
-                            }
-                        },
-                        "required": ["name", "deliverables"]
-                    },
-                    "description": "Milestones with deliverables"
-                },
-                "complexity": {
-                    "type": "string",
-                    "enum": ["S", "M", "L", "XL"],
-                    "description": "Complexity estimate"
-                }
-            },
-            "required": ["title", "problem_statement", "goals", "milestones", "complexity"]
-        }),
-    }
-}
-
-fn submit_ticket_tool() -> Tool {
-    Tool {
-        name: "submit_ticket".into(),
-        description: "Submit a decomposition ticket with validation.".into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "title": {
-                    "type": "string",
-                    "description": "Ticket title"
-                },
-                "description": {
-                    "type": "string",
-                    "description": "Detailed description"
-                },
-                "acceptance_criteria": {
-                    "type": "array",
-                    "items": { "type": "string" },
-                    "description": "Acceptance criteria checklist"
-                }
-            },
-            "required": ["title", "description", "acceptance_criteria"]
-        }),
-    }
-}
-
-fn update_config_tool() -> Tool {
-    Tool {
-        name: "update_config".into(),
-        description: "Update the documenter step's configuration. All fields are optional — only provided fields are changed.".into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "Step name displayed on the canvas"
-                },
-                "description": {
-                    "type": "string",
-                    "description": "What this step does and what it provides"
-                },
-                "prompt_template": {
-                    "type": "string",
-                    "description": "Instruction prompt that controls how the documenter generates documents"
-                }
-            },
-            "required": []
-        }),
-    }
-}
-
 // ============================================================================
 // Universal Node Assistant Tool Definitions
 // ============================================================================
@@ -656,19 +555,19 @@ fn update_notes_tool() -> Tool {
 }
 
 // ============================================================================
-// Task Force Archetype Tool Definitions
+// Workforce Archetype Tool Definitions
 // ============================================================================
 
 fn set_task_tool() -> Tool {
     Tool {
         name: "set_task".into(),
-        description: "Set the mission description for this task force node. Describes what the team of agents should accomplish.".into(),
+        description: "Set the mission description for this workforce node. Describes what the team of agents should accomplish.".into(),
         input_schema: json!({
             "type": "object",
             "properties": {
                 "description": {
                     "type": "string",
-                    "description": "What the task force should accomplish"
+                    "description": "What the workforce should accomplish"
                 }
             },
             "required": ["description"]
@@ -679,7 +578,7 @@ fn set_task_tool() -> Tool {
 fn add_agent_tool() -> Tool {
     Tool {
         name: "add_agent".into(),
-        description: "Add an agent to the task force roster. Each agent has a name, role, and capabilities that determine what tools they can use at runtime.".into(),
+        description: "Add an agent to the workforce roster. Each agent has a name, role, and capabilities that determine what tools they can use at runtime.".into(),
         input_schema: json!({
             "type": "object",
             "properties": {
@@ -706,7 +605,7 @@ fn update_agent_tool() -> Tool {
     Tool {
         name: "update_agent".into(),
         description:
-            "Update an existing agent in the task force roster. Only provided fields are changed."
+            "Update an existing agent in the workforce roster. Only provided fields are changed."
                 .into(),
         input_schema: json!({
             "type": "object",
@@ -737,7 +636,7 @@ fn update_agent_tool() -> Tool {
 fn remove_agent_tool() -> Tool {
     Tool {
         name: "remove_agent".into(),
-        description: "Remove an agent from the task force roster.".into(),
+        description: "Remove an agent from the workforce roster.".into(),
         input_schema: json!({
             "type": "object",
             "properties": {
@@ -754,7 +653,7 @@ fn remove_agent_tool() -> Tool {
 fn set_capabilities_tool() -> Tool {
     Tool {
         name: "set_capabilities".into(),
-        description: "Set the available capabilities for the task force. These determine what tools agents can be assigned.".into(),
+        description: "Set the available capabilities for the workforce. These determine what tools agents can be assigned.".into(),
         input_schema: json!({
             "type": "object",
             "properties": {
@@ -772,7 +671,7 @@ fn set_capabilities_tool() -> Tool {
 fn set_failure_mode_tool() -> Tool {
     Tool {
         name: "set_failure_mode".into(),
-        description: "Set how the task force handles agent failures during execution.".into(),
+        description: "Set how the workforce handles agent failures during execution.".into(),
         input_schema: json!({
             "type": "object",
             "properties": {
@@ -856,7 +755,7 @@ fn configure_team_tool() -> Tool {
 }
 
 // ============================================================================
-// Workforce Archetype Tool Definitions (deliverable-specific; agent tools shared)
+// Workforce Dependency Tool Definitions
 // ============================================================================
 
 fn set_dependency_tool() -> Tool {
@@ -911,7 +810,7 @@ fn dispatch_tool() -> Tool {
         description: concat!(
             "Send a plain English instruction to a background agent that will configure this ",
             "step. The background agent loads the current step state and calls mutation tools ",
-            "(add_agent, set_task, add_deliverable, etc.) on your behalf. You stay responsive ",
+            "(add_agent, set_task, configure_team, etc.) on your behalf. You stay responsive ",
             "while the work happens in the background. Use this instead of calling mutation ",
             "tools directly.",
         )

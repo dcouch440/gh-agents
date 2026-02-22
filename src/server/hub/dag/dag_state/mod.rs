@@ -342,7 +342,7 @@ pub(crate) fn broadcast_step_failure_if_real(
     }
 }
 
-/// Wrap step output into an agent-less StepExecutionEnvelope (for context/documenter steps).
+/// Wrap step output into an agent-less StepExecutionEnvelope (for context/pass-through steps).
 pub(crate) fn wrap_in_agentless_envelope(
     step_id: Uuid,
     data: Option<JsonValue>,

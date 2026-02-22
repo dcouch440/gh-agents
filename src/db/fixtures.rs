@@ -39,10 +39,9 @@ pub mod fixtures {
         }
     }
 
-    /// For-each step with iteration config.
-    pub fn for_each_step_with(
+    /// Workforce step with iteration config.
+    pub fn workforce_step_with(
         id: Uuid,
-        for_each_ref: &str,
         var_name: Option<&str>,
         display_order: i32,
     ) -> WorkflowStepRow {
@@ -50,9 +49,8 @@ pub mod fixtures {
             id,
             workflow_id: Uuid::new_v4(),
             agent_id: Some(Uuid::new_v4()),
-            execution_mode: "for_each".into(),
+            execution_mode: "workforce".into(),
             agent_execution_mode: Some("parallel".into()),
-            for_each_ref: Some(for_each_ref.into()),
             output_variable_name: var_name.map(String::from),
             display_order,
             ..Default::default()
@@ -363,7 +361,7 @@ pub mod fixtures {
             id: Uuid::new_v4(),
             name: "Test Protocol".into(),
             description: "A test protocol".into(),
-            protocol_type: "documenter".into(),
+            protocol_type: "workforce".into(),
             config: serde_json::json!({}),
             version: 1,
             created_at: chrono::Utc::now(),
