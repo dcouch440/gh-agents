@@ -4,6 +4,7 @@ import ForumOutlined from '@mui/icons-material/ForumOutlined'
 import BugReportOutlined from '@mui/icons-material/BugReportOutlined'
 import AssignmentOutlined from '@mui/icons-material/AssignmentOutlined'
 import StickyNote2Outlined from '@mui/icons-material/StickyNote2Outlined'
+import SendOutlined from '@mui/icons-material/SendOutlined'
 import type { CanvasFormTab } from '../../CanvasFormNode'
 import type { Archetype as ArchetypeType } from '../registry'
 import { Archetype } from '../registry'
@@ -14,6 +15,7 @@ import { AgentRosterTab } from './AgentRosterTab'
 import { RoomMembersTab } from './RoomMembersTab'
 import { DebugLogTab } from './DebugLogTab'
 import { PlanTab } from './PlanTab'
+import { DispatchTab } from './dispatch'
 
 type BuildStepTabsParams = {
   stepId: string
@@ -46,6 +48,13 @@ const buildStepTabs = ({
       content: <LiveStreamTab stepId={stepId} />,
     })
   }
+
+  tabs.push({
+    id: 'dispatch',
+    icon: SendOutlined,
+    tooltip: 'Dispatch',
+    content: <DispatchTab stepId={stepId} />,
+  })
 
   if (archetype === Archetype.WORKFORCE) {
     tabs.push({

@@ -5,6 +5,7 @@
 import { createStore } from './lib'
 import { SESSION_EVENT } from '@/types/ws'
 import type { WsWireMessage } from '@/types/ws'
+import type { ApiTraceEvent, DispatchTraceResponse } from '@/types/dispatch'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -208,6 +209,54 @@ const handleWsEvent = (msg: WsWireMessage): void => {
   }
 }
 
+// ── Hydration ────────────────────────────────────────────────────────────
+
+const mapApiTraceEvent = (e: ApiTraceEvent): DispatchTraceEvent => {
+  switch (e.type) {
+    case 'token':
+      return { type: 'token', content: e.content, ts: e.ts }
+    case 'tool_start':
+      return { type: 'tool_start', toolName: e.tool_name, toolId: e.tool_id, input: e.input, ts: e.ts }
+    case 'tool_end':
+      return { type: 'tool_end', toolName: e.tool_name, toolId: e.tool_id, result: e.result, ts: e.ts }
+    case 'error':
+      return { type: 'error', error: e.error, ts: e.ts }
+  }
+}
+
+const hydrateFromApi = (resp: DispatchTraceResponse): void => {
+  const stepId = resp.step_id
+  // Don't overwrite a running entry with stale API data
+  const existing = store.getState().byStep[stepId]
+  if (existing?.status === 'running') return
+
+  const trace = resp.trace.map(mapApiTraceEvent)
+  const tokenBuffer = trace
+    .filter((e): e is DispatchTraceEvent & { type: 'token' } => e.type === 'token')
+    .map((e) => e.content)
+    .join('')
+
+  const entry: DispatchEntry = {
+    executionId: resp.execution_id,
+    stepId,
+    status: resp.status as DispatchStatus,
+    instruction: resp.instruction,
+    message: null,
+    summary: resp.result,
+    error: null,
+    startedAt: '',
+    trace,
+    tokenBuffer,
+  }
+
+  store.setState((s) => ({ byStep: { ...s.byStep, [stepId]: entry } }))
+
+  // If the dispatch is already done, schedule cleanup
+  if (resp.status !== 'running') {
+    scheduleCleanup(stepId)
+  }
+}
+
 // ── Export ───────────────────────────────────────────────────────────────────
 
 export const dispatchStore = {
@@ -218,6 +267,7 @@ export const dispatchStore = {
   selectToolEvents,
   selectTokenBuffer,
   handleWsEvent,
+  hydrateFromApi,
 }
 
 export type { DispatchEntry, DispatchState, DispatchStatus, DispatchTraceEvent }
