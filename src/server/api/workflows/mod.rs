@@ -27,7 +27,7 @@ pub use step_chat_handlers::{
     clear_step_messages, get_or_create_step_session, get_step_chat_debug, get_step_session,
 };
 pub use step_handlers::{
-    create_workflow_step, delete_workflow_step, get_step_config, get_workflow_notes,
+    create_workflow_step, delete_workflow_step, get_step_config, get_workflow_plans,
     get_workflow_step, list_question_states, list_workflow_steps, toggle_step_pin,
     update_workflow_step,
 };

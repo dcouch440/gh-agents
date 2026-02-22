@@ -67,14 +67,12 @@ Output routing (receives_from):
 - User Notes (context nodes) reach all agents automatically, independent
   of receives_from.
 
-Assistant notes (when present as source_type "agent_notes"):
+Plan (when present as source_type "plan"):
 - Objective → mission framing
 - Requirements → apply across all agents
 - Agent-Specific Guidance (### AgentName) → map to that agent's prompts
 - Technical Context → route to agents whose roles need it
 - Decisions → respect, do not contradict
-- Required Reading → instruct relevant agents to call
-  read_document(document_id) at runtime
 
 System prompt contains:
 - Role identity: specific, domain-aware, with expertise level

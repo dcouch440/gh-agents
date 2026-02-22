@@ -17,7 +17,7 @@ finish — you do not wait for their responses.
     gets its own assistant session for conversational configuration.
 
     Auto-configures: task, agent roster, dependencies, capabilities,
-                     output schema, assistant notes
+                     output schema, step plan
     Execution: Designer pre-phase (generates per-agent prompts) then
                sequential agent loop with output routing
     When to use: any task that decomposes into specialized agent roles

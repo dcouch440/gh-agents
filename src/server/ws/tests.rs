@@ -873,20 +873,20 @@ mod tests {
     }
 
     #[test]
-    fn workflow_assistant_notes_updated_wire_message() {
+    fn workflow_plan_updated_wire_message() {
         let step_id = uuid::Uuid::new_v4();
         let wf_id = uuid::Uuid::new_v4();
         let event = WorkflowEvent {
             run_id: None,
             workflow_id: wf_id,
             user_id: Some(uuid::Uuid::new_v4()),
-            kind: WorkflowEventKind::AssistantNotesUpdated {
+            kind: WorkflowEventKind::PlanUpdated {
                 step_id,
                 content: "## Direction\n- Build auth system".to_string(),
             },
         };
         let wire = ServerEvent::Workflow(event).into_wire_message();
-        assert_eq!(wire.event, "assistant_notes_updated");
+        assert_eq!(wire.event, "plan_updated");
         assert_eq!(wire.run_id, None);
         assert_eq!(wire.data["workflow_id"], wf_id.to_string());
         assert_eq!(wire.data["step_id"], step_id.to_string());

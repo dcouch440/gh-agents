@@ -95,8 +95,8 @@ impl BoardStateVariant {
         matches!(self, Self::Dispatch)
     }
 
-    /// Whether assistant notes are included (L4 only).
-    pub fn include_notes(&self) -> bool {
+    /// Whether the step plan is included (L4 only).
+    pub fn include_plan(&self) -> bool {
         matches!(self, Self::Dispatch)
     }
 }
@@ -135,8 +135,8 @@ pub struct NodeSnapshot {
     pub input_ports: Vec<InputPortSnapshot>,
     pub output_ports: Vec<OutputPortSnapshot>,
     pub incoming_context: Vec<IncomingContextSnapshot>,
-    /// Assistant notes content (L4).
-    pub notes: String,
+    /// Step plan content (L4).
+    pub plan: String,
     /// Pending question for the user (L1 renders as `<asking>`).
     pub asking: Option<String>,
     /// Comma-separated upstream node names.

@@ -173,13 +173,13 @@ impl ExecutionStrategy for DispatchStrategy {
                 &tool_ctx,
             )
             .await
-        } else if name == "update_notes" {
+        } else if name == "update_plan" {
             let content = input["content"].as_str().unwrap_or("");
             match self
                 .state
                 .repos()
                 .workflows
-                .upsert_assistant_notes(self.step_id, content)
+                .upsert_plan(self.step_id, content)
                 .await
             {
                 Ok(()) => serde_json::json!({ "status": "ok" }),

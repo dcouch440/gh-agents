@@ -11,7 +11,7 @@ type WorkflowState = {
   documentsByStep: Record<string, Document[]>
   rosterByStep: Record<string, RosterAgent[]>
   roomMembersByStep: Record<string, RoomStepMember[]>
-  notesByStep: Record<string, string>
+  planByStep: Record<string, string>
   issuesByStep: Record<string, ConsistencyIssue[]>
   questionStateByStep: Record<string, StepQuestionState>
   dirtyStepIds: Set<string>

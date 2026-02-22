@@ -179,7 +179,7 @@ pub mod vars {
         pub const GRAPH_CONTEXT: &str = "System.graph_context";
         pub const BOARD_CONTEXT: &str = "System.board_context";
         pub const ARCHETYPE_BLOCK: &str = "System.archetype_block";
-        pub const ASSISTANT_NOTES: &str = "System.assistant_notes";
+        pub const PLAN: &str = "System.plan";
         pub const BOARD_OVERVIEW: &str = "System.board_overview";
         pub const DISPATCH_STATUS: &str = "System.dispatch_status";
         pub const RUN_CONTEXT: &str = "System.run_context";
@@ -534,7 +534,7 @@ mod tests {
             vars::system::GRAPH_CONTEXT,
             vars::system::BOARD_CONTEXT,
             vars::system::ARCHETYPE_BLOCK,
-            vars::system::ASSISTANT_NOTES,
+            vars::system::PLAN,
             vars::system::BOARD_OVERVIEW,
             vars::system::DISPATCH_STATUS,
             vars::system::RUN_CONTEXT,

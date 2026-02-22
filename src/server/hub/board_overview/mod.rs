@@ -19,7 +19,7 @@ const MAX_TOKENS_BOARD_OVERVIEW: u32 = 512;
 /// Spawn a background board overview summarization.
 /// Non-blocking — fires and forgets. Errors are logged, not propagated.
 ///
-/// Called after any `update_notes` tool call completes.
+/// Called after any `update_plan` tool call completes.
 pub fn spawn_board_overview_update(state: AppState, workflow_id: Uuid) {
     tokio::spawn(async move {
         if let Err(e) = regenerate_board_overview(&state, workflow_id).await {
@@ -38,7 +38,7 @@ async fn regenerate_board_overview(
     let all_notes = state
         .repos()
         .workflows
-        .get_all_assistant_notes_for_workflow(workflow_id)
+        .get_all_plans_for_workflow(workflow_id)
         .await?;
 
     // 2. Format as (label, content) pairs

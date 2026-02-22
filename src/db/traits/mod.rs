@@ -801,17 +801,17 @@ pub trait WorkflowRepo: Send + Sync {
         workflow_execution_id: Uuid,
     ) -> Result<Vec<AgentDesignerRunRow>>;
 
-    // --- Assistant Notes ---
+    // --- Step Plan ---
 
-    /// Get a single step's assistant notes content. Returns None if no notes exist.
-    async fn get_assistant_notes(&self, step_id: Uuid) -> Result<Option<String>>;
+    /// Get a single step's plan content. Returns None if no plan exists.
+    async fn get_plan(&self, step_id: Uuid) -> Result<Option<String>>;
 
-    /// Create or replace a step's assistant notes (full replacement).
-    async fn upsert_assistant_notes(&self, step_id: Uuid, content: &str) -> Result<()>;
+    /// Create or replace a step's plan (full replacement).
+    async fn upsert_plan(&self, step_id: Uuid, content: &str) -> Result<()>;
 
-    /// Get all assistant notes across a workflow (for board overview summarizer).
-    /// Returns Vec<(step_id, step_name, execution_mode, notes_content)>.
-    async fn get_all_assistant_notes_for_workflow(
+    /// Get all plans across a workflow (for board overview summarizer).
+    /// Returns Vec<(step_id, step_name, execution_mode, plan_content)>.
+    async fn get_all_plans_for_workflow(
         &self,
         workflow_id: Uuid,
     ) -> Result<Vec<(Uuid, Option<String>, String, String)>>;

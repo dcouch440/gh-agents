@@ -22,7 +22,7 @@ pub async fn build_workforce_designer_input(
     roster: &[TaskAgentRosterRow],
     completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
     steps: &[WorkflowStepRow],
-    assistant_notes: Option<&str>,
+    plan: Option<&str>,
     tool_cap_repo: &dyn ToolCapabilityRepo,
     child_edges: &[WorkflowStepEdgeRow],
 ) -> DesignerInput {
@@ -84,12 +84,12 @@ pub async fn build_workforce_designer_input(
     }
 
     let mut upstream = format_envelopes_as_upstream(completed_envelopes, steps);
-    if let Some(notes) = assistant_notes {
-        if !notes.is_empty() {
+    if let Some(plan) = plan {
+        if !plan.is_empty() {
             upstream.push(super::UpstreamContext {
-                source_name: "Assistant's Notes".to_string(),
-                source_type: "agent_notes".to_string(),
-                content: notes.to_string(),
+                source_name: "Plan".to_string(),
+                source_type: "plan".to_string(),
+                content: plan.to_string(),
             });
         }
     }

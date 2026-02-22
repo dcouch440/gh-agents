@@ -48,7 +48,7 @@ vi.mock('@/stores', () => ({
     selectStepById: () => () => undefined,
     selectDocumentDefsByStep: () => ({}),
     selectRosterByStep: () => ({}),
-    selectNotesByStep: () => ({}),
+    selectPlanByStep: () => ({}),
     selectDocumentContentByDefId: () => ({}),
     selectRoomMembersByStep: () => ({}),
     addEdge: mockAddEdge,

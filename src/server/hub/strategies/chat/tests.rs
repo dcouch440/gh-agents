@@ -128,7 +128,7 @@ mod tests {
         assert!(names.contains(&"set_node_name"));
         assert!(names.contains(&"set_node_description"));
         assert!(names.contains(&"think"));
-        assert!(names.contains(&"update_notes"));
+        assert!(names.contains(&"update_plan"));
         assert!(!names.contains(&"set_node_archetype"));
 
         // No archetype-specific tools
@@ -136,7 +136,7 @@ mod tests {
     }
 
     #[test]
-    fn broadcast_step_event_emits_assistant_notes_updated() {
+    fn broadcast_step_event_emits_plan_updated() {
         let state = make_state();
         let mut rx = state.events().subscribe();
 
@@ -163,13 +163,13 @@ mod tests {
         let input = serde_json::json!({ "content": "## Direction\n- Build auth system" });
         let result = serde_json::json!("Notes updated.");
 
-        strategy.broadcast_step_event("update_notes", &input, &result);
+        strategy.broadcast_step_event("update_plan", &input, &result);
 
         let envelope = rx.try_recv().unwrap();
         assert_eq!(envelope.topic, Topic::Workflow);
         assert!(envelope.run_id.is_none());
         let value: serde_json::Value = serde_json::from_str(&envelope.json).unwrap();
-        assert_eq!(value["event"], "assistant_notes_updated");
+        assert_eq!(value["event"], "plan_updated");
         assert_eq!(value["data"]["workflow_id"], workflow_id.to_string());
         assert_eq!(value["data"]["step_id"], step_id.to_string());
         assert_eq!(
@@ -187,7 +187,7 @@ mod tests {
         let tools = super::super::resolve_chat_step_tools("workforce");
         let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
 
-        // Has universal tools (minus update_notes which is dispatch-only)
+        // Has universal tools (minus update_plan which is dispatch-only)
         assert!(names.contains(&"dispatch"));
         assert!(names.contains(&"cancel_dispatch"));
         assert!(names.contains(&"render_panel"));
@@ -198,8 +198,8 @@ mod tests {
         // set_node_description is dispatch-only — assistant must dispatch it
         assert!(!names.contains(&"set_node_description"));
 
-        // update_notes is owned by the dispatch sub-agent, not the assistant
-        assert!(!names.contains(&"update_notes"));
+        // update_plan is owned by the dispatch sub-agent, not the assistant
+        assert!(!names.contains(&"update_plan"));
 
         // Does NOT have workforce mutation tools
         assert!(!names.contains(&"set_task"));
@@ -240,13 +240,13 @@ mod tests {
     }
 
     #[test]
-    fn resolve_step_tools_includes_update_notes_for_all_archetypes() {
+    fn resolve_step_tools_includes_update_plan_for_all_archetypes() {
         for mode in &["workforce", "single", ""] {
             let tools = super::super::resolve_step_tools(mode);
             let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
             assert!(
-                names.contains(&"update_notes"),
-                "update_notes missing for execution_mode={mode}"
+                names.contains(&"update_plan"),
+                "update_plan missing for execution_mode={mode}"
             );
         }
     }

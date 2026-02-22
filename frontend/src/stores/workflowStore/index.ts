@@ -12,7 +12,7 @@ import {
   selectRosterByStep,
   selectRoomStepMembers,
   selectRoomMembersByStep,
-  selectNotesByStep,
+  selectPlanByStep,
   selectLoading,
   selectError,
   selectDirty,
@@ -29,7 +29,7 @@ import { createStep, patchStepLocal, patchStepSilent, updateStep, deleteStep, sa
 import { addEdge, removeEdge } from './edges'
 import { fetchStepDocuments, addStepDocument, removeStepDocument } from './documents'
 import { fetchRoster, createRosterAgent, deleteRosterAgent, fetchRoomStepMembers } from './roster'
-import { fetchAllNotes } from './notes'
+import { fetchAllPlans } from './plans'
 import { fetchQuestionStates } from './questionStates'
 import { handleWsEvent } from './wsHandler'
 
@@ -47,7 +47,7 @@ export const workflowStore = {
   selectRosterByStep,
   selectRoomStepMembers,
   selectRoomMembersByStep,
-  selectNotesByStep,
+  selectPlanByStep,
   selectLoading,
   selectError,
   selectDirty,
@@ -82,7 +82,7 @@ export const workflowStore = {
   createRosterAgent,
   deleteRosterAgent,
   fetchRoomStepMembers,
-  fetchAllNotes,
+  fetchAllPlans,
   fetchQuestionStates,
   handleWsEvent,
   setDirty,

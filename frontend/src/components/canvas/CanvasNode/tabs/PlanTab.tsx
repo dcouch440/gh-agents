@@ -3,13 +3,13 @@ import Typography from '@mui/material/Typography'
 import { useStore, workflowStore } from '@/stores'
 import { TerminalBlock } from '@/components/primitives/terminal-renderer'
 
-type NotesTabProps = {
+type PlanTabProps = {
   stepId: string
 }
 
-function NotesTab({ stepId }: NotesTabProps) {
-  const notesByStep = useStore(workflowStore.store, workflowStore.selectNotesByStep)
-  const content = notesByStep[stepId] ?? ''
+function PlanTab({ stepId }: PlanTabProps) {
+  const planByStep = useStore(workflowStore.store, workflowStore.selectPlanByStep)
+  const content = planByStep[stepId] ?? ''
   const isEmpty = !content.trim()
 
   return (
@@ -25,7 +25,7 @@ function NotesTab({ stepId }: NotesTabProps) {
             }}
           >
             <Typography sx={{ fontSize: 12, color: 'text.disabled', fontStyle: 'italic' }}>
-              Notes will appear as the assistant records them.
+              Plan will appear as the assistant records it.
             </Typography>
           </Box>
         ) : (
@@ -38,4 +38,4 @@ function NotesTab({ stepId }: NotesTabProps) {
   )
 }
 
-export { NotesTab }
+export { PlanTab }

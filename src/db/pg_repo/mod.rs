@@ -2244,11 +2244,11 @@ impl WorkflowRepo for PgRepo {
         Ok(rows)
     }
 
-    // --- Assistant Notes ---
+    // --- Step Plan ---
 
-    async fn get_assistant_notes(&self, step_id: Uuid) -> Result<Option<String>> {
+    async fn get_plan(&self, step_id: Uuid) -> Result<Option<String>> {
         let row = sqlx::query_scalar::<_, String>(
-            "SELECT content FROM assistant_notes WHERE step_id = $1",
+            "SELECT content FROM step_plan WHERE step_id = $1",
         )
         .bind(step_id)
         .fetch_optional(&self.pool)
@@ -2256,10 +2256,10 @@ impl WorkflowRepo for PgRepo {
         Ok(row)
     }
 
-    async fn upsert_assistant_notes(&self, step_id: Uuid, content: &str) -> Result<()> {
+    async fn upsert_plan(&self, step_id: Uuid, content: &str) -> Result<()> {
         sqlx::query(
             r#"
-            INSERT INTO assistant_notes (step_id, content, updated_at)
+            INSERT INTO step_plan (step_id, content, updated_at)
             VALUES ($1, $2, now())
             ON CONFLICT (step_id) DO UPDATE
             SET content = $2, updated_at = now()
@@ -2272,16 +2272,16 @@ impl WorkflowRepo for PgRepo {
         Ok(())
     }
 
-    async fn get_all_assistant_notes_for_workflow(
+    async fn get_all_plans_for_workflow(
         &self,
         workflow_id: Uuid,
     ) -> Result<Vec<(Uuid, Option<String>, String, String)>> {
         let rows = sqlx::query_as::<_, (Uuid, Option<String>, String, String)>(
             r#"
-            SELECT ws.id, ws.name, ws.execution_mode, an.content
+            SELECT ws.id, ws.name, ws.execution_mode, sp.content
             FROM workflow_steps ws
-            JOIN assistant_notes an ON an.step_id = ws.id
-            WHERE ws.workflow_id = $1 AND an.content != ''
+            JOIN step_plan sp ON sp.step_id = ws.id
+            WHERE ws.workflow_id = $1 AND sp.content != ''
             ORDER BY ws.name
             "#,
         )

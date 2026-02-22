@@ -49,7 +49,7 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "set_node_name" => Some(set_node_name_tool()),
         "set_node_description" => Some(set_node_description_tool()),
         "render_panel" => Some(render_panel_tool()),
-        "update_notes" => Some(update_notes_tool()),
+        "update_plan" => Some(update_plan_tool()),
 
         // Workforce archetype tools (6)
         "set_task" => Some(set_task_tool()),
@@ -533,14 +533,14 @@ fn render_panel_tool() -> Tool {
     }
 }
 
-fn update_notes_tool() -> Tool {
+fn update_plan_tool() -> Tool {
     Tool {
-        name: "update_notes".into(),
+        name: "update_plan".into(),
         description: concat!(
-            "Update your personal notes. These notes persist across conversations and are ",
-            "injected into the workflow designer at execution time. Use this to record important ",
-            "discoveries, direction changes, special requirements, API details, or infrastructure ",
-            "notes. You can reorganize, prune, or rewrite your notes at any time — the full ",
+            "Update the execution plan for this node. The plan persists across conversations and is ",
+            "injected into the workflow designer at execution time. Use this to record the execution ",
+            "blueprint, key decisions, special requirements, API details, or infrastructure ",
+            "constraints. You can reorganize, prune, or rewrite the plan at any time — the full ",
             "content is replaced on each call.",
         )
         .into(),
@@ -549,7 +549,7 @@ fn update_notes_tool() -> Tool {
             "properties": {
                 "content": {
                     "type": "string",
-                    "description": "The complete updated notes content (replaces all previous notes). Use markdown formatting. Keep notes concise and actionable."
+                    "description": "The complete updated plan content (replaces all previous plan). Use markdown formatting. Keep the plan concise and actionable."
                 }
             },
             "required": ["content"]
@@ -700,7 +700,7 @@ fn configure_team_tool() -> Tool {
             "updating agents whose role or capabilities changed, and reconciling ",
             "dependencies. Use this for initial team setup or full rebuilds. For ",
             "single-agent tweaks after setup, use add_agent/update_agent/remove_agent. ",
-            "Notes are managed separately via update_notes.",
+            "Plans are managed separately via update_plan.",
         )
         .into(),
         input_schema: json!({

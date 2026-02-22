@@ -163,8 +163,8 @@ async fn assemble_node(
     let input_ports = load_input_ports(repo, step.id, workflow_edges, steps_map).await?;
     let output_ports = load_output_ports(repo, step.id, workflow_edges, steps_map).await?;
 
-    // Assistant notes (L4)
-    let notes = repo.get_assistant_notes(step.id).await?.unwrap_or_default();
+    // Step plan (L4)
+    let plan = repo.get_plan(step.id).await?.unwrap_or_default();
 
     // Derived fields
     let status = derive_node_status(step, !task.is_empty(), agents.len());
@@ -185,7 +185,7 @@ async fn assemble_node(
         input_ports,
         output_ports,
         incoming_context,
-        notes,
+        plan,
         asking: None, // populated by caller from step_question_state
         receives,
     })

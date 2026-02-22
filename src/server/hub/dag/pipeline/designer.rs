@@ -82,7 +82,7 @@ impl PipelinePhase for DesignerPhase {
             dag.state
                 .repos()
                 .workflows
-                .get_assistant_notes(ctx.step.id)
+                .get_plan(ctx.step.id)
                 .await
                 .unwrap_or_default()
                 .as_deref(),

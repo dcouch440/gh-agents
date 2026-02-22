@@ -19,7 +19,7 @@ const {
   mockListStepDocuments,
   mockAddStepDocument,
   mockRemoveStepDocument,
-  mockGetAllNotes,
+  mockGetAllPlans,
   mockListQuestionStates,
 } = vi.hoisted(() => ({
   mockList: vi.fn(),
@@ -37,7 +37,7 @@ const {
   mockListStepDocuments: vi.fn(),
   mockAddStepDocument: vi.fn(),
   mockRemoveStepDocument: vi.fn(),
-  mockGetAllNotes: vi.fn(),
+  mockGetAllPlans: vi.fn(),
   mockListQuestionStates: vi.fn(),
 }))
 
@@ -60,7 +60,7 @@ vi.mock('@/api', () => ({
       listStepDocuments: mockListStepDocuments,
       addStepDocument: mockAddStepDocument,
       removeStepDocument: mockRemoveStepDocument,
-      getAllNotes: mockGetAllNotes,
+      getAllPlans: mockGetAllPlans,
       listQuestionStates: mockListQuestionStates,
     },
   },
@@ -148,7 +148,7 @@ const resetStore = () => {
 beforeEach(() => {
   vi.clearAllMocks()
   resetStore()
-  mockGetAllNotes.mockResolvedValue([])
+  mockGetAllPlans.mockResolvedValue([])
   mockListQuestionStates.mockResolvedValue([])
 })
 
@@ -208,12 +208,12 @@ describe('workflowStore', () => {
   })
 
   describe('loadWorkflow', () => {
-    it('fetches workflow, steps, edges, and notes in parallel', async () => {
+    it('fetches workflow, steps, edges, and plans in parallel', async () => {
       mockGet.mockResolvedValue(wf1)
       mockListSteps.mockResolvedValue([step1, step2])
       mockListEdges.mockResolvedValue([edge1])
-      mockGetAllNotes.mockResolvedValue([
-        { step_id: 's1', content: 'Note for step 1' },
+      mockGetAllPlans.mockResolvedValue([
+        { step_id: 's1', content: 'Plan for step 1' },
       ])
 
       await workflowStore.loadWorkflow('wf1')
@@ -222,7 +222,7 @@ describe('workflowStore', () => {
       expect(s.activeWorkflowId).toBe('wf1')
       expect(toArray(s.steps)).toEqual([step1, step2])
       expect(toArray(s.edges)).toEqual([edge1])
-      expect(s.notesByStep).toEqual({ s1: 'Note for step 1' })
+      expect(s.planByStep).toEqual({ s1: 'Plan for step 1' })
       expect(s.documentsByStep).toEqual({})
       expect(s.loading).toBe(false)
       expect(s.dirty).toBe(false)
@@ -232,7 +232,7 @@ describe('workflowStore', () => {
       mockGet.mockRejectedValue(new Error('Not found'))
       mockListSteps.mockRejectedValue(new Error('Not found'))
       mockListEdges.mockRejectedValue(new Error('Not found'))
-      mockGetAllNotes.mockRejectedValue(new Error('Not found'))
+      mockGetAllPlans.mockRejectedValue(new Error('Not found'))
       mockListQuestionStates.mockRejectedValue(new Error('Not found'))
 
       await workflowStore.loadWorkflow('wf1')

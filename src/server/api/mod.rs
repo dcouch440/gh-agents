@@ -106,7 +106,7 @@ pub use workflows::{
     delete_workflow_step, execute_workshop_step, get_or_create_step_session,
     get_or_create_workshop, get_run_detail, get_step_chat_debug, get_step_config,
     get_step_last_run, get_step_run_for_execution, get_step_session, get_step_sub_dag,
-    get_template, get_workflow, get_workflow_notes, get_workflow_step, get_workshop,
+    get_template, get_workflow, get_workflow_plans, get_workflow_step, get_workshop,
     list_question_states, list_step_documents, list_templates, list_workflow_edges,
     list_workflow_executions, list_workflow_steps, list_workflows, rebase_workshop,
     remove_step_document, remove_workflow_edge, run_workflow, toggle_step_pin, update_workflow,

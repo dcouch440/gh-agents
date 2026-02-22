@@ -341,8 +341,8 @@ const workflows = freeze({
   getRunDetail: (workflowId: string, executionId: string, config?: RequestConfig) =>
     baseApi.get<RunDetailResponse>(API.WORKFLOW_EXECUTION_STEPS(workflowId, executionId), config),
 
-  getAllNotes: (workflowId: string, config?: RequestConfig) =>
-    baseApi.get<Array<{ step_id: string; content: string }>>(API.WORKFLOW_NOTES(workflowId), config),
+  getAllPlans: (workflowId: string, config?: RequestConfig) =>
+    baseApi.get<Array<{ step_id: string; content: string }>>(API.WORKFLOW_PLANS(workflowId), config),
 
   listQuestionStates: (workflowId: string, config?: RequestConfig) =>
     baseApi.get<StepQuestionState[]>(API.WORKFLOW_QUESTION_STATES(workflowId), config),

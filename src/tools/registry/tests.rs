@@ -276,9 +276,9 @@ mod tests {
     }
 
     #[test]
-    fn test_update_notes_schema() {
-        let tool = get_tool_definition("update_notes").unwrap();
-        assert_eq!(tool.name, "update_notes");
+    fn test_update_plan_schema() {
+        let tool = get_tool_definition("update_plan").unwrap();
+        assert_eq!(tool.name, "update_plan");
 
         let props = tool.input_schema["properties"].as_object().unwrap();
         assert!(props.contains_key("content"));

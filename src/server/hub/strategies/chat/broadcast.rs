@@ -16,7 +16,7 @@ enum ToolEffect {
     DescriptionUpdated,
     ConfigUpdated,
     RosterChanged,
-    NotesUpdated,
+    PlanUpdated,
 }
 
 impl ToolEffect {
@@ -33,7 +33,7 @@ impl ToolEffect {
                 Some(Self::RosterChanged)
             }
 
-            "update_notes" => Some(Self::NotesUpdated),
+            "update_plan" => Some(Self::PlanUpdated),
 
             _ => None,
         }
@@ -58,9 +58,9 @@ impl ToolEffect {
                 WorkflowEventKind::StepConfigUpdated { step_id }
             }
             Self::RosterChanged => WorkflowEventKind::RosterChanged { step_id },
-            Self::NotesUpdated => {
+            Self::PlanUpdated => {
                 let content = input["content"].as_str().unwrap_or("").to_string();
-                WorkflowEventKind::AssistantNotesUpdated { step_id, content }
+                WorkflowEventKind::PlanUpdated { step_id, content }
             }
         }
     }

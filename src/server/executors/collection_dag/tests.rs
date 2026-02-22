@@ -525,13 +525,13 @@ mod tests {
                 unimplemented!()
             }
             // Assistant Notes stubs
-            async fn get_assistant_notes(&self, _: Uuid) -> Result<Option<String>> {
+            async fn get_plan(&self, _: Uuid) -> Result<Option<String>> {
                 unimplemented!()
             }
-            async fn upsert_assistant_notes(&self, _: Uuid, _: &str) -> Result<()> {
+            async fn upsert_plan(&self, _: Uuid, _: &str) -> Result<()> {
                 unimplemented!()
             }
-            async fn get_all_assistant_notes_for_workflow(
+            async fn get_all_plans_for_workflow(
                 &self,
                 _: Uuid,
             ) -> Result<Vec<(Uuid, Option<String>, String, String)>> {

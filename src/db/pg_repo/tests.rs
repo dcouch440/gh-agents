@@ -1448,7 +1448,7 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires running Postgres"]
-    async fn assistant_notes_upsert_and_get() {
+    async fn plan_upsert_and_get() {
         let db = TestDb::new().await;
         let repo = PgRepo::new(db.pool.clone());
         let user_id = create_test_user(&repo).await;
@@ -1457,21 +1457,21 @@ mod tests {
         let step = create_test_step(&repo, workflow.id, agent.id).await;
 
         // Initially no notes
-        let notes = repo.get_assistant_notes(step.id).await.unwrap();
+        let notes = repo.get_plan(step.id).await.unwrap();
         assert!(notes.is_none());
 
         // Upsert first time
-        repo.upsert_assistant_notes(step.id, "First draft of notes")
+        repo.upsert_plan(step.id, "First draft of notes")
             .await
             .unwrap();
-        let notes = repo.get_assistant_notes(step.id).await.unwrap();
+        let notes = repo.get_plan(step.id).await.unwrap();
         assert_eq!(notes.as_deref(), Some("First draft of notes"));
 
         // Upsert again — full replacement
-        repo.upsert_assistant_notes(step.id, "Revised notes with new info")
+        repo.upsert_plan(step.id, "Revised notes with new info")
             .await
             .unwrap();
-        let notes = repo.get_assistant_notes(step.id).await.unwrap();
+        let notes = repo.get_plan(step.id).await.unwrap();
         assert_eq!(notes.as_deref(), Some("Revised notes with new info"));
 
         db.cleanup().await;
@@ -1479,7 +1479,7 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires running Postgres"]
-    async fn assistant_notes_get_returns_none_when_missing() {
+    async fn plan_get_returns_none_when_missing() {
         let db = TestDb::new().await;
         let repo = PgRepo::new(db.pool.clone());
         let user_id = create_test_user(&repo).await;
@@ -1487,7 +1487,7 @@ mod tests {
         let workflow = create_test_workflow(&repo, user_id).await;
         let step = create_test_step(&repo, workflow.id, agent.id).await;
 
-        let notes = repo.get_assistant_notes(step.id).await.unwrap();
+        let notes = repo.get_plan(step.id).await.unwrap();
         assert!(notes.is_none());
 
         db.cleanup().await;
@@ -1495,7 +1495,7 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires running Postgres"]
-    async fn assistant_notes_get_all_for_workflow() {
+    async fn plan_get_all_for_workflow() {
         let db = TestDb::new().await;
         let repo = PgRepo::new(db.pool.clone());
         let user_id = create_test_user(&repo).await;
@@ -1526,15 +1526,15 @@ mod tests {
         let step_c = repo.create_step(step_c_row).await.unwrap();
 
         // Notes on Alpha and Charlie only
-        repo.upsert_assistant_notes(step_a.id, "Alpha notes")
+        repo.upsert_plan(step_a.id, "Alpha notes")
             .await
             .unwrap();
-        repo.upsert_assistant_notes(step_c.id, "Charlie notes")
+        repo.upsert_plan(step_c.id, "Charlie notes")
             .await
             .unwrap();
 
         let all = repo
-            .get_all_assistant_notes_for_workflow(workflow.id)
+            .get_all_plans_for_workflow(workflow.id)
             .await
             .unwrap();
 
@@ -1550,7 +1550,7 @@ mod tests {
 
     #[tokio::test]
     #[ignore = "requires running Postgres"]
-    async fn assistant_notes_cascade_on_step_delete() {
+    async fn plan_cascade_on_step_delete() {
         let db = TestDb::new().await;
         let repo = PgRepo::new(db.pool.clone());
         let user_id = create_test_user(&repo).await;
@@ -1558,16 +1558,16 @@ mod tests {
         let workflow = create_test_workflow(&repo, user_id).await;
         let step = create_test_step(&repo, workflow.id, agent.id).await;
 
-        repo.upsert_assistant_notes(step.id, "Notes that should vanish")
+        repo.upsert_plan(step.id, "Notes that should vanish")
             .await
             .unwrap();
-        assert!(repo.get_assistant_notes(step.id).await.unwrap().is_some());
+        assert!(repo.get_plan(step.id).await.unwrap().is_some());
 
         // Delete the step — CASCADE should remove notes
         repo.delete_step(step.id).await.unwrap();
 
         // Notes should be gone (query returns None, not error)
-        let notes = repo.get_assistant_notes(step.id).await.unwrap();
+        let notes = repo.get_plan(step.id).await.unwrap();
         assert!(notes.is_none());
 
         db.cleanup().await;

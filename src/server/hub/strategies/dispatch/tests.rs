@@ -22,7 +22,7 @@ mod tests {
         assert!(tool_names.contains(&"set_node_name"));
         assert!(tool_names.contains(&"set_node_description"));
         assert!(tool_names.contains(&"think"));
-        assert!(tool_names.contains(&"update_notes"));
+        assert!(tool_names.contains(&"update_plan"));
 
         // Must include workforce tools
         assert!(tool_names.contains(&"set_task"));

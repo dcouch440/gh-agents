@@ -15,7 +15,7 @@ use super::config::StepChatContext;
 const UNIVERSAL_TOOLS: &[&str] = &[
     "render_panel",
     "think",
-    "update_notes",
+    "update_plan",
     "dispatch",
     "cancel_dispatch",
     "set_node_name",
@@ -28,8 +28,8 @@ const NODE_MUTATION_TOOLS: &[&str] = &["set_node_description"];
 const NODE_ASSISTANT_TOOLS: &[&str] = &["set_node_name", "set_node_description", "render_panel"];
 
 /// Tools excluded from the workforce assistant's chat session.
-/// The dispatch sub-agent owns note-taking for workforce nodes.
-const WORKFORCE_CHAT_EXCLUDED: &[&str] = &["update_notes"];
+/// The dispatch sub-agent owns plan management for workforce nodes.
+const WORKFORCE_CHAT_EXCLUDED: &[&str] = &["update_plan"];
 
 /// Manager assistant (L1) tools — dispatch, cancel, think, render_panel.
 const MANAGER_TOOLS: &[&str] = &["dispatch", "cancel_dispatch", "think", "render_panel"];
@@ -40,8 +40,8 @@ const MANAGER_TOOLS: &[&str] = &["dispatch", "cancel_dispatch", "think", "render
 /// `set_node_description` — the assistant must dispatch that to a background
 /// agent.
 ///
-/// For workforce mode, additionally excludes `update_notes` (dispatch sub-agent
-/// owns note-taking for workforce nodes).
+/// For workforce mode, additionally excludes `update_plan` (dispatch sub-agent
+/// owns plan management for workforce nodes).
 ///
 /// For manager mode, returns only manager-specific tools (no node mutation).
 pub(crate) fn resolve_chat_step_tools(execution_mode: &str) -> Vec<Tool> {
@@ -101,13 +101,13 @@ pub(super) async fn dispatch_step_tool(
     state: &AppState,
     ctx: &StepChatContext,
 ) -> Option<Value> {
-    // update_notes — needs state for board overview spawn
-    if name == "update_notes" {
+    // update_plan — needs state for board overview spawn
+    if name == "update_plan" {
         let content = input["content"].as_str().unwrap_or("");
         match state
             .repos()
             .workflows
-            .upsert_assistant_notes(ctx.step_id, content)
+            .upsert_plan(ctx.step_id, content)
             .await
         {
             Ok(()) => {

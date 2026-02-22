@@ -28,7 +28,7 @@ pub(crate) async fn restore_workflow_from_snapshot(
     // so this single DELETE cascades to: step_inputs, step_outputs,
     // step_routing_rules, step_documents, workflow_step_protocols,
     // protocol_document_defs, room_step_configs, room_step_members,
-    // task_mission_briefs (→ task_agent_roster), assistant_notes,
+    // task_mission_briefs (→ task_agent_roster), step_plan,
     // beliefs, agent_designer_runs, and workflow_step_edges.
     sqlx::query("DELETE FROM workflow_steps WHERE workflow_id = $1")
         .bind(workflow_id)
