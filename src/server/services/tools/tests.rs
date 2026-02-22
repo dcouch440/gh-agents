@@ -50,17 +50,17 @@ mod tests {
             &repo,
             CreateToolInput {
                 is_admin: true,
-                name: "web_search".to_string(),
-                display_name: Some("Web Search".to_string()),
-                description: Some("Search the web".to_string()),
+                name: "content_search".to_string(),
+                display_name: Some("Content Search".to_string()),
+                description: Some("Search file contents".to_string()),
                 parameters: None,
             },
         )
         .await;
         let tool = result.unwrap();
-        assert_eq!(tool.name, "web_search");
-        assert_eq!(tool.display_name, "Web Search");
-        assert_eq!(tool.description, "Search the web");
+        assert_eq!(tool.name, "content_search");
+        assert_eq!(tool.display_name, "Content Search");
+        assert_eq!(tool.description, "Search file contents");
     }
 
     #[tokio::test]
@@ -72,7 +72,7 @@ mod tests {
             &repo,
             CreateToolInput {
                 is_admin: true,
-                name: "web_search".to_string(),
+                name: "content_search".to_string(),
                 display_name: None,
                 description: None,
                 parameters: None,
@@ -80,7 +80,7 @@ mod tests {
         )
         .await;
         let tool = result.unwrap();
-        assert_eq!(tool.display_name, "web_search");
+        assert_eq!(tool.display_name, "content_search");
     }
 
     #[tokio::test]

@@ -103,7 +103,7 @@ mod tests {
 
     #[test]
     fn extract_json_fence_with_preamble() {
-        let content = "I'll create a documentation plan:\n\n```json\n{\"documents\": [{\"name\": \"Architecture\", \"capabilities\": [\"web_search\"]}]}\n```\n\nThis plan covers the main topics.";
+        let content = "I'll create a documentation plan:\n\n```json\n{\"documents\": [{\"name\": \"Architecture\", \"capabilities\": [\"file_read\"]}]}\n```\n\nThis plan covers the main topics.";
         let result = extract_json_from_llm_response(content);
         let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
         assert_eq!(parsed["documents"][0]["name"], "Architecture");

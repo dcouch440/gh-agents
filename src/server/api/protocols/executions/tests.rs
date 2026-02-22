@@ -27,7 +27,7 @@ mod tests {
             tokens_out: Some(200),
             cost_usd: Some(0.005),
             model: Some("claude-sonnet-4-5-20250929".to_string()),
-            capabilities_used: Some(vec!["web_search".to_string()]),
+            capabilities_used: Some(vec!["file_read".to_string()]),
             created_at: now,
             completed_at: Some(now),
             agent_name: None,
