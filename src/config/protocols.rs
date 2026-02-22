@@ -463,7 +463,7 @@ mod tests {
         assert_eq!(dispatcher.model_id, crate::constants::MODEL_TIER1);
         assert_eq!(dispatcher.temperature, 0.3);
         assert_eq!(dispatcher.max_tokens, 8192);
-        assert_eq!(dispatcher.max_rounds, 4);
+        assert_eq!(dispatcher.max_rounds, 6);
         assert_eq!(dispatcher.context_budget, 200_000);
     }
 
@@ -484,7 +484,7 @@ mod tests {
         assert_eq!(dispatcher.model_id, crate::constants::MODEL_TIER1);
         assert_eq!(dispatcher.temperature, 0.3);
         assert_eq!(dispatcher.max_tokens, 8192);
-        assert_eq!(dispatcher.max_rounds, 4);
+        assert_eq!(dispatcher.max_rounds, 5);
         assert_eq!(dispatcher.context_budget, 300_000);
     }
 
