@@ -89,6 +89,8 @@ describe('CanvasContextMenu', () => {
     render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
     expect(screen.getByTestId('ctx-add-workforce')).toBeInTheDocument()
     expect(screen.getByText('Workforce')).toBeInTheDocument()
+    expect(screen.getByTestId('ctx-add-manager')).toBeInTheDocument()
+    expect(screen.getByText('Manager')).toBeInTheDocument()
     expect(screen.getByTestId('ctx-add-room')).toBeInTheDocument()
     expect(screen.getByText('Room')).toBeInTheDocument()
   })
@@ -130,6 +132,36 @@ describe('CanvasContextMenu', () => {
     render(<CanvasContextMenu position={defaultPosition} onClose={onClose} />)
 
     await user.click(screen.getByText('Input'))
+
+    expect(mockCreateStep).not.toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('creates manager step on Manager click', async () => {
+    const user = userEvent.setup()
+    render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
+
+    await user.click(screen.getByText('Manager'))
+
+    expect(mockCreateStep).toHaveBeenCalledWith({
+      name: 'New Manager',
+      execution_mode: 'manager',
+      prompt_template: '',
+      position_x: 151,
+      position_y: 251,
+    })
+  })
+
+  it('does not create manager step when one already exists', async () => {
+    const { workflowStore: ws } = await import('@/stores')
+    const managerStep = { ...mockStep, execution_mode: 'manager' }
+    vi.spyOn(ws, 'selectSteps' as never).mockReturnValue([managerStep])
+
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    render(<CanvasContextMenu position={defaultPosition} onClose={onClose} />)
+
+    await user.click(screen.getByText('Manager'))
 
     expect(mockCreateStep).not.toHaveBeenCalled()
     expect(onClose).toHaveBeenCalledOnce()

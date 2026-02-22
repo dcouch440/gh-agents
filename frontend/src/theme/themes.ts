@@ -17,6 +17,7 @@ const DEFAULT_THEME_ID: ThemeId = 'linen'
 
 type NodePalette = {
   workforce: string
+  manager: string
   room: string
   blank: string
   agent: string
@@ -129,6 +130,7 @@ const linenShadows: Shadows = [
 
 const linenNodePalette: NodePalette = {
   workforce: '#4E7B9B',
+  manager: '#7C5CAF',
   room: '#9B7BB8',
   blank: '#8B8178',
   agent: '#3D9E9E',
@@ -228,6 +230,7 @@ const midnightShadows: Shadows = [
 
 const midnightNodePalette: NodePalette = {
   workforce: '#3b82f6',
+  manager: '#8b5cf6',
   room: '#a78bfa',
   blank: '#7d8590',
   agent: '#06b6d4',
@@ -327,6 +330,7 @@ const slateShadows: Shadows = [
 
 const slateNodePalette: NodePalette = {
   workforce: '#818cf8',
+  manager: '#a78bfa',
   room: '#c084fc',
   blank: '#94a3b8',
   agent: '#22d3ee',

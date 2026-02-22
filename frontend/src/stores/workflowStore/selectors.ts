@@ -1,6 +1,6 @@
 import { toArray, nmGet } from '../lib'
 import type { WorkflowState } from './types'
-import type { Workflow, WorkflowStep, WorkflowStepEdge, RosterAgent, RoomStepMember } from '@/types/workflow'
+import type { Workflow, WorkflowStep, WorkflowStepEdge, RosterAgent, RoomStepMember, StepQuestionState } from '@/types/workflow'
 import type { Document } from '@/types/document'
 import type { ConsistencyIssue } from '@/types/ws'
 import { STALE_THRESHOLD_MS } from './_store'
@@ -93,6 +93,11 @@ const selectRoomMemberById =
     return null
   }
 
+const selectStepQuestionState =
+  (stepId: string) =>
+  (s: WorkflowState): StepQuestionState | null =>
+    s.questionStateByStep[stepId] ?? null
+
 const selectIsStale = (s: WorkflowState): boolean => s.lastFetched === null || Date.now() - s.lastFetched > STALE_THRESHOLD_MS
 
 export {
@@ -117,5 +122,6 @@ export {
   selectStepIssues,
   selectRosterAgentById,
   selectRoomMemberById,
+  selectStepQuestionState,
   selectIsStale,
 }

@@ -156,6 +156,7 @@ export const API = {
   WORKFLOW_EXECUTION_STEPS: (wid: string, eid: string) => `/workflows/${wid}/executions/${eid}/steps`,
   WORKFLOW_EXECUTION_STEP: (wid: string, eid: string, sid: string) => `/workflows/${wid}/executions/${eid}/steps/${sid}`,
   WORKFLOW_NOTES: (id: string) => `/workflows/${id}/notes`,
+  WORKFLOW_QUESTION_STATES: (id: string) => `/workflows/${id}/question-states`,
   WORKFLOW_REBASE: (id: string) => `/workflows/${id}/rebase`,
   WORKFLOW_TEMPLATES: (id: string) => `/workflows/${id}/templates`,
 

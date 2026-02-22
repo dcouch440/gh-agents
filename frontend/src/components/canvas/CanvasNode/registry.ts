@@ -1,4 +1,5 @@
 import type { SvgIconComponent } from '@mui/icons-material'
+import AccountTreeOutlined from '@mui/icons-material/AccountTreeOutlined'
 import GroupsOutlined from '@mui/icons-material/GroupsOutlined'
 import ForumOutlined from '@mui/icons-material/ForumOutlined'
 import RadioButtonUncheckedOutlined from '@mui/icons-material/RadioButtonUncheckedOutlined'
@@ -16,6 +17,7 @@ import type { NodeVariant, LayoutMode } from './types'
 
 const Archetype = {
   WORKFORCE: 'workforce',
+  MANAGER: 'manager',
   ROOM: 'room',
   BLANK: 'blank',
   AGENT: 'agent',
@@ -40,6 +42,14 @@ const ARCHETYPE_CONFIGS: Record<Archetype, ArchetypeConfig> = {
     icon: GroupsOutlined,
     archetypeTabLabel: 'Team',
     chatEmptyMessage: 'Describe your mission and I\'ll help build the team.',
+  },
+  [Archetype.MANAGER]: {
+    label: 'Manager',
+    color: '#8b5cf6',
+    executionMode: 'manager',
+    icon: AccountTreeOutlined,
+    archetypeTabLabel: 'Team',
+    chatEmptyMessage: 'Describe your goals and I\'ll coordinate the team.',
   },
   [Archetype.ROOM]: {
     label: 'Room',
@@ -87,6 +97,17 @@ const VARIANT_CONFIGS: Record<NodeVariant, VariantConfig> = {
     label: 'Workforce',
     color: '#3b82f6',
     icon: GroupsOutlined,
+    layout: 'tabbed',
+    canvasNodeKind: CanvasNodeKind.PROTOCOL,
+    defaultWidth: 560,
+    defaultHeight: 500,
+    constraints: { minWidth: 360, minHeight: 300, maxWidth: 1800, maxHeight: 1600 },
+
+  },
+  manager: {
+    label: 'Manager',
+    color: '#8b5cf6',
+    icon: AccountTreeOutlined,
     layout: 'tabbed',
     canvasNodeKind: CanvasNodeKind.PROTOCOL,
     defaultWidth: 560,
@@ -194,6 +215,7 @@ const resolveArchetype = (
   _stepId?: string,
 ): Archetype => {
   if (step.execution_mode === 'workforce') return Archetype.WORKFORCE
+  if (step.execution_mode === 'manager') return Archetype.MANAGER
   if (step.execution_mode === 'room') return Archetype.ROOM
   return Archetype.BLANK
 }
@@ -207,6 +229,7 @@ const resolveVariant = (
   if (step.execution_mode === 'input') return 'input'
   if (step.execution_mode === 'sub_workflow') return 'sub_workflow'
   if (step.execution_mode === 'workforce') return 'workforce'
+  if (step.execution_mode === 'manager') return 'manager'
   if (step.execution_mode === 'room') return 'room'
   // Could resolve to 'blank' for known tabbed types in the future
   return 'step'

@@ -2,6 +2,7 @@ import type { CanvasNodeKind } from '../canvasKinds'
 
 const NodeVariant = {
   WORKFORCE: 'workforce',
+  MANAGER: 'manager',
   ROOM: 'room',
   BLANK: 'blank',
   AGENT: 'agent',
@@ -20,9 +21,9 @@ type NodeDataBase = {
   protocolStepId: string | null
 }
 
-/** workforce, room, blank — tabbed layout with chat, live stream, archetype tab */
+/** workforce, manager, room, blank — tabbed layout with chat, live stream, archetype tab */
 type TabbedNodeData = NodeDataBase & {
-  variant: 'workforce' | 'room' | 'blank'
+  variant: 'workforce' | 'manager' | 'room' | 'blank'
   description: string
   documentNames: string[]
   rosterNames: string[]

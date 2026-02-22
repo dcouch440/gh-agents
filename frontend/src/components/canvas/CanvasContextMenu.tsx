@@ -47,6 +47,7 @@ const MENU_ITEM_SX: SxProps<Theme> = {
 
 const ARCHETYPE_MENU_ORDER: ArchetypeType[] = [
   Archetype.WORKFORCE,
+  Archetype.MANAGER,
   Archetype.ROOM,
 ]
 
@@ -73,6 +74,15 @@ function CanvasContextMenu({ position, onClose }: CanvasContextMenuProps) {
     event.stopPropagation()
     event.preventDefault()
     const config = ARCHETYPE_CONFIGS[archetype]
+
+    // Enforce single-instance constraint for manager nodes
+    if (archetype === Archetype.MANAGER) {
+      const steps = workflowStore.selectSteps(workflowStore.store.getState())
+      if (steps.some((s) => s.execution_mode === 'manager')) {
+        onClose()
+        return
+      }
+    }
 
     void workflowStore.createStep({
       name: nextName(`New ${config.label}`),

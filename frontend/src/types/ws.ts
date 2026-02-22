@@ -194,6 +194,11 @@ export const SESSION_EVENT = {
   UPDATED: 'updated',
   DELETED: 'deleted',
   AGENT_MESSAGE: 'agent_message',
+  DISPATCH_STARTED: 'dispatch_started',
+  DISPATCH_PROGRESS: 'dispatch_progress',
+  DISPATCH_COMPLETED: 'dispatch_completed',
+  DISPATCH_FAILED: 'dispatch_failed',
+  DISPATCH_CANCELLED: 'dispatch_cancelled',
 } as const
 
 export type SessionCreatedData = { session_id: string; title: string; mode_id: string }
@@ -206,6 +211,13 @@ export type AgentMessageData = {
   message_type: string
   content_preview: string
 }
+
+// Dispatch events
+export type DispatchStartedData = { session_id: string; execution_id: string; step_id: string; instruction: string }
+export type DispatchProgressData = { session_id: string; execution_id: string; step_id: string; message: string }
+export type DispatchCompletedData = { session_id: string; execution_id: string; step_id: string; summary: string }
+export type DispatchFailedData = { session_id: string; execution_id: string; step_id: string; error: string }
+export type DispatchCancelledData = { session_id: string; execution_id: string; step_id: string }
 
 // ============================================================================
 // Handler Type

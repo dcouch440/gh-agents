@@ -1,6 +1,7 @@
 import { render } from '@testing-library/react'
 import { WsStoreRouter } from './WsStoreRouter'
 import { sessionStore } from '@/stores/sessionStore'
+import { dispatchStore } from '@/stores/dispatchStore'
 import { roomStore } from '@/stores/roomStore'
 import { workflowExecutionStore } from '@/stores/workflowExecutionStore'
 import { workflowStore } from '@/stores/workflowStore'
@@ -9,7 +10,7 @@ import { activityStore } from '@/stores/activity'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-const mockUnsubs = vi.hoisted(() => Array.from({ length: 8 }, () => vi.fn()))
+const mockUnsubs = vi.hoisted(() => Array.from({ length: 9 }, () => vi.fn()))
 const mockSubscribe = vi.hoisted(() => vi.fn())
 
 vi.mock('@/hooks/useWebSocket', () => ({
@@ -31,18 +32,19 @@ describe('WsStoreRouter', () => {
     vi.clearAllMocks()
     mockUnsubs.forEach((fn) => fn.mockClear())
     mockSubscribe.mockReset()
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 9; i++) {
       mockSubscribe.mockReturnValueOnce(mockUnsubs[i])
     }
   })
 
-  it('subscribes to all topics for domain stores + flight recorder (8 total)', () => {
+  it('subscribes to all topics for domain stores + flight recorder (9 total)', () => {
     render(<WsStoreRouter />)
 
-    expect(mockSubscribe).toHaveBeenCalledTimes(8)
+    expect(mockSubscribe).toHaveBeenCalledTimes(9)
 
     // Domain store handlers
     expect(mockSubscribe).toHaveBeenCalledWith('session', sessionStore.handleWsEvent)
+    expect(mockSubscribe).toHaveBeenCalledWith('session', dispatchStore.handleWsEvent)
     expect(mockSubscribe).toHaveBeenCalledWith('room', roomStore.handleWsEvent)
     expect(mockSubscribe).toHaveBeenCalledWith('workflow', workflowExecutionStore.handleWsEvent)
     expect(mockSubscribe).toHaveBeenCalledWith('workflow', workflowStore.handleWsEvent)
@@ -54,7 +56,7 @@ describe('WsStoreRouter', () => {
     expect(mockSubscribe).toHaveBeenCalledWith('workflow', activityStore.handleWsEvent)
   })
 
-  it('unsubscribes all 8 handlers on unmount', () => {
+  it('unsubscribes all 9 handlers on unmount', () => {
     const { unmount } = render(<WsStoreRouter />)
 
     unmount()

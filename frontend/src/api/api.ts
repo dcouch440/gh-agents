@@ -71,6 +71,7 @@ import type {
   RoomStepMember,
   StepChatDebugResponse,
   StepLastRunResponse,
+  StepQuestionState,
   RunDetailResponse,
   RebaseRequest,
   RebaseResponse,
@@ -342,6 +343,9 @@ const workflows = freeze({
 
   getAllNotes: (workflowId: string, config?: RequestConfig) =>
     baseApi.get<Array<{ step_id: string; content: string }>>(API.WORKFLOW_NOTES(workflowId), config),
+
+  listQuestionStates: (workflowId: string, config?: RequestConfig) =>
+    baseApi.get<StepQuestionState[]>(API.WORKFLOW_QUESTION_STATES(workflowId), config),
 
   rebase: (workflowId: string, body: RebaseRequest, config?: RequestConfig) =>
     baseApi.post<RebaseResponse>(API.WORKFLOW_REBASE(workflowId), body, config),

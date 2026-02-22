@@ -18,7 +18,7 @@ describe('buildStepTabs', () => {
     expect(tabs[0]!.id).toBe('chat')
   })
 
-  it('always includes notes and debug tabs', () => {
+  it('includes notes and debug tabs for non-manager archetypes', () => {
     const tabs = buildStepTabs({ ...baseParams, archetype: Archetype.BLANK })
     const ids = tabs.map((t) => t.id)
     expect(ids).toContain('notes')
@@ -63,6 +63,21 @@ describe('buildStepTabs', () => {
       const ids = tabs.map((t) => t.id)
       expect(ids).not.toContain('agents')
       expect(ids).not.toContain('documents')
+    })
+  })
+
+  describe('MANAGER archetype', () => {
+    it('excludes notes tab (manager sits above the DAG)', () => {
+      const tabs = buildStepTabs({ ...baseParams, archetype: Archetype.MANAGER })
+      const ids = tabs.map((t) => t.id)
+      expect(ids).not.toContain('notes')
+    })
+
+    it('includes chat and debug tabs', () => {
+      const tabs = buildStepTabs({ ...baseParams, archetype: Archetype.MANAGER })
+      const ids = tabs.map((t) => t.id)
+      expect(ids).toContain('chat')
+      expect(ids).toContain('debug')
     })
   })
 

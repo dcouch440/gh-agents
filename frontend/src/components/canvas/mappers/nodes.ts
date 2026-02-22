@@ -93,7 +93,9 @@ const toStepNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] =>
     if (archetype !== Archetype.BLANK) {
       const config = ARCHETYPE_CONFIGS[archetype]
       const rosterAgents = lookups.rosterByStep[step.id] ?? []
-      const variant = archetype === Archetype.WORKFORCE ? 'workforce' as const : 'room' as const
+      const variant = archetype === Archetype.WORKFORCE ? 'workforce' as const
+        : archetype === Archetype.MANAGER ? 'manager' as const
+        : 'room' as const
       const cfg = VARIANT_CONFIGS[variant]
       const data: TabbedNodeData = {
         variant,

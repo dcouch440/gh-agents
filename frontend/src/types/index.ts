@@ -43,6 +43,7 @@ export type {
   StepChatDebugResponse,
   PhaseExecution,
   StepLastRunResponse,
+  StepQuestionState,
   RunStepResult,
   RunDetailResponse,
   RebaseRequest,

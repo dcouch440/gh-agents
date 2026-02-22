@@ -175,6 +175,13 @@ type StepLastRunResponse = {
   phases: PhaseExecution[] | null
 }
 
+type StepQuestionState = {
+  step_id: string
+  status_text: string
+  question_text: string | null
+  updated_at: string
+}
+
 type ChildStepResult = {
   step_name: string | null
   execution_mode: string
@@ -283,6 +290,7 @@ export type {
   StepChatDebugResponse,
   PhaseExecution,
   StepLastRunResponse,
+  StepQuestionState,
   RunStepResult,
   RunDetailResponse,
   RebaseRequest,

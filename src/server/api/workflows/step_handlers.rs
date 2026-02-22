@@ -13,8 +13,8 @@ use crate::server::services::steps;
 use crate::server::state::AppState;
 
 use super::types::{
-    step_response, CreateStepRequest, TogglePinRequest, UpdateStepRequest, WorkflowNoteEntry,
-    WorkflowStepPath, WorkflowStepResponse,
+    step_response, CreateStepRequest, StepQuestionStateEntry, TogglePinRequest, UpdateStepRequest,
+    WorkflowNoteEntry, WorkflowStepPath, WorkflowStepResponse,
 };
 
 /// POST /api/workflows/:id/steps
@@ -289,4 +289,46 @@ pub async fn toggle_step_pin(
         .map_err(|e| AppError::Internal(e.to_string()))?
         .ok_or(AppError::not_found("Step"))?;
     Ok(Json(step_response(updated)))
+}
+
+/// GET /api/workflows/:id/question-states — question state for all steps in a workflow
+pub async fn list_question_states(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(workflow_id): Path<Uuid>,
+) -> Result<Json<Vec<StepQuestionStateEntry>>, AppError> {
+    let repo = &state.repos().workflows;
+
+    // Verify ownership
+    crate::server::services::workflows::verify_workflow_ownership(
+        repo.as_ref(),
+        auth.user_id.0,
+        workflow_id,
+    )
+    .await?;
+
+    // Get all step IDs for this workflow
+    let steps = repo
+        .list_steps(workflow_id)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let step_ids: Vec<Uuid> = steps.iter().map(|s| s.id).collect();
+
+    // Batch-load question states
+    let states = repo
+        .get_step_question_states(&step_ids)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let entries: Vec<StepQuestionStateEntry> = states
+        .into_iter()
+        .map(|qs| StepQuestionStateEntry {
+            step_id: qs.step_id.to_string(),
+            status_text: qs.status_text,
+            question_text: qs.question_text,
+            updated_at: qs.updated_at.to_rfc3339(),
+        })
+        .collect();
+
+    Ok(Json(entries))
 }

@@ -21,6 +21,7 @@ import {
   selectStepIssues,
   selectRosterAgentById,
   selectRoomMemberById,
+  selectStepQuestionState,
   selectIsStale,
 } from './selectors'
 import { fetchAll, fetchIfStale, fetchOne, create, update, remove, loadWorkflow, clearActive, upsert, setDirty } from './workflows'
@@ -29,6 +30,7 @@ import { addEdge, removeEdge } from './edges'
 import { fetchStepDocuments, addStepDocument, removeStepDocument } from './documents'
 import { fetchRoster, createRosterAgent, deleteRosterAgent, fetchRoomStepMembers } from './roster'
 import { fetchAllNotes } from './notes'
+import { fetchQuestionStates } from './questionStates'
 import { handleWsEvent } from './wsHandler'
 
 export const workflowStore = {
@@ -54,6 +56,7 @@ export const workflowStore = {
   selectStepIssues,
   selectRosterAgentById,
   selectRoomMemberById,
+  selectStepQuestionState,
   selectIsStale,
   fetchAll,
   fetchIfStale,
@@ -80,6 +83,7 @@ export const workflowStore = {
   deleteRosterAgent,
   fetchRoomStepMembers,
   fetchAllNotes,
+  fetchQuestionStates,
   handleWsEvent,
   setDirty,
   upsert,

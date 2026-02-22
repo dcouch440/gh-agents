@@ -8,6 +8,7 @@ import { api } from '@/api'
 import type { Session, CreateSessionRequest, UpdateSessionRequest } from '@/types/session'
 import { SESSION_EVENT } from '@/types/ws'
 import type { WsWireMessage } from '@/types/ws'
+import { assistantSessionStore } from './assistantSessionStore'
 
 // ── State ────────────────────────────────────────────────────────────────────
 
@@ -123,6 +124,13 @@ const handleWsEvent = (msg: WsWireMessage): void => {
           if (!existing) return s
           return { items: nmSet(s.items, sessionId, { ...existing, updated_at: msg.ts }) }
         })
+        // Insert agent message into the assistant session chat
+        assistantSessionStore.insertAgentMessage(
+          sessionId,
+          data.from_agent as string,
+          data.message_type as string,
+          data.content_preview as string,
+        )
         break
       }
     }

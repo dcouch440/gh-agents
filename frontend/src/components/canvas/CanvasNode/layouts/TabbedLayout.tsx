@@ -9,7 +9,7 @@ import OpenInFullOutlined from '@mui/icons-material/OpenInFullOutlined'
 import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined'
 import CircularProgress from '@mui/material/CircularProgress'
 import AssignmentOutlined from '@mui/icons-material/AssignmentOutlined'
-import { useStore, shareStore } from '@/stores'
+import { useStore, shareStore, dispatchStore, workflowStore } from '@/stores'
 import { CanvasFormNode } from '../../CanvasFormNode'
 import { CanvasHandle } from '../../CanvasHandle'
 import { NOTES_ACCENT } from '../../constants'
@@ -50,6 +50,8 @@ function TabbedLayout({ nodeId, data, selected, accentColor, highlightMode }: Ta
   const { isExecuting, resolvedExecStatus, agentSourceStatus, stepExecStatus } =
     useDynamicNodeExecution(nodeId, isAgent, rosterAgentId, protocolStepId)
   const { stepIssues } = useStepStoreData(nodeId)
+  const activeDispatch = useStore(dispatchStore.store, dispatchStore.selectActiveForStep(nodeId))
+  const questionState = useStore(workflowStore.store, workflowStore.selectStepQuestionState(nodeId))
 
   // --- Share mode (steps only) ---
   const shareActive = useStore(shareStore.store, isAgent ? () => false : shareStore.selectActive)
@@ -76,7 +78,7 @@ function TabbedLayout({ nodeId, data, selected, accentColor, highlightMode }: Ta
   const effectiveHighlight = shareActive && !isShareSource ? HighlightMode.HOVER : highlightMode
 
   // --- Build tabs ---
-  const archetype = isAgent ? Archetype.AGENT : data.variant === 'workforce' ? Archetype.WORKFORCE : data.variant === 'room' ? Archetype.ROOM : Archetype.BLANK
+  const archetype = isAgent ? Archetype.AGENT : data.variant === 'workforce' ? Archetype.WORKFORCE : data.variant === 'manager' ? Archetype.MANAGER : data.variant === 'room' ? Archetype.ROOM : Archetype.BLANK
   const tabs = useMemo(() => isAgent
     ? [
         { id: 'stream', icon: AssignmentOutlined, tooltip: 'Run Results', content: <AgentStreamTab rosterAgentId={rosterAgentId ?? ''} protocolStepId={protocolStepId} agentName={data.label} /> },
@@ -116,8 +118,14 @@ function TabbedLayout({ nodeId, data, selected, accentColor, highlightMode }: Ta
   )
 
   // --- Header badge ---
+  const DISPATCH_COLOR = '#8b5cf6'
+  const QUESTION_COLOR = '#f59e0b'
   const headerBadge = isExecuting ? (
     <ExecutionStatusBadge status={resolvedExecStatus} />
+  ) : activeDispatch ? (
+    <ProtocolBadge color={DISPATCH_COLOR} label="Dispatching..." animated />
+  ) : questionState?.question_text ? (
+    <ProtocolBadge color={QUESTION_COLOR} label="Has Question" animated />
   ) : stepIssues.length > 0 ? (
     <Tooltip
       title={
@@ -184,9 +192,11 @@ function TabbedLayout({ nodeId, data, selected, accentColor, highlightMode }: Ta
       overlay={shareOverlay}
       {...(isAgent
         ? { handles: agentHandles, constraints: AGENT_CONSTRAINTS }
-        : data.variant === 'workforce'
-          ? { handles: protocolHandles }
-          : { extraHandles: stepExtraHandles }
+        : data.variant === 'manager'
+          ? { handles: <></> }
+          : data.variant === 'workforce'
+            ? { handles: protocolHandles }
+            : { extraHandles: stepExtraHandles }
       )}
     />
   )
