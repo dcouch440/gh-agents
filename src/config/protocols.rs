@@ -445,7 +445,7 @@ mod tests {
             "should contain board context"
         );
         assert!(
-            ctx.system_prompt.contains("archetype_context"),
+            ctx.system_prompt.contains("<archetype"),
             "should contain workforce block"
         );
     }
