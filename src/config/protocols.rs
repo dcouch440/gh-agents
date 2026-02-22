@@ -3,7 +3,7 @@
 //! Layout:
 //! - `config/assistant/`          — shared conversational layer (all protocols)
 //! - `config/designer/`           — shared Agent Designer pre-lifecycle
-//! - `config/protocols/<name>/`   — protocol-specific (archetype, builder, agent)
+//! - `config/archetype/<name>/`   — archetype-specific (archetype, builder, agent)
 //! - `config/services/<name>/`    — utility LLM services (belief extraction, etc.)
 //! - `config/system/`             — platform config synced to DB at runtime
 //!
@@ -209,8 +209,8 @@ pub static ASSISTANT: Lazy<ProtocolConfig> = Lazy::new(|| {
 /// Workforce runtime agent config.
 pub static WORKFORCE: Lazy<ProtocolConfig> = Lazy::new(|| {
     load_protocol_config(
-        include_str!("../../config/protocols/workforce/agent/config.yaml"),
-        "config/protocols/workforce/agent/config.yaml",
+        include_str!("../../config/archetype/workforce/agent/config.yaml"),
+        "config/archetype/workforce/agent/config.yaml",
     )
 });
 
@@ -225,8 +225,8 @@ pub static DESIGNER: Lazy<ProtocolConfig> = Lazy::new(|| {
 /// Workforce builder config (background configuration agent).
 pub static WORKFORCE_BUILDER: Lazy<ProtocolConfig> = Lazy::new(|| {
     load_protocol_config(
-        include_str!("../../config/protocols/workforce/builder/config.yaml"),
-        "config/protocols/workforce/builder/config.yaml",
+        include_str!("../../config/archetype/workforce/builder/config.yaml"),
+        "config/archetype/workforce/builder/config.yaml",
     )
 });
 
@@ -262,16 +262,16 @@ pub mod roles {
 
     /// Workforce archetype block, injected via `{{.System.archetype_block}}`.
     pub const WORKFORCE_ARCHETYPE: &str =
-        include_str!("../../config/protocols/workforce/archetype.md");
+        include_str!("../../config/archetype/workforce/archetype.md");
 
     /// Workforce builder system prompt (background configuration agent).
     pub const WORKFORCE_BUILDER_SYSTEM: &str =
-        include_str!("../../config/protocols/workforce/builder/system.md");
+        include_str!("../../config/archetype/workforce/builder/system.md");
 
     /// Workforce runtime agent prompt template.
     pub static WORKFORCE_AGENT: RoleDefinition = RoleDefinition {
-        system: include_str!("../../config/protocols/workforce/agent/system.md"),
-        prompt: include_str!("../../config/protocols/workforce/agent/prompt.md"),
+        system: include_str!("../../config/archetype/workforce/agent/system.md"),
+        prompt: include_str!("../../config/archetype/workforce/agent/prompt.md"),
         response: None,
     };
 
