@@ -13,7 +13,7 @@ import { LiveStreamTab } from './LiveStreamTab'
 import { AgentRosterTab } from './AgentRosterTab'
 import { RoomMembersTab } from './RoomMembersTab'
 import { DebugLogTab } from './DebugLogTab'
-import { NotesTab } from './NotesTab'
+import { PlanTab } from './PlanTab'
 
 type BuildStepTabsParams = {
   stepId: string
@@ -63,13 +63,13 @@ const buildStepTabs = ({
     })
   }
 
-  // Manager sits above the DAG — no notes (notes are a node builder concept)
+  // Manager sits above the DAG — no plan tab (plan is a node builder concept)
   if (archetype !== Archetype.MANAGER) {
     tabs.push({
-      id: 'notes',
+      id: 'plan',
       icon: StickyNote2Outlined,
-      tooltip: 'Assistant Notes',
-      content: <NotesTab stepId={stepId} />,
+      tooltip: 'Plan',
+      content: <PlanTab stepId={stepId} />,
     })
   }
 

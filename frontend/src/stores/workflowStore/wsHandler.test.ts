@@ -46,47 +46,47 @@ describe('workflowStore/wsHandler', () => {
     })
   })
 
-  describe('assistant_notes_updated', () => {
-    it('updates notesByStep for active workflow', () => {
-      store.setState({ activeWorkflowId: 'wf-1', notesByStep: {} })
-      handleWsEvent(makeMsg('assistant_notes_updated', {
+  describe('plan_updated', () => {
+    it('updates planByStep for active workflow', () => {
+      store.setState({ activeWorkflowId: 'wf-1', planByStep: {} })
+      handleWsEvent(makeMsg('plan_updated', {
         workflow_id: 'wf-1',
         step_id: 'step-1',
         content: '## Direction\n- Build auth',
       }))
-      expect(store.getState().notesByStep).toEqual({ 'step-1': '## Direction\n- Build auth' })
+      expect(store.getState().planByStep).toEqual({ 'step-1': '## Direction\n- Build auth' })
     })
 
-    it('merges with existing notes', () => {
-      store.setState({ activeWorkflowId: 'wf-1', notesByStep: { 'step-2': 'existing notes' } })
-      handleWsEvent(makeMsg('assistant_notes_updated', {
+    it('merges with existing plan entries', () => {
+      store.setState({ activeWorkflowId: 'wf-1', planByStep: { 'step-2': 'existing plan' } })
+      handleWsEvent(makeMsg('plan_updated', {
         workflow_id: 'wf-1',
         step_id: 'step-1',
-        content: 'new notes',
+        content: 'new plan',
       }))
-      const notes = store.getState().notesByStep
-      expect(notes['step-1']).toBe('new notes')
-      expect(notes['step-2']).toBe('existing notes')
+      const plans = store.getState().planByStep
+      expect(plans['step-1']).toBe('new plan')
+      expect(plans['step-2']).toBe('existing plan')
     })
 
-    it('replaces existing notes for same step', () => {
-      store.setState({ activeWorkflowId: 'wf-1', notesByStep: { 'step-1': 'old' } })
-      handleWsEvent(makeMsg('assistant_notes_updated', {
+    it('replaces existing plan for same step', () => {
+      store.setState({ activeWorkflowId: 'wf-1', planByStep: { 'step-1': 'old' } })
+      handleWsEvent(makeMsg('plan_updated', {
         workflow_id: 'wf-1',
         step_id: 'step-1',
         content: 'updated',
       }))
-      expect(store.getState().notesByStep['step-1']).toBe('updated')
+      expect(store.getState().planByStep['step-1']).toBe('updated')
     })
 
     it('ignores events for a different workflow', () => {
-      store.setState({ activeWorkflowId: 'wf-1', notesByStep: {} })
-      handleWsEvent(makeMsg('assistant_notes_updated', {
+      store.setState({ activeWorkflowId: 'wf-1', planByStep: {} })
+      handleWsEvent(makeMsg('plan_updated', {
         workflow_id: 'wf-other',
         step_id: 'step-1',
         content: 'should not appear',
       }))
-      expect(store.getState().notesByStep).toEqual({})
+      expect(store.getState().planByStep).toEqual({})
     })
   })
 

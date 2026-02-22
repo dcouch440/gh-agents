@@ -45,7 +45,7 @@ mod tests {
             input_ports: vec![],
             output_ports: vec![],
             incoming_context: vec![],
-            notes: String::new(),
+            plan: String::new(),
             asking: None,
             receives: None,
         }
@@ -272,7 +272,7 @@ mod tests {
             to_node: "Writer Node".to_string(),
             schema: Some(r#"{"type": "string"}"#.to_string()),
         }];
-        node.notes = "Focus on academic sources.".to_string();
+        node.plan = "Focus on academic sources.".to_string();
 
         let snapshot = make_own_node_snapshot(node);
         let xml = render::render(&snapshot, BoardStateVariant::Dispatch);
@@ -297,11 +297,11 @@ mod tests {
         assert!(xml.contains("<role>Investigates sources</role>"));
         assert!(xml.contains("<depends_on>Researcher</depends_on>"));
         // Notes
-        assert!(xml.contains("<notes>Focus on academic sources.</notes>"));
+        assert!(xml.contains("<plan>Focus on academic sources.</plan>"));
     }
 
     #[test]
-    fn render_l4_no_ports_no_notes() {
+    fn render_l4_no_ports_no_plan() {
         let node = make_node(
             "Minimal",
             vec![make_agent("Worker", &[], &[], "Does things")],
@@ -311,7 +311,7 @@ mod tests {
 
         assert!(!xml.contains("<input_ports>"));
         assert!(!xml.contains("<output_ports>"));
-        assert!(!xml.contains("<notes>"));
+        assert!(!xml.contains("<plan>"));
         assert!(xml.contains("<agent_roster>"));
     }
 
@@ -352,7 +352,7 @@ mod tests {
         // L4
         assert!(BoardStateVariant::Dispatch.include_agent_ids());
         assert!(BoardStateVariant::Dispatch.include_port_schemas());
-        assert!(BoardStateVariant::Dispatch.include_notes());
+        assert!(BoardStateVariant::Dispatch.include_plan());
     }
 
     // ========================================================================

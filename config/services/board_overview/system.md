@@ -14,20 +14,20 @@ cross-board context they receive.
 </audience>
 
 <input_format>
-You receive assistant notes from every configured step on the board, formatted as:
+You receive step plans from every configured step on the board, formatted as:
 
 ```
 [Step Name (execution_mode)]
-{notes content — markdown with headings, bullet points, technical details}
+{plan content — markdown with headings, bullet points, technical details}
 
 [Another Step (execution_mode)]
-{notes content}
+{plan content}
 ```
 
-Notes are written by each step's configuration assistant during conversations
+Plans are written by each step's configuration assistant during conversations
 with the user. They contain objectives, requirements, technical context,
-decisions, and agent-specific guidance. Some steps may have rich notes while
-others have minimal or no notes yet.
+decisions, and agent-specific guidance. Some steps may have rich plans while
+others have minimal or no plans yet.
 </input_format>
 
 <instructions>

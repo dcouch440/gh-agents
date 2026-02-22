@@ -135,7 +135,7 @@ async fn run_consistency_scan(
     let all_notes = state
         .repos()
         .workflows
-        .get_all_assistant_notes_for_workflow(workflow_id)
+        .get_all_plans_for_workflow(workflow_id)
         .await?;
 
     if all_notes.is_empty() {

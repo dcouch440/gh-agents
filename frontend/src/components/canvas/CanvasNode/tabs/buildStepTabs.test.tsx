@@ -6,7 +6,7 @@ vi.mock('./LiveStreamTab', () => ({ LiveStreamTab: () => null }))
 vi.mock('./AgentRosterTab', () => ({ AgentRosterTab: () => null }))
 vi.mock('./RoomMembersTab', () => ({ RoomMembersTab: () => null }))
 vi.mock('./DebugLogTab', () => ({ DebugLogTab: () => null }))
-vi.mock('./NotesTab', () => ({ NotesTab: () => null }))
+vi.mock('./PlanTab', () => ({ PlanTab: () => null }))
 
 const baseParams = {
   stepId: 'step-1',
@@ -18,10 +18,10 @@ describe('buildStepTabs', () => {
     expect(tabs[0]!.id).toBe('chat')
   })
 
-  it('includes notes and debug tabs for non-manager archetypes', () => {
+  it('includes plan and debug tabs for non-manager archetypes', () => {
     const tabs = buildStepTabs({ ...baseParams, archetype: Archetype.BLANK })
     const ids = tabs.map((t) => t.id)
-    expect(ids).toContain('notes')
+    expect(ids).toContain('plan')
     expect(ids).toContain('debug')
   })
 
@@ -67,10 +67,10 @@ describe('buildStepTabs', () => {
   })
 
   describe('MANAGER archetype', () => {
-    it('excludes notes tab (manager sits above the DAG)', () => {
+    it('excludes plan tab (manager sits above the DAG)', () => {
       const tabs = buildStepTabs({ ...baseParams, archetype: Archetype.MANAGER })
       const ids = tabs.map((t) => t.id)
-      expect(ids).not.toContain('notes')
+      expect(ids).not.toContain('plan')
     })
 
     it('includes chat and debug tabs', () => {
@@ -94,7 +94,7 @@ describe('buildStepTabs', () => {
   it('tab order: chat > live? > archetype-specific > notes > debug', () => {
     const tabs = buildStepTabs({ ...baseParams, archetype: Archetype.WORKFORCE, includeLiveStream: true })
     const ids = tabs.map((t) => t.id)
-    expect(ids).toEqual(['chat', 'live', 'agents', 'notes', 'debug'])
+    expect(ids).toEqual(['chat', 'live', 'agents', 'plan', 'debug'])
   })
 
   it('every tab has an id, icon, tooltip, and content', () => {

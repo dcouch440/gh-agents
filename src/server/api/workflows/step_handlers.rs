@@ -186,7 +186,7 @@ pub async fn delete_workflow_step(
 }
 
 /// GET /api/workflows/:id/notes — all assistant notes for a workflow
-pub async fn get_workflow_notes(
+pub async fn get_workflow_plans(
     State(state): State<AppState>,
     auth: auth_utils::AuthUser,
     Path(workflow_id): Path<Uuid>,
@@ -200,7 +200,7 @@ pub async fn get_workflow_notes(
     )
     .await?;
     let notes = repo
-        .get_all_assistant_notes_for_workflow(workflow_id)
+        .get_all_plans_for_workflow(workflow_id)
         .await?;
     let entries: Vec<WorkflowNoteEntry> = notes
         .into_iter()

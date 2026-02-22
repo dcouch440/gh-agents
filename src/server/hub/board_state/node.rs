@@ -124,12 +124,12 @@ pub fn render_node(node: &NodeSnapshot, variant: BoardStateVariant) -> String {
         el.raw(&incoming.build());
     }
 
-    // ── L4: notes ───────────────────────────────────────────────────────
+    // ── L4: plan ────────────────────────────────────────────────────────
 
-    if variant.include_notes() && !node.notes.is_empty() {
+    if variant.include_plan() && !node.plan.is_empty() {
         el.raw(
-            &XmlBuilder::new("notes", indent + 1)
-                .text(&node.notes)
+            &XmlBuilder::new("plan", indent + 1)
+                .text(&node.plan)
                 .build(),
         );
     }

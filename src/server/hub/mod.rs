@@ -258,15 +258,15 @@ pub async fn build_step_system_prompt(
         board_overview
     };
 
-    // 1c. Load assistant notes for this step
-    let assistant_notes = state
+    // 1c. Load plan for this step
+    let plan_content = state
         .repos()
         .workflows
-        .get_assistant_notes(step_id)
+        .get_plan(step_id)
         .await
         .unwrap_or_default()
         .unwrap_or_else(|| {
-            "No notes yet. Use update_notes to record important discoveries.".to_string()
+            "No plan yet. Use update_plan to record the execution blueprint.".to_string()
         });
 
     // 2. Build archetype block + board state based on execution mode
@@ -307,7 +307,7 @@ pub async fn build_step_system_prompt(
         vars::system::BOARD_OVERVIEW.to_string(),
         board_overview_text,
     );
-    vars_map.insert(vars::system::ASSISTANT_NOTES.to_string(), assistant_notes);
+    vars_map.insert(vars::system::PLAN.to_string(), plan_content);
     vars_map.insert(vars::system::DISPATCH_STATUS.to_string(), dispatch_status);
     vars_map.insert(vars::system::RUN_CONTEXT.to_string(), run_context);
 

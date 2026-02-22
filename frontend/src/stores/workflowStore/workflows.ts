@@ -53,16 +53,16 @@ const remove = async (id: string): Promise<void> => {
 const loadWorkflow = async (id: string): Promise<void> => {
   store.setState({ loading: true, error: null })
   try {
-    const [workflow, steps, edges, notes, questionStates] = await Promise.all([
+    const [workflow, steps, edges, plans, questionStates] = await Promise.all([
       api.workflows.get(id),
       api.workflows.listSteps(id),
       api.workflows.listEdges(id),
-      api.workflows.getAllNotes(id),
+      api.workflows.getAllPlans(id),
       api.workflows.listQuestionStates(id),
     ])
-    const notesByStep: Record<string, string> = {}
-    for (const entry of notes) {
-      notesByStep[entry.step_id] = entry.content
+    const planByStep: Record<string, string> = {}
+    for (const entry of plans) {
+      planByStep[entry.step_id] = entry.content
     }
     const questionStateByStep: Record<string, (typeof questionStates)[number]> = {}
     for (const entry of questionStates) {
@@ -74,7 +74,7 @@ const loadWorkflow = async (id: string): Promise<void> => {
       steps: nmFromArray(steps),
       edges: nmFromArray(edges),
       documentsByStep: {},
-      notesByStep,
+      planByStep,
       questionStateByStep,
       dirtyStepIds: new Set<string>(),
       loading: false,
@@ -91,7 +91,7 @@ const clearActive = (): void => {
     steps: createNormalizedMap<WorkflowStep>(),
     edges: createNormalizedMap<WorkflowStepEdge>(),
     documentsByStep: {},
-    notesByStep: {},
+    planByStep: {},
     questionStateByStep: {},
     dirtyStepIds: new Set<string>(),
     dirty: false,
