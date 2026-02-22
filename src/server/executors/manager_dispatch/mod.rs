@@ -21,6 +21,9 @@ mod tests;
 /// Called from `tokio::spawn` in the chat dispatch handler when the step
 /// has `execution_mode = "manager"`. Builds a ManagerDispatchStrategy,
 /// runs the engine loop, and updates the TaskRegistry with the outcome.
+///
+/// `session_id` is the persistent L2 builder session — the instruction and
+/// outcome are persisted as messages so subsequent dispatches see history.
 pub async fn run_manager_dispatch_task(
     state: AppState,
     execution_id: Uuid,
@@ -28,6 +31,7 @@ pub async fn run_manager_dispatch_task(
     user_id: UserId,
     step_id: Uuid,
     instruction: String,
+    session_id: Uuid,
 ) {
     let cancel_token = match state.task_registry().get_task(execution_id) {
         Some(entry) => entry.cancel_token,
@@ -40,11 +44,32 @@ pub async fn run_manager_dispatch_task(
         }
     };
 
+    // Persist the instruction as a user message in the builder session.
+    if let Err(e) = state
+        .repos()
+        .sessions
+        .insert_session_message(
+            user_id,
+            session_id,
+            Uuid::new_v4(),
+            "user".to_string(),
+            instruction.clone(),
+        )
+        .await
+    {
+        tracing::warn!(
+            session_id = %session_id,
+            error = %e,
+            "Failed to persist dispatch instruction"
+        );
+    }
+
     let strategy = match ManagerDispatchStrategy::new(
         state.clone(),
         workflow_id,
         user_id,
         instruction.clone(),
+        Some(session_id),
     )
     .await
     {
@@ -55,6 +80,7 @@ pub async fn run_manager_dispatch_task(
                 error = %e,
                 "Failed to build ManagerDispatchStrategy"
             );
+            persist_outcome(&state, session_id, user_id, &format!("Error: {e}")).await;
             state
                 .task_registry()
                 .mark_failed(execution_id, e.to_string());
@@ -75,6 +101,7 @@ pub async fn run_manager_dispatch_task(
         None => {
             let err = "No LLM provider configured";
             tracing::error!(execution_id = %execution_id, err);
+            persist_outcome(&state, session_id, user_id, err).await;
             state
                 .task_registry()
                 .mark_failed(execution_id, err.to_string());
@@ -116,6 +143,8 @@ pub async fn run_manager_dispatch_task(
                 exec_result.content.clone()
             };
 
+            persist_outcome(&state, session_id, user_id, &summary).await;
+
             state
                 .task_registry()
                 .mark_completed(execution_id, Some(summary.clone()));
@@ -138,6 +167,7 @@ pub async fn run_manager_dispatch_task(
         }
         Err(e) => {
             let error_msg = e.to_string();
+            persist_outcome(&state, session_id, user_id, &format!("Error: {error_msg}")).await;
 
             if cancel_token.is_cancelled() {
                 state.task_registry().cancel_task(execution_id);
@@ -171,6 +201,28 @@ pub async fn run_manager_dispatch_task(
                 );
             }
         }
+    }
+}
+
+/// Persist the dispatch outcome as an assistant message in the builder session.
+async fn persist_outcome(state: &AppState, session_id: Uuid, user_id: UserId, content: &str) {
+    if let Err(e) = state
+        .repos()
+        .sessions
+        .insert_session_message(
+            user_id,
+            session_id,
+            Uuid::new_v4(),
+            "assistant".to_string(),
+            content.to_string(),
+        )
+        .await
+    {
+        tracing::warn!(
+            session_id = %session_id,
+            error = %e,
+            "Failed to persist dispatch outcome"
+        );
     }
 }
 

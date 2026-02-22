@@ -170,7 +170,21 @@ pub trait SessionRepo: Send + Sync {
     async fn clear_session_messages(&self, session_id: Uuid) -> Result<()>;
 
     /// Find a chat session linked to a workflow step via draft_config.
+    /// Excludes builder sessions (L4) — only returns assistant sessions.
     async fn find_session_by_step_id(&self, step_id: Uuid) -> Result<Option<SessionRow>>;
+
+    /// Find the L4 builder session for a workflow step.
+    async fn find_builder_session_by_step_id(&self, step_id: Uuid) -> Result<Option<SessionRow>>;
+
+    /// Find the L2 manager builder session for a workflow.
+    async fn find_manager_builder_session(&self, workflow_id: Uuid) -> Result<Option<SessionRow>>;
+
+    /// Batch-check which steps have received initial instructions.
+    /// Returns the set of step_ids that have been instructed.
+    async fn check_initial_instructions_sent(
+        &self,
+        step_ids: &[Uuid],
+    ) -> Result<std::collections::HashSet<Uuid>>;
 
     /// Link an agent to a session (and clear draft_config).
     async fn link_session_agent(&self, session_id: Uuid, agent_id: Uuid) -> Result<()>;

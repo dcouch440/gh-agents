@@ -1526,17 +1526,10 @@ mod tests {
         let step_c = repo.create_step(step_c_row).await.unwrap();
 
         // Notes on Alpha and Charlie only
-        repo.upsert_plan(step_a.id, "Alpha notes")
-            .await
-            .unwrap();
-        repo.upsert_plan(step_c.id, "Charlie notes")
-            .await
-            .unwrap();
+        repo.upsert_plan(step_a.id, "Alpha notes").await.unwrap();
+        repo.upsert_plan(step_c.id, "Charlie notes").await.unwrap();
 
-        let all = repo
-            .get_all_plans_for_workflow(workflow.id)
-            .await
-            .unwrap();
+        let all = repo.get_all_plans_for_workflow(workflow.id).await.unwrap();
 
         // Should return 2 entries, ordered by name (Alpha, Charlie)
         assert_eq!(all.len(), 2);

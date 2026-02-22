@@ -138,13 +138,98 @@ pub async fn get_session(pool: &PgPool, session_id: Uuid) -> Result<Option<Sessi
 }
 
 /// Find a chat session linked to a workflow step via draft_config->>'step_id'.
+///
+/// Excludes builder sessions (L4) by filtering on the `role` field — only
+/// returns sessions where role is absent or equals 'assistant'.
 pub async fn find_session_by_step_id(pool: &PgPool, step_id: Uuid) -> Result<Option<SessionRow>> {
-    let row: Option<SessionRow> = sqlx::query_as("SELECT id, user_id, mode_id, title, summary, agent_id, draft_config, created_at, updated_at FROM chat_sessions WHERE draft_config->>'step_id' = $1")
+    let row: Option<SessionRow> = sqlx::query_as(
+        "SELECT id, user_id, mode_id, title, summary, agent_id, draft_config, created_at, updated_at \
+         FROM chat_sessions \
+         WHERE draft_config->>'step_id' = $1 \
+           AND COALESCE(draft_config->>'role', 'assistant') = 'assistant'"
+    )
         .bind(step_id.to_string())
         .fetch_optional(pool)
         .await
         .context("Failed to find session by step_id")?;
     Ok(row)
+}
+
+/// Find the L4 builder session for a workflow step.
+///
+/// Builder sessions have `draft_config->>'role' = 'builder'` to distinguish
+/// them from the L3 assistant session on the same step.
+pub async fn find_builder_session_by_step_id(
+    pool: &PgPool,
+    step_id: Uuid,
+) -> Result<Option<SessionRow>> {
+    let row: Option<SessionRow> = sqlx::query_as(
+        "SELECT id, user_id, mode_id, title, summary, agent_id, draft_config, created_at, updated_at \
+         FROM chat_sessions \
+         WHERE draft_config->>'step_id' = $1 \
+           AND draft_config->>'role' = 'builder'"
+    )
+        .bind(step_id.to_string())
+        .fetch_optional(pool)
+        .await
+        .context("Failed to find builder session by step_id")?;
+    Ok(row)
+}
+
+/// Find the L2 manager builder session for a workflow.
+///
+/// Manager builder sessions have `draft_config->>'role' = 'manager_builder'`
+/// and `draft_config->>'workflow_id'` matching the given workflow.
+pub async fn find_manager_builder_session(
+    pool: &PgPool,
+    workflow_id: Uuid,
+) -> Result<Option<SessionRow>> {
+    let row: Option<SessionRow> = sqlx::query_as(
+        "SELECT id, user_id, mode_id, title, summary, agent_id, draft_config, created_at, updated_at \
+         FROM chat_sessions \
+         WHERE draft_config->>'workflow_id' = $1 \
+           AND draft_config->>'role' = 'manager_builder'"
+    )
+        .bind(workflow_id.to_string())
+        .fetch_optional(pool)
+        .await
+        .context("Failed to find manager builder session")?;
+    Ok(row)
+}
+
+/// Batch-check which steps have received initial instructions.
+///
+/// A step is considered "instructed" if its L3 assistant session contains at
+/// least one agent-sourced message with `type="initial_instruction"` in the
+/// content XML.
+pub async fn check_initial_instructions_sent(
+    pool: &PgPool,
+    step_ids: &[Uuid],
+) -> Result<std::collections::HashSet<Uuid>> {
+    if step_ids.is_empty() {
+        return Ok(std::collections::HashSet::new());
+    }
+
+    let step_id_strings: Vec<String> = step_ids.iter().map(|id| id.to_string()).collect();
+
+    let rows: Vec<(String,)> = sqlx::query_as(
+        "SELECT DISTINCT cs.draft_config->>'step_id' \
+         FROM chat_sessions cs \
+         JOIN chat_messages cm ON cm.session_id = cs.id \
+         WHERE cs.draft_config->>'step_id' = ANY($1) \
+           AND COALESCE(cs.draft_config->>'role', 'assistant') = 'assistant' \
+           AND cm.source_type = 'agent' \
+           AND cm.content LIKE '%type=\"initial_instruction\"%'",
+    )
+    .bind(&step_id_strings)
+    .fetch_all(pool)
+    .await
+    .context("Failed to check initial instructions")?;
+
+    Ok(rows
+        .into_iter()
+        .filter_map(|(id_str,)| Uuid::parse_str(&id_str).ok())
+        .collect())
 }
 
 /// Delete a session and its messages

@@ -27,12 +27,16 @@ mod tests;
 ///
 /// Given a plain English instruction and the current step state,
 /// the agent decides what workforce tools to call to configure the step.
+///
+/// Persistent: The `session_id` links to a builder session that accumulates
+/// history across dispatches, so the L4 agent can see prior work.
 pub struct DispatchStrategy {
     system_prompt: String,
     instruction: String,
     state: AppState,
     step_id: Uuid,
     workflow_id: Uuid,
+    session_id: Option<Uuid>,
 }
 
 impl DispatchStrategy {
@@ -66,14 +70,19 @@ impl DispatchStrategy {
     ///
     /// Loads the current step state snapshot and builds a system prompt
     /// that instructs the agent to configure the step.
+    ///
+    /// `session_id` links to the persistent L4 builder session. When present,
+    /// `build_messages()` loads prior dispatch history for continuity.
     pub async fn new(
         state: AppState,
         step_id: Uuid,
         workflow_id: Uuid,
         instruction: String,
+        session_id: Option<Uuid>,
     ) -> Result<Self, String> {
         let board_state_xml = crate::server::hub::board_state::build(
             state.repos().workflows.as_ref(),
+            None, // L4 doesn't need initial_instructions
             crate::server::hub::board_state::BoardStateVariant::Dispatch,
             workflow_id,
             step_id,
@@ -92,6 +101,7 @@ impl DispatchStrategy {
             state,
             step_id,
             workflow_id,
+            session_id,
         })
     }
 }
@@ -133,6 +143,7 @@ impl ExecutionStrategy for DispatchStrategy {
     async fn rebuild_system_prompt(&self) -> Result<Option<String>, HubError> {
         let board_state_xml = crate::server::hub::board_state::build(
             self.state.repos().workflows.as_ref(),
+            None,
             crate::server::hub::board_state::BoardStateVariant::Dispatch,
             self.workflow_id,
             self.step_id,
@@ -150,6 +161,32 @@ impl ExecutionStrategy for DispatchStrategy {
     }
 
     async fn build_messages(&self, _input: &str) -> Result<Vec<Message>, HubError> {
+        if let Some(session_id) = self.session_id {
+            // Load history from the persistent builder session.
+            // The executor already inserted the current instruction as the last
+            // user message, so history includes everything we need.
+            let history = self
+                .state
+                .repos()
+                .sessions
+                .get_session_history(session_id, 20) // 10 pairs max
+                .await
+                .unwrap_or_default();
+
+            if !history.is_empty() {
+                let mut messages = Vec::with_capacity(history.len());
+                for row in &history {
+                    match row.role.as_str() {
+                        "user" => messages.push(Message::user(&row.content)),
+                        "assistant" => messages.push(Message::assistant(&row.content)),
+                        _ => {}
+                    }
+                }
+                return Ok(messages);
+            }
+        }
+
+        // Fallback: no session or empty history
         Ok(vec![Message::user(&self.instruction)])
     }
 

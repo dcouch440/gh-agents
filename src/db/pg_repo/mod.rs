@@ -561,6 +561,21 @@ impl SessionRepo for PgRepo {
         crate::db::find_session_by_step_id(&self.pool, step_id).await
     }
 
+    async fn find_builder_session_by_step_id(&self, step_id: Uuid) -> Result<Option<SessionRow>> {
+        crate::db::find_builder_session_by_step_id(&self.pool, step_id).await
+    }
+
+    async fn find_manager_builder_session(&self, workflow_id: Uuid) -> Result<Option<SessionRow>> {
+        crate::db::find_manager_builder_session(&self.pool, workflow_id).await
+    }
+
+    async fn check_initial_instructions_sent(
+        &self,
+        step_ids: &[Uuid],
+    ) -> Result<std::collections::HashSet<Uuid>> {
+        crate::db::check_initial_instructions_sent(&self.pool, step_ids).await
+    }
+
     async fn link_session_agent(&self, session_id: Uuid, agent_id: Uuid) -> Result<()> {
         crate::db::link_session_agent(&self.pool, session_id, agent_id).await
     }
@@ -2247,12 +2262,11 @@ impl WorkflowRepo for PgRepo {
     // --- Step Plan ---
 
     async fn get_plan(&self, step_id: Uuid) -> Result<Option<String>> {
-        let row = sqlx::query_scalar::<_, String>(
-            "SELECT content FROM step_plan WHERE step_id = $1",
-        )
-        .bind(step_id)
-        .fetch_optional(&self.pool)
-        .await?;
+        let row =
+            sqlx::query_scalar::<_, String>("SELECT content FROM step_plan WHERE step_id = $1")
+                .bind(step_id)
+                .fetch_optional(&self.pool)
+                .await?;
         Ok(row)
     }
 

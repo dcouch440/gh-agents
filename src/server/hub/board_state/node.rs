@@ -40,6 +40,11 @@ pub fn render_node(node: &NodeSnapshot, variant: BoardStateVariant) -> String {
     }
 
     el.attr_opt("receives", node.receives.as_deref());
+    el.attr_if(
+        variant.include_initial_instructions() && node.initial_instructions_sent,
+        "initial_instructions",
+        "sent",
+    );
 
     // L1/L2: agent names as attribute (not rendered as children)
     if !variant.include_agent_children() && !node.agents.is_empty() {
@@ -127,11 +132,7 @@ pub fn render_node(node: &NodeSnapshot, variant: BoardStateVariant) -> String {
     // ── L4: plan ────────────────────────────────────────────────────────
 
     if variant.include_plan() && !node.plan.is_empty() {
-        el.raw(
-            &XmlBuilder::new("plan", indent + 1)
-                .text(&node.plan)
-                .build(),
-        );
+        el.raw(&XmlBuilder::new("plan", indent + 1).text(&node.plan).build());
     }
 
     el.build()
