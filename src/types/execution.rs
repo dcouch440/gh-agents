@@ -5,6 +5,73 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+// ============================================================================
+// Execution Type Discriminator
+// ============================================================================
+
+/// Discriminator for `agent_executions` rows — replaces implicit NULL-pattern
+/// detection with an explicit type tag.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionType {
+    /// Step-level dispatch: background LLM configures a step.
+    Dispatch,
+    /// Workflow-level dispatch: background LLM configures workflow topology.
+    ManagerDispatch,
+    /// Normal workflow step with agent.
+    #[default]
+    DagStep,
+    /// Designer pre-lifecycle: protocol expansion phase.
+    AgentDesigner,
+    /// Workforce pipeline agent execution.
+    PipelineAgent,
+    /// User approval gate (formerly `is_interactive = true`).
+    InteractiveReview,
+    /// Verification agent critiquing primary output.
+    DebateVerification,
+}
+
+impl ExecutionType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Dispatch => "dispatch",
+            Self::ManagerDispatch => "manager_dispatch",
+            Self::DagStep => "dag_step",
+            Self::AgentDesigner => "agent_designer",
+            Self::PipelineAgent => "pipeline_agent",
+            Self::InteractiveReview => "interactive_review",
+            Self::DebateVerification => "debate_verification",
+        }
+    }
+}
+
+impl std::fmt::Display for ExecutionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for ExecutionType {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "dispatch" => Ok(Self::Dispatch),
+            "manager_dispatch" => Ok(Self::ManagerDispatch),
+            "dag_step" => Ok(Self::DagStep),
+            "agent_designer" => Ok(Self::AgentDesigner),
+            "pipeline_agent" => Ok(Self::PipelineAgent),
+            "interactive_review" => Ok(Self::InteractiveReview),
+            "debate_verification" => Ok(Self::DebateVerification),
+            other => Err(anyhow::anyhow!("unknown execution type: {other}")),
+        }
+    }
+}
+
+// ============================================================================
+// Execution Status
+// ============================================================================
+
 /// Standard execution status
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -115,6 +182,45 @@ pub struct RouteDescription {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn execution_type_roundtrip() {
+        let variants = [
+            ExecutionType::Dispatch,
+            ExecutionType::ManagerDispatch,
+            ExecutionType::DagStep,
+            ExecutionType::AgentDesigner,
+            ExecutionType::PipelineAgent,
+            ExecutionType::InteractiveReview,
+            ExecutionType::DebateVerification,
+        ];
+        for variant in variants {
+            let s = variant.to_string();
+            let parsed: ExecutionType = s.parse().unwrap();
+            assert_eq!(parsed, variant, "roundtrip failed for {s}");
+            assert_eq!(variant.as_str(), s.as_str());
+        }
+    }
+
+    #[test]
+    fn execution_type_default_is_dag_step() {
+        assert_eq!(ExecutionType::default(), ExecutionType::DagStep);
+    }
+
+    #[test]
+    fn execution_type_serde_roundtrip() {
+        let variant = ExecutionType::ManagerDispatch;
+        let json = serde_json::to_string(&variant).unwrap();
+        assert_eq!(json, "\"manager_dispatch\"");
+        let parsed: ExecutionType = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, variant);
+    }
+
+    #[test]
+    fn execution_type_unknown_returns_error() {
+        let result: Result<ExecutionType, _> = "nonexistent".parse();
+        assert!(result.is_err());
+    }
 
     #[test]
     fn envelope_serde_roundtrip() {

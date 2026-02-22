@@ -1,5 +1,15 @@
+type ExecutionType =
+  | 'dispatch'
+  | 'manager_dispatch'
+  | 'dag_step'
+  | 'agent_designer'
+  | 'pipeline_agent'
+  | 'interactive_review'
+  | 'debate_verification'
+
 type AgentExecution = {
   id: string
+  execution_type: ExecutionType
   stage_execution_id: string
   agent_id: string
   workflow_step_id: string | null
@@ -59,6 +69,7 @@ type SendMessageResponse = {
 }
 
 export type {
+  ExecutionType,
   AgentExecution,
   AgentExecutionStatus,
   ExecutionMessage,

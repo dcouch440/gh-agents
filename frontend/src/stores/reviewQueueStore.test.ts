@@ -15,6 +15,7 @@ vi.mock('@/api', () => ({
 
 const exec1: AgentExecution = {
   id: 'e1',
+  execution_type: 'interactive_review',
   stage_execution_id: 'se1',
   agent_id: 'a1',
   workflow_step_id: null,

@@ -886,9 +886,9 @@ pub trait WorkflowRepo: Send + Sync {
 /// Input for creating an agent execution record.
 #[derive(Debug, Clone)]
 pub struct CreateAgentExecutionInput {
+    pub execution_type: crate::types::ExecutionType,
     pub agent_id: Option<Uuid>,
     pub workflow_step_id: Option<Uuid>,
-    pub is_interactive: bool,
     pub parent_agent_execution_id: Option<Uuid>,
     pub system_prompt_rendered: String,
     pub input: String,
@@ -930,22 +930,22 @@ pub trait AgentExecutionRepo: Send + Sync {
         agent_execution_id: Uuid,
     ) -> Result<Vec<ExecutionMessageRow>>;
 
-    /// List completed non-interactive agent executions for a set of workflow step IDs.
-    /// Used to reconstruct DAG state on resume.
+    /// List completed non-review agent executions for a set of workflow step IDs.
+    /// Filters out `execution_type = 'interactive_review'`. Used to reconstruct DAG state on resume.
     async fn list_completed_executions_for_step_ids(
         &self,
         workflow_step_ids: &[Uuid],
     ) -> Result<Vec<AgentExecutionRow>>;
 
-    /// List interactive agent executions for a specific workflow step.
-    /// Used to check if all interactive reviews are approved before resuming.
+    /// List interactive review executions (`execution_type = 'interactive_review'`) for a step.
+    /// Used to check if all reviews are approved before resuming the DAG.
     async fn list_interactive_executions_for_step(
         &self,
         workflow_step_id: Uuid,
     ) -> Result<Vec<AgentExecutionRow>>;
 
-    /// List interactive agent executions for a user, optionally filtered by status.
-    /// Joins through workflow_executions to filter by user_id.
+    /// List interactive review executions for a user, optionally filtered by status.
+    /// Matches `execution_type = 'interactive_review'`. Joins through workflow_executions.
     async fn list_agent_executions(
         &self,
         user_id: Uuid,
@@ -976,14 +976,10 @@ pub trait AgentExecutionRepo: Send + Sync {
     ) -> Result<AgentExecutionRow>;
 
     /// Update the trace JSONB column on an agent execution.
-    async fn update_execution_trace(
-        &self,
-        id: Uuid,
-        trace: serde_json::Value,
-    ) -> Result<()>;
+    async fn update_execution_trace(&self, id: Uuid, trace: serde_json::Value) -> Result<()>;
 
     /// Get the latest dispatch execution for a workflow step.
-    /// Dispatch executions have `agent_id IS NULL` and `workflow_execution_id IS NULL`.
+    /// Matches `execution_type IN ('dispatch', 'manager_dispatch')`.
     async fn get_latest_dispatch_execution_for_step(
         &self,
         step_id: Uuid,

@@ -27,6 +27,7 @@ use crate::db::traits::{
 };
 use crate::llm::{LLMProvider, LLMRequest, LLMResponse, Message, Role};
 use crate::server::hub::strategies::compute_cost;
+use crate::types::ExecutionType;
 
 use super::{ExecutionFilter, FilterContext, HubError, ResponseAction};
 
@@ -312,9 +313,9 @@ impl ExecutionFilter for DebateVerificationFilter {
                 let verification_ae_id = if let Some(ref ae_repo) = ae_repo {
                     match ae_repo
                         .create_agent_execution(CreateAgentExecutionInput {
+                            execution_type: ExecutionType::DebateVerification,
                             agent_id: Some(verifier_id),
                             workflow_step_id: step_id,
-                            is_interactive: false,
                             parent_agent_execution_id: parent_execution_id,
                             system_prompt_rendered: verifier_system.clone(),
                             input: verifier_user.clone(),

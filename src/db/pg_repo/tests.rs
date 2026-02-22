@@ -9,7 +9,7 @@ mod tests {
         CreateWorkflowInput, DocumentRepo, RoomRepo, TokenLedgerRepo, WorkflowCollectionRepo,
         WorkflowRepo,
     };
-    use crate::types::UserId;
+    use crate::types::{ExecutionType, UserId};
 
     // ============================================================================
     // Test helpers
@@ -546,7 +546,7 @@ mod tests {
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent.id),
                 workflow_step_id: None,
-                is_interactive: false,
+                execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
                 system_prompt_rendered: "You are a test agent.".to_string(),
                 input: "What is 2+2?".to_string(),
@@ -593,7 +593,7 @@ mod tests {
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent.id),
                 workflow_step_id: None,
-                is_interactive: false,
+                execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
                 system_prompt_rendered: "sys".to_string(),
                 input: "input1".to_string(),
@@ -625,7 +625,7 @@ mod tests {
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent.id),
                 workflow_step_id: None,
-                is_interactive: false,
+                execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
                 system_prompt_rendered: "sys".to_string(),
                 input: "input2".to_string(),
@@ -647,7 +647,7 @@ mod tests {
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent.id),
                 workflow_step_id: None,
-                is_interactive: false,
+                execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
                 system_prompt_rendered: "sys".to_string(),
                 input: "input3".to_string(),
@@ -692,7 +692,7 @@ mod tests {
                 .create_agent_execution(CreateAgentExecutionInput {
                     agent_id: Some(agent.id),
                     workflow_step_id: None,
-                    is_interactive: true,
+                    execution_type: ExecutionType::InteractiveReview,
                     parent_agent_execution_id: None,
                     system_prompt_rendered: "sys".to_string(),
                     input: "input".to_string(),
@@ -750,7 +750,7 @@ mod tests {
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent.id),
                 workflow_step_id: Some(step_a.id),
-                is_interactive: false,
+                execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
                 system_prompt_rendered: "s".to_string(),
                 input: "i".to_string(),
@@ -768,7 +768,7 @@ mod tests {
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent.id),
                 workflow_step_id: Some(step_b.id),
-                is_interactive: false,
+                execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
                 system_prompt_rendered: "s".to_string(),
                 input: "i".to_string(),
@@ -786,7 +786,7 @@ mod tests {
         repo.create_agent_execution(CreateAgentExecutionInput {
             agent_id: Some(agent.id),
             workflow_step_id: Some(step_a.id),
-            is_interactive: false,
+            execution_type: ExecutionType::DagStep,
             parent_agent_execution_id: None,
             system_prompt_rendered: "s".to_string(),
             input: "i".to_string(),
@@ -802,7 +802,7 @@ mod tests {
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent.id),
                 workflow_step_id: Some(step_a.id),
-                is_interactive: true,
+                execution_type: ExecutionType::InteractiveReview,
                 parent_agent_execution_id: None,
                 system_prompt_rendered: "s".to_string(),
                 input: "i".to_string(),
@@ -847,7 +847,7 @@ mod tests {
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent.id),
                 workflow_step_id: Some(step.id),
-                is_interactive: false,
+                execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
                 system_prompt_rendered: "s".to_string(),
                 input: "i".to_string(),
@@ -1266,7 +1266,7 @@ mod tests {
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent_a.id),
                 workflow_step_id: None,
-                is_interactive: false,
+                execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
                 system_prompt_rendered: "sys".to_string(),
                 input: "input".to_string(),
@@ -1280,7 +1280,7 @@ mod tests {
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent_b.id),
                 workflow_step_id: None,
-                is_interactive: false,
+                execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
                 system_prompt_rendered: "sys".to_string(),
                 input: "input".to_string(),

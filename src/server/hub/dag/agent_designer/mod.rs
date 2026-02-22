@@ -31,6 +31,7 @@ use crate::server::hub::strategies::agent_designer::{AgentDesignerConfig, AgentD
 use crate::server::hub::strategies::compute_cost;
 use crate::server::hub::streaming::NullSink;
 use crate::server::state::AppState;
+use crate::types::ExecutionType;
 use crate::types::UserId;
 
 use super::designer_input::{AgentDefinition, DesignerInput, ToolDescription, UpstreamContext};
@@ -208,9 +209,9 @@ pub(crate) async fn run_agent_designer(
     let ae_repo = &*state.repos().agent_executions;
     let designer_ae_id = match ae_repo
         .create_agent_execution(CreateAgentExecutionInput {
+            execution_type: ExecutionType::AgentDesigner,
             agent_id: None,
             workflow_step_id: Some(step.id),
-            is_interactive: false,
             parent_agent_execution_id: None,
             system_prompt_rendered: protocol_ctx.system_prompt.clone(),
             input: protocol_ctx.user_prompt.clone(),

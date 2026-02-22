@@ -331,6 +331,7 @@ pub struct StepDocumentRow {
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct AgentExecutionRow {
     pub id: Uuid,
+    pub execution_type: String,
     pub agent_id: Option<Uuid>,
     pub workflow_step_id: Option<Uuid>,
     pub workflow_execution_id: Option<Uuid>,
@@ -901,6 +902,7 @@ impl Default for AgentExecutionRow {
     fn default() -> Self {
         Self {
             id: Uuid::nil(),
+            execution_type: "dag_step".to_string(),
             agent_id: None,
             workflow_step_id: None,
             workflow_execution_id: None,

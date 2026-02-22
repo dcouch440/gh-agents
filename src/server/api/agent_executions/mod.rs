@@ -23,6 +23,7 @@ use crate::server::state::{AppState, StreamChunk};
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct AgentExecutionResponse {
     pub id: Uuid,
+    pub execution_type: String,
     pub agent_id: Option<Uuid>,
     pub workflow_step_id: Option<Uuid>,
     pub is_interactive: bool,
@@ -41,6 +42,7 @@ impl From<crate::db::AgentExecutionRow> for AgentExecutionResponse {
     fn from(r: crate::db::AgentExecutionRow) -> Self {
         Self {
             id: r.id,
+            execution_type: r.execution_type,
             agent_id: r.agent_id,
             workflow_step_id: r.workflow_step_id,
             is_interactive: r.is_interactive,

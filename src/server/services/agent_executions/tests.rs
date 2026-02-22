@@ -8,10 +8,11 @@ mod tests {
     use crate::server::services::agent_executions::*;
     use crate::server::services::ServiceError;
 
-    fn make_execution(is_interactive: bool, status: &str) -> AgentExecutionRow {
+    fn make_execution(execution_type: &str, status: &str) -> AgentExecutionRow {
         AgentExecutionRow {
             workflow_step_id: Some(Uuid::new_v4()),
-            is_interactive,
+            execution_type: execution_type.to_string(),
+            is_interactive: execution_type == "interactive_review",
             status: status.to_string(),
             input: "test input".to_string(),
             output: Some("test output".to_string()),
@@ -30,7 +31,7 @@ mod tests {
 
     #[tokio::test]
     async fn approve_rejects_non_interactive() {
-        let ae = make_execution(false, "completed");
+        let ae = make_execution("dag_step", "completed");
         let ae_id = ae.id;
         let mut repo = MockAgentExecutionRepo::new();
         repo.expect_get_agent_execution()
@@ -42,7 +43,7 @@ mod tests {
 
     #[tokio::test]
     async fn approve_rejects_wrong_status() {
-        let ae = make_execution(true, "completed");
+        let ae = make_execution("interactive_review", "completed");
         let ae_id = ae.id;
         let mut repo = MockAgentExecutionRepo::new();
         repo.expect_get_agent_execution()
@@ -54,7 +55,7 @@ mod tests {
 
     #[tokio::test]
     async fn approve_succeeds_and_signals_resume() {
-        let ae = make_execution(true, "awaiting_user");
+        let ae = make_execution("interactive_review", "awaiting_user");
         let ae_id = ae.id;
         let step_id = ae.workflow_step_id.unwrap();
         let ae_clone = ae.clone();

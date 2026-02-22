@@ -259,6 +259,7 @@ import type { AgentExecution, TreeAgentExecution, ExecutionMessage } from '@/typ
 
 export const mockAgentExecution: AgentExecution = {
   id: 'exec-001',
+  execution_type: 'interactive_review',
   stage_execution_id: 'stage-001',
   agent_id: 'agent-001',
   workflow_step_id: 'step-001',
