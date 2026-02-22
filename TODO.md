@@ -52,4 +52,6 @@ Check Dispatch History L3:
   └─ Task 1: ...
   ...
 
-Add auto increment on node creation.
+Builder built node without agents.
+
+Add expansion layer between L2 and L3.
