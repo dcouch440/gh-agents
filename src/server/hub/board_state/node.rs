@@ -47,6 +47,14 @@ pub fn render_node(node: &NodeSnapshot, variant: BoardStateVariant) -> String {
 
     el.text(&node.summary);
 
+    // ── Compressed status (L1/L2) ───────────────────────────────────────
+
+    if variant.include_compressed_status() {
+        if let Some(ref status) = node.compressed_status {
+            el.raw(&XmlBuilder::new("status", indent + 1).text(status).build());
+        }
+    }
+
     // ── Asking (L1 only) ────────────────────────────────────────────────
 
     if variant.include_asking() {

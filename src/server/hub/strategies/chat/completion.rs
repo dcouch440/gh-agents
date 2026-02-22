@@ -71,9 +71,15 @@ pub(super) async fn on_chat_complete(
         }
     }
 
-    // Spawn background belief extraction for step-scoped chats
+    // Spawn background belief extraction + question extraction for step-scoped chats
     if let (Some(ctx), Some(session_id)) = (step_context, session_id) {
         crate::server::hub::chat_beliefs::spawn_chat_belief_extraction(
+            state.clone(),
+            ctx.workflow_id,
+            ctx.step_id,
+            session_id,
+        );
+        crate::server::hub::question_extraction::spawn_question_extraction(
             state.clone(),
             ctx.workflow_id,
             ctx.step_id,

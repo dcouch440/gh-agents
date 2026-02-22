@@ -543,6 +543,27 @@ mod tests {
             async fn update_board_overview_summary(&self, _: Uuid, _: &str) -> Result<()> {
                 unimplemented!()
             }
+            // Step question state stubs
+            async fn get_step_question_state(
+                &self,
+                _: Uuid,
+            ) -> Result<Option<crate::db::StepQuestionStateRow>> {
+                unimplemented!()
+            }
+            async fn get_step_question_states(
+                &self,
+                _: &[Uuid],
+            ) -> Result<Vec<crate::db::StepQuestionStateRow>> {
+                unimplemented!()
+            }
+            async fn upsert_step_question_state(
+                &self,
+                _: Uuid,
+                _: &str,
+                _: Option<String>,
+            ) -> Result<()> {
+                unimplemented!()
+            }
             // Run template stubs
             async fn create_template(
                 &self,

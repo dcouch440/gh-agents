@@ -1036,6 +1036,15 @@ impl Default for StepOutputRow {
     }
 }
 
+/// Row type for step question state (compressed status + pending question).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+pub struct StepQuestionStateRow {
+    pub step_id: Uuid,
+    pub status_text: String,
+    pub question_text: Option<String>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// Type alias for the database pool
 pub type DbPool = PgPool;
 

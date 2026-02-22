@@ -152,6 +152,12 @@ pub mod vars {
         pub const BOARD_BELIEFS: &str = "ChatBelief.board_beliefs";
     }
 
+    /// Variables for question extraction prompts.
+    pub mod question_extraction {
+        pub const NODE_NAME: &str = "QuestionExtraction.node_name";
+        pub const CONVERSATION: &str = "QuestionExtraction.conversation";
+    }
+
     /// Variables for the Agent Designer pre-lifecycle prompt generation.
     pub mod designer {
         pub const ARCHETYPE: &str = "Designer.archetype";
@@ -302,6 +308,13 @@ pub mod roles {
 
     /// Manager builder system prompt (L2 — topology + dispatch agent).
     pub const MANAGER_BUILDER_SYSTEM: &str = include_str!("../../config/manager/builder/system.md");
+
+    /// Question extraction (Tier 3 compresses node responses into status + question).
+    pub static QUESTION_EXTRACTOR: RoleDefinition = RoleDefinition {
+        system: include_str!("../../config/services/question_extraction/system.md"),
+        prompt: include_str!("../../config/services/question_extraction/prompt.md"),
+        response: None,
+    };
 }
 
 // ---------------------------------------------------------------------------

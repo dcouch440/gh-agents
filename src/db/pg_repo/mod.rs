@@ -24,9 +24,9 @@ use crate::db::{
     PromptTemplateRow, ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow,
     ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomStepConfigRow,
     RoomStepMemberRow, RoomTranscriptEntry, RunSnapshotRow, RunTemplateRow, SessionRow,
-    StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow,
-    TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow, ToolRow,
-    WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
+    StepDocumentRow, StepInputRow, StepOutputRow, StepQuestionStateRow, StepRoutingRuleRow,
+    SystemConfigRow, TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow,
+    ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
     WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
 };
 use crate::types::{User, UserId};
@@ -2310,6 +2310,55 @@ impl WorkflowRepo for PgRepo {
             .bind(workflow_id)
             .execute(&self.pool)
             .await?;
+        Ok(())
+    }
+
+    // --- Step Question State ---
+
+    async fn get_step_question_state(&self, step_id: Uuid) -> Result<Option<StepQuestionStateRow>> {
+        let row = sqlx::query_as::<_, StepQuestionStateRow>(
+            "SELECT step_id, status_text, question_text, updated_at \
+             FROM step_question_state WHERE step_id = $1",
+        )
+        .bind(step_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_step_question_states(
+        &self,
+        step_ids: &[Uuid],
+    ) -> Result<Vec<StepQuestionStateRow>> {
+        let rows = sqlx::query_as::<_, StepQuestionStateRow>(
+            "SELECT step_id, status_text, question_text, updated_at \
+             FROM step_question_state WHERE step_id = ANY($1)",
+        )
+        .bind(step_ids)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn upsert_step_question_state(
+        &self,
+        step_id: Uuid,
+        status_text: &str,
+        question_text: Option<String>,
+    ) -> Result<()> {
+        sqlx::query(
+            r#"
+            INSERT INTO step_question_state (step_id, status_text, question_text, updated_at)
+            VALUES ($1, $2, $3, now())
+            ON CONFLICT (step_id) DO UPDATE
+            SET status_text = $2, question_text = $3, updated_at = now()
+            "#,
+        )
+        .bind(step_id)
+        .bind(status_text)
+        .bind(question_text)
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 
