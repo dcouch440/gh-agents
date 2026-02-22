@@ -19,6 +19,7 @@ const mockEntry: DispatchEntry = {
 }
 
 const mockSelectByStepId = vi.fn()
+const mockSelectActiveWorkflowId = vi.fn()
 
 vi.mock('@/stores', () => ({
   useStore: (_store: unknown, selector: (s: unknown) => unknown) => selector({ byStep: {} }),
@@ -26,6 +27,11 @@ vi.mock('@/stores', () => ({
     store: {},
     selectByStepId: (stepId: string) => mockSelectByStepId(stepId) as (s: unknown) => DispatchEntry | null,
     hydrateFromApi: vi.fn(),
+    hydrateFromHistory: vi.fn(),
+  },
+  workflowStore: {
+    store: {},
+    selectActiveWorkflowId: () => mockSelectActiveWorkflowId() as string | null,
   },
 }))
 
@@ -34,6 +40,9 @@ vi.mock('@/api', () => ({
     dispatch: {
       listForStep: vi.fn().mockResolvedValue({ tasks: [] }),
       trace: vi.fn().mockResolvedValue({ trace: [] }),
+    },
+    workflows: {
+      getStepDispatchHistory: vi.fn().mockResolvedValue([]),
     },
   },
 }))
@@ -47,6 +56,7 @@ vi.mock('./DispatchTraceView', () => ({
 describe('DispatchTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockSelectActiveWorkflowId.mockReturnValue('wf-1')
   })
 
   it('renders empty state when no dispatch entry exists', () => {

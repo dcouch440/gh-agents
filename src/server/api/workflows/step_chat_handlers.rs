@@ -11,6 +11,7 @@ use axum::{
 use serde::Serialize;
 use uuid::Uuid;
 
+use crate::server::api::chat::ChatMessage;
 use crate::server::api::sessions::SessionResponse;
 use crate::server::api::AppError;
 use crate::server::auth as auth_utils;
@@ -304,4 +305,52 @@ pub async fn get_step_chat_debug(
         system_prompt,
         messages,
     }))
+}
+
+/// GET /api/workflows/:wid/steps/:sid/dispatch/history
+///
+/// Returns the builder session's message history for a step — the persisted
+/// dispatch conversation (instructions + outcomes).
+pub async fn get_step_dispatch_history(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(p): Path<StepChatPath>,
+) -> Result<Json<Vec<ChatMessage>>, AppError> {
+    // Verify workflow ownership
+    let repo = &state.repos().workflows;
+    let wf = repo
+        .get_workflow(p.wid)
+        .await?
+        .ok_or(AppError::not_found("Workflow"))?;
+    if wf.user_id != auth.user_id.0 {
+        return Err(AppError::not_found("Workflow"));
+    }
+
+    // Find the builder session for this step
+    let session = state
+        .repos()
+        .sessions
+        .find_builder_session_by_step_id(p.sid)
+        .await?
+        .ok_or(AppError::not_found("Dispatch session"))?;
+
+    // Get message history
+    let rows = state
+        .repos()
+        .sessions
+        .get_session_history(session.id, 100)
+        .await?;
+
+    let messages: Vec<ChatMessage> = rows
+        .into_iter()
+        .map(|m| ChatMessage {
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            timestamp: m.timestamp,
+            source_type: m.source_type,
+        })
+        .collect();
+
+    Ok(Json(messages))
 }

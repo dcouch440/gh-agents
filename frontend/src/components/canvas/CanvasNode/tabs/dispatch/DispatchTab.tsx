@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import { useStore, dispatchStore } from '@/stores'
+import { useStore, dispatchStore, workflowStore } from '@/stores'
 import { api } from '@/api'
 import { DispatchTraceView } from './DispatchTraceView'
 
@@ -10,28 +10,42 @@ type DispatchTabProps = {
 }
 
 function DispatchTab({ stepId }: DispatchTabProps) {
+  const workflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
   const entry = useStore(dispatchStore.store, dispatchStore.selectByStepId(stepId))
   const fetchedRef = useRef(false)
 
   // Hydrate from API if no entry in store (page refresh / late tab open)
   useEffect(() => {
-    if (entry !== null || fetchedRef.current) return
+    if (entry !== null || fetchedRef.current || !workflowId) return
     fetchedRef.current = true
 
     const hydrate = async () => {
-      const resp = await api.dispatch.listForStep(stepId)
-      if (resp.tasks.length === 0) return
+      // First try the in-memory task registry (works if server hasn't restarted)
+      try {
+        const resp = await api.dispatch.listForStep(stepId)
+        if (resp.tasks.length > 0) {
+          const latest = resp.tasks[resp.tasks.length - 1]
+          if (latest !== undefined) {
+            const traceResp = await api.dispatch.trace(latest.execution_id)
+            dispatchStore.hydrateFromApi(traceResp)
+            return
+          }
+        }
+      } catch {
+        // Task registry empty or unavailable — fall through to DB
+      }
 
-      // Pick the most recent task
-      const latest = resp.tasks[resp.tasks.length - 1]
-      if (latest === undefined) return
-
-      const traceResp = await api.dispatch.trace(latest.execution_id)
-      dispatchStore.hydrateFromApi(traceResp)
+      // Fall back to builder session history (persisted in DB)
+      try {
+        const messages = await api.workflows.getStepDispatchHistory(workflowId, stepId)
+        dispatchStore.hydrateFromHistory(stepId, messages)
+      } catch {
+        // No dispatch history — leave empty state
+      }
     }
 
     void hydrate()
-  }, [stepId, entry])
+  }, [stepId, workflowId, entry])
 
   if (entry === null) {
     return (

@@ -257,6 +257,70 @@ const hydrateFromApi = (resp: DispatchTraceResponse): void => {
   }
 }
 
+// ── History hydration (from builder session messages) ──────────────────────
+
+type HistoryMessage = {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: string
+  source_type: string | null
+}
+
+/**
+ * Hydrate a DispatchEntry from the builder session's persisted messages.
+ * Used when the in-memory trace is gone (server restart / cleanup).
+ * Creates a synthetic entry with the last user instruction and assistant response.
+ */
+const hydrateFromHistory = (stepId: string, messages: HistoryMessage[]): void => {
+  if (messages.length === 0) return
+
+  // Don't overwrite a running entry with historical data
+  const existing = store.getState().byStep[stepId]
+  if (existing?.status === 'running') return
+
+  // Find the last user instruction and its following assistant response
+  let lastUserIdx = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i]?.role === 'user') {
+      lastUserIdx = i
+      break
+    }
+  }
+
+  if (lastUserIdx === -1) return
+
+  const userMsg = messages[lastUserIdx]
+  if (!userMsg) return
+
+  // Collect assistant response(s) that follow the last user message
+  let responseContent = ''
+  for (let i = lastUserIdx + 1; i < messages.length; i++) {
+    const msg = messages[i]
+    if (msg?.role === 'assistant') {
+      responseContent += (responseContent.length > 0 ? '\n' : '') + msg.content
+    }
+  }
+
+  const entry: DispatchEntry = {
+    executionId: '',
+    stepId,
+    status: 'completed',
+    instruction: userMsg.content,
+    message: null,
+    summary: responseContent.length > 0 ? responseContent : null,
+    error: null,
+    startedAt: userMsg.timestamp,
+    trace: responseContent.length > 0
+      ? [{ type: 'token', content: responseContent, ts: userMsg.timestamp }]
+      : [],
+    tokenBuffer: responseContent,
+  }
+
+  store.setState((s) => ({ byStep: { ...s.byStep, [stepId]: entry } }))
+  scheduleCleanup(stepId)
+}
+
 // ── Export ───────────────────────────────────────────────────────────────────
 
 export const dispatchStore = {
@@ -268,6 +332,7 @@ export const dispatchStore = {
   selectTokenBuffer,
   handleWsEvent,
   hydrateFromApi,
+  hydrateFromHistory,
 }
 
 export type { DispatchEntry, DispatchState, DispatchStatus, DispatchTraceEvent }
