@@ -1,5 +1,5 @@
 import type { Agent } from '@/types/agent'
-import type { Task } from '@/types/task'
+
 import type { FeedItem } from '@/types/feed'
 import type { UsageSummary } from '@/types/stats'
 import type { ChatMessage, Session, Mode } from '@/types/session'
@@ -28,30 +28,6 @@ export const mockAgent: Agent = {
 export const mockAgentUpdated: Agent = {
   ...mockAgent,
   status: 'working',
-}
-
-export const mockTask: Task = {
-  id: 'task-001',
-  slice_id: null,
-  title: 'Test task',
-  description: 'A task for testing',
-  assigned_agent: null,
-  status: 'pending',
-  priority: 'normal',
-  context_files: [],
-  metadata: null,
-  depends_on: [],
-  retry_count: 0,
-  max_retries: 3,
-  last_error: null,
-  created_at: '2025-01-01T00:00:00Z',
-  updated_at: '2025-01-01T00:00:00Z',
-}
-
-export const mockTaskCompleted: Task = {
-  ...mockTask,
-  status: 'completed',
-  updated_at: '2025-01-01T01:00:00Z',
 }
 
 export const mockFeedItem: FeedItem = {

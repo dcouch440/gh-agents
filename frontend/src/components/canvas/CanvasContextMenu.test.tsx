@@ -125,6 +125,7 @@ describe('CanvasContextMenu', () => {
     // Override selectSteps to return an input step
     const { workflowStore: ws } = await import('@/stores')
     const inputStep = { ...mockStep, execution_mode: 'input' }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call -- mock spying on store selector
     vi.spyOn(ws, 'selectSteps' as never).mockReturnValue([inputStep])
 
     const user = userEvent.setup()
@@ -155,6 +156,7 @@ describe('CanvasContextMenu', () => {
   it('does not create manager step when one already exists', async () => {
     const { workflowStore: ws } = await import('@/stores')
     const managerStep = { ...mockStep, execution_mode: 'manager' }
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call -- mock spying on store selector
     vi.spyOn(ws, 'selectSteps' as never).mockReturnValue([managerStep])
 
     const user = userEvent.setup()

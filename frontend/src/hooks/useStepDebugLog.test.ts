@@ -14,7 +14,7 @@ vi.mock('@/api', () => ({
 
 vi.mock('@/stores', () => ({
   useStore: (_store: unknown, selector: unknown) => {
-    if (selector === mockSelectActiveWorkflowId) return mockSelectActiveWorkflowId()
+    if (selector === mockSelectActiveWorkflowId) return mockSelectActiveWorkflowId() as string | null
     return null
   },
   workflowStore: {

@@ -42,7 +42,7 @@ const fetchAll = async (): Promise<void> => {
   store.setState({ loading: true, error: null })
   try {
     const data = await api.results.list()
-    store.setState({ items: nmFromArray(data as Result[]), loading: false })
+    store.setState({ items: nmFromArray(data), loading: false })
   } catch (e) {
     store.setState({ loading: false, error: extractError('results', e) })
   }

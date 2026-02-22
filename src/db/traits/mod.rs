@@ -974,6 +974,20 @@ pub trait AgentExecutionRepo: Send + Sync {
         id: Uuid,
         is_exemplary: bool,
     ) -> Result<AgentExecutionRow>;
+
+    /// Update the trace JSONB column on an agent execution.
+    async fn update_execution_trace(
+        &self,
+        id: Uuid,
+        trace: serde_json::Value,
+    ) -> Result<()>;
+
+    /// Get the latest dispatch execution for a workflow step.
+    /// Dispatch executions have `agent_id IS NULL` and `workflow_execution_id IS NULL`.
+    async fn get_latest_dispatch_execution_for_step(
+        &self,
+        step_id: Uuid,
+    ) -> Result<Option<AgentExecutionRow>>;
 }
 
 // ============================================================================
