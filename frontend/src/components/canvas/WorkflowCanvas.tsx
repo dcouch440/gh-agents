@@ -25,6 +25,7 @@ import { useEnterFocusMode } from './useEnterFocusMode'
 import { useCanvasKeyboard } from './useCanvasKeyboard'
 import { useContextMenuState } from './useContextMenuState'
 import { useTowerLayout } from './useTowerLayout'
+import { usePlacementEngine } from './placement'
 
 function WorkflowCanvasInner() {
   const theme = useTheme()
@@ -46,6 +47,9 @@ function WorkflowCanvasInner() {
   const autoSave = useAutoSave(true)
 
   useCanvasFetch(agents, steps)
+
+  // Auto-place steps with null positions (manager-created nodes)
+  usePlacementEngine(steps, edges)
 
   // Build lookup maps for node data enrichment
   const { lookups, protocolGroups, protocolsByStepLookup } = useCanvasLookups(
