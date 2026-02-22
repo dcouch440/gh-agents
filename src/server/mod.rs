@@ -317,6 +317,10 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::WORKFLOW_STEP_CHAT_DEBUG,
             get(api::get_step_chat_debug),
         )
+        .route(
+            routes::WORKFLOW_STEP_DISPATCH_HISTORY,
+            get(api::get_step_dispatch_history),
+        )
         .route(routes::WORKFLOW_STEP_CONFIG, get(api::get_step_config))
         .route(routes::WORKFLOW_STEP_PIN, post(api::toggle_step_pin))
         .route(routes::WORKFLOW_STEP_LAST_RUN, get(api::get_step_last_run))

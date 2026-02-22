@@ -331,6 +331,9 @@ const workflows = freeze({
   getStepChatDebug: (workflowId: string, stepId: string, config?: RequestConfig) =>
     baseApi.get<StepChatDebugResponse>(API.STEP_CHAT_DEBUG(workflowId, stepId), config),
 
+  getStepDispatchHistory: (workflowId: string, stepId: string, config?: RequestConfig) =>
+    baseApi.get<ChatMessage[]>(API.STEP_DISPATCH_HISTORY(workflowId, stepId), config),
+
   getStepLastRun: (workflowId: string, stepId: string, config?: RequestConfig) =>
     baseApi.get<StepLastRunResponse>(API.STEP_LAST_RUN(workflowId, stepId), config),
 

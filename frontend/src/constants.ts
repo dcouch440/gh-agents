@@ -148,6 +148,7 @@ export const API = {
   STEP_CHAT_SESSION: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}/chat/session`,
   STEP_CHAT_MESSAGES: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}/chat/messages`,
   STEP_CHAT_DEBUG: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}/chat/debug`,
+  STEP_DISPATCH_HISTORY: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}/dispatch/history`,
   STEP_LAST_RUN: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}/last-run`,
   WORKFLOW_RUN: (id: string) => `/workflows/${id}/run`,
   WORKFLOW_WORKSHOP: (id: string) => `/workflows/${id}/workshop`,
