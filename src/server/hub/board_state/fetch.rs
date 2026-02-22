@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 use uuid::Uuid;
 
 use crate::db::traits::WorkflowRepo;
-use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
+use crate::db::{StepQuestionStateRow, WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::server::tools::shared::classify_content_status;
 
 use super::types::*;
@@ -35,7 +35,15 @@ pub async fn fetch_node(
 
     let edges = repo.list_edges(workflow_id).await?;
 
-    assemble_node(repo, &step, &edges, None).await
+    let mut node = assemble_node(repo, &step, &edges, None).await?;
+
+    // Inject question state (L3/L4 don't render it, but keep data consistent)
+    if let Ok(Some(qs)) = repo.get_step_question_state(step_id).await {
+        node.compressed_status = Some(qs.status_text);
+        node.asking = qs.question_text;
+    }
+
+    Ok(node)
 }
 
 /// Fetch all visible nodes in a workflow (L1/L2 — all-nodes scope).
@@ -55,6 +63,14 @@ pub async fn fetch_board(repo: &dyn WorkflowRepo, workflow_id: Uuid) -> Result<B
     let steps_map: HashMap<Uuid, WorkflowStepRow> =
         all_steps.iter().map(|s| (s.id, s.clone())).collect();
 
+    // Batch-load question states for all steps
+    let step_ids: Vec<Uuid> = all_steps.iter().map(|s| s.id).collect();
+    let question_states = repo.get_step_question_states(&step_ids).await?;
+    let question_map: HashMap<Uuid, StepQuestionStateRow> = question_states
+        .into_iter()
+        .map(|qs| (qs.step_id, qs))
+        .collect();
+
     let mut nodes = Vec::new();
     let mut all_capabilities: HashSet<String> = HashSet::new();
 
@@ -63,7 +79,13 @@ pub async fn fetch_board(repo: &dyn WorkflowRepo, workflow_id: Uuid) -> Result<B
             continue;
         }
 
-        let node = assemble_node(repo, step, &all_edges, Some(&steps_map)).await?;
+        let mut node = assemble_node(repo, step, &all_edges, Some(&steps_map)).await?;
+
+        // Inject question state
+        if let Some(qs) = question_map.get(&step.id) {
+            node.compressed_status = Some(qs.status_text.clone());
+            node.asking = qs.question_text.clone();
+        }
 
         for cap in &node.capabilities {
             all_capabilities.insert(cap.clone());
@@ -158,12 +180,13 @@ async fn assemble_node(
         capabilities,
         failure_mode,
         summary,
+        compressed_status: None, // populated by caller from step_question_state
         agents,
         input_ports,
         output_ports,
         incoming_context,
         notes,
-        asking: None, // populated by manager node layer (not yet built)
+        asking: None, // populated by caller from step_question_state
         receives,
     })
 }

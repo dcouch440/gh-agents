@@ -40,6 +40,7 @@ mod tests {
                 agent_count,
                 if agent_count == 1 { "" } else { "s" }
             ),
+            compressed_status: None,
             agents,
             input_ports: vec![],
             output_ports: vec![],
@@ -81,6 +82,7 @@ mod tests {
                 make_agent("Formatter", &[], &["Scraper"], "Formats output"),
             ],
         );
+        node1.compressed_status = Some("Ready for web scraping".to_string());
         node1.asking = Some("Which companies should we target?".to_string());
 
         let node2 = make_node("Analyzer", vec![]);
@@ -94,6 +96,7 @@ mod tests {
         assert!(xml.contains("status=\"configuring\""));
         assert!(xml.contains("<node name=\"Collector\""));
         assert!(xml.contains("agents=\"Scraper, Formatter\""));
+        assert!(xml.contains("<status>Ready for web scraping</status>"));
         assert!(xml.contains("<asking>Which companies should we target?</asking>"));
         assert!(xml.contains("<node name=\"Analyzer\""));
         assert!(xml.contains("status=\"idle\""));
@@ -107,6 +110,50 @@ mod tests {
         let snapshot = make_board(vec![node]);
         let xml = render::render(&snapshot, BoardStateVariant::ManagerAssistant);
 
+        assert!(!xml.contains("<asking>"));
+        assert!(!xml.contains("<status>"));
+    }
+
+    #[test]
+    fn render_l1_status_without_question() {
+        let mut node = make_node("Ready", vec![make_agent("Worker", &[], &[], "Does work")]);
+        node.compressed_status = Some("All configured, ready to run".to_string());
+        // asking is None — no question
+        let snapshot = make_board(vec![node]);
+        let xml = render::render(&snapshot, BoardStateVariant::ManagerAssistant);
+
+        assert!(xml.contains("<status>All configured, ready to run</status>"));
+        assert!(!xml.contains("<asking>"));
+    }
+
+    #[test]
+    fn render_l2_shows_status_not_asking() {
+        let mut node = make_node(
+            "Collector",
+            vec![make_agent("Scraper", &[], &[], "Scrapes data")],
+        );
+        node.ref_id = Some("workforce-1".to_string());
+        node.compressed_status = Some("Configured for weekly scraping".to_string());
+        node.asking = Some("Which competitors?".to_string());
+
+        let snapshot = make_board(vec![node]);
+        let xml = render::render(&snapshot, BoardStateVariant::ManagerBuilder);
+
+        // L2 renders <status> but NOT <asking>
+        assert!(xml.contains("<status>Configured for weekly scraping</status>"));
+        assert!(!xml.contains("<asking>"));
+    }
+
+    #[test]
+    fn render_l3_hides_status_and_asking() {
+        let mut node = make_node("Worker", vec![make_agent("Agent", &[], &[], "Works")]);
+        node.compressed_status = Some("Some status".to_string());
+        node.asking = Some("Some question".to_string());
+
+        let snapshot = make_own_node_snapshot(node);
+        let xml = render::render(&snapshot, BoardStateVariant::NodeAssistant);
+
+        assert!(!xml.contains("<status>"));
         assert!(!xml.contains("<asking>"));
     }
 
@@ -278,11 +325,13 @@ mod tests {
     fn variant_include_flags() {
         // L1
         assert!(BoardStateVariant::ManagerAssistant.include_asking());
+        assert!(BoardStateVariant::ManagerAssistant.include_compressed_status());
         assert!(!BoardStateVariant::ManagerAssistant.include_node_ids());
         assert!(!BoardStateVariant::ManagerAssistant.include_capabilities());
 
         // L2
         assert!(!BoardStateVariant::ManagerBuilder.include_asking());
+        assert!(BoardStateVariant::ManagerBuilder.include_compressed_status());
         assert!(BoardStateVariant::ManagerBuilder.include_node_ids());
         assert!(BoardStateVariant::ManagerBuilder.include_capabilities());
 

@@ -1,7 +1,7 @@
 -- Add stable readable ref_id to workflow_steps (e.g. "workforce-1", "context-2")
 -- Used by L2 manager builder to reference nodes without relying on mutable names.
 
-ALTER TABLE public.workflow_steps ADD COLUMN ref_id TEXT;
+ALTER TABLE public.workflow_steps ADD COLUMN IF NOT EXISTS ref_id TEXT;
 
 -- Backfill existing steps: assign "{execution_mode}-N" based on creation order
 UPDATE workflow_steps SET ref_id = sub.ref_id

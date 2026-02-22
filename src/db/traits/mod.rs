@@ -16,9 +16,9 @@ use crate::db::{
     PromptTemplateRow, ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow,
     ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomStepConfigRow,
     RoomStepMemberRow, RoomTranscriptEntry, RunSnapshotRow, RunTemplateRow, SessionRow,
-    StepDocumentRow, StepInputRow, StepOutputRow, StepRoutingRuleRow, SystemConfigRow,
-    TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow, ToolRow,
-    WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
+    StepDocumentRow, StepInputRow, StepOutputRow, StepQuestionStateRow, StepRoutingRuleRow,
+    SystemConfigRow, TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow,
+    ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
     WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
 };
 use crate::types::{User, UserId};
@@ -823,6 +823,25 @@ pub trait WorkflowRepo: Send + Sync {
 
     /// Update the board overview summary for a workflow.
     async fn update_board_overview_summary(&self, workflow_id: Uuid, summary: &str) -> Result<()>;
+
+    // --- Step Question State ---
+
+    /// Get compressed status + pending question for a step.
+    async fn get_step_question_state(&self, step_id: Uuid) -> Result<Option<StepQuestionStateRow>>;
+
+    /// Batch-load question state for multiple steps (board fetch path).
+    async fn get_step_question_states(
+        &self,
+        step_ids: &[Uuid],
+    ) -> Result<Vec<StepQuestionStateRow>>;
+
+    /// Create or replace a step's compressed status + question.
+    async fn upsert_step_question_state(
+        &self,
+        step_id: Uuid,
+        status_text: &str,
+        question_text: Option<String>,
+    ) -> Result<()>;
 
     // --- Run Templates ---
 

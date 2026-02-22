@@ -54,6 +54,11 @@ impl BoardStateVariant {
         matches!(self, Self::Dispatch)
     }
 
+    /// Whether the `<status>` tag is rendered (compressed node status from question extraction).
+    pub fn include_compressed_status(&self) -> bool {
+        matches!(self, Self::ManagerAssistant | Self::ManagerBuilder)
+    }
+
     /// Whether the `<asking>` tag is rendered for nodes awaiting user input.
     pub fn include_asking(&self) -> bool {
         matches!(self, Self::ManagerAssistant)
@@ -124,6 +129,8 @@ pub struct NodeSnapshot {
     pub failure_mode: String,
     /// Compressed summary line (e.g. "3 agents, all dependencies set").
     pub summary: String,
+    /// Compressed semantic status from question extraction (L1/L2 renders as `<status>`).
+    pub compressed_status: Option<String>,
     pub agents: Vec<AgentSnapshot>,
     pub input_ports: Vec<InputPortSnapshot>,
     pub output_ports: Vec<OutputPortSnapshot>,

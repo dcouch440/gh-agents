@@ -17,6 +17,7 @@ pub mod error;
 pub mod graph_context;
 pub mod prompt_registry;
 pub mod protocols;
+pub mod question_extraction;
 pub mod recorder;
 pub mod run_results;
 pub mod strategies;
