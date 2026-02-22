@@ -16,6 +16,7 @@ const store = logger(
     roomMembersByStep: {},
     notesByStep: {},
     issuesByStep: {},
+    questionStateByStep: {},
     dirtyStepIds: new Set<string>(),
     loading: false,
     error: null,

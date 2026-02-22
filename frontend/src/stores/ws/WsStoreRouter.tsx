@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { WS_TOPIC } from '@/types/ws'
 import { sessionStore } from '@/stores/sessionStore'
+import { dispatchStore } from '@/stores/dispatchStore'
 import { roomStore } from '@/stores/roomStore'
 import { workflowExecutionStore } from '@/stores/workflowExecutionStore'
 import { workflowStore } from '@/stores/workflowStore'
@@ -15,6 +16,7 @@ function WsStoreRouter() {
     const unsubs = [
       // Domain store handlers
       subscribe(WS_TOPIC.SESSION, sessionStore.handleWsEvent),
+      subscribe(WS_TOPIC.SESSION, dispatchStore.handleWsEvent),
       subscribe(WS_TOPIC.ROOM, roomStore.handleWsEvent),
       subscribe(WS_TOPIC.WORKFLOW, workflowExecutionStore.handleWsEvent),
       subscribe(WS_TOPIC.WORKFLOW, workflowStore.handleWsEvent),

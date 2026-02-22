@@ -3,7 +3,7 @@ import type { ChatMessageData } from '@/components/chat'
 import type { SSEEvent } from '@/api'
 import type { ChatMessage, MessageSegment } from '@/types'
 import { SSE_EVENT, isContentEvent } from '@/types'
-import { getStep, updateStep } from './_store'
+import { store, getStep, updateStep } from './_store'
 
 type ToolEventPayload = { name: string; id: string }
 type DocEventPayload = { doc_id: string; title: string }
@@ -237,6 +237,21 @@ const buildDeduplicatingHandler = (
   }
 }
 
+const insertAgentMessage = (sessionId: string, agentName: string, messageType: string, content: string): void => {
+  // Find the step that has this session
+  const { byStep } = store.getState()
+  const stepId = Object.keys(byStep).find((sid) => byStep[sid]?.session?.id === sessionId)
+  if (!stepId) return
+
+  const message: ChatMessageData = {
+    id: `agent-${Date.now()}`,
+    role: 'assistant',
+    content: `[${agentName}] ${content}`,
+    source_type: messageType,
+  }
+  appendMessage(stepId, message)
+}
+
 export {
   // Pure helpers (exported for testing)
   appendTextToken,
@@ -259,4 +274,5 @@ export {
   handleStreamError,
   handleSSEEvent,
   buildDeduplicatingHandler,
+  insertAgentMessage,
 }

@@ -122,6 +122,8 @@ const renderMinimalHandles = (data: CanvasNodeData, accentColor: string) => {
           <CanvasHandle type="source" position={Position.Top} id="agents" color={accentColor} variant="passive" />
         </>
       )
+    case 'manager':
+      return null
     case 'room':
     case 'blank':
       return (

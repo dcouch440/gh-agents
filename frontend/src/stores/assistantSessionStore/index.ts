@@ -32,6 +32,7 @@ import {
   handleSSEEvent,
   buildDeduplicatingHandler,
   parseTokenText,
+  insertAgentMessage,
 } from './streaming'
 
 export const assistantSessionStore = {
@@ -64,6 +65,7 @@ export const assistantSessionStore = {
   handleSSEEvent,
   buildDeduplicatingHandler,
   parseTokenText,
+  insertAgentMessage,
 }
 
 export type { PanelState, StepSession, AssistantSessionState } from './types'

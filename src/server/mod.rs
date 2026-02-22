@@ -322,6 +322,10 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         .route(routes::WORKFLOW_STEP_LAST_RUN, get(api::get_step_last_run))
         .route(routes::WORKFLOW_STEP_SUB_DAG, get(api::get_step_sub_dag))
         .route(routes::WORKFLOW_NOTES, get(api::get_workflow_notes))
+        .route(
+            routes::WORKFLOW_QUESTION_STATES,
+            get(api::list_question_states),
+        )
         .route(routes::WORKFLOW_RUN, post(api::run_workflow))
         .route(
             routes::WORKFLOW_WORKSHOP,

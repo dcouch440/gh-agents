@@ -103,9 +103,13 @@ function WorkflowCanvasInner() {
   const isValidConnection = useCallback(
     (connection: Connection) => {
       if (connection.sourceHandle === 'agents') return false
+      // Manager nodes don't participate in the data-flow DAG
+      const sourceStep = connection.source ? stepsById.get(connection.source) : undefined
+      if (sourceStep?.execution_mode === 'manager') return false
       const targetStep = connection.target ? stepsById.get(connection.target) : undefined
       if (!targetStep) return false
       if (targetStep.execution_mode === 'context' || targetStep.execution_mode === 'input') return false
+      if (targetStep.execution_mode === 'manager') return false
       if (connection.source === connection.target) return false
       return true
     },

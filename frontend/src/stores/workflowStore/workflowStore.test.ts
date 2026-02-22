@@ -20,6 +20,7 @@ const {
   mockAddStepDocument,
   mockRemoveStepDocument,
   mockGetAllNotes,
+  mockListQuestionStates,
 } = vi.hoisted(() => ({
   mockList: vi.fn(),
   mockGet: vi.fn(),
@@ -37,6 +38,7 @@ const {
   mockAddStepDocument: vi.fn(),
   mockRemoveStepDocument: vi.fn(),
   mockGetAllNotes: vi.fn(),
+  mockListQuestionStates: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -59,6 +61,7 @@ vi.mock('@/api', () => ({
       addStepDocument: mockAddStepDocument,
       removeStepDocument: mockRemoveStepDocument,
       getAllNotes: mockGetAllNotes,
+      listQuestionStates: mockListQuestionStates,
     },
   },
 }))
@@ -146,6 +149,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   resetStore()
   mockGetAllNotes.mockResolvedValue([])
+  mockListQuestionStates.mockResolvedValue([])
 })
 
 describe('workflowStore', () => {
@@ -229,6 +233,7 @@ describe('workflowStore', () => {
       mockListSteps.mockRejectedValue(new Error('Not found'))
       mockListEdges.mockRejectedValue(new Error('Not found'))
       mockGetAllNotes.mockRejectedValue(new Error('Not found'))
+      mockListQuestionStates.mockRejectedValue(new Error('Not found'))
 
       await workflowStore.loadWorkflow('wf1')
 

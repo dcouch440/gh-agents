@@ -53,15 +53,20 @@ const remove = async (id: string): Promise<void> => {
 const loadWorkflow = async (id: string): Promise<void> => {
   store.setState({ loading: true, error: null })
   try {
-    const [workflow, steps, edges, notes] = await Promise.all([
+    const [workflow, steps, edges, notes, questionStates] = await Promise.all([
       api.workflows.get(id),
       api.workflows.listSteps(id),
       api.workflows.listEdges(id),
       api.workflows.getAllNotes(id),
+      api.workflows.listQuestionStates(id),
     ])
     const notesByStep: Record<string, string> = {}
     for (const entry of notes) {
       notesByStep[entry.step_id] = entry.content
+    }
+    const questionStateByStep: Record<string, (typeof questionStates)[number]> = {}
+    for (const entry of questionStates) {
+      questionStateByStep[entry.step_id] = entry
     }
     store.setState((s) => ({
       items: nmSet(s.items, workflow.id, workflow),
@@ -70,6 +75,7 @@ const loadWorkflow = async (id: string): Promise<void> => {
       edges: nmFromArray(edges),
       documentsByStep: {},
       notesByStep,
+      questionStateByStep,
       dirtyStepIds: new Set<string>(),
       loading: false,
       dirty: false,
@@ -86,6 +92,7 @@ const clearActive = (): void => {
     edges: createNormalizedMap<WorkflowStepEdge>(),
     documentsByStep: {},
     notesByStep: {},
+    questionStateByStep: {},
     dirtyStepIds: new Set<string>(),
     dirty: false,
   })

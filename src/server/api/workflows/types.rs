@@ -341,6 +341,15 @@ pub struct WorkflowNoteEntry {
     pub content: String,
 }
 
+/// Question state for a single step.
+#[derive(Serialize)]
+pub struct StepQuestionStateEntry {
+    pub step_id: String,
+    pub status_text: String,
+    pub question_text: Option<String>,
+    pub updated_at: String,
+}
+
 pub fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
     WorkflowStepResponse {
         id: r.id,

@@ -63,12 +63,15 @@ const buildStepTabs = ({
     })
   }
 
-  tabs.push({
-    id: 'notes',
-    icon: StickyNote2Outlined,
-    tooltip: 'Assistant Notes',
-    content: <NotesTab stepId={stepId} />,
-  })
+  // Manager sits above the DAG — no notes (notes are a node builder concept)
+  if (archetype !== Archetype.MANAGER) {
+    tabs.push({
+      id: 'notes',
+      icon: StickyNote2Outlined,
+      tooltip: 'Assistant Notes',
+      content: <NotesTab stepId={stepId} />,
+    })
+  }
 
   tabs.push({
     id: 'debug',
