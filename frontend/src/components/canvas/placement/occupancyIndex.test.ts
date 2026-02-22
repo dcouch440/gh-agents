@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { Rect } from '@/utils/geometry'
-import { buildOccupancyIndex, isOccupied, addToOccupancy, occupancyBounds } from './occupancyIndex'
+import { buildOccupancyIndex, isOccupied, addToOccupancy, occupancyBounds, updateOccupancy } from './occupancyIndex'
 import { PLACEMENT } from './constants'
 
 const makeNode = (id: string, x: number, y: number, w: number, h: number) => ({
@@ -111,6 +111,48 @@ describe('occupancyIndex', () => {
       const index = buildOccupancyIndex([makeNode('a', 50, 75, 200, 300)])
       const bounds = occupancyBounds(index)
       expect(bounds).toEqual({ x: 50, y: 75, width: 200, height: 300 })
+    })
+  })
+
+  describe('updateOccupancy', () => {
+    it('replaces rect and paddedRect for matching ID', () => {
+      const original = buildOccupancyIndex([makeNode('a', 0, 0, 100, 100)])
+      const newRect: Rect = { x: 200, y: 300, width: 150, height: 250 }
+      const updated = updateOccupancy(original, 'a', newRect)
+
+      expect(updated).toHaveLength(1)
+      expect(updated[0]!.id).toBe('a')
+      expect(updated[0]!.rect).toEqual(newRect)
+      expect(updated[0]!.paddedRect).toEqual({
+        x: 200 - PLACEMENT.OCCUPANCY_PAD,
+        y: 300 - PLACEMENT.OCCUPANCY_PAD,
+        width: 150 + PLACEMENT.OCCUPANCY_PAD * 2,
+        height: 250 + PLACEMENT.OCCUPANCY_PAD * 2,
+      })
+    })
+
+    it('returns original array unchanged when ID is not found', () => {
+      const original = buildOccupancyIndex([makeNode('a', 0, 0, 100, 100)])
+      const newRect: Rect = { x: 200, y: 300, width: 150, height: 250 }
+      const updated = updateOccupancy(original, 'nonexistent', newRect)
+
+      expect(updated).toBe(original) // same reference
+    })
+
+    it('does not mutate the original array', () => {
+      const original = buildOccupancyIndex([
+        makeNode('a', 0, 0, 100, 100),
+        makeNode('b', 200, 0, 100, 100),
+      ])
+      const newRect: Rect = { x: 500, y: 500, width: 50, height: 50 }
+      const updated = updateOccupancy(original, 'a', newRect)
+
+      // Original should be unchanged
+      expect(original[0]!.rect).toEqual({ x: 0, y: 0, width: 100, height: 100 })
+      // Updated should have the new rect
+      expect(updated[0]!.rect).toEqual(newRect)
+      // Other entries preserved
+      expect(updated[1]!.rect).toEqual({ x: 200, y: 0, width: 100, height: 100 })
     })
   })
 })

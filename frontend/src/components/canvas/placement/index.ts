@@ -1,4 +1,6 @@
 export { computePlacements } from './placementEngine'
 export { usePlacementEngine } from './usePlacementEngine'
+export { placeFanOutGroup, placeConvergenceTarget } from './fanOutPlacer'
+export { placeSpliceNode } from './splicePlacer'
 export { PLACEMENT } from './constants'
-export type { PlacementIntent, PlacementResult, OccupiedRect, PlacementStrategy } from './types'
+export type { PlacementIntent, PlacementResult, PlacementShift, PlacementOutput, PlacementStrategy, OccupiedRect, SpliceResult } from './types'
