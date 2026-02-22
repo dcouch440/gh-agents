@@ -210,6 +210,30 @@ pub async fn build_step_system_prompt(
 ) -> Result<String, HubError> {
     use crate::config::protocols::{roles, vars};
 
+    // Manager mode — uses its own prompt template with only board_state + dispatch_status
+    if execution_mode == "manager" {
+        let board_state_xml = board_state::build(
+            state.repos().workflows.as_ref(),
+            board_state::BoardStateVariant::ManagerAssistant,
+            workflow_id,
+            step_id,
+        )
+        .await
+        .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
+
+        let dispatch_status_xml = dispatch_status::build(state.task_registry(), step_id);
+
+        let mut vars_map = std::collections::HashMap::new();
+        vars_map.insert(vars::system::BOARD_STATE.to_string(), board_state_xml);
+        vars_map.insert(
+            vars::system::DISPATCH_STATUS.to_string(),
+            dispatch_status_xml,
+        );
+
+        let resolved = roles::MANAGER_ASSISTANT_BASE.resolve(&vars_map);
+        return Ok(resolved.system_prompt);
+    }
+
     // 1. Load beliefs from connected nodes
     let connected_beliefs = state
         .repos()

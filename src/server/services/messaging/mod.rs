@@ -10,6 +10,7 @@ use chrono::Utc;
 use uuid::Uuid;
 
 use crate::server::state::{AppState, ConsumerMessage};
+use crate::server::tools::manager::resolve;
 use crate::server::ws::events::{SessionEvent, SessionEventKind};
 use crate::types::UserId;
 
@@ -211,26 +212,20 @@ pub async fn execute_dispatch_to_nodes_tool(
         let content = content.to_string();
 
         handles.spawn(async move {
-            // Resolve ref → step
-            let step = match state
-                .repos()
-                .workflows
-                .find_step_by_ref_id(workflow_id, &node_ref)
-                .await
+            // Resolve node by name or ref ID
+            let step = match resolve::resolve_node(
+                state.repos().workflows.as_ref(),
+                workflow_id,
+                &node_ref,
+            )
+            .await
             {
-                Ok(Some(s)) => s,
-                Ok(None) => {
-                    return serde_json::json!({
-                        "node": node_ref,
-                        "status": "error",
-                        "error": format!("No step found for ref \"{node_ref}\""),
-                    });
-                }
+                Ok(s) => s,
                 Err(e) => {
                     return serde_json::json!({
                         "node": node_ref,
                         "status": "error",
-                        "error": format!("DB error: {e}"),
+                        "error": e,
                     });
                 }
             };

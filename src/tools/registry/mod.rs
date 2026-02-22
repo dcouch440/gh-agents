@@ -75,6 +75,14 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "send_message" => Some(send_message_tool()),
         "dispatch_to_nodes" => Some(dispatch_to_nodes_tool()),
 
+        // Manager topology tools (6)
+        "create_pipeline" => Some(create_pipeline_tool()),
+        "create_parallel" => Some(create_parallel_tool()),
+        "insert_node" => Some(insert_node_tool()),
+        "remove_node" => Some(remove_node_tool()),
+        "wire_edge" => Some(wire_edge_tool()),
+        "remove_edge" => Some(remove_edge_tool()),
+
         _ => None,
     }
 }
@@ -981,7 +989,7 @@ fn dispatch_to_nodes_tool() -> Tool {
         description: concat!(
             "Send instructions to multiple node assistants in one action. Each message is ",
             "delivered to the node's chat session and triggers an automatic response. ",
-            "Reference nodes by their ref attribute from board_state (e.g. \"workforce-1\"). ",
+            "Reference nodes by name (e.g. \"Collector\") or ref ID (e.g. \"workforce-1\"). ",
             "Messages are sent concurrently and each node processes them independently.",
         )
         .into(),
@@ -995,7 +1003,7 @@ fn dispatch_to_nodes_tool() -> Tool {
                         "properties": {
                             "node": {
                                 "type": "string",
-                                "description": "Node ref from board_state (e.g. \"workforce-1\", \"context-2\")"
+                                "description": "Node name (e.g. \"Collector\") or ref ID (e.g. \"workforce-1\")"
                             },
                             "message_type": {
                                 "type": "string",
@@ -1013,6 +1021,205 @@ fn dispatch_to_nodes_tool() -> Tool {
                 }
             },
             "required": ["messages"]
+        }),
+    }
+}
+
+// ============================================================================
+// Manager Topology Tool Definitions
+// ============================================================================
+
+fn create_pipeline_tool() -> Tool {
+    Tool {
+        name: "create_pipeline".into(),
+        description: concat!(
+            "Create workforce nodes wired in sequence. Returns the created nodes with their ",
+            "ref IDs. Node names must be unique within the workflow — duplicate names are ",
+            "rejected. Optionally connect to an existing source node that feeds into the ",
+            "first new node.",
+        )
+        .into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "source": {
+                    "type": "string",
+                    "description": "Existing node name or ref ID to wire before the first new node (optional)"
+                },
+                "nodes": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Unique display name for the node"
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "What this node does in the workflow"
+                            }
+                        },
+                        "required": ["name"]
+                    },
+                    "minItems": 1,
+                    "description": "Nodes to create, wired in order"
+                }
+            },
+            "required": ["nodes"]
+        }),
+    }
+}
+
+fn create_parallel_tool() -> Tool {
+    Tool {
+        name: "create_parallel".into(),
+        description: concat!(
+            "Create workforce nodes in parallel — fan-out from an optional source, fan-in to ",
+            "an optional target. Source and target must be existing nodes (name or ref ID). ",
+            "Node names must be unique within the workflow.",
+        )
+        .into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "source": {
+                    "type": "string",
+                    "description": "Existing node to fan out from (optional)"
+                },
+                "parallel": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Unique display name for the node"
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "What this node does in the workflow"
+                            }
+                        },
+                        "required": ["name"]
+                    },
+                    "minItems": 2,
+                    "description": "Nodes to create in parallel"
+                },
+                "target": {
+                    "type": "string",
+                    "description": "Existing node to fan in to (optional)"
+                }
+            },
+            "required": ["parallel"]
+        }),
+    }
+}
+
+fn insert_node_tool() -> Tool {
+    Tool {
+        name: "insert_node".into(),
+        description: concat!(
+            "Insert a new workforce node between two existing connected nodes. Removes the ",
+            "direct edge and wires through the new node. The node name must be unique within ",
+            "the workflow.",
+        )
+        .into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "from": {
+                    "type": "string",
+                    "description": "Upstream node name or ref ID"
+                },
+                "to": {
+                    "type": "string",
+                    "description": "Downstream node name or ref ID"
+                },
+                "node": {
+                    "type": "object",
+                    "properties": {
+                        "name": {
+                            "type": "string",
+                            "description": "Unique display name for the new node"
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "What this node does in the workflow"
+                        }
+                    },
+                    "required": ["name"]
+                }
+            },
+            "required": ["from", "to", "node"]
+        }),
+    }
+}
+
+fn remove_node_tool() -> Tool {
+    Tool {
+        name: "remove_node".into(),
+        description: concat!(
+            "Remove a node from the workflow. If reconnect is true (default), wires its ",
+            "predecessors directly to its successors to maintain flow.",
+        )
+        .into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "node": {
+                    "type": "string",
+                    "description": "Node name or ref ID to remove"
+                },
+                "reconnect": {
+                    "type": "boolean",
+                    "description": "Wire predecessors to successors after removal (default: true)"
+                }
+            },
+            "required": ["node"]
+        }),
+    }
+}
+
+fn wire_edge_tool() -> Tool {
+    Tool {
+        name: "wire_edge".into(),
+        description: "Add a connection between two existing nodes. Accepts node names or ref IDs."
+            .into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "from": {
+                    "type": "string",
+                    "description": "Upstream node name or ref ID"
+                },
+                "to": {
+                    "type": "string",
+                    "description": "Downstream node name or ref ID"
+                }
+            },
+            "required": ["from", "to"]
+        }),
+    }
+}
+
+fn remove_edge_tool() -> Tool {
+    Tool {
+        name: "remove_edge".into(),
+        description: "Remove a connection between two nodes. Accepts node names or ref IDs.".into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "from": {
+                    "type": "string",
+                    "description": "Upstream node name or ref ID"
+                },
+                "to": {
+                    "type": "string",
+                    "description": "Downstream node name or ref ID"
+                }
+            },
+            "required": ["from", "to"]
         }),
     }
 }

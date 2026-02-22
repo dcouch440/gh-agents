@@ -1,0 +1,7 @@
+agents:
+  assistant:
+    model_id: "tier:1"
+    max_tokens: 8192
+    temperature: 0.4
+    max_rounds: 15
+    context_budget: 480000

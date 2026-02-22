@@ -4,12 +4,14 @@ pub mod agent_designer;
 pub mod chat;
 pub mod dag_step;
 pub mod dispatch;
+pub mod manager_dispatch;
 pub mod workforce_agent;
 
 pub use agent_designer::{AgentDesignerConfig, AgentDesignerStrategy};
 pub use chat::{ChatConfig, ChatStrategy, StepChatContext};
 pub use dag_step::DagStepStrategy;
 pub use dispatch::DispatchStrategy;
+pub use manager_dispatch::ManagerDispatchStrategy;
 pub use workforce_agent::{WorkforceAgentConfig, WorkforceAgentStrategy};
 
 use crate::llm::TokenUsage;
