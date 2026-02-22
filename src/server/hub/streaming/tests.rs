@@ -13,8 +13,7 @@ mod tests {
         sink.token("hello").await;
         sink.tool_start("search", "t1", &json!({"query": "test"}))
             .await;
-        sink.tool_end("search", "t1", &json!({"results": []}))
-            .await;
+        sink.tool_end("search", "t1", &json!({"results": []})).await;
         sink.error("boom").await;
         sink.done().await;
     }
