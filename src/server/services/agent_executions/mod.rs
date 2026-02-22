@@ -79,9 +79,9 @@ pub async fn approve_execution(
         .await?
         .ok_or_else(|| ServiceError::not_found("Agent execution"))?;
 
-    if !ae.is_interactive || ae.status != "awaiting_user" {
+    if ae.execution_type != "interactive_review" || ae.status != "awaiting_user" {
         return Err(ServiceError::validation(
-            "Execution is not interactive or not awaiting user approval",
+            "Execution is not an interactive review or not awaiting user approval",
         ));
     }
 

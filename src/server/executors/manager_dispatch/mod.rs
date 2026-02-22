@@ -14,6 +14,7 @@ use crate::server::hub::strategy::ExecutionStrategy;
 use crate::server::hub::streaming::DispatchStreamSink;
 use crate::server::state::AppState;
 use crate::server::ws::events::{SessionEvent, SessionEventKind};
+use crate::types::ExecutionType;
 use crate::types::UserId;
 
 mod tests;
@@ -124,9 +125,9 @@ pub async fn run_manager_dispatch_task(
         .repos()
         .agent_executions
         .create_agent_execution(CreateAgentExecutionInput {
+            execution_type: ExecutionType::ManagerDispatch,
             agent_id: None,
             workflow_step_id: Some(step_id),
-            is_interactive: false,
             parent_agent_execution_id: None,
             system_prompt_rendered: strategy.system_prompt().to_string(),
             input: instruction.clone(),

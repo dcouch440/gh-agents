@@ -25,6 +25,7 @@ use crate::server::hub::recorder::ExecutionRecorder;
 use crate::server::hub::strategies::dag_step::{compute_cost, DagStepConfig, DagStepStrategy};
 use crate::server::hub::streaming::DagStreamSink;
 use crate::server::ws::events::WorkflowEventKind;
+use crate::types::ExecutionType;
 
 use super::container::{
     create_optional_container, destroy_optional_container, run_with_vpn_watchdog,
@@ -220,9 +221,9 @@ pub(crate) async fn run_step_via_engine(
     // Create agent_execution row
     let ae_row = ae_repo
         .create_agent_execution(CreateAgentExecutionInput {
+            execution_type: ExecutionType::DagStep,
             agent_id: Some(agent.id),
             workflow_step_id: Some(step.id),
-            is_interactive: false,
             parent_agent_execution_id: None,
             system_prompt_rendered: system_prompt.clone(),
             input: prompt.to_string(),

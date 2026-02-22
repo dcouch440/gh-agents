@@ -2435,12 +2435,19 @@ impl AgentExecutionRepo for PgRepo {
         &self,
         input: CreateAgentExecutionInput,
     ) -> Result<AgentExecutionRow> {
+        use crate::types::ExecutionType;
+        let is_interactive = input.execution_type == ExecutionType::InteractiveReview;
         let row = sqlx::query_as::<_, AgentExecutionRow>(
-            "INSERT INTO agent_executions (agent_id, workflow_step_id, is_interactive, parent_agent_execution_id, system_prompt_rendered, input, room_session_id, speaker_order, workflow_execution_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *",
+            "INSERT INTO agent_executions \
+             (execution_type, agent_id, workflow_step_id, is_interactive, \
+              parent_agent_execution_id, system_prompt_rendered, input, \
+              room_session_id, speaker_order, workflow_execution_id) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *",
         )
+        .bind(input.execution_type.as_str())
         .bind(input.agent_id)
         .bind(input.workflow_step_id)
-        .bind(input.is_interactive)
+        .bind(is_interactive)
         .bind(input.parent_agent_execution_id)
         .bind(&input.system_prompt_rendered)
         .bind(&input.input)
@@ -2522,7 +2529,7 @@ impl AgentExecutionRepo for PgRepo {
             "SELECT * FROM agent_executions \
              WHERE workflow_step_id = ANY($1) \
                AND status = 'completed' \
-               AND is_interactive = false \
+               AND execution_type != 'interactive_review' \
              ORDER BY started_at ASC",
         )
         .bind(workflow_step_ids)
@@ -2538,7 +2545,7 @@ impl AgentExecutionRepo for PgRepo {
         let rows = sqlx::query_as::<_, AgentExecutionRow>(
             "SELECT * FROM agent_executions \
              WHERE workflow_step_id = $1 \
-               AND is_interactive = true \
+               AND execution_type = 'interactive_review' \
              ORDER BY started_at ASC",
         )
         .bind(workflow_step_id)
@@ -2573,7 +2580,7 @@ impl AgentExecutionRepo for PgRepo {
             sqlx::query_as::<_, AgentExecutionRow>(
                 "SELECT ae.* FROM agent_executions ae \
                  JOIN workflow_executions we ON ae.workflow_execution_id = we.id \
-                 WHERE ae.status = $1 AND ae.is_interactive = true AND we.user_id = $2 \
+                 WHERE ae.status = $1 AND ae.execution_type = 'interactive_review' AND we.user_id = $2 \
                  ORDER BY ae.started_at DESC LIMIT 100",
             )
             .bind(s.as_str())
@@ -2584,7 +2591,7 @@ impl AgentExecutionRepo for PgRepo {
             sqlx::query_as::<_, AgentExecutionRow>(
                 "SELECT ae.* FROM agent_executions ae \
                  JOIN workflow_executions we ON ae.workflow_execution_id = we.id \
-                 WHERE ae.is_interactive = true AND we.user_id = $1 \
+                 WHERE ae.execution_type = 'interactive_review' AND we.user_id = $1 \
                  ORDER BY ae.started_at DESC LIMIT 100",
             )
             .bind(user_id)
@@ -2632,11 +2639,7 @@ impl AgentExecutionRepo for PgRepo {
         Ok(row)
     }
 
-    async fn update_execution_trace(
-        &self,
-        id: Uuid,
-        trace: serde_json::Value,
-    ) -> Result<()> {
+    async fn update_execution_trace(&self, id: Uuid, trace: serde_json::Value) -> Result<()> {
         sqlx::query("UPDATE agent_executions SET trace = $2 WHERE id = $1")
             .bind(id)
             .bind(trace)
@@ -2652,8 +2655,7 @@ impl AgentExecutionRepo for PgRepo {
         let row = sqlx::query_as::<_, AgentExecutionRow>(
             "SELECT * FROM agent_executions \
              WHERE workflow_step_id = $1 \
-               AND agent_id IS NULL \
-               AND workflow_execution_id IS NULL \
+               AND execution_type IN ('dispatch', 'manager_dispatch') \
              ORDER BY started_at DESC \
              LIMIT 1",
         )

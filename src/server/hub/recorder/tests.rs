@@ -7,7 +7,7 @@ mod tests {
         MockTokenLedgerRepo,
     };
     use crate::server::hub::recorder::ExecutionRecorder;
-    use crate::types::UserId;
+    use crate::types::{ExecutionType, UserId};
     use uuid::Uuid;
 
     #[tokio::test]
@@ -108,9 +108,9 @@ mod tests {
         let recorder = ExecutionRecorder::new(&session_mock, &chat_mock, None, None);
         let result = recorder
             .record_agent_execution(CreateAgentExecutionInput {
+                execution_type: ExecutionType::DagStep,
                 agent_id: Some(Uuid::new_v4()),
                 workflow_step_id: Some(Uuid::new_v4()),
-                is_interactive: false,
                 parent_agent_execution_id: None,
                 system_prompt_rendered: "system prompt".to_string(),
                 input: "user prompt".to_string(),

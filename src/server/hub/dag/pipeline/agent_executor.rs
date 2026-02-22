@@ -19,6 +19,7 @@ use crate::server::hub::strategies::workforce_agent::{
 };
 use crate::server::hub::streaming::DagStreamSink;
 use crate::server::ws::events::WorkflowEventKind;
+use crate::types::ExecutionType;
 use crate::types::UserId;
 
 use super::super::container::destroy_optional_container;
@@ -216,8 +217,10 @@ async fn execute_single_agent(
         .await?;
 
     // Resolve capabilities
-    let (tools, tool_names) =
-        env.state.capability_registry().resolve_tools(&designed.tools);
+    let (tools, tool_names) = env
+        .state
+        .capability_registry()
+        .resolve_tools(&designed.tools);
 
     // Inject previous outputs filtered by designer routing
     let filtered = filter_outputs_for_agent(prior_outputs, &designed.receives_from);
@@ -240,9 +243,9 @@ async fn execute_single_agent(
     let ae_repo = &*env.state.repos().agent_executions;
     let ae_id = match ae_repo
         .create_agent_execution(CreateAgentExecutionInput {
+            execution_type: ExecutionType::PipelineAgent,
             agent_id: None,
             workflow_step_id: Some(env.step_id),
-            is_interactive: false,
             parent_agent_execution_id: None,
             system_prompt_rendered: designed.system_prompt.clone(),
             input: task_prompt.clone(),
