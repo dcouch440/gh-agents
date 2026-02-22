@@ -90,9 +90,16 @@ mod tests {
             "submit_prd",
             "submit_ticket",
             "update_config",
+            // Manager topology tools
+            "create_pipeline",
+            "create_parallel",
+            "insert_node",
+            "remove_node",
+            "wire_edge",
+            "remove_edge",
         ];
 
-        assert_eq!(all_names.len(), 21);
+        assert_eq!(all_names.len(), 27);
 
         // Verify all map to tools
         for name in all_names {
@@ -132,6 +139,13 @@ mod tests {
             "submit_prd",
             "submit_ticket",
             "update_config",
+            // Manager topology tools
+            "create_pipeline",
+            "create_parallel",
+            "insert_node",
+            "remove_node",
+            "wire_edge",
+            "remove_edge",
         ];
 
         for tool_name in all_tools {
@@ -356,5 +370,131 @@ mod tests {
 
         let required = tool.input_schema["required"].as_array().unwrap();
         assert_eq!(required.len(), 3);
+    }
+
+    // ========================================================================
+    // Manager Topology Tool Tests
+    // ========================================================================
+
+    #[test]
+    fn test_create_pipeline_schema() {
+        let tool = get_tool_definition("create_pipeline").unwrap();
+        assert_eq!(tool.name, "create_pipeline");
+
+        let props = tool.input_schema["properties"].as_object().unwrap();
+        assert!(props.contains_key("source"));
+        assert!(props.contains_key("nodes"));
+
+        let nodes_schema = &props["nodes"];
+        assert_eq!(nodes_schema["type"], "array");
+        assert_eq!(nodes_schema["minItems"], 1);
+
+        let item_props = nodes_schema["items"]["properties"].as_object().unwrap();
+        assert!(item_props.contains_key("name"));
+        assert!(item_props.contains_key("description"));
+
+        let required = tool.input_schema["required"].as_array().unwrap();
+        assert_eq!(required.len(), 1);
+        assert_eq!(required[0], "nodes");
+    }
+
+    #[test]
+    fn test_create_parallel_schema() {
+        let tool = get_tool_definition("create_parallel").unwrap();
+        assert_eq!(tool.name, "create_parallel");
+
+        let props = tool.input_schema["properties"].as_object().unwrap();
+        assert!(props.contains_key("source"));
+        assert!(props.contains_key("parallel"));
+        assert!(props.contains_key("target"));
+
+        let parallel_schema = &props["parallel"];
+        assert_eq!(parallel_schema["type"], "array");
+        assert_eq!(parallel_schema["minItems"], 2);
+
+        let required = tool.input_schema["required"].as_array().unwrap();
+        assert_eq!(required.len(), 1);
+        assert_eq!(required[0], "parallel");
+    }
+
+    #[test]
+    fn test_insert_node_schema() {
+        let tool = get_tool_definition("insert_node").unwrap();
+        assert_eq!(tool.name, "insert_node");
+
+        let props = tool.input_schema["properties"].as_object().unwrap();
+        assert!(props.contains_key("from"));
+        assert!(props.contains_key("to"));
+        assert!(props.contains_key("node"));
+
+        let node_props = props["node"]["properties"].as_object().unwrap();
+        assert!(node_props.contains_key("name"));
+        assert!(node_props.contains_key("description"));
+
+        let required = tool.input_schema["required"].as_array().unwrap();
+        assert_eq!(required.len(), 3);
+    }
+
+    #[test]
+    fn test_remove_node_schema() {
+        let tool = get_tool_definition("remove_node").unwrap();
+        assert_eq!(tool.name, "remove_node");
+
+        let props = tool.input_schema["properties"].as_object().unwrap();
+        assert!(props.contains_key("node"));
+        assert!(props.contains_key("reconnect"));
+        assert_eq!(props["reconnect"]["type"], "boolean");
+
+        let required = tool.input_schema["required"].as_array().unwrap();
+        assert_eq!(required.len(), 1);
+        assert_eq!(required[0], "node");
+    }
+
+    #[test]
+    fn test_wire_edge_schema() {
+        let tool = get_tool_definition("wire_edge").unwrap();
+        assert_eq!(tool.name, "wire_edge");
+
+        let props = tool.input_schema["properties"].as_object().unwrap();
+        assert!(props.contains_key("from"));
+        assert!(props.contains_key("to"));
+
+        let required = tool.input_schema["required"].as_array().unwrap();
+        assert_eq!(required.len(), 2);
+    }
+
+    #[test]
+    fn test_remove_edge_schema() {
+        let tool = get_tool_definition("remove_edge").unwrap();
+        assert_eq!(tool.name, "remove_edge");
+
+        let props = tool.input_schema["properties"].as_object().unwrap();
+        assert!(props.contains_key("from"));
+        assert!(props.contains_key("to"));
+
+        let required = tool.input_schema["required"].as_array().unwrap();
+        assert_eq!(required.len(), 2);
+    }
+
+    #[test]
+    fn test_all_manager_topology_tools_mapped() {
+        let topology_tools = vec![
+            "create_pipeline",
+            "create_parallel",
+            "insert_node",
+            "remove_node",
+            "wire_edge",
+            "remove_edge",
+        ];
+
+        for tool_name in topology_tools {
+            let tool = get_tool_definition(tool_name);
+            assert!(
+                tool.is_some(),
+                "Manager topology tool '{}' not found in registry",
+                tool_name
+            );
+            assert_eq!(tool.unwrap().name, tool_name);
+        }
     }
 }

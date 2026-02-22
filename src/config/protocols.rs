@@ -224,6 +224,22 @@ pub static WORKFORCE_BUILDER: Lazy<ProtocolConfig> = Lazy::new(|| {
     )
 });
 
+/// Manager assistant config (L1 — conversational layer for the manager node).
+pub static MANAGER_ASSISTANT: Lazy<ProtocolConfig> = Lazy::new(|| {
+    load_protocol_config(
+        include_str!("../../config/manager/assistant/config.yaml"),
+        "config/manager/assistant/config.yaml",
+    )
+});
+
+/// Manager builder config (L2 — background topology + dispatch agent).
+pub static MANAGER_BUILDER: Lazy<ProtocolConfig> = Lazy::new(|| {
+    load_protocol_config(
+        include_str!("../../config/manager/builder/config.yaml"),
+        "config/manager/builder/config.yaml",
+    )
+});
+
 // ---------------------------------------------------------------------------
 // Role statics — compile-time embedded content
 // ---------------------------------------------------------------------------
@@ -276,6 +292,16 @@ pub mod roles {
     /// Board overview summarizer: distills all assistant notes into a board-wide summary.
     pub const BOARD_OVERVIEW_SUMMARIZER: &str =
         include_str!("../../config/services/board_overview/system.md");
+
+    /// Manager assistant base template (L1 — conversational layer).
+    pub static MANAGER_ASSISTANT_BASE: RoleDefinition = RoleDefinition {
+        system: include_str!("../../config/manager/assistant/system.md"),
+        prompt: include_str!("../../config/manager/assistant/prompt.md"),
+        response: None,
+    };
+
+    /// Manager builder system prompt (L2 — topology + dispatch agent).
+    pub const MANAGER_BUILDER_SYSTEM: &str = include_str!("../../config/manager/builder/system.md");
 }
 
 // ---------------------------------------------------------------------------
@@ -380,6 +406,12 @@ mod tests {
         assert!(!roles::DESIGNER.system.is_empty());
         assert!(!roles::DESIGNER.prompt.is_empty());
         assert!(roles::DESIGNER.response.is_none());
+
+        assert!(!roles::MANAGER_ASSISTANT_BASE.system.is_empty());
+        assert!(!roles::MANAGER_ASSISTANT_BASE.prompt.is_empty());
+        assert!(roles::MANAGER_ASSISTANT_BASE.response.is_none());
+
+        assert!(!roles::MANAGER_BUILDER_SYSTEM.is_empty());
     }
 
     #[test]
@@ -420,6 +452,27 @@ mod tests {
         assert_eq!(dispatcher.max_tokens, 8192);
         assert_eq!(dispatcher.max_rounds, 15);
         assert_eq!(dispatcher.context_budget, 200_000);
+    }
+
+    #[test]
+    fn manager_assistant_config_parses() {
+        let cfg = &*MANAGER_ASSISTANT;
+        let assistant = cfg.agent("assistant");
+        assert_eq!(assistant.model_id, crate::constants::MODEL_TIER1);
+        assert_eq!(assistant.temperature, 0.4);
+        assert_eq!(assistant.max_rounds, 15);
+        assert_eq!(assistant.context_budget, 480_000);
+    }
+
+    #[test]
+    fn manager_builder_config_parses() {
+        let cfg = &*MANAGER_BUILDER;
+        let dispatcher = cfg.agent("dispatcher");
+        assert_eq!(dispatcher.model_id, crate::constants::MODEL_TIER1);
+        assert_eq!(dispatcher.temperature, 0.3);
+        assert_eq!(dispatcher.max_tokens, 8192);
+        assert_eq!(dispatcher.max_rounds, 15);
+        assert_eq!(dispatcher.context_budget, 300_000);
     }
 
     #[test]
@@ -494,6 +547,7 @@ mod tests {
             ("workforce_agent", &roles::WORKFORCE_AGENT),
             ("belief_extractor", &roles::BELIEF_EXTRACTOR),
             ("designer", &roles::DESIGNER),
+            ("manager_assistant", &roles::MANAGER_ASSISTANT_BASE),
         ];
 
         let re = regex::Regex::new(r"\{\{\.([^}]+)\}\}").unwrap();

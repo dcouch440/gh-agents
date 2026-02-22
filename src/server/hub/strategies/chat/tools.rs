@@ -31,6 +31,9 @@ const NODE_ASSISTANT_TOOLS: &[&str] = &["set_node_name", "set_node_description",
 /// The dispatch sub-agent owns note-taking for workforce nodes.
 const WORKFORCE_CHAT_EXCLUDED: &[&str] = &["update_notes"];
 
+/// Manager assistant (L1) tools — dispatch, cancel, think, render_panel.
+const MANAGER_TOOLS: &[&str] = &["dispatch", "cancel_dispatch", "think", "render_panel"];
+
 /// Resolve tool definitions for step chat sessions (the conversational assistant).
 ///
 /// Returns universal tools plus archetype-specific tools, but excludes
@@ -39,7 +42,16 @@ const WORKFORCE_CHAT_EXCLUDED: &[&str] = &["update_notes"];
 ///
 /// For workforce mode, additionally excludes `update_notes` (dispatch sub-agent
 /// owns note-taking for workforce nodes).
+///
+/// For manager mode, returns only manager-specific tools (no node mutation).
 pub(crate) fn resolve_chat_step_tools(execution_mode: &str) -> Vec<Tool> {
+    if execution_mode == "manager" {
+        return MANAGER_TOOLS
+            .iter()
+            .filter_map(|name| crate::tools::registry::get_tool_definition(name))
+            .collect();
+    }
+
     UNIVERSAL_TOOLS
         .iter()
         .filter(|name| {

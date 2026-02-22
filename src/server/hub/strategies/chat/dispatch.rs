@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use crate::server::state::AppState;
 use crate::server::ws::events::{SessionEvent, SessionEventKind};
+use crate::types::UserId;
 
 use super::config::StepChatContext;
 
@@ -45,23 +46,41 @@ async fn handle_dispatch(input: &Value, state: &AppState, ctx: &StepChatContext)
         instruction.to_string(),
     );
 
-    // Spawn the background runner
+    // Spawn the appropriate background runner based on execution mode
     let runner_state = state.clone();
     let runner_step_id = ctx.step_id;
     let runner_workflow_id = ctx.workflow_id;
     let runner_instruction = instruction.to_string();
     let runner_execution_id = execution_id;
 
-    tokio::spawn(async move {
-        crate::server::executors::dispatch::run_dispatch_task(
-            runner_state,
-            runner_execution_id,
-            runner_step_id,
-            runner_workflow_id,
-            runner_instruction,
-        )
-        .await;
-    });
+    if ctx.execution_mode == "manager" {
+        // Resolve user_id from the session (manager dispatch needs it for
+        // ownership checks and session creation).
+        let user_id = resolve_dispatch_user_id(state, ctx).await;
+
+        tokio::spawn(async move {
+            crate::server::executors::manager_dispatch::run_manager_dispatch_task(
+                runner_state,
+                runner_execution_id,
+                runner_workflow_id,
+                user_id,
+                runner_step_id,
+                runner_instruction,
+            )
+            .await;
+        });
+    } else {
+        tokio::spawn(async move {
+            crate::server::executors::dispatch::run_dispatch_task(
+                runner_state,
+                runner_execution_id,
+                runner_step_id,
+                runner_workflow_id,
+                runner_instruction,
+            )
+            .await;
+        });
+    }
 
     // Broadcast started event
     // Session ID not available here, so we use step_id as the session scope.
@@ -113,5 +132,16 @@ async fn handle_cancel_dispatch(input: &Value, state: &AppState, ctx: &StepChatC
             "execution_id": execution_id.to_string(),
             "status": "not_found_or_already_complete",
         })
+    }
+}
+
+/// Resolve the user_id for a manager dispatch task.
+///
+/// Looks up the workflow to get the owner. Falls back to a nil UUID
+/// (the executor's ownership checks will catch this safely).
+async fn resolve_dispatch_user_id(state: &AppState, ctx: &StepChatContext) -> UserId {
+    match state.repos().workflows.get_workflow(ctx.workflow_id).await {
+        Ok(Some(wf)) => UserId(wf.user_id),
+        _ => UserId(Uuid::nil()),
     }
 }

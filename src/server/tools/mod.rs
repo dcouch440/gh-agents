@@ -7,6 +7,7 @@
 pub mod documents;
 mod exploration;
 pub mod haiku;
+pub mod manager;
 pub mod node_assistant;
 pub mod shared;
 pub mod workforce;
