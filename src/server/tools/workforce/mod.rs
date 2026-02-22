@@ -700,6 +700,28 @@ async fn execute_add_agent(
         Err(e) => return json!({ "error": format!("Pipeline error: {}", e) }),
     };
 
+    // 4b. Auto-create sequential edge from previous agent (if any)
+    if let Some(prev_agent) = roster
+        .iter()
+        .filter(|a| a.child_step_id.is_some())
+        .max_by_key(|a| a.execution_order)
+    {
+        if let Some(prev_step_id) = prev_agent.child_step_id {
+            let pip_ctx = pipeline_ctx(ctx);
+            match pipeline::add_edge(repo, &pip_ctx, prev_step_id, step_added.step_id).await {
+                Ok(_) | Err(crate::server::services::ServiceError::Conflict(_)) => {}
+                Err(e) => {
+                    tracing::warn!(
+                        from_step = %prev_step_id,
+                        to_step = %step_added.step_id,
+                        error = %e,
+                        "Failed to auto-create sequential edge for add_agent"
+                    );
+                }
+            }
+        }
+    }
+
     // 5. Create roster entry (workforce-specific)
     let roster_agent = match repo
         .add_roster_agent(brief_id, name, role, &capabilities, next_order)
