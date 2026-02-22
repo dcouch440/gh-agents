@@ -1075,7 +1075,7 @@ mod tests {
             "task": "Scan repositories for vulnerabilities",
             "agents": [
                 { "name": "Scanner", "role_description": "Scans code for vulns", "capabilities": ["file_read"] },
-                { "name": "Analyzer", "role_description": "Analyzes scan results", "capabilities": ["file_read", "web_search"] }
+                { "name": "Analyzer", "role_description": "Analyzes scan results", "capabilities": ["file_read", "content_search"] }
             ]
         });
         let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
@@ -1233,7 +1233,7 @@ mod tests {
             "task": "Scan repos",
             "agents": [
                 { "name": "Scanner", "role_description": "Scans code", "capabilities": ["file_read"] },
-                { "name": "Analyzer", "role_description": "Analyzes results", "capabilities": ["web_search"] }
+                { "name": "Analyzer", "role_description": "Analyzes results", "capabilities": ["content_search"] }
             ]
         });
         let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;

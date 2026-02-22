@@ -20,7 +20,6 @@ mod tests {
             "git_branch",
             "run_tests",
             "run_command",
-            "web_research",
         ];
 
         for tool_name in execution_tools {
@@ -55,7 +54,6 @@ mod tests {
             "git_branch",
             "run_tests",
             "run_command",
-            "web_research",
             "read_document",
             "think",
             "create_doc",
@@ -70,7 +68,7 @@ mod tests {
             "remove_edge",
         ];
 
-        assert_eq!(all_names.len(), 23);
+        assert_eq!(all_names.len(), 22);
 
         // Verify all map to tools
         for name in all_names {
@@ -100,7 +98,6 @@ mod tests {
             "git_branch",
             "run_tests",
             "run_command",
-            "web_research",
             "read_document",
             "think",
             "create_doc",
@@ -191,21 +188,6 @@ mod tests {
 
         let paths_schema = &props["paths"];
         assert_eq!(paths_schema["type"], "array");
-    }
-
-    #[test]
-    fn test_web_research_schema() {
-        let tool = get_tool_definition("web_research").unwrap();
-        assert_eq!(tool.name, "web_research");
-
-        let props = tool.input_schema["properties"].as_object().unwrap();
-        assert!(props.contains_key("query"));
-        assert!(props.contains_key("sources"));
-        assert!(props.contains_key("allowed_domains"));
-
-        let required = tool.input_schema["required"].as_array().unwrap();
-        assert_eq!(required.len(), 1);
-        assert_eq!(required[0], "query");
     }
 
     #[test]

@@ -172,7 +172,6 @@ pub(crate) fn build_tool_descriptions(capabilities: &[String]) -> Vec<ToolDescri
                 "shell_execution" => "Execute shell commands in a sandboxed environment",
                 "git_read" => "View git history, diffs, status, branches (read-only)",
                 "git_write" => "Commit changes, create branches, push to remote",
-                "web_search" => "Search the web for information",
                 "database_query" => "Execute read-only SQL queries",
                 "document_read" => "Read a document from the knowledge base by ID",
                 "document_create" => "Create a document in the knowledge base",

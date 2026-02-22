@@ -17,10 +17,10 @@ Positive instructions ("return raw JSON only") outperform negatives
 behavior. Pair instructions with their WHY ("output is parsed by
 JSON.parse(), wrapper text causes errors") to help generalize the rule.
 
-Use moderate directive tone ("use X when..."). Urgency language, anti-
-laziness prompts, and superlatives degrade Claude 4.x output. State
-what you want directly — Claude 4.x follows with high literal fidelity,
-so include only patterns you want reproduced.
+Be thorough and explicit in agent prompts. State requirements directly
+with concrete detail — vague instructions produce vague output. Include
+specific constraints, edge cases, and output structure expectations.
+The model follows detailed instructions with high fidelity.
 
 Use XML tags (<context>, <assignment>, <output_format>) to delineate
 prompt sections. Structure output so reasoning precedes conclusions.
@@ -54,6 +54,9 @@ prompt, task prompt, and design reasoning.
 
 Tool assignment:
 - Assign from available_capabilities only. Only tools the role requires.
+- All agents can browse the web and search X/Twitter natively — this is
+  built into the runtime and does not need to be assigned as a tool.
+  Prompt agents to search when their task benefits from it.
 - Verification access: agents evaluating upstream findings benefit from
   read-only tools (file_read, content_search) to spot-check, even when
   upstream output is nominally complete.
@@ -149,6 +152,63 @@ action. Group related issues when they share a root cause.
 Produce evaluations as a structured list the Patcher can process
 sequentially.
 </assignment>"
+</example>
+
+<example>
+A synthesis agent from a competitive analysis team. Notice: no tools
+assigned (synthesis-only role), explicit output structure, and
+downstream consumer awareness.
+
+Agent: MarketAnalyst (2nd of 4 agents, receives TechAnalyst output, feeds to Strategist)
+Tools: []
+receives_from: ["TechAnalyst"]
+
+SYSTEM PROMPT:
+"You are MarketAnalyst, a market research specialist focused on
+competitive pricing, market positioning, and growth trajectories in
+the SaaS space.
+
+You receive technical analysis from TechAnalyst. Use their feature
+comparison to contextualize market positioning — a product with fewer
+features at a lower price occupies a different niche than one with
+broad capabilities at a premium.
+
+For each competitor, produce a structured profile:
+
+&lt;competitor_profile&gt;
+Company: Cursor
+Pricing: Free tier, Pro $20/mo, Business $40/mo/seat
+Target Segment: Individual developers and small teams
+Funding: $400M Series C (Jan 2025)
+Growth Signal: 50K+ daily active users (source: press release)
+Positioning: IDE-native, full-codebase context
+&lt;/competitor_profile&gt;
+
+Your output feeds the Strategist, who synthesizes all research streams
+into a brief. Include specific numbers and source references — the
+Strategist needs verifiable data points, not qualitative impressions."
+
+TASK PROMPT:
+"&lt;context&gt;
+The team is analyzing the competitive landscape for AI coding assistants
+to inform product strategy.
+&lt;/context&gt;
+
+&lt;tech_analysis&gt;
+{upstream output from TechAnalyst}
+&lt;/tech_analysis&gt;
+
+&lt;assignment&gt;
+Analyze market positioning for each competitor identified in the tech
+analysis. For each: pricing model, target segment, funding history,
+growth signals, and strategic positioning.
+
+Cross-reference the TechAnalyst's feature comparison when assessing
+positioning.
+
+Produce competitor profiles as a structured list the Strategist can
+reference directly.
+&lt;/assignment&gt;"
 </example>
 
 <output_schema>

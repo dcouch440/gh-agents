@@ -33,7 +33,7 @@ mod tests {
                 "idle".to_string()
             },
             task: "Research best practices".to_string(),
-            capabilities: vec!["web_search".to_string()],
+            capabilities: vec!["content_search".to_string()],
             failure_mode: "fail_fast".to_string(),
             summary: format!(
                 "{} agent{}",
@@ -57,7 +57,7 @@ mod tests {
             workflow_name: "Test Workflow".to_string(),
             workflow_id: Uuid::new_v4(),
             nodes,
-            available_capabilities: vec!["github".to_string(), "web_search".to_string()],
+            available_capabilities: vec!["github".to_string(), "content_search".to_string()],
         }
     }
 
@@ -79,7 +79,7 @@ mod tests {
         let mut node1 = make_node(
             "Collector",
             vec![
-                make_agent("Scraper", &["web_search"], &[], "Scrapes web pages"),
+                make_agent("Scraper", &["content_search"], &[], "Scrapes web pages"),
                 make_agent("Formatter", &[], &["Scraper"], "Formats output"),
             ],
         );
@@ -166,7 +166,7 @@ mod tests {
     fn render_l2_with_ids_and_capabilities() {
         let mut node = make_node(
             "Collector",
-            vec![make_agent("Scraper", &["web_search"], &[], "Scrapes data")],
+            vec![make_agent("Scraper", &["content_search"], &[], "Scrapes data")],
         );
         node.ref_id = Some("workforce-1".to_string());
         let snapshot = make_board(vec![node]);
@@ -180,11 +180,11 @@ mod tests {
         // L2 includes node id
         assert!(xml.contains("name=\"Collector\" id=\""));
         // L2 includes per-node capabilities
-        assert!(xml.contains("capabilities=\"web_search\""));
+        assert!(xml.contains("capabilities=\"content_search\""));
         // L2 includes available_capabilities at board level
-        assert!(xml.contains("<available_capabilities>github, web_search</available_capabilities>"));
+        assert!(xml.contains("<available_capabilities>github, content_search</available_capabilities>"));
         // L2 renders agent children (not flat attribute)
-        assert!(xml.contains("<agent name=\"Scraper\" capabilities=\"web_search\">"));
+        assert!(xml.contains("<agent name=\"Scraper\" capabilities=\"content_search\">"));
         assert!(xml.contains("Scrapes data"));
         assert!(!xml.contains("agents=\"Scraper\""));
         // L2 should NOT include <asking>
@@ -200,7 +200,7 @@ mod tests {
         let mut node = make_node(
             "Research Team",
             vec![
-                make_agent("Researcher", &["web_search"], &[], "Investigates sources"),
+                make_agent("Researcher", &["content_search"], &[], "Investigates sources"),
                 make_agent("Synthesizer", &[], &["Researcher"], "Combines findings"),
             ],
         );
@@ -221,7 +221,7 @@ mod tests {
         assert!(!xml.contains("<workflow"));
         // Node attributes
         assert!(xml.contains("task=\"Research best practices\""));
-        assert!(xml.contains("capabilities=\"web_search\""));
+        assert!(xml.contains("capabilities=\"content_search\""));
         assert!(xml.contains("receives=\"Context Node\""));
         // Agent children with descriptions
         assert!(xml.contains("<agent name=\"Researcher\""));
@@ -258,7 +258,7 @@ mod tests {
         let mut node = make_node(
             "Research Team",
             vec![
-                make_agent("Researcher", &["web_search"], &[], "Investigates sources"),
+                make_agent("Researcher", &["content_search"], &[], "Investigates sources"),
                 make_agent("Synthesizer", &[], &["Researcher"], "Combines findings"),
             ],
         );
@@ -291,7 +291,7 @@ mod tests {
         assert!(xml.contains("<output_ports>"));
         assert!(xml.contains("<port name=\"report\" to=\"Writer Node\">"));
         // Capabilities as child element
-        assert!(xml.contains("<capabilities>web_search</capabilities>"));
+        assert!(xml.contains("<capabilities>content_search</capabilities>"));
         // Agent roster with ids
         assert!(xml.contains("<agent_roster>"));
         assert!(xml.contains("<agent name=\"Researcher\" id=\""));

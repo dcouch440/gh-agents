@@ -1,6 +1,6 @@
 //! Capability → tool resolution utility.
 //!
-//! Resolves a list of capability keys (e.g. `["web_search", "code_analysis"]`)
+//! Resolves a list of capability keys (e.g. `["file_read", "code_analysis"]`)
 //! into concrete `Tool` definitions by querying the DB for assigned tools and
 //! looking up each tool's runtime definition from the static registry.
 

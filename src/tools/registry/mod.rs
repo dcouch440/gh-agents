@@ -22,7 +22,7 @@ mod tests;
 /// ```
 pub fn get_tool_definition(name: &str) -> Option<Tool> {
     match name {
-        // Execution tools (12)
+        // Execution tools (11)
         "read_file" => Some(read_file_tool()),
         "write_file" => Some(write_file_tool()),
         "edit_file" => Some(edit_file_tool()),
@@ -34,7 +34,6 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "git_branch" => Some(git_branch_tool()),
         "run_tests" => Some(run_tests_tool()),
         "run_command" => Some(run_command_tool()),
-        "web_research" => Some(web_research_tool()),
 
         // Shared tools (used by chat, dispatch, and execution agents)
         "think" => Some(think_tool()),
@@ -281,36 +280,6 @@ fn run_command_tool() -> Tool {
                 }
             },
             "required": ["command"]
-        }),
-    }
-}
-
-fn web_research_tool() -> Tool {
-    Tool {
-        name: "web_research".into(),
-        description: "Research via xAI Grok with web and X/Twitter search.".into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Search query"
-                },
-                "sources": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "enum": ["web", "x"]
-                    },
-                    "description": "Sources to search (web, x)"
-                },
-                "allowed_domains": {
-                    "type": "array",
-                    "items": { "type": "string" },
-                    "description": "Restrict to specific domains (optional)"
-                }
-            },
-            "required": ["query"]
         }),
     }
 }
@@ -574,7 +543,7 @@ fn add_agent_tool() -> Tool {
                 "capabilities": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "Tool capabilities: file_read, file_write, grep, shell, git, github_api, web_search, database_query"
+                    "description": "Tool capabilities: file_read, file_write, content_search, shell, document_read, database_query"
                 }
             },
             "required": ["name"]
@@ -641,7 +610,7 @@ fn set_capabilities_tool() -> Tool {
                 "capabilities": {
                     "type": "array",
                     "items": { "type": "string" },
-                    "description": "Available capabilities: file_read, file_write, grep, shell, git, github_api, web_search, database_query"
+                    "description": "Available capabilities: file_read, file_write, content_search, shell, document_read, database_query"
                 }
             },
             "required": ["capabilities"]
@@ -704,7 +673,7 @@ fn configure_team_tool() -> Tool {
                             "capabilities": {
                                 "type": "array",
                                 "items": { "type": "string" },
-                                "description": "Tool capabilities: file_read, file_write, content_search, shell, web_search, document_read, database_query"
+                                "description": "Tool capabilities: file_read, file_write, content_search, shell, document_read, database_query"
                             }
                         },
                         "required": ["name", "role_description"]

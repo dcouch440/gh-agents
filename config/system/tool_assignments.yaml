@@ -141,24 +141,6 @@ tool_assignments:
   # WEB OPERATIONS
   # ==========================================================================
 
-  web_research:
-    capabilities:
-      - web_search
-      - web_fetch
-      - x_search          # X/Twitter search via Grok
-      - real_time_search  # Real-time web data via Grok
-    notes: >
-      Research topics using real-time web and X/Twitter search via xAI Grok.
-      Returns synthesized answers with citations.
-      Requires XAI_API_KEY environment variable.
-
-      Grok-powered capabilities:
-      - General web search with real-time data
-      - X/Twitter search for trends and conversations
-      - Synthesized answers from multiple sources
-      - Automatic citation generation
-    priority: 10
-
   # Future tools (examples):
   # http_request:
   #   capabilities:

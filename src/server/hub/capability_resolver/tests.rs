@@ -49,17 +49,17 @@ mod tests {
         repo.expect_get_tools_by_capabilities().returning(|_| {
             Ok(vec![
                 test_tool_row("read_file"),
-                test_tool_row("web_research"),
+                test_tool_row("list_files"),
             ])
         });
 
-        let keys = vec!["file_read".to_string(), "web_search".to_string()];
+        let keys = vec!["file_read".to_string(), "file_search".to_string()];
         let (tools, names) = resolve_capabilities_to_tools(&keys, &repo).await.unwrap();
 
         assert_eq!(tools.len(), 2);
         let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
         assert!(tool_names.contains(&"read_file"));
-        assert!(tool_names.contains(&"web_research"));
+        assert!(tool_names.contains(&"list_files"));
         assert_eq!(names.len(), 2);
     }
 

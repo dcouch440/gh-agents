@@ -11,9 +11,7 @@ use crate::execution::{
     parse_porcelain_status, validate_container_path, ContainerHandle, ExecutionContext, FileOps,
     GitOps, Sandbox, TestRunner,
 };
-use crate::llm::{
-    GrokResearchClient, ResearchRequest, ResearchSource, Tool, WebSearchFilters, XSearchFilters,
-};
+use crate::llm::Tool;
 
 // ── Shared File I/O Abstraction ───────────────────────────────────────────
 
@@ -319,39 +317,6 @@ pub fn execution_tools() -> Vec<Tool> {
             }),
         },
         Tool {
-            name: "web_research".into(),
-            description: "Research a topic using real-time web and X/Twitter search via xAI Grok. Returns a synthesized answer with citations. Requires XAI_API_KEY environment variable.".into(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "The research query or question to investigate"
-                    },
-                    "sources": {
-                        "type": "array",
-                        "items": { "type": "string", "enum": ["web", "x"] },
-                        "description": "Which sources to search. Default: both web and X."
-                    },
-                    "allowed_domains": {
-                        "type": "array",
-                        "items": { "type": "string" },
-                        "description": "Only search these web domains (max 5). Optional."
-                    },
-                    "x_handles": {
-                        "type": "array",
-                        "items": { "type": "string" },
-                        "description": "Only search posts from these X handles (max 10). Optional."
-                    },
-                    "x_from_date": {
-                        "type": "string",
-                        "description": "ISO8601 date to limit X search start (YYYY-MM-DD). Optional."
-                    }
-                },
-                "required": ["query"]
-            }),
-        },
-        Tool {
             name: "create_doc".into(),
             description: "Create a new document with auto-generated summary.".into(),
             input_schema: json!({
@@ -445,7 +410,6 @@ pub async fn execute_execution_tool(
         "git_branch" => exec_git_branch(input, ctx),
         "run_tests" => exec_run_tests(input, ctx).await,
         "run_command" => exec_run_command(input, ctx).await,
-        "web_research" => exec_web_research(input).await,
         _ => json!({ "error": format!("Unknown tool: {}", name) }),
     }
 }
@@ -454,7 +418,7 @@ pub async fn execute_execution_tool(
 /// Returns an error for tools that need filesystem/git access.
 pub async fn execute_context_free_tool(
     name: &str,
-    input: &Value,
+    _input: &Value,
     allowed_tools: Option<&[String]>,
 ) -> Value {
     if let Some(allowed) = allowed_tools {
@@ -464,7 +428,6 @@ pub async fn execute_context_free_tool(
     }
 
     match name {
-        "web_research" => exec_web_research(input).await,
         _ => json!({ "error": format!("Tool '{}' requires an execution context", name) }),
     }
 }
@@ -693,94 +656,12 @@ async fn exec_run_command(input: &Value, ctx: &ExecutionContext) -> Value {
     }
 }
 
-// --- Web research (xAI Grok) ---
-
-async fn exec_web_research(input: &Value) -> Value {
-    let query = match input["query"].as_str() {
-        Some(q) => q,
-        None => return json!({ "error": "Missing required parameter: query" }),
-    };
-
-    // Parse sources (default: both)
-    let sources = match input.get("sources").and_then(|v| v.as_array()) {
-        Some(arr) => arr
-            .iter()
-            .filter_map(|v| match v.as_str() {
-                Some("web") => Some(ResearchSource::Web),
-                Some("x") => Some(ResearchSource::X),
-                _ => None,
-            })
-            .collect(),
-        None => vec![ResearchSource::Web, ResearchSource::X],
-    };
-
-    // Parse optional filters
-    let web_filters = input
-        .get("allowed_domains")
-        .and_then(|v| v.as_array())
-        .map(|domains| WebSearchFilters {
-            allowed_domains: Some(
-                domains
-                    .iter()
-                    .filter_map(|d| d.as_str().map(String::from))
-                    .collect(),
-            ),
-            excluded_domains: None,
-        });
-
-    let x_handles = input.get("x_handles").and_then(|v| v.as_array());
-    let x_from_date = input.get("x_from_date").and_then(|v| v.as_str());
-    let x_filters = if x_handles.is_some() || x_from_date.is_some() {
-        Some(XSearchFilters {
-            allowed_x_handles: x_handles.map(|arr| {
-                arr.iter()
-                    .filter_map(|h| h.as_str().map(String::from))
-                    .collect()
-            }),
-            excluded_x_handles: None,
-            from_date: x_from_date.map(String::from),
-            to_date: None,
-        })
-    } else {
-        None
-    };
-
-    let client = match GrokResearchClient::from_env() {
-        Ok(c) => c,
-        Err(e) => {
-            return json!({
-                "error": format!("Grok client initialization failed: {}. Ensure XAI_API_KEY is set.", e)
-            })
-        }
-    };
-
-    let request = ResearchRequest {
-        query: query.to_string(),
-        sources,
-        web_filters,
-        x_filters,
-        system_prompt: None,
-    };
-
-    match client.research(&request).await {
-        Ok(response) => json!({
-            "answer": response.answer,
-            "citations": response.citations,
-            "usage": {
-                "input_tokens": response.usage.input_tokens,
-                "output_tokens": response.usage.output_tokens
-            }
-        }),
-        Err(e) => json!({ "error": format!("Research failed: {}", e) }),
-    }
-}
-
 // ── Container-aware tool dispatch ──────────────────────────────────────────
 
 /// Execute a tool inside a persistent Docker container.
 ///
 /// File/git/command tools delegate to `ContainerHandle`; host-only tools
-/// (web_research, create_doc, search_docs, update_doc) are executed locally.
+/// (create_doc, search_docs, update_doc) are executed locally.
 pub async fn execute_tool_in_container(
     name: &str,
     input: &Value,
@@ -805,8 +686,6 @@ pub async fn execute_tool_in_container(
         "git_branch" => container_git_branch(input, handle).await,
         "run_tests" => container_run_tests(input, handle).await,
         "run_command" => container_run_command(input, handle).await,
-        // Host-side tools — no filesystem needed
-        "web_research" => exec_web_research(input).await,
         "create_doc" | "search_docs" | "update_doc" => {
             json!({ "error": format!("Tool '{}' is not supported in container mode", name) })
         }
@@ -1022,7 +901,7 @@ mod tests {
     #[test]
     fn tool_schemas_are_valid() {
         let tools = execution_tools();
-        assert_eq!(tools.len(), 16);
+        assert_eq!(tools.len(), 15);
         for tool in &tools {
             assert!(!tool.name.is_empty());
             assert!(!tool.description.is_empty());
@@ -1040,9 +919,9 @@ mod tests {
     }
 
     #[test]
-    fn builtin_tool_rows_returns_16() {
+    fn builtin_tool_rows_returns_15() {
         let rows = builtin_tool_rows();
-        assert_eq!(rows.len(), 16);
+        assert_eq!(rows.len(), 15);
         for row in &rows {
             assert!(!row.name.is_empty());
             assert!(!row.display_name.is_empty());
