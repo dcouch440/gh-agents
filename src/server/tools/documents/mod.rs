@@ -173,4 +173,3 @@ pub(crate) async fn execute_read_document(input: &Value, state: &AppState) -> Va
         Err(e) => json!({ "error": e.to_string() }),
     }
 }
-

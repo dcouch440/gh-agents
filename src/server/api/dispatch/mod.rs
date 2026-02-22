@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::server::api::AppError;
 use crate::server::auth::AuthUser;
-use crate::server::state::task_registry::{TaskStatus, TraceEvent};
+use crate::server::state::task_registry::TraceEvent;
 use crate::server::state::AppState;
 
 mod tests;
