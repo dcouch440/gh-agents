@@ -4,13 +4,16 @@
 //! - `NullSink` discards all output for background/non-interactive runs.
 
 pub mod dag;
+pub mod dispatch;
 
 use async_trait::async_trait;
+use serde_json::Value;
 use uuid::Uuid;
 
 use crate::server::state::{AppState, StreamChunk};
 
 pub use dag::DagStreamSink;
+pub use dispatch::DispatchStreamSink;
 
 /// Trait for receiving streaming LLM output.
 ///
@@ -20,11 +23,11 @@ pub trait StreamSink: Send + Sync {
     /// A text token was generated.
     async fn token(&self, text: &str);
 
-    /// A tool call started.
-    async fn tool_start(&self, name: &str, tool_id: &str);
+    /// A tool call started. `input` contains the tool arguments.
+    async fn tool_start(&self, name: &str, tool_id: &str, input: &Value);
 
-    /// A tool call finished.
-    async fn tool_end(&self, name: &str, tool_id: &str);
+    /// A tool call finished. `result` contains the tool return value.
+    async fn tool_end(&self, name: &str, tool_id: &str, result: &Value);
 
     /// An interactive panel was rendered on the node.
     async fn panel_render(&self, content: &str, submit_label: &str);
@@ -57,7 +60,7 @@ impl StreamSink for SseSink {
             .send_stream_chunk(self.message_id, StreamChunk::Token(text.to_string()));
     }
 
-    async fn tool_start(&self, name: &str, tool_id: &str) {
+    async fn tool_start(&self, name: &str, tool_id: &str, _input: &Value) {
         self.state.send_stream_chunk(
             self.message_id,
             StreamChunk::ToolStart {
@@ -67,7 +70,7 @@ impl StreamSink for SseSink {
         );
     }
 
-    async fn tool_end(&self, name: &str, tool_id: &str) {
+    async fn tool_end(&self, name: &str, tool_id: &str, _result: &Value) {
         self.state.send_stream_chunk(
             self.message_id,
             StreamChunk::ToolEnd {
@@ -106,8 +109,8 @@ pub struct NullSink;
 #[async_trait]
 impl StreamSink for NullSink {
     async fn token(&self, _text: &str) {}
-    async fn tool_start(&self, _name: &str, _tool_id: &str) {}
-    async fn tool_end(&self, _name: &str, _tool_id: &str) {}
+    async fn tool_start(&self, _name: &str, _tool_id: &str, _input: &Value) {}
+    async fn tool_end(&self, _name: &str, _tool_id: &str, _result: &Value) {}
     async fn panel_render(&self, _content: &str, _submit_label: &str) {}
     async fn error(&self, _msg: &str) {}
     async fn done(&self) {}

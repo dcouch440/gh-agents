@@ -516,6 +516,34 @@ pub enum SessionEventKind {
         message_type: String,
         content_preview: String,
     },
+    /// Streaming text token from a dispatch agent.
+    DispatchStreamToken {
+        execution_id: Uuid,
+        step_id: Uuid,
+        content: String,
+    },
+    /// A dispatch agent started calling a tool.
+    DispatchStreamToolStart {
+        execution_id: Uuid,
+        step_id: Uuid,
+        tool_name: String,
+        tool_id: String,
+        input: serde_json::Value,
+    },
+    /// A dispatch agent's tool call completed.
+    DispatchStreamToolEnd {
+        execution_id: Uuid,
+        step_id: Uuid,
+        tool_name: String,
+        tool_id: String,
+        result: serde_json::Value,
+    },
+    /// An error occurred during dispatch execution.
+    DispatchStreamError {
+        execution_id: Uuid,
+        step_id: Uuid,
+        error: String,
+    },
 }
 
 impl SessionEvent {
@@ -530,6 +558,10 @@ impl SessionEvent {
             SessionEventKind::DispatchFailed { .. } => "dispatch_failed",
             SessionEventKind::DispatchCancelled { .. } => "dispatch_cancelled",
             SessionEventKind::AgentMessage { .. } => "agent_message",
+            SessionEventKind::DispatchStreamToken { .. } => "dispatch_stream_token",
+            SessionEventKind::DispatchStreamToolStart { .. } => "dispatch_stream_tool_start",
+            SessionEventKind::DispatchStreamToolEnd { .. } => "dispatch_stream_tool_end",
+            SessionEventKind::DispatchStreamError { .. } => "dispatch_stream_error",
         }
     }
 

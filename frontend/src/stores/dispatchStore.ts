@@ -1,5 +1,5 @@
 // ============================================================================
-// dispatchStore — Tracks active dispatch tasks per step
+// dispatchStore — Tracks active dispatch tasks per step with execution trace
 // ============================================================================
 
 import { createStore } from './lib'
@@ -10,6 +10,12 @@ import type { WsWireMessage } from '@/types/ws'
 
 type DispatchStatus = 'running' | 'completed' | 'failed' | 'cancelled'
 
+type DispatchTraceEvent =
+  | { type: 'token'; content: string; ts: string }
+  | { type: 'tool_start'; toolName: string; toolId: string; input: Record<string, unknown>; ts: string }
+  | { type: 'tool_end'; toolName: string; toolId: string; result: unknown; ts: string }
+  | { type: 'error'; error: string; ts: string }
+
 type DispatchEntry = {
   executionId: string
   stepId: string
@@ -19,6 +25,8 @@ type DispatchEntry = {
   summary: string | null
   error: string | null
   startedAt: string
+  trace: DispatchTraceEvent[]
+  tokenBuffer: string
 }
 
 type DispatchState = {
@@ -45,6 +53,23 @@ const selectActiveForStep =
     return entry?.status === 'running' ? entry : null
   }
 
+const selectTrace =
+  (stepId: string) =>
+  (s: DispatchState): DispatchTraceEvent[] =>
+    s.byStep[stepId]?.trace ?? []
+
+const selectToolEvents =
+  (stepId: string) =>
+  (s: DispatchState): DispatchTraceEvent[] =>
+    (s.byStep[stepId]?.trace ?? []).filter(
+      (e) => e.type === 'tool_start' || e.type === 'tool_end'
+    )
+
+const selectTokenBuffer =
+  (stepId: string) =>
+  (s: DispatchState): string =>
+    s.byStep[stepId]?.tokenBuffer ?? ''
+
 // ── Cleanup ─────────────────────────────────────────────────────────────────
 
 const CLEANUP_DELAY = 30_000
@@ -59,6 +84,19 @@ const scheduleCleanup = (stepId: string): void => {
       return { byStep: rest }
     })
   }, CLEANUP_DELAY)
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+const updateEntry = (
+  stepId: string,
+  updater: (entry: DispatchEntry) => DispatchEntry
+): void => {
+  store.setState((s) => {
+    const existing = s.byStep[stepId]
+    if (!existing) return s
+    return { byStep: { ...s.byStep, [stepId]: updater(existing) } }
+  })
 }
 
 // ── WS Handler ──────────────────────────────────────────────────────────────
@@ -79,43 +117,92 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         summary: null,
         error: null,
         startedAt: msg.ts,
+        trace: [],
+        tokenBuffer: '',
       }
       store.setState((s) => ({ byStep: { ...s.byStep, [stepId]: entry } }))
       break
     }
     case SESSION_EVENT.DISPATCH_PROGRESS: {
-      store.setState((s) => {
-        const existing = s.byStep[stepId]
-        if (!existing) return s
-        return { byStep: { ...s.byStep, [stepId]: { ...existing, message: (data.message as string | undefined) ?? null } } }
-      })
+      updateEntry(stepId, (e) => ({
+        ...e,
+        message: (data.message as string | undefined) ?? null,
+      }))
       break
     }
     case SESSION_EVENT.DISPATCH_COMPLETED: {
-      store.setState((s) => {
-        const existing = s.byStep[stepId]
-        if (!existing) return s
-        return { byStep: { ...s.byStep, [stepId]: { ...existing, status: 'completed', summary: (data.summary as string | undefined) ?? null } } }
-      })
+      updateEntry(stepId, (e) => ({
+        ...e,
+        status: 'completed',
+        summary: (data.summary as string | undefined) ?? null,
+      }))
       scheduleCleanup(stepId)
       break
     }
     case SESSION_EVENT.DISPATCH_FAILED: {
-      store.setState((s) => {
-        const existing = s.byStep[stepId]
-        if (!existing) return s
-        return { byStep: { ...s.byStep, [stepId]: { ...existing, status: 'failed', error: (data.error as string | undefined) ?? null } } }
-      })
+      updateEntry(stepId, (e) => ({
+        ...e,
+        status: 'failed',
+        error: (data.error as string | undefined) ?? null,
+      }))
       scheduleCleanup(stepId)
       break
     }
     case SESSION_EVENT.DISPATCH_CANCELLED: {
-      store.setState((s) => {
-        const existing = s.byStep[stepId]
-        if (!existing) return s
-        return { byStep: { ...s.byStep, [stepId]: { ...existing, status: 'cancelled' } } }
-      })
+      updateEntry(stepId, (e) => ({ ...e, status: 'cancelled' }))
       scheduleCleanup(stepId)
+      break
+    }
+    // ── Dispatch streaming events ─────────────────────────────────────
+    case SESSION_EVENT.DISPATCH_STREAM_TOKEN: {
+      const content = data.content as string
+      updateEntry(stepId, (e) => ({
+        ...e,
+        tokenBuffer: e.tokenBuffer + content,
+        trace: [...e.trace, { type: 'token', content, ts: msg.ts }],
+      }))
+      break
+    }
+    case SESSION_EVENT.DISPATCH_STREAM_TOOL_START: {
+      updateEntry(stepId, (e) => ({
+        ...e,
+        trace: [
+          ...e.trace,
+          {
+            type: 'tool_start' as const,
+            toolName: data.tool_name as string,
+            toolId: data.tool_id as string,
+            input: data.input as Record<string, unknown>,
+            ts: msg.ts,
+          },
+        ],
+      }))
+      break
+    }
+    case SESSION_EVENT.DISPATCH_STREAM_TOOL_END: {
+      updateEntry(stepId, (e) => ({
+        ...e,
+        trace: [
+          ...e.trace,
+          {
+            type: 'tool_end' as const,
+            toolName: data.tool_name as string,
+            toolId: data.tool_id as string,
+            result: data.result,
+            ts: msg.ts,
+          },
+        ],
+      }))
+      break
+    }
+    case SESSION_EVENT.DISPATCH_STREAM_ERROR: {
+      updateEntry(stepId, (e) => ({
+        ...e,
+        trace: [
+          ...e.trace,
+          { type: 'error' as const, error: data.error as string, ts: msg.ts },
+        ],
+      }))
       break
     }
   }
@@ -127,7 +214,10 @@ export const dispatchStore = {
   store,
   selectByStepId,
   selectActiveForStep,
+  selectTrace,
+  selectToolEvents,
+  selectTokenBuffer,
   handleWsEvent,
 }
 
-export type { DispatchEntry, DispatchState, DispatchStatus }
+export type { DispatchEntry, DispatchState, DispatchStatus, DispatchTraceEvent }

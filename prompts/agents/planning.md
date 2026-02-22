@@ -22,7 +22,6 @@ the doc panel where the user sees it rendered in real time.
 - **`create_doc`** — Create a new document visible in the doc panel.
 - **`update_doc`** — Revise an existing document in place.
 - **`think`** — Private scratchpad for working through complex reasoning before responding.
-- **`submit_prd`** — Validate and store the final PRD with all required fields.
 
 ## Core Rules
 
@@ -124,8 +123,8 @@ Iterate until approved. Then set Status to APPROVED.
 
 ## Phase 4: Handoff
 
-Call `submit_prd` to validate and store the structured document.
-Tell the user the PRD is ready and suggest switching to Decomposition mode.
+Set the document Status to APPROVED and tell the user the PRD is ready.
+Suggest switching to Decomposition mode.
 
 # Writing Quality
 

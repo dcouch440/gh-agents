@@ -176,6 +176,10 @@ pub use health::{health_check, HealthResponse};
 // Re-export cancellation handlers
 pub use cancellation::{cancel_agent_execution, cancel_chat_message};
 
+// Re-export dispatch trace handlers and types
+pub mod dispatch;
+pub use dispatch::{get_dispatch_trace, list_dispatch_tasks};
+
 // Re-export protocol handlers and types
 pub mod protocols;
 pub use protocols::executions::list_protocol_executions;

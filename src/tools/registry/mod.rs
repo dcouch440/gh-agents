@@ -36,8 +36,7 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "run_command" => Some(run_command_tool()),
         "web_research" => Some(web_research_tool()),
 
-        // Orchestrator tools
-        "search_files" => Some(search_files_tool()),
+        // Shared tools (used by chat, dispatch, and execution agents)
         "think" => Some(think_tool()),
         "create_doc" => Some(create_doc_tool()),
         "update_doc" => Some(update_doc_tool()),
@@ -317,29 +316,8 @@ fn web_research_tool() -> Tool {
 }
 
 // ============================================================================
-// Orchestrator Tool Definitions (from src/server/tools/mod.rs)
+// Shared Tool Definitions
 // ============================================================================
-
-fn search_files_tool() -> Tool {
-    Tool {
-        name: "search_files".into(),
-        description: "Search files in codebase with regex pattern.".into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "pattern": {
-                    "type": "string",
-                    "description": "Regex pattern to search for"
-                },
-                "path": {
-                    "type": "string",
-                    "description": "Directory to search (empty = all)"
-                }
-            },
-            "required": ["pattern"]
-        }),
-    }
-}
 
 fn think_tool() -> Tool {
     Tool {

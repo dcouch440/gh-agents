@@ -8,29 +8,6 @@ use crate::llm::{LLMRequest, Message as LlmMessage};
 
 mod tests;
 
-/// Call the utility model to summarize a file for the orchestrator context.
-pub async fn haiku_read_file(prompt: &str) -> Option<String> {
-    let client = crate::llm::create_utility_client().ok()?;
-
-    let request = LLMRequest::new(crate::constants::MODEL_TIER3, vec![LlmMessage::user(prompt.to_string())])
-        .with_system(
-            "You are a code reader. Given a source file, extract and return the most relevant content. \
-         Include function signatures, struct/type definitions, key logic, and imports. \
-         Use the original code when possible — quote exact lines for precision. \
-         If a focus area is specified, prioritize content related to it. \
-         Be concise but preserve technical accuracy. Do not add commentary.",
-        )
-        .with_max_tokens(crate::constants::MAX_TOKENS_FILE_READ);
-
-    match client.send_message(request).await {
-        Ok(resp) => Some(resp.content),
-        Err(e) => {
-            tracing::warn!("Utility file read failed: {}", e);
-            None
-        }
-    }
-}
-
 /// Call the utility model to generate a short summary for search indexing.
 pub async fn haiku_summarize(content: &str) -> Option<String> {
     let client = crate::llm::create_utility_client().ok()?;

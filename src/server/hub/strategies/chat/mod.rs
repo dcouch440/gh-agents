@@ -16,7 +16,6 @@ use uuid::Uuid;
 
 use crate::llm::{Message, TokenUsage, Tool};
 use crate::server::state::AppState;
-use crate::server::tools as server_tools;
 use crate::types::UserId;
 
 use super::super::error::HubError;
@@ -107,7 +106,7 @@ impl ExecutionStrategy for ChatStrategy {
         if let Some(ref ctx) = self.step_context {
             return tools::resolve_chat_step_tools(&ctx.execution_mode);
         }
-        server_tools::filtered_tools(&self.config.tool_names)
+        vec![]
     }
 
     fn model_id(&self) -> &str {
@@ -154,7 +153,7 @@ impl ExecutionStrategy for ChatStrategy {
                 return value;
             }
         }
-        server_tools::execute_tool(name, input, &self.state, self.user_id, self.session_id).await
+        serde_json::json!({ "error": format!("Unknown tool: {}", name) })
     }
 
     fn state(&self) -> Option<&AppState> {

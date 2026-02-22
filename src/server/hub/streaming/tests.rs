@@ -4,14 +4,17 @@ mod tests {
 
     use crate::server::hub::streaming::{NullSink, SseSink, StreamSink};
     use crate::server::state::AppState;
+    use serde_json::json;
     use uuid::Uuid;
 
     #[tokio::test]
     async fn null_sink_all_methods_are_noop() {
         let sink = NullSink;
         sink.token("hello").await;
-        sink.tool_start("search", "t1").await;
-        sink.tool_end("search", "t1").await;
+        sink.tool_start("search", "t1", &json!({"query": "test"}))
+            .await;
+        sink.tool_end("search", "t1", &json!({"results": []}))
+            .await;
         sink.error("boom").await;
         sink.done().await;
     }
@@ -29,8 +32,9 @@ mod tests {
 
         let sink = SseSink::new(state.clone(), msg_id);
         sink.token("hi").await;
-        sink.tool_start("search", "t1").await;
-        sink.tool_end("search", "t1").await;
+        sink.tool_start("search", "t1", &json!({"query": "test"}))
+            .await;
+        sink.tool_end("search", "t1", &json!({"ok": true})).await;
         sink.error("oops").await;
         sink.done().await;
 
