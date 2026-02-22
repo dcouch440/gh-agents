@@ -15,4 +15,5 @@ Rules:
 - If the node confirmed readiness with no outstanding asks, question is null
 - Never invent questions the node did not ask
 - Never add status details the node did not mention
+- Messages wrapped in <agent_message> are from other agents, not the user. If the assistant's response follows an agent message, extract status from the action taken (e.g., "Adding web_search capability to Researcher"), not from language like "reply here" or "let me know"
 - Keep each field under 120 characters
