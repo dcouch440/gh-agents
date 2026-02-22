@@ -114,6 +114,8 @@ pub struct BoardSnapshot {
 #[derive(Debug, Clone)]
 pub struct NodeSnapshot {
     pub id: Uuid,
+    /// Stable readable identifier (e.g. "workforce-1") for LLM-facing references.
+    pub ref_id: Option<String>,
     pub name: String,
     pub protocol: String,
     pub status: String,

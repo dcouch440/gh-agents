@@ -143,7 +143,10 @@ impl ExecutionStrategy for DispatchStrategy {
         let mut vars = HashMap::new();
         vars.insert("System.board_state".to_string(), board_state_xml);
 
-        Ok(Some(resolve_template(roles::WORKFORCE_BUILDER_SYSTEM, &vars)))
+        Ok(Some(resolve_template(
+            roles::WORKFORCE_BUILDER_SYSTEM,
+            &vars,
+        )))
     }
 
     async fn build_messages(&self, _input: &str) -> Result<Vec<Message>, HubError> {

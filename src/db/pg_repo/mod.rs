@@ -1158,8 +1158,8 @@ impl WorkflowRepo for PgRepo {
     async fn create_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow> {
         let row: WorkflowStepRow = sqlx::query_as(
             r#"
-            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, for_each_label_field, display_order, reasoning_trace, verification_agent_ids, position_x, position_y, width, height, name, system_prompt_suffix, visible, description, child_workflow_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+            INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, for_each_ref, prompt_template_id, prompt_template, output_schema_id, output_variable_name, interactive_agent_id, for_each_label_field, display_order, reasoning_trace, verification_agent_ids, position_x, position_y, width, height, name, system_prompt_suffix, visible, description, child_workflow_id, ref_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
             RETURNING *
             "#,
         )
@@ -1186,6 +1186,7 @@ impl WorkflowRepo for PgRepo {
         .bind(step.visible)
         .bind(&step.description)
         .bind(step.child_workflow_id)
+        .bind(&step.ref_id)
         .fetch_one(&self.pool)
         .await?;
         Ok(row)
@@ -1195,6 +1196,20 @@ impl WorkflowRepo for PgRepo {
         let row: Option<WorkflowStepRow> =
             sqlx::query_as("SELECT * FROM workflow_steps WHERE id = $1")
                 .bind(id)
+                .fetch_optional(&self.pool)
+                .await?;
+        Ok(row)
+    }
+
+    async fn find_step_by_ref_id(
+        &self,
+        workflow_id: Uuid,
+        ref_id: &str,
+    ) -> Result<Option<WorkflowStepRow>> {
+        let row: Option<WorkflowStepRow> =
+            sqlx::query_as("SELECT * FROM workflow_steps WHERE workflow_id = $1 AND ref_id = $2")
+                .bind(workflow_id)
+                .bind(ref_id)
                 .fetch_optional(&self.pool)
                 .await?;
         Ok(row)

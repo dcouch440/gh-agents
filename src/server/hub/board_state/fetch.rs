@@ -31,10 +31,7 @@ pub async fn fetch_node(
     workflow_id: Uuid,
     step_id: Uuid,
 ) -> Result<NodeSnapshot> {
-    let step = repo
-        .get_step(step_id)
-        .await?
-        .context("Step not found")?;
+    let step = repo.get_step(step_id).await?.context("Step not found")?;
 
     let edges = repo.list_edges(workflow_id).await?;
 
@@ -45,10 +42,7 @@ pub async fn fetch_node(
 ///
 /// Bulk-loads steps and edges once, then assembles each node using
 /// the pre-loaded data for efficient upstream lookups.
-pub async fn fetch_board(
-    repo: &dyn WorkflowRepo,
-    workflow_id: Uuid,
-) -> Result<BoardSnapshot> {
+pub async fn fetch_board(repo: &dyn WorkflowRepo, workflow_id: Uuid) -> Result<BoardSnapshot> {
     let workflow = repo
         .get_workflow(workflow_id)
         .await?
@@ -58,10 +52,8 @@ pub async fn fetch_board(
     let all_edges = repo.list_edges(workflow_id).await?;
 
     // Build lookup map for efficient upstream resolution
-    let steps_map: HashMap<Uuid, WorkflowStepRow> = all_steps
-        .iter()
-        .map(|s| (s.id, s.clone()))
-        .collect();
+    let steps_map: HashMap<Uuid, WorkflowStepRow> =
+        all_steps.iter().map(|s| (s.id, s.clone())).collect();
 
     let mut nodes = Vec::new();
     let mut all_capabilities: HashSet<String> = HashSet::new();
@@ -150,10 +142,7 @@ async fn assemble_node(
     let output_ports = load_output_ports(repo, step.id, workflow_edges, steps_map).await?;
 
     // Assistant notes (L4)
-    let notes = repo
-        .get_assistant_notes(step.id)
-        .await?
-        .unwrap_or_default();
+    let notes = repo.get_assistant_notes(step.id).await?.unwrap_or_default();
 
     // Derived fields
     let status = derive_node_status(step, !task.is_empty(), agents.len());
@@ -161,6 +150,7 @@ async fn assemble_node(
 
     Ok(NodeSnapshot {
         id: step.id,
+        ref_id: step.ref_id.clone(),
         name: step.name.clone().unwrap_or_else(|| "(unnamed)".to_string()),
         protocol: step.execution_mode.clone(),
         status,
@@ -216,8 +206,7 @@ async fn load_agents(
     let mut has_deps = false;
 
     for edge in &child_edges {
-        if agent_step_ids.contains(&edge.from_step_id)
-            && agent_step_ids.contains(&edge.to_step_id)
+        if agent_step_ids.contains(&edge.from_step_id) && agent_step_ids.contains(&edge.to_step_id)
         {
             if let (Some(&from_name), Some(&to_name)) = (
                 step_to_name.get(&edge.from_step_id),
@@ -268,11 +257,7 @@ async fn resolve_upstream_names(
         let name = if let Some(map) = steps_map {
             map.get(&uid).and_then(|s| s.name.clone())
         } else {
-            repo.get_step(uid)
-                .await
-                .ok()
-                .flatten()
-                .and_then(|s| s.name)
+            repo.get_step(uid).await.ok().flatten().and_then(|s| s.name)
         };
         names.push(name.unwrap_or_else(|| format!("Step {}", uid)));
     }
@@ -372,8 +357,7 @@ async fn load_output_ports(
         let to_node = workflow_edges
             .iter()
             .find(|e| {
-                e.from_step_id == step_id
-                    && e.from_output_port.as_deref() == Some(&row.port_name)
+                e.from_step_id == step_id && e.from_output_port.as_deref() == Some(&row.port_name)
             })
             .and_then(|e| {
                 if let Some(map) = steps_map {

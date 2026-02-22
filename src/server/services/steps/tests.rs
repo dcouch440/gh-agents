@@ -144,6 +144,81 @@ mod tests {
         assert_eq!(step.agent_id, None);
     }
 
+    // ── generate_ref_id ────────────────────────────────────────────────
+
+    #[test]
+    fn generate_ref_id_first_step() {
+        let ref_id = generate_ref_id(&[], "workforce");
+        assert_eq!(ref_id, "workforce-1");
+    }
+
+    #[test]
+    fn generate_ref_id_increments() {
+        let mut s1 = step();
+        s1.ref_id = Some("workforce-1".to_string());
+        let mut s2 = step();
+        s2.ref_id = Some("workforce-2".to_string());
+
+        let ref_id = generate_ref_id(&[s1, s2], "workforce");
+        assert_eq!(ref_id, "workforce-3");
+    }
+
+    #[test]
+    fn generate_ref_id_different_modes() {
+        let mut s1 = step();
+        s1.ref_id = Some("workforce-1".to_string());
+        let mut s2 = step();
+        s2.ref_id = Some("context-1".to_string());
+
+        // New context step should be context-2
+        let ref_id = generate_ref_id(&[s1.clone(), s2], "context");
+        assert_eq!(ref_id, "context-2");
+
+        // New workforce step should be workforce-2
+        let ref_id = generate_ref_id(&[s1], "workforce");
+        assert_eq!(ref_id, "workforce-2");
+    }
+
+    #[test]
+    fn generate_ref_id_gaps_in_sequence() {
+        // If workforce-1 exists but workforce-2 was deleted, next is workforce-2 (max+1)
+        let mut s1 = step();
+        s1.ref_id = Some("workforce-1".to_string());
+        let mut s3 = step();
+        s3.ref_id = Some("workforce-3".to_string());
+
+        let ref_id = generate_ref_id(&[s1, s3], "workforce");
+        assert_eq!(ref_id, "workforce-4");
+    }
+
+    #[tokio::test]
+    async fn create_step_generates_ref_id() {
+        let owner = Uuid::new_v4();
+        let wf = workflow(owner);
+        let wf_id = wf.id;
+
+        let mut repo = MockWorkflowRepo::new();
+        repo.expect_get_workflow()
+            .returning(move |_| Ok(Some(wf.clone())));
+        repo.expect_list_steps().returning(|_| Ok(vec![]));
+        repo.expect_create_step().returning(|step| Ok(step));
+
+        let result = create_step(
+            &repo,
+            CreateStepInput {
+                workflow_id: wf_id,
+                user_id: owner,
+                payload: StepPayload {
+                    execution_mode: Some("workforce".to_string()),
+                    ..Default::default()
+                },
+            },
+        )
+        .await;
+        let step = result.unwrap();
+        assert_eq!(step.ref_id, Some("workforce-1".to_string()));
+    }
+
     // ── get_step ──────────────────────────────────────────────────────
 
     #[tokio::test]

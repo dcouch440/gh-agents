@@ -302,9 +302,7 @@ async fn execute_configure_team(
         };
         let role_description = match agent_val["role_description"].as_str() {
             Some(r) => r.to_string(),
-            None => {
-                return json!({ "error": format!("agents[{}] missing 'role_description'", i) })
-            }
+            None => return json!({ "error": format!("agents[{}] missing 'role_description'", i) }),
         };
         let capabilities: Vec<String> = agent_val["capabilities"]
             .as_array()
@@ -340,8 +338,10 @@ async fn execute_configure_team(
     }
 
     // Validate dependency agent names exist in desired roster
-    let desired_name_set: HashSet<String> =
-        desired_agents.iter().map(|(n, _, _)| normalize_name(n)).collect();
+    let desired_name_set: HashSet<String> = desired_agents
+        .iter()
+        .map(|(n, _, _)| normalize_name(n))
+        .collect();
     for (from, to) in &desired_deps {
         if !desired_name_set.contains(&normalize_name(from)) {
             return json!({ "error": format!("Dependency references unknown agent '{}'", from) });
@@ -367,25 +367,24 @@ async fn execute_configure_team(
     };
 
     // --- Diff task ------------------------------------------------------
-    let task_status =
-        if current_brief.as_ref().map(|b| b.task_description.as_str()) == Some(task) {
-            "unchanged"
+    let task_status = if current_brief.as_ref().map(|b| b.task_description.as_str()) == Some(task) {
+        "unchanged"
+    } else {
+        if let Err(e) =
+            upsert_mission_brief_field(repo, ctx.step_id, Some(task), None, None, None).await
+        {
+            return json!({ "error": format!("Failed to update task: {}", e) });
+        }
+        if current_brief
+            .as_ref()
+            .map(|b| b.task_description.is_empty())
+            .unwrap_or(true)
+        {
+            "created"
         } else {
-            if let Err(e) =
-                upsert_mission_brief_field(repo, ctx.step_id, Some(task), None, None, None).await
-            {
-                return json!({ "error": format!("Failed to update task: {}", e) });
-            }
-            if current_brief
-                .as_ref()
-                .map(|b| b.task_description.is_empty())
-                .unwrap_or(true)
-            {
-                "created"
-            } else {
-                "updated"
-            }
-        };
+            "updated"
+        }
+    };
 
     // --- Diff agents ---------------------------------------------------
     let current_by_name: HashMap<String, &crate::db::TaskAgentRosterRow> = current_roster
@@ -550,8 +549,7 @@ async fn execute_configure_team(
         let current_edges: HashSet<(Uuid, Uuid)> = all_edges
             .iter()
             .filter(|e| {
-                agent_step_ids.contains(&e.from_step_id)
-                    && agent_step_ids.contains(&e.to_step_id)
+                agent_step_ids.contains(&e.from_step_id) && agent_step_ids.contains(&e.to_step_id)
             })
             .map(|e| (e.from_step_id, e.to_step_id))
             .collect();
@@ -574,9 +572,8 @@ async fn execute_configure_team(
                     Ok(_) => {
                         let from_name = step_to_name.get(&from_sid).unwrap_or(&"?");
                         let to_name = step_to_name.get(&to_sid).unwrap_or(&"?");
-                        dep_results.push(
-                            json!({ "from": from_name, "to": to_name, "status": "created" }),
-                        );
+                        dep_results
+                            .push(json!({ "from": from_name, "to": to_name, "status": "created" }));
                     }
                     Err(crate::server::services::ServiceError::Conflict(_)) => {
                         let from_name = step_to_name.get(&from_sid).unwrap_or(&"?");
@@ -610,8 +607,7 @@ async fn execute_configure_team(
                 }
                 let from_name = step_to_name.get(&from_sid).unwrap_or(&"?");
                 let to_name = step_to_name.get(&to_sid).unwrap_or(&"?");
-                dep_results
-                    .push(json!({ "from": from_name, "to": to_name, "status": "removed" }));
+                dep_results.push(json!({ "from": from_name, "to": to_name, "status": "removed" }));
             }
         }
     }
@@ -1164,4 +1160,3 @@ async fn execute_remove_dependency(
         "execution_sequence": execution_sequence,
     })
 }
-
