@@ -178,8 +178,14 @@ mod tests {
         assert!(xml.contains("ref=\"workforce-1\""));
         // L2 includes node id
         assert!(xml.contains("name=\"Collector\" id=\""));
-        // L2 includes available_capabilities
+        // L2 includes per-node capabilities
+        assert!(xml.contains("capabilities=\"web_search\""));
+        // L2 includes available_capabilities at board level
         assert!(xml.contains("<available_capabilities>github, web_search</available_capabilities>"));
+        // L2 renders agent children (not flat attribute)
+        assert!(xml.contains("<agent name=\"Scraper\" capabilities=\"web_search\">"));
+        assert!(xml.contains("Scrapes data"));
+        assert!(!xml.contains("agents=\"Scraper\""));
         // L2 should NOT include <asking>
         assert!(!xml.contains("<asking>"));
     }
@@ -334,6 +340,8 @@ mod tests {
         assert!(BoardStateVariant::ManagerBuilder.include_compressed_status());
         assert!(BoardStateVariant::ManagerBuilder.include_node_ids());
         assert!(BoardStateVariant::ManagerBuilder.include_capabilities());
+        assert!(BoardStateVariant::ManagerBuilder.include_agent_children());
+        assert!(BoardStateVariant::ManagerBuilder.include_agent_descriptions());
 
         // L3
         assert!(!BoardStateVariant::NodeAssistant.include_agent_ids());

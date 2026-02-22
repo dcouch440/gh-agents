@@ -30,8 +30,12 @@ pub fn render_node(node: &NodeSnapshot, variant: BoardStateVariant) -> String {
         &node.task,
     );
 
-    // L3: capabilities as attribute on <node>
-    if matches!(variant, BoardStateVariant::NodeAssistant) && !node.capabilities.is_empty() {
+    // L2/L3: capabilities as attribute on <node>
+    if matches!(
+        variant,
+        BoardStateVariant::ManagerBuilder | BoardStateVariant::NodeAssistant
+    ) && !node.capabilities.is_empty()
+    {
         el.attr("capabilities", &node.capabilities.join(", "));
     }
 

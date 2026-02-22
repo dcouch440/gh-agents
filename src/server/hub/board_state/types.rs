@@ -75,14 +75,14 @@ impl BoardStateVariant {
     }
 
     /// Whether individual `<agent>` child elements are rendered inside `<node>`.
-    /// L1/L2 show agents as a summary attribute instead.
+    /// L1 shows agents as a summary attribute instead.
     pub fn include_agent_children(&self) -> bool {
-        matches!(self, Self::NodeAssistant | Self::Dispatch)
+        matches!(self, Self::ManagerBuilder | Self::NodeAssistant | Self::Dispatch)
     }
 
     /// Whether agent role descriptions are included in agent elements.
     pub fn include_agent_descriptions(&self) -> bool {
-        matches!(self, Self::NodeAssistant | Self::Dispatch)
+        matches!(self, Self::ManagerBuilder | Self::NodeAssistant | Self::Dispatch)
     }
 
     /// Whether incoming port/context details are included.
