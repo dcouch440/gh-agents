@@ -96,6 +96,8 @@ pub(crate) struct AppStateInner {
     pub(crate) provider_registry: ProviderRegistry,
     /// Prompt registry for core system/agent prompts
     pub(crate) prompt_registry: Arc<PromptRegistry>,
+    /// In-memory capability → tool resolution (loaded from YAML at startup)
+    pub(crate) capability_registry: Arc<crate::config::capability_registry::CapabilityRegistry>,
     /// JWT secret for token signing
     pub(crate) jwt_secret: Vec<u8>,
     /// Channel to send messages to the orchestrator
@@ -172,6 +174,9 @@ impl AppState {
         // Load prompt registry from prompts/ directory
         let prompt_registry = Self::load_prompt_registry();
 
+        // Load capability registry from YAML config files
+        let capability_registry = Self::load_capability_registry();
+
         // Initialize LLM providers
         let (provider, provider_registry) = Self::init_providers().await;
 
@@ -183,6 +188,7 @@ impl AppState {
             provider,
             provider_registry,
             prompt_registry,
+            capability_registry,
             jwt_secret,
             chat_tx,
             response_streams: DashMap::new(),
@@ -220,6 +226,7 @@ impl AppState {
                 provider: None,
                 provider_registry: ProviderRegistry::default(),
                 prompt_registry: Arc::new(PromptRegistry::empty()),
+                capability_registry: Arc::new(crate::config::capability_registry::CapabilityRegistry::empty()),
                 jwt_secret,
                 chat_tx,
                 response_streams: DashMap::new(),
@@ -288,6 +295,24 @@ impl AppState {
                     e
                 );
                 Arc::new(PromptRegistry::empty())
+            }
+        }
+    }
+
+    fn load_capability_registry() -> Arc<crate::config::capability_registry::CapabilityRegistry> {
+        let config_dir = std::env::current_dir().unwrap_or_default().join("config");
+        match crate::config::capability_registry::CapabilityRegistry::load(&config_dir) {
+            Ok(registry) => {
+                tracing::info!("Loaded capability registry from {}", config_dir.display());
+                Arc::new(registry)
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to load capability registry from {}: {} — using empty registry",
+                    config_dir.display(),
+                    e
+                );
+                Arc::new(crate::config::capability_registry::CapabilityRegistry::empty())
             }
         }
     }
@@ -484,6 +509,13 @@ impl AppState {
     /// Access the prompt registry.
     pub fn prompt_registry(&self) -> &Arc<PromptRegistry> {
         &self.0.prompt_registry
+    }
+
+    /// Access the capability registry (YAML-backed, in-memory).
+    pub fn capability_registry(
+        &self,
+    ) -> &Arc<crate::config::capability_registry::CapabilityRegistry> {
+        &self.0.capability_registry
     }
 
     /// Access the protocol engine.

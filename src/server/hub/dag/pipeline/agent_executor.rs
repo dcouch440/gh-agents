@@ -8,7 +8,6 @@ use tracing::{error, info, warn};
 
 use crate::config::protocols::WORKFORCE;
 use crate::db::traits::CreateAgentExecutionInput;
-use crate::server::hub::capability_resolver::resolve_capabilities_to_tools;
 use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::execution_recorder::{
     PhaseCompletion, ProtocolExecutionRecorder,
@@ -218,12 +217,7 @@ async fn execute_single_agent(
 
     // Resolve capabilities
     let (tools, tool_names) =
-        resolve_capabilities_to_tools(&designed.tools, &*env.state.repos().tool_capabilities)
-            .await
-            .unwrap_or_else(|e| {
-                warn!(agent = %designed.agent_name, "Capability resolution failed: {}", e);
-                (vec![], vec![])
-            });
+        env.state.capability_registry().resolve_tools(&designed.tools);
 
     // Inject previous outputs filtered by designer routing
     let filtered = filter_outputs_for_agent(prior_outputs, &designed.receives_from);

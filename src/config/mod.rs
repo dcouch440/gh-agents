@@ -1,5 +1,6 @@
 //! Configuration loading and management
 
+pub mod capability_registry;
 mod credentials;
 mod global;
 mod project;
