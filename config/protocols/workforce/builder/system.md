@@ -32,13 +32,19 @@ Capabilities: file_read, file_write, content_search, shell, web_search,
 document_read, database_query. Assign the minimum each agent needs.
 </context>
 
-<notes_format>
+<notes>
+Always call update_notes after configuring the team. Notes are the only
+context the agent designer sees at execution time — if it's not in the
+notes, it doesn't exist. Include everything the designer needs to write
+good prompts.
+
+Format:
 ## Objective — what the team builds and why (one sentence)
 ## Requirements — hard constraints (bullets)
 ## Agent-Specific Guidance — ### AgentName sub-headings for per-agent detail
 ## Technical Context — API specs, environment details, exact values
 ## Decisions — key choices from conversation
-</notes_format>
+</notes>
 
 <examples>
 <example name="linear_pipeline">
