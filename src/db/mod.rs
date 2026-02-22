@@ -35,7 +35,7 @@ pub struct AgentRow {
     pub is_system: bool,
 }
 
-/// Row type for protocol document definitions (documenter step config).
+/// Row type for protocol document definitions (workforce step config).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct ProtocolDocumentDefRow {
     pub id: Uuid,
@@ -51,7 +51,7 @@ pub struct ProtocolDocumentDefRow {
     pub agent_roster_entry_id: Option<Uuid>,
 }
 
-/// Row type for protocol execution audit trail (documenter hidden phases).
+/// Row type for protocol execution audit trail (protocol hidden phases).
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct ProtocolExecutionRow {
     pub id: Uuid,
@@ -71,9 +71,9 @@ pub struct ProtocolExecutionRow {
     pub capabilities_used: Option<Vec<String>>,
     pub created_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
-    /// Human-readable agent name (e.g. "Scanner") for task_force agent phases.
+    /// Human-readable agent name (e.g. "Scanner") for workforce agent phases.
     pub agent_name: Option<String>,
-    /// Protocol archetype that produced this phase (e.g. "task_force", "documenter").
+    /// Protocol archetype that produced this phase (e.g. "workforce").
     pub archetype: Option<String>,
     /// Links agent phases back to the designer run that created them.
     pub designer_run_id: Option<Uuid>,
@@ -180,7 +180,7 @@ pub struct WorkflowStepRow {
     pub id: Uuid,
     pub workflow_id: Uuid,
     pub agent_id: Option<Uuid>,
-    pub execution_mode: String, // "single", "for_each", "room", "documenter", etc.
+    pub execution_mode: String, // "single", "workforce", "context", "input", "sub_workflow", "container"
     pub agent_execution_mode: Option<String>, // "sequential" or "parallel", NULL = inherit from workflow
     pub for_each_ref: Option<String>,
     pub prompt_template_id: Option<Uuid>,
@@ -558,7 +558,7 @@ pub struct ProtocolRow {
     pub id: Uuid,
     pub name: String,
     pub description: String,
-    pub protocol_type: String, // e.g. "documenter"
+    pub protocol_type: String, // e.g. "workforce"
     pub config: serde_json::Value,
     pub version: i32,
     pub created_at: DateTime<Utc>,
@@ -590,10 +590,10 @@ pub struct WorkflowStepProtocolRow {
 }
 
 // ============================================================================
-// Task Force Row Types
+// Workforce Row Types
 // ============================================================================
 
-/// Row type for task force mission briefs (one per step).
+/// Row type for workforce mission briefs (one per step).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
 pub struct TaskMissionBriefRow {
     pub id: Uuid,

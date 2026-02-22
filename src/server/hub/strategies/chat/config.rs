@@ -30,7 +30,7 @@ impl Default for ChatConfig {
 /// Optional context for step-scoped chat sessions.
 ///
 /// When present, `execute_tool` routes step-specific tools to the
-/// appropriate dispatcher (e.g., documenter tools) instead of
+/// appropriate dispatcher (e.g., workforce tools) instead of
 /// generic server tools.
 pub struct StepChatContext {
     pub workflow_id: Uuid,

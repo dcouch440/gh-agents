@@ -7,7 +7,6 @@
 
 use std::collections::{HashMap, HashSet};
 
-use chrono::Utc;
 use serde_json::{json, Value};
 use uuid::Uuid;
 
@@ -42,9 +41,6 @@ pub async fn execute_workforce_tool(
         "remove_agent" => execute_remove_agent(input, repo, ctx).await,
         "set_capabilities" => execute_set_capabilities(input, repo, ctx).await,
         "set_failure_mode" => execute_set_failure_mode(input, repo, ctx).await,
-        "add_deliverable" => execute_add_deliverable(input, repo, ctx).await,
-        "update_deliverable" => execute_update_deliverable(input, repo, ctx).await,
-        "remove_deliverable" => execute_remove_deliverable(input, repo, ctx).await,
         "set_dependency" => execute_set_dependency(input, repo, ctx).await,
         "remove_dependency" => execute_remove_dependency(input, repo, ctx).await,
         _ => json!({ "error": format!("Unknown workforce tool: {}", name) }),
@@ -886,131 +882,6 @@ async fn execute_set_failure_mode(
             "failure_mode": brief.failure_mode,
         }),
         Err(e) => json!({ "error": e }),
-    }
-}
-
-// =========================================================================
-// Tool Handlers — Deliverables
-// =========================================================================
-
-async fn execute_add_deliverable(
-    input: &Value,
-    repo: &dyn WorkflowRepo,
-    ctx: &WorkforceToolContext,
-) -> Value {
-    let name = match require_str(input, "name") {
-        Ok(v) => v,
-        Err(e) => return e,
-    };
-
-    let description = input["description"].as_str().unwrap_or("").to_string();
-    let target_length = input["target_length"].as_i64().unwrap_or(1500) as i32;
-
-    let agent_roster_entry_id = match input["agent_id"].as_str() {
-        Some(id_str) => match Uuid::parse_str(id_str) {
-            Ok(id) => Some(id),
-            Err(_) => return json!({ "error": format!("Invalid agent UUID: {}", id_str) }),
-        },
-        None => None,
-    };
-
-    let def = crate::db::ProtocolDocumentDefRow {
-        id: Uuid::new_v4(),
-        step_id: Some(ctx.step_id),
-        name: name.to_string(),
-        description,
-        target_length,
-        display_order: 0,
-        created_at: Utc::now(),
-        protocol_id: None,
-        document_id: None,
-        agent_roster_entry_id,
-    };
-
-    match repo.create_document_def(def).await {
-        Ok(row) => json!({
-            "id": row.id.to_string(),
-            "name": row.name,
-            "description": row.description,
-            "target_length": row.target_length,
-            "agent_id": row.agent_roster_entry_id.map(|id| id.to_string()),
-        }),
-        Err(e) => json!({ "error": e.to_string() }),
-    }
-}
-
-async fn execute_update_deliverable(
-    input: &Value,
-    repo: &dyn WorkflowRepo,
-    ctx: &WorkforceToolContext,
-) -> Value {
-    let def_id = match require_uuid(input, "deliverable_id") {
-        Ok(v) => v,
-        Err(e) => return e,
-    };
-
-    let existing_defs = match repo.list_document_defs(ctx.step_id).await {
-        Ok(defs) => defs,
-        Err(e) => return json!({ "error": e.to_string() }),
-    };
-
-    let existing = match existing_defs.into_iter().find(|d| d.id == def_id) {
-        Some(d) => d,
-        None => return json!({ "error": "Deliverable not found" }),
-    };
-
-    let name = input["name"]
-        .as_str()
-        .map(String::from)
-        .unwrap_or(existing.name);
-    let description = input["description"]
-        .as_str()
-        .map(String::from)
-        .unwrap_or(existing.description);
-    let target_length = input["target_length"]
-        .as_i64()
-        .map(|v| v as i32)
-        .unwrap_or(existing.target_length);
-
-    match repo
-        .update_document_def(def_id, name, description, target_length)
-        .await
-    {
-        Ok(row) => json!({
-            "id": row.id.to_string(),
-            "name": row.name,
-            "description": row.description,
-            "target_length": row.target_length,
-        }),
-        Err(e) => json!({ "error": e.to_string() }),
-    }
-}
-
-async fn execute_remove_deliverable(
-    input: &Value,
-    repo: &dyn WorkflowRepo,
-    ctx: &WorkforceToolContext,
-) -> Value {
-    let def_id = match require_uuid(input, "deliverable_id") {
-        Ok(v) => v,
-        Err(e) => return e,
-    };
-
-    let def_name = repo
-        .list_document_defs(ctx.step_id)
-        .await
-        .ok()
-        .and_then(|defs| defs.into_iter().find(|d| d.id == def_id))
-        .map(|d| d.name)
-        .unwrap_or_default();
-
-    match repo.delete_document_def(def_id).await {
-        Ok(()) => json!({
-            "deleted": true,
-            "name": def_name,
-            "id": def_id.to_string(),
-        }),
-        Err(e) => json!({ "error": e.to_string() }),
     }
 }
 

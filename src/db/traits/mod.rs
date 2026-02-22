@@ -286,7 +286,7 @@ pub trait DocumentRepo: Send + Sync {
     /// Create a blank document linked to a workflow for protocol-generated content.
     ///
     /// Sets `workflow_id`, `target_length`, `source_protocol_step_id`, and `is_static = false`.
-    /// Content starts empty and is populated by the DocumenterExecutor at runtime.
+    /// Content starts empty and is populated by the protocol executor at runtime.
     async fn create_workflow_document(
         &self,
         user_id: Uuid,
@@ -527,7 +527,7 @@ pub trait WorkflowRepo: Send + Sync {
     /// Get a single document definition by ID.
     async fn get_document_def(&self, id: Uuid) -> Result<Option<ProtocolDocumentDefRow>>;
 
-    /// List all document definitions for a documenter step.
+    /// List all document definitions for a workforce step.
     async fn list_document_defs(&self, step_id: Uuid) -> Result<Vec<ProtocolDocumentDefRow>>;
 
     /// Create a new document definition on a step.
@@ -612,7 +612,7 @@ pub trait WorkflowRepo: Send + Sync {
     /// Find a workflow step by its room_id reference.
     async fn find_step_by_room_id(&self, room_id: Uuid) -> Result<Option<WorkflowStepRow>>;
 
-    // --- Task Force (Mission Briefs + Agent Roster) ---
+    // --- Workforce (Mission Briefs + Agent Roster) ---
 
     /// Get the mission brief for a step, if any.
     async fn get_mission_brief(&self, step_id: Uuid) -> Result<Option<TaskMissionBriefRow>>;
@@ -1493,7 +1493,7 @@ pub trait ProtocolRepo: Send + Sync {
     /// Get a protocol by ID.
     async fn get_protocol(&self, id: Uuid) -> Result<Option<ProtocolRow>>;
 
-    /// Get a protocol by its protocol_type (e.g., "documenter").
+    /// Get a protocol by its protocol_type (e.g., "workforce").
     async fn get_protocol_by_type(&self, protocol_type: &str) -> Result<Option<ProtocolRow>>;
 
     /// List all protocols.

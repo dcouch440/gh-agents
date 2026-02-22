@@ -37,8 +37,7 @@ pub(crate) struct DesignerInput {
     pub available_tools: Vec<ToolDescription>,
 
     /// Archetype-specific guidance for the designer.
-    /// Extra instructions that vary by archetype (e.g., documenter phase info,
-    /// room interaction mode, task force failure mode).
+    /// Extra instructions that vary by archetype (e.g., workforce failure mode).
     pub archetype_guidance: String,
 
     /// Dependency edges between agents. Each edge means

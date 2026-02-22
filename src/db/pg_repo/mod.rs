@@ -1665,7 +1665,7 @@ impl WorkflowRepo for PgRepo {
         Ok(row)
     }
 
-    // --- Task Force (Mission Briefs + Agent Roster) ---
+    // --- Workforce (Mission Briefs + Agent Roster) ---
 
     async fn get_mission_brief(&self, step_id: Uuid) -> Result<Option<TaskMissionBriefRow>> {
         let row = sqlx::query_as::<_, TaskMissionBriefRow>(

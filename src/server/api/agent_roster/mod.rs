@@ -1,4 +1,4 @@
-//! Task force agent roster management endpoints
+//! Workforce agent roster management endpoints
 
 use axum::{
     extract::{Path, State},

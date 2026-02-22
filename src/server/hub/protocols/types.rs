@@ -10,7 +10,7 @@ use uuid::Uuid;
 /// A fully-loaded protocol with its port assignments, ready for expansion.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProtocolConfig {
-    /// The protocol type, e.g. "documenter".
+    /// The protocol type, e.g. "workforce".
     pub protocol_type: String,
     /// Type-specific configuration (content schema shape, review options, etc.).
     pub config: serde_json::Value,
@@ -68,7 +68,7 @@ pub struct StepDefinition {
     pub port_name: String,
     /// Assigned agent ID (fallback agent for label-routed steps). None for agent-less steps.
     pub agent_id: Option<Uuid>,
-    /// Step execution mode ("single", "for_each", etc.).
+    /// Step execution mode ("single", "workforce", etc.).
     pub execution_mode: String,
     /// Optional prompt template for the step.
     pub prompt_template: Option<String>,
@@ -78,7 +78,7 @@ pub struct StepDefinition {
     pub routing_mode: Option<String>,
     /// Field name used for routing lookup on the step (e.g., "port").
     pub routing_field: Option<String>,
-    /// For for_each steps: field in each element to extract the label from.
+    /// For routed steps: field in each element to extract the label from.
     pub for_each_label_field: Option<String>,
     /// Reference to the variable containing the array to iterate.
     /// Use `"{anchor_output}"` as sentinel; the apply handler resolves it.

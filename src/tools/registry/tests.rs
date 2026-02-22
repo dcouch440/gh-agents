@@ -44,8 +44,6 @@ mod tests {
             "create_doc",
             "update_doc",
             "search_docs",
-            "submit_prd",
-            "submit_ticket",
         ];
 
         for tool_name in orchestrator_tools {
@@ -87,9 +85,6 @@ mod tests {
             "create_doc",
             "update_doc",
             "search_docs",
-            "submit_prd",
-            "submit_ticket",
-            "update_config",
             // Manager topology tools
             "create_pipeline",
             "create_parallel",
@@ -99,7 +94,7 @@ mod tests {
             "remove_edge",
         ];
 
-        assert_eq!(all_names.len(), 27);
+        assert_eq!(all_names.len(), 24);
 
         // Verify all map to tools
         for name in all_names {
@@ -136,9 +131,6 @@ mod tests {
             "create_doc",
             "update_doc",
             "search_docs",
-            "submit_prd",
-            "submit_ticket",
-            "update_config",
             // Manager topology tools
             "create_pipeline",
             "create_parallel",
@@ -227,30 +219,6 @@ mod tests {
     }
 
     #[test]
-    fn test_submit_prd_schema() {
-        let tool = get_tool_definition("submit_prd").unwrap();
-        assert_eq!(tool.name, "submit_prd");
-
-        let props = tool.input_schema["properties"].as_object().unwrap();
-        assert!(props.contains_key("title"));
-        assert!(props.contains_key("problem_statement"));
-        assert!(props.contains_key("goals"));
-        assert!(props.contains_key("milestones"));
-        assert!(props.contains_key("complexity"));
-
-        // Verify complexity enum
-        let complexity = &props["complexity"]["enum"];
-        assert!(complexity.is_array());
-        let enums: Vec<&str> = complexity
-            .as_array()
-            .unwrap()
-            .iter()
-            .filter_map(|v| v.as_str())
-            .collect();
-        assert_eq!(enums, vec!["S", "M", "L", "XL"]);
-    }
-
-    #[test]
     fn test_web_research_schema() {
         let tool = get_tool_definition("web_research").unwrap();
         assert_eq!(tool.name, "web_research");
@@ -285,20 +253,6 @@ mod tests {
         let required = tool.input_schema["required"].as_array().unwrap();
         assert_eq!(required.len(), 1);
         assert_eq!(required[0], "document_id");
-    }
-
-    #[test]
-    fn test_update_config_schema() {
-        let tool = get_tool_definition("update_config").unwrap();
-        assert_eq!(tool.name, "update_config");
-
-        let props = tool.input_schema["properties"].as_object().unwrap();
-        assert!(props.contains_key("name"));
-        assert!(props.contains_key("description"));
-        assert!(props.contains_key("prompt_template"));
-
-        let required = tool.input_schema["required"].as_array().unwrap();
-        assert!(required.is_empty());
     }
 
     #[test]
