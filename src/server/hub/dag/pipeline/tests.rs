@@ -191,4 +191,140 @@ mod tests {
         assert_eq!(levels.len(), 1);
         assert_eq!(levels[0], vec![0]);
     }
+
+    #[test]
+    fn compute_levels_sorts_within_level_by_execution_order() {
+        // Three parallel agents with different execution_order, added in reverse
+        let prompts = vec![
+            DesignedAgentPrompt {
+                execution_order: 2,
+                ..make_designed_prompt("C", &[])
+            },
+            DesignedAgentPrompt {
+                execution_order: 0,
+                ..make_designed_prompt("A", &[])
+            },
+            DesignedAgentPrompt {
+                execution_order: 1,
+                ..make_designed_prompt("B", &[])
+            },
+        ];
+
+        let levels = compute_execution_levels(&prompts);
+
+        assert_eq!(levels.len(), 1);
+        // Sorted by execution_order: A(idx=1, order=0), B(idx=2, order=1), C(idx=0, order=2)
+        assert_eq!(levels[0], vec![1, 2, 0]);
+    }
+
+    // ── Static Fallback ───────────────────────────────────────────────────────
+
+    #[test]
+    fn static_fallback_creates_sequential_receives_from() {
+        use crate::db::TaskMissionBriefRow;
+        use super::super::designer::build_static_fallback_prompts;
+
+        let brief_id = Uuid::new_v4();
+        let brief = TaskMissionBriefRow {
+            id: brief_id,
+            task_description: "Test task".into(),
+            ..Default::default()
+        };
+        let roster = vec![
+            roster_agent(brief_id, "Scanner", 0),
+            roster_agent(brief_id, "Analyzer", 1),
+            roster_agent(brief_id, "Reporter", 2),
+        ];
+
+        let prompts = build_static_fallback_prompts(&brief, &roster, "base prompt");
+
+        assert_eq!(prompts.len(), 3);
+        // First agent has no receives_from (root)
+        assert!(prompts[0].receives_from.is_empty());
+        // Second receives from first
+        assert_eq!(prompts[1].receives_from, vec!["Scanner"]);
+        // Third receives from second
+        assert_eq!(prompts[2].receives_from, vec!["Analyzer"]);
+    }
+
+    // ── Edge Routing Enforcement ──────────────────────────────────────────────
+
+    #[test]
+    fn enforce_edge_routing_overrides_designer_receives_from() {
+        use crate::db::{TaskAgentRosterRow, WorkflowStepEdgeRow};
+        use super::super::designer::enforce_edge_routing;
+
+        let step_a = Uuid::new_v4();
+        let step_b = Uuid::new_v4();
+        let step_c = Uuid::new_v4();
+
+        let roster = vec![
+            TaskAgentRosterRow {
+                name: "A".into(),
+                child_step_id: Some(step_a),
+                execution_order: 0,
+                ..Default::default()
+            },
+            TaskAgentRosterRow {
+                name: "B".into(),
+                child_step_id: Some(step_b),
+                execution_order: 1,
+                ..Default::default()
+            },
+            TaskAgentRosterRow {
+                name: "C".into(),
+                child_step_id: Some(step_c),
+                execution_order: 2,
+                ..Default::default()
+            },
+        ];
+
+        // Edges: A → B → C
+        let edges = vec![
+            WorkflowStepEdgeRow {
+                from_step_id: step_a,
+                to_step_id: step_b,
+                ..Default::default()
+            },
+            WorkflowStepEdgeRow {
+                from_step_id: step_b,
+                to_step_id: step_c,
+                ..Default::default()
+            },
+        ];
+
+        // Designer gave wrong receives_from (all parallel)
+        let mut prompts = vec![
+            make_designed_prompt("A", &[]),
+            make_designed_prompt("B", &[]),
+            make_designed_prompt("C", &[]),
+        ];
+
+        enforce_edge_routing(&mut prompts, &roster, &edges);
+
+        // A has no incoming edges → root
+        assert!(prompts[0].receives_from.is_empty());
+        // B receives from A
+        assert_eq!(prompts[1].receives_from, vec!["A"]);
+        // C receives from B
+        assert_eq!(prompts[2].receives_from, vec!["B"]);
+    }
+
+    #[test]
+    fn enforce_edge_routing_noop_when_no_edges() {
+        use crate::db::TaskAgentRosterRow;
+        use super::super::designer::enforce_edge_routing;
+
+        let roster = vec![TaskAgentRosterRow {
+            name: "A".into(),
+            ..Default::default()
+        }];
+
+        // Designer set receives_from — should be preserved when no edges
+        let mut prompts = vec![make_designed_prompt("A", &["SomeAgent"])];
+
+        enforce_edge_routing(&mut prompts, &roster, &[]);
+
+        assert_eq!(prompts[0].receives_from, vec!["SomeAgent"]);
+    }
 }

@@ -110,6 +110,7 @@ pub(crate) fn compute_execution_levels(prompts: &[DesignedAgentPrompt]) -> Vec<V
     // BFS by levels (Kahn's with level tracking)
     let mut levels: Vec<Vec<usize>> = Vec::new();
     let mut current_level: Vec<usize> = (0..prompts.len()).filter(|&i| in_degree[i] == 0).collect();
+    current_level.sort_by_key(|&i| prompts[i].execution_order);
 
     while !current_level.is_empty() {
         let mut next_level: Vec<usize> = Vec::new();
@@ -122,6 +123,7 @@ pub(crate) fn compute_execution_levels(prompts: &[DesignedAgentPrompt]) -> Vec<V
             }
         }
         levels.push(current_level);
+        next_level.sort_by_key(|&i| prompts[i].execution_order);
         current_level = next_level;
     }
 

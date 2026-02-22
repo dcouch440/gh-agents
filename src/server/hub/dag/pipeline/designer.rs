@@ -12,7 +12,7 @@ use anyhow::anyhow;
 use tracing::warn;
 
 use crate::config::protocols::{roles, vars, DESIGNER};
-use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow};
+use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow, WorkflowStepEdgeRow};
 use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::context::{build_context_block, ContextDocument};
 use crate::server::hub::protocols::execution_recorder::{
@@ -118,7 +118,8 @@ impl PipelinePhase for DesignerPhase {
                     )
                     .await;
 
-                let prompts = map_designer_results(&result, &ctx.roster)?;
+                let mut prompts = map_designer_results(&result, &ctx.roster)?;
+                enforce_edge_routing(&mut prompts, &ctx.roster, &child_edges);
 
                 let usage = PhaseTokenUsage {
                     input_tokens: result.input_tokens,
@@ -221,7 +222,7 @@ pub(super) fn build_user_notes_block(upstream_context: &[(String, String)]) -> S
 
 /// Build static fallback prompts when no designer phase runs or when the
 /// designer fails. Maps roster agents directly to prompts using role templates.
-pub(super) fn build_static_fallback_prompts(
+pub(crate) fn build_static_fallback_prompts(
     brief: &TaskMissionBriefRow,
     roster: &[TaskAgentRosterRow],
     base_prompt: &str,
@@ -239,7 +240,8 @@ pub(super) fn build_static_fallback_prompts(
 
     roster
         .iter()
-        .map(|entry| {
+        .enumerate()
+        .map(|(i, entry)| {
             let mut v = base_vars.clone();
             v.insert(vars::workforce::AGENT_NAME.into(), entry.name.clone());
             v.insert(
@@ -249,6 +251,13 @@ pub(super) fn build_static_fallback_prompts(
 
             let role_ctx = roles::WORKFORCE_AGENT.resolve(&v);
 
+            // Sequential chain: each agent receives from the previous one
+            let receives_from = if i > 0 {
+                vec![roster[i - 1].name.clone()]
+            } else {
+                vec![]
+            };
+
             DesignedAgentPrompt {
                 agent_roster_entry_id: entry.id,
                 agent_name: entry.name.clone(),
@@ -256,7 +265,7 @@ pub(super) fn build_static_fallback_prompts(
                 system_prompt: role_ctx.system_prompt,
                 task_prompt: role_ctx.user_prompt,
                 execution_order: entry.execution_order,
-                receives_from: vec![],
+                receives_from,
             }
         })
         .collect()
@@ -295,4 +304,56 @@ fn map_designer_results(
 
     prompts.sort_by_key(|p| p.execution_order);
     Ok(prompts)
+}
+
+/// Override Designer-generated `receives_from` with the actual DB edge graph.
+///
+/// The Designer LLM may ignore or reorder dependencies. This function
+/// ensures execution routing matches the edges that were explicitly
+/// created (by `add_agent`, `set_dependency`, or `configure_team`).
+///
+/// When no edges exist, prompts are left unchanged (Designer routing stands).
+pub(crate) fn enforce_edge_routing(
+    prompts: &mut [DesignedAgentPrompt],
+    roster: &[TaskAgentRosterRow],
+    child_edges: &[WorkflowStepEdgeRow],
+) {
+    if child_edges.is_empty() {
+        return;
+    }
+
+    // Build child_step_id → agent_name lookup
+    let step_to_name: HashMap<uuid::Uuid, &str> = roster
+        .iter()
+        .filter_map(|r| r.child_step_id.map(|sid| (sid, r.name.as_str())))
+        .collect();
+
+    // Build agent_name → Vec<from_agent_name> from edges
+    // (only agent-to-agent edges; Designer→agent edges are filtered out)
+    let agent_names: std::collections::HashSet<&str> = step_to_name.values().copied().collect();
+    let mut edge_receives: HashMap<&str, Vec<String>> = HashMap::new();
+
+    for edge in child_edges {
+        if let (Some(from_name), Some(to_name)) = (
+            step_to_name.get(&edge.from_step_id).copied(),
+            step_to_name.get(&edge.to_step_id).copied(),
+        ) {
+            if agent_names.contains(from_name) && agent_names.contains(to_name) {
+                edge_receives
+                    .entry(to_name)
+                    .or_default()
+                    .push(from_name.to_string());
+            }
+        }
+    }
+
+    // Override receives_from on each prompt
+    for prompt in prompts.iter_mut() {
+        if let Some(from_agents) = edge_receives.get(prompt.agent_name.as_str()) {
+            prompt.receives_from = from_agents.clone();
+        } else {
+            // No incoming edges → root agent
+            prompt.receives_from = vec![];
+        }
+    }
 }

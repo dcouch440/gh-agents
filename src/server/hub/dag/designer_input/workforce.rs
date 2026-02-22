@@ -62,22 +62,22 @@ pub fn build_workforce_designer_input(
         }
     }
 
-    // Append dependency graph to guidance so the Designer sees it
+    // Append execution order to guidance so the Designer writes position-aware prompts
     if dependencies.is_empty() {
         guidance.push_str(
-            "\n\nNo inter-agent dependencies. All agents receive all prior agents' outputs.",
+            "\n\nExecution order: all agents run in parallel (no dependencies). Each agent receives all prior outputs.",
         );
     } else {
         guidance.push_str(
-            "\n\nDependency graph (from \u{2192} to, meaning to receives from's output):",
+            "\n\nExecution order (enforced by runtime — you do not control this):",
         );
         for dep in &dependencies {
             guidance.push_str(&format!(
-                "\n  {} \u{2192} {}",
+                "\n  {} runs before {}",
                 dep.from_agent_name, dep.to_agent_name
             ));
         }
-        guidance.push_str("\nUse these dependencies to set receives_from routing for each agent.");
+        guidance.push_str("\nUse this ordering to write position-aware prompts (tell agents who runs before/after them).");
     }
 
     let mut upstream = format_envelopes_as_upstream(completed_envelopes, steps);
