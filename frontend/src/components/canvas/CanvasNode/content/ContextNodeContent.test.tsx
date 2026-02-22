@@ -3,8 +3,8 @@ import { render, screen } from '@/test/render'
 import userEvent from '@testing-library/user-event'
 import { ContextNodeContent } from './ContextNodeContent'
 
-vi.mock('@/components/primitives/MarkdownPreview', () => ({
-  MarkdownPreview: ({ content }: { content: string }) => <div data-testid="markdown-preview">{content}</div>,
+vi.mock('@/components/primitives/terminal-renderer', () => ({
+  TerminalBlock: ({ content }: { content: string }) => <div data-testid="markdown-preview">{content}</div>,
 }))
 
 vi.mock('@/components/primitives/CodeEditor', () => ({

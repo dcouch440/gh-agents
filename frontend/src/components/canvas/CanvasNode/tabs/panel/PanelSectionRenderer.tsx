@@ -1,6 +1,6 @@
 import { PanelCard } from '@/components/primitives/PanelCard'
 import { PanelCheckbox } from '@/components/primitives/PanelCheckbox'
-import { MarkdownPreview } from '@/components/primitives/MarkdownPreview'
+import { TerminalBlock } from '@/components/primitives/terminal-renderer'
 import type { PanelSection } from './parsePanel'
 
 type PanelSectionRendererProps = {
@@ -12,7 +12,7 @@ type PanelSectionRendererProps = {
 function PanelSectionRenderer({ section, selections, onToggle }: PanelSectionRendererProps) {
   return (
     <PanelCard depth={section.depth} title={section.title}>
-      {section.bodyMarkdown ? <MarkdownPreview content={section.bodyMarkdown} /> : null}
+      {section.bodyMarkdown ? <TerminalBlock content={section.bodyMarkdown} /> : null}
 
       {section.interactiveItems.map((item) => (
         <PanelCheckbox

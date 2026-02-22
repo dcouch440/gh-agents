@@ -2,8 +2,8 @@ import { render, screen } from '@testing-library/react'
 import { StreamingMessage } from './StreamingMessage'
 import type { MessageSegment } from '@/types'
 
-vi.mock('@/components/primitives/MarkdownPreview', () => ({
-  MarkdownPreview: ({ content }: { content: string }) => <div data-testid="markdown">{content}</div>,
+vi.mock('@/components/primitives/terminal-renderer', () => ({
+  TerminalBlock: ({ content }: { content: string }) => <div data-testid="markdown">{content}</div>,
 }))
 
 describe('StreamingMessage', () => {

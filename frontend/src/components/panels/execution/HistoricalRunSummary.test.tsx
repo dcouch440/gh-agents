@@ -5,7 +5,10 @@ import type { WorkflowExecutionSummary } from '@/types'
 
 vi.mock('@/components/primitives', () => ({
   StatusBadge: ({ label }: { label: string }) => <span data-testid="badge">{label}</span>,
-  MarkdownPreview: ({ content }: { content: string }) => <div data-testid="markdown">{content}</div>,
+}))
+
+vi.mock('@/components/primitives/terminal-renderer', () => ({
+  TerminalBlock: ({ content }: { content: string }) => <div data-testid="markdown">{content}</div>,
 }))
 
 const makeRun = (overrides: Partial<WorkflowExecutionSummary> = {}): WorkflowExecutionSummary => ({

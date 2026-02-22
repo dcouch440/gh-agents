@@ -1,6 +1,6 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import { MarkdownPreview } from '@/components/primitives'
+import { TerminalBlock } from '@/components/primitives/terminal-renderer'
 
 type ExecutionStepOutputProps = {
   output: string | null
@@ -50,7 +50,7 @@ function ExecutionStepOutput({ output, error }: ExecutionStepOutputProps) {
           p: 1.5,
         }}
       >
-        <MarkdownPreview content={output} />
+        <TerminalBlock content={output} />
       </Box>
     )
   }

@@ -8,7 +8,7 @@ import Button from '@mui/material/Button'
 import ExpandMoreOutlined from '@mui/icons-material/ExpandMoreOutlined'
 import ExpandLessOutlined from '@mui/icons-material/ExpandLessOutlined'
 import OpenInNewOutlined from '@mui/icons-material/OpenInNewOutlined'
-import { MarkdownPreview } from '@/components/primitives'
+import { TerminalBlock } from '@/components/primitives/terminal-renderer'
 import type { RunStepResult, PhaseExecution, ChildStepResult } from '@/types'
 
 type StepResultCardProps = {
@@ -250,7 +250,7 @@ function StepResultCard({ step }: StepResultCardProps) {
 
           {step.output !== null && (
             <Box sx={{ mt: 1, maxHeight: 300, overflow: 'auto', borderRadius: 1, border: '1px solid', borderColor: 'divider', p: 1.5 }}>
-              <MarkdownPreview content={step.output} />
+              <TerminalBlock content={step.output} />
             </Box>
           )}
 

@@ -6,7 +6,7 @@ import { LoadingSpinner } from '@/components/primitives/LoadingSpinner'
 import { ErrorMessage } from '@/components/primitives/ErrorMessage'
 import { EmptyState } from '@/components/primitives/EmptyState'
 import { ChatPanel } from '@/components/chat/ChatPanel'
-import { MarkdownPreview } from '@/components/primitives/MarkdownPreview'
+import { TerminalBlock } from '@/components/primitives/terminal-renderer'
 import { ReviewCard, ApproveButton, CollapsibleSection } from '@/components/review'
 import { useStore, reviewQueueStore } from '@/stores'
 import { useInteractiveChat } from '@/hooks/useInteractiveChat'
@@ -144,7 +144,7 @@ function ReviewQueuePage() {
 
                   <CollapsibleSection title="Output" open={outputOpen} onToggle={() => setOutputOpen((v) => !v)}>
                     {selectedExecution.output ? (
-                      <MarkdownPreview content={selectedExecution.output} />
+                      <TerminalBlock content={selectedExecution.output} />
                     ) : (
                       <Typography variant="body2" color="text.secondary">
                         No output yet

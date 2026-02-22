@@ -1,7 +1,7 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import { useStore, workflowStore } from '@/stores'
-import { MarkdownPreview } from '@/components/primitives/MarkdownPreview'
+import { TerminalBlock } from '@/components/primitives/terminal-renderer'
 
 type NotesTabProps = {
   stepId: string
@@ -30,7 +30,7 @@ function NotesTab({ stepId }: NotesTabProps) {
           </Box>
         ) : (
           <Box sx={{ px: 1, py: 0.5, overflow: 'auto', height: '100%' }}>
-            <MarkdownPreview content={content} />
+            <TerminalBlock content={content} />
           </Box>
         )}
       </Box>
