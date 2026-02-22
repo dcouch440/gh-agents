@@ -7,6 +7,7 @@ vi.mock('./AgentRosterTab', () => ({ AgentRosterTab: () => null }))
 vi.mock('./RoomMembersTab', () => ({ RoomMembersTab: () => null }))
 vi.mock('./DebugLogTab', () => ({ DebugLogTab: () => null }))
 vi.mock('./PlanTab', () => ({ PlanTab: () => null }))
+vi.mock('./dispatch', () => ({ DispatchTab: () => null }))
 
 const baseParams = {
   stepId: 'step-1',
@@ -91,10 +92,16 @@ describe('buildStepTabs', () => {
     })
   })
 
-  it('tab order: chat > live? > archetype-specific > notes > debug', () => {
+  it('always includes dispatch tab', () => {
+    const tabs = buildStepTabs({ ...baseParams, archetype: Archetype.BLANK })
+    const ids = tabs.map((t) => t.id)
+    expect(ids).toContain('dispatch')
+  })
+
+  it('tab order: chat > live? > dispatch > archetype-specific > plan? > debug', () => {
     const tabs = buildStepTabs({ ...baseParams, archetype: Archetype.WORKFORCE, includeLiveStream: true })
     const ids = tabs.map((t) => t.id)
-    expect(ids).toEqual(['chat', 'live', 'agents', 'plan', 'debug'])
+    expect(ids).toEqual(['chat', 'live', 'dispatch', 'agents', 'plan', 'debug'])
   })
 
   it('every tab has an id, icon, tooltip, and content', () => {

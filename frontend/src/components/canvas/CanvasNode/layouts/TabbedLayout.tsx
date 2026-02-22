@@ -71,8 +71,10 @@ function TabbedLayout({ nodeId, data, selected, accentColor, highlightMode }: Ta
       queueMicrotask(() => { setActiveTabId('stream') })
     } else if (!isAgent && stepExecStatus === 'running') {
       queueMicrotask(() => { setActiveTabId('live') })
+    } else if (!isAgent && activeDispatch) {
+      queueMicrotask(() => { setActiveTabId('dispatch') })
     }
-  }, [isAgent, agentSourceStatus, stepExecStatus])
+  }, [isAgent, agentSourceStatus, stepExecStatus, activeDispatch])
 
   const shareOverlay = isShareSource ? <SharePickerPanel stepId={nodeId} /> : undefined
   const effectiveHighlight = shareActive && !isShareSource ? HighlightMode.HOVER : highlightMode
