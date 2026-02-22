@@ -4,7 +4,6 @@ import { createElement } from 'react'
 import DashboardOutlined from '@mui/icons-material/DashboardOutlined'
 import ChatBubbleOutline from '@mui/icons-material/ChatBubbleOutline'
 import SmartToyOutlined from '@mui/icons-material/SmartToyOutlined'
-import AssignmentOutlined from '@mui/icons-material/AssignmentOutlined'
 import AccountTreeOutlined from '@mui/icons-material/AccountTreeOutlined'
 import DescriptionOutlined from '@mui/icons-material/DescriptionOutlined'
 import RateReviewOutlined from '@mui/icons-material/RateReviewOutlined'
@@ -27,7 +26,6 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', path: ROUTES.DASHBOARD, icon: createElement(DashboardOutlined, { fontSize: 'small' }), group: 'nav' },
   { label: 'Chat', path: ROUTES.CHAT, icon: createElement(ChatBubbleOutline, { fontSize: 'small' }), group: 'nav' },
   { label: 'Agents', path: ROUTES.AGENTS, icon: createElement(SmartToyOutlined, { fontSize: 'small' }), group: 'nav' },
-  { label: 'Tasks', path: ROUTES.TASKS, icon: createElement(AssignmentOutlined, { fontSize: 'small' }), group: 'nav' },
   { label: 'Workflows', path: ROUTES.WORKFLOWS, icon: createElement(AccountTreeOutlined, { fontSize: 'small' }), group: 'nav' },
   { label: 'Documents', path: ROUTES.DOCUMENTS, icon: createElement(DescriptionOutlined, { fontSize: 'small' }), group: 'nav' },
   { label: 'Review Queue', path: ROUTES.REVIEW_QUEUE, icon: createElement(RateReviewOutlined, { fontSize: 'small' }), group: 'utility' },

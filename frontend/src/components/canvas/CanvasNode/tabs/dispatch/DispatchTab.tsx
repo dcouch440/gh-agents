@@ -20,25 +20,9 @@ function DispatchTab({ stepId }: DispatchTabProps) {
     fetchedRef.current = true
 
     const hydrate = async () => {
-      // First try the in-memory task registry (works if server hasn't restarted)
       try {
-        const resp = await api.dispatch.listForStep(stepId)
-        if (resp.tasks.length > 0) {
-          const latest = resp.tasks[resp.tasks.length - 1]
-          if (latest !== undefined) {
-            const traceResp = await api.dispatch.trace(latest.execution_id)
-            dispatchStore.hydrateFromApi(traceResp)
-            return
-          }
-        }
-      } catch {
-        // Task registry empty or unavailable — fall through to DB
-      }
-
-      // Fall back to builder session history (persisted in DB)
-      try {
-        const messages = await api.workflows.getStepDispatchHistory(workflowId, stepId)
-        dispatchStore.hydrateFromHistory(stepId, messages)
+        const resp = await api.workflows.getStepDispatchHistory(workflowId, stepId)
+        dispatchStore.hydrateFromApi(resp)
       } catch {
         // No dispatch history — leave empty state
       }

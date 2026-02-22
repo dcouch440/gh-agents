@@ -2631,6 +2631,37 @@ impl AgentExecutionRepo for PgRepo {
         .await?;
         Ok(row)
     }
+
+    async fn update_execution_trace(
+        &self,
+        id: Uuid,
+        trace: serde_json::Value,
+    ) -> Result<()> {
+        sqlx::query("UPDATE agent_executions SET trace = $2 WHERE id = $1")
+            .bind(id)
+            .bind(trace)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    async fn get_latest_dispatch_execution_for_step(
+        &self,
+        step_id: Uuid,
+    ) -> Result<Option<AgentExecutionRow>> {
+        let row = sqlx::query_as::<_, AgentExecutionRow>(
+            "SELECT * FROM agent_executions \
+             WHERE workflow_step_id = $1 \
+               AND agent_id IS NULL \
+               AND workflow_execution_id IS NULL \
+             ORDER BY started_at DESC \
+             LIMIT 1",
+        )
+        .bind(step_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
 }
 
 #[async_trait]

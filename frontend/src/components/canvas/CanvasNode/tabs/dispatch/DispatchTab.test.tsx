@@ -27,7 +27,6 @@ vi.mock('@/stores', () => ({
     store: {},
     selectByStepId: (stepId: string) => mockSelectByStepId(stepId) as (s: unknown) => DispatchEntry | null,
     hydrateFromApi: vi.fn(),
-    hydrateFromHistory: vi.fn(),
   },
   workflowStore: {
     store: {},
@@ -37,12 +36,8 @@ vi.mock('@/stores', () => ({
 
 vi.mock('@/api', () => ({
   api: {
-    dispatch: {
-      listForStep: vi.fn().mockResolvedValue({ tasks: [] }),
-      trace: vi.fn().mockResolvedValue({ trace: [] }),
-    },
     workflows: {
-      getStepDispatchHistory: vi.fn().mockResolvedValue([]),
+      getStepDispatchHistory: vi.fn().mockRejectedValue(new Error('not found')),
     },
   },
 }))

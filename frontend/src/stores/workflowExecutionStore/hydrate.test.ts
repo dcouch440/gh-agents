@@ -318,10 +318,10 @@ describe('hydrateLatestRun', () => {
   it('skips hydration when runId becomes set during fetch (race condition)', async () => {
     const summary = makeSummary()
     mockListExecutions.mockResolvedValue([summary])
-    mockGetRunDetail.mockImplementation(async () => {
+    mockGetRunDetail.mockImplementation(() => {
       // Simulate WS event arriving during the API call
       workflowExecutionStore.store.setState({ runId: 'ws-run-late' })
-      return makeDetail([makeStep()], summary)
+      return Promise.resolve(makeDetail([makeStep()], summary))
     })
 
     await hydrateLatestRun('w1')

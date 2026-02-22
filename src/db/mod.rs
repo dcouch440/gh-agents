@@ -347,6 +347,8 @@ pub struct AgentExecutionRow {
     pub completed_at: Option<DateTime<Utc>>,
     // Few-shot exemplar flag
     pub is_exemplary: bool,
+    /// Serialized dispatch trace (tokens, tool calls, errors) for persistence.
+    pub trace: Option<serde_json::Value>,
 }
 
 /// Row type for execution message records.
@@ -914,6 +916,7 @@ impl Default for AgentExecutionRow {
             started_at: Utc::now(),
             completed_at: None,
             is_exemplary: false,
+            trace: None,
         }
     }
 }

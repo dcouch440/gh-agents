@@ -248,7 +248,7 @@ type WorkshopResponse = {
 type WorkshopStepResponse = {
   step_id: string
   status: string
-  output: unknown | null
+  output: unknown
   tokens_in: number
   tokens_out: number
   cost_usd: number
@@ -259,7 +259,7 @@ type WorkshopStepResponse = {
 type WorkshopStepSummary = {
   step_id: string
   status: string
-  output: unknown | null
+  output: unknown
   error: string | null
 }
 

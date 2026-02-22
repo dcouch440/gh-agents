@@ -57,7 +57,7 @@ vi.mock('@/components/DocumentSelector', () => ({
 const _emptySchemas: never[] = []
 vi.mock('@/stores', async () => {
   const actual = await vi.importActual('@/stores')
-  const { createStore } = await vi.importActual('zustand/vanilla') as { createStore: <T>(fn: () => T) => unknown }
+  const { createStore } = await vi.importActual<{ createStore: <T>(fn: () => T) => unknown }>('zustand/vanilla')
   const emptyStore = createStore(() => ({ items: { byId: {}, ids: [] }, loading: false, error: null, lastFetched: null }))
   return {
     ...actual,

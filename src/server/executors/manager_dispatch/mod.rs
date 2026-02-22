@@ -6,9 +6,11 @@
 
 use uuid::Uuid;
 
+use crate::db::traits::CreateAgentExecutionInput;
 use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::recorder::ExecutionRecorder;
 use crate::server::hub::strategies::ManagerDispatchStrategy;
+use crate::server::hub::strategy::ExecutionStrategy;
 use crate::server::hub::streaming::DispatchStreamSink;
 use crate::server::state::AppState;
 use crate::server::ws::events::{SessionEvent, SessionEventKind};
@@ -117,12 +119,40 @@ pub async fn run_manager_dispatch_task(
         }
     };
 
+    // Create agent execution record for persistence
+    let ae_id = match state
+        .repos()
+        .agent_executions
+        .create_agent_execution(CreateAgentExecutionInput {
+            agent_id: None,
+            workflow_step_id: Some(step_id),
+            is_interactive: false,
+            parent_agent_execution_id: None,
+            system_prompt_rendered: strategy.system_prompt().to_string(),
+            input: instruction.clone(),
+            room_session_id: None,
+            speaker_order: None,
+            workflow_execution_id: None,
+        })
+        .await
+    {
+        Ok(row) => Some(row.id),
+        Err(e) => {
+            tracing::warn!(
+                execution_id = %execution_id,
+                error = %e,
+                "Failed to create agent execution record for manager dispatch"
+            );
+            None
+        }
+    };
+
     let engine = ExecutionEngine::new(provider);
     let recorder = ExecutionRecorder::new(
         &*state.repos().sessions,
         &*state.repos().chat_messages,
-        None,
-        None,
+        Some(&*state.repos().agent_executions),
+        Some(&*state.repos().token_ledger),
     );
     let sink = DispatchStreamSink::new(state.clone(), execution_id, step_id);
 
@@ -145,6 +175,7 @@ pub async fn run_manager_dispatch_task(
             };
 
             persist_outcome(&state, session_id, user_id, &summary).await;
+            persist_trace(&state, execution_id, ae_id, "completed", Some(&summary)).await;
 
             state
                 .task_registry()
@@ -171,6 +202,7 @@ pub async fn run_manager_dispatch_task(
             persist_outcome(&state, session_id, user_id, &format!("Error: {error_msg}")).await;
 
             if cancel_token.is_cancelled() {
+                persist_trace(&state, execution_id, ae_id, "cancelled", None).await;
                 state.task_registry().cancel_task(execution_id);
                 broadcast_dispatch_event(
                     &state,
@@ -184,6 +216,7 @@ pub async fn run_manager_dispatch_task(
                     "Manager dispatch task cancelled"
                 );
             } else {
+                persist_trace(&state, execution_id, ae_id, "failed", Some(&error_msg)).await;
                 state
                     .task_registry()
                     .mark_failed(execution_id, error_msg.clone());
@@ -224,6 +257,41 @@ async fn persist_outcome(state: &AppState, session_id: Uuid, user_id: UserId, co
             error = %e,
             "Failed to persist dispatch outcome"
         );
+    }
+}
+
+/// Persist the dispatch trace and update agent_execution status.
+async fn persist_trace(
+    state: &AppState,
+    execution_id: Uuid,
+    ae_id: Option<Uuid>,
+    status: &str,
+    output: Option<&str>,
+) {
+    let Some(ae_id) = ae_id else { return };
+
+    // Serialize trace from in-memory TaskRegistry
+    if let Some(task) = state.task_registry().get_task(execution_id) {
+        if let Ok(trace_json) = serde_json::to_value(&task.trace) {
+            if let Err(e) = state
+                .repos()
+                .agent_executions
+                .update_execution_trace(ae_id, trace_json)
+                .await
+            {
+                tracing::warn!(ae_id = %ae_id, error = %e, "Failed to persist manager dispatch trace");
+            }
+        }
+    }
+
+    // Update agent execution status
+    if let Err(e) = state
+        .repos()
+        .agent_executions
+        .update_agent_execution_status(ae_id, status, output.map(|s| s.to_string()), None)
+        .await
+    {
+        tracing::warn!(ae_id = %ae_id, error = %e, "Failed to update manager dispatch agent execution status");
     }
 }
 
