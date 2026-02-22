@@ -86,10 +86,7 @@ pub fn wrap_agent_xml(
 ///
 /// The message is stored with role "user" because the LLM (the node assistant)
 /// should treat it as incoming input and respond to it on its next turn.
-pub async fn send_message(
-    state: &AppState,
-    input: SendMessageInput,
-) -> Result<SendMessageResult> {
+pub async fn send_message(state: &AppState, input: SendMessageInput) -> Result<SendMessageResult> {
     let message_id = Uuid::new_v4();
     let xml_content = wrap_agent_xml(
         &input.from_agent,
@@ -120,8 +117,8 @@ pub async fn send_message(
         xml_content.clone()
     };
 
-    state.broadcast(
-        crate::server::ws::events::ServerEvent::Session(SessionEvent {
+    state.broadcast(crate::server::ws::events::ServerEvent::Session(
+        SessionEvent {
             session_id: input.session_id,
             user_id: Some(input.user_id.0),
             kind: SessionEventKind::AgentMessage {
@@ -130,8 +127,8 @@ pub async fn send_message(
                 message_type: input.message_type,
                 content_preview,
             },
-        }),
-    );
+        },
+    ));
 
     // Trigger auto-response if requested.
     let response_message_id = if input.trigger_response {
@@ -174,6 +171,140 @@ pub async fn send_message(
 // ============================================================================
 // Tool Execution Handler
 // ============================================================================
+
+/// Execute the `dispatch_to_nodes` batch tool call.
+///
+/// Resolves each node ref → step → session, sends messages concurrently,
+/// and returns aggregated per-node results.
+pub async fn execute_dispatch_to_nodes_tool(
+    state: &AppState,
+    input: &serde_json::Value,
+    from_agent: &str,
+    user_id: UserId,
+    workflow_id: Uuid,
+) -> serde_json::Value {
+    let Some(messages) = input["messages"].as_array() else {
+        return serde_json::json!({ "error": "Missing required parameter: messages" });
+    };
+
+    if messages.is_empty() {
+        return serde_json::json!({ "error": "messages array must not be empty" });
+    }
+
+    let mut handles = tokio::task::JoinSet::new();
+
+    for msg in messages {
+        let Some(node_ref) = msg["node"].as_str() else {
+            continue;
+        };
+        let Some(message_type) = msg["message_type"].as_str() else {
+            continue;
+        };
+        let Some(content) = msg["content"].as_str() else {
+            continue;
+        };
+
+        let state = state.clone();
+        let from_agent = from_agent.to_string();
+        let node_ref = node_ref.to_string();
+        let message_type = message_type.to_string();
+        let content = content.to_string();
+
+        handles.spawn(async move {
+            // Resolve ref → step
+            let step = match state
+                .repos()
+                .workflows
+                .find_step_by_ref_id(workflow_id, &node_ref)
+                .await
+            {
+                Ok(Some(s)) => s,
+                Ok(None) => {
+                    return serde_json::json!({
+                        "node": node_ref,
+                        "status": "error",
+                        "error": format!("No step found for ref \"{node_ref}\""),
+                    });
+                }
+                Err(e) => {
+                    return serde_json::json!({
+                        "node": node_ref,
+                        "status": "error",
+                        "error": format!("DB error: {e}"),
+                    });
+                }
+            };
+
+            // Resolve step → session
+            let session = match state
+                .repos()
+                .sessions
+                .find_session_by_step_id(step.id)
+                .await
+            {
+                Ok(Some(s)) => s,
+                Ok(None) => {
+                    return serde_json::json!({
+                        "node": node_ref,
+                        "status": "error",
+                        "error": format!("No session for node \"{node_ref}\". The node may not have been opened yet."),
+                    });
+                }
+                Err(e) => {
+                    return serde_json::json!({
+                        "node": node_ref,
+                        "status": "error",
+                        "error": format!("DB error: {e}"),
+                    });
+                }
+            };
+
+            let ref_id = Uuid::new_v4().to_string()[..8].to_string();
+
+            match send_message(
+                &state,
+                SendMessageInput {
+                    session_id: session.id,
+                    user_id,
+                    from_agent,
+                    message_type,
+                    content,
+                    ref_id: Some(ref_id),
+                    trigger_response: true,
+                },
+            )
+            .await
+            {
+                Ok(result) => serde_json::json!({
+                    "node": node_ref,
+                    "status": "delivered",
+                    "message_id": result.message_id.to_string(),
+                }),
+                Err(e) => serde_json::json!({
+                    "node": node_ref,
+                    "status": "error",
+                    "error": format!("Failed to send: {e}"),
+                }),
+            }
+        });
+    }
+
+    let mut results = Vec::new();
+    while let Some(result) = handles.join_next().await {
+        match result {
+            Ok(value) => results.push(value),
+            Err(e) => results.push(serde_json::json!({
+                "status": "error",
+                "error": format!("Task join error: {e}"),
+            })),
+        }
+    }
+
+    serde_json::json!({
+        "dispatched": results.len(),
+        "results": results,
+    })
+}
 
 /// Execute the `send_message` tool call.
 ///

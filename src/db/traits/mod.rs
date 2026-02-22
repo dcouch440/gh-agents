@@ -481,6 +481,11 @@ pub trait WorkflowRepo: Send + Sync {
     // --- Steps ---
     async fn create_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow>;
     async fn get_step(&self, id: Uuid) -> Result<Option<WorkflowStepRow>>;
+    async fn find_step_by_ref_id(
+        &self,
+        workflow_id: Uuid,
+        ref_id: &str,
+    ) -> Result<Option<WorkflowStepRow>>;
     async fn list_steps(&self, workflow_id: Uuid) -> Result<Vec<WorkflowStepRow>>;
     async fn update_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow>;
     async fn delete_step(&self, id: Uuid) -> Result<()>;

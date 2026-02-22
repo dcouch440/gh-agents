@@ -5,8 +5,8 @@
 //! - [`render_input_port`]: L4 typed input with schema and json_path
 //! - [`render_output_port`]: L4 typed output with schema
 
-use crate::markup::XmlBuilder;
 use super::types::*;
+use crate::markup::XmlBuilder;
 
 /// Render an [`IncomingContextSnapshot`] as a `<port>` element (L3 style).
 pub fn render_incoming_port(port: &IncomingContextSnapshot, indent: usize) -> String {
@@ -29,18 +29,10 @@ pub fn render_input_port(port: &InputPortSnapshot, indent: usize) -> String {
     el.attr("from", &port.from_node);
 
     if let Some(ref schema) = port.schema {
-        el.raw(
-            &XmlBuilder::new("schema", indent + 1)
-                .text(schema)
-                .build(),
-        );
+        el.raw(&XmlBuilder::new("schema", indent + 1).text(schema).build());
     }
     if let Some(ref jp) = port.json_path {
-        el.raw(
-            &XmlBuilder::new("json_path", indent + 1)
-                .text(jp)
-                .build(),
-        );
+        el.raw(&XmlBuilder::new("json_path", indent + 1).text(jp).build());
     }
 
     el.build()
@@ -53,11 +45,7 @@ pub fn render_output_port(port: &OutputPortSnapshot, indent: usize) -> String {
     el.attr("to", &port.to_node);
 
     if let Some(ref schema) = port.schema {
-        el.raw(
-            &XmlBuilder::new("schema", indent + 1)
-                .text(schema)
-                .build(),
-        );
+        el.raw(&XmlBuilder::new("schema", indent + 1).text(schema).build());
     }
 
     el.build()

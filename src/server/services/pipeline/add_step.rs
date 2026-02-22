@@ -5,6 +5,7 @@ use uuid::Uuid;
 use crate::db::traits::WorkflowRepo;
 use crate::db::WorkflowStepRow;
 use crate::server::hub::dag::dag_state::to_snake_case;
+use crate::server::services::steps::generate_ref_id;
 use crate::server::services::ServiceError;
 
 use super::recompute::recompute_execution_order;
@@ -23,18 +24,25 @@ pub async fn add_step(
     let pipeline = super::create::create_pipeline(repo, ctx, user_id).await?;
     let pipeline_id = pipeline.pipeline_id;
 
-    // Determine display_order
+    // Fetch existing steps (used for display_order + ref_id generation)
+    let existing_steps = repo
+        .list_steps(pipeline_id)
+        .await
+        .map_err(|e| ServiceError::Internal(e.into()))?;
+
     let display_order = match input.display_order {
         Some(order) => order,
         None => {
-            let steps = repo
-                .list_steps(pipeline_id)
-                .await
-                .map_err(|e| ServiceError::Internal(e.into()))?;
-            let max_order = steps.iter().map(|s| s.display_order).max().unwrap_or(0);
+            let max_order = existing_steps
+                .iter()
+                .map(|s| s.display_order)
+                .max()
+                .unwrap_or(0);
             max_order + 1
         }
     };
+
+    let ref_id = generate_ref_id(&existing_steps, &input.execution_mode);
 
     // Build the child step
     let output_variable_name = input
@@ -75,6 +83,7 @@ pub async fn add_step(
         goal_summary_updated_at: None,
         sub_workflow_template_id: None,
         child_workflow_id: None,
+        ref_id: Some(ref_id),
         pinned: false,
         run_results_summary: String::new(),
     };

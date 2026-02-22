@@ -4,8 +4,8 @@
 //! L3 uses flat attributes with text content; L4 uses child elements.
 //! L1/L2 don't render individual agents (they're a summary attribute on `<node>`).
 
-use crate::markup::XmlBuilder;
 use super::types::*;
+use crate::markup::XmlBuilder;
 
 /// Render an [`AgentSnapshot`] as an `<agent>` XML element.
 ///

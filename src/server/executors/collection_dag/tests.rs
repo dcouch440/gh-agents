@@ -168,6 +168,13 @@ mod tests {
             async fn get_step(&self, _: Uuid) -> Result<Option<crate::db::WorkflowStepRow>> {
                 unimplemented!()
             }
+            async fn find_step_by_ref_id(
+                &self,
+                _: Uuid,
+                _: &str,
+            ) -> Result<Option<crate::db::WorkflowStepRow>> {
+                unimplemented!()
+            }
             async fn list_steps(&self, _: Uuid) -> Result<Vec<crate::db::WorkflowStepRow>> {
                 unimplemented!()
             }

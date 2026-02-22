@@ -967,10 +967,7 @@ mod tests {
         });
         let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
 
-        assert!(result["error"]
-            .as_str()
-            .unwrap()
-            .contains("unknown agent"));
+        assert!(result["error"].as_str().unwrap().contains("unknown agent"));
     }
 
     #[tokio::test]

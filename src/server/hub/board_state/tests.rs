@@ -2,8 +2,8 @@
 mod tests {
     use uuid::Uuid;
 
-    use crate::server::hub::board_state::render;
     use crate::markup::{xml_escape, XmlBuilder};
+    use crate::server::hub::board_state::render;
     use crate::server::hub::board_state::types::*;
 
     // ========================================================================
@@ -24,6 +24,7 @@ mod tests {
         let agent_count = agents.len();
         NodeSnapshot {
             id: Uuid::new_v4(),
+            ref_id: None,
             name: name.to_string(),
             protocol: "workforce".to_string(),
             status: if agent_count > 0 {
@@ -102,10 +103,7 @@ mod tests {
 
     #[test]
     fn render_l1_no_asking() {
-        let node = make_node(
-            "Simple",
-            vec![make_agent("Worker", &[], &[], "Does work")],
-        );
+        let node = make_node("Simple", vec![make_agent("Worker", &[], &[], "Does work")]);
         let snapshot = make_board(vec![node]);
         let xml = render::render(&snapshot, BoardStateVariant::ManagerAssistant);
 
@@ -118,18 +116,21 @@ mod tests {
 
     #[test]
     fn render_l2_with_ids_and_capabilities() {
-        let node = make_node(
+        let mut node = make_node(
             "Collector",
             vec![make_agent("Scraper", &["web_search"], &[], "Scrapes data")],
         );
+        node.ref_id = Some("workforce-1".to_string());
         let snapshot = make_board(vec![node]);
         let xml = render::render(&snapshot, BoardStateVariant::ManagerBuilder);
 
         assert!(xml.contains("<workflow name=\"Test Workflow\""));
         // L2 includes workflow id
         assert!(xml.contains(" id=\""));
+        // L2 includes ref attribute before name
+        assert!(xml.contains("ref=\"workforce-1\""));
         // L2 includes node id
-        assert!(xml.contains("<node name=\"Collector\" id=\""));
+        assert!(xml.contains("name=\"Collector\" id=\""));
         // L2 includes available_capabilities
         assert!(xml.contains("<available_capabilities>github, web_search</available_capabilities>"));
         // L2 should NOT include <asking>
@@ -146,12 +147,7 @@ mod tests {
             "Research Team",
             vec![
                 make_agent("Researcher", &["web_search"], &[], "Investigates sources"),
-                make_agent(
-                    "Synthesizer",
-                    &[],
-                    &["Researcher"],
-                    "Combines findings",
-                ),
+                make_agent("Synthesizer", &[], &["Researcher"], "Combines findings"),
             ],
         );
         node.incoming_context = vec![IncomingContextSnapshot {
@@ -209,12 +205,7 @@ mod tests {
             "Research Team",
             vec![
                 make_agent("Researcher", &["web_search"], &[], "Investigates sources"),
-                make_agent(
-                    "Synthesizer",
-                    &[],
-                    &["Researcher"],
-                    "Combines findings",
-                ),
+                make_agent("Synthesizer", &[], &["Researcher"], "Combines findings"),
             ],
         );
         node.input_ports = vec![InputPortSnapshot {
@@ -277,10 +268,7 @@ mod tests {
 
     #[test]
     fn variant_scope() {
-        assert_eq!(
-            BoardStateVariant::ManagerAssistant.scope(),
-            Scope::AllNodes
-        );
+        assert_eq!(BoardStateVariant::ManagerAssistant.scope(), Scope::AllNodes);
         assert_eq!(BoardStateVariant::ManagerBuilder.scope(), Scope::AllNodes);
         assert_eq!(BoardStateVariant::NodeAssistant.scope(), Scope::OwnNode);
         assert_eq!(BoardStateVariant::Dispatch.scope(), Scope::OwnNode);
@@ -316,8 +304,7 @@ mod tests {
 
     #[test]
     fn xml_escape_special_chars() {
-        
-assert_eq!(xml_escape("a & b"), "a &amp; b");
+        assert_eq!(xml_escape("a & b"), "a &amp; b");
         assert_eq!(xml_escape("<script>"), "&lt;script&gt;");
         assert_eq!(xml_escape(r#"say "hello""#), "say &quot;hello&quot;");
         assert_eq!(xml_escape("clean text"), "clean text");
@@ -329,22 +316,19 @@ assert_eq!(xml_escape("a & b"), "a &amp; b");
 
     #[test]
     fn builder_self_closing() {
-        
-let xml = XmlBuilder::new("empty", 0).build();
+        let xml = XmlBuilder::new("empty", 0).build();
         assert_eq!(xml, "<empty />\n");
     }
 
     #[test]
     fn builder_inline_text() {
-        
-let xml = XmlBuilder::new("tag", 0).text("hello").build();
+        let xml = XmlBuilder::new("tag", 0).text("hello").build();
         assert_eq!(xml, "<tag>hello</tag>\n");
     }
 
     #[test]
     fn builder_attrs_and_children() {
-        
-let xml = XmlBuilder::new("node", 0)
+        let xml = XmlBuilder::new("node", 0)
             .attr("name", "Test")
             .text("summary")
             .raw(&XmlBuilder::new("child", 1).text("inner").build())
@@ -358,8 +342,7 @@ let xml = XmlBuilder::new("node", 0)
 
     #[test]
     fn builder_indent() {
-        
-let xml = XmlBuilder::new("deep", 3).attr("x", "1").build();
+        let xml = XmlBuilder::new("deep", 3).attr("x", "1").build();
         assert!(xml.starts_with("      <deep")); // 3 * 2 spaces
     }
 }

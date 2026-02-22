@@ -319,4 +319,42 @@ mod tests {
         assert_eq!(required.len(), 1);
         assert_eq!(required[0], "content");
     }
+
+    #[test]
+    fn test_dispatch_to_nodes_schema() {
+        let tool = get_tool_definition("dispatch_to_nodes").unwrap();
+        assert_eq!(tool.name, "dispatch_to_nodes");
+
+        let props = tool.input_schema["properties"].as_object().unwrap();
+        assert!(props.contains_key("messages"));
+
+        let messages_schema = &props["messages"];
+        assert_eq!(messages_schema["type"], "array");
+
+        let item_props = messages_schema["items"]["properties"].as_object().unwrap();
+        assert!(item_props.contains_key("node"));
+        assert!(item_props.contains_key("message_type"));
+        assert!(item_props.contains_key("content"));
+
+        let item_required = messages_schema["items"]["required"].as_array().unwrap();
+        assert_eq!(item_required.len(), 3);
+
+        let required = tool.input_schema["required"].as_array().unwrap();
+        assert_eq!(required.len(), 1);
+        assert_eq!(required[0], "messages");
+    }
+
+    #[test]
+    fn test_send_message_schema() {
+        let tool = get_tool_definition("send_message").unwrap();
+        assert_eq!(tool.name, "send_message");
+
+        let props = tool.input_schema["properties"].as_object().unwrap();
+        assert!(props.contains_key("step_id"));
+        assert!(props.contains_key("message_type"));
+        assert!(props.contains_key("content"));
+
+        let required = tool.input_schema["required"].as_array().unwrap();
+        assert_eq!(required.len(), 3);
+    }
 }

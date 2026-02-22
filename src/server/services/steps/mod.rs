@@ -14,7 +14,7 @@ use super::workflows::verify_workflow_ownership;
 /// All 20 optional fields that are common to both create and update operations.
 /// Derives `Deserialize` + `utoipa::ToSchema` so it can be embedded in API
 /// request types via `#[serde(flatten)]`.
-#[derive(Deserialize, utoipa::ToSchema)]
+#[derive(Default, Deserialize, utoipa::ToSchema)]
 pub struct StepPayload {
     pub agent_id: Option<Uuid>,
     pub execution_mode: Option<String>,
@@ -82,15 +82,18 @@ pub async fn create_step(
     let p = input.payload;
     let execution_mode = p.execution_mode.unwrap_or_else(|| "single".to_string());
 
+    // Fetch existing steps (used for input constraint + ref_id generation)
+    let existing_steps = repo.list_steps(input.workflow_id).await?;
+
     // Enforce single-input constraint
-    if execution_mode == "input" {
-        let existing_steps = repo.list_steps(input.workflow_id).await?;
-        if existing_steps.iter().any(|s| s.execution_mode == "input") {
-            return Err(ServiceError::validation(
-                "Workflow can have at most one input step",
-            ));
-        }
+    if execution_mode == "input" && existing_steps.iter().any(|s| s.execution_mode == "input") {
+        return Err(ServiceError::validation(
+            "Workflow can have at most one input step",
+        ));
     }
+
+    // Generate stable ref_id: "{execution_mode}-{next_number}"
+    let ref_id = generate_ref_id(&existing_steps, &execution_mode);
 
     let (resolved_agent_id, resolved_schema_id, resolved_reasoning) = resolve_step_defaults(
         &execution_mode,
@@ -137,6 +140,7 @@ pub async fn create_step(
         goal_summary_updated_at: None,
         sub_workflow_template_id: p.sub_workflow_template_id,
         child_workflow_id: None,
+        ref_id: Some(ref_id),
         pinned: false,
         run_results_summary: String::new(),
     };
@@ -254,6 +258,7 @@ pub async fn update_step(
             .sub_workflow_template_id
             .or(existing.sub_workflow_template_id),
         child_workflow_id: existing.child_workflow_id,
+        ref_id: existing.ref_id.clone(),
         pinned: existing.pinned,
         run_results_summary: existing.run_results_summary.clone(),
     };
@@ -293,6 +298,22 @@ pub async fn delete_step(
 
     repo.delete_step(step_id).await?;
     Ok(deleted_session_id)
+}
+
+/// Generate a stable ref_id like "workforce-1" for a new step.
+///
+/// Scans existing steps in the workflow for the highest number with the same
+/// execution_mode prefix and increments it.
+pub(crate) fn generate_ref_id(existing_steps: &[WorkflowStepRow], execution_mode: &str) -> String {
+    let prefix = format!("{}-", execution_mode);
+    let max_num = existing_steps
+        .iter()
+        .filter_map(|s| s.ref_id.as_deref())
+        .filter_map(|r| r.strip_prefix(&prefix))
+        .filter_map(|n| n.parse::<u32>().ok())
+        .max()
+        .unwrap_or(0);
+    format!("{}{}", prefix, max_num + 1)
 }
 
 mod tests;

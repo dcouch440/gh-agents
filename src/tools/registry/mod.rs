@@ -73,6 +73,7 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
 
         // Agent messaging tools
         "send_message" => Some(send_message_tool()),
+        "dispatch_to_nodes" => Some(dispatch_to_nodes_tool()),
 
         _ => None,
     }
@@ -970,6 +971,48 @@ fn send_message_tool() -> Tool {
                 }
             },
             "required": ["step_id", "message_type", "content"]
+        }),
+    }
+}
+
+fn dispatch_to_nodes_tool() -> Tool {
+    Tool {
+        name: "dispatch_to_nodes".into(),
+        description: concat!(
+            "Send instructions to multiple node assistants in one action. Each message is ",
+            "delivered to the node's chat session and triggers an automatic response. ",
+            "Reference nodes by their ref attribute from board_state (e.g. \"workforce-1\"). ",
+            "Messages are sent concurrently and each node processes them independently.",
+        )
+        .into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "messages": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "node": {
+                                "type": "string",
+                                "description": "Node ref from board_state (e.g. \"workforce-1\", \"context-2\")"
+                            },
+                            "message_type": {
+                                "type": "string",
+                                "enum": ["initial_instruction", "update", "upstream_change", "coordination", "feedback"],
+                                "description": "Type of message: initial_instruction (first contact), update (new info), upstream_change (topology change), coordination (cross-node sync), feedback (post-run)"
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "The instruction or message content for the node assistant"
+                            }
+                        },
+                        "required": ["node", "message_type", "content"]
+                    },
+                    "description": "Array of messages, one per target node"
+                }
+            },
+            "required": ["messages"]
         }),
     }
 }

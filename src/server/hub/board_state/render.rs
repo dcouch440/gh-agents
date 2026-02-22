@@ -19,7 +19,11 @@ pub fn render(snapshot: &BoardSnapshot, variant: BoardStateVariant) -> String {
         Scope::AllNodes => {
             let mut wf = XmlBuilder::new("workflow", 1);
             wf.attr("name", &snapshot.workflow_name);
-            wf.attr_if(variant.include_node_ids(), "id", &snapshot.workflow_id.to_string());
+            wf.attr_if(
+                variant.include_node_ids(),
+                "id",
+                &snapshot.workflow_id.to_string(),
+            );
 
             if matches!(variant, BoardStateVariant::ManagerAssistant) {
                 wf.attr("status", derive_workflow_status(&snapshot.nodes));

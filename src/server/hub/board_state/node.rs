@@ -5,20 +5,21 @@
 
 use super::agent;
 use super::port;
-use crate::markup::XmlBuilder;
 use super::types::*;
+use crate::markup::XmlBuilder;
 
 /// Render a [`NodeSnapshot`] as a `<node>` XML element for the given variant.
 pub fn render_node(node: &NodeSnapshot, variant: BoardStateVariant) -> String {
     let indent = match variant.scope() {
         Scope::AllNodes => 2, // inside <workflow>
-        Scope::OwnNode => 1, // inside <board_state>
+        Scope::OwnNode => 1,  // inside <board_state>
     };
 
     let mut el = XmlBuilder::new("node", indent);
 
     // ── Attributes ──────────────────────────────────────────────────────
 
+    el.attr_opt("ref", node.ref_id.as_deref());
     el.attr("name", &node.name);
     el.attr_if(variant.include_node_ids(), "id", &node.id.to_string());
     el.attr("protocol", &node.protocol);
