@@ -16,22 +16,17 @@ type ToolCallCardProps = {
   status: 'running' | 'complete'
 }
 
-const MAX_INPUT_KEYS = 3
-
 const summarizeInput = (input: Record<string, unknown>): string => {
   const keys = Object.keys(input)
   if (keys.length === 0) return ''
 
-  const pairs = keys.slice(0, MAX_INPUT_KEYS).map((k) => {
+  const pairs = keys.map((k) => {
     const v = input[k]
-    const val = typeof v === 'string'
-      ? (v.length > 40 ? `"${v.slice(0, 40)}..."` : `"${v}"`)
-      : String(JSON.stringify(v)).slice(0, 40)
+    const val = typeof v === 'string' ? `"${v}"` : String(JSON.stringify(v))
     return `${k}=${val}`
   })
 
-  const suffix = keys.length > MAX_INPUT_KEYS ? ` +${keys.length - MAX_INPUT_KEYS} more` : ''
-  return pairs.join(', ') + suffix
+  return pairs.join(', ')
 }
 
 const formatResult = (result: unknown): string => {
@@ -114,9 +109,8 @@ function ToolCallCard({ toolName, toolId, input, result, status }: ToolCallCardP
             color: 'text.disabled',
             px: 1,
             pb: 0.5,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
           }}
         >
           {inputSummary}
@@ -137,7 +131,6 @@ function ToolCallCard({ toolName, toolId, input, result, status }: ToolCallCardP
               color: 'text.secondary',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
-              maxHeight: 200,
               overflowY: 'auto',
               borderTop: 1,
               borderColor: 'divider',
