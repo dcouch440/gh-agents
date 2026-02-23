@@ -144,7 +144,9 @@ impl AppStateBuilder {
             provider: self.provider,
             provider_registry,
             prompt_registry,
-            capability_registry: Arc::new(crate::config::capability_registry::CapabilityRegistry::empty()),
+            capability_registry: Arc::new(
+                crate::config::capability_registry::CapabilityRegistry::empty(),
+            ),
             jwt_secret,
             chat_tx,
             response_streams: DashMap::new(),
