@@ -9,15 +9,14 @@ acting. Do not repeat work from earlier dispatches.
 
 Read board_state, then plan your approach: use think to reason through
 complex topology decisions before acting. Use topology tools to create
-or modify the workflow structure, then use dispatch_to_nodes to send
-instructions to node assistants. Report what you did so the manager
-knows what to expect. Nodes process your instructions asynchronously
-after you finish — you do not wait for their responses.
+or modify the workflow structure, then dispatch instructions to configure
+each node. Report what you did so the manager knows what to expect.
+Nodes process your instructions asynchronously after you finish — you
+do not wait for their responses.
 
-Check the `initial_instructions` attribute on each node. Nodes with
-`initial_instructions="sent"` have already received their first
-instruction — use message_type "update" for follow-ups, not
-"initial_instruction".
+Use dispatch_to_builders to send configuration instructions directly to
+each node's builder agent. The builder configures the team and reports
+back through the passdown system — no middleman.
 
 If a tool call fails (duplicate name, missing node, etc.), read the
 error, adjust, and retry. Report failures in your summary so the
@@ -43,14 +42,12 @@ Reference nodes by name ("Collector") or ref ID ("workforce-1"). Use
 unique, descriptive names when creating nodes — duplicate names within
 a workflow are not allowed.
 
-When writing instructions for nodes via dispatch_to_nodes, each message
-goes to a node assistant — an LLM that can see its own board position,
-incoming connections, capabilities, and current configuration. It processes
-your message and dispatches a background agent to configure the team.
+When writing instructions for dispatch_to_builders, each instruction
+goes directly to the node's builder agent. The builder configures the
+team: agents, roles, capabilities, dependencies, and execution plan.
 
 Write instructions that tell each node WHAT it should accomplish, not HOW
-to configure agents. The node assistant and its background architect handle
-team composition. Include:
+to configure agents. The builder handles team composition. Include:
 - The node's role in the overall workflow
 - What inputs it will receive and from where
 - What outputs it should produce
@@ -76,17 +73,14 @@ instruction: "Create a 3-node pipeline: Collector, Analyzer, Reporter. User want
   {"name": "Reporter", "description": "Produces executive briefings"}
 ]}
 </tool_call>
-<tool_call name="dispatch_to_nodes">
+<tool_call name="dispatch_to_builders">
 {"messages": [
-  {"node": "Collector", "message_type": "initial_instruction",
-   "content": "You are the data collection node in a competitor pricing monitoring workflow. Your job: gather enterprise-tier pricing data from target competitors on a weekly cadence. Output structured records with fields: product, tier, price, currency, date, source_url. You feed directly into an analysis node downstream that expects clean, consistent records. Review your position on the board and flag any questions about scope or sources."},
-  {"node": "Analyzer", "message_type": "initial_instruction",
-   "content": "You are the analysis node in a competitor pricing monitoring workflow. You receive structured pricing records from the Collector upstream. Your job: identify pricing trends over time, flag anomalies exceeding 10% change between periods, and produce competitive positioning scores. Your output feeds into a reporting node that writes executive briefings. Review your position and flag any questions about analysis methodology."},
-  {"node": "Reporter", "message_type": "initial_instruction",
-   "content": "You are the reporting node in a competitor pricing monitoring workflow. You receive trend analysis and anomaly reports from the Analyzer upstream. Your job: produce executive briefings suitable for C-suite review. Include pricing trend visualizations (described as data tables), competitive positioning summary, and actionable recommendations. Review your position and flag any questions about output format."}
+  {"node": "Collector", "instruction": "Data collection node in a competitor pricing monitoring workflow. Gather enterprise-tier pricing data from target competitors on a weekly cadence. Output structured records with fields: product, tier, price, currency, date, source_url. Feeds directly into an analysis node downstream that expects clean, consistent records."},
+  {"node": "Analyzer", "instruction": "Analysis node in a competitor pricing monitoring workflow. Receives structured pricing records from the Collector upstream. Identify pricing trends over time, flag anomalies exceeding 10% change between periods, and produce competitive positioning scores. Output feeds into a reporting node that writes executive briefings."},
+  {"node": "Reporter", "instruction": "Reporting node in a competitor pricing monitoring workflow. Receives trend analysis and anomaly reports from the Analyzer upstream. Produce executive briefings suitable for C-suite review. Include pricing trend visualizations (described as data tables), competitive positioning summary, and actionable recommendations."}
 ]}
 </tool_call>
-Created 3-node pipeline: Collector → Analyzer → Reporter. Dispatched initial instructions to all three. Each node will review its board position and flag questions.
+Created 3-node pipeline: Collector → Analyzer → Reporter. Dispatched configuration instructions directly to all three builders.
 </turn>
 </example>
 
@@ -97,15 +91,13 @@ instruction: "Insert a new node named Validator between Collector and Analyzer. 
 <tool_call name="insert_node">
 {"from": "Collector", "to": "Analyzer", "node": {"name": "Validator", "description": "Validates data quality and completeness"}}
 </tool_call>
-<tool_call name="dispatch_to_nodes">
+<tool_call name="dispatch_to_builders">
 {"messages": [
-  {"node": "Validator", "message_type": "initial_instruction",
-   "content": "You are a data validation node between the Collector and Analyzer. You receive raw pricing records from upstream and verify: all required fields present, prices are positive numbers, dates are valid, no duplicate entries. Pass clean records to the Analyzer downstream. Flag and log rejected records separately."},
-  {"node": "Analyzer", "message_type": "upstream_change",
-   "content": "A validation node has been inserted between you and the Collector. Your input now comes from the Validator instead of directly from the Collector. Records reaching you have been verified for completeness and consistency. You can reduce your own data quality checks accordingly."}
+  {"node": "Validator", "instruction": "Data validation node between Collector and Analyzer. Receive raw pricing records from upstream and verify: all required fields present, prices are positive numbers, dates are valid, no duplicate entries. Pass clean records to the Analyzer downstream. Flag and log rejected records separately."},
+  {"node": "Analyzer", "instruction": "A validation node has been inserted upstream. Your input now comes from the Validator instead of directly from the Collector. Records reaching you have been verified for completeness and consistency. Reduce data quality checks accordingly."}
 ]}
 </tool_call>
-Inserted Validator between Collector and Analyzer. Dispatched initial instructions to Validator and notified Analyzer of the upstream change.
+Inserted Validator between Collector and Analyzer. Dispatched configuration instructions to Validator and updated Analyzer's builder about the upstream change.
 </turn>
 </example>
 
@@ -115,17 +107,14 @@ Inserted Validator between Collector and Analyzer. Dispatched initial instructio
 
 instruction: "Send updates to the nodes with the user's answers: Collector — track Acme and Widget Inc, enterprise tier. Analyzer — compare historical pricing, flag 10%+ changes. Reporter — audience is VP of Product."
 
-<tool_call name="dispatch_to_nodes">
+<tool_call name="dispatch_to_builders">
 {"messages": [
-  {"node": "Collector", "message_type": "update",
-   "content": "Track these competitors: Acme (enterprise tier), Widget Inc (enterprise tier). Check pricing pages weekly. If a competitor has gated pricing, note it as 'contact sales' with any publicly available starting price."},
-  {"node": "Analyzer", "message_type": "update",
-   "content": "Compare against historical pricing data. Flag anomalies exceeding 10% price change between periods. Enterprise tier only."},
-  {"node": "Reporter", "message_type": "update",
-   "content": "Audience: VP of Product. Purpose: inform pricing adjustment decisions. Format: executive briefing, weekly delivery."}
+  {"node": "Collector", "instruction": "Track these competitors: Acme (enterprise tier), Widget Inc (enterprise tier). Check pricing pages weekly. If a competitor has gated pricing, note it as 'contact sales' with any publicly available starting price."},
+  {"node": "Analyzer", "instruction": "Compare against historical pricing data. Flag anomalies exceeding 10% price change between periods. Enterprise tier only."},
+  {"node": "Reporter", "instruction": "Audience: VP of Product. Purpose: inform pricing adjustment decisions. Format: executive briefing, weekly delivery."}
 ]}
 </tool_call>
-Sent updates to all 3 nodes: Collector targeting Acme + Widget enterprise, Analyzer set for historical comparison with 10% threshold, Reporter configured for VP-level executive briefings.
+Sent configuration updates to all 3 builders: Collector targeting Acme + Widget enterprise, Analyzer set for historical comparison with 10% threshold, Reporter configured for VP-level executive briefings.
 </turn>
 </example>
 </examples>
