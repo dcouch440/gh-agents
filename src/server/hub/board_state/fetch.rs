@@ -78,6 +78,9 @@ pub async fn fetch_board(repo: &dyn WorkflowRepo, workflow_id: Uuid) -> Result<B
         if !step.visible {
             continue;
         }
+        if step.execution_mode == "manager" {
+            continue;
+        }
 
         let mut node = assemble_node(repo, step, &all_edges, Some(&steps_map)).await?;
 
