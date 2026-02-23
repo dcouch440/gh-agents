@@ -1,4 +1,5 @@
 import { Position } from '@xyflow/react'
+import { assignParallelTracks } from '@/utils/spatial'
 import { roundCorners } from './roundCorners'
 
 // ============================================================================
@@ -197,31 +198,6 @@ const computeOrthogonalLabel = (
   labelX: (sourceX + targetX) / 2,
   labelY: (sourceY + targetY) / 2,
 })
-
-// ============================================================================
-// Parallel Track Assignment
-// ============================================================================
-
-/**
- * Compute perpendicular offsets for parallel pipes sharing a corridor.
- * Centers the group around 0 with `spacing` between each pipe.
- *
- * Example: 3 pipes with spacing 8 → offsets [-8, 0, 8]
- */
-const assignParallelTracks = (
-  edgeCount: number,
-  spacing: number,
-): number[] => {
-  if (edgeCount <= 0) return []
-  if (edgeCount === 1) return [0]
-
-  const totalWidth = (edgeCount - 1) * spacing
-  const offsets: number[] = []
-  for (let i = 0; i < edgeCount; i++) {
-    offsets.push(-totalWidth / 2 + i * spacing)
-  }
-  return offsets
-}
 
 // ============================================================================
 // Obstacle-Aware Corridor Routing
