@@ -1,8 +1,8 @@
 //! ManagerDispatchStrategy — ExecutionStrategy for the manager builder (L2).
 //!
 //! Runs asynchronously to create/modify workflow topology and dispatch
-//! instructions to node assistants. Uses topology tools (create_pipeline, etc.)
-//! and dispatch_to_nodes for messaging.
+//! instructions directly to node builders. Uses topology tools
+//! (create_pipeline, etc.) and dispatch_to_builders for configuration.
 
 use std::collections::HashMap;
 
@@ -16,7 +16,6 @@ use crate::server::hub::board_state::{self, BoardStateVariant};
 use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::template_resolve::resolve_template;
 use crate::server::hub::strategy::ExecutionStrategy;
-use crate::server::services::messaging;
 use crate::server::state::AppState;
 use crate::server::tools::manager::{self, ManagerToolContext};
 use crate::types::UserId;
@@ -31,7 +30,6 @@ const MANAGER_BUILDER_TOOLS: &[&str] = &[
     "remove_node",
     "wire_edge",
     "remove_edge",
-    "dispatch_to_nodes",
     "dispatch_to_builders",
     "think",
 ];
@@ -182,16 +180,6 @@ impl ExecutionStrategy for ManagerDispatchStrategy {
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
         match name {
             "think" => serde_json::json!({ "status": "ok" }),
-            "dispatch_to_nodes" => {
-                messaging::execute_dispatch_to_nodes_tool(
-                    &self.state,
-                    input,
-                    "Manager",
-                    self.user_id,
-                    self.workflow_id,
-                )
-                .await
-            }
             "dispatch_to_builders" => {
                 crate::server::services::dispatch::execute_dispatch_to_builders_tool(
                     &self.state,
