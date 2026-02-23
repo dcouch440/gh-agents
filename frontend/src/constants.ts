@@ -224,9 +224,11 @@ export const API = {
   PROTOCOL_APPLY: (id: string, stepId: string) => `/protocols/${id}/apply/${stepId}`,
   PROTOCOL_UNAPPLY: (protocolId: string, stepId: string) => `/protocols/${protocolId}/unapply/${stepId}`,
 
-  // Dispatch trace
+  // Dispatch
   DISPATCH_TRACE: (executionId: string) => `/dispatch/${executionId}/trace`,
   DISPATCH_STEP_TASKS: (stepId: string) => `/dispatch/step/${stepId}`,
+  DISPATCH_SEND: (stepId: string) => `/dispatch/step/${stepId}/send`,
+  DISPATCH_CANCEL: (executionId: string) => `/dispatch/${executionId}/cancel`,
 } as const
 
 // Local Storage

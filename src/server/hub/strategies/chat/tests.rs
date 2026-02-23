@@ -128,7 +128,9 @@ mod tests {
         assert!(names.contains(&"set_node_name"));
         assert!(names.contains(&"set_node_description"));
         assert!(names.contains(&"think"));
-        assert!(names.contains(&"update_plan"));
+        // update_plan is excluded from dispatch — builder uses complete_task
+        assert!(!names.contains(&"update_plan"));
+        assert!(names.contains(&"complete_task"));
         assert!(!names.contains(&"set_node_archetype"));
 
         // No archetype-specific tools
@@ -198,8 +200,8 @@ mod tests {
         // set_node_description is dispatch-only — assistant must dispatch it
         assert!(!names.contains(&"set_node_description"));
 
-        // update_plan is owned by the dispatch sub-agent, not the assistant
-        assert!(!names.contains(&"update_plan"));
+        // update_plan is now owned by the assistant (plan is user's design doc)
+        assert!(names.contains(&"update_plan"));
 
         // Does NOT have workforce mutation tools
         assert!(!names.contains(&"set_task"));
@@ -240,13 +242,18 @@ mod tests {
     }
 
     #[test]
-    fn resolve_step_tools_includes_update_plan_for_all_archetypes() {
+    fn resolve_step_tools_excludes_update_plan_from_dispatch() {
+        // Builder uses complete_task instead of update_plan
         for mode in &["workforce", "single", ""] {
             let tools = super::super::resolve_step_tools(mode);
             let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
             assert!(
-                names.contains(&"update_plan"),
-                "update_plan missing for execution_mode={mode}"
+                !names.contains(&"update_plan"),
+                "update_plan should not be in dispatch tools for execution_mode={mode}"
+            );
+            assert!(
+                names.contains(&"complete_task"),
+                "complete_task missing for dispatch execution_mode={mode}"
             );
         }
     }

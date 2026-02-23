@@ -32,6 +32,7 @@ const MANAGER_BUILDER_TOOLS: &[&str] = &[
     "wire_edge",
     "remove_edge",
     "dispatch_to_nodes",
+    "dispatch_to_builders",
     "think",
 ];
 
@@ -186,6 +187,15 @@ impl ExecutionStrategy for ManagerDispatchStrategy {
                     &self.state,
                     input,
                     "Manager",
+                    self.user_id,
+                    self.workflow_id,
+                )
+                .await
+            }
+            "dispatch_to_builders" => {
+                crate::server::services::dispatch::execute_dispatch_to_builders_tool(
+                    &self.state,
+                    input,
                     self.user_id,
                     self.workflow_id,
                 )

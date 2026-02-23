@@ -11,6 +11,7 @@ pub mod agents;
 pub mod chat;
 pub mod collections;
 pub mod costs;
+pub mod dispatch;
 pub mod documents;
 pub mod edges;
 pub mod error;

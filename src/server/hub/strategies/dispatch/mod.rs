@@ -5,6 +5,7 @@
 //! assistant uses, but runs in the background with no streaming.
 
 use std::collections::HashMap;
+use std::sync::Mutex;
 
 use async_trait::async_trait;
 use serde_json::Value;
@@ -15,6 +16,7 @@ use crate::llm::{Message, Tool};
 use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::template_resolve::resolve_template;
 use crate::server::hub::strategy::ExecutionStrategy;
+use crate::server::services::dispatch::Passdown;
 use crate::server::state::AppState;
 use crate::server::tools::workforce::{self, WorkforceToolContext};
 
@@ -37,6 +39,8 @@ pub struct DispatchStrategy {
     step_id: Uuid,
     workflow_id: Uuid,
     session_id: Option<Uuid>,
+    /// Captured passdown from `complete_task` tool call.
+    passdown: Mutex<Option<Passdown>>,
 }
 
 impl DispatchStrategy {
@@ -102,7 +106,15 @@ impl DispatchStrategy {
             step_id,
             workflow_id,
             session_id,
+            passdown: Mutex::new(None),
         })
+    }
+
+    /// Take the captured passdown, if any.
+    ///
+    /// Called by the executor after the engine loop ends.
+    pub fn take_passdown(&self) -> Option<Passdown> {
+        self.passdown.lock().ok().and_then(|mut p| p.take())
     }
 }
 
@@ -191,6 +203,19 @@ impl ExecutionStrategy for DispatchStrategy {
     }
 
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
+        // Handle complete_task — capture passdown and signal completion
+        if name == "complete_task" {
+            let passdown = Passdown {
+                plan: input["plan"].as_str().unwrap_or("").to_string(),
+                summary: input["summary"].as_str().unwrap_or("").to_string(),
+                question: input["question"].as_str().map(String::from),
+            };
+            if let Ok(mut guard) = self.passdown.lock() {
+                *guard = Some(passdown);
+            }
+            return serde_json::json!({ "status": "completed" });
+        }
+
         let ctx = WorkforceToolContext {
             workflow_id: self.workflow_id,
             step_id: self.step_id,
@@ -210,18 +235,6 @@ impl ExecutionStrategy for DispatchStrategy {
                 &tool_ctx,
             )
             .await
-        } else if name == "update_plan" {
-            let content = input["content"].as_str().unwrap_or("");
-            match self
-                .state
-                .repos()
-                .workflows
-                .upsert_plan(self.step_id, content)
-                .await
-            {
-                Ok(()) => serde_json::json!({ "status": "ok" }),
-                Err(e) => serde_json::json!({ "error": e.to_string() }),
-            }
         } else if name == "think" {
             serde_json::json!({ "status": "ok" })
         } else {

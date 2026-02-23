@@ -68,6 +68,10 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         // Agent messaging tools
         "send_message" => Some(send_message_tool()),
         "dispatch_to_nodes" => Some(dispatch_to_nodes_tool()),
+        "dispatch_to_builders" => Some(dispatch_to_builders_tool()),
+
+        // Builder completion tool
+        "complete_task" => Some(complete_task_tool()),
 
         // Manager topology tools (6)
         "create_pipeline" => Some(create_pipeline_tool()),
@@ -870,6 +874,79 @@ fn dispatch_to_nodes_tool() -> Tool {
                 }
             },
             "required": ["messages"]
+        }),
+    }
+}
+
+fn dispatch_to_builders_tool() -> Tool {
+    Tool {
+        name: "dispatch_to_builders".into(),
+        description: concat!(
+            "Send configuration instructions directly to node builders (L4), bypassing the ",
+            "node assistants (L3). Each instruction spawns a background builder agent that ",
+            "configures the node's workforce team. Use this for configuration tasks. Use ",
+            "dispatch_to_nodes for conversational messages to node assistants.",
+        )
+        .into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "messages": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "node": {
+                                "type": "string",
+                                "description": "Node name (e.g. \"Collector\") or ref ID (e.g. \"workforce-1\")"
+                            },
+                            "instruction": {
+                                "type": "string",
+                                "description": "Configuration instruction for the node builder"
+                            }
+                        },
+                        "required": ["node", "instruction"]
+                    },
+                    "description": "Array of instructions, one per target node builder"
+                }
+            },
+            "required": ["messages"]
+        }),
+    }
+}
+
+// ============================================================================
+// Builder Completion Tool Definition
+// ============================================================================
+
+fn complete_task_tool() -> Tool {
+    Tool {
+        name: "complete_task".into(),
+        description: concat!(
+            "Signal that you have finished configuring this node. Call this once when done. ",
+            "Provide a plan for the designer (what the team should accomplish and how), a ",
+            "summary of what you configured, and optionally a question if you need user input ",
+            "to proceed. Do not call any tools after calling complete_task.",
+        )
+        .into(),
+        input_schema: json!({
+            "type": "object",
+            "properties": {
+                "plan": {
+                    "type": "string",
+                    "description": "Plan for the designer — what the team should accomplish, key decisions, execution direction. This feeds into the agent designer at execution time."
+                },
+                "summary": {
+                    "type": "string",
+                    "description": "What you configured and key decisions made (1-3 sentences). Displayed to the manager/user."
+                },
+                "question": {
+                    "type": "string",
+                    "description": "Question for the manager/user if you need input to proceed. Leave null if no question.",
+                    "nullable": true
+                }
+            },
+            "required": ["plan", "summary"]
         }),
     }
 }

@@ -220,7 +220,7 @@ export type AgentMessageData = {
 // Dispatch events
 export type DispatchStartedData = { session_id: string; execution_id: string; step_id: string; instruction: string }
 export type DispatchProgressData = { session_id: string; execution_id: string; step_id: string; message: string }
-export type DispatchCompletedData = { session_id: string; execution_id: string; step_id: string; summary: string }
+export type DispatchCompletedData = { session_id: string; execution_id: string; step_id: string; summary: string; question: string | null }
 export type DispatchFailedData = { session_id: string; execution_id: string; step_id: string; error: string }
 export type DispatchCancelledData = { session_id: string; execution_id: string; step_id: string }
 

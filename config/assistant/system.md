@@ -43,6 +43,10 @@ Messages in the conversation come from two sources:
 <your_plan>
 {{.System.plan}}
 </your_plan>
+Use update_plan to capture design decisions from your conversation with
+the user. The plan feeds into the agent designer at execution time —
+include requirements, context, and guidance the designer needs to write
+good agent prompts.
 
 {{.System.dispatch_status}}
 
