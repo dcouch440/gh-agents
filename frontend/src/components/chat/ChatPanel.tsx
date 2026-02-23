@@ -18,9 +18,10 @@ export type ChatPanelProps = {
   stepId?: string
   /** When true, uses more generous spacing for fullscreen focus mode */
   focusMode?: boolean
+  onPanelSubmit?: (messageId: string, selections: string) => void
 }
 
-function ChatPanel({ messages, onSend, onCancel, streaming, disabled, emptyMessage, streamingContent, stepId, focusMode }: ChatPanelProps) {
+function ChatPanel({ messages, onSend, onCancel, streaming, disabled, emptyMessage, streamingContent, stepId, focusMode, onPanelSubmit }: ChatPanelProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   return (
@@ -42,6 +43,7 @@ function ChatPanel({ messages, onSend, onCancel, streaming, disabled, emptyMessa
         streamingContent={streamingContent}
         streaming={streaming}
         focusMode={focusMode}
+        onPanelSubmit={onPanelSubmit}
       />
       {stepId ? (
         <RichChatInput onSend={onSend} onCancel={onCancel} stepId={stepId} disabled={disabled} focusMode={focusMode} />

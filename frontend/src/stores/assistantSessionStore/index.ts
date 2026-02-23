@@ -3,7 +3,6 @@ import {
   selectSession,
   selectMessages,
   selectSegments,
-  selectPanel,
   selectLoading,
   selectError,
   selectStreaming,
@@ -24,8 +23,8 @@ import {
   addTool,
   completeTool,
   addDoc,
-  setPanel,
-  dismissPanel,
+  addPanelMessage,
+  submitPanel,
   setStreaming,
   finalizeStream,
   handleStreamError,
@@ -40,7 +39,6 @@ export const assistantSessionStore = {
   selectSession,
   selectMessages,
   selectSegments,
-  selectPanel,
   selectLoading,
   selectError,
   selectStreaming,
@@ -57,8 +55,8 @@ export const assistantSessionStore = {
   addTool,
   completeTool,
   addDoc,
-  setPanel,
-  dismissPanel,
+  addPanelMessage,
+  submitPanel,
   setStreaming,
   finalizeStream,
   handleStreamError,
@@ -68,4 +66,4 @@ export const assistantSessionStore = {
   insertAgentMessage,
 }
 
-export type { PanelState, StepSession, AssistantSessionState } from './types'
+export type { StepSession, AssistantSessionState } from './types'

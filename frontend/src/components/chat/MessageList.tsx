@@ -2,11 +2,17 @@ import { useRef, useEffect, type ReactNode } from 'react'
 import { Box, Typography } from '@mui/material'
 import { ChatMessage } from './ChatMessage'
 
+export type PanelMessageMetadata = {
+  submitLabel: string
+  submitted: boolean
+}
+
 export type ChatMessageData = {
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string
   source_type?: string | null
+  panelMeta?: PanelMessageMetadata | null
 }
 
 export type MessageListProps = {
@@ -15,9 +21,10 @@ export type MessageListProps = {
   streamingContent?: ReactNode
   streaming?: boolean
   focusMode?: boolean
+  onPanelSubmit?: (messageId: string, selections: string) => void
 }
 
-function MessageList({ messages, emptyMessage, streamingContent, streaming, focusMode }: MessageListProps) {
+function MessageList({ messages, emptyMessage, streamingContent, streaming, focusMode, onPanelSubmit }: MessageListProps) {
   const messagesRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -76,6 +83,9 @@ function MessageList({ messages, emptyMessage, streamingContent, streaming, focu
                 content={message.content}
                 streaming={isLastAssistant ? streaming : undefined}
                 sourceType={message.source_type}
+                panelMeta={message.panelMeta}
+                onPanelSubmit={onPanelSubmit}
+                messageId={message.id}
               />
             )
           })}

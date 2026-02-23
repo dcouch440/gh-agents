@@ -7,7 +7,6 @@ const emptySession: StepSession = {
   streamingSegments: [],
   isLoading: true,
   error: null,
-  activePanel: null,
   streaming: false,
 }
 

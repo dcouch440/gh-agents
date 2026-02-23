@@ -1,6 +1,6 @@
 import type { ChatMessageData } from '@/components/chat'
 import type { Session, MessageSegment } from '@/types'
-import type { AssistantSessionState, PanelState } from './types'
+import type { AssistantSessionState } from './types'
 import { emptySession } from './_store'
 
 const EMPTY_MESSAGES: ChatMessageData[] = []
@@ -21,11 +21,6 @@ const selectSegments =
   (s: AssistantSessionState): MessageSegment[] =>
     s.byStep[stepId]?.streamingSegments ?? EMPTY_SEGMENTS
 
-const selectPanel =
-  (stepId: string) =>
-  (s: AssistantSessionState): PanelState | null =>
-    s.byStep[stepId]?.activePanel ?? null
-
 const selectLoading =
   (stepId: string) =>
   (s: AssistantSessionState): boolean =>
@@ -45,7 +40,6 @@ export {
   selectSession,
   selectMessages,
   selectSegments,
-  selectPanel,
   selectLoading,
   selectError,
   selectStreaming,

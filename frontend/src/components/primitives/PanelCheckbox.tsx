@@ -5,11 +5,13 @@ type PanelCheckboxProps = {
   label: string
   checked: boolean
   onChange: (checked: boolean) => void
+  disabled?: boolean
 }
 
-function PanelCheckbox({ label, checked, onChange }: PanelCheckboxProps) {
+function PanelCheckbox({ label, checked, onChange, disabled }: PanelCheckboxProps) {
   return (
     <FormControlLabel
+      disabled={disabled}
       control={
         <Checkbox
           checked={checked}
@@ -21,6 +23,7 @@ function PanelCheckbox({ label, checked, onChange }: PanelCheckboxProps) {
       label={<TerminalInline content={label} />}
       sx={{
         mx: 0,
+        opacity: disabled ? 0.6 : 1,
         '& .MuiFormControlLabel-label': {
           fontSize: '0.875rem',
         },

@@ -7,7 +7,6 @@ import { useAssistantSession } from '@/hooks/useAssistantSession'
 import { ChatPanel, StreamingMessage, ThinkingIndicator } from '@/components/chat'
 import { ARCHETYPE_CONFIGS } from '../registry'
 import type { Archetype } from '../registry'
-import { PanelOverlay } from './panel'
 
 type ChatTabProps = {
   stepId: string
@@ -17,7 +16,7 @@ type ChatTabProps = {
 
 function ChatTab({ stepId, archetype, focusMode }: ChatTabProps) {
   const workflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
-  const { messages, streamingSegments, isLoading, error, streaming, activePanel, sendMessage, cancelGeneration, dismissPanel, submitPanelSelections } = useAssistantSession(workflowId, stepId)
+  const { messages, streamingSegments, isLoading, error, streaming, sendMessage, cancelGeneration, submitPanelSelections } = useAssistantSession(workflowId, stepId)
 
   const handleSend = useCallback(
     (message: string) => {
@@ -69,7 +68,7 @@ function ChatTab({ stepId, archetype, focusMode }: ChatTabProps) {
   ) : undefined
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <ChatPanel
         messages={messages}
         onSend={handleSend}
@@ -80,15 +79,8 @@ function ChatTab({ stepId, archetype, focusMode }: ChatTabProps) {
         emptyMessage={ARCHETYPE_CONFIGS[archetype].chatEmptyMessage}
         stepId={stepId}
         focusMode={focusMode}
+        onPanelSubmit={submitPanelSelections}
       />
-      {activePanel ? (
-        <PanelOverlay
-          content={activePanel.content}
-          submitLabel={activePanel.submitLabel}
-          onSubmit={submitPanelSelections}
-          onDismiss={dismissPanel}
-        />
-      ) : null}
     </Box>
   )
 }

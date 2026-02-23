@@ -6,7 +6,6 @@ import { API } from '@/constants'
 import type { SSEEvent } from '@/api'
 import type { ChatMessageData } from '@/components/chat'
 import type { MessageSegment } from '@/types'
-import type { PanelState } from '@/stores/assistantSessionStore'
 
 const STREAM_LOST_ERROR = 'Stream connection lost'
 const SEND_FAILED_ERROR = 'Failed to send message'
@@ -49,12 +48,10 @@ type UseAssistantSessionReturn = {
   isLoading: boolean
   error: string | null
   streaming: boolean
-  activePanel: PanelState | null
   sendMessage: (content: string) => void
   cancelGeneration: () => void
   clearHistory: () => void
-  dismissPanel: () => void
-  submitPanelSelections: (selections: string) => void
+  submitPanelSelections: (messageId: string, selections: string) => void
 }
 
 type SendMessageResponse = {
@@ -70,7 +67,6 @@ const useAssistantSession = (
   const streamingSegments = useStore(assistantSessionStore.store, assistantSessionStore.selectSegments(stepId))
   const isLoading = useStore(assistantSessionStore.store, assistantSessionStore.selectLoading(stepId))
   const error = useStore(assistantSessionStore.store, assistantSessionStore.selectError(stepId))
-  const activePanel = useStore(assistantSessionStore.store, assistantSessionStore.selectPanel(stepId))
   const streaming = useStore(assistantSessionStore.store, assistantSessionStore.selectStreaming(stepId))
 
   // Mount tracking and session loading
@@ -234,13 +230,9 @@ const useAssistantSession = (
     assistantSessionStore.finalizeStream(stepId)
   }, [stepId])
 
-  const dismissPanel = useCallback(() => {
-    assistantSessionStore.dismissPanel(stepId)
-  }, [stepId])
-
   const submitPanelSelections = useCallback(
-    (selections: string) => {
-      assistantSessionStore.dismissPanel(stepId)
+    (messageId: string, selections: string) => {
+      assistantSessionStore.submitPanel(stepId, messageId)
       sendMessage(selections)
     },
     [stepId, sendMessage],
@@ -257,14 +249,12 @@ const useAssistantSession = (
     isLoading,
     error,
     streaming,
-    activePanel,
     sendMessage,
     cancelGeneration,
     clearHistory,
-    dismissPanel,
     submitPanelSelections,
   }
 }
 
 export { useAssistantSession }
-export type { UseAssistantSessionReturn, PanelState }
+export type { UseAssistantSessionReturn }

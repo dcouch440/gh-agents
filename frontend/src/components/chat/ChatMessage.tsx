@@ -1,14 +1,31 @@
 import { Box, Typography } from '@mui/material'
 import { TerminalBlock } from '@/components/primitives/terminal-renderer'
+import { InlinePanelMessage } from './InlinePanelMessage'
+import type { PanelMessageMetadata } from './MessageList'
 
 type ChatMessageProps = {
   role: 'user' | 'assistant' | 'system'
   content: string
   streaming?: boolean
   sourceType?: string | null
+  panelMeta?: PanelMessageMetadata | null
+  onPanelSubmit?: (messageId: string, selections: string) => void
+  messageId?: string
 }
 
-function ChatMessage({ role, content, streaming, sourceType }: ChatMessageProps) {
+function ChatMessage({ role, content, streaming, sourceType, panelMeta, onPanelSubmit, messageId }: ChatMessageProps) {
+  if (sourceType === 'panel_render' && panelMeta && onPanelSubmit && messageId) {
+    return (
+      <InlinePanelMessage
+        content={content}
+        submitLabel={panelMeta.submitLabel}
+        submitted={panelMeta.submitted}
+        onSubmit={onPanelSubmit}
+        messageId={messageId}
+      />
+    )
+  }
+
   if (role === 'user' && sourceType === 'agent') {
     return (
       <Box

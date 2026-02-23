@@ -76,6 +76,9 @@ const mapHistory = (history: readonly ChatMessage[]): ChatMessageData[] =>
     role: m.role,
     content: m.content,
     source_type: m.source_type,
+    panelMeta: m.source_type === 'panel_render'
+      ? { submitLabel: 'Submit', submitted: true }
+      : undefined,
   }))
 
 const parseTokenText = (data: string): string => {
@@ -118,12 +121,40 @@ const addDoc = (stepId: string, docId: string, title: string): void => {
   updateStep(stepId, { streamingSegments: buildDocSegments(step.streamingSegments, docId, title) })
 }
 
-const setPanel = (stepId: string, content: string, submitLabel: string): void => {
-  updateStep(stepId, { activePanel: { content, submitLabel } })
+const addPanelMessage = (stepId: string, content: string, submitLabel: string): void => {
+  const step = getStep(stepId)
+  const panelMessage: ChatMessageData = {
+    id: `panel-${crypto.randomUUID()}`,
+    role: 'assistant',
+    content,
+    source_type: 'panel_render',
+    panelMeta: { submitLabel, submitted: false },
+  }
+
+  // Insert before the last assistant message (the one being streamed)
+  // so MessageList's "skip last assistant during streaming" logic still works
+  const messages = step.messages.slice()
+  const lastIdx = messages.length - 1
+  if (lastIdx >= 0 && messages[lastIdx].role === 'assistant' && messages[lastIdx].source_type !== 'panel_render') {
+    messages.splice(lastIdx, 0, panelMessage)
+  } else {
+    messages.push(panelMessage)
+  }
+
+  updateStep(stepId, {
+    streamingSegments: [...step.streamingSegments, { type: 'panel_render' as const, content, submitLabel }],
+    messages,
+  })
 }
 
-const dismissPanel = (stepId: string): void => {
-  updateStep(stepId, { activePanel: null })
+const submitPanel = (stepId: string, panelMessageId: string): void => {
+  const step = getStep(stepId)
+  const messages = Collections.mapBy(step.messages, (m) =>
+    m.id === panelMessageId && m.panelMeta
+      ? { ...m, panelMeta: { ...m.panelMeta, submitted: true } }
+      : m,
+  )
+  updateStep(stepId, { messages })
 }
 
 const setStreaming = (stepId: string, value: boolean): void => {
@@ -170,7 +201,7 @@ const handleSSEEvent = (stepId: string, event: SSEEvent): number => {
     }
     case SSE_EVENT.PANEL_RENDER: {
       const data = JSON.parse(event.data) as PanelEventPayload
-      setPanel(stepId, data.content, data.submit_label)
+      addPanelMessage(stepId, data.content, data.submit_label)
       return 0
     }
     case SSE_EVENT.ERROR: {
@@ -201,6 +232,7 @@ const buildDeduplicatingHandler = (
       .filter((s): s is Extract<typeof s, { type: 'doc_update' }> => s.type === 'doc_update')
       .map((s) => s.docId),
   )
+  let seenPanelCount = step.streamingSegments.filter((s) => s.type === 'panel_render').length
 
   return (evt: SSEEvent) => {
     if (isContentEvent(evt.event)) {
@@ -230,6 +262,12 @@ const buildDeduplicatingHandler = (
       const data = JSON.parse(evt.data) as { doc_id: string }
       if (seenDocIds.has(data.doc_id)) return
       seenDocIds.add(data.doc_id)
+      onEvent(evt)
+    } else if (evt.event === SSE_EVENT.PANEL_RENDER) {
+      if (seenPanelCount > 0) {
+        seenPanelCount--
+        return
+      }
       onEvent(evt)
     } else {
       onEvent(evt)
@@ -267,8 +305,8 @@ export {
   addTool,
   completeTool,
   addDoc,
-  setPanel,
-  dismissPanel,
+  addPanelMessage,
+  submitPanel,
   setStreaming,
   finalizeStream,
   handleStreamError,

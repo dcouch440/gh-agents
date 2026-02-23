@@ -111,9 +111,18 @@ describe('assistantSessionStore', () => {
         const result = mapHistory(history)
 
         expect(result).toEqual([
-          { id: 'msg-1', role: 'user', content: 'hello', source_type: null },
-          { id: 'msg-2', role: 'assistant', content: 'hi', source_type: null },
+          { id: 'msg-1', role: 'user', content: 'hello', source_type: null, panelMeta: undefined },
+          { id: 'msg-2', role: 'assistant', content: 'hi', source_type: null, panelMeta: undefined },
         ])
+      })
+
+      it('reconstructs panelMeta as submitted for panel_render messages', () => {
+        const history: ChatMessage[] = [
+          { id: 'msg-1', role: 'assistant', content: '# Panel', timestamp: '2025-01-01T00:00:00Z', source_type: 'panel_render' },
+        ]
+        const result = mapHistory(history)
+
+        expect(result[0]?.panelMeta).toEqual({ submitLabel: 'Submit', submitted: true })
       })
     })
 
@@ -175,19 +184,32 @@ describe('assistantSessionStore', () => {
       ])
     })
 
-    it('setPanel sets active panel', () => {
-      assistantSessionStore.setPanel(STEP, '# Panel', 'Submit')
+    it('addPanelMessage inserts panel message before last assistant', () => {
+      assistantSessionStore.addPanelMessage(STEP, '# Panel\n- [ ] Option A', 'Submit')
 
       const step = store.getState().byStep[STEP]!
-      expect(step.activePanel).toEqual({ content: '# Panel', submitLabel: 'Submit' })
+      // Panel message inserted before the last assistant message (index 1)
+      expect(step.messages).toHaveLength(3)
+      expect(step.messages[1]?.source_type).toBe('panel_render')
+      expect(step.messages[1]?.panelMeta).toEqual({ submitLabel: 'Submit', submitted: false })
+      // Original assistant message stays at the end
+      expect(step.messages[2]?.id).toBe('a1')
+      // Adds a panel_render segment
+      expect(step.streamingSegments).toContainEqual(
+        expect.objectContaining({ type: 'panel_render', content: '# Panel\n- [ ] Option A' }),
+      )
     })
 
-    it('dismissPanel clears active panel', () => {
-      assistantSessionStore.setPanel(STEP, '# Panel', 'Submit')
-      assistantSessionStore.dismissPanel(STEP)
+    it('submitPanel marks panel message as submitted', () => {
+      assistantSessionStore.addPanelMessage(STEP, '# Panel', 'Submit')
 
       const step = store.getState().byStep[STEP]!
-      expect(step.activePanel).toBeNull()
+      const panelMsg = step.messages.find((m) => m.source_type === 'panel_render')!
+      assistantSessionStore.submitPanel(STEP, panelMsg.id)
+
+      const updated = store.getState().byStep[STEP]!
+      const updatedPanel = updated.messages.find((m) => m.id === panelMsg.id)!
+      expect(updatedPanel.panelMeta?.submitted).toBe(true)
     })
 
     it('finalizeStream clears streaming segments', () => {

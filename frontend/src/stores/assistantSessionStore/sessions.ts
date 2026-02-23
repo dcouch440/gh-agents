@@ -19,7 +19,6 @@ const setSession = (stepId: string, session: Session, messages: ChatMessageData[
     streamingSegments: [],
     isLoading: false,
     error: null,
-    activePanel: null,
   })
 }
 
@@ -60,7 +59,7 @@ const clearMessages = async (workflowId: string, stepId: string): Promise<void> 
   if (!current?.session) return
 
   const capturedSession = current.session
-  updateStep(stepId, { messages: [], streamingSegments: [], activePanel: null })
+  updateStep(stepId, { messages: [], streamingSegments: [] })
 
   try {
     await api.workflows.clearStepMessages(workflowId, stepId)
