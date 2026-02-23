@@ -145,6 +145,27 @@ fn find_agent_by_name<'a>(
         .find(|a| normalize_name(&a.name) == normalized)
 }
 
+/// Build a detailed error when an agent name isn't found in the roster.
+///
+/// Lists available agents and reminds the builder of its scope — it can only
+/// reference agents within this node, not other workflow nodes.
+fn agent_not_found_error(name: &str, roster: &[crate::db::TaskAgentRosterRow]) -> Value {
+    let available: Vec<&str> = roster.iter().map(|a| a.name.as_str()).collect();
+    let available_str = if available.is_empty() {
+        "No agents configured yet — use configure_team or add_agent first.".to_string()
+    } else {
+        format!("Available agents in this node: {}", available.join(", "))
+    };
+    json!({
+        "error": format!(
+            "Agent '{}' not found in this node's roster. {} \
+             You can only reference agents within this node — \
+             other workflow nodes and the manager are outside your scope.",
+            name, available_str
+        )
+    })
+}
+
 /// Recompute execution_order for all roster agents from the dependency graph.
 ///
 /// Uses Kahn's algorithm with a min-heap (tie-break by current execution_order
@@ -936,11 +957,11 @@ async fn execute_set_dependency(
     // Resolve agent names → child step IDs
     let from_agent = match find_agent_by_name(&roster, from_name) {
         Some(a) => a,
-        None => return json!({ "error": format!("Agent '{}' not found in roster", from_name) }),
+        None => return agent_not_found_error(from_name, &roster),
     };
     let to_agent = match find_agent_by_name(&roster, to_name) {
         Some(a) => a,
-        None => return json!({ "error": format!("Agent '{}' not found in roster", to_name) }),
+        None => return agent_not_found_error(to_name, &roster),
     };
 
     if from_agent.id == to_agent.id {
@@ -1017,11 +1038,11 @@ async fn execute_remove_dependency(
 
     let from_agent = match find_agent_by_name(&roster, from_name) {
         Some(a) => a,
-        None => return json!({ "error": format!("Agent '{}' not found in roster", from_name) }),
+        None => return agent_not_found_error(from_name, &roster),
     };
     let to_agent = match find_agent_by_name(&roster, to_name) {
         Some(a) => a,
-        None => return json!({ "error": format!("Agent '{}' not found in roster", to_name) }),
+        None => return agent_not_found_error(to_name, &roster),
     };
 
     let from_child_step_id = match from_agent.child_step_id {
