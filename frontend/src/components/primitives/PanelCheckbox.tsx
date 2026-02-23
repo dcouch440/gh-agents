@@ -1,5 +1,4 @@
-import { Checkbox, FormControlLabel } from '@mui/material'
-import { TerminalInline } from './terminal-renderer'
+import { Box, Typography } from '@mui/material'
 
 type PanelCheckboxProps = {
   label: string
@@ -10,25 +9,44 @@ type PanelCheckboxProps = {
 
 function PanelCheckbox({ label, checked, onChange, disabled }: PanelCheckboxProps) {
   return (
-    <FormControlLabel
-      disabled={disabled}
-      control={
-        <Checkbox
-          checked={checked}
-          onChange={(_, val) => onChange(val)}
-          size="small"
-          sx={{ py: 0.25 }}
-        />
-      }
-      label={<TerminalInline content={label} />}
+    <Box
+      onClick={disabled ? undefined : () => onChange(!checked)}
       sx={{
-        mx: 0,
+        display: 'flex',
+        alignItems: 'baseline',
+        gap: 0.75,
+        py: 0.25,
+        cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.6 : 1,
-        '& .MuiFormControlLabel-label': {
-          fontSize: '0.875rem',
-        },
+        '&:hover': disabled ? {} : { bgcolor: 'action.hover' },
+        borderRadius: 0.5,
+        px: 0.5,
+        mx: -0.5,
       }}
-    />
+    >
+      <Typography
+        component="span"
+        sx={{
+          fontFamily: 'monospace',
+          fontSize: '0.8125rem',
+          lineHeight: 1.6,
+          flexShrink: 0,
+          userSelect: 'none',
+        }}
+      >
+        [{checked ? 'X' : '\u00A0'}]
+      </Typography>
+      <Typography
+        component="span"
+        sx={{
+          fontFamily: 'monospace',
+          fontSize: '0.8125rem',
+          lineHeight: 1.6,
+        }}
+      >
+        {label}
+      </Typography>
+    </Box>
   )
 }
 

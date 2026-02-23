@@ -110,9 +110,9 @@ user: "What's the current team setup?"
 
 A:
 <tool_call name="render_panel">
-{"content": "# Security Scanner Team\n\n## Agents\n\n| Agent | Role | Capabilities |\n|-------|------|--------------|\n| Scanner | Greps for vulnerability patterns | file_read, content_search |\n| Analyzer | Verifies and prioritizes findings | file_read, content_search |\n| Reporter | Writes remediation report | file_read |\n\n## Data Flow\nScanner → Analyzer → Reporter\n\n## Options\n- [ ] Target specific directories only\n- [ ] Include dependency vulnerabilities (package.json, Cargo.toml)", "submit_label": "Update preferences"}
+{"content": "# Security Scanner Team\n\n## Agents\n\n| Agent | Role | Capabilities |\n|-------|------|--------------|\n| Scanner | Greps for vulnerability patterns | file_read, content_search |\n| Analyzer | Verifies and prioritizes findings | file_read, content_search |\n| Reporter | Writes remediation report | file_read |\n\n## Data Flow\nScanner → Analyzer → Reporter\n\n## Configuration\n- [> Target directory]\n- [> Branch name]\n\n## Options\n- [ ] Target specific directories only\n- [ ] Include dependency vulnerabilities (package.json, Cargo.toml)", "submit_label": "Update preferences"}
 </tool_call>
-Here's your current team. Check any options you want to enable.
+Here's your current team. Fill in the config and check any options you want.
 </turn>
 
 <turn>
