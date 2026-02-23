@@ -156,7 +156,11 @@ This is what the manager builder receives. Not "here are 20 nodes and 15 edges."
 
 ## The Dispatch Pipeline
 
-The changeset feeds into the existing dispatch pipeline. No new execution path. The doodle layer is a visual frontend to the same manager builder dispatch that chat messages use.
+### Manager Builder as Single Source of Truth
+
+The changeset always goes to the manager builder (L2). Not to individual node assistants. Not fanned out to parallel L3 sessions. The manager builder is the single brain that sees the full changeset and the full board state. It decides what to do, resolves conflicts between changes, and orchestrates execution in the right order.
+
+This is critical. If annotations blasted directly to individual node assistants in parallel, you'd have five agents independently deciding what to do with no coordination. One might restructure edges while another is creating nodes that depend on those edges. The manager builder prevents that — it sees everything, plans everything, then executes.
 
 ```
   ╭──────────────╮         ╭──────────────╮
@@ -176,17 +180,79 @@ The changeset feeds into the existing dispatch pipeline. No new execution path. 
               │ Manager      │
               │ Builder (L2) │
               │              │
-              │ Same agent.  │
-              │ Same tools.  │
-              │ Same pipeline│
+              │ Single source│
+              │ of truth.    │
+              │ Sees full    │
+              │ changeset +  │
+              │ full board.  │
               └──────┬───────┘
                      │
-                     ▼
-              Creates / modifies
-              workflow nodes
+          ┌──────────┼──────────┐
+          ▼          ▼          ▼
+     create_node  add_edge  dispatch_to_builders
+                              │
+                    ┌─────────┼─────────┐
+                    ▼         ▼         ▼
+                  L4 node   L4 node   L4 node
+                  builder   builder   builder
 ```
 
-The manager builder already knows how to create nodes, wire edges, and dispatch to node builders. The changeset just gives it structured input instead of freeform text. If anything, it makes the manager's job easier — the topology is explicit, not buried in a paragraph.
+Drawing and chatting are two input methods into the same pipeline. The manager builder already knows how to create nodes, wire edges, and dispatch to node builders. The changeset just gives it structured input instead of freeform text. The topology is explicit, not buried in a paragraph.
+
+### Thinking Layer / Action Layer
+
+A large changeset — say 5 node annotations, 3 new nodes, 4 edges — doesn't need one expensive agent doing everything sequentially. The changeset itself is the thinking. By the time the system has extracted "these are the nodes, these are the edges, these are the comments," the hard reasoning is done. What remains is execution.
+
+This splits naturally into two layers:
+
+**Thinking layer** — one pass over the full changeset. The manager builder reads everything, understands the full board context, resolves conflicts, and produces a plan of atomic work items. This is where intelligence lives. One smart call.
+
+**Action layer** — parallel execution of atomic work items. Each item is a single tool call: create a node, wire an edge, dispatch an instruction to an L4 builder. These don't require reasoning. They're mechanical. Cheap model, or even direct service calls with no LLM.
+
+```
+Changeset (13 items)
+      │
+      ▼
+┌─────────────────────┐
+│ Thinking Layer       │  ← One pass. Manager builder.
+│                      │     Reads full changeset + board state.
+│ Splits into phases:  │     Resolves conflicts.
+│   Phase 1: creates   │     Produces atomic work items.
+│   Phase 2: edges     │
+│   Phase 3: behaviors │
+└──────────┬──────────┘
+           │
+  ┌────────┼────────┐
+  ▼        ▼        ▼
+┌──────┐┌──────┐┌──────┐    ← Phase 1: create nodes (parallel, cheap)
+│Create││Create││Create│
+│node A││node B││node C│
+└──┬───┘└──┬───┘└──┬───┘
+   └────┬──┘───────┘
+        ▼                         (barrier — wait for node IDs)
+  ┌─────┼─────┐
+  ▼     ▼     ▼
+┌────┐┌────┐┌────┐              ← Phase 2: wire edges (parallel, cheap)
+│Edge││Edge││Edge│
+│ 1  ││ 2  ││ 3  │
+└────┘└────┘└────┘
+  ┌─────┼─────┐
+  ▼     ▼     ▼
+┌────┐┌────┐┌────┐              ← Phase 3: behavior changes (parallel)
+│ L4 ││ L4 ││ L4 │                 Dispatch to node builders.
+│bld ││bld ││bld │                 This is where reasoning lives —
+└────┘└────┘└────┘                 but scoped to one node each.
+```
+
+The cost tiers:
+
+| Tier | What | Model | Why |
+|------|------|-------|-----|
+| Thinking | Parse changeset, plan execution | Smart (but structured input makes it easier) | Needs full board context, conflict resolution |
+| Action — structural | Create nodes, wire edges | Cheapest, or no LLM at all | Mechanical tool calls, no reasoning |
+| Action — behavioral | L4 node builder dispatches | Smart, but scoped to one node | "Fix hallucinating sources" requires real interpretation |
+
+The thinking layer might not even need an expensive model. The changeset already did the hard work of identifying what the user wants. The manager builder is reading structured input, not parsing prose. And the structural actions (creates, edges) might not need an LLM at all — they're database writes with explicit parameters.
 
 ### Changeset as Manager Prompt
 
@@ -210,6 +276,29 @@ The changeset is serialized into the manager builder's dispatch instruction as s
 ### Edge changes
 - Add: [new validation node] → single-3
 ```
+
+### What Lands in the Node Chat Sessions
+
+The L3 node assistant chat sessions don't make decisions during Visual Dispatch — the manager builder does. But the chat sessions are updated as a record of what happened. When the manager builder dispatches a behavior change to a node's L4 builder, the result appears in that node's chat history.
+
+```
+┌─────────────────────────────────┐
+│ Research — Chat                  │
+│                                  │
+│ ┄┄┄ earlier conversation ┄┄┄    │
+│                                  │
+│ 📌 Manager dispatched:           │
+│ "Add source verification to      │
+│  search prompt — user reported   │
+│  hallucinated sources."          │
+│                                  │
+│ ● Builder completed.             │
+│                                  │
+│ > Type a message...              │
+└─────────────────────────────────┘
+```
+
+The user can open any node's chat panel and see the full history — changes from Visual Dispatch, changes from direct chat, everything in one timeline. The chat box is both an input method (type to the assistant) and an audit trail (see what happened via drawing).
 
 ## The Submit Flow
 
@@ -273,6 +362,105 @@ Three doodles submitted. Two became real nodes. One came back as a sketch — th
 **"I changed my mind mid-drawing."**
 Select a doodle element. Delete it. It's gone. Doodles are ephemeral until submitted. No undo needed — just delete and redraw.
 
+## Hierarchy Trees Inside Nodes
+
+Doodle boxes can contain other doodle boxes. A large rectangle with smaller rectangles and arrows inside it describes a team hierarchy — and that maps directly to workforce nodes with agent rosters.
+
+```
+╭ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╮
+╎ Research Team                            ╎
+╎                                          ╎
+╎    ╭ ─ ─ ─ ─ ─ ─ ╮                     ╎
+╎    ╎ Lead          ╎                     ╎
+╎    ╎ Researcher    ╎                     ╎
+╎    ╰ ─ ─ ─ ┬ ─ ─ ╯                     ╎
+╎         ╭───┼────╮                       ╎
+╎         ▼   ▼    ▼                       ╎      ╭ ─ ─ ─ ─ ─ ╮
+╎   ╭ ─ ─ ╮╭ ─ ─ ╮╭ ─ ─ ─ ╮             ╎      ╎ Write      ╎
+╎   ╎ Web ╎╎Paper╎╎ Fact  ╎             ╎~~~~>╎ final     ╎
+╎   ╎Srch ╎╎Anlyz╎╎ Check ╎             ╎      ╎ report    ╎
+╎   ╰ ─ ─ ╯╰ ─ ─ ╯╰ ─ ─ ─ ╯             ╎      ╰ ─ ─ ─ ─ ─ ╯
+╎                                          ╎
+╰ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╯
+```
+
+The system classifies rectangles by spatial containment. Is rectangle B fully inside rectangle A's bounds? Then B is an inner element — an agent in A's team. Arrows between inner elements describe the team's reporting structure. Arrows between outer elements describe the workflow DAG.
+
+The extraction produces a nested changeset:
+
+```
+New Nodes:
+  - "Research Team"
+    Position: (50, 50)
+    Hierarchy:
+      Agents:
+        - "Lead Researcher" (lead)
+        - "Web Searcher"
+        - "Paper Analyzer"
+        - "Fact Checker"
+      Reporting:
+        - Lead Researcher → Web Searcher
+        - Lead Researcher → Paper Analyzer
+        - Lead Researcher → Fact Checker
+
+  - "Write final report"
+    Position: (500, 200)
+    Hierarchy: none
+
+Edges:
+  - "Research Team" → "Write final report"
+```
+
+The manager builder reads "Research Team" with a hierarchy and creates a workforce node with that agent roster. The inner tree is the team structure. Lead Researcher is the designer, the three children are the agents. "Write final report" with no hierarchy becomes a single node. The user just drew their entire agent team on a canvas and the system understood it.
+
+No forms. No config screens. No "add agent" buttons. Draw the tree, submit, watch it build.
+
+## Rich Text Inside Nodes
+
+### TerminalBlock in Doodle Nodes
+
+The existing `TerminalBlock` component — the custom markdown renderer built from scratch with a full AST parser, JetBrains Mono, headings, lists, tables, code blocks, blockquotes — goes inside the doodle nodes. The user types markdown, the node renders it beautifully.
+
+This means doodle nodes aren't limited to plain text. The user can write structured content:
+
+```
+WHAT THE USER TYPES:              WHAT THEY SEE IN THE NODE:
+
+# Research Team                   Research Team
+                                  ─────────────
+- search the web for              • search the web for
+  competitor pricing                competitor pricing
+- analyze **quarterly reports**   • analyze quarterly reports
+- fact-check all claims           • fact-check all claims
+
+> Focus on Q4 2025 data only.     ┃ Focus on Q4 2025 data only.
+```
+
+Headings describe the node's purpose. Lists describe subtasks or agents. Blockquotes add context or constraints. Bold emphasizes what matters. All rendered by a component that already exists and already handles theming, memoization, and performance.
+
+### Edit / Preview Toggle
+
+The text editing experience uses a two-state toggle rather than a hybrid WYSIWYG approach. This avoids the hardest UX problem in canvas editing — cursor positioning inside rendered content.
+
+Click into a doodle node: you see raw markdown in a plain text input. Type freely. Click away (or press Escape): the raw text is replaced by the TerminalBlock-rendered output. Click back in to edit again.
+
+```
+EDITING (clicked into node):          VIEWING (clicked away):
+
+╭ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╮        ╭ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╮
+╎ # Research Team             ╎        ╎ Research Team               ╎
+╎                             ╎        ╎ ─────────────               ╎
+╎ - Web Searcher              ╎   →    ╎  • Web Searcher             ╎
+╎ - Paper Analyzer            ╎        ╎  • Paper Analyzer           ╎
+╎ - **Fact Checker**          ╎        ╎  • Fact Checker              ╎
+╎                             ╎        ╎                              ╎
+╎ > Require citations.|       ╎        ╎  ┃ Require citations.       ╎
+╰ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╯        ╰ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╯
+     raw markdown                        TerminalBlock rendered
+```
+
+This also applies to side-anchored comments on real nodes. Click to type markdown, click away to see it rendered. The comments look polished in their sketchy containers.
+
 ## Technical Foundation
 
 ### Drawing Engine
@@ -280,6 +468,10 @@ Select a doodle element. Delete it. It's gone. Doodles are ephemeral until submi
 The doodle layer uses the Excalidraw React component (`@excalidraw/excalidraw`, MIT licensed). It provides rectangle, arrow, and text tools with a hand-drawn aesthetic out of the box. The component runs as an overlay on the existing React Flow canvas, sharing the same viewport (pan and zoom stay synchronized).
 
 Excalidraw elements are never persisted to the database. They live in local component state until submit, at which point they're extracted into a changeset and cleared. Doodles are ephemeral.
+
+### Text Rendering
+
+Inside doodle nodes and comment boxes, the existing `TerminalBlock` component handles markdown rendering. It brings the full parser (headings, lists, tables, code blocks, blockquotes, inline formatting), JetBrains Mono typography, and the terminal theme — all already built, tested, and memoized. No new rendering code needed.
 
 ### Real Node Rendering
 
@@ -293,7 +485,25 @@ For a fully unified aesthetic, real nodes could optionally render their borders 
 
 - The manager assistant chat works exactly as it does today.
 - The dispatch pipeline (L1 → L2 → L3 → L4) is unchanged.
+- The manager builder remains the single source of truth for all workflow mutations.
 - Node configuration, execution, the DAG engine — all untouched.
+- Node chat sessions continue to work — they gain an audit trail of Visual Dispatch changes alongside direct conversation history.
 - The doodle layer is a new input method, not a new execution path.
+
+## What This Builds On
+
+Every piece of this feature already exists in some form:
+
+| Capability | Already built | Visual Dispatch adds |
+|------------|--------------|---------------------|
+| Canvas with nodes and edges | React Flow (`@xyflow/react`) | Doodle overlay via Excalidraw |
+| Manager builder dispatch | L2 dispatch pipeline | Structured changeset as input |
+| Node builder dispatch | L4 dispatch pipeline | Manager routes drawing annotations to builders |
+| Rich text rendering | `TerminalBlock` (custom markdown AST parser) | Same component inside doodle nodes |
+| Workforce agent teams | Agent rosters, pipeline service | Drawn hierarchy trees map to rosters |
+| Node chat sessions | L3 assistant chat | Audit trail for drawing-initiated changes |
+| Board state | `board_state::build()` queries DB | Changeset is the visual diff on top of board state |
+
+Nothing gets thrown away. Nothing gets rewritten. Visual Dispatch is a visual front door to the system that already exists.
 
 The insight is simple: the user already thinks visually about their workflow. The board is already spatial. Visual Dispatch lets them express intent in the same medium they're already looking at.
