@@ -166,7 +166,12 @@ mod tests {
     fn render_l2_with_ids_and_capabilities() {
         let mut node = make_node(
             "Collector",
-            vec![make_agent("Scraper", &["content_search"], &[], "Scrapes data")],
+            vec![make_agent(
+                "Scraper",
+                &["content_search"],
+                &[],
+                "Scrapes data",
+            )],
         );
         node.ref_id = Some("workforce-1".to_string());
         let snapshot = make_board(vec![node]);
@@ -182,7 +187,9 @@ mod tests {
         // L2 includes per-node capabilities
         assert!(xml.contains("capabilities=\"content_search\""));
         // L2 includes available_capabilities at board level
-        assert!(xml.contains("<available_capabilities>github, content_search</available_capabilities>"));
+        assert!(
+            xml.contains("<available_capabilities>github, content_search</available_capabilities>")
+        );
         // L2 renders agent children (not flat attribute)
         assert!(xml.contains("<agent name=\"Scraper\" capabilities=\"content_search\">"));
         assert!(xml.contains("Scrapes data"));
@@ -200,7 +207,12 @@ mod tests {
         let mut node = make_node(
             "Research Team",
             vec![
-                make_agent("Researcher", &["content_search"], &[], "Investigates sources"),
+                make_agent(
+                    "Researcher",
+                    &["content_search"],
+                    &[],
+                    "Investigates sources",
+                ),
                 make_agent("Synthesizer", &[], &["Researcher"], "Combines findings"),
             ],
         );
@@ -258,7 +270,12 @@ mod tests {
         let mut node = make_node(
             "Research Team",
             vec![
-                make_agent("Researcher", &["content_search"], &[], "Investigates sources"),
+                make_agent(
+                    "Researcher",
+                    &["content_search"],
+                    &[],
+                    "Investigates sources",
+                ),
                 make_agent("Synthesizer", &[], &["Researcher"], "Combines findings"),
             ],
         );

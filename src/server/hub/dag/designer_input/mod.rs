@@ -128,7 +128,6 @@ pub fn format_envelopes_as_upstream(
         .collect()
 }
 
-
 /// Truncate long content for context injection, respecting char boundaries.
 pub fn truncate_for_context(content: &str, max_chars: usize) -> &str {
     if content.len() <= max_chars {
