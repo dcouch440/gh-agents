@@ -32,6 +32,9 @@ function StreamingMessage({ segments, streaming }: StreamingMessageProps) {
                 <ToolIndicator variant="doc_update" title={segment.title} />
               </Box>
             )
+          case 'panel_render':
+            // Panel is rendered inline as a message in MessageList, not as a streaming segment
+            return null
         }
       })}
       {showCursor ? (
