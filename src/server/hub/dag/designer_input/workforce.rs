@@ -68,9 +68,7 @@ pub fn build_workforce_designer_input(
             "\n\nExecution order: all agents run in parallel (no dependencies). Each agent receives all prior outputs.",
         );
     } else {
-        guidance.push_str(
-            "\n\nExecution order (enforced by runtime — you do not control this):",
-        );
+        guidance.push_str("\n\nExecution order (enforced by runtime — you do not control this):");
         for dep in &dependencies {
             guidance.push_str(&format!(
                 "\n  {} runs before {}",
