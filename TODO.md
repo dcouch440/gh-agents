@@ -56,4 +56,9 @@ Builder built node without agents.
 
 Add expansion layer between L2 and L3.
 
-Few shot examples need to display tools instead.
+
+If the user was detailed in their description, the assistant should be detailed in their dispatch.
+
+HALLUCINATION DETECTION
+
+Make dispatch agent multi task capable. running tasks should show on the builder agents system prompt and it should do the task and then complete it.

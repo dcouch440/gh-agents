@@ -15,7 +15,7 @@ The manager node's builder creates workflow nodes in rapid bursts (`create_pipel
 | Decision | Choice | Rationale |
 |----------|--------|-----------|
 | Flow direction | Left to right | Pipelines read naturally L→R. Parallels fan out vertically. |
-| Position computation | Frontend computes | Server creates steps with sentinel positions. Frontend detects unplaced nodes and runs placement. Layout logic stays in UI layer. |
+| PositionThe computation | Frontend computes | Server creates steps with sentinel positions. Frontend detects unplaced nodes and runs placement. Layout logic stays in UI layer. |
 | Existing node policy | Never move | Find open space around fixed nodes. User-placed positions are sacred. |
 | Insert behavior | Shift immediate neighbors | `insert_node` places at midpoint, shifts the downstream neighbor (and only that neighbor) right. |
 | Manager node | Regular canvas node, singleton, auto-created | One per workflow. Permanent history. Same node system as workforce. |
