@@ -8,12 +8,9 @@
 // (bullets, paragraphs, tables, etc.) flows into bodyMarkdown for
 // TerminalBlock rendering.
 
-type PanelInteractiveItem = {
-  type: 'checkbox'
-  label: string
-  checked: boolean
-  id: string
-}
+type PanelInteractiveItem =
+  | { type: 'checkbox'; label: string; checked: boolean; id: string }
+  | { type: 'text_input'; label: string; id: string }
 
 type PanelSection = {
   id: string
@@ -33,6 +30,7 @@ const resetIdCounter = (): void => {
 
 const HEADING_RE = /^(#{1,3})\s+(.*)$/
 const CHECKBOX_RE = /^-\s+\[([ xX])\]\s+(.*)$/
+const TEXT_INPUT_RE = /^-\s+\[>\s*(.*?)\]$/
 
 const parsePanel = (markdown: string): PanelSection[] => {
   resetIdCounter()
@@ -87,6 +85,16 @@ const parsePanel = (markdown: string): PanelSection[] => {
         type: 'checkbox',
         label: checkboxMatch[2],
         checked: checkboxMatch[1] !== ' ',
+        id: nextId(),
+      })
+      continue
+    }
+
+    const textInputMatch = TEXT_INPUT_RE.exec(line)
+    if (textInputMatch) {
+      current.interactiveItems.push({
+        type: 'text_input',
+        label: textInputMatch[1].trim(),
         id: nextId(),
       })
       continue

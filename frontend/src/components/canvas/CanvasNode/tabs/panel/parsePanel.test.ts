@@ -125,6 +125,53 @@ describe('parsePanel', () => {
     expect(result[0].bodyMarkdown).toBe('Some preamble text')
   })
 
+  it('parses text inputs with [> Label] syntax', () => {
+    const md = [
+      '# Config',
+      '- [> Project name]',
+      '- [> Target directory]',
+    ].join('\n')
+
+    const result = parsePanel(md)
+    const items = result[0].interactiveItems
+
+    expect(items).toHaveLength(2)
+    expect(items[0]).toMatchObject({ type: 'text_input', label: 'Project name' })
+    expect(items[1]).toMatchObject({ type: 'text_input', label: 'Target directory' })
+  })
+
+  it('handles empty text input label', () => {
+    const md = [
+      '# Config',
+      '- [> ]',
+    ].join('\n')
+
+    const result = parsePanel(md)
+    const items = result[0].interactiveItems
+
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ type: 'text_input', label: '' })
+  })
+
+  it('mixes checkboxes and text inputs in same section', () => {
+    const md = [
+      '# Setup',
+      '- [> Name]',
+      '- [ ] Enable logging',
+      '- [> Output path]',
+      '- [x] Verbose mode',
+    ].join('\n')
+
+    const result = parsePanel(md)
+    const items = result[0].interactiveItems
+
+    expect(items).toHaveLength(4)
+    expect(items[0]).toMatchObject({ type: 'text_input', label: 'Name' })
+    expect(items[1]).toMatchObject({ type: 'checkbox', label: 'Enable logging', checked: false })
+    expect(items[2]).toMatchObject({ type: 'text_input', label: 'Output path' })
+    expect(items[3]).toMatchObject({ type: 'checkbox', label: 'Verbose mode', checked: true })
+  })
+
   it('assigns unique ids to all elements', () => {
     const md = [
       '# Section',
