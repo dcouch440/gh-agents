@@ -232,6 +232,7 @@ impl Pipeline {
             total_agents: phase_output.designed_prompts.len(),
             container_handle: managed_container.as_ref().map(|mc| mc.agent_handle.clone()),
             cancel: dag.cancel.cloned(),
+            task_description: brief.task_description.clone(),
         };
 
         let level_result = execute_agent_levels(

@@ -222,17 +222,21 @@ async fn execute_single_agent(
         .capability_registry()
         .resolve_tools(&designed.tools);
 
-    // Inject previous outputs filtered by designer routing
+    // Build task prompt: shared mission context + designer's assignment
     let filtered = filter_outputs_for_agent(prior_outputs, &designed.receives_from);
-    let mut task_prompt = if filtered.is_empty() {
-        designed.task_prompt.clone()
-    } else {
+    let mut task_prompt = format!(
+        "<context>\n{}\n</context>\n\n<assignment>\n{}\n</assignment>",
+        env.task_description, designed.assignment,
+    );
+
+    // Append upstream agent outputs
+    if !filtered.is_empty() {
         let previous_outputs = build_filtered_outputs_block(&filtered);
-        format!(
+        task_prompt = format!(
             "{}\n\n<previous_agent_outputs>\n{}\n</previous_agent_outputs>",
-            designed.task_prompt, previous_outputs
-        )
-    };
+            task_prompt, previous_outputs
+        );
+    }
 
     // Inject user notes
     if !env.user_notes_block.is_empty() {

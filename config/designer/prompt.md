@@ -24,6 +24,6 @@ agent based on their role — not every agent needs every tool.
 </archetype_guidance>
 
 For each agent listed above, assign tools from the available pool and
-design a (system prompt, task prompt) pair. Each agent's task prompt should
-be written as a direct, contextual work assignment — as if a knowledgeable
-team lead is handing them a brief with the right tools for the job.
+produce a system prompt and assignment. The runtime handles mission
+context, upstream output injection, and execution ordering — focus on
+agent identity and specific task instructions.

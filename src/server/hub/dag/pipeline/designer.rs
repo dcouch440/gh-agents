@@ -263,7 +263,7 @@ pub(crate) fn build_static_fallback_prompts(
                 agent_name: entry.name.clone(),
                 tools: entry.capabilities.clone(),
                 system_prompt: role_ctx.system_prompt,
-                task_prompt: role_ctx.user_prompt,
+                assignment: entry.role_description.clone(),
                 execution_order: entry.execution_order,
                 receives_from,
             }
@@ -296,9 +296,9 @@ fn map_designer_results(
             agent_name: entry.agent_name.clone(),
             tools: entry.tools.clone(),
             system_prompt: entry.system_prompt.clone(),
-            task_prompt: entry.task_prompt.clone(),
+            assignment: entry.assignment.clone(),
             execution_order: roster_entry.execution_order,
-            receives_from: entry.receives_from.clone(),
+            receives_from: vec![],
         });
     }
 

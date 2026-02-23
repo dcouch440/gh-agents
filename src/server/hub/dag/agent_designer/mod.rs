@@ -1,8 +1,8 @@
 //! Generalized Agent Designer pre-lifecycle.
 //!
 //! Before agents run, a single LLM call reads the archetype-agnostic
-//! `DesignerInput` and generates optimized (system_prompt, task_prompt,
-//! tool assignment) tuples for each agent. This invests one LLM call in
+//! `DesignerInput` and generates optimized (system_prompt, assignment,
+//! tool selection) tuples for each agent. This invests one LLM call in
 //! prompt quality so agents produce better results.
 //!
 //! Any archetype (workforce) can call `run_agent_designer()`
@@ -49,17 +49,16 @@ pub struct DesignerResult {
     pub cost_usd: f32,
 }
 
-/// One designed prompt pair for one agent.
+/// One designed output for one agent — system prompt + short assignment.
 #[derive(Debug, Clone)]
 pub struct DesignedAgentPrompt {
     pub agent_id: String,
     pub agent_name: String,
     pub tools: Vec<String>,
     pub system_prompt: String,
-    pub task_prompt: String,
+    pub assignment: String,
     pub reasoning: String,
     pub execution_order: i32,
-    pub receives_from: Vec<String>,
 }
 
 // ── Name normalization ─────────────────────────────────────────────────────
@@ -71,41 +70,6 @@ pub(crate) fn normalize_agent_name(name: &str) -> String {
     name.chars()
         .filter(|c| *c != ' ' && *c != '_' && *c != '-')
         .flat_map(|c| c.to_lowercase())
-        .collect()
-}
-
-/// Validate receives_from entries against actual agent names using normalized matching.
-/// Returns a corrected vec with names mapped to their canonical (original) form.
-/// Logs warnings for unresolvable entries.
-fn validate_receives_from(
-    receives_from: &[String],
-    all_agent_names: &[String],
-    current_agent: &str,
-) -> Vec<String> {
-    if receives_from.is_empty() {
-        return Vec::new();
-    }
-
-    let name_lookup: HashMap<String, &String> = all_agent_names
-        .iter()
-        .map(|n| (normalize_agent_name(n), n))
-        .collect();
-
-    receives_from
-        .iter()
-        .filter_map(|entry| {
-            let normalized = normalize_agent_name(entry);
-            if let Some(canonical) = name_lookup.get(&normalized) {
-                Some((*canonical).clone())
-            } else {
-                warn!(
-                    agent = %current_agent,
-                    receives_from = %entry,
-                    "Designer referenced unknown agent in receives_from, stripping"
-                );
-                None
-            }
-        })
         .collect()
 }
 
@@ -123,10 +87,9 @@ pub(crate) struct DesignerAgentEntry {
     agent_name: String,
     tools: Vec<String>,
     system_prompt: String,
-    task_prompt: String,
+    #[serde(alias = "task_prompt")]
+    assignment: String,
     reasoning: String,
-    #[serde(default)]
-    receives_from: Vec<String>,
 }
 
 // ── Main execution function ─────────────────────────────────────────────────
@@ -134,7 +97,7 @@ pub(crate) struct DesignerAgentEntry {
 /// Run the Agent Designer pre-lifecycle for any archetype.
 ///
 /// Accepts archetype-agnostic `DesignerInput`, makes a single LLM call,
-/// returns generated (system_prompt, task_prompt, tools) for each agent.
+/// returns generated (system_prompt, assignment, tools) for each agent.
 /// Stores results in DB with full token tracking.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn run_agent_designer(
@@ -342,13 +305,6 @@ pub(crate) async fn run_agent_designer(
         .flat_map(|a| a.capabilities.iter().map(|s| s.as_str()))
         .collect();
 
-    // 8b. Collect all agent names for receives_from validation
-    let all_agent_names: Vec<String> = designer_output
-        .agents
-        .iter()
-        .map(|a| a.agent_name.clone())
-        .collect();
-
     let mut designed_prompts = Vec::with_capacity(designer_output.agents.len());
 
     for (idx, entry) in designer_output.agents.iter().enumerate() {
@@ -377,26 +333,21 @@ pub(crate) async fn run_agent_designer(
                 agent_name: entry.agent_name.clone(),
                 assigned_tools: valid_tools.clone(),
                 generated_system_prompt: entry.system_prompt.clone(),
-                generated_task_prompt: entry.task_prompt.clone(),
+                generated_task_prompt: entry.assignment.clone(),
                 design_reasoning: entry.reasoning.clone(),
                 execution_order: idx as i32,
                 protocol_execution_id,
             })
             .await;
 
-        // Validate receives_from against actual agent names
-        let valid_receives_from =
-            validate_receives_from(&entry.receives_from, &all_agent_names, &entry.agent_name);
-
         designed_prompts.push(DesignedAgentPrompt {
             agent_id: entry.agent_id.clone(),
             agent_name: entry.agent_name.clone(),
             tools: valid_tools,
             system_prompt: entry.system_prompt.clone(),
-            task_prompt: entry.task_prompt.clone(),
+            assignment: entry.assignment.clone(),
             reasoning: entry.reasoning.clone(),
             execution_order: idx as i32,
-            receives_from: valid_receives_from,
         });
     }
 
