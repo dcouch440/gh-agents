@@ -1,14 +1,6 @@
-// ============================================================================
-// Grid Notch — Quantize dimensions to nearest grid multiple
-// ============================================================================
+import { snapToGridMin } from '@/utils/spatial'
 
-/**
- * Round a dimension value to the nearest grid multiple,
- * clamped to a minimum value.
- *
- * Used during node resize to make blocks snap to clean grid-aligned sizes.
- */
-const notchToGrid = (value: number, gridSize: number, min: number): number =>
-  Math.max(min, Math.round(value / gridSize) * gridSize)
+/** @deprecated Use `snapToGridMin` from `@/utils/spatial` directly. */
+const notchToGrid = snapToGridMin
 
 export { notchToGrid }
