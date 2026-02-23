@@ -497,6 +497,8 @@ pub enum SessionEventKind {
         execution_id: Uuid,
         step_id: Uuid,
         summary: String,
+        /// Question from the builder, if any. Surfaces to manager board state.
+        question: Option<String>,
     },
     /// A dispatch task failed.
     DispatchFailed {

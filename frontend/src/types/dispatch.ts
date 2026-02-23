@@ -31,4 +31,14 @@ export type DispatchTasksResponse = {
   tasks: DispatchTaskSummary[]
 }
 
+export type DispatchSendRequest = {
+  instruction: string
+  workflow_id: string
+}
+
+export type DispatchActionResponse = {
+  execution_id: string
+  status: string
+}
+
 export type { ApiTraceEvent }

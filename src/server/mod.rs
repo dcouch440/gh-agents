@@ -481,9 +481,11 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::PROTOCOL_EXECUTIONS,
             get(api::list_protocol_executions),
         )
-        // Dispatch trace
+        // Dispatch trace + direct dispatch
         .route(routes::DISPATCH_TRACE, get(api::get_dispatch_trace))
         .route(routes::DISPATCH_STEP_TASKS, get(api::list_dispatch_tasks))
+        .route(routes::DISPATCH_SEND, post(api::dispatch_send))
+        .route(routes::DISPATCH_CANCEL, post(api::dispatch_cancel))
         .layer(middleware::from_fn_with_state(state.clone(), require_auth))
 }
 

@@ -12,6 +12,7 @@ use crate::server::hub::recorder::ExecutionRecorder;
 use crate::server::hub::strategies::DispatchStrategy;
 use crate::server::hub::strategy::ExecutionStrategy;
 use crate::server::hub::streaming::DispatchStreamSink;
+use crate::server::services::dispatch::Passdown;
 use crate::server::state::AppState;
 use crate::server::ws::events::{SessionEvent, SessionEventKind};
 use crate::types::ExecutionType;
@@ -173,25 +174,69 @@ pub async fn run_dispatch_task(
 
     match result {
         Ok(exec_result) => {
-            let summary = if exec_result.content.is_empty() {
-                "Completed with no response".to_string()
-            } else {
-                exec_result.content.clone()
-            };
+            // Retrieve captured passdown from strategy (or fallback)
+            let passdown = strategy.take_passdown().unwrap_or_else(|| Passdown {
+                plan: String::new(),
+                summary: if exec_result.content.is_empty() {
+                    "Completed with no response".to_string()
+                } else {
+                    exec_result.content.clone()
+                },
+                question: None,
+            });
 
-            persist_outcome(&state, session_id, user_id, &summary).await;
-            persist_trace(&state, execution_id, ae_id, "completed", Some(&summary)).await;
+            // Persist passdown as structured JSON in agent_execution output
+            let passdown_json = serde_json::to_string(&passdown).unwrap_or_default();
+            persist_outcome(&state, session_id, user_id, &passdown.summary).await;
+            persist_trace(&state, execution_id, ae_id, "completed", Some(&passdown_json)).await;
+
+            // Write question + summary into step_question_state for board state.
+            // This replaces the old cheap-LLM question detection — the builder
+            // declares its question explicitly via complete_task.
+            if let Err(e) = state
+                .repos()
+                .workflows
+                .upsert_step_question_state(
+                    step_id,
+                    &passdown.summary,
+                    passdown.question.clone(),
+                )
+                .await
+            {
+                tracing::warn!(
+                    step_id = %step_id,
+                    error = %e,
+                    "Failed to upsert step question state from passdown"
+                );
+            }
+
+            // Store the plan from passdown
+            if !passdown.plan.is_empty() {
+                if let Err(e) = state
+                    .repos()
+                    .workflows
+                    .upsert_plan(step_id, &passdown.plan)
+                    .await
+                {
+                    tracing::warn!(
+                        step_id = %step_id,
+                        error = %e,
+                        "Failed to persist passdown plan"
+                    );
+                }
+            }
 
             state
                 .task_registry()
-                .mark_completed(execution_id, Some(summary.clone()));
+                .mark_completed(execution_id, Some(passdown.summary.clone()));
 
             broadcast_dispatch_event(
                 &state,
                 SessionEventKind::DispatchCompleted {
                     execution_id,
                     step_id,
-                    summary,
+                    summary: passdown.summary,
+                    question: passdown.question,
                 },
             );
 

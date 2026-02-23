@@ -188,6 +188,7 @@ pub async fn run_manager_dispatch_task(
                     execution_id,
                     step_id,
                     summary,
+                    question: None,
                 },
             );
 

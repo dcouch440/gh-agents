@@ -27,10 +27,6 @@ const NODE_MUTATION_TOOLS: &[&str] = &["set_node_description"];
 /// Universal tool names handled by node_assistant (includes mutations for dispatch routing).
 const NODE_ASSISTANT_TOOLS: &[&str] = &["set_node_name", "set_node_description", "render_panel"];
 
-/// Tools excluded from the workforce assistant's chat session.
-/// The dispatch sub-agent owns plan management for workforce nodes.
-const WORKFORCE_CHAT_EXCLUDED: &[&str] = &["update_plan"];
-
 /// Manager assistant (L1) tools — dispatch, cancel, think, render_panel.
 const MANAGER_TOOLS: &[&str] = &["dispatch", "cancel_dispatch", "think", "render_panel"];
 
@@ -40,8 +36,8 @@ const MANAGER_TOOLS: &[&str] = &["dispatch", "cancel_dispatch", "think", "render
 /// `set_node_description` — the assistant must dispatch that to a background
 /// agent.
 ///
-/// For workforce mode, additionally excludes `update_plan` (dispatch sub-agent
-/// owns plan management for workforce nodes).
+/// The assistant owns `update_plan` for all modes — the plan is the user's
+/// design document maintained through conversation.
 ///
 /// For manager mode, returns only manager-specific tools (no node mutation).
 pub(crate) fn resolve_chat_step_tools(execution_mode: &str) -> Vec<Tool> {
@@ -54,13 +50,6 @@ pub(crate) fn resolve_chat_step_tools(execution_mode: &str) -> Vec<Tool> {
 
     UNIVERSAL_TOOLS
         .iter()
-        .filter(|name| {
-            if execution_mode == "workforce" {
-                !WORKFORCE_CHAT_EXCLUDED.contains(name)
-            } else {
-                true
-            }
-        })
         .filter_map(|name| crate::tools::registry::get_tool_definition(name))
         .collect()
 }
@@ -68,13 +57,17 @@ pub(crate) fn resolve_chat_step_tools(execution_mode: &str) -> Vec<Tool> {
 /// Tools excluded from the dispatch (background) agent.
 /// These are interactive/orchestration tools that only the conversational
 /// assistant should use — dispatch agents just do their job silently.
-const DISPATCH_EXCLUDED: &[&str] = &["render_panel", "dispatch", "cancel_dispatch"];
+const DISPATCH_EXCLUDED: &[&str] = &["render_panel", "dispatch", "cancel_dispatch", "update_plan"];
+
+/// Dispatch-only tools — not in UNIVERSAL_TOOLS, only available to background builders.
+const DISPATCH_ONLY_TOOLS: &[&str] = &["complete_task"];
 
 /// Resolve tool definitions by step execution mode.
 ///
-/// Includes universal tools, node mutation tools, and archetype-specific ones.
-/// Used by DispatchStrategy (background agent) which needs the full tool set
-/// including mutations that the conversational assistant cannot call directly.
+/// Includes universal tools, node mutation tools, dispatch-only tools,
+/// and archetype-specific ones. Used by DispatchStrategy (background agent)
+/// which needs the full tool set including mutations that the conversational
+/// assistant cannot call directly.
 ///
 /// Excludes interactive tools (`render_panel`) and orchestration tools
 /// (`dispatch`, `cancel_dispatch`) — dispatch agents are workers, not managers.
@@ -97,6 +90,7 @@ pub(crate) fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
         .iter()
         .filter(|name| !DISPATCH_EXCLUDED.contains(name))
         .chain(NODE_MUTATION_TOOLS.iter())
+        .chain(DISPATCH_ONLY_TOOLS.iter())
         .chain(archetype_specific.iter())
         .filter_map(|name| crate::tools::registry::get_tool_definition(name))
         .collect()

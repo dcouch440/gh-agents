@@ -81,6 +81,8 @@ import type {
   WorkshopStatusResponse,
   DispatchTraceResponse,
   DispatchTasksResponse,
+  DispatchSendRequest,
+  DispatchActionResponse,
 } from '@/types'
 
 // ============================================================================
@@ -453,6 +455,12 @@ const dispatch = freeze({
 
   listForStep: (stepId: string, config?: RequestConfig) =>
     baseApi.get<DispatchTasksResponse>(API.DISPATCH_STEP_TASKS(stepId), config),
+
+  send: (stepId: string, body: DispatchSendRequest, config?: RequestConfig) =>
+    baseApi.post<DispatchActionResponse>(API.DISPATCH_SEND(stepId), body, config),
+
+  cancel: (executionId: string, config?: RequestConfig) =>
+    baseApi.post<DispatchActionResponse>(API.DISPATCH_CANCEL(executionId), undefined, config),
 })
 
 // ============================================================================

@@ -18,11 +18,13 @@ mod tests {
         let tools = resolve_step_tools("workforce");
         let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
 
-        // Must include universal tools
+        // Must include universal tools (minus dispatch-excluded ones)
         assert!(tool_names.contains(&"set_node_name"));
         assert!(tool_names.contains(&"set_node_description"));
         assert!(tool_names.contains(&"think"));
-        assert!(tool_names.contains(&"update_plan"));
+        // update_plan is excluded — builder uses complete_task instead
+        assert!(!tool_names.contains(&"update_plan"));
+        assert!(tool_names.contains(&"complete_task"));
 
         // Must include workforce tools
         assert!(tool_names.contains(&"set_task"));
@@ -36,10 +38,20 @@ mod tests {
     }
 
     #[test]
-    fn dispatch_tools_include_render_panel() {
+    fn dispatch_tools_exclude_interactive_tools() {
         let tools = resolve_step_tools("workforce");
         let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
-        assert!(tool_names.contains(&"render_panel"));
+        // Dispatch agents are workers — no interactive or orchestration tools
+        assert!(!tool_names.contains(&"render_panel"));
+        assert!(!tool_names.contains(&"dispatch"));
+        assert!(!tool_names.contains(&"cancel_dispatch"));
+    }
+
+    #[test]
+    fn dispatch_tools_include_complete_task() {
+        let tools = resolve_step_tools("workforce");
+        let tool_names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
+        assert!(tool_names.contains(&"complete_task"));
     }
 
     // ========================================================================
