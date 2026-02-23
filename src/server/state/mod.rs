@@ -226,7 +226,9 @@ impl AppState {
                 provider: None,
                 provider_registry: ProviderRegistry::default(),
                 prompt_registry: Arc::new(PromptRegistry::empty()),
-                capability_registry: Arc::new(crate::config::capability_registry::CapabilityRegistry::empty()),
+                capability_registry: Arc::new(
+                    crate::config::capability_registry::CapabilityRegistry::empty(),
+                ),
                 jwt_secret,
                 chat_tx,
                 response_streams: DashMap::new(),
@@ -390,11 +392,17 @@ impl AppState {
             );
         }
 
-        // Initialize xAI provider
-        match crate::llm::XaiClient::from_env() {
+        // Initialize xAI provider (with web + X search enabled for all requests).
+        // These are server-side tools that Grok invokes autonomously when the
+        // prompt requests live data — enabling them globally is safe; the model
+        // only searches when instructed to by the system/task prompt.
+        match crate::llm::XaiConfig::from_env()
+            .map(|c| c.with_web_search().with_x_search())
+            .and_then(crate::llm::XaiClient::with_config)
+        {
             Ok(client) => {
                 tracing::info!(
-                    "Initialized xAI provider: {} ({})",
+                    "Initialized xAI provider: {} ({}) [web_search + x_search enabled]",
                     client.model_id(),
                     crate::constants::XAI_DEFAULT_BASE_URL
                 );
