@@ -266,17 +266,30 @@ pub async fn update_step(
     Ok(row)
 }
 
+/// Sessions cleaned up by [`delete_step`].
+///
+/// Callers are responsible for broadcasting `SessionEventKind::Deleted`
+/// for any `Some` session IDs returned here.
+pub struct DeleteStepResult {
+    /// L3 assistant chat session that was deleted (if any).
+    pub deleted_chat_session_id: Option<Uuid>,
+    /// L4 builder session that was deleted (if any).
+    pub deleted_builder_session_id: Option<Uuid>,
+}
+
 /// Delete a workflow step, verifying ownership.
 ///
-/// Returns `Some((session_id, user_id))` if a chat session was cleaned up
-/// (the caller is responsible for broadcasting the session deletion event).
+/// Cleans up associated sessions:
+/// - L3 assistant chat session (deleted)
+/// - L4 builder session (deleted)
+/// - L2 manager builder session messages (cleared, session kept)
 pub async fn delete_step(
     repo: &dyn WorkflowRepo,
     session_repo: &dyn SessionRepo,
     user_id: Uuid,
     workflow_id: Uuid,
     step_id: Uuid,
-) -> Result<Option<Uuid>, ServiceError> {
+) -> Result<DeleteStepResult, ServiceError> {
     verify_workflow_ownership(repo, user_id, workflow_id).await?;
 
     let existing = repo
@@ -287,8 +300,8 @@ pub async fn delete_step(
         return Err(ServiceError::not_found("Step"));
     }
 
-    // Clean up any associated chat session
-    let deleted_session_id =
+    // Clean up L3 assistant chat session
+    let deleted_chat_session_id =
         if let Ok(Some(session)) = session_repo.find_session_by_step_id(step_id).await {
             let _ = session_repo.delete_session(session.id).await;
             Some(session.id)
@@ -296,8 +309,30 @@ pub async fn delete_step(
             None
         };
 
+    // Clean up L4 builder session (one per step, orphaned after deletion)
+    let deleted_builder_session_id =
+        if let Ok(Some(session)) = session_repo.find_builder_session_by_step_id(step_id).await {
+            let _ = session_repo.delete_session(session.id).await;
+            Some(session.id)
+        } else {
+            None
+        };
+
+    // Clear stale messages from L2 manager builder session (one per workflow).
+    // The session shell is kept — next dispatch repopulates via fresh board_state.
+    if let Ok(Some(manager_session)) =
+        session_repo.find_manager_builder_session(workflow_id).await
+    {
+        let _ = session_repo
+            .clear_session_messages(manager_session.id)
+            .await;
+    }
+
     repo.delete_step(step_id).await?;
-    Ok(deleted_session_id)
+    Ok(DeleteStepResult {
+        deleted_chat_session_id,
+        deleted_builder_session_id,
+    })
 }
 
 /// Generate a stable ref_id like "workforce-1" for a new step.
