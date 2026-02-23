@@ -3,7 +3,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::db::fixtures::fixtures::*;
-    use crate::db::traits::MockWorkflowRepo;
+    use crate::db::traits::{MockSessionRepo, MockWorkflowRepo};
     use crate::server::services::steps::*;
     use crate::server::services::ServiceError;
 
@@ -236,5 +236,150 @@ mod tests {
 
         let result = get_step(&repo, attacker, wf_id, step_id).await;
         assert!(matches!(result, Err(ServiceError::NotFound(_))));
+    }
+
+    // ── delete_step — session cleanup ──────────────────────────────────
+
+    #[tokio::test]
+    async fn delete_step_cleans_all_sessions() {
+        let owner = Uuid::new_v4();
+        let wf = workflow(owner);
+        let wf_id = wf.id;
+        let step = step_in(wf_id);
+        let step_id = step.id;
+
+        let l3_session = session(owner);
+        let l3_id = l3_session.id;
+        let l4_session = {
+            let mut s = session(owner);
+            s.draft_config = Some(serde_json::json!({
+                "step_id": step_id.to_string(),
+                "role": "builder"
+            }));
+            s
+        };
+        let l4_id = l4_session.id;
+        let l2_session = {
+            let mut s = session(owner);
+            s.draft_config = Some(serde_json::json!({
+                "workflow_id": wf_id.to_string(),
+                "role": "manager_builder"
+            }));
+            s
+        };
+        let l2_id = l2_session.id;
+
+        let mut repo = MockWorkflowRepo::new();
+        repo.expect_get_workflow()
+            .returning(move |_| Ok(Some(wf.clone())));
+        repo.expect_get_step()
+            .returning(move |_| Ok(Some(step.clone())));
+        repo.expect_delete_step().returning(|_| Ok(()));
+
+        let mut session_repo = MockSessionRepo::new();
+        session_repo
+            .expect_find_session_by_step_id()
+            .returning(move |_| Ok(Some(l3_session.clone())));
+        session_repo
+            .expect_find_builder_session_by_step_id()
+            .returning(move |_| Ok(Some(l4_session.clone())));
+        session_repo
+            .expect_find_manager_builder_session()
+            .returning(move |_| Ok(Some(l2_session.clone())));
+        session_repo
+            .expect_delete_session()
+            .times(2)
+            .returning(|_| Ok(()));
+        session_repo
+            .expect_clear_session_messages()
+            .withf(move |id| *id == l2_id)
+            .times(1)
+            .returning(|_| Ok(()));
+
+        let result = delete_step(&repo, &session_repo, owner, wf_id, step_id)
+            .await
+            .unwrap();
+        assert_eq!(result.deleted_chat_session_id, Some(l3_id));
+        assert_eq!(result.deleted_builder_session_id, Some(l4_id));
+    }
+
+    #[tokio::test]
+    async fn delete_step_no_sessions() {
+        let owner = Uuid::new_v4();
+        let wf = workflow(owner);
+        let wf_id = wf.id;
+        let step = step_in(wf_id);
+        let step_id = step.id;
+
+        let mut repo = MockWorkflowRepo::new();
+        repo.expect_get_workflow()
+            .returning(move |_| Ok(Some(wf.clone())));
+        repo.expect_get_step()
+            .returning(move |_| Ok(Some(step.clone())));
+        repo.expect_delete_step().returning(|_| Ok(()));
+
+        let mut session_repo = MockSessionRepo::new();
+        session_repo
+            .expect_find_session_by_step_id()
+            .returning(|_| Ok(None));
+        session_repo
+            .expect_find_builder_session_by_step_id()
+            .returning(|_| Ok(None));
+        session_repo
+            .expect_find_manager_builder_session()
+            .returning(|_| Ok(None));
+
+        let result = delete_step(&repo, &session_repo, owner, wf_id, step_id)
+            .await
+            .unwrap();
+        assert_eq!(result.deleted_chat_session_id, None);
+        assert_eq!(result.deleted_builder_session_id, None);
+    }
+
+    #[tokio::test]
+    async fn delete_step_only_builder_session() {
+        let owner = Uuid::new_v4();
+        let wf = workflow(owner);
+        let wf_id = wf.id;
+        let step = step_in(wf_id);
+        let step_id = step.id;
+
+        let l4_session = {
+            let mut s = session(owner);
+            s.draft_config = Some(serde_json::json!({
+                "step_id": step_id.to_string(),
+                "role": "builder"
+            }));
+            s
+        };
+        let l4_id = l4_session.id;
+
+        let mut repo = MockWorkflowRepo::new();
+        repo.expect_get_workflow()
+            .returning(move |_| Ok(Some(wf.clone())));
+        repo.expect_get_step()
+            .returning(move |_| Ok(Some(step.clone())));
+        repo.expect_delete_step().returning(|_| Ok(()));
+
+        let mut session_repo = MockSessionRepo::new();
+        session_repo
+            .expect_find_session_by_step_id()
+            .returning(|_| Ok(None));
+        session_repo
+            .expect_find_builder_session_by_step_id()
+            .returning(move |_| Ok(Some(l4_session.clone())));
+        session_repo
+            .expect_find_manager_builder_session()
+            .returning(|_| Ok(None));
+        session_repo
+            .expect_delete_session()
+            .times(1)
+            .returning(|_| Ok(()));
+
+        let result = delete_step(&repo, &session_repo, owner, wf_id, step_id)
+            .await
+            .unwrap();
+        assert_eq!(result.deleted_chat_session_id, None);
+        assert_eq!(result.deleted_builder_session_id, Some(l4_id));
     }
 }

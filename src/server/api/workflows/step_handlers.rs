@@ -164,7 +164,7 @@ pub async fn delete_workflow_step(
     auth: auth_utils::AuthUser,
     Path(p): Path<WorkflowStepPath>,
 ) -> Result<StatusCode, AppError> {
-    let deleted_session_id = steps::delete_step(
+    let result = steps::delete_step(
         state.repos().workflows.as_ref(),
         state.repos().sessions.as_ref(),
         auth.user_id.0,
@@ -173,8 +173,14 @@ pub async fn delete_workflow_step(
     )
     .await?;
 
-    // Broadcast session deletion if a chat session was cleaned up
-    if let Some(session_id) = deleted_session_id {
+    // Broadcast session deletions for any cleaned-up sessions (L3 chat + L4 builder)
+    for session_id in [
+        result.deleted_chat_session_id,
+        result.deleted_builder_session_id,
+    ]
+    .into_iter()
+    .flatten()
+    {
         state.broadcast_session(crate::server::ws::events::SessionEvent {
             session_id,
             user_id: Some(auth.user_id.0),
