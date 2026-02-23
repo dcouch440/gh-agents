@@ -46,7 +46,7 @@ pub struct DesignerDetail {
 pub struct DesignerAgentOutput {
     pub agent_name: String,
     pub system_prompt: String,
-    pub task_prompt: String,
+    pub assignment: String,
     pub assigned_tools: Vec<String>,
     pub reasoning: String,
     pub execution_order: i32,
@@ -185,7 +185,7 @@ pub async fn get_step_sub_dag(
                 .map(|o| DesignerAgentOutput {
                     agent_name: o.agent_name,
                     system_prompt: o.generated_system_prompt,
-                    task_prompt: o.generated_task_prompt,
+                    assignment: o.generated_task_prompt,
                     assigned_tools: o.assigned_tools,
                     reasoning: o.design_reasoning,
                     execution_order: o.execution_order,

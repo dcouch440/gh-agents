@@ -6,14 +6,14 @@ use crate::execution::container::ContainerHandle;
 use crate::server::hub::error::HubError;
 use crate::server::state::AppState;
 
-/// Output from the Agent Designer — one prompt pair + tool assignment per agent.
+/// Output from the Agent Designer — system prompt + assignment + tool selection per agent.
 #[derive(Debug, Clone)]
 pub(crate) struct DesignedAgentPrompt {
     pub agent_roster_entry_id: Uuid,
     pub agent_name: String,
     pub tools: Vec<String>,
     pub system_prompt: String,
-    pub task_prompt: String,
+    pub assignment: String,
     pub execution_order: i32,
     pub receives_from: Vec<String>,
 }
@@ -44,6 +44,7 @@ pub(super) struct WorkforceStepEnv {
     pub total_agents: usize,
     pub container_handle: Option<ContainerHandle>,
     pub cancel: Option<tokio_util::sync::CancellationToken>,
+    pub task_description: String,
 }
 
 /// Aggregated results from executing all agent levels.

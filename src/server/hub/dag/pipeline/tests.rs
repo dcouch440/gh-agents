@@ -24,7 +24,7 @@ mod tests {
             agent_name: name.to_string(),
             tools: vec![],
             system_prompt: String::new(),
-            task_prompt: String::new(),
+            assignment: String::new(),
             execution_order: 0,
             receives_from: receives_from.iter().map(|s| s.to_string()).collect(),
         }
@@ -221,8 +221,8 @@ mod tests {
 
     #[test]
     fn static_fallback_creates_sequential_receives_from() {
-        use crate::db::TaskMissionBriefRow;
         use super::super::designer::build_static_fallback_prompts;
+        use crate::db::TaskMissionBriefRow;
 
         let brief_id = Uuid::new_v4();
         let brief = TaskMissionBriefRow {
@@ -251,8 +251,8 @@ mod tests {
 
     #[test]
     fn enforce_edge_routing_overrides_designer_receives_from() {
-        use crate::db::{TaskAgentRosterRow, WorkflowStepEdgeRow};
         use super::super::designer::enforce_edge_routing;
+        use crate::db::{TaskAgentRosterRow, WorkflowStepEdgeRow};
 
         let step_a = Uuid::new_v4();
         let step_b = Uuid::new_v4();
@@ -312,8 +312,8 @@ mod tests {
 
     #[test]
     fn enforce_edge_routing_noop_when_no_edges() {
-        use crate::db::TaskAgentRosterRow;
         use super::super::designer::enforce_edge_routing;
+        use crate::db::TaskAgentRosterRow;
 
         let roster = vec![TaskAgentRosterRow {
             name: "A".into(),

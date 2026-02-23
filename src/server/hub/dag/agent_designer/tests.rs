@@ -126,7 +126,7 @@ mod tests {
                 "agent_name": "Scanner",
                 "tools": ["file_read", "grep"],
                 "system_prompt": "You are a scanner...",
-                "task_prompt": "Scan the repo for...",
+                "assignment": "Scan the repo for issues and report findings.",
                 "reasoning": "Identity framing emphasizes thoroughness..."
             }]
         }"#;
@@ -145,7 +145,7 @@ mod tests {
                     "agent_name": "Scanner",
                     "tools": ["file_read"],
                     "system_prompt": "sys1",
-                    "task_prompt": "task1",
+                    "assignment": "Scan the codebase.",
                     "reasoning": "r1"
                 },
                 {
@@ -153,7 +153,7 @@ mod tests {
                     "agent_name": "Analyzer",
                     "tools": [],
                     "system_prompt": "sys2",
-                    "task_prompt": "task2",
+                    "assignment": "Analyze scanner findings.",
                     "reasoning": "r2"
                 }
             ]
@@ -179,36 +179,38 @@ mod tests {
     }
 
     #[test]
-    fn parse_designer_output_with_receives_from() {
+    fn parse_designer_output_backward_compat_task_prompt_alias() {
+        // Old LLM responses may still use "task_prompt" — the alias should accept it
         let json = r#"{
             "agents": [{
                 "agent_id": "aaa",
                 "agent_name": "Analyzer",
                 "tools": ["file_read"],
                 "system_prompt": "sys",
-                "task_prompt": "task",
-                "reasoning": "r",
-                "receives_from": ["Scanner"]
+                "task_prompt": "old-style task prompt text",
+                "reasoning": "r"
             }]
         }"#;
         let parsed: DesignerOutputSchema = serde_json::from_str(json).unwrap();
-        assert_eq!(parsed.agents[0].receives_from, vec!["Scanner"]);
+        assert_eq!(parsed.agents[0].assignment, "old-style task prompt text");
     }
 
     #[test]
-    fn parse_designer_output_without_receives_from_defaults_empty() {
+    fn parse_designer_output_ignores_unknown_fields() {
+        // Old LLM responses may include receives_from — should be ignored
         let json = r#"{
             "agents": [{
                 "agent_id": "aaa",
                 "agent_name": "Scanner",
                 "tools": [],
                 "system_prompt": "sys",
-                "task_prompt": "task",
-                "reasoning": "r"
+                "assignment": "Do the scan.",
+                "reasoning": "r",
+                "receives_from": ["SomeAgent"]
             }]
         }"#;
         let parsed: DesignerOutputSchema = serde_json::from_str(json).unwrap();
-        assert!(parsed.agents[0].receives_from.is_empty());
+        assert_eq!(parsed.agents[0].agent_name, "Scanner");
     }
 
     // ── Wrapped JSON unwrapping ────────────────────────────────────────
@@ -220,7 +222,7 @@ mod tests {
             "agent_name": "Scanner",
             "tools": ["file_read"],
             "system_prompt": "sys",
-            "task_prompt": "task",
+            "assignment": "Do the scan.",
             "reasoning": "r"
         }]}}"#;
         let value: serde_json::Value = serde_json::from_str(json).unwrap();
@@ -242,7 +244,7 @@ mod tests {
             "agent_name": "Scanner",
             "tools": [],
             "system_prompt": "sys",
-            "task_prompt": "task",
+            "assignment": "Do the scan.",
             "reasoning": "r"
         }]}}}"#;
         let value: serde_json::Value = serde_json::from_str(json).unwrap();
@@ -260,7 +262,6 @@ mod tests {
     // ── normalize_agent_name ─────────────────────────────────────────────
 
     use super::super::normalize_agent_name;
-    use super::super::validate_receives_from;
 
     #[test]
     fn normalize_agent_name_cases() {
@@ -270,44 +271,5 @@ mod tests {
         assert_eq!(normalize_agent_name("security-auditor"), canonical);
         assert_eq!(normalize_agent_name("Security Auditor"), canonical);
         assert_eq!(normalize_agent_name("SECURITY_AUDITOR"), canonical);
-    }
-
-    // ── validate_receives_from ───────────────────────────────────────────
-
-    #[test]
-    fn validate_receives_from_exact_match() {
-        let names = vec!["Scanner".to_string(), "Analyzer".to_string()];
-        let result = validate_receives_from(&["Scanner".to_string()], &names, "Analyzer");
-        assert_eq!(result, vec!["Scanner"]);
-    }
-
-    #[test]
-    fn validate_receives_from_case_mismatch() {
-        let names = vec!["SecurityAuditor".to_string(), "Reporter".to_string()];
-        let result = validate_receives_from(&["security_auditor".to_string()], &names, "Reporter");
-        assert_eq!(result, vec!["SecurityAuditor"]);
-    }
-
-    #[test]
-    fn validate_receives_from_unknown_agent() {
-        let names = vec!["Scanner".to_string(), "Analyzer".to_string()];
-        let result = validate_receives_from(&["NonExistent".to_string()], &names, "Analyzer");
-        assert!(result.is_empty());
-    }
-
-    #[test]
-    fn validate_receives_from_mixed() {
-        let names = vec![
-            "Scanner".to_string(),
-            "Analyzer".to_string(),
-            "Reporter".to_string(),
-        ];
-        let receives = vec![
-            "scanner".to_string(),
-            "BadName".to_string(),
-            "REPORTER".to_string(),
-        ];
-        let result = validate_receives_from(&receives, &names, "Worker");
-        assert_eq!(result, vec!["Scanner", "Reporter"]);
     }
 }
