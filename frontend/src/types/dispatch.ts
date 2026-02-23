@@ -41,4 +41,8 @@ export type DispatchActionResponse = {
   status: string
 }
 
+export type DispatchSessionResponse = {
+  session_id: string
+}
+
 export type { ApiTraceEvent }

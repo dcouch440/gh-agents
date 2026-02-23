@@ -316,6 +316,24 @@ impl ExecutionEngine {
                             }
                         }
                     }
+
+                    // Check if strategy wants to stop (e.g. complete_task was called)
+                    if strategy.should_stop() {
+                        let usage = TokenUsage {
+                            input_tokens: total_input as u32,
+                            output_tokens: total_output as u32,
+                        };
+                        strategy.on_complete("", &usage).await?;
+                        sink.done().await;
+                        return Ok(ExecutionResult {
+                            content: String::new(),
+                            content_blocks: response.content_blocks,
+                            input_tokens: total_input,
+                            output_tokens: total_output,
+                            cost_usd: 0.0,
+                            rounds_used: round + 1,
+                        });
+                    }
                 }
                 StopReason::EndTurn | StopReason::MaxTokens | StopReason::StopSequence => {
                     // ── on_response filters ──

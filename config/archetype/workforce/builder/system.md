@@ -186,4 +186,6 @@ instruction: "Add a fact-checker after the researcher but before the writer. The
 </examples>
 
 {{.System.board_state}}
+
+{{.System.dispatch_status}}
 </output>

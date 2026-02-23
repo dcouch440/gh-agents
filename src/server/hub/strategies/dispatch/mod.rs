@@ -94,8 +94,12 @@ impl DispatchStrategy {
         .await
         .map_err(|e| e.to_string())?;
 
+        let dispatch_status_xml =
+            crate::server::hub::dispatch_status::build(state.task_registry(), step_id);
+
         let mut vars = HashMap::new();
         vars.insert("System.board_state".to_string(), board_state_xml);
+        vars.insert("System.dispatch_status".to_string(), dispatch_status_xml);
 
         let system_prompt = resolve_template(roles::WORKFORCE_BUILDER_SYSTEM, &vars);
 
@@ -144,6 +148,10 @@ impl ExecutionStrategy for DispatchStrategy {
         false
     }
 
+    fn should_stop(&self) -> bool {
+        self.passdown.lock().map(|p| p.is_some()).unwrap_or(false)
+    }
+
     fn temperature(&self) -> f32 {
         self.config().temperature
     }
@@ -163,8 +171,14 @@ impl ExecutionStrategy for DispatchStrategy {
         .await
         .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
 
+        let dispatch_status_xml = crate::server::hub::dispatch_status::build(
+            self.state.task_registry(),
+            self.step_id,
+        );
+
         let mut vars = HashMap::new();
         vars.insert("System.board_state".to_string(), board_state_xml);
+        vars.insert("System.dispatch_status".to_string(), dispatch_status_xml);
 
         Ok(Some(resolve_template(
             roles::WORKFORCE_BUILDER_SYSTEM,

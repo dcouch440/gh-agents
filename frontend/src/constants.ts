@@ -229,6 +229,7 @@ export const API = {
   DISPATCH_STEP_TASKS: (stepId: string) => `/dispatch/step/${stepId}`,
   DISPATCH_SEND: (stepId: string) => `/dispatch/step/${stepId}/send`,
   DISPATCH_CANCEL: (executionId: string) => `/dispatch/${executionId}/cancel`,
+  DISPATCH_SESSION: (stepId: string) => `/dispatch/step/${stepId}/session`,
 } as const
 
 // Local Storage
