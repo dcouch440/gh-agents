@@ -64,6 +64,12 @@ pub struct DispatchActionResponse {
     pub status: String,
 }
 
+/// Response for builder session lookup.
+#[derive(Debug, Serialize)]
+pub struct DispatchSessionResponse {
+    pub session_id: Uuid,
+}
+
 // ── Handlers ───────────────────────────────────────────────────────────────
 
 /// GET /dispatch/:execution_id/trace — fetch the full execution trace.
@@ -177,5 +183,43 @@ pub async fn dispatch_cancel(
         } else {
             "not_found_or_already_complete".to_string()
         },
+    }))
+}
+
+/// GET /dispatch/step/:step_id/session — find the builder session for a step.
+///
+/// Returns the persistent session ID that accumulates dispatch history.
+/// Works for both L4 builder (workforce steps) and L2 manager builder.
+pub async fn get_dispatch_session(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    Path(step_id): Path<Uuid>,
+) -> Result<Json<DispatchSessionResponse>, AppError> {
+    let session_repo = state.repos().sessions.as_ref();
+
+    // Load step to determine execution mode
+    let step = state
+        .repos()
+        .workflows
+        .get_step(step_id)
+        .await
+        .map_err(|e| AppError::Internal(format!("Failed to load step: {e}")))?
+        .ok_or_else(|| AppError::not_found("Step"))?;
+
+    // Manager builder sessions are keyed by workflow_id, node builders by step_id
+    let session = if step.execution_mode == "manager" {
+        session_repo
+            .find_manager_builder_session(step.workflow_id)
+            .await
+    } else {
+        session_repo.find_builder_session_by_step_id(step_id).await
+    };
+
+    let session = session
+        .map_err(|e| AppError::Internal(format!("Failed to find builder session: {e}")))?
+        .ok_or_else(|| AppError::not_found("Builder session"))?;
+
+    Ok(Json(DispatchSessionResponse {
+        session_id: session.id,
     }))
 }

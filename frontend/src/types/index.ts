@@ -92,7 +92,7 @@ export type {
   UpdateProtocolRequest,
   CreatePortRequest,
 } from './protocol'
-export type { DispatchTraceResponse, DispatchTaskSummary, DispatchTasksResponse, DispatchSendRequest, DispatchActionResponse } from './dispatch'
+export type { DispatchTraceResponse, DispatchTaskSummary, DispatchTasksResponse, DispatchSendRequest, DispatchActionResponse, DispatchSessionResponse } from './dispatch'
 export { SSE_EVENT, isContentEvent } from './streaming'
 export type { ToolStatus, ToolIndicatorData, MessageSegment, StreamEventType } from './streaming'
 export { ACTIVITY } from './activity'

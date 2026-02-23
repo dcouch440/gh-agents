@@ -67,6 +67,16 @@ pub trait ExecutionStrategy: Send + Sync {
     /// Execute a tool call. Returns the tool result as JSON.
     async fn execute_tool(&self, name: &str, input: &Value) -> Value;
 
+    /// Whether the engine should stop after the current tool-use round.
+    ///
+    /// Strategies that have terminal tools (e.g. `complete_task` in dispatch)
+    /// return `true` once their terminal tool has been called. The engine
+    /// checks this after executing all tools in a round and breaks the loop
+    /// instead of sending another LLM request.
+    fn should_stop(&self) -> bool {
+        false
+    }
+
     /// Rebuild the system prompt between tool-use rounds.
     ///
     /// Called before each LLM call after round 0. Return `Some(prompt)` to

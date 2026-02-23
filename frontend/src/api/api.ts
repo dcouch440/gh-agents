@@ -83,6 +83,7 @@ import type {
   DispatchTasksResponse,
   DispatchSendRequest,
   DispatchActionResponse,
+  DispatchSessionResponse,
 } from '@/types'
 
 // ============================================================================
@@ -461,6 +462,9 @@ const dispatch = freeze({
 
   cancel: (executionId: string, config?: RequestConfig) =>
     baseApi.post<DispatchActionResponse>(API.DISPATCH_CANCEL(executionId), undefined, config),
+
+  session: (stepId: string, config?: RequestConfig) =>
+    baseApi.get<DispatchSessionResponse>(API.DISPATCH_SESSION(stepId), config),
 })
 
 // ============================================================================

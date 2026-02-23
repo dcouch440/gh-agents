@@ -71,22 +71,6 @@ const selectTokenBuffer =
   (s: DispatchState): string =>
     s.byStep[stepId]?.tokenBuffer ?? ''
 
-// ── Cleanup ─────────────────────────────────────────────────────────────────
-
-const CLEANUP_DELAY = 30_000
-
-const scheduleCleanup = (stepId: string): void => {
-  setTimeout(() => {
-    store.setState((s) => {
-      const entry = s.byStep[stepId]
-      if (!entry || entry.status === 'running') return s
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { [stepId]: _removed, ...rest } = s.byStep
-      return { byStep: rest }
-    })
-  }, CLEANUP_DELAY)
-}
-
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 const updateEntry = (
@@ -137,7 +121,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         status: 'completed',
         summary: (data.summary as string | undefined) ?? null,
       }))
-      scheduleCleanup(stepId)
+
       break
     }
     case SESSION_EVENT.DISPATCH_FAILED: {
@@ -146,12 +130,12 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         status: 'failed',
         error: (data.error as string | undefined) ?? null,
       }))
-      scheduleCleanup(stepId)
+
       break
     }
     case SESSION_EVENT.DISPATCH_CANCELLED: {
       updateEntry(stepId, (e) => ({ ...e, status: 'cancelled' }))
-      scheduleCleanup(stepId)
+
       break
     }
     // ── Dispatch streaming events ─────────────────────────────────────

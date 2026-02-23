@@ -400,6 +400,7 @@ pub mod routes {
     pub const DISPATCH_STEP_TASKS: &str = "/dispatch/step/:step_id";
     pub const DISPATCH_SEND: &str = "/dispatch/step/:step_id/send";
     pub const DISPATCH_CANCEL: &str = "/dispatch/:execution_id/cancel";
+    pub const DISPATCH_SESSION: &str = "/dispatch/step/:step_id/session";
 
     // WebSocket
     pub const WS: &str = "/ws";
