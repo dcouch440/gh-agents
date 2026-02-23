@@ -28,7 +28,7 @@ describe('ToolCallCard', () => {
     expect(screen.getByText(/limit=10/)).toBeInTheDocument()
   })
 
-  it('truncates long input values', () => {
+  it('s long input values', () => {
     const longValue = 'a'.repeat(60)
     render(<ToolCallCard {...baseProps} input={{ data: longValue }} />)
     // Input summary should contain truncated value with ellipsis
