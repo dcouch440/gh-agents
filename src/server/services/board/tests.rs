@@ -59,12 +59,10 @@ mod tests {
     /// Configure MockWorkflowRepo with Phase 0 expectations for step/edge creation.
     fn expect_phase_zero_creates(mock: &mut MockWorkflowRepo, workflow_id: Uuid) {
         // list_element_maps — empty on first submit
-        mock.expect_list_element_maps()
-            .returning(|_| Ok(vec![]));
+        mock.expect_list_element_maps().returning(|_| Ok(vec![]));
 
         // list_steps — needed by create_step for ref_id generation
-        mock.expect_list_steps()
-            .returning(|_| Ok(vec![]));
+        mock.expect_list_steps().returning(|_| Ok(vec![]));
 
         // create_step — return a step with the given workflow_id
         mock.expect_create_step().returning(move |step| {
@@ -75,29 +73,26 @@ mod tests {
         });
 
         // update_step — for board_context_cache
-        mock.expect_update_step()
-            .returning(|step| Ok(step));
+        mock.expect_update_step().returning(|step| Ok(step));
 
         // upsert_element_map — store the mapping
-        mock.expect_upsert_element_map()
-            .returning(|row| Ok(row));
+        mock.expect_upsert_element_map().returning(|row| Ok(row));
 
         // add_edge — for new edges
-        mock.expect_add_edge()
-            .returning(move |wf_id, from, to| {
-                Ok(WorkflowStepEdgeRow {
-                    id: Uuid::new_v4(),
-                    workflow_id: wf_id,
-                    from_step_id: from,
-                    to_step_id: to,
-                    from_output_port: None,
-                    to_input_port: None,
-                    transform_jsonpath: None,
-                    condition_type: None,
-                    condition_value: None,
-                    edge_label: None,
-                })
-            });
+        mock.expect_add_edge().returning(move |wf_id, from, to| {
+            Ok(WorkflowStepEdgeRow {
+                id: Uuid::new_v4(),
+                workflow_id: wf_id,
+                from_step_id: from,
+                to_step_id: to,
+                from_output_port: None,
+                to_input_port: None,
+                transform_jsonpath: None,
+                condition_type: None,
+                condition_value: None,
+                edge_label: None,
+            })
+        });
     }
 
     fn empty_session_repo() -> MockSessionRepo {
@@ -124,8 +119,7 @@ mod tests {
         mock.expect_get_workflow()
             .returning(move |_| Ok(Some(workflow_row(user_id, workflow_id))));
 
-        mock.expect_get_canvas_snapshot()
-            .returning(|_| Ok(None));
+        mock.expect_get_canvas_snapshot().returning(|_| Ok(None));
 
         mock.expect_upsert_canvas_snapshot()
             .returning(|row| Ok(row));
@@ -169,9 +163,8 @@ mod tests {
             make_rect("r1", 0.0, 0.0, 200.0, 100.0, "t1"),
             make_text("t1", "Research competitors", "r1"),
         ];
-        let first_snapshot = crate::server::hub::board_serializer::classify_board(
-            &parse_elements(&first_elements),
-        );
+        let first_snapshot =
+            crate::server::hub::board_serializer::classify_board(&parse_elements(&first_elements));
         let snapshot_json = serde_json::to_string(&first_snapshot).unwrap();
 
         // Second submit: same node with updated text + a new node
@@ -190,16 +183,15 @@ mod tests {
             .returning(move |_| Ok(Some(workflow_row(user_id, workflow_id))));
 
         let snapshot_json_clone = snapshot_json.clone();
-        mock.expect_get_canvas_snapshot()
-            .returning(move |_| {
-                Ok(Some(CanvasSnapshotRow {
-                    workflow_id,
-                    snapshot_json: snapshot_json_clone.clone(),
-                    elements_json: String::new(),
-                    created_at: chrono::Utc::now(),
-                    updated_at: chrono::Utc::now(),
-                }))
-            });
+        mock.expect_get_canvas_snapshot().returning(move |_| {
+            Ok(Some(CanvasSnapshotRow {
+                workflow_id,
+                snapshot_json: snapshot_json_clone.clone(),
+                elements_json: String::new(),
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+            }))
+        });
 
         mock.expect_upsert_canvas_snapshot()
             .returning(|row| Ok(row));
@@ -294,7 +286,10 @@ mod tests {
 
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(matches!(err, crate::server::services::ServiceError::NotFound(_)));
+        assert!(matches!(
+            err,
+            crate::server::services::ServiceError::NotFound(_)
+        ));
     }
 
     #[tokio::test]
@@ -304,8 +299,7 @@ mod tests {
 
         let mut mock = MockWorkflowRepo::new();
 
-        mock.expect_get_workflow()
-            .returning(|_| Ok(None));
+        mock.expect_get_workflow().returning(|_| Ok(None));
 
         let session_mock = empty_session_repo();
 
@@ -323,7 +317,10 @@ mod tests {
 
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(matches!(err, crate::server::services::ServiceError::NotFound(_)));
+        assert!(matches!(
+            err,
+            crate::server::services::ServiceError::NotFound(_)
+        ));
     }
 
     #[tokio::test]
@@ -336,15 +333,13 @@ mod tests {
         mock.expect_get_workflow()
             .returning(move |_| Ok(Some(workflow_row(user_id, workflow_id))));
 
-        mock.expect_get_canvas_snapshot()
-            .returning(|_| Ok(None));
+        mock.expect_get_canvas_snapshot().returning(|_| Ok(None));
 
         mock.expect_upsert_canvas_snapshot()
             .returning(|row| Ok(row));
 
         // Empty board — Phase 0 has nothing to do, but still loads maps
-        mock.expect_list_element_maps()
-            .returning(|_| Ok(vec![]));
+        mock.expect_list_element_maps().returning(|_| Ok(vec![]));
 
         let session_mock = empty_session_repo();
 

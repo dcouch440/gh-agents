@@ -82,7 +82,11 @@ pub(crate) fn rasterize_strokes(
 
     let rendered: Vec<String> = grid[..=last_filled_row]
         .iter()
-        .map(|row| row.iter().map(|&cell| if cell { FILLED } else { EMPTY }).collect())
+        .map(|row| {
+            row.iter()
+                .map(|&cell| if cell { FILLED } else { EMPTY })
+                .collect()
+        })
         .collect();
 
     if rendered.is_empty() || rendered.iter().all(|row| row.chars().all(|c| c == EMPTY)) {
@@ -99,17 +103,9 @@ pub(crate) fn rasterize_strokes(
 /// Map an absolute canvas point to grid coordinates.
 ///
 /// Returns `(col, row)` clamped to valid grid indices.
-fn to_grid(
-    x: f64,
-    y: f64,
-    bounds: &CanvasBounds,
-    cols: usize,
-    rows: usize,
-) -> (usize, usize) {
-    let col = ((x - bounds.x) / bounds.width * cols as f64)
-        .clamp(0.0, (cols - 1) as f64) as usize;
-    let row = ((y - bounds.y) / bounds.height * rows as f64)
-        .clamp(0.0, (rows - 1) as f64) as usize;
+fn to_grid(x: f64, y: f64, bounds: &CanvasBounds, cols: usize, rows: usize) -> (usize, usize) {
+    let col = ((x - bounds.x) / bounds.width * cols as f64).clamp(0.0, (cols - 1) as f64) as usize;
+    let row = ((y - bounds.y) / bounds.height * rows as f64).clamp(0.0, (rows - 1) as f64) as usize;
     (col, row)
 }
 

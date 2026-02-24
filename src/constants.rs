@@ -72,6 +72,19 @@ pub const MAX_TOKENS_INDEXER: u32 = 512;
 pub const MAX_TOKENS_COMPILER: u32 = 256;
 pub const MAX_TOKENS_PLANNER: u32 = 8192;
 
+// ── Debug ───────────────────────────────────────────────────────────────────
+
+/// Env var key to enable live debug events on the WebSocket.
+/// Set `NEXOR_DEBUG_STREAM=1` to enable (system prompts, messages, tool I/O).
+pub const ENV_DEBUG_STREAM: &str = "NEXOR_DEBUG_STREAM";
+
+/// Check if the debug stream is enabled via env var.
+pub fn debug_stream_enabled() -> bool {
+    std::env::var(ENV_DEBUG_STREAM)
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
 // ── Temperature ─────────────────────────────────────────────────────────────
 
 pub const DEFAULT_TEMPERATURE: f32 = 0.7;
@@ -327,6 +340,9 @@ pub mod routes {
     // Pipeline stage members
     pub const PIPELINE_STAGE_MEMBERS: &str = "/pipelines/:pid/stages/:num/members";
     pub const PIPELINE_STAGE_MEMBER: &str = "/pipelines/:pid/stages/:num/members/:mid";
+
+    // Execution timeline (debug stream)
+    pub const EXECUTION_TIMELINE: &str = "/workflow-executions/:id/timeline";
 
     // Agent executions
     pub const AGENT_EXECUTIONS: &str = "/agent-executions";

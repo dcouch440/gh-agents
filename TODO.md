@@ -62,3 +62,11 @@ If the user was detailed in their description, the assistant should be detailed 
 HALLUCINATION DETECTION
 
 Make dispatch agent multi task capable. running tasks should show on the builder agents system prompt and it should do the task and then complete it.
+
+
+I guess I just kind of felt like the designer can be more of the
+program. hes hidden away, we wont see his response but we should
+see the result. I Feel like we need endpoints for the designers
+agents he creates and all their data for the given workflow.
+We need web socket events too to notify the front end that hes done.
+instead of before every run (optional) the user can run the designer in the menu to observe the prompts and debug their program (advanced users).

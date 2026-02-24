@@ -168,10 +168,7 @@ impl Pipeline {
         // 7. Build pipeline execution context
         // Only include envelopes from actual upstream steps (those with edges into this step),
         // not the full DAG state which may include this step's own prior output from workshop reruns.
-        let upstream_step_ids: HashSet<Uuid> = incoming
-            .iter()
-            .map(|e| e.from_step_id)
-            .collect();
+        let upstream_step_ids: HashSet<Uuid> = incoming.iter().map(|e| e.from_step_id).collect();
         let upstream_envelopes: HashMap<Uuid, StepExecutionEnvelope> = dag_state
             .completed_envelopes
             .iter()

@@ -88,8 +88,8 @@ pub async fn submit_board(
     );
 
     // 6. Persist current snapshot for next diff
-    let snapshot_json = serde_json::to_string(&current_snapshot)
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+    let snapshot_json =
+        serde_json::to_string(&current_snapshot).map_err(|e| ServiceError::Internal(e.into()))?;
 
     repo.upsert_canvas_snapshot(CanvasSnapshotRow {
         workflow_id: input.workflow_id,

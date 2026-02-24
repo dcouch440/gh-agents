@@ -83,8 +83,11 @@ mod tests {
         let repos = default_mock_repos();
         let (state, _rx) = AppState::with_repos(None, repos, AppConfig::default());
 
-        let result =
-            crate::server::services::dispatch::cancel_dispatch(&state, Uuid::new_v4(), Uuid::new_v4());
+        let result = crate::server::services::dispatch::cancel_dispatch(
+            &state,
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+        );
         assert!(!result);
     }
 }

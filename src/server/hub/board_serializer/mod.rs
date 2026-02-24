@@ -23,13 +23,13 @@
 //! let changeset = diff_snapshots(&previous_snapshot, &snapshot);
 //! ```
 
-pub mod types;
 mod classify;
 mod diff;
 mod filter;
 mod rasterize;
 mod resolve;
 mod snapshot;
+pub mod types;
 
 mod tests;
 

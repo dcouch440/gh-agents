@@ -58,8 +58,10 @@ struct NodeChanges {
 }
 
 fn diff_nodes(previous: &[CanvasNode], current: &[CanvasNode]) -> NodeChanges {
-    let prev_map: HashMap<&str, &CanvasNode> =
-        previous.iter().map(|n| (n.element_id.as_str(), n)).collect();
+    let prev_map: HashMap<&str, &CanvasNode> = previous
+        .iter()
+        .map(|n| (n.element_id.as_str(), n))
+        .collect();
     let curr_map: HashMap<&str, &CanvasNode> =
         current.iter().map(|n| (n.element_id.as_str(), n)).collect();
 
@@ -122,8 +124,10 @@ struct EdgeChanges {
 }
 
 fn diff_edges(previous: &[CanvasEdge], current: &[CanvasEdge]) -> EdgeChanges {
-    let prev_map: HashMap<&str, &CanvasEdge> =
-        previous.iter().map(|e| (e.element_id.as_str(), e)).collect();
+    let prev_map: HashMap<&str, &CanvasEdge> = previous
+        .iter()
+        .map(|e| (e.element_id.as_str(), e))
+        .collect();
     let curr_map: HashMap<&str, &CanvasEdge> =
         current.iter().map(|e| (e.element_id.as_str(), e)).collect();
 

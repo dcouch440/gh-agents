@@ -391,6 +391,7 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             post(api::approve_execution),
         )
         .route(routes::AGENT_EXECUTION_EXEMPLARY, put(api::set_exemplary))
+        .route(routes::EXECUTION_TIMELINE, get(api::get_execution_timeline))
         .route(routes::COSTS, get(api::get_costs))
         .route(routes::RESULTS, get(api::list_results))
         .route(

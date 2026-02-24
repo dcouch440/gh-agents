@@ -37,6 +37,37 @@ pub trait StreamSink: Send + Sync {
 
     /// Execution is complete.
     async fn done(&self);
+
+    // ── Debug stream events (default no-op) ──────────────────────────
+
+    /// Emit a debug event for the system prompt sent to the LLM.
+    async fn debug_system_prompt(&self, _ae_id: Uuid, _content: &str) {}
+
+    /// Emit a debug event for the user message sent to the LLM.
+    async fn debug_user_message(&self, _ae_id: Uuid, _content: &str) {}
+
+    /// Emit a debug event for the full assistant response.
+    async fn debug_assistant_message(&self, _ae_id: Uuid, _content: &str) {}
+
+    /// Emit a debug event for a tool call with its input payload.
+    async fn debug_tool_call(
+        &self,
+        _ae_id: Uuid,
+        _tool_name: &str,
+        _tool_id: &str,
+        _input: &Value,
+    ) {
+    }
+
+    /// Emit a debug event for a tool result with its output.
+    async fn debug_tool_result(
+        &self,
+        _ae_id: Uuid,
+        _tool_name: &str,
+        _tool_id: &str,
+        _result: &str,
+    ) {
+    }
 }
 
 // ── SseSink ─────────────────────────────────────────────────────────────────

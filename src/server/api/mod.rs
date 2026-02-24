@@ -180,6 +180,10 @@ pub use health::{health_check, HealthResponse};
 // Re-export cancellation handlers
 pub use cancellation::{cancel_agent_execution, cancel_chat_message};
 
+// Re-export timeline handlers and types
+pub mod timeline;
+pub use timeline::get_execution_timeline;
+
 // Re-export dispatch handlers and types
 pub mod dispatch;
 pub use dispatch::{

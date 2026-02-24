@@ -320,8 +320,7 @@ pub async fn delete_step(
 
     // Clear stale messages from L2 manager builder session (one per workflow).
     // The session shell is kept — next dispatch repopulates via fresh board_state.
-    if let Ok(Some(manager_session)) =
-        session_repo.find_manager_builder_session(workflow_id).await
+    if let Ok(Some(manager_session)) = session_repo.find_manager_builder_session(workflow_id).await
     {
         let _ = session_repo
             .clear_session_messages(manager_session.id)

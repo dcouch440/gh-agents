@@ -1,7 +1,9 @@
 #[cfg(test)]
 mod tests {
     use crate::server::hub::board_serializer::types::*;
-    use crate::server::hub::board_serializer::{classify_board, classify_board_with_threshold, diff_snapshots};
+    use crate::server::hub::board_serializer::{
+        classify_board, classify_board_with_threshold, diff_snapshots,
+    };
 
     // ========================================================================
     // Factory helpers
@@ -155,7 +157,12 @@ mod tests {
     }
 
     /// Create a freedraw element with absolute base position and relative points.
-    fn make_freedraw(id: &str, base_x: f64, base_y: f64, points: Vec<Vec<f64>>) -> ExcalidrawElement {
+    fn make_freedraw(
+        id: &str,
+        base_x: f64,
+        base_y: f64,
+        points: Vec<Vec<f64>>,
+    ) -> ExcalidrawElement {
         ExcalidrawElement::Freedraw(FreedrawElement {
             id: id.to_string(),
             x: base_x,
@@ -190,7 +197,14 @@ mod tests {
 
     #[test]
     fn classify_rect_with_text() {
-        let elements = make_rect("r1", 0.0, 0.0, 200.0, 100.0, "Document Collection\nWorkforce");
+        let elements = make_rect(
+            "r1",
+            0.0,
+            0.0,
+            200.0,
+            100.0,
+            "Document Collection\nWorkforce",
+        );
         let snapshot = classify_board(&elements);
 
         assert_eq!(snapshot.nodes.len(), 1);
@@ -248,7 +262,11 @@ mod tests {
         let snapshot = classify_board(&elements);
 
         assert_eq!(snapshot.nodes.len(), 2);
-        let ids: Vec<&str> = snapshot.nodes.iter().map(|n| n.element_id.as_str()).collect();
+        let ids: Vec<&str> = snapshot
+            .nodes
+            .iter()
+            .map(|n| n.element_id.as_str())
+            .collect();
         assert!(ids.contains(&"r1"));
         assert!(ids.contains(&"r2"));
     }
@@ -381,8 +399,16 @@ mod tests {
 
         let snapshot = classify_board_with_threshold(&elements, 200.0);
 
-        let node_a = snapshot.nodes.iter().find(|n| n.element_id == "r1").unwrap();
-        let node_b = snapshot.nodes.iter().find(|n| n.element_id == "r2").unwrap();
+        let node_a = snapshot
+            .nodes
+            .iter()
+            .find(|n| n.element_id == "r1")
+            .unwrap();
+        let node_b = snapshot
+            .nodes
+            .iter()
+            .find(|n| n.element_id == "r2")
+            .unwrap();
 
         assert!(node_a.annotations.is_empty());
         assert_eq!(node_b.annotations.len(), 1);
@@ -419,8 +445,12 @@ mod tests {
         let snapshot = classify_board_with_threshold(&elements, 100.0);
 
         assert_eq!(snapshot.nodes[0].annotations.len(), 2);
-        assert!(snapshot.nodes[0].annotations.contains(&"note 1".to_string()));
-        assert!(snapshot.nodes[0].annotations.contains(&"note 2".to_string()));
+        assert!(snapshot.nodes[0]
+            .annotations
+            .contains(&"note 1".to_string()));
+        assert!(snapshot.nodes[0]
+            .annotations
+            .contains(&"note 2".to_string()));
     }
 
     // ========================================================================
@@ -430,7 +460,11 @@ mod tests {
     #[test]
     fn diff_new_node() {
         let previous = make_snapshot(vec![], vec![], vec![]);
-        let current = make_snapshot(vec![make_canvas_node("n1", "New Node", 0.0, 0.0)], vec![], vec![]);
+        let current = make_snapshot(
+            vec![make_canvas_node("n1", "New Node", 0.0, 0.0)],
+            vec![],
+            vec![],
+        );
 
         let changeset = diff_snapshots(&previous, &current);
 
@@ -635,8 +669,22 @@ mod tests {
     #[test]
     fn full_pipeline_simple() {
         // Two nodes connected by an arrow, plus one annotation
-        let mut elements = make_rect("r1", 0.0, 0.0, 200.0, 100.0, "Document Collection\nWorkforce\n\nCollect documents from the database.");
-        elements.extend(make_rect("r2", 400.0, 0.0, 200.0, 100.0, "Analysis Report\nSingle\n\nAnalyze the documents."));
+        let mut elements = make_rect(
+            "r1",
+            0.0,
+            0.0,
+            200.0,
+            100.0,
+            "Document Collection\nWorkforce\n\nCollect documents from the database.",
+        );
+        elements.extend(make_rect(
+            "r2",
+            400.0,
+            0.0,
+            200.0,
+            100.0,
+            "Analysis Report\nSingle\n\nAnalyze the documents.",
+        ));
         elements.push(make_arrow("a1", "r1", "r2"));
         elements.push(make_text("t1", 210.0, 40.0, "Handle pagination"));
 
@@ -651,12 +699,12 @@ mod tests {
         assert_eq!(snapshot.edges[0].target_node_id, "r2");
 
         // Annotation assigned to the nearest node
-        let annotated_node = snapshot
-            .nodes
-            .iter()
-            .find(|n| !n.annotations.is_empty());
+        let annotated_node = snapshot.nodes.iter().find(|n| !n.annotations.is_empty());
         assert!(annotated_node.is_some());
-        assert!(annotated_node.unwrap().annotations.contains(&"Handle pagination".to_string()));
+        assert!(annotated_node
+            .unwrap()
+            .annotations
+            .contains(&"Handle pagination".to_string()));
     }
 
     #[test]
@@ -674,7 +722,11 @@ mod tests {
         assert_eq!(snapshot.nodes.len(), 2);
         assert_eq!(snapshot.edges.len(), 1);
         // No noise leaked through
-        let all_ids: Vec<&str> = snapshot.nodes.iter().map(|n| n.element_id.as_str()).collect();
+        let all_ids: Vec<&str> = snapshot
+            .nodes
+            .iter()
+            .map(|n| n.element_id.as_str())
+            .collect();
         assert!(!all_ids.contains(&"r3"));
         assert!(!all_ids.contains(&"r4"));
     }
@@ -725,21 +777,37 @@ mod tests {
     #[test]
     fn rasterize_horizontal_line() {
         // Stroke from left edge to right edge, at vertical midpoint
-        let bounds = CanvasBounds { x: 0.0, y: 0.0, width: 100.0, height: 100.0 };
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
+        };
         let stroke = vec![[0.0, 50.0], [100.0, 50.0]];
         let result = rasterize_strokes(&[stroke], &bounds, 10, 10).unwrap();
         let lines: Vec<&str> = result.lines().collect();
 
         // Row 5 (midpoint) should be all filled
-        assert!(lines[5].chars().all(|c| c == '█'), "middle row should be fully filled");
+        assert!(
+            lines[5].chars().all(|c| c == '█'),
+            "middle row should be fully filled"
+        );
         // Row 0 should be all empty
-        assert!(lines[0].chars().all(|c| c == '·'), "top row should be empty");
+        assert!(
+            lines[0].chars().all(|c| c == '·'),
+            "top row should be empty"
+        );
     }
 
     #[test]
     fn rasterize_vertical_line() {
         // Stroke from top to bottom at horizontal midpoint
-        let bounds = CanvasBounds { x: 0.0, y: 0.0, width: 100.0, height: 100.0 };
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
+        };
         let stroke = vec![[50.0, 0.0], [50.0, 100.0]];
         let result = rasterize_strokes(&[stroke], &bounds, 10, 10).unwrap();
         let lines: Vec<&str> = result.lines().collect();
@@ -753,38 +821,64 @@ mod tests {
 
     #[test]
     fn rasterize_diagonal_line() {
-        let bounds = CanvasBounds { x: 0.0, y: 0.0, width: 100.0, height: 100.0 };
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
+        };
         let stroke = vec![[0.0, 0.0], [100.0, 100.0]];
         let result = rasterize_strokes(&[stroke], &bounds, 10, 10).unwrap();
         let lines: Vec<&str> = result.lines().collect();
 
         // Diagonal should have at least one filled cell per row
         for line in &lines {
-            assert!(line.contains('█'), "each row should have at least one filled cell on diagonal");
+            assert!(
+                line.contains('█'),
+                "each row should have at least one filled cell on diagonal"
+            );
         }
     }
 
     #[test]
     fn rasterize_single_dot() {
-        let bounds = CanvasBounds { x: 0.0, y: 0.0, width: 100.0, height: 100.0 };
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
+        };
         let stroke = vec![[50.0, 50.0]];
         let result = rasterize_strokes(&[stroke], &bounds, 10, 10).unwrap();
 
         // Should have exactly one filled cell
         let filled_count = result.chars().filter(|&c| c == '█').count();
-        assert_eq!(filled_count, 1, "single dot should produce exactly one filled cell");
+        assert_eq!(
+            filled_count, 1,
+            "single dot should produce exactly one filled cell"
+        );
     }
 
     #[test]
     fn rasterize_empty_strokes() {
-        let bounds = CanvasBounds { x: 0.0, y: 0.0, width: 100.0, height: 100.0 };
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
+        };
         let result = rasterize_strokes(&[], &bounds, 10, 10);
         assert!(result.is_none(), "empty strokes should return None");
     }
 
     #[test]
     fn rasterize_zero_area_bounds() {
-        let bounds = CanvasBounds { x: 0.0, y: 0.0, width: 0.0, height: 100.0 };
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 0.0,
+            height: 100.0,
+        };
         let stroke = vec![[0.0, 0.0], [0.0, 100.0]];
         let result = rasterize_strokes(&[stroke], &bounds, 10, 10);
         assert!(result.is_none(), "zero-width bounds should return None");
@@ -792,7 +886,12 @@ mod tests {
 
     #[test]
     fn rasterize_multiple_strokes() {
-        let bounds = CanvasBounds { x: 0.0, y: 0.0, width: 100.0, height: 100.0 };
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
+        };
         // Two horizontal lines: one at top, one at bottom
         let stroke1 = vec![[0.0, 0.0], [100.0, 0.0]];
         let stroke2 = vec![[0.0, 100.0], [100.0, 100.0]];
@@ -800,15 +899,26 @@ mod tests {
         let lines: Vec<&str> = result.lines().collect();
 
         // First row should be filled
-        assert!(lines[0].chars().all(|c| c == '█'), "top row should be filled");
+        assert!(
+            lines[0].chars().all(|c| c == '█'),
+            "top row should be filled"
+        );
         // Last row should be filled
-        assert!(lines.last().unwrap().chars().all(|c| c == '█'), "bottom row should be filled");
+        assert!(
+            lines.last().unwrap().chars().all(|c| c == '█'),
+            "bottom row should be filled"
+        );
     }
 
     #[test]
     fn rasterize_trims_trailing_empty_rows() {
         // Stroke only in the top quarter — bottom rows should be trimmed
-        let bounds = CanvasBounds { x: 0.0, y: 0.0, width: 100.0, height: 100.0 };
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
+        };
         let stroke = vec![[0.0, 0.0], [100.0, 0.0]];
         let result = rasterize_strokes(&[stroke], &bounds, 10, 20).unwrap();
         let lines: Vec<&str> = result.lines().collect();
@@ -826,46 +936,60 @@ mod tests {
     fn node_with_freedraw_inside() {
         // Node at (0, 0, 200, 100), freedraw inside at base (50, 30) with relative points
         let mut elements = make_rect("r1", 0.0, 0.0, 200.0, 100.0, "My Node");
-        elements.push(make_freedraw("fd1", 50.0, 30.0, vec![
-            vec![0.0, 0.0],
-            vec![20.0, 10.0],
-            vec![40.0, 0.0],
-        ]));
+        elements.push(make_freedraw(
+            "fd1",
+            50.0,
+            30.0,
+            vec![vec![0.0, 0.0], vec![20.0, 10.0], vec![40.0, 0.0]],
+        ));
 
         let snapshot = classify_board(&elements);
 
         assert_eq!(snapshot.nodes.len(), 1);
-        assert!(snapshot.nodes[0].sketch.is_some(), "freedraw inside node should produce a sketch");
+        assert!(
+            snapshot.nodes[0].sketch.is_some(),
+            "freedraw inside node should produce a sketch"
+        );
     }
 
     #[test]
     fn freedraw_outside_node() {
         // Node at (0, 0, 200, 100), freedraw far away at (1000, 1000)
         let mut elements = make_rect("r1", 0.0, 0.0, 200.0, 100.0, "My Node");
-        elements.push(make_freedraw("fd1", 1000.0, 1000.0, vec![
-            vec![0.0, 0.0],
-            vec![20.0, 10.0],
-        ]));
+        elements.push(make_freedraw(
+            "fd1",
+            1000.0,
+            1000.0,
+            vec![vec![0.0, 0.0], vec![20.0, 10.0]],
+        ));
 
         let snapshot = classify_board(&elements);
 
         assert_eq!(snapshot.nodes.len(), 1);
-        assert!(snapshot.nodes[0].sketch.is_none(), "freedraw outside node should not produce a sketch");
+        assert!(
+            snapshot.nodes[0].sketch.is_none(),
+            "freedraw outside node should not produce a sketch"
+        );
     }
 
     #[test]
     fn node_with_line_inside() {
         // Node at (0, 0, 200, 100), line inside
         let mut elements = make_rect("r1", 0.0, 0.0, 200.0, 100.0, "My Node");
-        elements.push(make_line("ln1", 10.0, 10.0, vec![
-            vec![0.0, 0.0],
-            vec![100.0, 50.0],
-        ]));
+        elements.push(make_line(
+            "ln1",
+            10.0,
+            10.0,
+            vec![vec![0.0, 0.0], vec![100.0, 50.0]],
+        ));
 
         let snapshot = classify_board(&elements);
 
         assert_eq!(snapshot.nodes.len(), 1);
-        assert!(snapshot.nodes[0].sketch.is_some(), "line inside node should produce a sketch");
+        assert!(
+            snapshot.nodes[0].sketch.is_some(),
+            "line inside node should produce a sketch"
+        );
     }
 
     #[test]
@@ -874,18 +998,37 @@ mod tests {
         let mut elements = make_rect("r1", 0.0, 0.0, 200.0, 100.0, "Node A");
         elements.extend(make_rect("r2", 200.0, 0.0, 200.0, 100.0, "Node B"));
         // Freedraw at (100, 50) with points spanning from -50 to +150 — overlaps both nodes
-        elements.push(make_freedraw("fd1", 100.0, 50.0, vec![
-            vec![-50.0, 0.0],  // absolute: (50, 50) — inside r1
-            vec![150.0, 0.0],  // absolute: (250, 50) — inside r2
-        ]));
+        elements.push(make_freedraw(
+            "fd1",
+            100.0,
+            50.0,
+            vec![
+                vec![-50.0, 0.0], // absolute: (50, 50) — inside r1
+                vec![150.0, 0.0], // absolute: (250, 50) — inside r2
+            ],
+        ));
 
         let snapshot = classify_board(&elements);
 
         assert_eq!(snapshot.nodes.len(), 2);
-        let node_a = snapshot.nodes.iter().find(|n| n.element_id == "r1").unwrap();
-        let node_b = snapshot.nodes.iter().find(|n| n.element_id == "r2").unwrap();
-        assert!(node_a.sketch.is_none(), "stroke spanning two nodes should be discarded");
-        assert!(node_b.sketch.is_none(), "stroke spanning two nodes should be discarded");
+        let node_a = snapshot
+            .nodes
+            .iter()
+            .find(|n| n.element_id == "r1")
+            .unwrap();
+        let node_b = snapshot
+            .nodes
+            .iter()
+            .find(|n| n.element_id == "r2")
+            .unwrap();
+        assert!(
+            node_a.sketch.is_none(),
+            "stroke spanning two nodes should be discarded"
+        );
+        assert!(
+            node_b.sketch.is_none(),
+            "stroke spanning two nodes should be discarded"
+        );
     }
 
     #[test]
@@ -901,7 +1044,10 @@ mod tests {
 
         let snapshot = classify_board(&elements);
 
-        assert!(snapshot.nodes[0].sketch.is_none(), "deleted freedraw should be skipped");
+        assert!(
+            snapshot.nodes[0].sketch.is_none(),
+            "deleted freedraw should be skipped"
+        );
     }
 
     #[test]
@@ -909,7 +1055,10 @@ mod tests {
         let elements = make_rect("r1", 0.0, 0.0, 200.0, 100.0, "Plain Node");
         let snapshot = classify_board(&elements);
 
-        assert!(snapshot.nodes[0].sketch.is_none(), "node without strokes should have no sketch");
+        assert!(
+            snapshot.nodes[0].sketch.is_none(),
+            "node without strokes should have no sketch"
+        );
     }
 
     #[test]
@@ -926,7 +1075,10 @@ mod tests {
 
         let changeset = diff_snapshots(&previous, &current);
 
-        assert!(changeset.updated_nodes.is_empty(), "sketch change alone should not trigger update");
+        assert!(
+            changeset.updated_nodes.is_empty(),
+            "sketch change alone should not trigger update"
+        );
         assert!(changeset.new_nodes.is_empty());
         assert!(changeset.deleted_node_ids.is_empty());
         assert!(changeset.moved_nodes.is_empty());
@@ -967,8 +1119,18 @@ mod tests {
     fn make_node_move(id: &str, old_x: f64, old_y: f64, new_x: f64, new_y: f64) -> NodeMove {
         NodeMove {
             element_id: id.to_string(),
-            old_bounds: CanvasBounds { x: old_x, y: old_y, width: 200.0, height: 100.0 },
-            new_bounds: CanvasBounds { x: new_x, y: new_y, width: 200.0, height: 100.0 },
+            old_bounds: CanvasBounds {
+                x: old_x,
+                y: old_y,
+                width: 200.0,
+                height: 100.0,
+            },
+            new_bounds: CanvasBounds {
+                x: new_x,
+                y: new_y,
+                width: 200.0,
+                height: 100.0,
+            },
         }
     }
 
@@ -1001,7 +1163,10 @@ mod tests {
 
         assert!(result.agentless.moved_nodes.is_empty(), "all moves are pan");
         assert_eq!(result.noise.len(), 3);
-        assert!(result.noise.iter().all(|n| n.reason == NoiseReason::CanvasPan));
+        assert!(result
+            .noise
+            .iter()
+            .all(|n| n.reason == NoiseReason::CanvasPan));
     }
 
     #[test]
@@ -1009,13 +1174,17 @@ mod tests {
         let mut changeset = empty_changeset();
         changeset.moved_nodes = vec![
             make_node_move("n1", 0.0, 0.0, 50.0, 30.0),
-            make_node_move("n2", 200.0, 0.0, 300.0, 0.0),   // different delta
+            make_node_move("n2", 200.0, 0.0, 300.0, 0.0), // different delta
             make_node_move("n3", 400.0, 0.0, 450.0, 30.0),
         ];
 
         let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
 
-        assert_eq!(result.agentless.moved_nodes.len(), 3, "different deltas survive");
+        assert_eq!(
+            result.agentless.moved_nodes.len(),
+            3,
+            "different deltas survive"
+        );
         assert!(result.noise.is_empty());
     }
 
@@ -1026,7 +1195,11 @@ mod tests {
 
         let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
 
-        assert_eq!(result.agentless.moved_nodes.len(), 1, "single move always survives");
+        assert_eq!(
+            result.agentless.moved_nodes.len(),
+            1,
+            "single move always survives"
+        );
         assert!(result.noise.is_empty());
     }
 
@@ -1051,7 +1224,10 @@ mod tests {
 
         let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
 
-        assert!(result.agentless.moved_nodes.is_empty(), "within epsilon → pan");
+        assert!(
+            result.agentless.moved_nodes.is_empty(),
+            "within epsilon → pan"
+        );
         assert_eq!(result.noise.len(), 2);
     }
 
@@ -1062,9 +1238,7 @@ mod tests {
     #[test]
     fn filter_whitespace_only_text() {
         let mut changeset = empty_changeset();
-        changeset.updated_nodes = vec![
-            make_node_update("n1", "  hello   world ", "hello world"),
-        ];
+        changeset.updated_nodes = vec![make_node_update("n1", "  hello   world ", "hello world")];
 
         let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
 
@@ -1076,9 +1250,8 @@ mod tests {
     #[test]
     fn filter_whitespace_with_real_change() {
         let mut changeset = empty_changeset();
-        changeset.updated_nodes = vec![
-            make_node_update("n1", "  hello   world ", "hello universe"),
-        ];
+        changeset.updated_nodes =
+            vec![make_node_update("n1", "  hello   world ", "hello universe")];
 
         let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
 
@@ -1089,12 +1262,13 @@ mod tests {
     #[test]
     fn filter_whitespace_annotation_only() {
         let mut changeset = empty_changeset();
-        changeset.updated_nodes = vec![
-            make_node_update_with_annotations(
-                "n1", "same text", "same text",
-                vec!["  old  note  "], vec!["old note"],
-            ),
-        ];
+        changeset.updated_nodes = vec![make_node_update_with_annotations(
+            "n1",
+            "same text",
+            "same text",
+            vec!["  old  note  "],
+            vec!["old note"],
+        )];
 
         let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
 
@@ -1106,9 +1280,7 @@ mod tests {
     #[test]
     fn filter_whitespace_tabs_and_newlines() {
         let mut changeset = empty_changeset();
-        changeset.updated_nodes = vec![
-            make_node_update("n1", "hello\t\tworld\n\n", "hello world"),
-        ];
+        changeset.updated_nodes = vec![make_node_update("n1", "hello\t\tworld\n\n", "hello world")];
 
         let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
 
@@ -1131,9 +1303,7 @@ mod tests {
         let mut changeset = empty_changeset();
         // User changed "original text" → "edited text" → "original text"
         // diff sees: old="edited text", new="original text"
-        changeset.updated_nodes = vec![
-            make_node_update("n1", "edited text", "original text"),
-        ];
+        changeset.updated_nodes = vec![make_node_update("n1", "edited text", "original text")];
 
         let result = filter_changeset(&changeset, &[], Some(&baseline), &FilterConfig::default());
 
@@ -1145,13 +1315,15 @@ mod tests {
     #[test]
     fn filter_oscillation_no_baseline() {
         let mut changeset = empty_changeset();
-        changeset.updated_nodes = vec![
-            make_node_update("n1", "edited text", "original text"),
-        ];
+        changeset.updated_nodes = vec![make_node_update("n1", "edited text", "original text")];
 
         let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
 
-        assert_eq!(result.meaningful.len(), 1, "no baseline → oscillation skipped");
+        assert_eq!(
+            result.meaningful.len(),
+            1,
+            "no baseline → oscillation skipped"
+        );
     }
 
     #[test]
@@ -1163,9 +1335,8 @@ mod tests {
         );
 
         let mut changeset = empty_changeset();
-        changeset.updated_nodes = vec![
-            make_node_update("n1", "edited text", "completely new text"),
-        ];
+        changeset.updated_nodes =
+            vec![make_node_update("n1", "edited text", "completely new text")];
 
         let result = filter_changeset(&changeset, &[], Some(&baseline), &FilterConfig::default());
 
@@ -1177,13 +1348,15 @@ mod tests {
         let baseline = make_snapshot(vec![], vec![], vec![]);
 
         let mut changeset = empty_changeset();
-        changeset.updated_nodes = vec![
-            make_node_update("n1", "old text", "new text"),
-        ];
+        changeset.updated_nodes = vec![make_node_update("n1", "old text", "new text")];
 
         let result = filter_changeset(&changeset, &[], Some(&baseline), &FilterConfig::default());
 
-        assert_eq!(result.meaningful.len(), 1, "node not in baseline → survives");
+        assert_eq!(
+            result.meaningful.len(),
+            1,
+            "node not in baseline → survives"
+        );
     }
 
     // ========================================================================
@@ -1193,9 +1366,11 @@ mod tests {
     #[test]
     fn filter_reorder_same_lines() {
         let mut changeset = empty_changeset();
-        changeset.updated_nodes = vec![
-            make_node_update("n1", "Line A\nLine B\nLine C", "Line C\nLine A\nLine B"),
-        ];
+        changeset.updated_nodes = vec![make_node_update(
+            "n1",
+            "Line A\nLine B\nLine C",
+            "Line C\nLine A\nLine B",
+        )];
 
         let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
 
@@ -1207,9 +1382,7 @@ mod tests {
     #[test]
     fn filter_reorder_different_content() {
         let mut changeset = empty_changeset();
-        changeset.updated_nodes = vec![
-            make_node_update("n1", "Line A\nLine B", "Line C\nLine A"),
-        ];
+        changeset.updated_nodes = vec![make_node_update("n1", "Line A\nLine B", "Line C\nLine A")];
 
         let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
 
@@ -1219,9 +1392,11 @@ mod tests {
     #[test]
     fn filter_reorder_different_count() {
         let mut changeset = empty_changeset();
-        changeset.updated_nodes = vec![
-            make_node_update("n1", "Line A\nLine B\nLine C", "Line A\nLine B"),
-        ];
+        changeset.updated_nodes = vec![make_node_update(
+            "n1",
+            "Line A\nLine B\nLine C",
+            "Line A\nLine B",
+        )];
 
         let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
 
@@ -1231,9 +1406,11 @@ mod tests {
     #[test]
     fn filter_reorder_blank_lines_ignored() {
         let mut changeset = empty_changeset();
-        changeset.updated_nodes = vec![
-            make_node_update("n1", "Line A\n\nLine B\nLine C", "Line C\nLine A\n\nLine B"),
-        ];
+        changeset.updated_nodes = vec![make_node_update(
+            "n1",
+            "Line A\n\nLine B\nLine C",
+            "Line C\nLine A\n\nLine B",
+        )];
 
         let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
 
@@ -1303,7 +1480,10 @@ mod tests {
         let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
 
         assert_eq!(result.meaningful.len(), 1);
-        assert_eq!(result.meaningful[0].significance(), ChangeSignificance::High);
+        assert_eq!(
+            result.meaningful[0].significance(),
+            ChangeSignificance::High
+        );
     }
 
     #[test]
@@ -1314,7 +1494,10 @@ mod tests {
         let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
 
         assert_eq!(result.meaningful.len(), 1);
-        assert_eq!(result.meaningful[0].significance(), ChangeSignificance::Medium);
+        assert_eq!(
+            result.meaningful[0].significance(),
+            ChangeSignificance::Medium
+        );
     }
 
     // ========================================================================
@@ -1335,7 +1518,11 @@ mod tests {
 
         assert_eq!(result.meaningful.len(), 1);
         let sig = result.meaningful[0].significance();
-        assert_eq!(sig, ChangeSignificance::Low, "morphological variants should score Low");
+        assert_eq!(
+            sig,
+            ChangeSignificance::Low,
+            "morphological variants should score Low"
+        );
     }
 
     #[test]
@@ -1369,7 +1556,11 @@ mod tests {
 
         assert_eq!(result.meaningful.len(), 1);
         let sig = result.meaningful[0].significance();
-        assert_eq!(sig, ChangeSignificance::High, "completely different words should score High");
+        assert_eq!(
+            sig,
+            ChangeSignificance::High,
+            "completely different words should score High"
+        );
     }
 
     #[test]
@@ -1386,7 +1577,11 @@ mod tests {
 
         assert_eq!(result.meaningful.len(), 1);
         let sig = result.meaningful[0].significance();
-        assert_eq!(sig, ChangeSignificance::Low, "similar prefix words should score Low in long text");
+        assert_eq!(
+            sig,
+            ChangeSignificance::Low,
+            "similar prefix words should score Low in long text"
+        );
     }
 
     // ========================================================================
@@ -1487,14 +1682,15 @@ mod tests {
     fn filter_aggregate_empty_meaningful() {
         // All changes filtered as noise
         let mut changeset = empty_changeset();
-        changeset.updated_nodes = vec![
-            make_node_update("n1", "  hello  ", "hello"),
-        ];
+        changeset.updated_nodes = vec![make_node_update("n1", "  hello  ", "hello")];
 
         let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
 
         assert_eq!(result.aggregate_score, 0.0);
-        assert!(!result.should_dispatch, "no meaningful changes → don't dispatch");
+        assert!(
+            !result.should_dispatch,
+            "no meaningful changes → don't dispatch"
+        );
     }
 
     #[test]
@@ -1529,7 +1725,9 @@ mod tests {
         ];
 
         // 1 whitespace-only update
-        changeset.updated_nodes.push(make_node_update("ws1", "  hello  world  ", "hello world"));
+        changeset
+            .updated_nodes
+            .push(make_node_update("ws1", "  hello  world  ", "hello world"));
 
         // 1 real text change
         changeset.updated_nodes.push(make_node_update(
@@ -1598,7 +1796,11 @@ mod tests {
             // n1: oscillation (back to baseline)
             make_node_update("n1", "edited text", "original text"),
             // n2: real change (not back to baseline)
-            make_node_update("n2", "other original", "completely rewritten content for node two"),
+            make_node_update(
+                "n2",
+                "other original",
+                "completely rewritten content for node two",
+            ),
         ];
 
         let result = filter_changeset(&changeset, &[], Some(&baseline), &FilterConfig::default());
@@ -1650,6 +1852,9 @@ mod tests {
         // Pan moves filtered out of agentless
         assert!(result.agentless.moved_nodes.is_empty());
         assert_eq!(result.noise.len(), 2);
-        assert!(result.noise.iter().all(|n| n.reason == NoiseReason::CanvasPan));
+        assert!(result
+            .noise
+            .iter()
+            .all(|n| n.reason == NoiseReason::CanvasPan));
     }
 }

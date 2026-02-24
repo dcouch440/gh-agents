@@ -321,6 +321,47 @@ pub enum WorkflowEventKind {
         source_name: String,
         error: String,
     },
+    // ── Debug events ──────────────────────────────────────────────
+    /// System prompt sent to LLM (debug stream).
+    DebugSystemPrompt {
+        step_id: Uuid,
+        agent_execution_id: Uuid,
+        agent_name: Option<String>,
+        content: String,
+    },
+    /// User message sent to LLM (debug stream).
+    DebugUserMessage {
+        step_id: Uuid,
+        agent_execution_id: Uuid,
+        agent_name: Option<String>,
+        content: String,
+    },
+    /// Full assistant response text (debug stream — not per-token).
+    DebugAssistantMessage {
+        step_id: Uuid,
+        agent_execution_id: Uuid,
+        agent_name: Option<String>,
+        content: String,
+    },
+    /// Tool call with input payload (debug stream).
+    DebugToolCall {
+        step_id: Uuid,
+        agent_execution_id: Uuid,
+        agent_name: Option<String>,
+        tool_name: String,
+        tool_id: String,
+        input: serde_json::Value,
+    },
+    /// Tool result with output payload (debug stream).
+    DebugToolResult {
+        step_id: Uuid,
+        agent_execution_id: Uuid,
+        agent_name: Option<String>,
+        tool_name: String,
+        tool_id: String,
+        result: String,
+    },
+
     /// Step pin state was toggled.
     StepPinChanged {
         step_id: Uuid,
@@ -385,6 +426,11 @@ impl WorkflowEvent {
             WorkflowEventKind::StepStreamToolStart { .. } => "step_stream_tool_start",
             WorkflowEventKind::StepStreamToolEnd { .. } => "step_stream_tool_end",
             WorkflowEventKind::StepStreamError { .. } => "step_stream_error",
+            WorkflowEventKind::DebugSystemPrompt { .. } => "debug_system_prompt",
+            WorkflowEventKind::DebugUserMessage { .. } => "debug_user_message",
+            WorkflowEventKind::DebugAssistantMessage { .. } => "debug_assistant_message",
+            WorkflowEventKind::DebugToolCall { .. } => "debug_tool_call",
+            WorkflowEventKind::DebugToolResult { .. } => "debug_tool_result",
             WorkflowEventKind::StepPinChanged { .. } => "step_pin_changed",
             WorkflowEventKind::StepCreated { .. } => "step_created",
             WorkflowEventKind::StepDeleted { .. } => "step_deleted",

@@ -189,9 +189,7 @@ pub async fn delete_workflow_step(
         run_id: None,
         workflow_id: p.wid,
         user_id: Some(auth.user_id.0),
-        kind: crate::server::ws::events::WorkflowEventKind::StepDeleted {
-            step_id: p.sid,
-        },
+        kind: crate::server::ws::events::WorkflowEventKind::StepDeleted { step_id: p.sid },
     });
 
     // Broadcast session deletions for any cleaned-up sessions (L3 chat + L4 builder)

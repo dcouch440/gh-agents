@@ -58,10 +58,7 @@ pub struct DispatchOutput {
 ///
 /// Used by the assistant `dispatch` tool, the direct REST API, and the
 /// manager `dispatch_to_builders` tool.
-pub async fn dispatch_to_builder(
-    state: &AppState,
-    input: DispatchInput,
-) -> DispatchOutput {
+pub async fn dispatch_to_builder(state: &AppState, input: DispatchInput) -> DispatchOutput {
     let session_id = find_or_create_builder_session(
         state,
         input.step_id,
