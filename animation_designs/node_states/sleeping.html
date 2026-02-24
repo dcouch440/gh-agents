@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sleeping State</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #fafaf8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .back { position: fixed; top: 20px; left: 20px; text-decoration: none; color: #888; font-size: 14px; }
+  .back:hover { color: #333; }
+  h2 { margin-bottom: 6px; color: #333; font-size: 20px; font-weight: 500; }
+  p.sub { margin-bottom: 40px; color: #999; font-size: 14px; }
+  .scene { display: flex; gap: 100px; align-items: center; }
+  .demo { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .demo label { font-size: 13px; color: #888; }
+  .demo .desc { font-size: 12px; color: #aaa; max-width: 220px; text-align: center; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<a class="back" href="index.html">&larr; Back</a>
+<h2>Sleeping</h2>
+<p class="sub">Idle, dormant, hasn't been asked to work yet</p>
+
+<div class="scene">
+  <div class="demo">
+    <canvas id="canvas-a" width="260" height="200"></canvas>
+    <label>Variant A — Floating Z's</label>
+    <div class="desc">Classic cartoon sleep bubbles drifting up from the node. Gentle, universally understood.</div>
+  </div>
+  <div class="demo">
+    <canvas id="canvas-b" width="260" height="200"></canvas>
+    <label>Variant B — Breathing</label>
+    <div class="desc">The node gently expands and contracts like it's breathing in its sleep. Subtle, ambient, barely there.</div>
+  </div>
+</div>
+
+<script>
+const RECT = { x: 50, y: 70, w: 160, h: 70, r: 8 };
+
+function rand(min, max) { return min + Math.random() * (max - min); }
+
+// Excalidraw-style rounded rect with hand-drawn wobble
+function drawNode(ctx, x, y, w, h, r, opts = {}) {
+  const wobble = opts.wobble || 0.8;
+  const alpha = opts.alpha || 1;
+  const scale = opts.scale || 1;
+
+  ctx.save();
+  if (scale !== 1) {
+    ctx.translate(x + w/2, y + h/2);
+    ctx.scale(scale, scale);
+    ctx.translate(-(x + w/2), -(y + h/2));
+  }
+
+  // Fill
+  ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+  ctx.beginPath();
+  ctx.roundRect(x + 1, y + 1, w - 2, h - 2, r);
+  ctx.fill();
+
+  // Hand-drawn border — two slightly offset passes
+  for (let pass = 0; pass < 2; pass++) {
+    const o = pass * 0.6;
+    ctx.strokeStyle = `rgba(30, 30, 30, ${alpha * (pass === 0 ? 0.85 : 0.35)})`;
+    ctx.lineWidth = pass === 0 ? 1.6 : 1.0;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    ctx.beginPath();
+    // Top
+    ctx.moveTo(x + r + rand(-wobble, wobble) + o, y + rand(-wobble, wobble) + o);
+    for (let i = 1; i <= 4; i++) {
+      const t = i / 4;
+      ctx.lineTo(x + r + (w - 2*r) * t + rand(-wobble, wobble), y + rand(-wobble, wobble) + o);
+    }
+    // Top-right corner
+    ctx.arcTo(x + w + rand(-wobble, wobble), y + rand(-wobble, wobble) + o,
+              x + w + rand(-wobble, wobble), y + r + rand(-wobble, wobble), r);
+    // Right
+    for (let i = 1; i <= 3; i++) {
+      const t = i / 3;
+      ctx.lineTo(x + w + rand(-wobble, wobble) + o, y + r + (h - 2*r) * t + rand(-wobble, wobble));
+    }
+    // Bottom-right corner
+    ctx.arcTo(x + w + rand(-wobble, wobble), y + h + rand(-wobble, wobble),
+              x + w - r + rand(-wobble, wobble), y + h + rand(-wobble, wobble) + o, r);
+    // Bottom
+    for (let i = 1; i <= 4; i++) {
+      const t = i / 4;
+      ctx.lineTo(x + w - r - (w - 2*r) * t + rand(-wobble, wobble), y + h + rand(-wobble, wobble) + o);
+    }
+    // Bottom-left corner
+    ctx.arcTo(x + rand(-wobble, wobble), y + h + rand(-wobble, wobble),
+              x + rand(-wobble, wobble) + o, y + h - r + rand(-wobble, wobble), r);
+    // Left
+    for (let i = 1; i <= 3; i++) {
+      const t = i / 3;
+      ctx.lineTo(x + rand(-wobble, wobble) + o, y + h - r - (h - 2*r) * t + rand(-wobble, wobble));
+    }
+    // Top-left corner
+    ctx.arcTo(x + rand(-wobble, wobble), y + rand(-wobble, wobble) + o,
+              x + r + rand(-wobble, wobble), y + rand(-wobble, wobble) + o, r);
+    ctx.closePath();
+    ctx.stroke();
+  }
+
+  // Label
+  ctx.font = '16px "Segoe Print", "Comic Sans MS", "Bradley Hand", cursive';
+  ctx.fillStyle = `rgba(30, 30, 30, ${alpha})`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(opts.label || 'Worker', x + w/2, y + h/2);
+
+  ctx.restore();
+}
+
+// ---- VARIANT A: Floating Z's ----
+const zParticles = [];
+let timeA = 0;
+
+function spawnZ() {
+  if (zParticles.length >= 4) return;
+  zParticles.push({
+    x: RECT.x + RECT.w - 15 + rand(-5, 5),
+    y: RECT.y + 5,
+    size: rand(10, 15),
+    opacity: 0.6,
+    vx: rand(0.15, 0.4),
+    vy: rand(-0.3, -0.6),
+    rotation: rand(-0.2, 0.2),
+    rotSpeed: rand(-0.01, 0.01),
+    age: 0,
+  });
+}
+
+function drawVariantA() {
+  const ctx = document.getElementById('canvas-a').getContext('2d');
+  ctx.clearRect(0, 0, 260, 200);
+  timeA++;
+
+  drawNode(ctx, RECT.x, RECT.y, RECT.w, RECT.h, RECT.r, { label: 'Database' });
+
+  // Spawn Z's periodically
+  if (timeA % 45 === 0) spawnZ();
+
+  // Update and draw Z's
+  for (let i = zParticles.length - 1; i >= 0; i--) {
+    const z = zParticles[i];
+    z.x += z.vx;
+    z.y += z.vy;
+    z.age++;
+    z.rotation += z.rotSpeed;
+    z.opacity = Math.max(0, 0.6 - z.age * 0.005);
+
+    if (z.opacity <= 0) { zParticles.splice(i, 1); continue; }
+
+    ctx.save();
+    ctx.translate(z.x, z.y);
+    ctx.rotate(z.rotation);
+    ctx.font = `${z.size}px "Segoe Print", "Comic Sans MS", cursive`;
+    ctx.fillStyle = `rgba(100, 100, 120, ${z.opacity})`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('z', 0, 0);
+    ctx.restore();
+  }
+}
+
+// ---- VARIANT B: Breathing ----
+let timeB = 0;
+
+function drawVariantB() {
+  const ctx = document.getElementById('canvas-b').getContext('2d');
+  ctx.clearRect(0, 0, 260, 200);
+  timeB++;
+
+  // Gentle breathing: very subtle scale oscillation
+  const breathCycle = Math.sin(timeB * 0.025) * 0.012; // tiny scale change
+  const breathAlpha = 0.92 + Math.sin(timeB * 0.025) * 0.08;
+
+  drawNode(ctx, RECT.x, RECT.y, RECT.w, RECT.h, RECT.r, {
+    label: 'Database',
+    scale: 1 + breathCycle,
+    alpha: breathAlpha,
+  });
+
+  // Very faint "closed eyes" — two small curved lines in upper portion
+  const cx = RECT.x + RECT.w / 2;
+  const ey = RECT.y + 18;
+  ctx.save();
+  ctx.strokeStyle = `rgba(150, 150, 160, ${0.15 + Math.sin(timeB * 0.025) * 0.05})`;
+  ctx.lineWidth = 1.2;
+  ctx.lineCap = 'round';
+
+  // Left eye (closed)
+  ctx.beginPath();
+  ctx.arc(cx - 18, ey, 5, 0.2, Math.PI - 0.2);
+  ctx.stroke();
+
+  // Right eye (closed)
+  ctx.beginPath();
+  ctx.arc(cx + 18, ey, 5, 0.2, Math.PI - 0.2);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function animate() {
+  drawVariantA();
+  drawVariantB();
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>

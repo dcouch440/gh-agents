@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DAG Showcase — All States</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #fafaf8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 20px;
+  }
+  .back { position: fixed; top: 20px; left: 20px; text-decoration: none; color: #888; font-size: 14px; z-index: 10; }
+  .back:hover { color: #333; }
+  h2 { margin: 10px 0 4px; color: #333; font-size: 20px; font-weight: 500; }
+  p.sub { margin-bottom: 20px; color: #999; font-size: 13px; }
+  canvas { border: 1px solid #eee; border-radius: 8px; }
+  .controls {
+    margin-top: 20px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 700px;
+  }
+  .controls button {
+    padding: 8px 18px;
+    font-family: inherit;
+    font-size: 13px;
+    border: 1.5px solid #ddd;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: #555;
+  }
+  .controls button:hover { border-color: #999; color: #333; }
+  .controls button.active { background: #333; color: #fff; border-color: #333; }
+  .controls button.sleeping { border-color: #aab; }
+  .controls button.sleeping.active { background: #667; border-color: #667; }
+  .controls button.editing { border-color: #c9a040; }
+  .controls button.editing.active { background: #b8942e; border-color: #b8942e; }
+  .controls button.working { border-color: #6688cc; }
+  .controls button.working.active { background: #5070b0; border-color: #5070b0; }
+  .controls button.done { border-color: #60a060; }
+  .controls button.done.active { background: #4a8a4a; border-color: #4a8a4a; }
+  .controls button.broken { border-color: #cc5544; }
+  .controls button.broken.active { background: #b04030; border-color: #b04030; }
+  .hint { margin-top: 12px; font-size: 12px; color: #bbb; }
+</style>
+</head>
+<body>
+
+<a class="back" href="index.html">&larr; Back</a>
+<h2>DAG Showcase</h2>
+<p class="sub">Click a state below to see all nodes transition — or click individual nodes to cycle</p>
+
+<canvas id="canvas" width="900" height="340"></canvas>
+
+<div class="controls">
+  <button class="sleeping active" data-state="sleeping">Sleeping</button>
+  <button class="editing" data-state="editing">Editing</button>
+  <button class="working" data-state="working">Working</button>
+  <button class="done" data-state="done">Done</button>
+  <button class="broken" data-state="broken">Broken</button>
+</div>
+<div class="hint">Click any node on the canvas to cycle its state independently</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// Node layout matching the user's screenshot
+const NODES = [
+  { id: 'database', label: 'Database', x: 40, y: 50, w: 130, h: 55, r: 8 },
+  { id: 'input',    label: 'Input: Website Visits', x: 40, y: 200, w: 170, h: 55, r: 8 },
+  { id: 'worker',   label: 'Worker', x: 280, y: 100, w: 180, h: 100, r: 8, big: true },
+  { id: 'report',   label: 'Write Report', x: 540, y: 140, w: 150, h: 55, r: 8 },
+  { id: 'output',   label: 'Output', x: 750, y: 140, w: 110, h: 55, r: 8 },
+];
+
+// Arrows: [fromId, toId]
+const ARROWS = [
+  ['database', 'worker'],
+  ['input', 'worker'],
+  ['worker', 'report'],
+  ['report', 'output'],
+];
+
+const STATES = ['sleeping', 'editing', 'working', 'done', 'broken'];
+const nodeStates = {};
+NODES.forEach(n => nodeStates[n.id] = 'sleeping');
+
+let time = 0;
+
+// ---- Particles / state-specific data ----
+const zParticles = {};
+const smokeParticles = {};
+const doneProgress = {};
+NODES.forEach(n => {
+  zParticles[n.id] = [];
+  smokeParticles[n.id] = [];
+  doneProgress[n.id] = 0;
+});
+
+function rand(min, max) { return min + Math.random() * (max - min); }
+
+// ---- Drawing utilities ----
+function drawHandBorder(x, y, w, h, r, wobble, color, lineWidth) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x+r+rand(-wobble,wobble), y+rand(-wobble,wobble));
+  for (let i=1;i<=4;i++) ctx.lineTo(x+r+(w-2*r)*(i/4)+rand(-wobble,wobble), y+rand(-wobble,wobble));
+  ctx.arcTo(x+w+rand(-wobble,wobble), y+rand(-wobble,wobble), x+w, y+r, r);
+  for (let i=1;i<=3;i++) ctx.lineTo(x+w+rand(-wobble,wobble), y+r+(h-2*r)*(i/3)+rand(-wobble,wobble));
+  ctx.arcTo(x+w+rand(-wobble,wobble), y+h+rand(-wobble,wobble), x+w-r, y+h, r);
+  for (let i=1;i<=4;i++) ctx.lineTo(x+w-r-(w-2*r)*(i/4)+rand(-wobble,wobble), y+h+rand(-wobble,wobble));
+  ctx.arcTo(x+rand(-wobble,wobble), y+h+rand(-wobble,wobble), x, y+h-r, r);
+  for (let i=1;i<=3;i++) ctx.lineTo(x+rand(-wobble,wobble), y+h-r-(h-2*r)*(i/3)+rand(-wobble,wobble));
+  ctx.arcTo(x+rand(-wobble,wobble), y+rand(-wobble,wobble), x+r, y, r);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawArrow(from, to) {
+  const fx = from.x + from.w;
+  const fy = from.y + from.h / 2;
+  const tx = to.x;
+  const ty = to.y + to.h / 2;
+
+  // Curved arrow with hand-drawn feel
+  const midX = (fx + tx) / 2;
+  const midY = (fy + ty) / 2;
+  const cpOffset = (ty - fy) * 0.3;
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(30, 30, 30, 0.6)';
+  ctx.lineWidth = 1.4;
+  ctx.lineCap = 'round';
+
+  ctx.beginPath();
+  ctx.moveTo(fx + 2 + rand(-0.5,0.5), fy + rand(-0.5,0.5));
+  ctx.quadraticCurveTo(
+    midX + rand(-2, 2),
+    midY - cpOffset + rand(-2, 2),
+    tx - 8 + rand(-0.5,0.5),
+    ty + rand(-0.5,0.5)
+  );
+  ctx.stroke();
+
+  // Arrowhead
+  const angle = Math.atan2(ty - (midY - cpOffset), tx - 8 - midX);
+  const headLen = 8;
+  ctx.beginPath();
+  ctx.moveTo(tx - 6, ty);
+  ctx.lineTo(tx - 6 - headLen * Math.cos(angle - 0.4), ty - headLen * Math.sin(angle - 0.4));
+  ctx.moveTo(tx - 6, ty);
+  ctx.lineTo(tx - 6 - headLen * Math.cos(angle + 0.4), ty - headLen * Math.sin(angle + 0.4));
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ---- State renderers ----
+function renderSleeping(node) {
+  const { x, y, w, h, r, id } = node;
+
+  // Breathing
+  const breathScale = 1 + Math.sin(time * 0.025) * 0.008;
+  const breathAlpha = 0.88 + Math.sin(time * 0.025) * 0.06;
+
+  ctx.save();
+  ctx.translate(x + w/2, y + h/2);
+  ctx.scale(breathScale, breathScale);
+  ctx.translate(-(x + w/2), -(y + h/2));
+
+  ctx.fillStyle = `rgba(255, 255, 255, ${breathAlpha})`;
+  ctx.beginPath(); ctx.roundRect(x+1, y+1, w-2, h-2, r); ctx.fill();
+  drawHandBorder(x, y, w, h, r, 0.6, `rgba(30,30,30,${breathAlpha * 0.7})`, 1.4);
+
+  ctx.restore();
+
+  // Z's
+  if (time % 50 === 0 && zParticles[id].length < 3) {
+    zParticles[id].push({
+      x: x + w - 8, y: y + 2,
+      size: rand(9, 13), opacity: 0.5,
+      vx: rand(0.12, 0.3), vy: rand(-0.25, -0.45),
+      rotation: 0, rotSpeed: rand(-0.008, 0.008),
+    });
+  }
+  for (let i = zParticles[id].length - 1; i >= 0; i--) {
+    const z = zParticles[id][i];
+    z.x += z.vx; z.y += z.vy; z.rotation += z.rotSpeed;
+    z.opacity -= 0.004;
+    if (z.opacity <= 0) { zParticles[id].splice(i, 1); continue; }
+    ctx.save();
+    ctx.translate(z.x, z.y); ctx.rotate(z.rotation);
+    ctx.font = `${z.size}px "Segoe Print", "Comic Sans MS", cursive`;
+    ctx.fillStyle = `rgba(100,100,120,${z.opacity})`;
+    ctx.textAlign = 'center';
+    ctx.fillText('z', 0, 0);
+    ctx.restore();
+  }
+}
+
+function renderEditing(node) {
+  const { x, y, w, h, r } = node;
+
+  // Warm glow
+  ctx.save();
+  ctx.shadowColor = `rgba(255,180,80,${0.07 + Math.sin(time*0.04)*0.025})`;
+  ctx.shadowBlur = 14;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill();
+  ctx.restore();
+
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.roundRect(x+1, y+1, w-2, h-2, r); ctx.fill();
+
+  const wobble = 1.2 + Math.sin(time * 0.08) * 0.3;
+  drawHandBorder(x, y, w, h, r, wobble, 'rgba(30,30,30,0.8)', 1.5);
+
+  // Typing dots
+  const dotPhase = Math.floor(time / 18) % 4;
+  const dotY = y + h / 2 + 12;
+  const dotX = x + w / 2;
+  ctx.fillStyle = 'rgba(80,80,100,0.3)';
+  for (let i = 0; i < 3; i++) {
+    if (i < dotPhase) {
+      ctx.beginPath();
+      ctx.arc(dotX - 8 + i * 8, dotY, 1.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function renderWorking(node) {
+  const { x, y, w, h, r } = node;
+
+  // Slight vibration
+  const vx = rand(-0.6, 0.6);
+  const vy = rand(-0.6, 0.6);
+
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.roundRect(x+vx+1, y+vy+1, w-2, h-2, r); ctx.fill();
+  drawHandBorder(x+vx, y+vy, w, h, r, 0.8, 'rgba(30,30,30,0.85)', 1.5);
+
+  // Fume lines
+  ctx.save();
+  ctx.strokeStyle = 'rgba(50,50,60,0.25)';
+  ctx.lineWidth = 1.3;
+  ctx.lineCap = 'round';
+
+  const fumeCount = 3;
+  for (let i = 0; i < fumeCount; i++) {
+    const t = (i + 0.5) / fumeCount;
+    const baseX = x + 15 + (w - 30) * t + rand(-4, 4);
+    const fumeH = rand(14, 28);
+    ctx.beginPath();
+    let cx = baseX, cy = y - 2;
+    ctx.moveTo(cx, cy);
+    const segs = 4;
+    for (let s = 0; s < segs; s++) {
+      const nx = cx + rand(-3.5, 3.5);
+      const ny = cy - fumeH / segs;
+      ctx.quadraticCurveTo(cx + rand(-4,4), cy - fumeH/segs*0.5, nx, ny);
+      cx = nx; cy = ny;
+    }
+    ctx.stroke();
+  }
+
+  // Sweat drop
+  if (Math.random() > 0.6) {
+    const side = Math.random() > 0.5 ? 1 : -1;
+    const sx = side > 0 ? x + w + 3 : x - 6;
+    const sy = y + rand(8, 20);
+    ctx.fillStyle = 'rgba(100,140,200,0.2)';
+    ctx.beginPath();
+    ctx.moveTo(sx, sy - 2);
+    ctx.quadraticCurveTo(sx + 2.5, sy + 1.5, sx, sy + 4);
+    ctx.quadraticCurveTo(sx - 2.5, sy + 1.5, sx, sy - 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function renderDone(node) {
+  const { x, y, w, h, r, id } = node;
+
+  doneProgress[id] = Math.min(doneProgress[id] + 1, 50);
+  const t = doneProgress[id] / 50;
+
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.roundRect(x+1, y+1, w-2, h-2, r); ctx.fill();
+  drawHandBorder(x, y, w, h, r, 0.5, 'rgba(30,30,30,0.9)', 1.6);
+
+  // Checkmark
+  const checkT = Math.min(t * 2.5, 1);
+  const bounce = checkT < 1 ? (checkT < 0.6 ? checkT/0.6 : 1 + Math.sin((checkT-0.6)/0.4 * Math.PI) * 0.15) : 1;
+
+  const cx = x + w - 16;
+  const cy = y + 13;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(bounce, bounce);
+
+  ctx.fillStyle = `rgba(80,180,100,${checkT * 0.2})`;
+  ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI*2); ctx.fill();
+
+  ctx.strokeStyle = `rgba(60,160,80,${checkT * 0.85})`;
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-4, 0.5);
+  ctx.lineTo(-1, 3.5);
+  ctx.lineTo(4.5, -3);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function renderBroken(node) {
+  const { x, y, w, h, r, id } = node;
+
+  ctx.fillStyle = 'rgba(255,235,230,0.95)';
+  ctx.beginPath(); ctx.roundRect(x+1, y+1, w-2, h-2, r); ctx.fill();
+  drawHandBorder(x, y, w, h, r, 1.0, 'rgba(180,50,40,0.65)', 1.5);
+
+  // Cracks
+  ctx.save();
+  ctx.strokeStyle = 'rgba(160,50,40,0.35)';
+  ctx.lineWidth = 1;
+  ctx.lineCap = 'round';
+  const cx = x + w * 0.4, cy = y + h * 0.5;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx + 12, cy - 15);
+  ctx.lineTo(cx + 18, cy - 10);
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(cx - 8, cy + 18);
+  ctx.moveTo(cx + 6, cy - 8);
+  ctx.lineTo(cx + 20, cy - 5);
+  ctx.stroke();
+  ctx.restore();
+
+  // Dizzy stars
+  const starCount = 3;
+  const orbitR = Math.min(w, 50) * 0.45;
+  const orbitY = y - 8;
+  const ncx = x + w / 2;
+
+  ctx.save();
+  for (let i = 0; i < starCount; i++) {
+    const angle = time * 0.05 + (Math.PI * 2 / starCount) * i;
+    const sx = ncx + Math.cos(angle) * orbitR;
+    const sy = orbitY + Math.sin(angle) * 6;
+    const sz = 3.5;
+
+    ctx.fillStyle = `rgba(220,180,40,${0.45 + Math.sin(time*0.08+i)*0.1})`;
+    ctx.beginPath();
+    for (let p = 0; p < 8; p++) {
+      const pr = p % 2 === 0 ? sz : sz * 0.35;
+      const pa = (Math.PI * 2 / 8) * p + time * 0.03;
+      const px = sx + Math.cos(pa) * pr;
+      const py = sy + Math.sin(pa) * pr;
+      if (p === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // Smoke wisps
+  if (time % 15 === 0 && smokeParticles[id].length < 4) {
+    smokeParticles[id].push({
+      x: x + rand(15, w - 15), y: y - 1,
+      size: rand(3, 6), opacity: 0.25,
+      vx: rand(-0.15, 0.15), vy: rand(-0.3, -0.6),
+    });
+  }
+  for (let i = smokeParticles[id].length - 1; i >= 0; i--) {
+    const s = smokeParticles[id][i];
+    s.x += s.vx; s.y += s.vy; s.size += 0.06; s.opacity -= 0.003;
+    if (s.opacity <= 0) { smokeParticles[id].splice(i, 1); continue; }
+    ctx.fillStyle = `rgba(100,80,70,${s.opacity})`;
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ---- Main render ----
+const stateRenderers = { sleeping: renderSleeping, editing: renderEditing, working: renderWorking, done: renderDone, broken: renderBroken };
+
+function renderNode(node) {
+  const state = nodeStates[node.id];
+  stateRenderers[state](node);
+
+  // Label (drawn on top for all states)
+  ctx.save();
+  ctx.font = node.big
+    ? 'bold 14px "Segoe Print", "Comic Sans MS", cursive'
+    : '13px "Segoe Print", "Comic Sans MS", cursive';
+  ctx.fillStyle = 'rgba(30,30,30,0.9)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  if (node.big) {
+    // Multi-line for worker
+    ctx.font = 'bold 13px "Segoe Print", "Comic Sans MS", cursive';
+    ctx.fillText('Name', node.x + node.w/2, node.y + 20);
+    ctx.font = '12px "Segoe Print", "Comic Sans MS", cursive';
+    ctx.fillStyle = 'rgba(30,30,30,0.6)';
+    ctx.fillText('Worker', node.x + node.w/2, node.y + 38);
+    ctx.fillText('Description', node.x + node.w/2, node.y + 55);
+    ctx.font = '11px "Segoe Print", "Comic Sans MS", cursive';
+    ctx.fillStyle = 'rgba(30,30,30,0.45)';
+    ctx.fillText('Search the database for new', node.x + node.w/2, node.y + 72);
+    ctx.fillText('entries based on query.', node.x + node.w/2, node.y + 86);
+  } else {
+    ctx.fillText(node.label, node.x + node.w/2, node.y + node.h/2);
+  }
+  ctx.restore();
+}
+
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  time++;
+
+  // Draw arrows first (behind nodes)
+  for (const [fromId, toId] of ARROWS) {
+    const from = NODES.find(n => n.id === fromId);
+    const to = NODES.find(n => n.id === toId);
+    drawArrow(from, to);
+  }
+
+  // Draw nodes
+  for (const node of NODES) {
+    renderNode(node);
+  }
+}
+
+// Only redraw at intervals for hand-drawn feel (working redraws faster)
+let frame = 0;
+function animate() {
+  const hasWorking = Object.values(nodeStates).includes('working');
+  const hasBroken = Object.values(nodeStates).includes('broken');
+  const interval = (hasWorking || hasBroken) ? 3 : 1;
+
+  if (frame % interval === 0) render();
+  frame++;
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+// ---- Controls ----
+function setAllStates(state) {
+  NODES.forEach(n => {
+    nodeStates[n.id] = state;
+    zParticles[n.id] = [];
+    smokeParticles[n.id] = [];
+    doneProgress[n.id] = 0;
+  });
+  document.querySelectorAll('.controls button').forEach(b => b.classList.remove('active'));
+  document.querySelector(`[data-state="${state}"]`).classList.add('active');
+}
+
+document.querySelectorAll('.controls button').forEach(btn => {
+  btn.addEventListener('click', () => setAllStates(btn.dataset.state));
+});
+
+// Click individual nodes to cycle
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+  const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+  for (const node of NODES) {
+    if (mx >= node.x && mx <= node.x + node.w && my >= node.y && my <= node.y + node.h) {
+      const curr = STATES.indexOf(nodeStates[node.id]);
+      nodeStates[node.id] = STATES[(curr + 1) % STATES.length];
+      zParticles[node.id] = [];
+      smokeParticles[node.id] = [];
+      doneProgress[node.id] = 0;
+      // Deselect all-state buttons since nodes are now mixed
+      document.querySelectorAll('.controls button').forEach(b => b.classList.remove('active'));
+      break;
+    }
+  }
+});
+</script>
+</body>
+</html>

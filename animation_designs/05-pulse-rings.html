@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pulse Rings Animation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #f5f0e8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Comic Sans MS', 'Marker Felt', cursive;
+  }
+  h2 { margin-bottom: 30px; color: #333; font-size: 18px; }
+  .scene { display: flex; gap: 120px; align-items: flex-end; }
+  .demo { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .demo label { font-size: 14px; color: #666; }
+  .controls { margin-top: 40px; display: flex; gap: 16px; }
+  .controls button {
+    padding: 10px 24px; font-family: inherit; font-size: 14px;
+    border: 2px solid #333; border-radius: 6px; background: #fff; cursor: pointer;
+  }
+  .controls button:hover { background: #e8e0d0; }
+  .controls button.active { background: #333; color: #fff; }
+</style>
+</head>
+<body>
+
+<h2>Pulse Rings / Expanding Heartbeat</h2>
+
+<div class="scene">
+  <div class="demo">
+    <canvas id="canvas-subtle" width="300" height="280"></canvas>
+    <label>Subtle</label>
+  </div>
+  <div class="demo">
+    <canvas id="canvas-medium" width="300" height="280"></canvas>
+    <label>Medium</label>
+  </div>
+  <div class="demo">
+    <canvas id="canvas-intense" width="300" height="280"></canvas>
+    <label>Intense</label>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="btn-toggle" class="active">Running</button>
+  <button id="btn-speed-slow">Slow</button>
+  <button id="btn-speed-normal" class="active">Normal</button>
+  <button id="btn-speed-fast">Fast</button>
+</div>
+
+<script>
+const RECT = { x: 70, y: 110, w: 160, h: 80 };
+let running = true;
+let speed = 30;
+let time = 0;
+
+const PRESETS = {
+  subtle:  { rings: 2, maxExpand: 25, opacity: 0.25, interval: 90,  wobble: 1.5, strokeW: 1.5 },
+  medium:  { rings: 3, maxExpand: 35, opacity: 0.4,  interval: 60,  wobble: 2.5, strokeW: 2.0 },
+  intense: { rings: 4, maxExpand: 50, opacity: 0.55, interval: 40,  wobble: 3.5, strokeW: 2.5 },
+};
+
+function rand(min, max) { return min + Math.random() * (max - min); }
+
+function drawSketchyRect(ctx, x, y, w, h) {
+  ctx.save();
+  ctx.strokeStyle = '#1e1e1e';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.beginPath();
+    const edges = [[x,y,x+w,y],[x+w,y,x+w,y+h],[x+w,y+h,x,y+h],[x,y+h,x,y]];
+    for (const [x1,y1,x2,y2] of edges) {
+      ctx.moveTo(x1+rand(-1.5,1.5), y1+rand(-1.5,1.5));
+      for (let i = 1; i <= 5; i++) {
+        const t = i/5;
+        ctx.lineTo(x1+(x2-x1)*t+rand(-1,1), y1+(y2-y1)*t+rand(-1,1));
+      }
+    }
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(220, 230, 255, 0.2)';
+  ctx.fillRect(x+2, y+2, w-4, h-4);
+  ctx.restore();
+}
+
+function drawLabel(ctx, text) {
+  ctx.save();
+  ctx.font = '14px "Comic Sans MS", cursive';
+  ctx.fillStyle = '#555';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, RECT.x + RECT.w/2, RECT.y + RECT.h/2);
+  ctx.restore();
+}
+
+// Draw a wobbly rounded-rect ring
+function drawWobblyRoundedRect(ctx, x, y, w, h, r, wobble) {
+  const steps = 40;
+  ctx.beginPath();
+
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const angle = t * Math.PI * 2;
+
+    // Parametric rounded rect
+    const hw = w / 2, hh = h / 2;
+    let px, py;
+
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const scale = Math.min(hw / Math.abs(cos || 0.001), hh / Math.abs(sin || 0.001));
+    const baseR = Math.min(scale, Math.min(hw, hh));
+
+    px = x + w/2 + Math.cos(angle) * (hw + r) + rand(-wobble, wobble);
+    py = y + h/2 + Math.sin(angle) * (hh + r) + rand(-wobble, wobble);
+
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+
+  ctx.closePath();
+  ctx.stroke();
+}
+
+function drawPulseRings(ctx, preset, t) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  for (let i = 0; i < preset.rings; i++) {
+    const phase = ((t + i * preset.interval) % (preset.interval * preset.rings)) / (preset.interval * preset.rings);
+    const expand = phase * preset.maxExpand;
+    const alpha = preset.opacity * (1 - phase);
+
+    if (alpha < 0.02) continue;
+
+    ctx.strokeStyle = `rgba(70, 100, 200, ${alpha})`;
+    ctx.lineWidth = preset.strokeW * (1 - phase * 0.5);
+
+    drawWobblyRoundedRect(
+      ctx,
+      RECT.x - expand,
+      RECT.y - expand,
+      RECT.w + expand * 2,
+      RECT.h + expand * 2,
+      expand,
+      preset.wobble * (1 - phase * 0.3)
+    );
+  }
+
+  ctx.restore();
+}
+
+const canvases = [
+  { id: 'canvas-subtle',  preset: 'subtle',  label: 'LLM Call' },
+  { id: 'canvas-medium',  preset: 'medium',  label: 'Agent' },
+  { id: 'canvas-intense', preset: 'intense', label: 'Pipeline' },
+];
+const contexts = canvases.map(c => ({ ctx: document.getElementById(c.id).getContext('2d'), ...c }));
+
+function renderFrame() {
+  time++;
+  for (const { ctx, preset: presetName, label } of contexts) {
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    drawSketchyRect(ctx, RECT.x, RECT.y, RECT.w, RECT.h);
+    drawLabel(ctx, label);
+    if (running) drawPulseRings(ctx, PRESETS[presetName], time);
+  }
+}
+
+let lastFrame = 0;
+function animate(ts) {
+  if (ts - lastFrame >= speed) { renderFrame(); lastFrame = ts; }
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+document.getElementById('btn-toggle').addEventListener('click', function() {
+  running = !running;
+  this.textContent = running ? 'Running' : 'Stopped';
+  this.classList.toggle('active', running);
+});
+[['btn-speed-slow',60],['btn-speed-normal',30],['btn-speed-fast',15]].forEach(([id,ms]) => {
+  document.getElementById(id).addEventListener('click', function() {
+    speed = ms;
+    document.querySelectorAll('.controls button:not(#btn-toggle)').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

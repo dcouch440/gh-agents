@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Electric Sparks Animation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #f5f0e8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Comic Sans MS', 'Marker Felt', cursive;
+  }
+  h2 { margin-bottom: 30px; color: #333; font-size: 18px; }
+  .scene { display: flex; gap: 120px; align-items: flex-end; }
+  .demo { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .demo label { font-size: 14px; color: #666; }
+  .controls { margin-top: 40px; display: flex; gap: 16px; }
+  .controls button {
+    padding: 10px 24px; font-family: inherit; font-size: 14px;
+    border: 2px solid #333; border-radius: 6px; background: #fff; cursor: pointer;
+  }
+  .controls button:hover { background: #e8e0d0; }
+  .controls button.active { background: #333; color: #fff; }
+</style>
+</head>
+<body>
+
+<h2>Electric Sparks / Crackling Energy</h2>
+
+<div class="scene">
+  <div class="demo">
+    <canvas id="canvas-subtle" width="260" height="260"></canvas>
+    <label>Subtle</label>
+  </div>
+  <div class="demo">
+    <canvas id="canvas-medium" width="260" height="260"></canvas>
+    <label>Medium</label>
+  </div>
+  <div class="demo">
+    <canvas id="canvas-intense" width="260" height="260"></canvas>
+    <label>Intense</label>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="btn-toggle" class="active">Running</button>
+  <button id="btn-speed-slow">Slow</button>
+  <button id="btn-speed-normal" class="active">Normal</button>
+  <button id="btn-speed-fast">Fast</button>
+</div>
+
+<script>
+const RECT = { x: 50, y: 120, w: 160, h: 80 };
+let running = true;
+let speed = 100;
+
+const PRESETS = {
+  subtle:  { bolts: 2, sparks: 3,  boltLen: 25, opacity: 0.5,  glow: false },
+  medium:  { bolts: 4, sparks: 6,  boltLen: 35, opacity: 0.7,  glow: true },
+  intense: { bolts: 6, sparks: 12, boltLen: 45, opacity: 0.85, glow: true },
+};
+
+function rand(min, max) { return min + Math.random() * (max - min); }
+
+function drawSketchyRect(ctx, x, y, w, h) {
+  ctx.save();
+  ctx.strokeStyle = '#1e1e1e';
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.beginPath();
+    const edges = [[x,y,x+w,y],[x+w,y,x+w,y+h],[x+w,y+h,x,y+h],[x,y+h,x,y]];
+    for (const [x1,y1,x2,y2] of edges) {
+      ctx.moveTo(x1+rand(-1.5,1.5), y1+rand(-1.5,1.5));
+      for (let i = 1; i <= 5; i++) {
+        const t = i/5;
+        ctx.lineTo(x1+(x2-x1)*t+rand(-1,1), y1+(y2-y1)*t+rand(-1,1));
+      }
+    }
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(200, 220, 255, 0.2)';
+  ctx.fillRect(x+2, y+2, w-4, h-4);
+  ctx.restore();
+}
+
+function drawLabel(ctx, text) {
+  ctx.save();
+  ctx.font = '14px "Comic Sans MS", cursive';
+  ctx.fillStyle = '#555';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, RECT.x + RECT.w/2, RECT.y + RECT.h/2);
+  ctx.restore();
+}
+
+// Lightning bolt from a point
+function drawBolt(ctx, sx, sy, angle, length, preset) {
+  ctx.save();
+  const segments = 3 + Math.floor(Math.random() * 3);
+  const segLen = length / segments;
+
+  ctx.strokeStyle = `rgba(80, 120, 255, ${preset.opacity})`;
+  ctx.lineWidth = 1.5 + Math.random();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  if (preset.glow) {
+    ctx.shadowColor = 'rgba(100, 150, 255, 0.6)';
+    ctx.shadowBlur = 8;
+  }
+
+  ctx.beginPath();
+  let cx = sx, cy = sy;
+  ctx.moveTo(cx, cy);
+
+  for (let i = 0; i < segments; i++) {
+    const a = angle + rand(-0.8, 0.8);
+    cx += Math.cos(a) * segLen;
+    cy += Math.sin(a) * segLen;
+    ctx.lineTo(cx, cy);
+
+    // Branch
+    if (Math.random() > 0.6) {
+      const ba = a + rand(-1.2, 1.2);
+      const bl = segLen * 0.5;
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(ba)*bl, cy + Math.sin(ba)*bl);
+      ctx.moveTo(cx, cy);
+    }
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+// Small spark mark
+function drawSpark(ctx, x, y, preset) {
+  ctx.save();
+  ctx.strokeStyle = `rgba(100, 160, 255, ${preset.opacity * 0.8})`;
+  ctx.lineWidth = 1.5;
+  if (preset.glow) {
+    ctx.shadowColor = 'rgba(100, 150, 255, 0.4)';
+    ctx.shadowBlur = 4;
+  }
+
+  const size = rand(3, 7);
+  // Small cross / star burst
+  const arms = 2 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < arms; i++) {
+    const a = (Math.PI * 2 / arms) * i + rand(-0.3, 0.3);
+    ctx.beginPath();
+    ctx.moveTo(x - Math.cos(a)*size, y - Math.sin(a)*size);
+    ctx.lineTo(x + Math.cos(a)*size, y + Math.sin(a)*size);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawElectric(ctx, preset) {
+  const cx = RECT.x + RECT.w/2;
+  const cy = RECT.y + RECT.h/2;
+  const hw = RECT.w/2 + 10;
+  const hh = RECT.h/2 + 10;
+
+  // Bolts emanating from edges
+  for (let i = 0; i < preset.bolts; i++) {
+    const side = Math.floor(Math.random() * 4);
+    let sx, sy, angle;
+    if (side === 0) { sx = RECT.x + rand(0, RECT.w); sy = RECT.y; angle = -Math.PI/2 + rand(-0.5,0.5); }
+    else if (side === 1) { sx = RECT.x + RECT.w; sy = RECT.y + rand(0, RECT.h); angle = rand(-0.5,0.5); }
+    else if (side === 2) { sx = RECT.x + rand(0, RECT.w); sy = RECT.y + RECT.h; angle = Math.PI/2 + rand(-0.5,0.5); }
+    else { sx = RECT.x; sy = RECT.y + rand(0, RECT.h); angle = Math.PI + rand(-0.5,0.5); }
+
+    drawBolt(ctx, sx, sy, angle, preset.boltLen, preset);
+  }
+
+  // Random sparks around the rectangle
+  for (let i = 0; i < preset.sparks; i++) {
+    const margin = 15 + rand(0, 20);
+    const sx = cx + rand(-hw - margin, hw + margin);
+    const sy = cy + rand(-hh - margin, hh + margin);
+    // Only draw if outside rect bounds
+    if (sx < RECT.x - 5 || sx > RECT.x + RECT.w + 5 || sy < RECT.y - 5 || sy > RECT.y + RECT.h + 5) {
+      drawSpark(ctx, sx, sy, preset);
+    }
+  }
+}
+
+const canvases = [
+  { id: 'canvas-subtle',  preset: 'subtle',  label: 'LLM Call' },
+  { id: 'canvas-medium',  preset: 'medium',  label: 'Agent' },
+  { id: 'canvas-intense', preset: 'intense', label: 'Pipeline' },
+];
+const contexts = canvases.map(c => ({ ctx: document.getElementById(c.id).getContext('2d'), ...c }));
+
+function renderFrame() {
+  for (const { ctx, preset, label } of contexts) {
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    drawSketchyRect(ctx, RECT.x, RECT.y, RECT.w, RECT.h);
+    drawLabel(ctx, label);
+    if (running) drawElectric(ctx, PRESETS[preset]);
+  }
+}
+
+let lastFrame = 0;
+function animate(ts) {
+  if (ts - lastFrame >= speed) { renderFrame(); lastFrame = ts; }
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+document.getElementById('btn-toggle').addEventListener('click', function() {
+  running = !running;
+  this.textContent = running ? 'Running' : 'Stopped';
+  this.classList.toggle('active', running);
+});
+[['btn-speed-slow',300],['btn-speed-normal',100],['btn-speed-fast',40]].forEach(([id,ms]) => {
+  document.getElementById(id).addEventListener('click', function() {
+    speed = ms;
+    document.querySelectorAll('.controls button:not(#btn-toggle)').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

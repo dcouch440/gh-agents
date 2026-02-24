@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Scribble Vibrate Animation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #f5f0e8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Comic Sans MS', 'Marker Felt', cursive;
+  }
+  h2 { margin-bottom: 30px; color: #333; font-size: 18px; }
+  .scene { display: flex; gap: 120px; align-items: flex-end; }
+  .demo { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .demo label { font-size: 14px; color: #666; }
+  .controls { margin-top: 40px; display: flex; gap: 16px; }
+  .controls button {
+    padding: 10px 24px; font-family: inherit; font-size: 14px;
+    border: 2px solid #333; border-radius: 6px; background: #fff; cursor: pointer;
+  }
+  .controls button:hover { background: #e8e0d0; }
+  .controls button.active { background: #333; color: #fff; }
+</style>
+</head>
+<body>
+
+<h2>Scribble Vibrate / Shaky Outline</h2>
+
+<div class="scene">
+  <div class="demo">
+    <canvas id="canvas-subtle" width="260" height="240"></canvas>
+    <label>Subtle</label>
+  </div>
+  <div class="demo">
+    <canvas id="canvas-medium" width="260" height="240"></canvas>
+    <label>Medium</label>
+  </div>
+  <div class="demo">
+    <canvas id="canvas-intense" width="260" height="240"></canvas>
+    <label>Intense</label>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="btn-toggle" class="active">Running</button>
+  <button id="btn-speed-slow">Slow</button>
+  <button id="btn-speed-normal" class="active">Normal</button>
+  <button id="btn-speed-fast">Fast</button>
+</div>
+
+<script>
+const RECT = { x: 50, y: 90, w: 160, h: 80 };
+let running = true;
+let speed = 80;
+
+const PRESETS = {
+  subtle:  { jitter: 2.5,  passes: 2, opacity: 0.5,  scribbleLines: 2, scribbleJitter: 4 },
+  medium:  { jitter: 4.5,  passes: 3, opacity: 0.65, scribbleLines: 4, scribbleJitter: 6 },
+  intense: { jitter: 7.0,  passes: 4, opacity: 0.8,  scribbleLines: 7, scribbleJitter: 9 },
+};
+
+function rand(min, max) { return min + Math.random() * (max - min); }
+
+function drawLabel(ctx, text) {
+  ctx.save();
+  ctx.font = '14px "Comic Sans MS", cursive';
+  ctx.fillStyle = '#555';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, RECT.x + RECT.w/2, RECT.y + RECT.h/2);
+  ctx.restore();
+}
+
+// The rectangle itself vibrates — redrawn with jitter each frame
+function drawVibratingRect(ctx, x, y, w, h, preset) {
+  ctx.save();
+
+  // Fill stays stable
+  ctx.fillStyle = 'rgba(255, 240, 220, 0.3)';
+  ctx.fillRect(x+4, y+4, w-8, h-8);
+
+  ctx.strokeStyle = `rgba(30, 30, 30, ${preset.opacity})`;
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  const j = preset.jitter;
+
+  for (let pass = 0; pass < preset.passes; pass++) {
+    ctx.beginPath();
+    const edges = [
+      [x, y, x+w, y],
+      [x+w, y, x+w, y+h],
+      [x+w, y+h, x, y+h],
+      [x, y+h, x, y],
+    ];
+    for (const [x1, y1, x2, y2] of edges) {
+      ctx.moveTo(x1 + rand(-j, j), y1 + rand(-j, j));
+      const steps = 6;
+      for (let i = 1; i <= steps; i++) {
+        const t = i / steps;
+        ctx.lineTo(
+          x1 + (x2-x1)*t + rand(-j, j),
+          y1 + (y2-y1)*t + rand(-j, j)
+        );
+      }
+    }
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+// Scribble marks around the rect — like cartoon "shaking" emphasis lines
+function drawScribbleMarks(ctx, preset) {
+  ctx.save();
+  ctx.strokeStyle = `rgba(50, 50, 50, ${preset.opacity * 0.5})`;
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = 'round';
+
+  const j = preset.scribbleJitter;
+  const cx = RECT.x + RECT.w / 2;
+  const cy = RECT.y + RECT.h / 2;
+
+  for (let i = 0; i < preset.scribbleLines; i++) {
+    // Pick a random spot around the edges
+    const side = Math.floor(Math.random() * 4);
+    let sx, sy, dx, dy;
+    const margin = 8 + rand(0, 12);
+
+    if (side === 0) { // top
+      sx = RECT.x + rand(20, RECT.w - 20); sy = RECT.y - margin;
+      dx = rand(-3, 3); dy = -rand(6, 14);
+    } else if (side === 1) { // right
+      sx = RECT.x + RECT.w + margin; sy = RECT.y + rand(10, RECT.h - 10);
+      dx = rand(6, 14); dy = rand(-3, 3);
+    } else if (side === 2) { // bottom
+      sx = RECT.x + rand(20, RECT.w - 20); sy = RECT.y + RECT.h + margin;
+      dx = rand(-3, 3); dy = rand(6, 14);
+    } else { // left
+      sx = RECT.x - margin; sy = RECT.y + rand(10, RECT.h - 10);
+      dx = -rand(6, 14); dy = rand(-3, 3);
+    }
+
+    // Short scratchy line
+    ctx.beginPath();
+    ctx.moveTo(sx + rand(-2, 2), sy + rand(-2, 2));
+    ctx.lineTo(sx + dx + rand(-j, j), sy + dy + rand(-j, j));
+    ctx.stroke();
+
+    // Sometimes double it
+    if (Math.random() > 0.5) {
+      ctx.beginPath();
+      ctx.moveTo(sx + rand(-2, 2) + 3, sy + rand(-2, 2) + 2);
+      ctx.lineTo(sx + dx + rand(-j, j) + 3, sy + dy + rand(-j, j) + 2);
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
+const canvases = [
+  { id: 'canvas-subtle',  preset: 'subtle',  label: 'LLM Call' },
+  { id: 'canvas-medium',  preset: 'medium',  label: 'Agent' },
+  { id: 'canvas-intense', preset: 'intense', label: 'Pipeline' },
+];
+const contexts = canvases.map(c => ({ ctx: document.getElementById(c.id).getContext('2d'), ...c }));
+
+function renderFrame() {
+  for (const { ctx, preset: presetName, label } of contexts) {
+    const preset = PRESETS[presetName];
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    drawVibratingRect(ctx, RECT.x, RECT.y, RECT.w, RECT.h, running ? preset : { ...preset, jitter: 1.5, passes: 2 });
+    drawLabel(ctx, label);
+    if (running) drawScribbleMarks(ctx, preset);
+  }
+}
+
+let lastFrame = 0;
+function animate(ts) {
+  if (ts - lastFrame >= speed) { renderFrame(); lastFrame = ts; }
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+document.getElementById('btn-toggle').addEventListener('click', function() {
+  running = !running;
+  this.textContent = running ? 'Running' : 'Stopped';
+  this.classList.toggle('active', running);
+});
+[['btn-speed-slow',180],['btn-speed-normal',80],['btn-speed-fast',30]].forEach(([id,ms]) => {
+  document.getElementById(id).addEventListener('click', function() {
+    speed = ms;
+    document.querySelectorAll('.controls button:not(#btn-toggle)').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>

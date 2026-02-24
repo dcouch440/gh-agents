@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Drawing Itself In — Initializing</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #f5f0e8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Comic Sans MS', 'Marker Felt', cursive;
+  }
+  h2 { margin-bottom: 8px; color: #333; font-size: 18px; }
+  p.sub { margin-bottom: 30px; color: #888; font-size: 13px; }
+  .scene { display: flex; gap: 100px; align-items: flex-end; }
+  .demo { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .demo label { font-size: 14px; color: #666; }
+  .controls { margin-top: 40px; display: flex; gap: 16px; }
+  .controls button {
+    padding: 10px 24px; font-family: inherit; font-size: 14px;
+    border: 2px solid #333; border-radius: 6px; background: #fff; cursor: pointer;
+  }
+  .controls button:hover { background: #e8e0d0; }
+  .controls button.active { background: #333; color: #fff; }
+</style>
+</head>
+<body>
+
+<h2>Drawing Itself In</h2>
+<p class="sub">The rectangle sketches itself into existence, edge by edge</p>
+
+<div class="scene">
+  <div class="demo">
+    <canvas id="canvas-clean" width="260" height="220"></canvas>
+    <label>Clean — single pass</label>
+  </div>
+  <div class="demo">
+    <canvas id="canvas-sketchy" width="260" height="220"></canvas>
+    <label>Sketchy — double line</label>
+  </div>
+  <div class="demo">
+    <canvas id="canvas-messy" width="260" height="220"></canvas>
+    <label>Messy — overshoot + wobble</label>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="btn-restart" class="active">Restart</button>
+  <button id="btn-speed-slow">Slow</button>
+  <button id="btn-speed-normal" class="active">Normal</button>
+  <button id="btn-speed-fast">Fast</button>
+</div>
+
+<script>
+const RECT = { x: 50, y: 70, w: 160, h: 80 };
+let speed = 1.2; // progress per frame (percentage points)
+
+function rand(min, max) { return min + Math.random() * (max - min); }
+
+// Edge definitions: each edge is [x1,y1,x2,y2] + percentage range [startPct, endPct]
+function getEdges() {
+  const { x, y, w, h } = RECT;
+  return [
+    { from: [x, y], to: [x + w, y], start: 0, end: 25 },           // top
+    { from: [x + w, y], to: [x + w, y + h], start: 25, end: 50 },   // right
+    { from: [x + w, y + h], to: [x, y + h], start: 50, end: 75 },   // bottom
+    { from: [x, y + h], to: [x, y], start: 75, end: 100 },          // left
+  ];
+}
+
+const PRESETS = {
+  clean:   { passes: 1, wobble: 1.0, overshoot: 0, labelDelay: 90 },
+  sketchy: { passes: 2, wobble: 2.0, overshoot: 0, labelDelay: 85 },
+  messy:   { passes: 3, wobble: 3.5, overshoot: 8, labelDelay: 80 },
+};
+
+class DrawAnimation {
+  constructor(canvasId, presetName) {
+    this.ctx = document.getElementById(canvasId).getContext('2d');
+    this.preset = PRESETS[presetName];
+    this.progress = 0;
+    this.done = false;
+    // Pre-generate wobble seeds for consistent strokes during draw
+    this.seeds = [];
+    for (let pass = 0; pass < this.preset.passes; pass++) {
+      const edgeSeeds = [];
+      for (let e = 0; e < 4; e++) {
+        const pts = [];
+        for (let i = 0; i < 8; i++) pts.push(rand(-1, 1));
+        edgeSeeds.push(pts);
+      }
+      this.seeds.push(edgeSeeds);
+    }
+  }
+
+  reset() {
+    this.progress = 0;
+    this.done = false;
+  }
+
+  update() {
+    if (this.done) return;
+    this.progress += speed;
+    if (this.progress >= 100) {
+      this.progress = 100;
+      this.done = true;
+    }
+  }
+
+  draw() {
+    const ctx = this.ctx;
+    const p = this.preset;
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+    // Fill fades in after edges are mostly drawn
+    if (this.progress > 60) {
+      const fillAlpha = Math.min(0.25, (this.progress - 60) / 40 * 0.25);
+      ctx.fillStyle = `rgba(255, 240, 220, ${fillAlpha})`;
+      ctx.fillRect(RECT.x + 2, RECT.y + 2, RECT.w - 4, RECT.h - 4);
+    }
+
+    const edges = getEdges();
+
+    ctx.strokeStyle = '#1e1e1e';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    for (let pass = 0; pass < p.passes; pass++) {
+      const passOffset = pass * 0.8;
+      ctx.lineWidth = 2 - pass * 0.3;
+
+      for (let ei = 0; ei < edges.length; ei++) {
+        const edge = edges[ei];
+        const seeds = this.seeds[pass][ei];
+
+        // How much of this edge is drawn (0 to 1)
+        let edgeProgress = 0;
+        if (this.progress >= edge.end) {
+          edgeProgress = 1;
+        } else if (this.progress > edge.start) {
+          edgeProgress = (this.progress - edge.start) / (edge.end - edge.start);
+        }
+
+        if (edgeProgress <= 0) continue;
+
+        ctx.beginPath();
+        const [x1, y1] = edge.from;
+        const [x2, y2] = edge.to;
+
+        const steps = 6;
+        const drawnSteps = Math.ceil(edgeProgress * steps);
+
+        ctx.moveTo(
+          x1 + seeds[0] * p.wobble + passOffset,
+          y1 + seeds[1] * p.wobble + passOffset
+        );
+
+        for (let i = 1; i <= drawnSteps; i++) {
+          const t = Math.min(i / steps, edgeProgress);
+          const wx = seeds[i % seeds.length] * p.wobble;
+          const wy = seeds[(i + 1) % seeds.length] * p.wobble;
+
+          // Overshoot on the leading edge
+          let ox = 0, oy = 0;
+          if (i === drawnSteps && edgeProgress < 1 && p.overshoot > 0) {
+            const dir_x = x2 - x1, dir_y = y2 - y1;
+            const len = Math.sqrt(dir_x * dir_x + dir_y * dir_y);
+            ox = (dir_x / len) * p.overshoot * (1 - edgeProgress);
+            oy = (dir_y / len) * p.overshoot * (1 - edgeProgress);
+          }
+
+          ctx.lineTo(
+            x1 + (x2 - x1) * t + wx + passOffset + ox,
+            y1 + (y2 - y1) * t + wy + passOffset + oy
+          );
+        }
+        ctx.stroke();
+
+        // Pencil dot at the drawing tip
+        if (edgeProgress > 0 && edgeProgress < 1 && pass === 0) {
+          const tipX = x1 + (x2 - x1) * edgeProgress;
+          const tipY = y1 + (y2 - y1) * edgeProgress;
+          ctx.beginPath();
+          ctx.arc(tipX, tipY, 2, 0, Math.PI * 2);
+          ctx.fillStyle = '#1e1e1e';
+          ctx.fill();
+        }
+      }
+    }
+
+    // Label fades in near the end
+    if (this.progress > p.labelDelay) {
+      const labelAlpha = Math.min(1, (this.progress - p.labelDelay) / (100 - p.labelDelay));
+      ctx.save();
+      ctx.font = '14px "Comic Sans MS", cursive';
+      ctx.fillStyle = `rgba(85, 85, 85, ${labelAlpha})`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('Initializing...', RECT.x + RECT.w / 2, RECT.y + RECT.h / 2);
+      ctx.restore();
+    }
+  }
+}
+
+const anims = [
+  new DrawAnimation('canvas-clean', 'clean'),
+  new DrawAnimation('canvas-sketchy', 'sketchy'),
+  new DrawAnimation('canvas-messy', 'messy'),
+];
+
+function restartAll() {
+  for (const a of anims) a.reset();
+}
+
+let lastFrame = 0;
+function animate(ts) {
+  if (ts - lastFrame >= 25) {
+    for (const a of anims) { a.update(); a.draw(); }
+    lastFrame = ts;
+  }
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+document.getElementById('btn-restart').addEventListener('click', restartAll);
+[['btn-speed-slow', 0.5], ['btn-speed-normal', 1.2], ['btn-speed-fast', 3.0]].forEach(([id, s]) => {
+  document.getElementById(id).addEventListener('click', function() {
+    speed = s;
+    document.querySelectorAll('.controls button:not(#btn-restart)').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>
