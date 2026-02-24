@@ -3,6 +3,7 @@
 //! - `chat`: Background worker for chat messages
 //! - `collection_dag`: Multi-workflow orchestration
 
+pub mod board_dispatch;
 pub mod chat;
 pub mod collection_dag;
 pub mod dispatch;

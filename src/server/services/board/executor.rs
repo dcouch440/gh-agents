@@ -23,8 +23,8 @@ use crate::server::services::ServiceError;
 /// Result of Phase 0 structural execution.
 #[derive(Debug, Clone)]
 pub struct PhaseZeroResult {
-    /// Steps created from new canvas nodes: (element_id, step_id).
-    pub created_steps: Vec<(String, Uuid)>,
+    /// Steps created from new canvas nodes: (element_id, step_id, ref_id).
+    pub created_steps: Vec<(String, Uuid, String)>,
     /// Edges created from new canvas edges: (element_id, edge_id).
     pub created_edges: Vec<(String, Uuid)>,
     /// Element IDs of deleted steps.
@@ -35,8 +35,8 @@ pub struct PhaseZeroResult {
     pub rewired_edges: Vec<String>,
     /// Element IDs of moved steps.
     pub moved_steps: Vec<String>,
-    /// Steps updated from canvas node text/annotation edits: (element_id, step_id).
-    pub updated_steps: Vec<(String, Uuid)>,
+    /// Steps updated from canvas node text/annotation edits: (element_id, step_id, ref_id).
+    pub updated_steps: Vec<(String, Uuid, String)>,
 }
 
 /// Execute Phase 0: apply structural changes from a board submit as DB writes.
@@ -75,10 +75,11 @@ pub async fn execute_phase_zero(
     // ── 1. Create new nodes ─────────────────────────────────────────────────
     for change in &changeset.meaningful {
         if let ScoredChange::NewNode { node, .. } = change {
-            let step_id = create_node(repo, workflow_id, user_id, node, &mut element_map).await?;
+            let (step_id, ref_id) =
+                create_node(repo, workflow_id, user_id, node, &mut element_map).await?;
             result
                 .created_steps
-                .push((node.element_id.clone(), step_id));
+                .push((node.element_id.clone(), step_id, ref_id));
         }
     }
 
@@ -125,10 +126,11 @@ pub async fn execute_phase_zero(
                 step.board_context_updated_at = Some(chrono::Utc::now());
             }
 
+            let ref_id = step.ref_id.clone().unwrap_or_default();
             repo.update_step(step).await?;
             result
                 .updated_steps
-                .push((update.element_id.clone(), step_id));
+                .push((update.element_id.clone(), step_id, ref_id));
         }
     }
 
@@ -195,13 +197,14 @@ pub async fn execute_phase_zero(
 }
 
 /// Create a workflow step from a canvas node and insert the element mapping.
+/// Returns `(step_id, ref_id)`.
 async fn create_node(
     repo: &dyn WorkflowRepo,
     workflow_id: Uuid,
     user_id: Uuid,
     node: &CanvasNode,
     element_map: &mut HashMap<String, CanvasElementMapRow>,
-) -> Result<Uuid, ServiceError> {
+) -> Result<(Uuid, String), ServiceError> {
     let (name, prompt_template) = parse_node_text(&node.raw_text);
     let board_context_cache =
         build_board_context(&node.annotations, &node.sketch, &node.stroke_encoding);
@@ -243,7 +246,8 @@ async fn create_node(
     repo.upsert_element_map(map_row.clone()).await?;
     element_map.insert(node.element_id.clone(), map_row);
 
-    Ok(step.id)
+    let ref_id = step.ref_id.clone().unwrap_or_default();
+    Ok((step.id, ref_id))
 }
 
 /// Parse raw box text into a step name and prompt template.

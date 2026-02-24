@@ -29,6 +29,8 @@ pub enum ExecutionType {
     InteractiveReview,
     /// Verification agent critiquing primary output.
     DebateVerification,
+    /// Board dispatcher: reads changeset, dispatches to per-node builders.
+    BoardDispatch,
 }
 
 impl ExecutionType {
@@ -41,6 +43,7 @@ impl ExecutionType {
             Self::PipelineAgent => "pipeline_agent",
             Self::InteractiveReview => "interactive_review",
             Self::DebateVerification => "debate_verification",
+            Self::BoardDispatch => "board_dispatch",
         }
     }
 }
@@ -63,6 +66,7 @@ impl std::str::FromStr for ExecutionType {
             "pipeline_agent" => Ok(Self::PipelineAgent),
             "interactive_review" => Ok(Self::InteractiveReview),
             "debate_verification" => Ok(Self::DebateVerification),
+            "board_dispatch" => Ok(Self::BoardDispatch),
             other => Err(anyhow::anyhow!("unknown execution type: {other}")),
         }
     }
@@ -193,6 +197,7 @@ mod tests {
             ExecutionType::PipelineAgent,
             ExecutionType::InteractiveReview,
             ExecutionType::DebateVerification,
+            ExecutionType::BoardDispatch,
         ];
         for variant in variants {
             let s = variant.to_string();

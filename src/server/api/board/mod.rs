@@ -8,7 +8,9 @@ use crate::server::api::AppError;
 use crate::server::auth::AuthUser;
 use crate::server::hub::board_serializer::{CanvasSnapshot, ExcalidrawElement, FilteredChangeset};
 use crate::server::services::board;
+use crate::server::services::dispatch::{self, DispatchInput};
 use crate::server::state::AppState;
+use crate::types::UserId;
 
 #[derive(Deserialize)]
 pub struct BoardSubmitRequest {
@@ -41,11 +43,21 @@ pub struct ElementEdgePair {
 }
 
 #[derive(Serialize)]
+pub struct BoardDispatchInfo {
+    pub execution_id: Uuid,
+    pub session_id: Uuid,
+    pub step_id: Uuid,
+    pub instruction: String,
+}
+
+#[derive(Serialize)]
 pub struct BoardSubmitResponse {
     pub is_first_submit: bool,
     pub changeset: FilteredChangeset,
     pub snapshot: CanvasSnapshot,
     pub phase_zero: PhaseZeroResponse,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dispatch: Option<BoardDispatchInfo>,
 }
 
 pub async fn submit_board(
@@ -73,12 +85,27 @@ pub async fn submit_board(
     )
     .await?;
 
+    // Try to dispatch to the board dispatcher (best-effort, fire-and-forget)
+    let dispatch = if result.changeset.should_dispatch {
+        try_dispatch_board(
+            &state,
+            workflow_id,
+            auth.user_id,
+            &result.changeset,
+            &result.phase_zero,
+            &result.snapshot,
+        )
+        .await
+    } else {
+        None
+    };
+
     let phase_zero = PhaseZeroResponse {
         created_steps: result
             .phase_zero
             .created_steps
             .into_iter()
-            .map(|(element_id, step_id)| ElementStepPair {
+            .map(|(element_id, step_id, _ref_id)| ElementStepPair {
                 element_id,
                 step_id,
             })
@@ -100,7 +127,7 @@ pub async fn submit_board(
             .phase_zero
             .updated_steps
             .into_iter()
-            .map(|(element_id, step_id)| ElementStepPair {
+            .map(|(element_id, step_id, _ref_id)| ElementStepPair {
                 element_id,
                 step_id,
             })
@@ -112,7 +139,48 @@ pub async fn submit_board(
         changeset: result.changeset,
         snapshot: result.snapshot,
         phase_zero,
+        dispatch,
     }))
+}
+
+/// Try to dispatch meaningful changes to the board dispatcher agent.
+///
+/// Best-effort: returns `None` on any error. Never fails the board submit.
+async fn try_dispatch_board(
+    state: &AppState,
+    workflow_id: Uuid,
+    user_id: UserId,
+    changeset: &FilteredChangeset,
+    phase_zero: &board::PhaseZeroResult,
+    snapshot: &CanvasSnapshot,
+) -> Option<BoardDispatchInfo> {
+    // Format the instruction from the changeset
+    let instruction =
+        board::instruction::format_board_instruction(changeset, phase_zero, snapshot)?;
+
+    // Find the manager step to use as the dispatch anchor
+    let steps = state.repos().workflows.list_steps(workflow_id).await.ok()?;
+    let manager_step = steps.iter().find(|s| s.execution_mode == "manager")?;
+
+    // Dispatch via the shared dispatch service
+    let output = dispatch::dispatch_to_builder(
+        state,
+        DispatchInput {
+            step_id: manager_step.id,
+            workflow_id,
+            user_id,
+            instruction: instruction.clone(),
+            execution_mode: "board_dispatch".to_string(),
+        },
+    )
+    .await;
+
+    Some(BoardDispatchInfo {
+        execution_id: output.execution_id,
+        session_id: output.session_id,
+        step_id: manager_step.id,
+        instruction,
+    })
 }
 
 mod tests;
