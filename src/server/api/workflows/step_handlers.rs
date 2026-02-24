@@ -45,6 +45,17 @@ pub async fn create_workflow_step(
         },
     )
     .await?;
+
+    state.broadcast_workflow(crate::server::ws::events::WorkflowEvent {
+        run_id: None,
+        workflow_id: wid,
+        user_id: Some(auth.user_id.0),
+        kind: crate::server::ws::events::WorkflowEventKind::StepCreated {
+            step_id: row.id,
+            name: row.name.clone().unwrap_or_default(),
+        },
+    });
+
     Ok((StatusCode::CREATED, Json(step_response(row))))
 }
 
@@ -172,6 +183,16 @@ pub async fn delete_workflow_step(
         p.sid,
     )
     .await?;
+
+    // Broadcast step deletion
+    state.broadcast_workflow(crate::server::ws::events::WorkflowEvent {
+        run_id: None,
+        workflow_id: p.wid,
+        user_id: Some(auth.user_id.0),
+        kind: crate::server::ws::events::WorkflowEventKind::StepDeleted {
+            step_id: p.sid,
+        },
+    });
 
     // Broadcast session deletions for any cleaned-up sessions (L3 chat + L4 builder)
     for session_id in [

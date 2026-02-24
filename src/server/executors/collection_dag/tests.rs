@@ -219,10 +219,17 @@ mod tests {
             ) -> Result<crate::db::WorkflowStepEdgeRow> {
                 unimplemented!()
             }
-            async fn remove_edge(&self, _: Uuid, _: Uuid) -> Result<()> {
+            async fn remove_edge(
+                &self,
+                _: Uuid,
+                _: Uuid,
+            ) -> Result<crate::db::WorkflowStepEdgeRow> {
                 unimplemented!()
             }
-            async fn delete_edge_by_id(&self, _: Uuid) -> Result<()> {
+            async fn delete_edge_by_id(
+                &self,
+                _: Uuid,
+            ) -> Result<crate::db::WorkflowStepEdgeRow> {
                 unimplemented!()
             }
             async fn list_step_documents(
@@ -607,6 +614,21 @@ mod tests {
                 &self,
                 _: crate::db::CanvasSnapshotRow,
             ) -> Result<crate::db::CanvasSnapshotRow> {
+                unimplemented!()
+            }
+            async fn list_element_maps(
+                &self,
+                _: Uuid,
+            ) -> Result<Vec<crate::db::CanvasElementMapRow>> {
+                unimplemented!()
+            }
+            async fn upsert_element_map(
+                &self,
+                _: crate::db::CanvasElementMapRow,
+            ) -> Result<crate::db::CanvasElementMapRow> {
+                unimplemented!()
+            }
+            async fn delete_element_map(&self, _: Uuid, _: &str) -> Result<()> {
                 unimplemented!()
             }
         }

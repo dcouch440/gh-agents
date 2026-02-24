@@ -405,7 +405,20 @@ mod tests {
             .returning(move |_| Ok(vec![remaining.clone()]));
 
         // Remove edges only — no add_edge (no bridging)
-        repo.expect_remove_edge().returning(|_, _| Ok(()));
+        repo.expect_remove_edge().returning(|from, to| {
+            Ok(WorkflowStepEdgeRow {
+                id: Uuid::new_v4(),
+                workflow_id: Uuid::new_v4(),
+                from_step_id: from,
+                to_step_id: to,
+                from_output_port: None,
+                to_input_port: None,
+                transform_jsonpath: None,
+                condition_type: None,
+                condition_value: None,
+                edge_label: None,
+            })
+        });
         repo.expect_delete_step().returning(|_| Ok(()));
         repo.expect_remove_roster_agent()
             .withf(move |id| *id == agent1_id)
@@ -807,7 +820,20 @@ mod tests {
 
         repo.expect_remove_edge()
             .withf(move |from, to| *from == scanner_child && *to == analyzer_child)
-            .returning(|_, _| Ok(()));
+            .returning(|from, to| {
+                Ok(WorkflowStepEdgeRow {
+                    id: Uuid::new_v4(),
+                    workflow_id: Uuid::new_v4(),
+                    from_step_id: from,
+                    to_step_id: to,
+                    from_output_port: None,
+                    to_input_port: None,
+                    transform_jsonpath: None,
+                    condition_type: None,
+                    condition_value: None,
+                    edge_label: None,
+                })
+            });
 
         // recompute_execution_order: list_edges (edge was just removed)
         repo.expect_list_edges().returning(|_| Ok(vec![]));
@@ -1300,7 +1326,20 @@ mod tests {
         // Pipeline remove_step for OldAgent's child step
         repo.expect_list_edges().returning(|_| Ok(vec![]));
         repo.expect_list_steps().returning(|_| Ok(vec![]));
-        repo.expect_remove_edge().returning(|_, _| Ok(()));
+        repo.expect_remove_edge().returning(|from, to| {
+            Ok(WorkflowStepEdgeRow {
+                id: Uuid::new_v4(),
+                workflow_id: Uuid::new_v4(),
+                from_step_id: from,
+                to_step_id: to,
+                from_output_port: None,
+                to_input_port: None,
+                transform_jsonpath: None,
+                condition_type: None,
+                condition_value: None,
+                edge_label: None,
+            })
+        });
         repo.expect_delete_step().returning(|_| Ok(()));
         repo.expect_update_step().returning(|s| Ok(s));
 
@@ -1618,7 +1657,20 @@ mod tests {
         // Edge removal
         repo.expect_remove_edge()
             .withf(move |from, to| *from == scanner_child && *to == analyzer_child)
-            .returning(|_, _| Ok(()));
+            .returning(|from, to| {
+                Ok(WorkflowStepEdgeRow {
+                    id: Uuid::new_v4(),
+                    workflow_id: Uuid::new_v4(),
+                    from_step_id: from,
+                    to_step_id: to,
+                    from_output_port: None,
+                    to_input_port: None,
+                    transform_jsonpath: None,
+                    condition_type: None,
+                    condition_value: None,
+                    edge_label: None,
+                })
+            });
 
         let input = json!({
             "task": "Scan repos",

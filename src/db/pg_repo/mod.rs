@@ -18,7 +18,8 @@ use crate::db::traits::{
 };
 use crate::db::{
     AgentDesignerOutputRow, AgentDesignerRunRow, AgentExecutionRow, AgentRow,
-    BeliefExtractionPlanRow, BeliefRow, CanvasSnapshotRow, ChatMessageRow, CollectionRunRow,
+    BeliefExtractionPlanRow, BeliefRow, CanvasElementMapRow, CanvasSnapshotRow, ChatMessageRow,
+    CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContentVersionRow, DocumentRow,
     DocumentSearchResult, EnvelopeSnapshotRow, ExecutionMessageRow, OutputSchemaRow,
     PromptTemplateRow, ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow,
@@ -1385,21 +1386,29 @@ impl WorkflowRepo for PgRepo {
         Ok(row)
     }
 
-    async fn remove_edge(&self, from_step_id: Uuid, to_step_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM workflow_step_edges WHERE from_step_id = $1 AND to_step_id = $2")
-            .bind(from_step_id)
-            .bind(to_step_id)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
+    async fn remove_edge(
+        &self,
+        from_step_id: Uuid,
+        to_step_id: Uuid,
+    ) -> Result<WorkflowStepEdgeRow> {
+        let row: WorkflowStepEdgeRow = sqlx::query_as(
+            "DELETE FROM workflow_step_edges WHERE from_step_id = $1 AND to_step_id = $2 RETURNING *",
+        )
+        .bind(from_step_id)
+        .bind(to_step_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
     }
 
-    async fn delete_edge_by_id(&self, edge_id: Uuid) -> Result<()> {
-        sqlx::query("DELETE FROM workflow_step_edges WHERE id = $1")
-            .bind(edge_id)
-            .execute(&self.pool)
-            .await?;
-        Ok(())
+    async fn delete_edge_by_id(&self, edge_id: Uuid) -> Result<WorkflowStepEdgeRow> {
+        let row: WorkflowStepEdgeRow = sqlx::query_as(
+            "DELETE FROM workflow_step_edges WHERE id = $1 RETURNING *",
+        )
+        .bind(edge_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row)
     }
 
     // --- Step documents ---
@@ -2452,6 +2461,42 @@ impl WorkflowRepo for PgRepo {
         .fetch_one(&self.pool)
         .await?;
         Ok(result)
+    }
+
+    async fn list_element_maps(&self, workflow_id: Uuid) -> Result<Vec<CanvasElementMapRow>> {
+        let rows = sqlx::query_as::<_, CanvasElementMapRow>(
+            "SELECT * FROM canvas_element_maps WHERE workflow_id = $1",
+        )
+        .bind(workflow_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn upsert_element_map(&self, row: CanvasElementMapRow) -> Result<CanvasElementMapRow> {
+        let result = sqlx::query_as::<_, CanvasElementMapRow>(
+            r#"INSERT INTO canvas_element_maps (workflow_id, element_id, step_id, edge_id, created_at)
+               VALUES ($1, $2, $3, $4, NOW())
+               ON CONFLICT (workflow_id, element_id) DO UPDATE
+               SET step_id = $3, edge_id = $4
+               RETURNING *"#,
+        )
+        .bind(row.workflow_id)
+        .bind(&row.element_id)
+        .bind(row.step_id)
+        .bind(row.edge_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(result)
+    }
+
+    async fn delete_element_map(&self, workflow_id: Uuid, element_id: &str) -> Result<()> {
+        sqlx::query("DELETE FROM canvas_element_maps WHERE workflow_id = $1 AND element_id = $2")
+            .bind(workflow_id)
+            .bind(element_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 }
 

@@ -2,8 +2,8 @@
 mod tests {
     use uuid::Uuid;
 
-    use crate::db::traits::MockWorkflowRepo;
-    use crate::db::{CanvasSnapshotRow, WorkflowRow};
+    use crate::db::traits::{MockSessionRepo, MockWorkflowRepo};
+    use crate::db::{CanvasSnapshotRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow};
     use crate::server::hub::board_serializer::ExcalidrawElement;
     use crate::server::services::board::{submit_board, BoardSubmitInput};
 
@@ -54,6 +54,54 @@ mod tests {
         }
     }
 
+    /// Configure MockWorkflowRepo with Phase 0 expectations for step/edge creation.
+    fn expect_phase_zero_creates(mock: &mut MockWorkflowRepo, workflow_id: Uuid) {
+        // list_element_maps — empty on first submit
+        mock.expect_list_element_maps()
+            .returning(|_| Ok(vec![]));
+
+        // list_steps — needed by create_step for ref_id generation
+        mock.expect_list_steps()
+            .returning(|_| Ok(vec![]));
+
+        // create_step — return a step with the given workflow_id
+        mock.expect_create_step().returning(move |step| {
+            Ok(WorkflowStepRow {
+                workflow_id,
+                ..step
+            })
+        });
+
+        // update_step — for board_context_cache
+        mock.expect_update_step()
+            .returning(|step| Ok(step));
+
+        // upsert_element_map — store the mapping
+        mock.expect_upsert_element_map()
+            .returning(|row| Ok(row));
+
+        // add_edge — for new edges
+        mock.expect_add_edge()
+            .returning(move |wf_id, from, to| {
+                Ok(WorkflowStepEdgeRow {
+                    id: Uuid::new_v4(),
+                    workflow_id: wf_id,
+                    from_step_id: from,
+                    to_step_id: to,
+                    from_output_port: None,
+                    to_input_port: None,
+                    transform_jsonpath: None,
+                    condition_type: None,
+                    condition_value: None,
+                    edge_label: None,
+                })
+            });
+    }
+
+    fn empty_session_repo() -> MockSessionRepo {
+        MockSessionRepo::new()
+    }
+
     #[tokio::test]
     async fn first_submit_all_nodes_are_new() {
         let user_id = Uuid::new_v4();
@@ -75,13 +123,17 @@ mod tests {
             .returning(move |_| Ok(Some(workflow_row(user_id, workflow_id))));
 
         mock.expect_get_canvas_snapshot()
-            .returning(|_| Ok(None)); // First submit — no previous snapshot
+            .returning(|_| Ok(None));
 
         mock.expect_upsert_canvas_snapshot()
             .returning(|row| Ok(row));
 
+        expect_phase_zero_creates(&mut mock, workflow_id);
+        let session_mock = empty_session_repo();
+
         let result = submit_board(
             &mock,
+            &session_mock,
             BoardSubmitInput {
                 workflow_id,
                 user_id,
@@ -99,6 +151,10 @@ mod tests {
         // All nodes should be new (meaningful)
         assert!(result.changeset.should_dispatch);
         assert_eq!(result.changeset.meaningful.len(), 3); // 2 nodes + 1 edge
+
+        // Phase 0 should have created 2 steps and 1 edge
+        assert_eq!(result.phase_zero.created_steps.len(), 2);
+        assert_eq!(result.phase_zero.created_edges.len(), 1);
     }
 
     #[tokio::test]
@@ -146,8 +202,12 @@ mod tests {
         mock.expect_upsert_canvas_snapshot()
             .returning(|row| Ok(row));
 
+        expect_phase_zero_creates(&mut mock, workflow_id);
+        let session_mock = empty_session_repo();
+
         let result = submit_board(
             &mock,
+            &session_mock,
             BoardSubmitInput {
                 workflow_id,
                 user_id,
@@ -164,6 +224,9 @@ mod tests {
         // Should have meaningful changes: 1 updated node + 1 new node
         assert!(result.changeset.meaningful.len() >= 2);
         assert!(result.changeset.should_dispatch);
+
+        // Phase 0 should have created the new node (r2)
+        assert_eq!(result.phase_zero.created_steps.len(), 1);
     }
 
     #[tokio::test]
@@ -177,8 +240,11 @@ mod tests {
         mock.expect_get_workflow()
             .returning(move |_| Ok(Some(workflow_row(owner_id, workflow_id))));
 
+        let session_mock = empty_session_repo();
+
         let result = submit_board(
             &mock,
+            &session_mock,
             BoardSubmitInput {
                 workflow_id,
                 user_id: caller_id,
@@ -203,8 +269,11 @@ mod tests {
         mock.expect_get_workflow()
             .returning(|_| Ok(None));
 
+        let session_mock = empty_session_repo();
+
         let result = submit_board(
             &mock,
+            &session_mock,
             BoardSubmitInput {
                 workflow_id,
                 user_id,
@@ -235,8 +304,15 @@ mod tests {
         mock.expect_upsert_canvas_snapshot()
             .returning(|row| Ok(row));
 
+        // Empty board — Phase 0 has nothing to do, but still loads maps
+        mock.expect_list_element_maps()
+            .returning(|_| Ok(vec![]));
+
+        let session_mock = empty_session_repo();
+
         let result = submit_board(
             &mock,
+            &session_mock,
             BoardSubmitInput {
                 workflow_id,
                 user_id,
@@ -251,5 +327,6 @@ mod tests {
         assert_eq!(result.snapshot.nodes.len(), 0);
         assert_eq!(result.snapshot.edges.len(), 0);
         assert!(!result.changeset.should_dispatch);
+        assert!(result.phase_zero.created_steps.is_empty());
     }
 }

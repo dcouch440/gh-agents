@@ -326,6 +326,36 @@ pub enum WorkflowEventKind {
         step_id: Uuid,
         pinned: bool,
     },
+    /// A workflow step was created.
+    StepCreated {
+        step_id: Uuid,
+        name: String,
+    },
+    /// A workflow step was deleted.
+    StepDeleted {
+        step_id: Uuid,
+    },
+    /// A workflow edge was created.
+    EdgeCreated {
+        edge_id: Uuid,
+        from_step_id: Uuid,
+        to_step_id: Uuid,
+    },
+    /// A workflow edge was deleted.
+    EdgeDeleted {
+        edge_id: Uuid,
+        from_step_id: Uuid,
+        to_step_id: Uuid,
+    },
+    /// A protocol was applied to a step.
+    ProtocolApplied {
+        step_id: Uuid,
+        protocol_id: Uuid,
+    },
+    /// A protocol was unapplied from a step.
+    ProtocolUnapplied {
+        step_id: Uuid,
+    },
 }
 
 impl WorkflowEvent {
@@ -356,6 +386,12 @@ impl WorkflowEvent {
             WorkflowEventKind::StepStreamToolEnd { .. } => "step_stream_tool_end",
             WorkflowEventKind::StepStreamError { .. } => "step_stream_error",
             WorkflowEventKind::StepPinChanged { .. } => "step_pin_changed",
+            WorkflowEventKind::StepCreated { .. } => "step_created",
+            WorkflowEventKind::StepDeleted { .. } => "step_deleted",
+            WorkflowEventKind::EdgeCreated { .. } => "edge_created",
+            WorkflowEventKind::EdgeDeleted { .. } => "edge_deleted",
+            WorkflowEventKind::ProtocolApplied { .. } => "protocol_applied",
+            WorkflowEventKind::ProtocolUnapplied { .. } => "protocol_unapplied",
         }
     }
 

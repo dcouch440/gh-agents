@@ -10,7 +10,8 @@ use uuid::Uuid;
 
 use crate::db::{
     AgentDesignerOutputRow, AgentDesignerRunRow, AgentExecutionRow, AgentGuidanceRow, AgentRow,
-    BeliefExtractionPlanRow, BeliefRow, CanvasSnapshotRow, ChatMessageRow, CollectionRunRow,
+    BeliefExtractionPlanRow, BeliefRow, CanvasElementMapRow, CanvasSnapshotRow, ChatMessageRow,
+    CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContentVersionRow, DocumentRow,
     DocumentSearchResult, EnvelopeSnapshotRow, ExecutionMessageRow, OutputSchemaRow,
     PromptTemplateRow, ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow,
@@ -528,8 +529,12 @@ pub trait WorkflowRepo: Send + Sync {
         from_step_id: Uuid,
         to_step_id: Uuid,
     ) -> Result<WorkflowStepEdgeRow>;
-    async fn remove_edge(&self, from_step_id: Uuid, to_step_id: Uuid) -> Result<()>;
-    async fn delete_edge_by_id(&self, edge_id: Uuid) -> Result<()>;
+    async fn remove_edge(
+        &self,
+        from_step_id: Uuid,
+        to_step_id: Uuid,
+    ) -> Result<WorkflowStepEdgeRow>;
+    async fn delete_edge_by_id(&self, edge_id: Uuid) -> Result<WorkflowStepEdgeRow>;
 
     // --- Step documents ---
     async fn list_step_documents(&self, step_id: Uuid) -> Result<Vec<StepDocumentRow>>;
@@ -885,6 +890,17 @@ pub trait WorkflowRepo: Send + Sync {
 
     /// Create or replace the canvas snapshot for a workflow.
     async fn upsert_canvas_snapshot(&self, row: CanvasSnapshotRow) -> Result<CanvasSnapshotRow>;
+
+    // --- Canvas Element Maps ---
+
+    /// Load all element→step/edge mappings for a workflow.
+    async fn list_element_maps(&self, workflow_id: Uuid) -> Result<Vec<CanvasElementMapRow>>;
+
+    /// Create or update an element mapping (element_id → step_id or edge_id).
+    async fn upsert_element_map(&self, row: CanvasElementMapRow) -> Result<CanvasElementMapRow>;
+
+    /// Remove an element mapping.
+    async fn delete_element_map(&self, workflow_id: Uuid, element_id: &str) -> Result<()>;
 }
 
 // ============================================================================

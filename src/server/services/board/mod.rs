@@ -1,15 +1,23 @@
-//! Board submit service — orchestrates the classify → diff → filter pipeline
-//! and persists canvas snapshots for cross-submit diffing.
+//! Board submit service — orchestrates the classify → diff → filter → execute pipeline.
+//!
+//! On each board submit:
+//! 1. Classify raw Excalidraw elements → `CanvasSnapshot`
+//! 2. Diff against previous snapshot → `CanvasChangeset`
+//! 3. Filter noise → `FilteredChangeset` (three tiers)
+//! 4. Persist snapshot for next diff
+//! 5. Execute Phase 0 structural changes (agentless DB writes)
 
 use uuid::Uuid;
 
-use crate::db::traits::WorkflowRepo;
+use crate::db::traits::{SessionRepo, WorkflowRepo};
 use crate::db::CanvasSnapshotRow;
 use crate::server::hub::board_serializer::{
     self, CanvasSnapshot, ExcalidrawElement, FilterConfig, FilteredChangeset,
 };
 use crate::server::services::ownership;
 use crate::server::services::ServiceError;
+
+pub use executor::PhaseZeroResult;
 
 /// Input for a board submit request.
 pub struct BoardSubmitInput {
@@ -20,7 +28,8 @@ pub struct BoardSubmitInput {
     pub elements_json: String,
 }
 
-/// Result of a board submit — the classified snapshot and filtered changeset.
+/// Result of a board submit — the classified snapshot, filtered changeset,
+/// and Phase 0 structural execution result.
 #[derive(Debug)]
 pub struct BoardSubmitResult {
     /// Whether this is the first submit for this workflow (no previous snapshot).
@@ -29,12 +38,14 @@ pub struct BoardSubmitResult {
     pub snapshot: CanvasSnapshot,
     /// The filtered changeset (diff against previous snapshot, run through noise filters).
     pub changeset: FilteredChangeset,
+    /// Phase 0 structural execution result (nodes/edges created, deleted, rewired, moved).
+    pub phase_zero: PhaseZeroResult,
 }
 
-/// Process a board submit: classify elements, diff against previous snapshot,
-/// filter noise, persist the new snapshot, and return the result.
+/// Process a board submit: classify, diff, filter, persist, and execute Phase 0.
 pub async fn submit_board(
     repo: &dyn WorkflowRepo,
+    session_repo: &dyn SessionRepo,
     input: BoardSubmitInput,
 ) -> Result<BoardSubmitResult, ServiceError> {
     // 1. Verify workflow ownership
@@ -89,11 +100,24 @@ pub async fn submit_board(
     })
     .await?;
 
+    // 7. Execute Phase 0 structural changes (agentless DB writes)
+    let phase_zero = executor::execute_phase_zero(
+        repo,
+        session_repo,
+        input.workflow_id,
+        input.user_id,
+        &filtered,
+    )
+    .await?;
+
     Ok(BoardSubmitResult {
         is_first_submit,
         snapshot: current_snapshot,
         changeset: filtered,
+        phase_zero,
     })
 }
+
+pub mod executor;
 
 mod tests;

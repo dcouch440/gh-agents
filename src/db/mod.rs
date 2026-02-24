@@ -777,6 +777,17 @@ pub struct CanvasSnapshotRow {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Maps Excalidraw element IDs to workflow step or edge UUIDs.
+/// Exactly one of `step_id` or `edge_id` is populated (XOR constraint in DB).
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct CanvasElementMapRow {
+    pub workflow_id: Uuid,
+    pub element_id: String,
+    pub step_id: Option<Uuid>,
+    pub edge_id: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+}
+
 // ============================================================================
 // Default Implementations
 // ============================================================================
