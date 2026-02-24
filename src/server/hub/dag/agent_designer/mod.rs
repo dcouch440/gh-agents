@@ -29,7 +29,7 @@ use crate::server::hub::protocols::json_utils::parse_structured_output;
 use crate::server::hub::recorder::ExecutionRecorder;
 use crate::server::hub::strategies::agent_designer::{AgentDesignerConfig, AgentDesignerStrategy};
 use crate::server::hub::strategies::compute_cost;
-use crate::server::hub::streaming::NullSink;
+use crate::server::hub::streaming::StreamSink;
 use crate::server::state::AppState;
 use crate::types::ExecutionType;
 use crate::types::UserId;
@@ -109,6 +109,7 @@ pub(crate) async fn run_agent_designer(
     phase: &str,
     cancel: Option<&CancellationToken>,
     protocol_execution_id: Option<Uuid>,
+    sink: &dyn StreamSink,
 ) -> Result<DesignerResult, HubError> {
     let designer_cfg = DESIGNER.agent("designer");
 
@@ -230,7 +231,7 @@ pub(crate) async fn run_agent_designer(
         .execute(
             &strategy,
             &protocol_ctx.user_prompt,
-            &NullSink,
+            sink,
             &recorder,
             cancel,
         )

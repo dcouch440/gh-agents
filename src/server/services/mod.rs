@@ -12,6 +12,7 @@ pub mod board;
 pub mod chat;
 pub mod collections;
 pub mod costs;
+pub mod designer;
 pub mod dispatch;
 pub mod documents;
 pub mod edges;
