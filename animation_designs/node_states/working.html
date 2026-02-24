@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Working State</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #fafaf8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  .back { position: fixed; top: 20px; left: 20px; text-decoration: none; color: #888; font-size: 14px; }
+  .back:hover { color: #333; }
+  h2 { margin-bottom: 6px; color: #333; font-size: 20px; font-weight: 500; }
+  p.sub { margin-bottom: 40px; color: #999; font-size: 14px; }
+  .scene { display: flex; gap: 100px; align-items: center; }
+  .demo { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .demo label { font-size: 13px; color: #888; }
+  .demo .desc { font-size: 12px; color: #aaa; max-width: 220px; text-align: center; line-height: 1.5; }
+</style>
+</head>
+<body>
+
+<a class="back" href="index.html">&larr; Back</a>
+<h2>Working</h2>
+<p class="sub">AI is actively processing — the main event</p>
+
+<div class="scene">
+  <div class="demo">
+    <canvas id="canvas-a" width="260" height="200"></canvas>
+    <label>Variant A — Fuming</label>
+    <div class="desc">Cartoon fume lines rising from the top. The node is thinking hard, working up a sweat. Active but contained.</div>
+  </div>
+  <div class="demo">
+    <canvas id="canvas-b" width="260" height="200"></canvas>
+    <label>Variant B — Vibrating focus</label>
+    <div class="desc">The node has a gentle vibration and concentrated energy dots orbiting tight. Focused intensity.</div>
+  </div>
+</div>
+
+<script>
+const RECT = { x: 50, y: 80, w: 160, h: 70, r: 8 };
+let time = 0;
+
+function rand(min, max) { return min + Math.random() * (max - min); }
+
+function drawNodeBase(ctx, x, y, w, h, r) {
+  ctx.save();
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.roundRect(x + 1, y + 1, w - 2, h - 2, r);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawHandBorder(ctx, x, y, w, h, r, wobble, alpha, lineWidth) {
+  ctx.save();
+  ctx.strokeStyle = `rgba(30, 30, 30, ${alpha})`;
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x + r + rand(-wobble,wobble), y + rand(-wobble,wobble));
+  for (let i = 1; i <= 4; i++) ctx.lineTo(x+r+(w-2*r)*(i/4)+rand(-wobble,wobble), y+rand(-wobble,wobble));
+  ctx.arcTo(x+w+rand(-wobble,wobble), y+rand(-wobble,wobble), x+w+rand(-wobble,wobble), y+r, r);
+  for (let i = 1; i <= 3; i++) ctx.lineTo(x+w+rand(-wobble,wobble), y+r+(h-2*r)*(i/3)+rand(-wobble,wobble));
+  ctx.arcTo(x+w+rand(-wobble,wobble), y+h+rand(-wobble,wobble), x+w-r, y+h+rand(-wobble,wobble), r);
+  for (let i = 1; i <= 4; i++) ctx.lineTo(x+w-r-(w-2*r)*(i/4)+rand(-wobble,wobble), y+h+rand(-wobble,wobble));
+  ctx.arcTo(x+rand(-wobble,wobble), y+h+rand(-wobble,wobble), x+rand(-wobble,wobble), y+h-r, r);
+  for (let i = 1; i <= 3; i++) ctx.lineTo(x+rand(-wobble,wobble), y+h-r-(h-2*r)*(i/3)+rand(-wobble,wobble));
+  ctx.arcTo(x+rand(-wobble,wobble), y+rand(-wobble,wobble), x+r, y+rand(-wobble,wobble), r);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawLabel(ctx, text, x, y, w, h) {
+  ctx.save();
+  ctx.font = '16px "Segoe Print", "Comic Sans MS", "Bradley Hand", cursive';
+  ctx.fillStyle = 'rgba(30, 30, 30, 1)';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + w/2, y + h/2);
+  ctx.restore();
+}
+
+// ---- VARIANT A: Fuming ----
+function drawFumeLine(ctx, startX, topY, height) {
+  ctx.beginPath();
+  const segments = 5 + Math.floor(Math.random() * 3);
+  const segH = height / segments;
+  let cx = startX, cy = topY + height;
+  ctx.moveTo(cx + rand(-1, 1), cy);
+
+  for (let i = 0; i < segments; i++) {
+    const nx = cx + rand(-4, 4);
+    const ny = cy - segH;
+    const cp1x = cx + rand(-6, 6);
+    const cp1y = cy - segH * 0.3 + rand(-1, 1);
+    const cp2x = nx + rand(-6, 6);
+    const cp2y = ny + segH * 0.3 + rand(-1, 1);
+    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, nx + rand(-1, 1), ny);
+    cx = nx;
+    cy = ny;
+  }
+  ctx.stroke();
+}
+
+function drawVariantA() {
+  const ctx = document.getElementById('canvas-a').getContext('2d');
+  ctx.clearRect(0, 0, 260, 200);
+
+  drawNodeBase(ctx, RECT.x, RECT.y, RECT.w, RECT.h, RECT.r);
+  drawHandBorder(ctx, RECT.x, RECT.y, RECT.w, RECT.h, RECT.r, 0.8, 0.85, 1.6);
+  drawHandBorder(ctx, RECT.x, RECT.y, RECT.w, RECT.h, RECT.r, 0.5, 0.3, 1.0);
+  drawLabel(ctx, 'Worker', RECT.x, RECT.y, RECT.w, RECT.h);
+
+  // Fume lines
+  ctx.save();
+  ctx.strokeStyle = 'rgba(50, 50, 60, 0.3)';
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = 'round';
+
+  const fumeCount = 4;
+  const zoneLeft = RECT.x + 20;
+  const zoneWidth = RECT.w - 40;
+  for (let i = 0; i < fumeCount; i++) {
+    const t = i / (fumeCount - 1);
+    const baseX = zoneLeft + t * zoneWidth + rand(-5, 5);
+    const h = rand(18, 35);
+    drawFumeLine(ctx, baseX, RECT.y - h - rand(2, 5), h);
+  }
+
+  // Small sweat drops on sides
+  if (Math.random() > 0.3) {
+    const side = Math.random() > 0.5 ? 1 : -1;
+    const sx = side > 0 ? RECT.x + RECT.w + 4 : RECT.x - 8;
+    const sy = RECT.y + rand(10, 30);
+    ctx.fillStyle = 'rgba(100, 140, 200, 0.25)';
+    ctx.beginPath();
+    // Teardrop shape
+    ctx.moveTo(sx, sy - 3);
+    ctx.quadraticCurveTo(sx + 3, sy + 2, sx, sy + 5);
+    ctx.quadraticCurveTo(sx - 3, sy + 2, sx, sy - 3);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+// ---- VARIANT B: Vibrating focus ----
+function drawVariantB() {
+  const ctx = document.getElementById('canvas-b').getContext('2d');
+  ctx.clearRect(0, 0, 260, 200);
+  time++;
+
+  // Slight position vibration
+  const vx = rand(-0.8, 0.8);
+  const vy = rand(-0.8, 0.8);
+  const rx = RECT.x + vx;
+  const ry = RECT.y + vy;
+
+  drawNodeBase(ctx, rx, ry, RECT.w, RECT.h, RECT.r);
+  drawHandBorder(ctx, rx, ry, RECT.w, RECT.h, RECT.r, 1.0, 0.85, 1.6);
+  drawHandBorder(ctx, rx, ry, RECT.w, RECT.h, RECT.r, 0.6, 0.3, 1.0);
+  drawLabel(ctx, 'Worker', rx, ry, RECT.w, RECT.h);
+
+  // Focus dots — small dots orbiting tight around the node
+  ctx.save();
+  const cx = RECT.x + RECT.w / 2;
+  const cy = RECT.y + RECT.h / 2;
+  const dotCount = 3;
+  const orbitRx = RECT.w / 2 + 12;
+  const orbitRy = RECT.h / 2 + 10;
+
+  for (let i = 0; i < dotCount; i++) {
+    const angle = time * 0.04 + (Math.PI * 2 / dotCount) * i;
+    const dx = cx + Math.cos(angle) * orbitRx;
+    const dy = cy + Math.sin(angle) * orbitRy;
+
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(60, 80, 140, ${0.25 + Math.sin(time * 0.06 + i) * 0.1})`;
+    ctx.arc(dx, dy, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Concentration lines — short marks near corners pointing inward
+  ctx.strokeStyle = 'rgba(50, 50, 70, 0.15)';
+  ctx.lineWidth = 1.2;
+  ctx.lineCap = 'round';
+  const margin = 6;
+  const lineLen = 8;
+  const offsets = [
+    [rx - margin, ry - margin, -1, -1],
+    [rx + RECT.w + margin, ry - margin, 1, -1],
+    [rx + RECT.w + margin, ry + RECT.h + margin, 1, 1],
+    [rx - margin, ry + RECT.h + margin, -1, 1],
+  ];
+  for (const [ox, oy, dirX, dirY] of offsets) {
+    if (Math.random() > 0.6) continue;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(ox + dirX * lineLen, oy + dirY * lineLen);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+let frame = 0;
+function animate(ts) {
+  // Variant A redraws at slower interval for jittery feel
+  if (frame % 4 === 0) drawVariantA();
+  drawVariantB();
+  frame++;
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>

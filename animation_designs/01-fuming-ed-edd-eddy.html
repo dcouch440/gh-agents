@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fuming Rectangle Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #f5f0e8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Comic Sans MS', 'Marker Felt', cursive;
+  }
+  h2 {
+    margin-bottom: 30px;
+    color: #333;
+    font-size: 18px;
+    letter-spacing: 1px;
+  }
+  .scene {
+    display: flex;
+    gap: 120px;
+    align-items: flex-end;
+  }
+  .demo {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+  .demo label {
+    font-size: 14px;
+    color: #666;
+  }
+  canvas { cursor: pointer; }
+  .controls {
+    margin-top: 40px;
+    display: flex;
+    gap: 16px;
+  }
+  .controls button {
+    padding: 10px 24px;
+    font-family: inherit;
+    font-size: 14px;
+    border: 2px solid #333;
+    border-radius: 6px;
+    background: #fff;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .controls button:hover { background: #e8e0d0; }
+  .controls button.active { background: #333; color: #fff; }
+</style>
+</head>
+<body>
+
+<h2>Fuming Element Mockup (Ed, Edd n Eddy style)</h2>
+
+<div class="scene">
+  <div class="demo">
+    <canvas id="canvas-subtle" width="240" height="220"></canvas>
+    <label>Subtle</label>
+  </div>
+  <div class="demo">
+    <canvas id="canvas-medium" width="240" height="220"></canvas>
+    <label>Medium</label>
+  </div>
+  <div class="demo">
+    <canvas id="canvas-intense" width="240" height="220"></canvas>
+    <label>Intense</label>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="btn-toggle" class="active">Running</button>
+  <button id="btn-speed-slow">Slow</button>
+  <button id="btn-speed-normal" class="active">Normal</button>
+  <button id="btn-speed-fast">Fast</button>
+</div>
+
+<script>
+const RECT = { x: 40, y: 110, w: 160, h: 80 };
+
+// Intensity presets: [lineCount, maxHeight, lineWidth, opacity, jitter]
+const PRESETS = {
+  subtle:  { lines: 3, maxH: 30, lw: 1.5, opacity: 0.35, jitter: 3, spread: 0.6 },
+  medium:  { lines: 5, maxH: 45, lw: 2.0, opacity: 0.5,  jitter: 5, spread: 0.75 },
+  intense: { lines: 8, maxH: 60, lw: 2.5, opacity: 0.65, jitter: 7, spread: 0.9 },
+};
+
+let running = true;
+let speed = 140; // ms between frames
+
+// Draw a sketchy rectangle (hand-drawn style like Excalidraw)
+function drawSketchyRect(ctx, x, y, w, h) {
+  ctx.save();
+  ctx.strokeStyle = '#1e1e1e';
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  // Draw each edge with slight wobble (2 passes for that Ed Edd Eddy doubled-line look)
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.beginPath();
+    const o = pass * 1.2; // slight offset between passes
+    const edges = [
+      [x, y, x + w, y],         // top
+      [x + w, y, x + w, y + h], // right
+      [x + w, y + h, x, y + h], // bottom
+      [x, y + h, x, y],         // left
+    ];
+    for (const [x1, y1, x2, y2] of edges) {
+      ctx.moveTo(x1 + rand(-1.5, 1.5) + o, y1 + rand(-1.5, 1.5) + o);
+      const steps = 5;
+      for (let i = 1; i <= steps; i++) {
+        const t = i / steps;
+        ctx.lineTo(
+          x1 + (x2 - x1) * t + rand(-1.2, 1.2),
+          y1 + (y2 - y1) * t + rand(-1.2, 1.2)
+        );
+      }
+    }
+    ctx.stroke();
+  }
+
+  // Light fill
+  ctx.fillStyle = 'rgba(255, 220, 180, 0.25)';
+  ctx.fillRect(x + 2, y + 2, w - 4, h - 4);
+
+  ctx.restore();
+}
+
+// Draw a single fuming squiggly line
+function drawFumeLine(ctx, startX, topY, height, preset) {
+  ctx.beginPath();
+
+  const segments = 6 + Math.floor(Math.random() * 4);
+  const segH = height / segments;
+
+  let cx = startX;
+  let cy = topY + height; // start from bottom (near rect top), go up
+
+  ctx.moveTo(cx + rand(-2, 2), cy + rand(-2, 2));
+
+  for (let i = 0; i < segments; i++) {
+    const nx = cx + rand(-preset.jitter, preset.jitter);
+    const ny = cy - segH;
+
+    // Wobbly bezier curve for each segment
+    const cp1x = cx + rand(-preset.jitter * 1.8, preset.jitter * 1.8);
+    const cp1y = cy - segH * 0.3 + rand(-2, 2);
+    const cp2x = nx + rand(-preset.jitter * 1.8, preset.jitter * 1.8);
+    const cp2y = ny + segH * 0.3 + rand(-2, 2);
+
+    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, nx + rand(-1, 1), ny + rand(-1, 1));
+
+    cx = nx;
+    cy = ny;
+  }
+
+  ctx.stroke();
+}
+
+// Draw fume lines above the rectangle
+function drawFumes(ctx, preset) {
+  ctx.save();
+  ctx.strokeStyle = `rgba(40, 40, 40, ${preset.opacity})`;
+  ctx.lineWidth = preset.lw;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  const rectCenterX = RECT.x + RECT.w / 2;
+  const zoneWidth = RECT.w * preset.spread;
+  const zoneLeft = rectCenterX - zoneWidth / 2;
+
+  for (let i = 0; i < preset.lines; i++) {
+    const t = preset.lines === 1 ? 0.5 : i / (preset.lines - 1);
+    const baseX = zoneLeft + t * zoneWidth + rand(-8, 8);
+    const h = preset.maxH * (0.5 + Math.random() * 0.5);
+    const topY = RECT.y - h - rand(2, 8);
+
+    drawFumeLine(ctx, baseX, topY, h, preset);
+
+    // Occasional short "dust puff" marks near the base
+    if (Math.random() > 0.6) {
+      ctx.beginPath();
+      const px = baseX + rand(-6, 6);
+      const py = RECT.y - rand(2, 8);
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + rand(-4, 4), py + rand(-5, -2));
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
+function rand(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+// Label inside rect
+function drawLabel(ctx, text) {
+  ctx.save();
+  ctx.font = '14px "Comic Sans MS", "Marker Felt", cursive';
+  ctx.fillStyle = '#555';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, RECT.x + RECT.w / 2, RECT.y + RECT.h / 2);
+  ctx.restore();
+}
+
+// Set up each canvas
+const canvases = [
+  { id: 'canvas-subtle',  preset: 'subtle',  label: 'LLM Call' },
+  { id: 'canvas-medium',  preset: 'medium',  label: 'Agent' },
+  { id: 'canvas-intense', preset: 'intense',  label: 'Pipeline' },
+];
+
+const contexts = canvases.map(c => {
+  const canvas = document.getElementById(c.id);
+  return { ctx: canvas.getContext('2d'), ...c };
+});
+
+function renderFrame() {
+  for (const { ctx, preset, label } of contexts) {
+    const canvas = ctx.canvas;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawSketchyRect(ctx, RECT.x, RECT.y, RECT.w, RECT.h);
+    drawLabel(ctx, label);
+
+    if (running) {
+      drawFumes(ctx, PRESETS[preset]);
+    }
+  }
+}
+
+// Animation loop
+let lastFrame = 0;
+function animate(ts) {
+  if (ts - lastFrame >= speed) {
+    renderFrame();
+    lastFrame = ts;
+  }
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+// Controls
+const btnToggle = document.getElementById('btn-toggle');
+btnToggle.addEventListener('click', () => {
+  running = !running;
+  btnToggle.textContent = running ? 'Running' : 'Stopped';
+  btnToggle.classList.toggle('active', running);
+});
+
+const speedBtns = [
+  { el: document.getElementById('btn-speed-slow'), ms: 300 },
+  { el: document.getElementById('btn-speed-normal'), ms: 140 },
+  { el: document.getElementById('btn-speed-fast'), ms: 60 },
+];
+for (const btn of speedBtns) {
+  btn.el.addEventListener('click', () => {
+    speed = btn.ms;
+    speedBtns.forEach(b => b.el.classList.remove('active'));
+    btn.el.classList.add('active');
+  });
+}
+</script>
+</body>
+</html>

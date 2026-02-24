@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Winding Up — Initializing</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #f5f0e8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Comic Sans MS', 'Marker Felt', cursive;
+  }
+  h2 { margin-bottom: 8px; color: #333; font-size: 18px; }
+  p.sub { margin-bottom: 30px; color: #888; font-size: 13px; }
+  .scene { display: flex; gap: 100px; align-items: flex-end; }
+  .demo { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+  .demo label { font-size: 14px; color: #666; }
+  .controls { margin-top: 40px; display: flex; gap: 16px; }
+  .controls button {
+    padding: 10px 24px; font-family: inherit; font-size: 14px;
+    border: 2px solid #333; border-radius: 6px; background: #fff; cursor: pointer;
+  }
+  .controls button:hover { background: #e8e0d0; }
+  .controls button.active { background: #333; color: #fff; }
+</style>
+</head>
+<body>
+
+<h2>Winding Up</h2>
+<p class="sub">A spiral coils tighter and tighter, then snaps — ready to go</p>
+
+<div class="scene">
+  <div class="demo">
+    <canvas id="canvas-spring" width="260" height="250"></canvas>
+    <label>Spring coil</label>
+  </div>
+  <div class="demo">
+    <canvas id="canvas-clockwork" width="260" height="250"></canvas>
+    <label>Clockwork key</label>
+  </div>
+  <div class="demo">
+    <canvas id="canvas-orbit" width="260" height="250"></canvas>
+    <label>Orbiting dots</label>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="btn-restart" class="active">Restart</button>
+  <button id="btn-speed-slow">Slow</button>
+  <button id="btn-speed-normal" class="active">Normal</button>
+  <button id="btn-speed-fast">Fast</button>
+</div>
+
+<script>
+const RECT = { x: 50, y: 100, w: 160, h: 80 };
+let speedMult = 1.0;
+
+function rand(min, max) { return min + Math.random() * (max - min); }
+
+function drawSketchyRect(ctx, x, y, w, h, alpha) {
+  ctx.save();
+  ctx.strokeStyle = `rgba(30, 30, 30, ${alpha})`;
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.beginPath();
+    const edges = [[x,y,x+w,y],[x+w,y,x+w,y+h],[x+w,y+h,x,y+h],[x,y+h,x,y]];
+    for (const [x1,y1,x2,y2] of edges) {
+      ctx.moveTo(x1+rand(-1.5,1.5), y1+rand(-1.5,1.5));
+      for (let i = 1; i <= 5; i++) {
+        const t = i/5;
+        ctx.lineTo(x1+(x2-x1)*t+rand(-1,1), y1+(y2-y1)*t+rand(-1,1));
+      }
+    }
+    ctx.stroke();
+  }
+  ctx.fillStyle = `rgba(255, 240, 220, ${alpha * 0.25})`;
+  ctx.fillRect(x+2, y+2, w-4, h-4);
+  ctx.restore();
+}
+
+function drawLabel(ctx, text, alpha) {
+  ctx.save();
+  ctx.font = '14px "Comic Sans MS", cursive';
+  ctx.fillStyle = `rgba(85, 85, 85, ${alpha})`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, RECT.x + RECT.w/2, RECT.y + RECT.h/2);
+  ctx.restore();
+}
+
+// ---- SPRING COIL ----
+class SpringAnimation {
+  constructor(canvasId) {
+    this.ctx = document.getElementById(canvasId).getContext('2d');
+    this.progress = 0;
+    this.done = false;
+  }
+  reset() { this.progress = 0; this.done = false; }
+  update() {
+    if (this.done) return;
+    this.progress += 0.6 * speedMult;
+    if (this.progress >= 100) { this.progress = 100; this.done = true; }
+  }
+  draw() {
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+    const p = this.progress / 100;
+    const rectAlpha = Math.min(1, p * 1.5);
+    drawSketchyRect(ctx, RECT.x, RECT.y, RECT.w, RECT.h, rectAlpha);
+
+    // Spiral above the rect that coils tighter
+    const cx = RECT.x + RECT.w / 2;
+    const cy = RECT.y - 20;
+
+    if (!this.done) {
+      ctx.save();
+      ctx.strokeStyle = `rgba(80, 80, 120, ${0.4 + p * 0.3})`;
+      ctx.lineWidth = 1.8;
+      ctx.lineCap = 'round';
+
+      ctx.beginPath();
+      const maxTurns = 2 + p * 4; // more turns as it winds
+      const maxR = 25 * (1 - p * 0.6); // tighter spiral
+      const steps = 80;
+
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const angle = t * maxTurns * Math.PI * 2;
+        const r = maxR * (1 - t * 0.7) + rand(-0.5, 0.5);
+        const px = cx + Math.cos(angle) * r;
+        const py = cy + Math.sin(angle) * r * 0.6 - t * 8; // flatten + rise
+
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+
+      // Tick marks showing tension
+      if (p > 0.5) {
+        const tickCount = Math.floor((p - 0.5) * 10);
+        for (let i = 0; i < tickCount; i++) {
+          const ta = rand(0, Math.PI * 2);
+          const tr = maxR * 0.3 + rand(0, 5);
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(ta)*tr, cy + Math.sin(ta)*tr*0.6);
+          ctx.lineTo(cx + Math.cos(ta)*(tr+4), cy + Math.sin(ta)*(tr+4)*0.6);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    drawLabel(ctx, this.done ? 'Ready' : 'Winding...', this.done ? 1 : rectAlpha * 0.7);
+  }
+}
+
+// ---- CLOCKWORK KEY ----
+class ClockworkAnimation {
+  constructor(canvasId) {
+    this.ctx = document.getElementById(canvasId).getContext('2d');
+    this.progress = 0;
+    this.done = false;
+    this.angle = 0;
+  }
+  reset() { this.progress = 0; this.done = false; this.angle = 0; }
+  update() {
+    if (this.done) return;
+    this.progress += 0.6 * speedMult;
+    // Key turns faster as it progresses
+    this.angle += (0.05 + (this.progress / 100) * 0.15) * speedMult;
+    if (this.progress >= 100) { this.progress = 100; this.done = true; }
+  }
+  draw() {
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+    const p = this.progress / 100;
+    const rectAlpha = Math.min(1, p * 1.5);
+    drawSketchyRect(ctx, RECT.x, RECT.y, RECT.w, RECT.h, rectAlpha);
+
+    // Wind-up key on the right side
+    const kx = RECT.x + RECT.w + 5;
+    const ky = RECT.y + RECT.h / 2;
+
+    ctx.save();
+    ctx.strokeStyle = `rgba(80, 80, 80, ${this.done ? 0.3 : 0.6})`;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+
+    // Shaft
+    ctx.beginPath();
+    ctx.moveTo(kx + rand(-0.5,0.5), ky + rand(-0.5,0.5));
+    ctx.lineTo(kx + 15 + rand(-0.5,0.5), ky + rand(-0.5,0.5));
+    ctx.stroke();
+
+    // Rotating handle
+    ctx.translate(kx + 15, ky);
+    if (!this.done) ctx.rotate(this.angle);
+
+    const handleLen = 18;
+    ctx.beginPath();
+    ctx.moveTo(rand(-0.5,0.5), -handleLen + rand(-0.5,0.5));
+    ctx.lineTo(rand(-0.5,0.5), handleLen + rand(-0.5,0.5));
+    ctx.stroke();
+
+    // Knobs at ends
+    for (const dy of [-handleLen, handleLen]) {
+      ctx.beginPath();
+      ctx.arc(rand(-0.3,0.3), dy, 3 + rand(-0.5,0.5), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+    drawLabel(ctx, this.done ? 'Ready' : 'Winding...', this.done ? 1 : rectAlpha * 0.7);
+  }
+}
+
+// ---- ORBITING DOTS ----
+class OrbitAnimation {
+  constructor(canvasId) {
+    this.ctx = document.getElementById(canvasId).getContext('2d');
+    this.progress = 0;
+    this.done = false;
+    this.angle = 0;
+  }
+  reset() { this.progress = 0; this.done = false; this.angle = 0; }
+  update() {
+    if (this.done) return;
+    this.progress += 0.6 * speedMult;
+    this.angle += (0.03 + (this.progress / 100) * 0.12) * speedMult;
+    if (this.progress >= 100) { this.progress = 100; this.done = true; }
+  }
+  draw() {
+    const ctx = this.ctx;
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+    const p = this.progress / 100;
+    const rectAlpha = Math.min(1, p * 1.5);
+    drawSketchyRect(ctx, RECT.x, RECT.y, RECT.w, RECT.h, rectAlpha);
+
+    const cx = RECT.x + RECT.w / 2;
+    const cy = RECT.y + RECT.h / 2;
+
+    if (!this.done) {
+      // Orbiting dots that speed up and pull inward
+      const dotCount = 3 + Math.floor(p * 3);
+      const orbitRx = (RECT.w / 2 + 30) * (1 - p * 0.5);
+      const orbitRy = (RECT.h / 2 + 25) * (1 - p * 0.5);
+
+      ctx.save();
+      for (let i = 0; i < dotCount; i++) {
+        const da = this.angle + (Math.PI * 2 / dotCount) * i;
+        const dx = cx + Math.cos(da) * orbitRx;
+        const dy = cy + Math.sin(da) * orbitRy;
+        const dotSize = 3 + (1 - p) * 2;
+
+        // Trail
+        ctx.strokeStyle = `rgba(80, 100, 140, ${0.15 + p * 0.1})`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const trailLen = 0.4 + p * 0.3;
+        for (let s = 0; s <= 8; s++) {
+          const ta = da - (s / 8) * trailLen;
+          const tx = cx + Math.cos(ta) * orbitRx;
+          const ty = cy + Math.sin(ta) * orbitRy;
+          if (s === 0) ctx.moveTo(tx, ty);
+          else ctx.lineTo(tx, ty);
+        }
+        ctx.stroke();
+
+        // Dot
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(60, 80, 130, ${0.4 + p * 0.4})`;
+        ctx.arc(dx, dy, dotSize, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // Orbit path (faint)
+      ctx.save();
+      ctx.strokeStyle = `rgba(100, 100, 130, 0.1)`;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, orbitRx, orbitRy, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    drawLabel(ctx, this.done ? 'Ready' : 'Loading...', this.done ? 1 : rectAlpha * 0.7);
+  }
+}
+
+const anims = [
+  new SpringAnimation('canvas-spring'),
+  new ClockworkAnimation('canvas-clockwork'),
+  new OrbitAnimation('canvas-orbit'),
+];
+
+function restartAll() { for (const a of anims) a.reset(); }
+
+let lastFrame = 0;
+function animate(ts) {
+  if (ts - lastFrame >= 30) {
+    for (const a of anims) { a.update(); a.draw(); }
+    lastFrame = ts;
+  }
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+document.getElementById('btn-restart').addEventListener('click', restartAll);
+[['btn-speed-slow', 0.4], ['btn-speed-normal', 1.0], ['btn-speed-fast', 2.5]].forEach(([id, s]) => {
+  document.getElementById(id).addEventListener('click', function() {
+    speedMult = s;
+    document.querySelectorAll('.controls button:not(#btn-restart)').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+</script>
+</body>
+</html>
