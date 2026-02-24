@@ -26,6 +26,7 @@
 pub mod types;
 mod classify;
 mod diff;
+mod filter;
 mod rasterize;
 mod resolve;
 mod snapshot;
@@ -67,4 +68,26 @@ pub fn classify_board_with_threshold(
 /// new, deleted, rewired (edges).
 pub fn diff_snapshots(previous: &CanvasSnapshot, current: &CanvasSnapshot) -> CanvasChangeset {
     diff::diff_snapshots(previous, current)
+}
+
+/// Filter and score a changeset, producing a tiered dispatch plan.
+///
+/// Removes noise (whitespace-only changes, oscillations, canvas pans, line
+/// reordering), scores remaining changes by token-level significance, and
+/// sorts meaningful changes in topological order (upstream first).
+///
+/// # Arguments
+///
+/// * `changeset` — The raw changeset from [`diff_snapshots`].
+/// * `current_edges` — All edges in the current snapshot (for topological sorting).
+/// * `baseline` — Optional baseline snapshot (last agent-processed state) for
+///   oscillation detection. Pass `None` to skip oscillation filtering.
+/// * `config` — Filtering thresholds. Use [`FilterConfig::default()`] for standard values.
+pub fn filter_changeset(
+    changeset: &CanvasChangeset,
+    current_edges: &[CanvasEdge],
+    baseline: Option<&CanvasSnapshot>,
+    config: &FilterConfig,
+) -> FilteredChangeset {
+    filter::filter_changeset(changeset, current_edges, baseline, config)
 }
