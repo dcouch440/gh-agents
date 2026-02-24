@@ -2,508 +2,497 @@
 
 ## What It Is
 
-Visual Dispatch turns the workflow canvas into a freeform drawing surface. The user sketches what they want — boxes, arrows, annotations — directly on the board, right on top of their existing workflow. When they're ready, they hit submit and the drawing becomes a structured changeset that flows through the same dispatch pipeline as a chat message. The manager builder receives it, interprets it, and makes it real.
+Visual Dispatch turns the workflow canvas into a persistent drawing surface and pairs it with a tree-first sidebar for structured navigation, configuration, and execution output. The user sketches what they want — boxes, arrows, annotations — and those drawings stay exactly where the user put them as a static visual guide. The system reads the drawings, builds the workflow structure instantly, then designs the agents asynchronously.
 
-Drawing and chatting coexist. The manager chat is still there. Some users will always prefer typing. But for spatial, structural, multi-node intent — drawing is faster and more natural than describing topology in words. The user draws three boxes with arrows and writes "research", "validate", "report" inside them. That says more than a paragraph of instructions.
-
-The doodle layer is always on. There's no mode toggle. The drawing tools sit in the toolbar alongside everything else. The user can pick up a pencil and annotate at any time, on any board — empty or full.
+The canvas is the user's whiteboard. The sidebar is the system's structured response.
 
 ## Why This Matters
 
 Today, the only way to instruct the manager is through conversation. That works well for simple requests ("add a node that summarizes the output") but breaks down for structural intent. Try describing a four-node DAG with conditional branching in a chat message. The user knows exactly what they want — they can see it in their head — but translating spatial relationships into words is friction.
 
-Visual Dispatch removes that translation step. The user draws what's in their head. The system reads the drawing.
+Visual Dispatch removes that translation step. The user draws what's in their head. The system reads the drawing and builds the structure. The drawings never disappear, never convert, never shake around. They stay right where the user put them — a persistent reference for both the user and the system.
 
-This also changes the relationship between the user and the board. Right now the board is an output — something the manager builds while the user watches. With Visual Dispatch, the board becomes an input. The user and the agents share the same canvas, both contributing to it in their own way.
-
-## Two Contexts, Same Tools
-
-The doodle tools work the same whether the board is empty or populated. The dispatch pipeline doesn't care — it receives a changeset either way.
-
-### Empty Board — Sketch From Scratch
-
-The user opens a new workflow. The canvas is blank and dark. They grab the rectangle tool and start drawing boxes, connecting them with arrows, typing descriptions inside each one. They're sketching the workflow they want.
+## The Layout
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│   ╭ ─ ─ ─ ─ ─ ─ ╮         ╭ ─ ─ ─ ─ ─ ─ ╮               │
-│   ╎ research the  ╎ ~~~~>  ╎ analyze and   ╎               │
-│   ╎ competitors   ╎        ╎ compare       ╎               │
-│   ╰ ─ ─ ─ ─ ─ ─ ╯         ╰ ─ ─ ─ ─ ╮─ ─ ╯               │
-│                                       ╎                     │
-│                                       ~~~~>                 │
-│                             ╭ ─ ─ ─ ─ ─ ─ ╮               │
-│                             ╎ write final   ╎               │
-│                             ╎ report        ╎               │
-│                             ╰ ─ ─ ─ ─ ─ ─ ╯               │
-│                                                             │
-│  Everything is a doodle. Nothing is real yet.               │
-│                                              [Submit]       │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────┬──────────────────────┐
+│                                     │                      │
+│          Canvas                     │      Sidebar         │
+│                                     │                      │
+│  Full drawing surface.              │  Tree Tab (primary)  │
+│  Excalidraw overlay.                │  ── Research Team    │
+│  User's whiteboard.                 │     ├── Web Search   │
+│                                     │     ├── Paper Review │
+│  ╭ ─ ─ ─ ─ ─ ╮     ╭ ─ ─ ─ ─ ╮   │     └── Fact Check  │
+│  ╎ research    ╎────>╎ write    ╎   │  ── Write Report     │
+│  ╎ competitors ╎     ╎ report   ╎   │  ── Output           │
+│  ╰ ─ ─ ─ ─ ─ ╯     ╰ ─ ─ ─ ─ ╯   │                      │
+│                                     │  Config Panel        │
+│  Drawings stay. Always.             │  (click a node)      │
+│                                     │  System prompt, tools│
+│                                     │  capabilities, etc.  │
+│                                     │                      │
+│                                     │  Chat (secondary)    │
+│                                     │  > Type a message... │
+│                                     │                      │
+└─────────────────────────────────────┴──────────────────────┘
 ```
 
-On submit, the system extracts the topology — three nodes, two edges — and dispatches it to the manager builder. The manager creates real workflow nodes at the positions where the user drew them. Doodles fade out, real nodes fade in. The sketch becomes the workflow.
+Three surfaces, each with a clear job:
 
-### Populated Board — Annotate and Change
+- **Canvas** — full drawing surface. Always visible. The user's whiteboard. Drawings are permanent until the user deletes them. No conversion, no replacement, no animation.
+- **Tree tab** (sidebar, primary) — the actual workflow structure rendered as a file tree. Shows every node, its hierarchy, its design status. This is how the user navigates the workflow.
+- **Config panel** (sidebar) — click a node in the tree, see its full agent design. System prompt, capabilities, tools, routing rules, agent roster. Edit anything before execution.
+- **Chat** (sidebar, secondary) — still there for users who prefer typing. Same dispatch pipeline.
 
-The user has a running workflow. Three nodes, configured and executing. They want changes. They grab the drawing tools and start annotating directly on the board.
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                                                             │
-│  ┌──────────────┐         ┌──────────────┐                 │
-│  │ Research      │────────│ Summarize    │                 │
-│  │ workforce-1   │         │ single-2     │                 │
-│  └──────────────┘         └──────┬───────┘                 │
-│    ╎ The agents keep ╮           │                          │
-│    ╎ hallucinating   ╎           │                          │
-│    ╎ sources during  ╎           │       ┌──────────────┐  │
-│    ╎ search.         ╎           └───────│ Final Report │  │
-│    ╰ ─ ─ ─ ─ ─ ─ ─ ╯                   │ single-3     │  │
-│                                          └──────────────┘  │
-│          ╭ ─ ─ ─ ─ ─ ─ ─ ─ ╮                  ▲           │
-│          ╎ add a fact-check  ╎~~~~~~~~~~~~~~~~~╯           │
-│          ╎ validation step   ╎                              │
-│          ╰ ─ ─ ─ ─ ─ ─ ─ ─ ╯                              │
-│                                                             │
-│  REAL nodes + DOODLE annotations on the same canvas.       │
-│                                              [Submit]       │
-└─────────────────────────────────────────────────────────────┘
-```
-
-On submit, the system builds a changeset — only the things the user touched. A comment on workforce-1 about hallucinating sources. A new node sketch for a validation step. A drawn arrow connecting it to single-3. The existing unchanged nodes are not included. The manager builder receives the diff, not the whole board.
-
-## The Doodle Layer
+## The Drawing Layer
 
 ### Always On
 
-The doodle tools live in the toolbar permanently. Rectangle, arrow, text. The user can draw at any time without entering a special mode. Doodle elements are visually distinct from real nodes — they look hand-drawn, sketchy, with rough borders and wobbly lines. Real nodes are clean and solid. You can tell at a glance what's a sketch and what's built.
+The doodle tools live in the toolbar permanently. Rectangle, arrow, text. The user can draw at any time without entering a special mode. Doodle elements are visually distinct from the sidebar's structured data — they look hand-drawn, sketchy, with rough borders and wobbly lines.
 
-### Visual Style
+### Drawings Are Permanent
 
-Doodle elements use a hand-drawn aesthetic. Rough borders, imperfect lines, a sketch-weight font. This isn't decorative — it's functional. The contrast between sketchy doodles and solid real nodes tells the user exactly what's intent and what's reality.
+This is the key difference from a "convert sketches to nodes" model. The user draws boxes and arrows on the canvas. Those drawings **stay exactly where they are**. They don't convert to real nodes. They don't fade out. They don't move.
 
-```
-Doodle (intent):              Real (built):
+The drawings are the user's visual reference — their blueprint. The system reads them and builds the structured workflow in the sidebar. The user can always look at their canvas and see exactly what they drew. They can keep drawing, annotating, adding notes. The canvas is theirs.
 
-╭ ─ ─ ─ ─ ─ ╮               ┌──────────────┐
-╎ research    ╎               │ Research      │
-╎ competitors ╎               │ workforce-1   │
-╰ ─ ─ ─ ─ ─ ╯               │ ● running     │
-                              └──────────────┘
-```
+### What Users Can Draw
 
-### Comments on Existing Nodes
+- **Boxes with text** — describe what a node should do
+- **Arrows** — describe the flow between nodes
+- **Annotations on existing drawings** — refine, add detail, add context
+- **Pictures, diagrams, freeform sketches** — whatever helps them think
+- **Comments** — notes to themselves or to the system
 
-Right-click a real node, select "Add Comment." A comment box appears anchored to the right side of the node. Multiple comments on the same node stack vertically. Each comment is a doodle element — sketchy style, clearly an annotation rather than part of the node.
-
-```
-┌──────────────┐ ╭ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╮
-│ Research      │╌╎ Agents hallucinate    ╎
-│ workforce-1   │ ╎ sources during search ╎
-│               │ ╰ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╯
-└──────────────┘ ╭ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╮
-                 ╎ Also increase the      ╎
-                 ╎ search depth to 3      ╎
-                 ╰ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╯
-```
-
-Comments are the primary way users annotate existing nodes. They describe problems, request behavior changes, or add context. On submit, each comment is associated with its target node in the changeset.
-
-### Drawn Elements
-
-Beyond comments, the user can draw new boxes and arrows on the board. A new box with text inside is interpreted as a request for a new node. An arrow drawn from a doodle box to a real node (or between two doodle boxes) is interpreted as a requested edge. Arrows don't need to snap or touch — the system infers connections by spatial proximity after the user submits.
-
-## The Changeset
-
-When the user hits submit, the system doesn't send the entire board state. It extracts only what the user drew — the changeset. This is what makes it efficient for the manager. A board with 20 real nodes and 2 doodle annotations produces a changeset with only those 2 annotations.
-
-### Structure
-
-The changeset captures four types of intent:
-
-**Node annotations** — comments attached to existing nodes. The user wants something about that node to change.
-
-**New nodes** — doodle boxes with text that aren't attached to any existing node. The user wants new nodes created.
-
-**Edge additions** — drawn arrows between elements (new-to-existing, new-to-new, or existing-to-existing). The user wants new connections.
-
-**Edge removals** — existing edges the user has marked for deletion (e.g., right-click edge, "Mark for removal," visualized as a strikethrough on the edge).
-
-### Example Changeset
-
-From the annotated board above:
-
-```
-Changeset:
-  Node Annotations:
-    - workforce-1 "Research":
-      "The agents keep hallucinating sources during search."
-
-  New Nodes:
-    - "add a fact-check validation step"
-      Position: (320, 480)
-
-  Edge Additions:
-    - [new: fact-check validation] → single-3 "Final Report"
-
-  Edge Removals:
-    (none)
-```
-
-This is what the manager builder receives. Not "here are 20 nodes and 15 edges." Just the delta.
+The system extracts structure from boxes and arrows. Everything else is ignored by the system but preserved for the user.
 
 ## The Dispatch Pipeline
 
-### Manager Builder as Single Source of Truth
+Two entry points, same pipeline agents. The user can talk to the manager assistant OR draw on the board. Both paths feed into the same builder sub-agents.
 
-The changeset always goes to the manager builder (L2). Not to individual node assistants. Not fanned out to parallel L3 sessions. The manager builder is the single brain that sees the full changeset and the full board state. It decides what to do, resolves conflicts between changes, and orchestrates execution in the right order.
+### Entry Point 1 — Chat
 
-This is critical. If annotations blasted directly to individual node assistants in parallel, you'd have five agents independently deciding what to do with no coordination. One might restructure edges while another is creating nodes that depend on those edges. The manager builder prevents that — it sees everything, plans everything, then executes.
-
-```
-  ╭──────────────╮         ╭──────────────╮
-  │ User draws   │         │ User types   │
-  │ on canvas    │         │ in chat      │
-  ╰──────┬───────╯         ╰──────┬───────╯
-         │                        │
-         ▼                        ▼
-  ┌──────────────┐         ┌──────────────┐
-  │ Extract      │         │ Chat message │
-  │ changeset    │         │ (plain text) │
-  └──────┬───────┘         └──────┬───────┘
-         │                        │
-         └───────────┬────────────┘
-                     ▼
-              ┌──────────────┐
-              │ Manager      │
-              │ Builder (L2) │
-              │              │
-              │ Single source│
-              │ of truth.    │
-              │ Sees full    │
-              │ changeset +  │
-              │ full board.  │
-              └──────┬───────┘
-                     │
-          ┌──────────┼──────────┐
-          ▼          ▼          ▼
-     create_node  add_edge  dispatch_to_builders
-                              │
-                    ┌─────────┼─────────┐
-                    ▼         ▼         ▼
-                  L4 node   L4 node   L4 node
-                  builder   builder   builder
-```
-
-Drawing and chatting are two input methods into the same pipeline. The manager builder already knows how to create nodes, wire edges, and dispatch to node builders. The changeset just gives it structured input instead of freeform text. The topology is explicit, not buried in a paragraph.
-
-### Thinking Layer / Action Layer
-
-A large changeset — say 5 node annotations, 3 new nodes, 4 edges — doesn't need one expensive agent doing everything sequentially. The changeset itself is the thinking. By the time the system has extracted "these are the nodes, these are the edges, these are the comments," the hard reasoning is done. What remains is execution.
-
-This splits naturally into two layers:
-
-**Thinking layer** — one pass over the full changeset. The manager builder reads everything, understands the full board context, resolves conflicts, and produces a plan of atomic work items. This is where intelligence lives. One smart call.
-
-**Action layer** — parallel execution of atomic work items. Each item is a single tool call: create a node, wire an edge, dispatch an instruction to an L4 builder. These don't require reasoning. They're mechanical. Cheap model, or even direct service calls with no LLM.
+The user talks to the manager assistant conversationally. The manager dispatches an instruction to the builder pipeline.
 
 ```
-Changeset (13 items)
-      │
-      ▼
-┌─────────────────────┐
-│ Thinking Layer       │  ← One pass. Manager builder.
-│                      │     Reads full changeset + board state.
-│ Splits into phases:  │     Resolves conflicts.
-│   Phase 1: creates   │     Produces atomic work items.
-│   Phase 2: edges     │
-│   Phase 3: behaviors │
-└──────────┬──────────┘
-           │
-  ┌────────┼────────┐
-  ▼        ▼        ▼
-┌──────┐┌──────┐┌──────┐    ← Phase 1: create nodes (parallel, cheap)
-│Create││Create││Create│
-│node A││node B││node C│
-└──┬───┘└──┬───┘└──┬───┘
-   └────┬──┘───────┘
-        ▼                         (barrier — wait for node IDs)
-  ┌─────┼─────┐
-  ▼     ▼     ▼
-┌────┐┌────┐┌────┐              ← Phase 2: wire edges (parallel, cheap)
-│Edge││Edge││Edge│
-│ 1  ││ 2  ││ 3  │
-└────┘└────┘└────┘
-  ┌─────┼─────┐
-  ▼     ▼     ▼
-┌────┐┌────┐┌────┐              ← Phase 3: behavior changes (parallel)
-│ L4 ││ L4 ││ L4 │                 Dispatch to node builders.
-│bld ││bld ││bld │                 This is where reasoning lives —
-└────┘└────┘└────┘                 but scoped to one node each.
+User: "Hey I want to add something to my refiner but I cant decide what?"
+Manager: "Based on your pipeline, a verification step after the refiner
+          would catch errors before output. Want me to add an online
+          verifier that cross-checks the refined content?"
+User: "Yeah that sounds good, do it."
+Manager: dispatch("Add an online verifier for the refiner")
+  → Builder Sub-Agent 1 (creation): creates topology → passdown
+  → Builder Sub-Agent 2 (content): refines, corrects concerns → passdown
+  → Per-node builder: configures the actual node content
 ```
 
-The cost tiers:
+### Entry Point 2 — Board Submit
 
-| Tier | What | Model | Why |
-|------|------|-------|-----|
-| Thinking | Parse changeset, plan execution | Smart (but structured input makes it easier) | Needs full board context, conflict resolution |
-| Action — structural | Create nodes, wire edges | Cheapest, or no LLM at all | Mechanical tool calls, no reasoning |
-| Action — behavioral | L4 node builder dispatches | Smart, but scoped to one node | "Fix hallucinating sources" requires real interpretation |
-
-The thinking layer might not even need an expensive model. The changeset already did the hard work of identifying what the user wants. The manager builder is reading structured input, not parsing prose. And the structural actions (creates, edges) might not need an LLM at all — they're database writes with explicit parameters.
-
-### Changeset as Manager Prompt
-
-The changeset is serialized into the manager builder's dispatch instruction as structured text:
+The user draws on the canvas and hits submit. The system handles the structural diff agentlessly (Phase 0), then the same builder sub-agents take over.
 
 ```
-## Visual Dispatch — Change Request
-
-### Current workflow
-- workforce-1 "Research" → single-2 "Summarize" → single-3 "Final Report"
-
-### Node annotations
-**workforce-1 (Research):**
-> The agents keep hallucinating sources during search.
-
-### New nodes requested
-1. "add a fact-check validation step"
-   - Suggested position: (320, 480)
-   - User drew edge: [this node] → single-3 "Final Report"
-
-### Edge changes
-- Add: [new validation node] → single-3
+User: draws complete schema on canvas → submits
+System: Phase 0 — create nodes, delete removed ones, update annotations (agentless DB writes)
+  → Per-node builder: "Looks like I have a node here, lets take a look!" → passdown
 ```
 
-### What Lands in the Node Chat Sessions
+### Phase 0 — Structural (Board Submit Only, Instant, Agentless)
 
-The L3 node assistant chat sessions don't make decisions during Visual Dispatch — the manager builder does. But the chat sessions are updated as a record of what happened. When the manager builder dispatches a behavior change to a node's L4 builder, the result appears in that node's chat history.
+Only runs on board submit. The semantic diff is computed. All **Diff** items (edge changes, deletions, repositions) execute as pure DB writes. All **New** items run through the protocol selector — a cheap bot that classifies each node into the right protocol instantly — then create the node in the DB with the assigned protocol.
+
+Nodes appear in the tree tab as soon as the user hits submit. This is agentless. Pure mechanical diff → protocol classification → DB writes. The board skeleton is built.
+
+The chat entry point skips Phase 0 — the manager dispatches directly to the builder sub-agents.
+
+### The Builder Sub-Agents
+
+Same agents regardless of entry point. They are **peers at the same level** — same dispatch tool, different branches. Each does one focused job, produces a passdown, and hands off to the next.
+
+**Creation sub-agent** — Reads the board at a **stripped-down level**: node names, topology (edges), and the **beliefs layer**. Not the full box content. Identifies structural gaps, creates topology. Produces a passdown with the schema and any concerns. **The board is locked** while this agent works.
+
+**Content sub-agent** — Picks up the previous passdown. Reads concerns, corrects them, refines the design. Produces a passdown with the final schema.
+
+**Per-node builder** — Picks up the passdown. Reads the **full box content** for each node — raw text, annotations, sketches. Configures the workforce: agent rosters, system prompts, capabilities, tools, routing rules. The design populates into each node's config panel.
+
+After configuration, each node is ready for workforce execution — the existing pipeline, no changes needed.
+
+### The Beliefs Layer
+
+The builder sub-agents don't read walls of box text to understand board-level context. They read **beliefs** — structured, tagged, confidence-rated knowledge extracted automatically from every conversation on the board.
+
+Beliefs accumulate from two sources:
+- **User chats** — when a user talks to a node's assistant, Haiku extracts beliefs in the background
+- **Builder conversations** — when agents work on nodes, their conversations also trigger belief extraction
+
+Each belief is tagged by type (fact, goal, requirement, risk, assumption), confidence level (low, medium, high), and semantic tags. Contradictions between nodes are flagged as cross-source tensions.
+
+The creation sub-agent sees beliefs from all connected nodes via `get_beliefs_for_connected_steps()`. This gives it a compressed, structured understanding of what each node is about — without reading the full box content. The per-node builder gets both beliefs AND full box content, because it needs the detail to configure the workforce.
+
+### Cost Model
+
+| Phase | What | Model | Speed |
+|-------|------|-------|-------|
+| 0 — Structural (board only) | Diff → DB writes, protocol selector | Cheap bot for selector, no LLM for diff | Instant |
+| Creation sub-agent | Read names + topology + beliefs, create structure | Smart, one pass | Seconds |
+| Content sub-agent | Review + refine schema from creation passdown | Smart, one pass | Seconds |
+| Per-node builder | Read full box content, configure workforce | Smart, per node | Seconds |
+| Execution | Run each node's workforce | Per-node model selection | Background |
+
+## The Guided Engineering Pipeline
+
+This is not "draw and execute." It's "draw, design, review, refine, then execute."
+
+### The Workflow
+
+1. **Draw** — user sketches their workflow on the canvas
+2. **Submit** — system builds the structure instantly, designs agents async
+3. **Review** — user clicks nodes in the tree, reads the agent designs in the config panel
+4. **Refine** — user edits system prompts, adjusts capabilities, tweaks routing
+5. **Execute** — when the user is satisfied, they run the workflow
+
+The execution is the last step, not the automatic next step. The system does the heavy lifting of designing agents, but the user has full visibility and control before anything runs. The config panel is the inspection and editing surface for each node's design.
+
+### Design Status in the Tree
+
+The tree shows more than just structure. It shows design status:
 
 ```
-┌─────────────────────────────────┐
-│ Research — Chat                  │
-│                                  │
-│ ┄┄┄ earlier conversation ┄┄┄    │
-│                                  │
-│ 📌 Manager dispatched:           │
-│ "Add source verification to      │
-│  search prompt — user reported   │
-│  hallucinated sources."          │
-│                                  │
-│ ● Builder completed.             │
-│                                  │
-│ > Type a message...              │
-└─────────────────────────────────┘
+── Research Pipeline
+   ├── Web Search          ● designed
+   ├── Paper Review        ● designed (edited)
+   ├── Fact Check          ◐ designing...
+   └── Write Report        ○ pending
 ```
 
-The user can open any node's chat panel and see the full history — changes from Visual Dispatch, changes from direct chat, everything in one timeline. The chat box is both an input method (type to the assistant) and an audit trail (see what happened via drawing).
+The user can see at a glance which nodes have been designed, which ones they've manually edited, which are still being designed, and which are waiting. No guessing, no checking individual panels.
 
-## The Submit Flow
+## The Sidebar
 
-### Step by Step
+### Tree Tab (Primary)
 
-1. **User draws** — annotates existing nodes, sketches new boxes, draws arrows. No constraints, no snapping. Pure freeform.
+The tree is the primary navigation surface. It shows the full workflow structure as a file tree — nodes, their hierarchy, their relationships. This is the `AsciiTree` renderer, the same component already built in `frontend/src/utils/AsciiTree.ts`.
 
-2. **User hits Submit** — the board locks. No more drawing until this changeset is processed.
+Clicking a node in the tree opens its config panel. The tree is always visible while the config panel shows the selected node's details below it.
 
-3. **System extracts the changeset** — associates comments with nodes by anchor relationships, infers arrow connections by spatial proximity, identifies new node requests from unattached doodle boxes.
+### Config Panel
 
-4. **Changeset dispatches to manager builder** — same L2 dispatch pipeline as chat. The manager builder receives the structured changeset and begins working.
+Click a node in the tree. The config panel shows everything about that node's design:
 
-5. **Board shows processing state** — doodles dim and pulse. The user watches.
+- **Name and type** — workforce, single, sub_workflow, etc.
+- **System prompt** — the full prompt the agent will use
+- **Capabilities** — what tools the agent has access to
+- **Routing rules** — how outputs flow to downstream nodes
+- **Agent roster** (workforce nodes) — the team hierarchy, each agent's role
+- **Constraints** — token limits, model selection, temperature
 
-6. **Manager builder creates/modifies nodes** — using existing tools (create_node, remove_node, dispatch_to_builders). New nodes get placed at the positions from the user's drawing. Node behavior changes dispatch to the appropriate L4 builders.
+Everything is editable. The user can rewrite system prompts, add or remove capabilities, restructure the agent roster. The design agent gives them a starting point. They refine it.
 
-7. **Transition** — as each real node is created or updated, it appears on the board. Fast fade-swap: doodle fades out (~300ms), real node fades in at the same position. Quick, no ceremony.
+### Chat (Secondary)
 
-8. **Partial success handling** — if some changes succeed and others fail, the successful ones stay real. Failed doodles restore to their original state so the user can edit and resubmit. The user sees a mixed state: some nodes materialized, some sketches came back.
+The chat is still there. Some users will always prefer typing. The chat feeds into the same dispatch pipeline — the manager builder receives the message and acts on it. But the tree and config panel are the primary interface. Chat is for conversational refinement, not primary navigation.
 
-9. **Board unlocks** — the user can draw again.
+## Execution Output Stream
 
-## Spatial Inference
+When the user runs the workflow, the output renders as a vertical stream of full-width document blocks in the sidebar. Each block is a step's output — plain English or code, rendered cleanly.
 
-### Arrow-to-Node Connection
+A tree gutter runs along the left edge showing the pipeline flow. When steps run in parallel, the gutter branches. When they merge, it rejoins.
 
-Arrows don't need to touch the boxes they connect. The system uses spatial proximity to infer connections after the user submits.
+```
+│ ┌─────────────────────────────────────────┐
+│ │ Research Results                        │
+│ │                                         │
+│ │ Found 12 competitor pricing entries     │
+│ │ across 4 major providers. The Q4 data  │
+│ │ shows a 15% average price increase...  │
+│ └─────────────────────────────────────────┘
+│
+├─┬─┌─────────────────────────────────────────┐
+│ │ │ 1A · Web Search                         │
+│ │ │                                         │
+│ │ │ Scraped 4 competitor sites. Found       │
+│ │ │ current pricing for all tiers...        │
+│ │ └─────────────────────────────────────────┘
+│ │
+│ ├─┌─────────────────────────────────────────┐
+│ │ │ 1B · Paper Review                       │
+│ │ │                                         │
+│ │ │ Analyzed quarterly earnings report.     │
+│ │ │ Key finding: margin compression in      │
+│ │ │ enterprise tier...                      │
+│ │ └─────────────────────────────────────────┘
+│ │
+│ └─┌─────────────────────────────────────────┐
+│   │ 1C · Fact Check                         │
+│   │                                         │
+│   │ Verified 11 of 12 claims. One source    │
+│   │ (CompetitorD Q3 report) could not be    │
+│   │ confirmed — flagged for review.         │
+│   └─────────────────────────────────────────┘
+│
+│ ┌─────────────────────────────────────────┐
+│ │ Final Report                            │
+│ │                                         │
+│ │ ## Competitive Pricing Analysis — Q4    │
+│ │                                         │
+│ │ ```sql                                  │
+│ │ SELECT provider, tier, price, delta     │
+│ │ FROM pricing_entries                    │
+│ │ WHERE quarter = 'Q4'                    │
+│ │ ORDER BY delta DESC                     │
+│ │ ```                                     │
+│ │                                         │
+│ │ Three of four competitors increased     │
+│ │ enterprise pricing by 12-18%...         │
+│ └─────────────────────────────────────────┘
+```
 
-For each drawn arrow, the system finds the nearest rectangle to the arrow's start point and the nearest rectangle to the arrow's end point. If both are within a reasonable threshold (accounting for zoom level), the arrow registers as a connection between those two elements. If an arrow points at nothing, it's ignored.
+Every document is full width. The tree gutter on the left shows the flow at a glance — you can scan the left edge and see the shape of the pipeline without reading any content. Sequential steps flow straight down. Parallel steps branch with `├──` connectors. Merge points rejoin the main pipe.
 
-This works for all combinations: doodle-to-doodle, doodle-to-real, real-to-real.
+Code blocks render inside the documents. Plain English renders as readable prose. The whole execution reads top to bottom like a story.
 
-### Position Normalization
+## The Semantic Diff
 
-Users draw sloppy. Boxes overlap, sizes vary wildly. Real nodes have standard dimensions. The system normalizes positions before creating real nodes:
+The system maintains a snapshot of the board state at each submit. When the user submits again, it diffs the current Excalidraw state against the last snapshot. Every element has a stable ID, so the diff is exact. Three categories fall out:
 
-1. Take the centroid (center point) of each doodle box as the intended position.
-2. Apply standard node dimensions (real nodes are all the same size).
-3. Run overlap resolution — push nodes apart while preserving the user's relative layout. What was above stays above. What was left stays left.
+### Diff (Programmatic, No AI)
 
-The user's spatial intent is preserved. The exact pixel positions are cleaned up.
+Structural changes that can be handled as pure DB writes. No reasoning needed.
+
+```
+Diff: handled programmatically
+  Edge A → connected to Edge C
+  Node "Validation" → deleted
+  Node "Research" → repositioned to (400, 200)
+```
+
+These are immediate. Edge rewired? Update the DB. Node deleted? Remove the row. Node moved? Update position. No agent touches these.
+
+### Updating (AI Interprets the Delta)
+
+The user changed the text inside an existing node. The system has both the before and after — the design agent sees exactly what shifted and why it matters.
+
+```
+Updating: User changed node description from:
+  "Query the database for new website visits"
+  →
+  "Query the database for new website visits and aggregate the
+   company information by first selecting the companies then
+   placing their IDs in your final response."
+```
+
+The design agent reads this diff and understands: the user wants aggregation logic, company selection, and structured ID output. It rewrites the agent's system prompt and capabilities to match. The before/after gives it precise context — not "here's a node, design it from scratch" but "here's what changed, update the design accordingly."
+
+### New (AI Classifies + Designs)
+
+A new box on the board. The system has never seen this element before. Two things happen:
+
+**1. Protocol selection (cheap bot, instant):**
+
+A lightweight classifier reads the node description and selects the right protocol. No expensive reasoning — just pattern matching against the protocol catalog.
+
+```
+New: User created a new node (cheap bot):
+  Select the correct protocol to fulfill the job:
+  Protocols: {workforce, single, sub_workflow, container}
+  Input: "File a report"
+  Output: workforce
+```
+
+The selector looks at "File a report" and determines this needs a team of agents (workforce) — not a single agent, not a sub-workflow. The protocol is assigned automatically. The user never thinks about execution modes.
+
+**2. Design agent writes the spec (async):**
+
+The design agent sees the new node with its assigned protocol and the full board context — incoming edges, upstream outputs, the user's description. It writes the complete agent specification.
+
+```
+New: User created a new node:
+  "File a report"
+  Protocol: workforce (from selector)
+  Incoming context: upstream step outputs, extracted beliefs
+  → Design agent writes system prompt, capabilities, agent roster
+  → Dispatches to builder with detailed message
+  → Everything happens in the background
+```
+
+The design agent doesn't just configure the node in isolation. It sees what's upstream, understands what data flows into this node, and designs the agent to handle that specific context. "File a report" with research data upstream produces a different design than "File a report" with raw database output upstream.
+
+### Full Example
+
+A user has a three-node workflow. They edit one node's description, add a new node, and rewire an edge. On submit:
+
+```
+Semantic Diff:
+
+  Diff (programmatic):
+    Edge: "Research" → "Summarize" reconnected to "Research" → "Validate"
+
+  Updating (AI interprets):
+    Node "Research":
+      "Search for competitor pricing"
+      →
+      "Search for competitor pricing across Q3 and Q4, compare
+       year-over-year trends, flag anomalies above 10%."
+
+  New (AI classifies + designs):
+    Node: "Generate executive summary"
+    Protocol selector: workforce
+    → Design agent sees: upstream validation output, board context
+    → Writes spec: 3-agent team (analyst, writer, reviewer)
+    → Dispatches to builder in background
+```
+
+Phase 1 handles the edge rewire instantly. Phase 2 handles the description update and new node design in parallel. Phase 3 dispatches the builder messages. The user sees the edge change immediately, watches the designs populate, and runs when ready.
+
+## The Protocol Selector
+
+Context nodes go away. The user never picks an execution mode. Instead, a lightweight selector classifies each new node into the right protocol based on its description and board position.
+
+The selector is a cheap, fast classifier — not a reasoning agent. It reads the node description, looks at the available protocols, and picks the best match. This runs inline during Phase 1, before the design agent even starts.
+
+```
+┌────────────────────────────────┐
+│ Protocol Selector (cheap bot)  │
+│                                │
+│ Input:  "File a report"        │
+│ Protocols: {workforce, single, │
+│   sub_workflow, container}     │
+│ Output: workforce              │
+│                                │
+│ Input:  "Query the database"   │
+│ Output: single                 │
+│                                │
+│ Input:  "Run the full QA       │
+│          pipeline"             │
+│ Output: sub_workflow           │
+└────────────────────────────────┘
+```
+
+The selector's decision populates into the node immediately. If the user disagrees, they can change it in the config panel before execution. But the default is usually right — "research competitors" is obviously a workforce, "write the final output" is obviously a single agent, "run the validation suite" is obviously a sub-workflow.
+
+This eliminates the concept of "context" as a node type. If a node needs upstream context, the protocol handles it. The selector and design agent wire context flow through the protocol's built-in mechanisms — ports, variable interpolation, prompt composition. The user just describes what the node should do. The system figures out how.
+
+## Two Entry Points, Same Sub-Agents
+
+Drawing and chatting are two ways to trigger the same builder sub-agents. The sub-agents are peers — same level, same dispatch tool, different branches. Each does one focused job, produces a passdown, and hands off to the next.
+
+```
+  ╭──────────────╮                    ╭──────────────╮
+  │ User draws   │                    │ User types   │
+  │ on canvas    │                    │ in chat      │
+  ╰──────┬───────╯                    ╰──────┬───────╯
+         │                                   │
+         ▼                                   ▼
+  ┌──────────────┐                    ┌──────────────┐
+  │  Phase 0     │                    │  Manager     │
+  │  Structural  │                    │  Assistant   │
+  │  (agentless) │                    │  dispatch()  │
+  └──────┬───────┘                    └──────┬───────┘
+         │                                   │
+         └───────────────┬───────────────────┘
+                         ▼
+                  ┌──────────────┐
+                  │  Creation    │
+                  │  Sub-Agent   │──── dispatch tool (creation branch)
+                  └──────┬───────┘
+                         │ passdown
+                         ▼
+                  ┌──────────────┐
+                  │  Content     │
+                  │  Sub-Agent   │──── dispatch tool (content branch)
+                  └──────┬───────┘
+                         │ passdown
+                         ▼
+                  ┌──────────────┐
+                  │  Per-Node    │
+                  │  Builder     │──── reads full box content
+                  └──────┬───────┘
+                         │ passdown
+                         ▼
+                  ┌──────────────┐
+                  │  Workforce   │
+                  │  Execution   │
+                  └──────────────┘
+```
+
+The board path front-loads structural work agentlessly (Phase 0). The chat path skips Phase 0 — the manager dispatches directly to the builder sub-agents. After that, the pipeline is identical.
+
+## Hierarchy Trees Inside Nodes
+
+Workforce nodes have agent teams. The tree tab shows these as nested hierarchies:
+
+```
+── Research Pipeline
+   ├── Research Team               [workforce]
+   │   ├── Lead Researcher
+   │   ├── Web Searcher
+   │   ├── Paper Analyzer
+   │   └── Fact Checker
+   ├── Write Report                [single]
+   └── Output                      [single]
+```
+
+The user can draw nested boxes on the canvas to describe team structure — a large rectangle containing smaller rectangles with arrows between them. The system reads the containment and builds the agent roster. Or the user can configure the roster directly in the config panel. Both paths produce the same result.
 
 ## User Stories
 
 **"I want to sketch a workflow from nothing."**
-Open a new workflow. Draw three boxes. Write what each one does. Connect them with arrows. Hit submit. Watch the real nodes appear where the sketches were. Done. No conversation needed.
+Open a new workflow. Draw boxes. Write what each one does. Connect them with arrows. Hit submit. The tree populates instantly with the structure. Designs fill in over the next few seconds. Click each node to review. Run when ready.
 
 **"I want to restructure my workflow."**
-The board has five nodes. Draw a new box between nodes 2 and 3. Draw arrows connecting it. Add a comment to node 4: "remove this, it's redundant." Hit submit. The manager adds the new node, rewires the edges, and removes node 4.
+Draw new boxes on the canvas. Draw arrows connecting them to the existing structure. Submit. New nodes appear in the tree instantly. The drawing stays on the canvas as your reference.
 
 **"I want to fix how a node behaves."**
-Right-click a node. Add comment: "The output is too verbose, limit to 3 bullet points." Hit submit. The manager dispatches to that node's builder with the instruction. The node gets reconfigured.
+Click the node in the tree. The config panel opens. Edit the system prompt directly. No submit needed — you're editing the live configuration. Or draw an annotation on the canvas near the node and submit for the design agent to interpret.
 
-**"I want to do something complex that's hard to draw."**
-Open the chat. Type it out. The manager handles it the same way. Chat and drawing coexist. Use whichever is more natural for the task at hand.
+**"I want to review everything before running."**
+Walk through the tree. Click each node. Read the system prompt, check the capabilities, verify the routing. Edit anything that doesn't look right. The guided engineering pipeline means nothing runs until you say so.
 
-**"I submitted but some changes failed."**
-Three doodles submitted. Two became real nodes. One came back as a sketch — the manager couldn't interpret it. Edit the sketch, add more detail, resubmit just that one.
-
-**"I changed my mind mid-drawing."**
-Select a doodle element. Delete it. It's gone. Doodles are ephemeral until submitted. No undo needed — just delete and redraw.
-
-## Hierarchy Trees Inside Nodes
-
-Doodle boxes can contain other doodle boxes. A large rectangle with smaller rectangles and arrows inside it describes a team hierarchy — and that maps directly to workforce nodes with agent rosters.
-
-```
-╭ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╮
-╎ Research Team                            ╎
-╎                                          ╎
-╎    ╭ ─ ─ ─ ─ ─ ─ ╮                     ╎
-╎    ╎ Lead          ╎                     ╎
-╎    ╎ Researcher    ╎                     ╎
-╎    ╰ ─ ─ ─ ┬ ─ ─ ╯                     ╎
-╎         ╭───┼────╮                       ╎
-╎         ▼   ▼    ▼                       ╎      ╭ ─ ─ ─ ─ ─ ╮
-╎   ╭ ─ ─ ╮╭ ─ ─ ╮╭ ─ ─ ─ ╮             ╎      ╎ Write      ╎
-╎   ╎ Web ╎╎Paper╎╎ Fact  ╎             ╎~~~~>╎ final     ╎
-╎   ╎Srch ╎╎Anlyz╎╎ Check ╎             ╎      ╎ report    ╎
-╎   ╰ ─ ─ ╯╰ ─ ─ ╯╰ ─ ─ ─ ╯             ╎      ╰ ─ ─ ─ ─ ─ ╯
-╎                                          ╎
-╰ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╯
-```
-
-The system classifies rectangles by spatial containment. Is rectangle B fully inside rectangle A's bounds? Then B is an inner element — an agent in A's team. Arrows between inner elements describe the team's reporting structure. Arrows between outer elements describe the workflow DAG.
-
-The extraction produces a nested changeset:
-
-```
-New Nodes:
-  - "Research Team"
-    Position: (50, 50)
-    Hierarchy:
-      Agents:
-        - "Lead Researcher" (lead)
-        - "Web Searcher"
-        - "Paper Analyzer"
-        - "Fact Checker"
-      Reporting:
-        - Lead Researcher → Web Searcher
-        - Lead Researcher → Paper Analyzer
-        - Lead Researcher → Fact Checker
-
-  - "Write final report"
-    Position: (500, 200)
-    Hierarchy: none
-
-Edges:
-  - "Research Team" → "Write final report"
-```
-
-The manager builder reads "Research Team" with a hierarchy and creates a workforce node with that agent roster. The inner tree is the team structure. Lead Researcher is the designer, the three children are the agents. "Write final report" with no hierarchy becomes a single node. The user just drew their entire agent team on a canvas and the system understood it.
-
-No forms. No config screens. No "add agent" buttons. Draw the tree, submit, watch it build.
-
-## Rich Text Inside Nodes
-
-### TerminalBlock in Doodle Nodes
-
-The existing `TerminalBlock` component — the custom markdown renderer built from scratch with a full AST parser, JetBrains Mono, headings, lists, tables, code blocks, blockquotes — goes inside the doodle nodes. The user types markdown, the node renders it beautifully.
-
-This means doodle nodes aren't limited to plain text. The user can write structured content:
-
-```
-WHAT THE USER TYPES:              WHAT THEY SEE IN THE NODE:
-
-# Research Team                   Research Team
-                                  ─────────────
-- search the web for              • search the web for
-  competitor pricing                competitor pricing
-- analyze **quarterly reports**   • analyze quarterly reports
-- fact-check all claims           • fact-check all claims
-
-> Focus on Q4 2025 data only.     ┃ Focus on Q4 2025 data only.
-```
-
-Headings describe the node's purpose. Lists describe subtasks or agents. Blockquotes add context or constraints. Bold emphasizes what matters. All rendered by a component that already exists and already handles theming, memoization, and performance.
-
-### Edit / Preview Toggle
-
-The text editing experience uses a two-state toggle rather than a hybrid WYSIWYG approach. This avoids the hardest UX problem in canvas editing — cursor positioning inside rendered content.
-
-Click into a doodle node: you see raw markdown in a plain text input. Type freely. Click away (or press Escape): the raw text is replaced by the TerminalBlock-rendered output. Click back in to edit again.
-
-```
-EDITING (clicked into node):          VIEWING (clicked away):
-
-╭ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╮        ╭ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╮
-╎ # Research Team             ╎        ╎ Research Team               ╎
-╎                             ╎        ╎ ─────────────               ╎
-╎ - Web Searcher              ╎   →    ╎  • Web Searcher             ╎
-╎ - Paper Analyzer            ╎        ╎  • Paper Analyzer           ╎
-╎ - **Fact Checker**          ╎        ╎  • Fact Checker              ╎
-╎                             ╎        ╎                              ╎
-╎ > Require citations.|       ╎        ╎  ┃ Require citations.       ╎
-╰ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╯        ╰ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ╯
-     raw markdown                        TerminalBlock rendered
-```
-
-This also applies to side-anchored comments on real nodes. Click to type markdown, click away to see it rendered. The comments look polished in their sketchy containers.
+**"I want to see what my workflow produced."**
+Switch to the execution output tab. Scroll through full-width document blocks. The tree gutter on the left shows the pipeline flow — sequential steps flow straight down, parallel steps branch and merge. Read the whole execution like a story.
 
 ## Technical Foundation
 
 ### Drawing Engine
 
-The doodle layer uses the Excalidraw React component (`@excalidraw/excalidraw`, MIT licensed). It provides rectangle, arrow, and text tools with a hand-drawn aesthetic out of the box. The component runs as an overlay on the existing React Flow canvas, sharing the same viewport (pan and zoom stay synchronized).
+The doodle layer uses the Excalidraw React component (`@excalidraw/excalidraw`, MIT licensed). It provides rectangle, arrow, and text tools with a hand-drawn aesthetic out of the box. The component runs as an overlay on the existing page, providing a full drawing surface.
 
-Excalidraw elements are never persisted to the database. They live in local component state until submit, at which point they're extracted into a changeset and cleared. Doodles are ephemeral.
+Excalidraw elements persist locally as the user's visual reference. They are never converted to workflow nodes. The system reads them on submit to extract structure, but the drawings themselves stay.
 
-### Text Rendering
+### Tree Rendering
 
-Inside doodle nodes and comment boxes, the existing `TerminalBlock` component handles markdown rendering. It brings the full parser (headings, lists, tables, code blocks, blockquotes, inline formatting), JetBrains Mono typography, and the terminal theme — all already built, tested, and memoized. No new rendering code needed.
+The sidebar tree uses the `AsciiTree` class (`frontend/src/utils/AsciiTree.ts`) — a generic tree builder that converts flat data into hierarchical ASCII text with box-drawing characters. Already built, tested (23 unit tests), and integrated into the workforce agents tab as a proof of concept.
 
-### Real Node Rendering
+### Execution Output Stream
 
-Real workflow nodes continue to render through React Flow with the existing `CanvasNode` component. No changes to how real nodes look or behave. The doodle layer is purely additive.
+The execution output is a vertical scroll of full-width document blocks. A tree gutter component renders along the left edge using box-drawing characters to show pipeline flow. The gutter branches for parallel steps and merges when they rejoin. Each document block contains the step's output — plain text rendered as prose, code rendered in fenced blocks.
 
-### Rough.js (Future Enhancement)
+### Existing Canvas
 
-For a fully unified aesthetic, real nodes could optionally render their borders using rough.js to match the hand-drawn feel. This is a visual polish pass, not a launch requirement. The contrast between sketchy doodles and clean real nodes is actually useful — it communicates state.
+The existing React Flow canvas (`@xyflow/react`) with `CanvasNode` components stays as-is. It becomes the "advanced" or "spatial" view for users who want the full DAG editor. The new tree-first sidebar is the primary experience. Both views read from the same stores, same API, same types. Two views into the same data.
 
 ## What This Doesn't Change
 
-- The manager assistant chat works exactly as it does today.
-- The dispatch pipeline (L1 → L2 → L3 → L4) is unchanged.
-- The manager builder remains the single source of truth for all workflow mutations.
 - Node configuration, execution, the DAG engine — all untouched.
-- Node chat sessions continue to work — they gain an audit trail of Visual Dispatch changes alongside direct conversation history.
-- The doodle layer is a new input method, not a new execution path.
+- The workforce pipeline infrastructure is reused, not rebuilt.
+- The beliefs extraction system continues as-is — it feeds the pipeline agents with compressed context.
+- The existing canvas view continues to work as an advanced/spatial view.
+- All stores, API endpoints, and types are shared between views.
+- The designer phase still generates per-agent system prompts at execution time.
 
 ## What This Builds On
 
-Every piece of this feature already exists in some form:
-
 | Capability | Already built | Visual Dispatch adds |
 |------------|--------------|---------------------|
-| Canvas with nodes and edges | React Flow (`@xyflow/react`) | Doodle overlay via Excalidraw |
-| Manager builder dispatch | L2 dispatch pipeline | Structured changeset as input |
-| Node builder dispatch | L4 dispatch pipeline | Manager routes drawing annotations to builders |
-| Rich text rendering | `TerminalBlock` (custom markdown AST parser) | Same component inside doodle nodes |
-| Workforce agent teams | Agent rosters, pipeline service | Drawn hierarchy trees map to rosters |
-| Node chat sessions | L3 assistant chat | Audit trail for drawing-initiated changes |
-| Board state | `board_state::build()` queries DB | Changeset is the visual diff on top of board state |
+| Workflow structure | Stores, API, DB (50+ entity types) | Tree-first sidebar navigation |
+| Workforce pipeline | Pipeline service, sequential agent execution | Reused as the dispatch pipeline (creation → content → execution) |
+| Dispatch tool | Dispatch mechanism with passdowns | Branching: creation dispatch vs content dispatch |
+| Beliefs extraction | Chat-phase Haiku extraction, neighbor awareness | Primary context layer for pipeline agents |
+| Board serializer | `board_serializer` module (classify, diff, rasterize) | Feeds changeset into the pipeline |
+| Rich text rendering | `TerminalBlock` (custom markdown AST parser) | Execution output stream with tree gutter |
+| Tree rendering | `AsciiTree` class (box-drawing hierarchies) | Primary navigation in sidebar |
+| Workforce agent teams | Agent rosters, pipeline service | Visual hierarchy in tree + config panel editing |
+| Canvas with nodes and edges | React Flow (`@xyflow/react`) | Stays as advanced view; Excalidraw overlay for drawing |
+| Agent configuration | Config screens, chat-based dispatch | Config panel in sidebar with full edit capability |
 
-Nothing gets thrown away. Nothing gets rewritten. Visual Dispatch is a visual front door to the system that already exists.
-
-The insight is simple: the user already thinks visually about their workflow. The board is already spatial. Visual Dispatch lets them express intent in the same medium they're already looking at.
+Nothing gets thrown away. Nothing gets rewritten. Visual Dispatch is a new front door — a guided engineering pipeline that builds on every system that already exists.
