@@ -12,7 +12,17 @@
 //! classification and annotation resolution. [`CanvasChangeset`] is the result
 //! of diffing two snapshots.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+/// Deserialize `null` as `Default::default()` — Excalidraw sends `null` for
+/// several array fields instead of `[]`.
+fn deserialize_null_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Default + Deserialize<'de>,
+{
+    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
+}
 
 // ============================================================================
 // Excalidraw Input Types
@@ -51,7 +61,8 @@ pub struct RectangleElement {
     #[serde(default)]
     pub is_deleted: bool,
     /// References to elements bound inside this rectangle (text labels, arrows).
-    #[serde(default)]
+    /// Excalidraw sends `null` when no elements are bound, so `Option` + `default`.
+    #[serde(default, deserialize_with = "deserialize_null_as_default")]
     pub bound_elements: Vec<BoundElementRef>,
 }
 
