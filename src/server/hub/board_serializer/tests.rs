@@ -153,6 +153,7 @@ mod tests {
             },
             annotations: vec![],
             sketch: None,
+            stroke_encoding: None,
         }
     }
 
@@ -1859,6 +1860,363 @@ mod tests {
     }
 
     // ========================================================================
+    // Stroke Encoder — RDP simplification + JSON coordinate encoding
+    // ========================================================================
+
+    use crate::server::hub::board_serializer::encode::encode_strokes;
+
+    // -- RDP unit tests (through encode_strokes) ----------------------------
+
+    #[test]
+    fn encode_straight_line_simplified_to_endpoints() {
+        // 22 collinear points from (100,150) to (300,150) — should simplify to 2 endpoints.
+        let bounds = CanvasBounds {
+            x: 100.0,
+            y: 100.0,
+            width: 300.0,
+            height: 200.0,
+        };
+        let stroke: Vec<[f64; 2]> = (0..22)
+            .map(|i| [100.0 + (i as f64) * 10.0, 150.0])
+            .collect();
+
+        let result = encode_strokes(&[stroke], &bounds).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        let points = &parsed["strokes"][0]["points"];
+        assert_eq!(
+            points.as_array().unwrap().len(),
+            2,
+            "straight line should simplify to 2 endpoints"
+        );
+    }
+
+    #[test]
+    fn encode_right_angle_preserves_corner() {
+        // L-shape: (100,100)→(200,100)→(200,200) — corner must survive RDP.
+        let bounds = CanvasBounds {
+            x: 100.0,
+            y: 100.0,
+            width: 200.0,
+            height: 200.0,
+        };
+        let stroke = vec![[100.0, 100.0], [200.0, 100.0], [200.0, 200.0]];
+        let result = encode_strokes(&[stroke], &bounds).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        let points = parsed["strokes"][0]["points"].as_array().unwrap();
+        assert_eq!(points.len(), 3, "L-shape corner should be preserved");
+    }
+
+    #[test]
+    fn encode_triangle_preserves_all_vertices() {
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 200.0,
+            height: 200.0,
+        };
+        let stroke = vec![[0.0, 200.0], [100.0, 0.0], [200.0, 200.0]];
+        let result = encode_strokes(&[stroke], &bounds).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        let points = parsed["strokes"][0]["points"].as_array().unwrap();
+        assert_eq!(points.len(), 3, "triangle vertices should all survive");
+    }
+
+    #[test]
+    fn encode_noisy_line_collapses() {
+        // Horizontal line with tiny vertical jitter (< 3px epsilon).
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 500.0,
+            height: 100.0,
+        };
+        let stroke: Vec<[f64; 2]> = (0..20)
+            .map(|i| {
+                let jitter = if i % 2 == 0 { 1.0 } else { -1.0 };
+                [i as f64 * 25.0, 50.0 + jitter]
+            })
+            .collect();
+
+        let result = encode_strokes(&[stroke], &bounds).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        let points = parsed["strokes"][0]["points"].as_array().unwrap();
+        assert_eq!(points.len(), 2, "noisy line should collapse to 2 endpoints");
+    }
+
+    #[test]
+    fn encode_single_point_stroke() {
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
+        };
+        let stroke = vec![[50.0, 50.0]];
+        let result = encode_strokes(&[stroke], &bounds).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        let points = parsed["strokes"][0]["points"].as_array().unwrap();
+        assert_eq!(points.len(), 1);
+        assert_eq!(points[0], serde_json::json!([50, 50]));
+    }
+
+    #[test]
+    fn encode_two_point_stroke_passes_through() {
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 200.0,
+            height: 100.0,
+        };
+        let stroke = vec![[10.0, 20.0], [190.0, 80.0]];
+        let result = encode_strokes(&[stroke], &bounds).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        let points = parsed["strokes"][0]["points"].as_array().unwrap();
+        assert_eq!(points.len(), 2);
+    }
+
+    // -- Coordinate handling ------------------------------------------------
+
+    #[test]
+    fn encode_coordinates_are_bounds_relative() {
+        let bounds = CanvasBounds {
+            x: 100.0,
+            y: 200.0,
+            width: 300.0,
+            height: 150.0,
+        };
+        // Point at canvas (100, 200) should map to (0, 0) relative to bounds.
+        let stroke = vec![[100.0, 200.0], [250.0, 275.0]];
+        let result = encode_strokes(&[stroke], &bounds).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        let points = parsed["strokes"][0]["points"].as_array().unwrap();
+        assert_eq!(points[0], serde_json::json!([0, 0]));
+        assert_eq!(points[1], serde_json::json!([150, 75]));
+    }
+
+    #[test]
+    fn encode_coordinates_rounded_to_integers() {
+        let bounds = CanvasBounds {
+            x: 100.0,
+            y: 200.0,
+            width: 300.0,
+            height: 150.0,
+        };
+        let stroke = vec![[100.7, 200.3], [250.4, 275.9]];
+        let result = encode_strokes(&[stroke], &bounds).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        let points = parsed["strokes"][0]["points"].as_array().unwrap();
+        assert_eq!(points[0], serde_json::json!([1, 0]));
+        assert_eq!(points[1], serde_json::json!([150, 76]));
+    }
+
+    #[test]
+    fn encode_canvas_dimensions_from_bounds() {
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 480.3,
+            height: 359.7,
+        };
+        let stroke = vec![[10.0, 10.0], [100.0, 100.0]];
+        let result = encode_strokes(&[stroke], &bounds).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        let canvas = parsed["canvas"].as_array().unwrap();
+        assert_eq!(canvas[0], 480);
+        assert_eq!(canvas[1], 360);
+    }
+
+    // -- Edge cases ---------------------------------------------------------
+
+    #[test]
+    fn encode_empty_strokes_returns_none() {
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 100.0,
+            height: 100.0,
+        };
+        assert!(encode_strokes(&[], &bounds).is_none());
+    }
+
+    #[test]
+    fn encode_zero_area_bounds_returns_none() {
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 0.0,
+            height: 100.0,
+        };
+        let stroke = vec![[10.0, 10.0], [50.0, 50.0]];
+        assert!(encode_strokes(&[stroke], &bounds).is_none());
+    }
+
+    #[test]
+    fn encode_multiple_strokes() {
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 200.0,
+            height: 200.0,
+        };
+        let stroke1 = vec![[0.0, 0.0], [100.0, 0.0]];
+        let stroke2 = vec![[0.0, 100.0], [100.0, 100.0]];
+        let result = encode_strokes(&[stroke1, stroke2], &bounds).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        assert_eq!(parsed["strokes"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn encode_empty_stroke_in_batch_skipped() {
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 200.0,
+            height: 200.0,
+        };
+        let empty: Vec<[f64; 2]> = vec![];
+        let stroke = vec![[10.0, 10.0], [100.0, 100.0]];
+        let result = encode_strokes(&[empty, stroke], &bounds).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        assert_eq!(parsed["strokes"].as_array().unwrap().len(), 1);
+    }
+
+    // -- Integration (through classify_board) -------------------------------
+
+    #[test]
+    fn snapshot_populates_both_sketch_and_stroke_encoding() {
+        let mut elements = make_rect("r1", 0.0, 0.0, 500.0, 300.0, "Draw here");
+        // Diagonal line inside the rect
+        elements.push(make_freedraw(
+            "fd1",
+            50.0,
+            50.0,
+            vec![vec![0.0, 0.0], vec![200.0, 200.0]],
+        ));
+        let snapshot = classify_board(&elements);
+
+        assert_eq!(snapshot.nodes.len(), 1);
+        let node = &snapshot.nodes[0];
+        assert!(node.sketch.is_some(), "ASCII sketch should be populated");
+        assert!(
+            node.stroke_encoding.is_some(),
+            "stroke encoding should be populated"
+        );
+
+        // Verify JSON structure
+        let parsed: serde_json::Value =
+            serde_json::from_str(node.stroke_encoding.as_ref().unwrap()).unwrap();
+        assert!(parsed["canvas"].is_array());
+        assert!(parsed["strokes"].is_array());
+        assert!(!parsed["strokes"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn snapshot_no_strokes_encoding_is_none() {
+        let elements = make_rect("r1", 0.0, 0.0, 200.0, 100.0, "No drawing");
+        let snapshot = classify_board(&elements);
+
+        assert_eq!(snapshot.nodes.len(), 1);
+        assert!(snapshot.nodes[0].sketch.is_none());
+        assert!(snapshot.nodes[0].stroke_encoding.is_none());
+    }
+
+    #[test]
+    fn encode_token_count_much_less_than_ascii() {
+        let mut elements = make_rect("r1", 0.0, 0.0, 500.0, 300.0, "Draw here");
+        // Arrow shape: shaft + two arrowhead lines
+        elements.push(make_freedraw(
+            "shaft",
+            50.0,
+            150.0,
+            vec![vec![0.0, 0.0], vec![350.0, 0.0]],
+        ));
+        elements.push(make_freedraw(
+            "head1",
+            350.0,
+            100.0,
+            vec![vec![0.0, 0.0], vec![50.0, 50.0]],
+        ));
+        elements.push(make_freedraw(
+            "head2",
+            350.0,
+            200.0,
+            vec![vec![0.0, 0.0], vec![50.0, -50.0]],
+        ));
+        let snapshot = classify_board(&elements);
+        let node = &snapshot.nodes[0];
+
+        let sketch_len = node.sketch.as_ref().unwrap().len();
+        let encoding_len = node.stroke_encoding.as_ref().unwrap().len();
+
+        // Encoding should be at least 5x smaller than ASCII grid.
+        assert!(
+            encoding_len * 5 < sketch_len,
+            "stroke encoding ({encoding_len} chars) should be much smaller than ASCII sketch ({sketch_len} chars)"
+        );
+    }
+
+    // -- JSON format validation ---------------------------------------------
+
+    #[test]
+    fn encode_output_is_valid_json_with_expected_structure() {
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 480.0,
+            height: 360.0,
+        };
+        let stroke = vec![[20.0, 20.0], [460.0, 20.0]];
+        let result = encode_strokes(&[stroke], &bounds).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+
+        // Top-level keys
+        assert!(parsed.get("canvas").is_some(), "must have 'canvas' key");
+        assert!(parsed.get("strokes").is_some(), "must have 'strokes' key");
+
+        // Canvas is [width, height]
+        let canvas = parsed["canvas"].as_array().unwrap();
+        assert_eq!(canvas.len(), 2);
+
+        // Each stroke has a 'points' array of [x, y] pairs
+        let strokes = parsed["strokes"].as_array().unwrap();
+        for s in strokes {
+            let pts = s["points"].as_array().unwrap();
+            for pt in pts {
+                assert_eq!(pt.as_array().unwrap().len(), 2, "each point must be [x, y]");
+            }
+        }
+    }
+
+    #[test]
+    fn encode_output_is_compact_json() {
+        let bounds = CanvasBounds {
+            x: 0.0,
+            y: 0.0,
+            width: 200.0,
+            height: 100.0,
+        };
+        let stroke = vec![[10.0, 20.0], [190.0, 80.0]];
+        let result = encode_strokes(&[stroke], &bounds).unwrap();
+
+        // Compact JSON should have no newlines or leading spaces.
+        assert!(
+            !result.contains('\n'),
+            "output should be compact (no newlines)"
+        );
+    }
+
+    // ========================================================================
     // ASCII Drawing → LLM Integration
     // ========================================================================
     //
@@ -1989,20 +2347,21 @@ mod tests {
         };
         let client = XaiClient::with_config(config).unwrap();
 
-        let request = crate::llm::LLMRequest::new(
-            "grok-3-latest",
-            vec![crate::llm::Message::user(prompt)],
-        )
-        .with_system(
-            "You are a visual design assistant. \
+        let request =
+            crate::llm::LLMRequest::new("grok-3-latest", vec![crate::llm::Message::user(prompt)])
+                .with_system(
+                    "You are a visual design assistant. \
              Interpret ASCII sketches drawn on workflow boards and explain \
              what the user is trying to communicate.",
-        );
+                );
 
         let response: crate::llm::LLMResponse = client.send_message(request).await.unwrap();
 
         // Verify we got a meaningful response back
-        assert!(!response.content.is_empty(), "Grok response should not be empty");
+        assert!(
+            !response.content.is_empty(),
+            "Grok response should not be empty"
+        );
         assert!(
             response.content.contains("arrow"),
             "Grok should identify the arrow shape in the sketch"
@@ -2172,7 +2531,8 @@ mod tests {
         );
 
         // Filter → should dispatch (new node = High significance)
-        let filtered = filter_changeset(&changeset, &snapshot.edges, None, &FilterConfig::default());
+        let filtered =
+            filter_changeset(&changeset, &snapshot.edges, None, &FilterConfig::default());
         assert!(filtered.should_dispatch);
         assert_eq!(filtered.meaningful.len(), 1);
 
@@ -2257,8 +2617,7 @@ mod tests {
     fn ascii_website_wireframe_layout() {
         use crate::server::hub::board_serializer::rasterize::rasterize_strokes;
 
-        let mut elements =
-            make_rect("page", 0.0, 0.0, 480.0, 360.0, "Landing Page Wireframe");
+        let mut elements = make_rect("page", 0.0, 0.0, 480.0, 360.0, "Landing Page Wireframe");
 
         // ── Outer border ──
 
@@ -2405,11 +2764,21 @@ mod tests {
         let rows: Vec<&str> = sketch.lines().collect();
 
         // Should use most of the 24-row grid
-        assert!(rows.len() >= 18, "wireframe should span most rows, got {}", rows.len());
+        assert!(
+            rows.len() >= 18,
+            "wireframe should span most rows, got {}",
+            rows.len()
+        );
 
         // Top and bottom rows should have filled cells (outer border)
-        assert!(rows.first().unwrap().contains('█'), "top border should be visible");
-        assert!(rows.last().unwrap().contains('█'), "bottom border should be visible");
+        assert!(
+            rows.first().unwrap().contains('█'),
+            "top border should be visible"
+        );
+        assert!(
+            rows.last().unwrap().contains('█'),
+            "bottom border should be visible"
+        );
 
         // Header separator row (~row 4-5) should have a full horizontal line
         let header_row = &rows[3];
@@ -2475,7 +2844,10 @@ mod tests {
             48,
             24,
         );
-        assert!(direct.is_some(), "direct rasterization should work for same bounds");
+        assert!(
+            direct.is_some(),
+            "direct rasterization should work for same bounds"
+        );
     }
 
     #[tokio::test]
@@ -2486,33 +2858,64 @@ mod tests {
         use wiremock::{Mock, MockServer, ResponseTemplate};
 
         // Reuse the same wireframe construction
-        let mut elements =
-            make_rect("page", 0.0, 0.0, 480.0, 360.0, "Landing Page Wireframe");
+        let mut elements = make_rect("page", 0.0, 0.0, 480.0, 360.0, "Landing Page Wireframe");
 
         // Outer border
-        elements.push(make_freedraw("bt", 20.0, 20.0,
-            (0..=22).map(|i| vec![i as f64 * 20.0, 0.0]).collect()));
-        elements.push(make_freedraw("br", 460.0, 20.0,
-            (0..=16).map(|i| vec![0.0, i as f64 * 20.0]).collect()));
-        elements.push(make_freedraw("bb", 460.0, 340.0,
-            (0..=22).map(|i| vec![-(i as f64 * 20.0), 0.0]).collect()));
-        elements.push(make_freedraw("bl", 20.0, 340.0,
-            (0..=16).map(|i| vec![0.0, -(i as f64 * 20.0)]).collect()));
+        elements.push(make_freedraw(
+            "bt",
+            20.0,
+            20.0,
+            (0..=22).map(|i| vec![i as f64 * 20.0, 0.0]).collect(),
+        ));
+        elements.push(make_freedraw(
+            "br",
+            460.0,
+            20.0,
+            (0..=16).map(|i| vec![0.0, i as f64 * 20.0]).collect(),
+        ));
+        elements.push(make_freedraw(
+            "bb",
+            460.0,
+            340.0,
+            (0..=22).map(|i| vec![-(i as f64 * 20.0), 0.0]).collect(),
+        ));
+        elements.push(make_freedraw(
+            "bl",
+            20.0,
+            340.0,
+            (0..=16).map(|i| vec![0.0, -(i as f64 * 20.0)]).collect(),
+        ));
 
         // Header + footer separators
-        elements.push(make_freedraw("hs", 20.0, 70.0,
-            (0..=22).map(|i| vec![i as f64 * 20.0, 0.0]).collect()));
-        elements.push(make_freedraw("fs", 20.0, 290.0,
-            (0..=22).map(|i| vec![i as f64 * 20.0, 0.0]).collect()));
+        elements.push(make_freedraw(
+            "hs",
+            20.0,
+            70.0,
+            (0..=22).map(|i| vec![i as f64 * 20.0, 0.0]).collect(),
+        ));
+        elements.push(make_freedraw(
+            "fs",
+            20.0,
+            290.0,
+            (0..=22).map(|i| vec![i as f64 * 20.0, 0.0]).collect(),
+        ));
 
         // Sidebar
-        elements.push(make_freedraw("se", 130.0, 70.0,
-            (0..=11).map(|i| vec![0.0, i as f64 * 20.0]).collect()));
+        elements.push(make_freedraw(
+            "se",
+            130.0,
+            70.0,
+            (0..=11).map(|i| vec![0.0, i as f64 * 20.0]).collect(),
+        ));
 
         // Content lines
         for (i, y) in [100.0, 130.0, 160.0, 190.0].iter().enumerate() {
-            elements.push(make_freedraw(&format!("c{i}"), 160.0, *y,
-                (0..=14).map(|j| vec![j as f64 * 20.0, 0.0]).collect()));
+            elements.push(make_freedraw(
+                &format!("c{i}"),
+                160.0,
+                *y,
+                (0..=14).map(|j| vec![j as f64 * 20.0, 0.0]).collect(),
+            ));
         }
 
         let snapshot = classify_board(&elements);

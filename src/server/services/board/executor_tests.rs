@@ -39,6 +39,7 @@ mod tests {
             },
             annotations: vec![],
             sketch: None,
+            stroke_encoding: None,
         }
     }
 
@@ -94,6 +95,7 @@ mod tests {
                     },
                     annotations: vec!["Focus on pricing".to_string()],
                     sketch: None,
+                    stroke_encoding: None,
                 },
                 significance: ChangeSignificance::High,
             },

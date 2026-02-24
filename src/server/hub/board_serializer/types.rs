@@ -171,6 +171,9 @@ pub struct CanvasNode {
     /// ASCII rasterization of freeform drawings inside this node's bounds.
     /// `None` if no strokes were detected inside the node.
     pub sketch: Option<String>,
+    /// RDP-simplified JSON coordinate encoding of strokes for LLM consumption.
+    /// More token-efficient than ASCII sketch (~30-100 tokens vs ~1,200).
+    pub stroke_encoding: Option<String>,
 }
 
 /// An edge: an arrow connecting two node candidates.

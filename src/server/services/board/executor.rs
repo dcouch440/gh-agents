@@ -119,7 +119,7 @@ pub async fn execute_phase_zero(
             step.name = Some(name);
             step.prompt_template = prompt_template;
 
-            let new_context = build_board_context(&update.new_annotations, &None);
+            let new_context = build_board_context(&update.new_annotations, &None, &None);
             if !new_context.is_empty() || !step.board_context_cache.is_empty() {
                 step.board_context_cache = new_context;
                 step.board_context_updated_at = Some(chrono::Utc::now());
@@ -203,7 +203,8 @@ async fn create_node(
     element_map: &mut HashMap<String, CanvasElementMapRow>,
 ) -> Result<Uuid, ServiceError> {
     let (name, prompt_template) = parse_node_text(&node.raw_text);
-    let board_context_cache = build_board_context(&node.annotations, &node.sketch);
+    let board_context_cache =
+        build_board_context(&node.annotations, &node.sketch, &node.stroke_encoding);
 
     let step = steps::create_step(
         repo,
@@ -272,7 +273,11 @@ fn parse_node_text(raw_text: &str) -> (String, String) {
 /// ██··██
 /// ·████·
 /// ```
-fn build_board_context(annotations: &[String], sketch: &Option<String>) -> String {
+fn build_board_context(
+    annotations: &[String],
+    sketch: &Option<String>,
+    stroke_encoding: &Option<String>,
+) -> String {
     let mut parts = Vec::new();
 
     if !annotations.is_empty() {
@@ -285,7 +290,13 @@ fn build_board_context(annotations: &[String], sketch: &Option<String>) -> Strin
         parts.push(section);
     }
 
-    if let Some(sketch_data) = sketch {
+    // Prefer stroke_encoding (compact JSON coordinates) over ASCII sketch.
+    if let Some(encoding) = stroke_encoding {
+        let mut section = String::from("## Stroke Coordinates\n");
+        section.push_str(encoding);
+        section.push('\n');
+        parts.push(section);
+    } else if let Some(sketch_data) = sketch {
         let mut section = String::from("## Sketch\n");
         section.push_str(sketch_data);
         section.push('\n');
