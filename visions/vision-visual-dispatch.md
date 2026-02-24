@@ -99,9 +99,29 @@ System: Phase 0 — create nodes, delete removed ones, update annotations (agent
 
 ### Phase 0 — Structural (Board Submit Only, Instant, Agentless)
 
-Only runs on board submit. The semantic diff is computed. All **Diff** items (edge changes, deletions, repositions) execute as pure DB writes. All **New** items run through the protocol selector — a cheap bot that classifies each node into the right protocol instantly — then create the node in the DB with the assigned protocol.
+Only runs on board submit. Phase 0 has two layers: the serializer pipeline and the structural executor.
 
-Nodes appear in the tree tab as soon as the user hits submit. This is agentless. Pure mechanical diff → protocol classification → DB writes. The board skeleton is built.
+**Serializer pipeline:** A 4-pass classifier reads raw Excalidraw elements and extracts structured data:
+
+1. **Nodes** — rectangles with bound text. Captures `raw_text` (full box content the user wrote), `bounds` (canvas position/size).
+2. **Edges** — arrows with both endpoints bound to nodes. Captures `source_node_id`, `target_node_id`.
+3. **Annotations** — free-floating text assigned to the nearest node within 100px by spatial proximity. Text beyond the threshold becomes a `GlobalNote` (board-level context).
+4. **Sketches** — freeform drawings inside node bounds, rasterized to ASCII art via Bresenham line algorithm.
+
+The classifier produces a `CanvasSnapshot`, which is diffed against the previous snapshot (persisted per workflow). The diff is filtered through whitespace normalization, oscillation detection, pan detection, reorder detection, and token scoring (Myers + Sørensen-Dice hybrid). The output is a `FilteredChangeset` with three tiers:
+
+- **Agentless** — deletes, rewires, moves (pure DB writes, no AI)
+- **Noise** — filtered out (whitespace-only, oscillation, pan, reorder)
+- **Meaningful** — new nodes, updated nodes, new edges (scored by significance, topologically sorted)
+
+**Structural executor:** Takes the `FilteredChangeset` and acts on it:
+
+- Execute agentless tier as DB writes (delete nodes/edges, rewire edges, update positions)
+- Create new nodes in the DB with the user's content, annotations, and sketches preserved
+- Update existing nodes when text or annotations change (name, prompt, board context)
+- The frontend updates from the POST response — no WebSocket events for Phase 0
+
+Nodes appear in the tree tab as soon as the user hits submit. This is agentless. Pure mechanical diff → DB writes. The board skeleton is built, with the user's original content and annotations intact.
 
 The chat entry point skips Phase 0 — the manager dispatches directly to the builder sub-agents.
 
@@ -133,7 +153,7 @@ The creation sub-agent sees beliefs from all connected nodes via `get_beliefs_fo
 
 | Phase | What | Model | Speed |
 |-------|------|-------|-------|
-| 0 — Structural (board only) | Diff → DB writes, protocol selector | Cheap bot for selector, no LLM for diff | Instant |
+| 0 — Structural (board only) | Diff → DB writes | No LLM | Instant |
 | Creation sub-agent | Read names + topology + beliefs, create structure | Smart, one pass | Seconds |
 | Content sub-agent | Review + refine schema from creation passdown | Smart, one pass | Seconds |
 | Per-node builder | Read full box content, configure workforce | Smart, per node | Seconds |
@@ -294,28 +314,32 @@ A lightweight classifier reads the node description and selects the right protoc
 ```
 New: User created a new node (cheap bot):
   Select the correct protocol to fulfill the job:
-  Protocols: {workforce, single, sub_workflow, container}
+  Protocols: {available protocols from registry}
   Input: "File a report"
   Output: workforce
 ```
 
-The selector looks at "File a report" and determines this needs a team of agents (workforce) — not a single agent, not a sub-workflow. The protocol is assigned automatically. The user never thinks about execution modes.
+The selector looks at "File a report" and determines the right protocol from the registry. The protocol is assigned automatically. The user never thinks about execution modes.
 
-**2. Design agent writes the spec (async):**
+**2. Per-node builder configures the node (async):**
 
-The design agent sees the new node with its assigned protocol and the full board context — incoming edges, upstream outputs, the user's description. It writes the complete agent specification.
+The per-node builder picks up the new node with its assigned protocol and the full board context — incoming edges, upstream outputs, the user's description, extracted beliefs. It configures the workforce: agent rosters, system prompts, capabilities, tools, routing rules.
 
 ```
 New: User created a new node:
   "File a report"
   Protocol: workforce (from selector)
   Incoming context: upstream step outputs, extracted beliefs
-  → Design agent writes system prompt, capabilities, agent roster
-  → Dispatches to builder with detailed message
-  → Everything happens in the background
+  → Per-node builder reads full box content
+  → Configures workforce: agent roster, system prompts, capabilities
+  → Node is ready for execution
 ```
 
-The design agent doesn't just configure the node in isolation. It sees what's upstream, understands what data flows into this node, and designs the agent to handle that specific context. "File a report" with research data upstream produces a different design than "File a report" with raw database output upstream.
+The per-node builder doesn't configure in isolation. It sees what's upstream, understands what data flows into this node, and designs the agents to handle that specific context. "File a report" with research data upstream produces a different configuration than "File a report" with raw database output upstream.
+
+**3. Designer phase (user-triggered, separate):**
+
+The designer is NOT part of the board submit pipeline. It runs later, when the user triggers workflow execution. The designer phase generates per-agent system prompts at execution time — it's the existing workforce pipeline, unchanged. The board submit pipeline builds the structure and configures the nodes. The designer phase refines the agents when they actually run.
 
 ### Full Example
 
@@ -334,12 +358,12 @@ Semantic Diff:
       "Search for competitor pricing across Q3 and Q4, compare
        year-over-year trends, flag anomalies above 10%."
 
-  New (AI classifies + designs):
+  New (AI classifies + configures):
     Node: "Generate executive summary"
     Protocol selector: workforce
-    → Design agent sees: upstream validation output, board context
-    → Writes spec: 3-agent team (analyst, writer, reviewer)
-    → Dispatches to builder in background
+    → Per-node builder sees: upstream validation output, board context
+    → Configures workforce: 3-agent team (analyst, writer, reviewer)
+    → Node ready for execution
 ```
 
 Phase 1 handles the edge rewire instantly. Phase 2 handles the description update and new node design in parallel. Phase 3 dispatches the builder messages. The user sees the edge change immediately, watches the designs populate, and runs when ready.
@@ -351,30 +375,30 @@ Context nodes go away. The user never picks an execution mode. Instead, a lightw
 The selector is a cheap, fast classifier — not a reasoning agent. It reads the node description, looks at the available protocols, and picks the best match. This runs inline during Phase 1, before the design agent even starts.
 
 ```
-┌────────────────────────────────┐
-│ Protocol Selector (cheap bot)  │
-│                                │
-│ Input:  "File a report"        │
-│ Protocols: {workforce, single, │
-│   sub_workflow, container}     │
-│ Output: workforce              │
-│                                │
-│ Input:  "Query the database"   │
-│ Output: single                 │
-│                                │
-│ Input:  "Run the full QA       │
-│          pipeline"             │
-│ Output: sub_workflow           │
-└────────────────────────────────┘
+┌─────────────────────────────────────┐
+│ Protocol Selector (cheap bot)       │
+│                                     │
+│ Protocols: {from registry}          │
+│                                     │
+│ Input:  "File a report"             │
+│ Output: workforce                   │
+│                                     │
+│ Input:  "Research competitors and   │
+│          summarize findings"        │
+│ Output: workforce                   │
+│                                     │
+│ Input:  "Run the full QA pipeline"  │
+│ Output: sub_workflow                │
+└─────────────────────────────────────┘
 ```
 
-The selector's decision populates into the node immediately. If the user disagrees, they can change it in the config panel before execution. But the default is usually right — "research competitors" is obviously a workforce, "write the final output" is obviously a single agent, "run the validation suite" is obviously a sub-workflow.
+The selector's decision populates into the node immediately. If the user disagrees, they can change it in the config panel before execution. But the default is usually right — "research competitors" is obviously a workforce, "run the validation suite" is obviously a sub-workflow. The selector picks from whatever protocols are registered, so as the protocol catalog grows, the selector's options grow with it.
 
 This eliminates the concept of "context" as a node type. If a node needs upstream context, the protocol handles it. The selector and design agent wire context flow through the protocol's built-in mechanisms — ports, variable interpolation, prompt composition. The user just describes what the node should do. The system figures out how.
 
 ## Two Entry Points, Same Sub-Agents
 
-Drawing and chatting are two ways to trigger the same builder sub-agents. The sub-agents are peers — same level, same dispatch tool, different branches. Each does one focused job, produces a passdown, and hands off to the next.
+Drawing and chatting are two ways to trigger the same manager and builder pipeline. Both paths go through the Manager — but the board path skips the Creation and Content sub-agents because the user already did that work by drawing the topology and writing the content.
 
 ```
   ╭──────────────╮                    ╭──────────────╮
@@ -382,32 +406,49 @@ Drawing and chatting are two ways to trigger the same builder sub-agents. The su
   │ on canvas    │                    │ in chat      │
   ╰──────┬───────╯                    ╰──────┬───────╯
          │                                   │
-         ▼                                   ▼
-  ┌──────────────┐                    ┌──────────────┐
-  │  Phase 0     │                    │  Manager     │
-  │  Structural  │                    │  Assistant   │
-  │  (agentless) │                    │  dispatch()  │
-  └──────┬───────┘                    └──────┬───────┘
+         ▼                                   │
+  ┌──────────────┐                           │
+  │  Phase 0     │                           │
+  │  Structural  │                           │
+  │  (agentless) │                           │
+  │  - create    │                           │
+  │    nodes     │                           │
+  │  - delete    │                           │
+  │    removed   │                           │
+  │  - rewire    │                           │
+  │    edges     │                           │
+  └──────┬───────┘                           │
          │                                   │
-         └───────────────┬───────────────────┘
-                         ▼
-                  ┌──────────────┐
-                  │  Creation    │
-                  │  Sub-Agent   │──── dispatch tool (creation branch)
-                  └──────┬───────┘
-                         │ passdown
-                         ▼
-                  ┌──────────────┐
-                  │  Content     │
-                  │  Sub-Agent   │──── dispatch tool (content branch)
-                  └──────┬───────┘
-                         │ passdown
+         │ dispatch diff                     │
+         │ to manager                        │
+         │                                   │
+         ▼                                   ▼
+         ┌───────────────────────────────────┐
+         │         Manager Assistant         │
+         │         dispatch()                │
+         └──────┬────────────────────┬───────┘
+                │                    │
+                │ board path         │ chat path
+                │ (skips 2 steps)    │ (full pipeline)
+                │                    ▼
+                │             ┌──────────────┐
+                │             │  Creation    │
+                │             │  Sub-Agent   │── topology
+                │             └──────┬───────┘
+                │                    │ passdown
+                │                    ▼
+                │             ┌──────────────┐
+                │             │  Content     │
+                │             │  Sub-Agent   │── refinement
+                │             └──────┬───────┘
+                │                    │ passdown
+                └────────┬───────────┘
                          ▼
                   ┌──────────────┐
                   │  Per-Node    │
                   │  Builder     │──── reads full box content
                   └──────┬───────┘
-                         │ passdown
+                         │
                          ▼
                   ┌──────────────┐
                   │  Workforce   │
@@ -415,7 +456,7 @@ Drawing and chatting are two ways to trigger the same builder sub-agents. The su
                   └──────────────┘
 ```
 
-The board path front-loads structural work agentlessly (Phase 0). The chat path skips Phase 0 — the manager dispatches directly to the builder sub-agents. After that, the pipeline is identical.
+The board path front-loads structural work agentlessly (Phase 0 creates nodes, deletes removed ones, rewires edges), then dispatches the diff to the Manager. The Manager recognizes the user already built the topology and wrote the content, so it skips Creation and Content and goes straight to Per-Node Builder. The chat path uses Creation and Content sub-agents to build what the user would have drawn. Both paths converge at Per-Node Builder.
 
 ## Hierarchy Trees Inside Nodes
 
@@ -488,7 +529,8 @@ The existing React Flow canvas (`@xyflow/react`) with `CanvasNode` components st
 | Workforce pipeline | Pipeline service, sequential agent execution | Reused as the dispatch pipeline (creation → content → execution) |
 | Dispatch tool | Dispatch mechanism with passdowns | Branching: creation dispatch vs content dispatch |
 | Beliefs extraction | Chat-phase Haiku extraction, neighbor awareness | Primary context layer for pipeline agents |
-| Board serializer | `board_serializer` module (classify, diff, rasterize) | Feeds changeset into the pipeline |
+| Board serializer | `board_serializer` module (classify, diff, filter, score) | Feeds changeset into the structural executor |
+| Board submit API | `POST /workflows/:id/board/submit` with snapshot persistence + Phase 0 executor | Entry point for canvas → pipeline |
 | Rich text rendering | `TerminalBlock` (custom markdown AST parser) | Execution output stream with tree gutter |
 | Tree rendering | `AsciiTree` class (box-drawing hierarchies) | Primary navigation in sidebar |
 | Workforce agent teams | Agent rosters, pipeline service | Visual hierarchy in tree + config panel editing |
