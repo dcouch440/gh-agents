@@ -20,9 +20,7 @@ pub fn render_node(node: &NodeSnapshot, variant: BoardStateVariant) -> String {
     // ── Attributes ──────────────────────────────────────────────────────
 
     el.attr_opt("ref", node.ref_id.as_deref());
-    el.attr("name", &node.name);
     el.attr_if(variant.include_node_ids(), "id", &node.id.to_string());
-    el.attr("protocol", &node.protocol);
     el.attr("status", &node.status);
     el.attr_if(
         variant.include_task_attr() && !node.task.is_empty(),
