@@ -16,6 +16,7 @@ pub mod tools;
 pub mod ws;
 
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use anyhow::Result;
 use axum::{
@@ -39,6 +40,7 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::constants::routes;
+use crate::env::Env;
 use crate::types::AppConfig;
 
 pub use state::AppState;
@@ -51,8 +53,13 @@ pub use state::AppState;
 /// - CORS configuration for development
 /// - Request tracing middleware
 /// - Graceful shutdown handling
-pub async fn start_server(db: PgPool, config: AppConfig, addr: SocketAddr) -> Result<()> {
-    let (state, chat_rx) = AppState::new(db, config).await;
+pub async fn start_server(
+    db: PgPool,
+    config: AppConfig,
+    addr: SocketAddr,
+    env: Arc<Env>,
+) -> Result<()> {
+    let (state, chat_rx) = AppState::new(db, config, env).await;
 
     // Spawn the chat consumer to process chat messages via LLM
     let _chat_consumer_handle = executors::chat::spawn_chat_consumer(state.clone(), chat_rx);
@@ -103,14 +110,10 @@ pub async fn start_server(db: PgPool, config: AppConfig, addr: SocketAddr) -> Re
 
 /// Create the application router with all routes, middleware, and rate limiting
 fn create_router(state: AppState) -> Router {
-    let static_dir = std::env::var(crate::constants::ENV_NEXOR_STATIC_DIR)
-        .unwrap_or_else(|_| "ui/dist".to_string());
-    let cors = build_cors_layer();
-
-    // Check if we should skip rate limiting (dev mode behind proxy)
-    let skip_rate_limit = std::env::var("NEXOR_SKIP_RATE_LIMIT")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
+    let env = state.env();
+    let static_dir = env.static_dir.clone();
+    let cors = build_cors_layer(env.cors_origins.as_deref());
+    let skip_rate_limit = env.skip_rate_limit;
 
     let public_routes = if skip_rate_limit {
         info!("Rate limiting disabled (NEXOR_SKIP_RATE_LIMIT=1)");
@@ -495,7 +498,7 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
 /// Create the application router with a specific static directory (no rate limiting — used by tests)
 #[cfg(test)]
 fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
-    let cors = build_cors_layer();
+    let cors = build_cors_layer(state.env().cors_origins.as_deref());
     let public_routes = build_public_routes();
     let protected_routes = build_protected_routes(state.clone());
 
@@ -513,13 +516,13 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
         .with_state(state)
 }
 
-/// Build CORS layer from CORS_ORIGINS env var.
+/// Build CORS layer from the parsed CORS origins.
 ///
-/// - If `CORS_ORIGINS` is set, parse comma-separated origins.
-/// - If unset, default to permissive (dev mode) with a warning.
-fn build_cors_layer() -> CorsLayer {
-    match std::env::var(crate::constants::ENV_CORS_ORIGINS) {
-        Ok(origins) if !origins.is_empty() => {
+/// - If origins are provided, parse comma-separated values.
+/// - If `None`, default to permissive (dev mode) with a warning.
+fn build_cors_layer(cors_origins: Option<&str>) -> CorsLayer {
+    match cors_origins {
+        Some(origins) => {
             let parsed: Vec<HeaderValue> = origins
                 .split(',')
                 .filter_map(|o| {
@@ -544,7 +547,7 @@ fn build_cors_layer() -> CorsLayer {
                     .allow_credentials(true)
             }
         }
-        _ => {
+        None => {
             warn!("CORS_ORIGINS not set — allowing all origins (dev mode). Set CORS_ORIGINS for production.");
             CorsLayer::new()
                 .allow_origin(Any)

@@ -252,7 +252,10 @@ async fn resolve_provider(
             agent_name: agent.name.clone(),
         })?;
 
-    Ok(Some(ExecutionEngine::new(provider)))
+    Ok(Some(ExecutionEngine::new(
+        provider,
+        dag.state.env().debug_stream,
+    )))
 }
 
 // ── Pinned Replay ───────────────────────────────────────────────────────────

@@ -206,7 +206,7 @@ pub async fn resume_dag_from_approval(
         .provider()
         .ok_or(HubError::ProviderNotConfigured)?
         .clone();
-    let engine = ExecutionEngine::new(provider);
+    let engine = ExecutionEngine::new(provider, state.env().debug_stream);
 
     // Broadcast: resumed
     broadcast_workflow_event(

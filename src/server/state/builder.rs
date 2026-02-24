@@ -12,6 +12,7 @@ use thiserror::Error;
 use tokio::sync::{mpsc, RwLock};
 use tokio_util::sync::CancellationToken;
 
+use crate::env::Env;
 use crate::llm::{LLMProvider, ProviderRegistry};
 use crate::types::AppConfig;
 
@@ -50,6 +51,7 @@ pub struct AppStateBuilder {
     provider_registry: Option<ProviderRegistry>,
     prompt_registry: Option<Arc<PromptRegistry>>,
     jwt_secret: Option<Vec<u8>>,
+    env: Option<Arc<Env>>,
 }
 
 impl AppStateBuilder {
@@ -64,6 +66,7 @@ impl AppStateBuilder {
             provider_registry: None,
             prompt_registry: None,
             jwt_secret: None,
+            env: None,
         }
     }
 
@@ -115,6 +118,12 @@ impl AppStateBuilder {
         self
     }
 
+    /// Set the environment configuration.
+    pub fn with_env(mut self, env: Arc<Env>) -> Self {
+        self.env = Some(env);
+        self
+    }
+
     /// Build the AppState and return it along with the orchestrator message receiver.
     ///
     /// # Errors
@@ -124,6 +133,11 @@ impl AppStateBuilder {
     pub fn build(self) -> Result<(AppState, mpsc::Receiver<ConsumerMessage>), BuilderError> {
         let repos = self.repos.ok_or(BuilderError::MissingRepos)?;
         let config = self.config.ok_or(BuilderError::MissingConfig)?;
+
+        #[cfg(test)]
+        let env = self.env.unwrap_or_else(|| Arc::new(Env::test_default()));
+        #[cfg(not(test))]
+        let env = self.env.unwrap_or_else(|| Arc::new(Env::load()));
 
         let (chat_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
         let events = self.events.unwrap_or_default();
@@ -137,6 +151,7 @@ impl AppStateBuilder {
         let provider_registry = self.provider_registry.unwrap_or_default();
 
         let state = AppState::from_inner(AppStateInner {
+            env,
             db: self.db,
             repos,
             events,

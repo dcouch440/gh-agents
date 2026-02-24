@@ -39,7 +39,7 @@ pub(crate) async fn execute_step(
         .provider()
         .ok_or_else(|| HubError::Internal(anyhow::anyhow!("LLM provider not configured")))?
         .clone();
-    let engine = ExecutionEngine::new(provider);
+    let engine = ExecutionEngine::new(provider, state.env().debug_stream);
 
     info!(
         step_id = %step.id,
@@ -191,7 +191,7 @@ async fn execute_agent(
                 agent_name: agent.name.clone(),
             }
         })?;
-        Some(ExecutionEngine::new(provider))
+        Some(ExecutionEngine::new(provider, state.env().debug_stream))
     };
     let effective_engine = step_engine.as_ref().unwrap_or(default_engine);
 

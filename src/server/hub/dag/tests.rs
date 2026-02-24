@@ -409,7 +409,7 @@ mod tests {
             .with_content_versions(Arc::new(cv_repo))
             .build();
 
-        let engine = ExecutionEngine::new(provider.clone());
+        let engine = ExecutionEngine::new(provider.clone(), false);
 
         let (state, rx) = AppStateBuilder::new()
             .with_repos(repos)
@@ -796,7 +796,7 @@ mod tests {
             .with_content_versions(Arc::new(cv_repo))
             .build();
 
-        let engine = ExecutionEngine::new(provider.clone());
+        let engine = ExecutionEngine::new(provider.clone(), false);
 
         let (state, rx) = AppStateBuilder::new()
             .with_repos(repos)

@@ -98,13 +98,26 @@ impl CredentialsStore {
         Ok(credentials)
     }
 
-    /// Get GitHub token, checking env var first, then stored credentials
+    /// Get GitHub token, checking env var first, then stored credentials.
+    ///
+    /// Prefer passing `env.github_token` directly when `Env` is available.
+    /// This method is for code paths that only have a `CredentialsStore`.
     pub fn get_github_token(&self) -> Option<String> {
         // Check environment variable first (allows override)
         if let Ok(token) = std::env::var(crate::constants::ENV_GITHUB_TOKEN) {
             if !token.is_empty() {
                 return Some(token);
             }
+        }
+
+        // Fall back to stored credentials
+        self.load().ok().and_then(|c| c.github_token)
+    }
+
+    /// Get GitHub token from centralized Env, falling back to stored credentials.
+    pub fn get_github_token_from_env(&self, env: &crate::env::Env) -> Option<String> {
+        if let Some(ref token) = env.github_token {
+            return Some(token.clone());
         }
 
         // Fall back to stored credentials

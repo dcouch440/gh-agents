@@ -8,6 +8,7 @@ use crate::config::sync_config;
 use crate::db::init_db;
 use crate::db::pg_repo::PgRepo;
 use crate::db::traits::{ProtocolRepo, ToolRepo};
+use crate::env::Env;
 
 /// Run config sync command
 pub async fn run_sync(config_dir: &Path, dry_run: bool, verbose: bool) -> Result<()> {
@@ -19,7 +20,8 @@ pub async fn run_sync(config_dir: &Path, dry_run: bool, verbose: bool) -> Result
     println!();
 
     // Initialize database
-    let pool = init_db().await?;
+    let env = Env::load();
+    let pool = init_db(&env).await?;
 
     // Seed built-in tools and protocols (idempotent)
     if !dry_run {

@@ -1074,13 +1074,9 @@ pub struct StepQuestionStateRow {
 /// Type alias for the database pool
 pub type DbPool = PgPool;
 
-/// Initialize the database using DATABASE_URL from environment
-pub async fn init_db() -> Result<PgPool> {
-    let database_url = std::env::var(crate::constants::ENV_DATABASE_URL).context(format!(
-        "{} environment variable not set",
-        crate::constants::ENV_DATABASE_URL
-    ))?;
-    init_db_with_url(&database_url).await
+/// Initialize the database using the centralized Env config.
+pub async fn init_db(env: &crate::env::Env) -> Result<PgPool> {
+    init_db_with_config(&env.database_url, env.db_max_connections).await
 }
 
 /// Flat row for the execution timeline view — joins agent_executions + execution_messages + workflow_steps.
@@ -1101,12 +1097,8 @@ pub struct TimelineRow {
     pub agent_status: String,
 }
 
-/// Initialize the database with an explicit URL
-pub async fn init_db_with_url(database_url: &str) -> Result<PgPool> {
-    let max_connections: u32 = std::env::var(crate::constants::ENV_DB_MAX_CONNECTIONS)
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(50);
+/// Initialize the database with an explicit URL and max connections.
+pub async fn init_db_with_config(database_url: &str, max_connections: u32) -> Result<PgPool> {
     tracing::info!("DB pool max_connections = {}", max_connections);
 
     let pool = PgPoolOptions::new()
