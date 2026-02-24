@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::db::traits::{SessionRepo, WorkflowRepo};
-use crate::db::CanvasElementMapRow;
+use crate::db::{CanvasElementMapRow, WorkflowStepRow};
 use crate::server::hub::board_serializer::{CanvasNode, FilteredChangeset, ScoredChange};
 use crate::server::services::steps::{self, CreateStepInput, StepPayload};
 use crate::server::services::ServiceError;
@@ -23,8 +23,8 @@ use crate::server::services::ServiceError;
 /// Result of Phase 0 structural execution.
 #[derive(Debug, Clone)]
 pub struct PhaseZeroResult {
-    /// Steps created from new canvas nodes: (element_id, step_id, ref_id).
-    pub created_steps: Vec<(String, Uuid, String)>,
+    /// Steps created from new canvas nodes: (element_id, full_step_row).
+    pub created_steps: Vec<(String, WorkflowStepRow)>,
     /// Edges created from new canvas edges: (element_id, edge_id).
     pub created_edges: Vec<(String, Uuid)>,
     /// Element IDs of deleted steps.
@@ -35,8 +35,8 @@ pub struct PhaseZeroResult {
     pub rewired_edges: Vec<String>,
     /// Element IDs of moved steps.
     pub moved_steps: Vec<String>,
-    /// Steps updated from canvas node text/annotation edits: (element_id, step_id, ref_id).
-    pub updated_steps: Vec<(String, Uuid, String)>,
+    /// Steps updated from canvas node text/annotation edits: (element_id, full_step_row).
+    pub updated_steps: Vec<(String, WorkflowStepRow)>,
 }
 
 /// Execute Phase 0: apply structural changes from a board submit as DB writes.
@@ -75,11 +75,10 @@ pub async fn execute_phase_zero(
     // ── 1. Create new nodes ─────────────────────────────────────────────────
     for change in &changeset.meaningful {
         if let ScoredChange::NewNode { node, .. } = change {
-            let (step_id, ref_id) =
-                create_node(repo, workflow_id, user_id, node, &mut element_map).await?;
+            let step_row = create_node(repo, workflow_id, user_id, node, &mut element_map).await?;
             result
                 .created_steps
-                .push((node.element_id.clone(), step_id, ref_id));
+                .push((node.element_id.clone(), step_row));
         }
     }
 
@@ -126,11 +125,10 @@ pub async fn execute_phase_zero(
                 step.board_context_updated_at = Some(chrono::Utc::now());
             }
 
-            let ref_id = step.ref_id.clone().unwrap_or_default();
-            repo.update_step(step).await?;
+            let updated_step = repo.update_step(step).await?;
             result
                 .updated_steps
-                .push((update.element_id.clone(), step_id, ref_id));
+                .push((update.element_id.clone(), updated_step));
         }
     }
 
@@ -197,14 +195,14 @@ pub async fn execute_phase_zero(
 }
 
 /// Create a workflow step from a canvas node and insert the element mapping.
-/// Returns `(step_id, ref_id)`.
+/// Returns the full [`WorkflowStepRow`] for inclusion in the API response.
 async fn create_node(
     repo: &dyn WorkflowRepo,
     workflow_id: Uuid,
     user_id: Uuid,
     node: &CanvasNode,
     element_map: &mut HashMap<String, CanvasElementMapRow>,
-) -> Result<(Uuid, String), ServiceError> {
+) -> Result<WorkflowStepRow, ServiceError> {
     let (name, prompt_template) = parse_node_text(&node.raw_text);
     let board_context_cache =
         build_board_context(&node.annotations, &node.sketch, &node.stroke_encoding);
@@ -228,12 +226,14 @@ async fn create_node(
     .await?;
 
     // Store the user's annotations and sketch as supplementary context.
-    if !board_context_cache.is_empty() {
+    let step = if !board_context_cache.is_empty() {
         let mut updated = step.clone();
         updated.board_context_cache = board_context_cache;
         updated.board_context_updated_at = Some(chrono::Utc::now());
-        repo.update_step(updated).await?;
-    }
+        repo.update_step(updated).await?
+    } else {
+        step
+    };
 
     // Insert element → step mapping.
     let map_row = CanvasElementMapRow {
@@ -246,8 +246,7 @@ async fn create_node(
     repo.upsert_element_map(map_row.clone()).await?;
     element_map.insert(node.element_id.clone(), map_row);
 
-    let ref_id = step.ref_id.clone().unwrap_or_default();
-    Ok((step.id, ref_id))
+    Ok(step)
 }
 
 /// Parse raw box text into a step name and prompt template.

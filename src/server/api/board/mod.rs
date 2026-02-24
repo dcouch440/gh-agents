@@ -4,6 +4,7 @@ use axum::extract::{Json, Path, State};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::server::api::workflows::types::{step_response, WorkflowStepResponse};
 use crate::server::api::AppError;
 use crate::server::auth::AuthUser;
 use crate::server::hub::board_serializer::{CanvasSnapshot, ExcalidrawElement, FilteredChangeset};
@@ -21,19 +22,22 @@ pub struct BoardSubmitRequest {
 
 #[derive(Serialize)]
 pub struct PhaseZeroResponse {
-    pub created_steps: Vec<ElementStepPair>,
+    pub created_steps: Vec<PhaseZeroStep>,
     pub created_edges: Vec<ElementEdgePair>,
     pub deleted_steps: Vec<String>,
     pub deleted_edges: Vec<String>,
     pub rewired_edges: Vec<String>,
     pub moved_steps: Vec<String>,
-    pub updated_steps: Vec<ElementStepPair>,
+    pub updated_steps: Vec<PhaseZeroStep>,
 }
 
+/// A step created or updated by Phase 0, with the Excalidraw element ID
+/// that produced it. Contains the full step data for frontend selective sync.
 #[derive(Serialize)]
-pub struct ElementStepPair {
+pub struct PhaseZeroStep {
     pub element_id: String,
-    pub step_id: Uuid,
+    #[serde(flatten)]
+    pub step: WorkflowStepResponse,
 }
 
 #[derive(Serialize)]
@@ -105,9 +109,9 @@ pub async fn submit_board(
             .phase_zero
             .created_steps
             .into_iter()
-            .map(|(element_id, step_id, _ref_id)| ElementStepPair {
+            .map(|(element_id, row)| PhaseZeroStep {
                 element_id,
-                step_id,
+                step: step_response(row),
             })
             .collect(),
         created_edges: result
@@ -127,9 +131,9 @@ pub async fn submit_board(
             .phase_zero
             .updated_steps
             .into_iter()
-            .map(|(element_id, step_id, _ref_id)| ElementStepPair {
+            .map(|(element_id, row)| PhaseZeroStep {
                 element_id,
-                step_id,
+                step: step_response(row),
             })
             .collect(),
     };

@@ -641,7 +641,7 @@ mod tests {
 
         assert_eq!(result.updated_steps.len(), 1);
         assert_eq!(result.updated_steps[0].0, "r1");
-        assert_eq!(result.updated_steps[0].1, step_id);
+        assert_eq!(result.updated_steps[0].1.id, step_id);
 
         let steps = updated_steps.lock().unwrap();
         assert_eq!(

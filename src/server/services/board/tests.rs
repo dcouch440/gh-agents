@@ -256,7 +256,7 @@ mod tests {
         assert_eq!(result.phase_zero.created_steps.len(), 1);
         assert_eq!(result.phase_zero.updated_steps.len(), 1);
         assert_eq!(result.phase_zero.updated_steps[0].0, "r1");
-        assert_eq!(result.phase_zero.updated_steps[0].1, existing_step_id);
+        assert_eq!(result.phase_zero.updated_steps[0].1.id, existing_step_id);
     }
 
     #[tokio::test]
