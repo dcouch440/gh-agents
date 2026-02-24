@@ -95,12 +95,13 @@ mod tests {
         assert!(xml.ends_with("</board_state>\n"));
         assert!(xml.contains("<workflow name=\"Test Workflow\""));
         assert!(xml.contains("status=\"configuring\""));
-        assert!(xml.contains("<node name=\"Collector\""));
         assert!(xml.contains("agents=\"Scraper, Formatter\""));
         assert!(xml.contains("<status>Ready for web scraping</status>"));
         assert!(xml.contains("<asking>Which companies should we target?</asking>"));
-        assert!(xml.contains("<node name=\"Analyzer\""));
         assert!(xml.contains("status=\"idle\""));
+        // node name and protocol should NOT appear on <node> elements
+        assert!(!xml.contains("<node name=\""));
+        assert!(!xml.contains("protocol=\""));
         // L1 should NOT include ids
         assert!(!xml.contains(" id=\""));
     }
@@ -180,12 +181,15 @@ mod tests {
         assert!(xml.contains("<workflow name=\"Test Workflow\""));
         // L2 includes workflow id
         assert!(xml.contains(" id=\""));
-        // L2 includes ref attribute before name
+        // L2 includes ref attribute
         assert!(xml.contains("ref=\"workforce-1\""));
         // L2 includes node id
-        assert!(xml.contains("name=\"Collector\" id=\""));
+        assert!(xml.contains(" id=\""));
         // L2 includes per-node capabilities
         assert!(xml.contains("capabilities=\"content_search\""));
+        // node name and protocol should NOT appear on <node> elements
+        assert!(!xml.contains("<node name=\""));
+        assert!(!xml.contains("protocol=\""));
         // L2 includes available_capabilities at board level
         assert!(
             xml.contains("<available_capabilities>github, content_search</available_capabilities>")
@@ -255,8 +259,8 @@ mod tests {
         let snapshot = make_own_node_snapshot(node);
         let xml = render::render(&snapshot, BoardStateVariant::NodeAssistant);
 
-        assert!(xml.contains("<node name=\"Empty Node\""));
         assert!(xml.contains("status=\"idle\""));
+        assert!(!xml.contains("<node name=\""));
         assert!(!xml.contains("<agent"));
         assert!(!xml.contains("<incoming>"));
     }
