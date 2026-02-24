@@ -132,6 +132,15 @@ pub async fn create_roster_agent(
     )
     .await?;
 
+    state.broadcast_workflow(crate::server::ws::events::WorkflowEvent {
+        run_id: None,
+        workflow_id: wid,
+        user_id: Some(auth.user_id.0),
+        kind: crate::server::ws::events::WorkflowEventKind::RosterChanged {
+            step_id: sid,
+        },
+    });
+
     Ok((
         StatusCode::CREATED,
         Json(RosterAgentResponse::from_row(row, vec![])),
@@ -168,7 +177,14 @@ pub async fn delete_roster_agent(
     )
     .await?;
 
-    // Consistency scanner disabled — see consistency_scanner/mod.rs for details.
+    state.broadcast_workflow(crate::server::ws::events::WorkflowEvent {
+        run_id: None,
+        workflow_id: wid,
+        user_id: Some(auth.user_id.0),
+        kind: crate::server::ws::events::WorkflowEventKind::RosterChanged {
+            step_id: sid,
+        },
+    });
 
     Ok(StatusCode::NO_CONTENT)
 }

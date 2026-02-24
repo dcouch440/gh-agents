@@ -20,10 +20,33 @@ pub struct BoardSubmitRequest {
 }
 
 #[derive(Serialize)]
+pub struct PhaseZeroResponse {
+    pub created_steps: Vec<ElementStepPair>,
+    pub created_edges: Vec<ElementEdgePair>,
+    pub deleted_steps: Vec<String>,
+    pub deleted_edges: Vec<String>,
+    pub rewired_edges: Vec<String>,
+    pub moved_steps: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct ElementStepPair {
+    pub element_id: String,
+    pub step_id: Uuid,
+}
+
+#[derive(Serialize)]
+pub struct ElementEdgePair {
+    pub element_id: String,
+    pub edge_id: Uuid,
+}
+
+#[derive(Serialize)]
 pub struct BoardSubmitResponse {
     pub is_first_submit: bool,
     pub changeset: FilteredChangeset,
     pub snapshot: CanvasSnapshot,
+    pub phase_zero: PhaseZeroResponse,
 }
 
 pub async fn submit_board(
@@ -41,6 +64,7 @@ pub async fn submit_board(
 
     let result = board::submit_board(
         state.repos().workflows.as_ref(),
+        state.repos().sessions.as_ref(),
         board::BoardSubmitInput {
             workflow_id,
             user_id: auth.user_id.0,
@@ -50,10 +74,36 @@ pub async fn submit_board(
     )
     .await?;
 
+    let phase_zero = PhaseZeroResponse {
+        created_steps: result
+            .phase_zero
+            .created_steps
+            .into_iter()
+            .map(|(element_id, step_id)| ElementStepPair {
+                element_id,
+                step_id,
+            })
+            .collect(),
+        created_edges: result
+            .phase_zero
+            .created_edges
+            .into_iter()
+            .map(|(element_id, edge_id)| ElementEdgePair {
+                element_id,
+                edge_id,
+            })
+            .collect(),
+        deleted_steps: result.phase_zero.deleted_steps,
+        deleted_edges: result.phase_zero.deleted_edges,
+        rewired_edges: result.phase_zero.rewired_edges,
+        moved_steps: result.phase_zero.moved_steps,
+    };
+
     Ok(Json(BoardSubmitResponse {
         is_first_submit: result.is_first_submit,
         changeset: result.changeset,
         snapshot: result.snapshot,
+        phase_zero,
     }))
 }
 

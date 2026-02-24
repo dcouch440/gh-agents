@@ -26,7 +26,8 @@ pub async fn remove_edge(
         .child_workflow_id
         .ok_or_else(|| ServiceError::Validation("Parent step has no pipeline".into()))?;
 
-    repo.remove_edge(from_step_id, to_step_id)
+    let _deleted = repo
+        .remove_edge(from_step_id, to_step_id)
         .await
         .map_err(|e| ServiceError::Internal(e.into()))?;
 

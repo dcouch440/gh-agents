@@ -70,6 +70,18 @@ pub async fn add_workflow_edge(
         req.to_step_id,
     )
     .await?;
+
+    state.broadcast_workflow(crate::server::ws::events::WorkflowEvent {
+        run_id: None,
+        workflow_id: wid,
+        user_id: Some(auth.user_id.0),
+        kind: crate::server::ws::events::WorkflowEventKind::EdgeCreated {
+            edge_id: edge.id,
+            from_step_id: edge.from_step_id,
+            to_step_id: edge.to_step_id,
+        },
+    });
+
     Ok((
         StatusCode::CREATED,
         Json(EdgeResponse {
@@ -99,7 +111,7 @@ pub async fn remove_workflow_edge(
     Path(wid): Path<Uuid>,
     Json(req): Json<EdgeRequest>,
 ) -> Result<StatusCode, AppError> {
-    edges::remove_edge(
+    let edge = edges::remove_edge(
         state.repos().workflows.as_ref(),
         auth.user_id.0,
         wid,
@@ -107,6 +119,18 @@ pub async fn remove_workflow_edge(
         req.to_step_id,
     )
     .await?;
+
+    state.broadcast_workflow(crate::server::ws::events::WorkflowEvent {
+        run_id: None,
+        workflow_id: wid,
+        user_id: Some(auth.user_id.0),
+        kind: crate::server::ws::events::WorkflowEventKind::EdgeDeleted {
+            edge_id: edge.id,
+            from_step_id: edge.from_step_id,
+            to_step_id: edge.to_step_id,
+        },
+    });
+
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -130,6 +154,20 @@ pub async fn delete_workflow_edge_by_id(
     auth: auth_utils::AuthUser,
     Path((wid, eid)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
-    edges::delete_edge_by_id(state.repos().workflows.as_ref(), auth.user_id.0, wid, eid).await?;
+    let edge =
+        edges::delete_edge_by_id(state.repos().workflows.as_ref(), auth.user_id.0, wid, eid)
+            .await?;
+
+    state.broadcast_workflow(crate::server::ws::events::WorkflowEvent {
+        run_id: None,
+        workflow_id: wid,
+        user_id: Some(auth.user_id.0),
+        kind: crate::server::ws::events::WorkflowEventKind::EdgeDeleted {
+            edge_id: edge.id,
+            from_step_id: edge.from_step_id,
+            to_step_id: edge.to_step_id,
+        },
+    });
+
     Ok(StatusCode::NO_CONTENT)
 }

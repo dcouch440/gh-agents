@@ -35,28 +35,30 @@ pub async fn add_edge(
 }
 
 /// Remove an edge by step pair, verifying ownership.
+/// Returns the deleted edge row for event broadcasting.
 pub async fn remove_edge(
     repo: &dyn WorkflowRepo,
     user_id: Uuid,
     workflow_id: Uuid,
     from_step_id: Uuid,
     to_step_id: Uuid,
-) -> Result<(), ServiceError> {
+) -> Result<WorkflowStepEdgeRow, ServiceError> {
     verify_workflow_ownership(repo, user_id, workflow_id).await?;
-    repo.remove_edge(from_step_id, to_step_id).await?;
-    Ok(())
+    let edge = repo.remove_edge(from_step_id, to_step_id).await?;
+    Ok(edge)
 }
 
 /// Delete an edge by its ID, verifying workflow ownership.
+/// Returns the deleted edge row for event broadcasting.
 pub async fn delete_edge_by_id(
     repo: &dyn WorkflowRepo,
     user_id: Uuid,
     workflow_id: Uuid,
     edge_id: Uuid,
-) -> Result<(), ServiceError> {
+) -> Result<WorkflowStepEdgeRow, ServiceError> {
     verify_workflow_ownership(repo, user_id, workflow_id).await?;
-    repo.delete_edge_by_id(edge_id).await?;
-    Ok(())
+    let edge = repo.delete_edge_by_id(edge_id).await?;
+    Ok(edge)
 }
 
 /// List edges for a workflow, verifying ownership.

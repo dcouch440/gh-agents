@@ -451,6 +451,15 @@ pub async fn apply_protocol(
     Path((protocol_id, step_id)): Path<(Uuid, Uuid)>,
     Json(_request): Json<ApplyProtocolRequest>,
 ) -> Result<(StatusCode, Json<ApplyResponse>), AppError> {
+    // Look up the step to get workflow_id for the broadcast
+    let step = state
+        .repos()
+        .workflows
+        .get_step(step_id)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Step"))?;
+
     let result = protocol_svc::apply_protocol(
         state.repos().protocols.as_ref(),
         state.repos().workflows.as_ref(),
@@ -463,6 +472,16 @@ pub async fn apply_protocol(
         step_id,
     )
     .await?;
+
+    state.broadcast_workflow(crate::server::ws::events::WorkflowEvent {
+        run_id: None,
+        workflow_id: step.workflow_id,
+        user_id: Some(auth.user_id.0),
+        kind: crate::server::ws::events::WorkflowEventKind::ProtocolApplied {
+            step_id,
+            protocol_id,
+        },
+    });
 
     Ok((
         StatusCode::CREATED,
@@ -484,11 +503,44 @@ pub async fn apply_protocol(
 /// DELETE /api/protocols/:protocol_id/unapply/:step_id — Remove protocol from step.
 pub async fn unapply_protocol(
     State(state): State<AppState>,
-    Path((_, step_id)): Path<(Uuid, Uuid)>,
+    auth: auth_utils::AuthUser,
+    Path((protocol_id, step_id)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
+    // Look up the step to get workflow_id for ownership check and broadcast
+    let step = state
+        .repos()
+        .workflows
+        .get_step(step_id)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Step"))?;
+
+    // Verify the caller owns this workflow
+    crate::server::services::workflows::verify_workflow_ownership(
+        state.repos().workflows.as_ref(),
+        auth.user_id.0,
+        step.workflow_id,
+    )
+    .await
+    .map_err(AppError::from)?;
+
     let repo = state.repos().protocols.as_ref();
     repo.delete_step_protocol(step_id)
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    state.broadcast_workflow(crate::server::ws::events::WorkflowEvent {
+        run_id: None,
+        workflow_id: step.workflow_id,
+        user_id: Some(auth.user_id.0),
+        kind: crate::server::ws::events::WorkflowEventKind::ProtocolUnapplied {
+            step_id,
+        },
+    });
+
+    // Suppress unused variable warning — protocol_id identifies the route
+    // but the step_protocol record is keyed by step_id alone.
+    let _ = protocol_id;
+
     Ok(StatusCode::NO_CONTENT)
 }
