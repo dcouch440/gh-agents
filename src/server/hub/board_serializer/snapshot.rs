@@ -2,6 +2,7 @@
 //! into a [`CanvasSnapshot`].
 
 use super::classify::{ClassifiedEdge, ClassifiedElements, ClassifiedNode, ClassifiedStroke};
+use super::encode;
 use super::rasterize;
 use super::resolve::ResolvedAnnotations;
 use super::types::*;
@@ -78,12 +79,19 @@ fn build_node(
         rasterize::rasterize_strokes(&node_strokes, &bounds, RASTER_COLS, RASTER_ROWS)
     };
 
+    let stroke_encoding = if node_strokes.is_empty() {
+        None
+    } else {
+        encode::encode_strokes(&node_strokes, &bounds)
+    };
+
     CanvasNode {
         element_id: node.id,
         raw_text: node.text,
         bounds,
         annotations: node_annotations,
         sketch,
+        stroke_encoding,
     }
 }
 

@@ -25,6 +25,7 @@
 
 mod classify;
 mod diff;
+mod encode;
 mod filter;
 mod rasterize;
 mod resolve;
