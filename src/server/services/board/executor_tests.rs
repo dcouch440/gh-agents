@@ -8,7 +8,7 @@ mod tests {
     use crate::db::{CanvasElementMapRow, WorkflowStepEdgeRow, WorkflowStepRow};
     use crate::server::hub::board_serializer::{
         AgentlessChanges, CanvasBounds, CanvasEdge, CanvasNode, ChangeSignificance, EdgeRewire,
-        FilteredChangeset, NodeMove, ScoredChange,
+        FilteredChangeset, NodeMove, NodeUpdate, ScoredChange,
     };
     use crate::server::services::board::executor::execute_phase_zero;
 
@@ -589,5 +589,141 @@ mod tests {
         assert!(result.is_err());
         let err = format!("{}", result.unwrap_err());
         assert!(err.contains("nonexistent"));
+    }
+
+    #[tokio::test]
+    async fn update_existing_node_updates_step_fields() {
+        let workflow_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+        let step_id = Uuid::new_v4();
+
+        let mut changeset = empty_changeset();
+        changeset.meaningful = vec![ScoredChange::UpdatedNode {
+            update: NodeUpdate {
+                element_id: "r1".to_string(),
+                old_text: "Research competitors".to_string(),
+                new_text: "Research competitors and pricing\nFocus on Q4 data".to_string(),
+                old_annotations: vec![],
+                new_annotations: vec![],
+            },
+            significance: ChangeSignificance::High,
+            token_change_ratio: 0.4,
+        }];
+
+        let updated_steps: Arc<Mutex<Vec<WorkflowStepRow>>> = Arc::new(Mutex::new(vec![]));
+        let updated_steps_clone = updated_steps.clone();
+
+        let mut mock = MockWorkflowRepo::new();
+
+        let map = CanvasElementMapRow {
+            workflow_id,
+            element_id: "r1".to_string(),
+            step_id: Some(step_id),
+            edge_id: None,
+            created_at: chrono::Utc::now(),
+        };
+        mock.expect_list_element_maps()
+            .returning(move |_| Ok(vec![map.clone()]));
+
+        mock.expect_get_step().returning(move |_| {
+            Ok(Some(WorkflowStepRow {
+                id: step_id,
+                workflow_id,
+                name: Some("Research competitors".to_string()),
+                prompt_template: "Research competitors".to_string(),
+                ..Default::default()
+            }))
+        });
+
+        mock.expect_update_step().returning(move |step| {
+            updated_steps_clone.lock().unwrap().push(step.clone());
+            Ok(step)
+        });
+
+        let session_mock = MockSessionRepo::new();
+
+        let result = execute_phase_zero(&mock, &session_mock, workflow_id, user_id, &changeset)
+            .await
+            .unwrap();
+
+        assert_eq!(result.updated_steps.len(), 1);
+        assert_eq!(result.updated_steps[0].0, "r1");
+        assert_eq!(result.updated_steps[0].1, step_id);
+
+        let steps = updated_steps.lock().unwrap();
+        assert_eq!(
+            steps[0].name,
+            Some("Research competitors and pricing".to_string())
+        );
+        assert_eq!(
+            steps[0].prompt_template,
+            "Research competitors and pricing\nFocus on Q4 data"
+        );
+    }
+
+    #[tokio::test]
+    async fn update_node_with_annotations_rebuilds_context() {
+        let workflow_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+        let step_id = Uuid::new_v4();
+
+        let mut changeset = empty_changeset();
+        changeset.meaningful = vec![ScoredChange::UpdatedNode {
+            update: NodeUpdate {
+                element_id: "r1".to_string(),
+                old_text: "Research".to_string(),
+                new_text: "Research".to_string(),
+                old_annotations: vec![],
+                new_annotations: vec![
+                    "Focus on pricing".to_string(),
+                    "Include Q4 data".to_string(),
+                ],
+            },
+            significance: ChangeSignificance::Medium,
+            token_change_ratio: 0.1,
+        }];
+
+        let updated_steps: Arc<Mutex<Vec<WorkflowStepRow>>> = Arc::new(Mutex::new(vec![]));
+        let updated_steps_clone = updated_steps.clone();
+
+        let mut mock = MockWorkflowRepo::new();
+
+        let map = CanvasElementMapRow {
+            workflow_id,
+            element_id: "r1".to_string(),
+            step_id: Some(step_id),
+            edge_id: None,
+            created_at: chrono::Utc::now(),
+        };
+        mock.expect_list_element_maps()
+            .returning(move |_| Ok(vec![map.clone()]));
+
+        mock.expect_get_step().returning(move |_| {
+            Ok(Some(WorkflowStepRow {
+                id: step_id,
+                workflow_id,
+                name: Some("Research".to_string()),
+                prompt_template: "Research".to_string(),
+                ..Default::default()
+            }))
+        });
+
+        mock.expect_update_step().returning(move |step| {
+            updated_steps_clone.lock().unwrap().push(step.clone());
+            Ok(step)
+        });
+
+        let session_mock = MockSessionRepo::new();
+
+        let result = execute_phase_zero(&mock, &session_mock, workflow_id, user_id, &changeset)
+            .await
+            .unwrap();
+
+        assert_eq!(result.updated_steps.len(), 1);
+
+        let steps = updated_steps.lock().unwrap();
+        assert!(steps[0].board_context_cache.contains("Focus on pricing"));
+        assert!(steps[0].board_context_cache.contains("Include Q4 data"));
+        assert!(steps[0].board_context_updated_at.is_some());
     }
 }

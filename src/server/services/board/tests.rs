@@ -3,7 +3,9 @@ mod tests {
     use uuid::Uuid;
 
     use crate::db::traits::{MockSessionRepo, MockWorkflowRepo};
-    use crate::db::{CanvasSnapshotRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow};
+    use crate::db::{
+        CanvasElementMapRow, CanvasSnapshotRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
+    };
     use crate::server::hub::board_serializer::ExcalidrawElement;
     use crate::server::services::board::{submit_board, BoardSubmitInput};
 
@@ -202,7 +204,40 @@ mod tests {
         mock.expect_upsert_canvas_snapshot()
             .returning(|row| Ok(row));
 
-        expect_phase_zero_creates(&mut mock, workflow_id);
+        // r1 already exists from first submit — has an element map entry.
+        let existing_step_id = Uuid::new_v4();
+        let map = CanvasElementMapRow {
+            workflow_id,
+            element_id: "r1".to_string(),
+            step_id: Some(existing_step_id),
+            edge_id: None,
+            created_at: chrono::Utc::now(),
+        };
+        mock.expect_list_element_maps()
+            .returning(move |_| Ok(vec![map.clone()]));
+
+        // UpdatedNode processing fetches the existing step.
+        mock.expect_get_step().returning(move |_| {
+            Ok(Some(WorkflowStepRow {
+                id: existing_step_id,
+                workflow_id,
+                name: Some("Research competitors".to_string()),
+                prompt_template: "Research competitors".to_string(),
+                ..Default::default()
+            }))
+        });
+
+        // Step creation (for new node r2) + step update (for updated r1).
+        mock.expect_list_steps().returning(|_| Ok(vec![]));
+        mock.expect_create_step().returning(move |step| {
+            Ok(WorkflowStepRow {
+                workflow_id,
+                ..step
+            })
+        });
+        mock.expect_update_step().returning(|step| Ok(step));
+        mock.expect_upsert_element_map().returning(|row| Ok(row));
+
         let session_mock = empty_session_repo();
 
         let result = submit_board(
@@ -225,8 +260,11 @@ mod tests {
         assert!(result.changeset.meaningful.len() >= 2);
         assert!(result.changeset.should_dispatch);
 
-        // Phase 0 should have created the new node (r2)
+        // Phase 0 should have created the new node (r2) and updated existing (r1).
         assert_eq!(result.phase_zero.created_steps.len(), 1);
+        assert_eq!(result.phase_zero.updated_steps.len(), 1);
+        assert_eq!(result.phase_zero.updated_steps[0].0, "r1");
+        assert_eq!(result.phase_zero.updated_steps[0].1, existing_step_id);
     }
 
     #[tokio::test]
