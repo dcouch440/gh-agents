@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import { useStore, workflowStore, agentStore, outputSchemaStore, protocolStore, workflowExecutionStore } from '@/stores'
-import { WorkflowCanvas } from '@/components/canvas'
+import { Board } from '@/components/board'
 
 function WorkflowEditorPage() {
   const { id } = useParams<{ id: string }>()
@@ -38,7 +38,7 @@ function WorkflowEditorPage() {
         position: 'relative',
       }}
     >
-      <WorkflowCanvas />
+      {id && <Board workflowId={id} />}
       {loading && (
         <Box
           sx={{

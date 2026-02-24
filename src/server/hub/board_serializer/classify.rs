@@ -91,7 +91,7 @@ pub(crate) fn classify(elements: &[ExcalidrawElement]) -> ClassifiedElements {
 
     // Pass 1: Find node candidates
     let mut nodes = Vec::new();
-    let mut consumed_text_ids: HashSet<&str> = HashSet::new();
+    let mut consumed_text_ids: HashSet<String> = HashSet::new();
 
     for el in elements {
         let ExcalidrawElement::Rectangle(rect) = el else {
@@ -113,7 +113,7 @@ pub(crate) fn classify(elements: &[ExcalidrawElement]) -> ClassifiedElements {
         });
 
         if let Some(text_el) = bound_text {
-            consumed_text_ids.insert(&text_el.id);
+            consumed_text_ids.insert(text_el.id.clone());
             nodes.push(ClassifiedNode {
                 id: rect.id.clone(),
                 x: rect.x,
@@ -121,6 +121,76 @@ pub(crate) fn classify(elements: &[ExcalidrawElement]) -> ClassifiedElements {
                 width: rect.width,
                 height: rect.height,
                 text: text_el.text.clone(),
+            });
+        }
+    }
+
+    // Pass 1b: Spatial containment fallback — if a rectangle has no bound text
+    // but a free-floating text element is geometrically inside it, adopt the text.
+    // Collects ALL unbound text whose center falls inside the rectangle and
+    // concatenates it (newline-separated) as the node's raw_text.
+    // This handles users who select the text tool and type inside a box instead
+    // of double-clicking the box (which creates an Excalidraw binding).
+    let node_rect_ids: HashSet<&str> = nodes.iter().map(|n| n.id.as_str()).collect();
+
+    // Collect adoptions as (rect_id, rect_bounds, Vec<(text_id, text_content)>)
+    let mut adoptions: Vec<(String, f64, f64, f64, f64, Vec<(String, String)>)> = Vec::new();
+
+    for el in elements {
+        let ExcalidrawElement::Rectangle(rect) = el else {
+            continue;
+        };
+        if rect.is_deleted || node_rect_ids.contains(rect.id.as_str()) {
+            continue;
+        }
+
+        let mut texts: Vec<(String, String)> = Vec::new();
+        for candidate in elements {
+            let ExcalidrawElement::Text(t) = candidate else {
+                continue;
+            };
+            if t.is_deleted || t.text.is_empty() || t.container_id.is_some() {
+                continue;
+            }
+            if consumed_text_ids.contains(&t.id) {
+                continue;
+            }
+            let text_cx = t.x + t.width / 2.0;
+            let text_cy = t.y + t.height / 2.0;
+            if text_cx >= rect.x
+                && text_cx <= rect.x + rect.width
+                && text_cy >= rect.y
+                && text_cy <= rect.y + rect.height
+            {
+                texts.push((t.id.clone(), t.text.clone()));
+            }
+        }
+
+        if !texts.is_empty() {
+            adoptions.push((rect.id.clone(), rect.x, rect.y, rect.width, rect.height, texts));
+        }
+    }
+
+    for (rect_id, x, y, width, height, texts) in adoptions {
+        let mut combined = String::new();
+        for (text_id, text_content) in &texts {
+            if consumed_text_ids.contains(text_id.as_str()) {
+                continue;
+            }
+            consumed_text_ids.insert(text_id.clone());
+            if !combined.is_empty() {
+                combined.push('\n');
+            }
+            combined.push_str(text_content);
+        }
+        if !combined.is_empty() {
+            nodes.push(ClassifiedNode {
+                id: rect_id,
+                x,
+                y,
+                width,
+                height,
+                text: combined,
             });
         }
     }
