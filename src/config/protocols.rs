@@ -246,6 +246,14 @@ pub static MANAGER_BUILDER: Lazy<ProtocolConfig> = Lazy::new(|| {
     )
 });
 
+/// Board dispatcher config (board submit → per-node dispatch agent).
+pub static BOARD_DISPATCHER: Lazy<ProtocolConfig> = Lazy::new(|| {
+    load_protocol_config(
+        include_str!("../../config/manager/board_dispatcher/config.yaml"),
+        "config/manager/board_dispatcher/config.yaml",
+    )
+});
+
 // ---------------------------------------------------------------------------
 // Role statics — compile-time embedded content
 // ---------------------------------------------------------------------------
@@ -308,6 +316,10 @@ pub mod roles {
 
     /// Manager builder system prompt (L2 — topology + dispatch agent).
     pub const MANAGER_BUILDER_SYSTEM: &str = include_str!("../../config/manager/builder/system.md");
+
+    /// Board dispatcher system prompt (board submit → per-node dispatch).
+    pub const BOARD_DISPATCHER_SYSTEM: &str =
+        include_str!("../../config/manager/board_dispatcher/system.md");
 
     /// Question extraction (Tier 3 compresses node responses into status + question).
     pub static QUESTION_EXTRACTOR: RoleDefinition = RoleDefinition {
@@ -425,6 +437,8 @@ mod tests {
         assert!(roles::MANAGER_ASSISTANT_BASE.response.is_none());
 
         assert!(!roles::MANAGER_BUILDER_SYSTEM.is_empty());
+
+        assert!(!roles::BOARD_DISPATCHER_SYSTEM.is_empty());
     }
 
     #[test]
@@ -485,6 +499,17 @@ mod tests {
         assert_eq!(dispatcher.temperature, 0.3);
         assert_eq!(dispatcher.max_tokens, 8192);
         assert_eq!(dispatcher.max_rounds, 5);
+        assert_eq!(dispatcher.context_budget, 300_000);
+    }
+
+    #[test]
+    fn board_dispatcher_config_parses() {
+        let cfg = &*BOARD_DISPATCHER;
+        let dispatcher = cfg.agent("dispatcher");
+        assert_eq!(dispatcher.model_id, crate::constants::MODEL_TIER1);
+        assert_eq!(dispatcher.temperature, 0.3);
+        assert_eq!(dispatcher.max_tokens, 8192);
+        assert_eq!(dispatcher.max_rounds, 2);
         assert_eq!(dispatcher.context_budget, 300_000);
     }
 

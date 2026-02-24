@@ -97,6 +97,19 @@ pub async fn dispatch_to_builder(state: &AppState, input: DispatchInput) -> Disp
             )
             .await;
         });
+    } else if input.execution_mode == "board_dispatch" {
+        tokio::spawn(async move {
+            crate::server::executors::board_dispatch::run_board_dispatch_task(
+                runner_state,
+                runner_execution_id,
+                runner_workflow_id,
+                user_id,
+                runner_step_id,
+                runner_instruction,
+                session_id,
+            )
+            .await;
+        });
     } else {
         tokio::spawn(async move {
             crate::server::executors::dispatch::run_dispatch_task(
@@ -297,6 +310,45 @@ async fn find_or_create_builder_session(
                 workflow_id = %workflow_id,
                 error = %e,
                 "Failed to create manager builder session"
+            );
+        }
+
+        session_id
+    } else if execution_mode == "board_dispatch" {
+        // Board dispatcher session, keyed by workflow_id
+        match sessions.find_board_dispatcher_session(workflow_id).await {
+            Ok(Some(session)) => return session.id,
+            Ok(None) => {}
+            Err(e) => {
+                tracing::warn!(
+                    workflow_id = %workflow_id,
+                    error = %e,
+                    "Failed to find board dispatcher session, creating new"
+                );
+            }
+        }
+
+        let session_id = Uuid::new_v4();
+        let draft_config = json!({
+            "workflow_id": workflow_id.to_string(),
+            "role": "board_dispatcher",
+        });
+
+        if let Err(e) = sessions
+            .create_session(
+                user_id,
+                session_id,
+                "dispatch",
+                "Board Dispatcher",
+                None,
+                Some(draft_config),
+            )
+            .await
+        {
+            tracing::error!(
+                workflow_id = %workflow_id,
+                error = %e,
+                "Failed to create board dispatcher session"
             );
         }
 

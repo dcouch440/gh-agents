@@ -119,5 +119,6 @@ pub async fn submit_board(
 }
 
 pub mod executor;
+pub mod instruction;
 
 mod tests;
