@@ -114,10 +114,12 @@ pub(super) async fn execute_agent_levels(
                 let designed = designed_prompts[idx].clone();
                 let env_clone = env.clone();
                 let provider = dag.engine.provider();
+                let debug_stream = dag.state.env().debug_stream;
                 let outputs = outputs_snapshot.clone();
 
                 join_set.spawn(async move {
-                    let engine = crate::server::hub::engine::ExecutionEngine::new(provider);
+                    let engine =
+                        crate::server::hub::engine::ExecutionEngine::new(provider, debug_stream);
                     let result =
                         execute_single_agent(&env_clone, &engine, &designed, &outputs, idx).await;
                     (idx, result)

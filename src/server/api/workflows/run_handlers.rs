@@ -108,7 +108,7 @@ pub async fn run_workflow(
         .provider()
         .ok_or(AppError::Internal("LLM provider not configured".into()))?
         .clone();
-    let engine = ExecutionEngine::new(provider);
+    let engine = ExecutionEngine::new(provider, state.env().debug_stream);
 
     // Resolve initial_input: prefer POST body, fall back to first context step's prompt_template
     let initial_input = body_input.unwrap_or_else(|| {

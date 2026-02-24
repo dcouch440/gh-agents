@@ -115,7 +115,7 @@ mod tests {
             },
         });
 
-        let engine = ExecutionEngine::new(provider);
+        let engine = ExecutionEngine::new(provider, false);
         let strategy = TestStrategy::new();
         let sink = NullSink;
         let recorder = make_mock_recorder();
@@ -142,7 +142,7 @@ mod tests {
             },
         });
 
-        let engine = ExecutionEngine::new(provider);
+        let engine = ExecutionEngine::new(provider, false);
         let sink = NullSink;
         let recorder = make_mock_recorder();
 
@@ -253,7 +253,7 @@ mod tests {
         let provider = Arc::new(ToolThenDone {
             calls: call_count_clone,
         });
-        let engine = ExecutionEngine::new(provider);
+        let engine = ExecutionEngine::new(provider, false);
         let strategy = TestStrategy::new();
         let sink = NullSink;
         let recorder = make_mock_recorder();
@@ -341,7 +341,7 @@ mod tests {
             }
         }
 
-        let engine = ExecutionEngine::new(Arc::new(AlwaysToolUse));
+        let engine = ExecutionEngine::new(Arc::new(AlwaysToolUse), false);
         let sink = NullSink;
         let recorder = make_mock_recorder();
 
@@ -421,7 +421,7 @@ mod tests {
             },
         });
 
-        let engine = ExecutionEngine::new(provider);
+        let engine = ExecutionEngine::new(provider, false);
         let strategy = CallbackStrategy {
             completed: completed_clone,
         };
@@ -452,7 +452,7 @@ mod tests {
             },
         });
 
-        let engine = ExecutionEngine::new(provider);
+        let engine = ExecutionEngine::new(provider, false);
         let strategy = TestStrategy::new();
         let sink = NullSink;
         let recorder = make_mock_recorder();
@@ -576,7 +576,7 @@ mod tests {
         }
 
         let provider = Arc::new(MultiToolProvider { calls: call_count });
-        let engine = ExecutionEngine::new(provider);
+        let engine = ExecutionEngine::new(provider, false);
         let strategy = ToolCountingStrategy {
             count: tool_exec_clone,
         };
@@ -612,7 +612,7 @@ mod tests {
             },
         });
 
-        let engine = ExecutionEngine::new(provider);
+        let engine = ExecutionEngine::new(provider, false);
         let strategy = TestStrategy::new();
         let sink = NullSink;
         let recorder = make_mock_recorder();
@@ -714,7 +714,7 @@ mod tests {
         let provider = Arc::new(CancelAfterToolProvider {
             calls: call_count.clone(),
         });
-        let engine = ExecutionEngine::new(provider);
+        let engine = ExecutionEngine::new(provider, false);
         let strategy = CancellingStrategy {
             token: token_for_strategy,
             calls: call_count.clone(),

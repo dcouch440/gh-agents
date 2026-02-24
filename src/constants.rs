@@ -78,13 +78,6 @@ pub const MAX_TOKENS_PLANNER: u32 = 8192;
 /// Set `NEXOR_DEBUG_STREAM=1` to enable (system prompts, messages, tool I/O).
 pub const ENV_DEBUG_STREAM: &str = "NEXOR_DEBUG_STREAM";
 
-/// Check if the debug stream is enabled via env var.
-pub fn debug_stream_enabled() -> bool {
-    std::env::var(ENV_DEBUG_STREAM)
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false)
-}
-
 // ── Temperature ─────────────────────────────────────────────────────────────
 
 pub const DEFAULT_TEMPERATURE: f32 = 0.7;

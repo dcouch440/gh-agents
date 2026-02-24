@@ -115,7 +115,7 @@ pub async fn run_chat(
         session_id,
         req.message_id,
     );
-    let mut engine = ExecutionEngine::new(req.provider);
+    let mut engine = ExecutionEngine::new(req.provider, state.env().debug_stream);
     if let Some((filter_ctx, filters)) = schema_filters {
         engine = engine.with_filter_context(filter_ctx).with_filters(filters);
     }
@@ -184,7 +184,7 @@ pub async fn run_step_chat(
     );
 
     // Execute
-    let engine = ExecutionEngine::new(req.provider);
+    let engine = ExecutionEngine::new(req.provider, state.env().debug_stream);
     let sink = streaming::SseSink::new(state.clone(), req.message_id);
     let recorder = ExecutionRecorder::new(
         &*state.repos().sessions,

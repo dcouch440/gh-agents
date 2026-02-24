@@ -46,14 +46,16 @@ pub struct ExecutionEngine {
     provider: Arc<dyn LLMProvider>,
     filters: Vec<Arc<dyn ExecutionFilter>>,
     filter_ctx: Option<FilterContext>,
+    debug_stream: bool,
 }
 
 impl ExecutionEngine {
-    pub fn new(provider: Arc<dyn LLMProvider>) -> Self {
+    pub fn new(provider: Arc<dyn LLMProvider>, debug_stream: bool) -> Self {
         Self {
             provider,
             filters: Vec::new(),
             filter_ctx: None,
+            debug_stream,
         }
     }
 
@@ -76,6 +78,7 @@ impl ExecutionEngine {
             provider: Arc::clone(&self.provider),
             filters: self.filters.clone(),
             filter_ctx: self.filter_ctx.clone(),
+            debug_stream: self.debug_stream,
         }
     }
 
@@ -120,7 +123,7 @@ impl ExecutionEngine {
         };
 
         // ── Debug: emit system prompt + user message ──
-        if crate::constants::debug_stream_enabled() {
+        if self.debug_stream {
             if let Some(ae_id) = strategy.agent_execution_id() {
                 sink.debug_system_prompt(ae_id, &system_prompt).await;
                 sink.debug_user_message(ae_id, input).await;
@@ -307,7 +310,7 @@ impl ExecutionEngine {
                             .await;
 
                         // Debug: emit tool calls with full input payloads
-                        if crate::constants::debug_stream_enabled() {
+                        if self.debug_stream {
                             for (tool_id, tool_name, tool_input) in &tool_uses {
                                 sink.debug_tool_call(ae_id, tool_name, tool_id, tool_input)
                                     .await;
@@ -332,7 +335,7 @@ impl ExecutionEngine {
                                     .await;
 
                                 // Debug: emit tool result with full content
-                                if crate::constants::debug_stream_enabled() {
+                                if self.debug_stream {
                                     sink.debug_tool_result(ae_id, "", tool_use_id, content)
                                         .await;
                                 }
@@ -409,7 +412,7 @@ impl ExecutionEngine {
                             .await;
 
                         // Debug: emit complete assistant response
-                        if crate::constants::debug_stream_enabled() {
+                        if self.debug_stream {
                             sink.debug_assistant_message(ae_id, &final_content).await;
                         }
                     }

@@ -17,6 +17,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::db::pg_repo::PgRepo;
+use crate::env::Env;
 use crate::llm::{LLMProvider, ProviderRegistry};
 use crate::types::{AppConfig, UserId};
 
@@ -82,6 +83,8 @@ pub(crate) struct BufferedStream {
 
 /// Inner state wrapped in Arc for cheap cloning.
 pub(crate) struct AppStateInner {
+    /// Centralized environment configuration (read once at startup).
+    pub(crate) env: Arc<Env>,
     /// Database connection pool
     pub(crate) db: Option<PgPool>,
     /// All repository trait objects grouped together
@@ -142,7 +145,11 @@ impl AppState {
     /// so it can be passed to the orchestrator consumer task.
     ///
     /// Loads persisted agents and clusters from the database on startup.
-    pub async fn new(db: PgPool, config: AppConfig) -> (Self, mpsc::Receiver<ConsumerMessage>) {
+    pub async fn new(
+        db: PgPool,
+        config: AppConfig,
+        env: Arc<Env>,
+    ) -> (Self, mpsc::Receiver<ConsumerMessage>) {
         // Create all repos from PgRepo
         let repos = Repos::new(
             Arc::new(PgRepo::new(db.clone())), // users
@@ -169,7 +176,7 @@ impl AppState {
         let events = EventBus::new();
 
         // JWT secret: require via env var, fall back to random for dev only
-        let jwt_secret = Self::load_jwt_secret();
+        let jwt_secret = Self::load_jwt_secret(&env);
 
         // Load prompt registry from prompts/ directory
         let prompt_registry = Self::load_prompt_registry();
@@ -178,9 +185,10 @@ impl AppState {
         let capability_registry = Self::load_capability_registry();
 
         // Initialize LLM providers
-        let (provider, provider_registry) = Self::init_providers().await;
+        let (provider, provider_registry) = Self::init_providers(&env).await;
 
         let state = Self(Arc::new(AppStateInner {
+            env,
             db: Some(db),
             repos,
             events,
@@ -213,12 +221,18 @@ impl AppState {
         repos: Repos,
         config: AppConfig,
     ) -> (Self, mpsc::Receiver<ConsumerMessage>) {
+        #[cfg(test)]
+        let env = Arc::new(Env::test_default());
+        #[cfg(not(test))]
+        let env = Arc::new(Env::load());
+
         let (chat_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
         let events = EventBus::new();
-        let jwt_secret = Self::load_jwt_secret();
+        let jwt_secret = Self::load_jwt_secret(&env);
 
         (
             Self(Arc::new(AppStateInner {
+                env,
                 db,
                 repos,
                 events,
@@ -250,20 +264,17 @@ impl AppState {
     // Private initialization helpers
     // =========================================================================
 
-    fn load_jwt_secret() -> Vec<u8> {
-        match std::env::var(crate::constants::ENV_JWT_SECRET) {
-            Ok(s) if !s.is_empty() => {
+    fn load_jwt_secret(env: &Env) -> Vec<u8> {
+        match &env.jwt_secret {
+            Some(s) => {
                 tracing::info!(
                     "{} loaded from environment",
                     crate::constants::ENV_JWT_SECRET
                 );
-                s.into_bytes()
+                s.clone().into_bytes()
             }
-            _ => {
-                let is_production = std::env::var(crate::constants::ENV_RUST_ENV)
-                    .map(|v| v.eq_ignore_ascii_case("production"))
-                    .unwrap_or(false);
-                if is_production {
+            None => {
+                if env.is_production() {
                     panic!(
                         "{} must be set in production ({}=production)",
                         crate::constants::ENV_JWT_SECRET,
@@ -319,68 +330,88 @@ impl AppState {
         }
     }
 
-    async fn init_providers() -> (Option<Arc<dyn LLMProvider + Send + Sync>>, ProviderRegistry) {
+    async fn init_providers(
+        env: &Env,
+    ) -> (Option<Arc<dyn LLMProvider + Send + Sync>>, ProviderRegistry) {
         let active = crate::constants::ACTIVE_PROVIDER;
         let mut registry = ProviderRegistry::new(active);
 
         // Initialize Anthropic provider
-        match crate::llm::AnthropicClient::from_env() {
-            Ok(p) => {
-                tracing::info!("Initialized Anthropic provider: {}", p.model_id());
-                let provider: Arc<dyn LLMProvider + Send + Sync> =
-                    Arc::new(crate::llm::SafeStreamProvider::new(
-                        crate::llm::RetryingProvider::with_defaults(
-                            crate::llm::RateLimitedProvider::with_defaults(p),
-                        ),
-                    ));
-                registry.register("anthropic", provider);
-            }
-            Err(e) => {
-                tracing::warn!(
-                    "Anthropic provider not initialized: {}. Set ANTHROPIC_API_KEY.",
-                    e
-                );
-            }
-        }
-
-        // Initialize Ollama provider if enabled
-        let ollama_enabled = std::env::var(crate::constants::ENV_OLLAMA_ENABLED)
-            .map(|v| v == "true" || v == "1")
-            .unwrap_or(false);
-
-        if ollama_enabled {
-            match crate::llm::OllamaClient::from_env() {
-                Ok(client) => {
-                    // Verify Ollama is reachable before registering
-                    if let Err(e) = client.health_check().await {
-                        tracing::warn!(
-                            "Ollama enabled but not reachable — skipping registration: {}",
-                            e
-                        );
-                    } else if let Err(e) = client.validate_model().await {
-                        tracing::warn!(
-                            "Ollama reachable but model validation failed — skipping registration: {}",
-                            e
-                        );
-                    } else {
-                        tracing::info!(
-                            "Initialized Ollama provider: {} ({})",
-                            client.model_id(),
-                            std::env::var(crate::constants::ENV_OLLAMA_BASE_URL).unwrap_or_else(
-                                |_| { crate::constants::OLLAMA_DEFAULT_BASE_URL.to_string() }
-                            )
-                        );
-                        let ollama_provider: Arc<dyn LLMProvider + Send + Sync> =
-                            Arc::new(crate::llm::SafeStreamProvider::new(
-                                crate::llm::RetryingProvider::with_defaults(client),
-                            ));
-                        registry.register("ollama", ollama_provider);
-                    }
+        if let Some(ref api_key) = env.anthropic_api_key {
+            let config = crate::llm::AnthropicConfig::new(api_key.clone())
+                .with_model(env.anthropic_model.clone());
+            match crate::llm::AnthropicClient::with_config(config) {
+                Ok(p) => {
+                    tracing::info!("Initialized Anthropic provider: {}", p.model_id());
+                    let provider: Arc<dyn LLMProvider + Send + Sync> =
+                        Arc::new(crate::llm::SafeStreamProvider::new(
+                            crate::llm::RetryingProvider::with_defaults(
+                                crate::llm::RateLimitedProvider::with_defaults(p),
+                            ),
+                        ));
+                    registry.register("anthropic", provider);
                 }
                 Err(e) => {
                     tracing::warn!(
-                        "Ollama enabled but failed to initialize: {}. Set {}.",
-                        e,
+                        "Anthropic provider not initialized: {}. Set ANTHROPIC_API_KEY.",
+                        e
+                    );
+                }
+            }
+        } else {
+            tracing::warn!(
+                "Anthropic provider not initialized: {} not set. Set ANTHROPIC_API_KEY.",
+                crate::constants::ENV_ANTHROPIC_API_KEY
+            );
+        }
+
+        // Initialize Ollama provider if enabled
+        if env.ollama_enabled {
+            match &env.ollama_model {
+                Some(model) => {
+                    let config = crate::llm::OllamaConfig {
+                        base_url: env.ollama_base_url.clone(),
+                        model: model.clone(),
+                        timeout_secs: crate::constants::OLLAMA_DEFAULT_TIMEOUT_SECS,
+                    };
+                    match crate::llm::OllamaClient::new(config) {
+                        Ok(client) => {
+                            // Verify Ollama is reachable before registering
+                            if let Err(e) = client.health_check().await {
+                                tracing::warn!(
+                                    "Ollama enabled but not reachable — skipping registration: {}",
+                                    e
+                                );
+                            } else if let Err(e) = client.validate_model().await {
+                                tracing::warn!(
+                                    "Ollama reachable but model validation failed — skipping registration: {}",
+                                    e
+                                );
+                            } else {
+                                tracing::info!(
+                                    "Initialized Ollama provider: {} ({})",
+                                    client.model_id(),
+                                    env.ollama_base_url
+                                );
+                                let ollama_provider: Arc<dyn LLMProvider + Send + Sync> =
+                                    Arc::new(crate::llm::SafeStreamProvider::new(
+                                        crate::llm::RetryingProvider::with_defaults(client),
+                                    ));
+                                registry.register("ollama", ollama_provider);
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "Ollama enabled but failed to initialize: {}. Set {}.",
+                                e,
+                                crate::constants::ENV_OLLAMA_MODEL
+                            );
+                        }
+                    }
+                }
+                None => {
+                    tracing::warn!(
+                        "Ollama enabled but {} not set — skipping.",
                         crate::constants::ENV_OLLAMA_MODEL
                     );
                 }
@@ -393,34 +424,44 @@ impl AppState {
         }
 
         // Initialize xAI provider (with web + X search enabled for all requests).
-        // These are server-side tools that Grok invokes autonomously when the
-        // prompt requests live data — enabling them globally is safe; the model
-        // only searches when instructed to by the system/task prompt.
-        match crate::llm::XaiConfig::from_env()
-            .map(|c| c.with_web_search().with_x_search())
-            .and_then(crate::llm::XaiClient::with_config)
-        {
-            Ok(client) => {
-                tracing::info!(
-                    "Initialized xAI provider: {} ({}) [web_search + x_search enabled]",
-                    client.model_id(),
-                    crate::constants::XAI_DEFAULT_BASE_URL
-                );
-                let xai_provider: Arc<dyn LLMProvider + Send + Sync> =
-                    Arc::new(crate::llm::SafeStreamProvider::new(
-                        crate::llm::RetryingProvider::with_defaults(
-                            crate::llm::RateLimitedProvider::with_defaults(client),
-                        ),
-                    ));
-                registry.register("xai", xai_provider);
+        if let Some(ref api_key) = env.xai_api_key {
+            let config = crate::llm::XaiConfig {
+                api_key: api_key.clone(),
+                base_url: crate::constants::XAI_DEFAULT_BASE_URL.to_string(),
+                model: env.xai_model.clone(),
+                timeout_secs: crate::constants::XAI_CHAT_TIMEOUT_SECS,
+                web_search: true,
+                x_search: true,
+            };
+            match crate::llm::XaiClient::with_config(config) {
+                Ok(client) => {
+                    tracing::info!(
+                        "Initialized xAI provider: {} ({}) [web_search + x_search enabled]",
+                        client.model_id(),
+                        crate::constants::XAI_DEFAULT_BASE_URL
+                    );
+                    let xai_provider: Arc<dyn LLMProvider + Send + Sync> =
+                        Arc::new(crate::llm::SafeStreamProvider::new(
+                            crate::llm::RetryingProvider::with_defaults(
+                                crate::llm::RateLimitedProvider::with_defaults(client),
+                            ),
+                        ));
+                    registry.register("xai", xai_provider);
+                }
+                Err(e) => {
+                    tracing::debug!(
+                        "xAI provider not initialized: {}. Set {} to enable.",
+                        e,
+                        crate::constants::ENV_XAI_API_KEY
+                    );
+                }
             }
-            Err(e) => {
-                tracing::debug!(
-                    "xAI provider not initialized: {}. Set {} to enable.",
-                    e,
-                    crate::constants::ENV_XAI_API_KEY
-                );
-            }
+        } else {
+            tracing::debug!(
+                "xAI provider not initialized: {} not set. Set {} to enable.",
+                crate::constants::ENV_XAI_API_KEY,
+                crate::constants::ENV_XAI_API_KEY
+            );
         }
 
         // Resolve the default provider from the active profile
@@ -439,6 +480,11 @@ impl AppState {
     // =========================================================================
     // Accessor methods
     // =========================================================================
+
+    /// Access the centralized environment configuration.
+    pub fn env(&self) -> &Env {
+        &self.0.env
+    }
 
     /// Access the database connection pool.
     pub fn db(&self) -> Option<&PgPool> {
@@ -500,9 +546,7 @@ impl AppState {
             .await
         {
             Ok(Some(config)) => config.config_value.as_bool().unwrap_or(false),
-            _ => std::env::var(crate::constants::ENV_OLLAMA_ENABLED)
-                .map(|v| v == "true" || v == "1")
-                .unwrap_or(false),
+            _ => self.0.env.ollama_enabled,
         };
 
         // Update cache

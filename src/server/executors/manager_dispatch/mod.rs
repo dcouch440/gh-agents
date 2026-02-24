@@ -148,7 +148,7 @@ pub async fn run_manager_dispatch_task(
         }
     };
 
-    let engine = ExecutionEngine::new(provider);
+    let engine = ExecutionEngine::new(provider, state.env().debug_stream);
     let recorder = ExecutionRecorder::new(
         &*state.repos().sessions,
         &*state.repos().chat_messages,

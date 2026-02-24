@@ -1,13 +1,17 @@
 //! Server mode command handler
 
-use anyhow::Result;
 use std::net::SocketAddr;
 use std::path::Path;
+use std::sync::Arc;
+
+use anyhow::Result;
 use tracing::{debug, info};
 
 use crate::cli::Args;
 use crate::config::load_config;
 use crate::db::init_db;
+use crate::env::Env;
+use crate::execution::vpn::WgEasyConfig;
 use crate::logging::{init_logging_with_file, LOG_DIR};
 use crate::server::start_server;
 
@@ -25,11 +29,14 @@ pub async fn run_serve(args: Args) -> Result<()> {
     info!("nexor server starting...");
     debug!("Debug logging enabled (verbosity: {})", args.verbose);
 
+    // Load environment once — everything reads from this struct
+    let env = Arc::new(Env::load());
+
     // Load configuration
     let config = load_config().unwrap_or_default();
 
     // Initialize database
-    let pool = init_db().await?;
+    let pool = init_db(&env).await?;
 
     // Reap orphaned containers from previous crashes
     let reaped = crate::execution::ContainerManager::real()
@@ -51,7 +58,7 @@ pub async fn run_serve(args: Args) -> Result<()> {
     }
 
     // Reap orphaned wg-easy peers (only if wg-easy is configured)
-    if let Some(wg_config) = crate::execution::WgEasyConfig::from_env() {
+    if let Some(wg_config) = WgEasyConfig::from_env_config(&env) {
         let wg_client = crate::execution::WgEasyClient::new(wg_config);
         let peers_reaped = wg_client.reap_orphaned_peers().await;
         if peers_reaped > 0 {
@@ -63,7 +70,7 @@ pub async fn run_serve(args: Args) -> Result<()> {
     let addr: SocketAddr = format!("0.0.0.0:{}", args.port()).parse()?;
 
     // Run server
-    start_server(pool, config, addr).await?;
+    start_server(pool, config, addr, env).await?;
 
     info!("nexor shutting down");
     Ok(())

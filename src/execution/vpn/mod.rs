@@ -66,12 +66,25 @@ pub struct WgEasyConfig {
 }
 
 impl WgEasyConfig {
-    /// Build config from environment variables.
+    /// Build config from environment variables (legacy — prefer `from_env_config`).
     ///
     /// Returns `None` if `WGEASY_API_URL` is not set.
     pub fn from_env() -> Option<Self> {
         let base_url = std::env::var("WGEASY_API_URL").ok()?;
         let password = std::env::var("WGEASY_PASSWORD").unwrap_or_default();
+        Some(Self {
+            base_url,
+            password: RedactedString::new(password),
+            timeout_secs: crate::constants::WGEASY_API_TIMEOUT_SECS,
+        })
+    }
+
+    /// Build config from the centralized `Env` struct.
+    ///
+    /// Returns `None` if `wgeasy_api_url` is not set.
+    pub fn from_env_config(env: &crate::env::Env) -> Option<Self> {
+        let base_url = env.wgeasy_api_url.clone()?;
+        let password = env.wgeasy_password.clone().unwrap_or_default();
         Some(Self {
             base_url,
             password: RedactedString::new(password),

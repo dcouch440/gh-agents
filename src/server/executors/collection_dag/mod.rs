@@ -400,7 +400,7 @@ where
                 .provider()
                 .ok_or_else(|| anyhow!("LLM provider not configured"))?
                 .clone();
-            ExecutionEngine::new(provider)
+            ExecutionEngine::new(provider, self.state.env().debug_stream)
         };
 
         // 5. Build container config from workflow settings (if enabled)
@@ -413,7 +413,7 @@ where
             if wf_row.container_enabled {
                 if let Some(repo_url) = &wf_row.target_repo_url {
                     let github_token = crate::execution::RedactedString::new(
-                        std::env::var("GITHUB_TOKEN").unwrap_or_default(),
+                        self.state.env().github_token.clone().unwrap_or_default(),
                     );
                     Some(ContainerExecutionConfig {
                         clone_url: repo_url.clone(),
