@@ -119,6 +119,14 @@ impl ExecutionEngine {
             strategy.system_prompt().to_string()
         };
 
+        // ── Debug: emit system prompt + user message ──
+        if crate::constants::debug_stream_enabled() {
+            if let Some(ae_id) = strategy.agent_execution_id() {
+                sink.debug_system_prompt(ae_id, &system_prompt).await;
+                sink.debug_user_message(ae_id, input).await;
+            }
+        }
+
         // Track filter retries (max 1 retry per filter per execution)
         let mut filter_retried = vec![false; self.filters.len()];
 
@@ -297,6 +305,15 @@ impl ExecutionEngine {
                                 response.usage.output_tokens as i64,
                             )
                             .await;
+
+                        // Debug: emit tool calls with full input payloads
+                        if crate::constants::debug_stream_enabled() {
+                            for (tool_id, tool_name, tool_input) in &tool_uses {
+                                sink.debug_tool_call(ae_id, tool_name, tool_id, tool_input)
+                                    .await;
+                            }
+                        }
+
                         for block in &result_blocks {
                             if let ContentBlock::ToolResult {
                                 tool_use_id,
@@ -313,6 +330,12 @@ impl ExecutionEngine {
                                         0,
                                     )
                                     .await;
+
+                                // Debug: emit tool result with full content
+                                if crate::constants::debug_stream_enabled() {
+                                    sink.debug_tool_result(ae_id, "", tool_use_id, content)
+                                        .await;
+                                }
                             }
                         }
                     }
@@ -384,6 +407,11 @@ impl ExecutionEngine {
                                 response.usage.output_tokens as i64,
                             )
                             .await;
+
+                        // Debug: emit complete assistant response
+                        if crate::constants::debug_stream_enabled() {
+                            sink.debug_assistant_message(ae_id, &final_content).await;
+                        }
                     }
 
                     // Execution complete

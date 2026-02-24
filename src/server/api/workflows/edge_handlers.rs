@@ -154,9 +154,8 @@ pub async fn delete_workflow_edge_by_id(
     auth: auth_utils::AuthUser,
     Path((wid, eid)): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode, AppError> {
-    let edge =
-        edges::delete_edge_by_id(state.repos().workflows.as_ref(), auth.user_id.0, wid, eid)
-            .await?;
+    let edge = edges::delete_edge_by_id(state.repos().workflows.as_ref(), auth.user_id.0, wid, eid)
+        .await?;
 
     state.broadcast_workflow(crate::server::ws::events::WorkflowEvent {
         run_id: None,

@@ -52,11 +52,7 @@ mod tests {
 
     /// Set up MockWorkflowRepo with standard expectations for step creation.
     /// create_step calls verify_workflow_ownership internally, which needs get_workflow.
-    fn setup_create_expectations(
-        mock: &mut MockWorkflowRepo,
-        workflow_id: Uuid,
-        user_id: Uuid,
-    ) {
+    fn setup_create_expectations(mock: &mut MockWorkflowRepo, workflow_id: Uuid, user_id: Uuid) {
         mock.expect_get_workflow().returning(move |_| {
             Ok(Some(crate::db::WorkflowRow {
                 id: workflow_id,
@@ -197,23 +193,22 @@ mod tests {
         mock.expect_list_element_maps()
             .returning(move |_| Ok(maps.clone()));
 
-        mock.expect_add_edge()
-            .returning(move |wf_id, from, to| {
-                assert_eq!(from, step_a_id);
-                assert_eq!(to, step_b_id);
-                Ok(WorkflowStepEdgeRow {
-                    id: Uuid::new_v4(),
-                    workflow_id: wf_id,
-                    from_step_id: from,
-                    to_step_id: to,
-                    from_output_port: None,
-                    to_input_port: None,
-                    transform_jsonpath: None,
-                    condition_type: None,
-                    condition_value: None,
-                    edge_label: None,
-                })
-            });
+        mock.expect_add_edge().returning(move |wf_id, from, to| {
+            assert_eq!(from, step_a_id);
+            assert_eq!(to, step_b_id);
+            Ok(WorkflowStepEdgeRow {
+                id: Uuid::new_v4(),
+                workflow_id: wf_id,
+                from_step_id: from,
+                to_step_id: to,
+                from_output_port: None,
+                to_input_port: None,
+                transform_jsonpath: None,
+                condition_type: None,
+                condition_value: None,
+                edge_label: None,
+            })
+        });
 
         mock.expect_upsert_element_map().returning(|row| Ok(row));
 
@@ -307,22 +302,21 @@ mod tests {
         mock.expect_list_element_maps()
             .returning(move |_| Ok(vec![map.clone()]));
 
-        mock.expect_delete_edge_by_id()
-            .returning(move |id| {
-                assert_eq!(id, edge_id);
-                Ok(WorkflowStepEdgeRow {
-                    id: edge_id,
-                    workflow_id: Uuid::new_v4(),
-                    from_step_id: Uuid::new_v4(),
-                    to_step_id: Uuid::new_v4(),
-                    from_output_port: None,
-                    to_input_port: None,
-                    transform_jsonpath: None,
-                    condition_type: None,
-                    condition_value: None,
-                    edge_label: None,
-                })
-            });
+        mock.expect_delete_edge_by_id().returning(move |id| {
+            assert_eq!(id, edge_id);
+            Ok(WorkflowStepEdgeRow {
+                id: edge_id,
+                workflow_id: Uuid::new_v4(),
+                from_step_id: Uuid::new_v4(),
+                to_step_id: Uuid::new_v4(),
+                from_output_port: None,
+                to_input_port: None,
+                transform_jsonpath: None,
+                condition_type: None,
+                condition_value: None,
+                edge_label: None,
+            })
+        });
 
         mock.expect_delete_element_map().returning(|_, _| Ok(()));
 
@@ -388,40 +382,38 @@ mod tests {
         mock.expect_list_element_maps()
             .returning(move |_| Ok(maps.clone()));
 
-        mock.expect_delete_edge_by_id()
-            .returning(move |id| {
-                assert_eq!(id, old_edge_id);
-                Ok(WorkflowStepEdgeRow {
-                    id: old_edge_id,
-                    workflow_id: Uuid::new_v4(),
-                    from_step_id: Uuid::new_v4(),
-                    to_step_id: Uuid::new_v4(),
-                    from_output_port: None,
-                    to_input_port: None,
-                    transform_jsonpath: None,
-                    condition_type: None,
-                    condition_value: None,
-                    edge_label: None,
-                })
-            });
+        mock.expect_delete_edge_by_id().returning(move |id| {
+            assert_eq!(id, old_edge_id);
+            Ok(WorkflowStepEdgeRow {
+                id: old_edge_id,
+                workflow_id: Uuid::new_v4(),
+                from_step_id: Uuid::new_v4(),
+                to_step_id: Uuid::new_v4(),
+                from_output_port: None,
+                to_input_port: None,
+                transform_jsonpath: None,
+                condition_type: None,
+                condition_value: None,
+                edge_label: None,
+            })
+        });
 
-        mock.expect_add_edge()
-            .returning(move |wf_id, from, to| {
-                assert_eq!(from, step_a);
-                assert_eq!(to, step_c);
-                Ok(WorkflowStepEdgeRow {
-                    id: Uuid::new_v4(),
-                    workflow_id: wf_id,
-                    from_step_id: from,
-                    to_step_id: to,
-                    from_output_port: None,
-                    to_input_port: None,
-                    transform_jsonpath: None,
-                    condition_type: None,
-                    condition_value: None,
-                    edge_label: None,
-                })
-            });
+        mock.expect_add_edge().returning(move |wf_id, from, to| {
+            assert_eq!(from, step_a);
+            assert_eq!(to, step_c);
+            Ok(WorkflowStepEdgeRow {
+                id: Uuid::new_v4(),
+                workflow_id: wf_id,
+                from_step_id: from,
+                to_step_id: to,
+                from_output_port: None,
+                to_input_port: None,
+                transform_jsonpath: None,
+                condition_type: None,
+                condition_value: None,
+                edge_label: None,
+            })
+        });
 
         mock.expect_upsert_element_map().returning(|row| Ok(row));
 
@@ -543,21 +535,20 @@ mod tests {
 
         mock.expect_upsert_element_map().returning(|row| Ok(row));
 
-        mock.expect_add_edge()
-            .returning(move |wf_id, _from, _to| {
-                Ok(WorkflowStepEdgeRow {
-                    id: Uuid::new_v4(),
-                    workflow_id: wf_id,
-                    from_step_id: _from,
-                    to_step_id: _to,
-                    from_output_port: None,
-                    to_input_port: None,
-                    transform_jsonpath: None,
-                    condition_type: None,
-                    condition_value: None,
-                    edge_label: None,
-                })
-            });
+        mock.expect_add_edge().returning(move |wf_id, _from, _to| {
+            Ok(WorkflowStepEdgeRow {
+                id: Uuid::new_v4(),
+                workflow_id: wf_id,
+                from_step_id: _from,
+                to_step_id: _to,
+                from_output_port: None,
+                to_input_port: None,
+                transform_jsonpath: None,
+                condition_type: None,
+                condition_value: None,
+                edge_label: None,
+            })
+        });
 
         let session_mock = MockSessionRepo::new();
 

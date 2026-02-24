@@ -226,10 +226,7 @@ mod tests {
             ) -> Result<crate::db::WorkflowStepEdgeRow> {
                 unimplemented!()
             }
-            async fn delete_edge_by_id(
-                &self,
-                _: Uuid,
-            ) -> Result<crate::db::WorkflowStepEdgeRow> {
+            async fn delete_edge_by_id(&self, _: Uuid) -> Result<crate::db::WorkflowStepEdgeRow> {
                 unimplemented!()
             }
             async fn list_step_documents(

@@ -23,6 +23,8 @@ pub struct DagStreamSink {
     step_id: Uuid,
     source_id: Uuid,
     source_name: String,
+    /// Agent name for debug events (roster agent name for workforce, agent name for single steps).
+    agent_name: Option<String>,
 }
 
 impl DagStreamSink {
@@ -41,7 +43,14 @@ impl DagStreamSink {
             step_id,
             source_id,
             source_name,
+            agent_name: None,
         }
+    }
+
+    /// Set the agent name for debug events.
+    pub fn with_agent_name(mut self, name: Option<String>) -> Self {
+        self.agent_name = name;
+        self
     }
 }
 
@@ -111,5 +120,79 @@ impl StreamSink for DagStreamSink {
 
     async fn done(&self) {
         // No-op — lifecycle handled by existing progress events
+    }
+
+    async fn debug_system_prompt(&self, ae_id: Uuid, content: &str) {
+        broadcast_workflow_event(
+            &self.state,
+            &self.ctx,
+            self.workflow_id,
+            WorkflowEventKind::DebugSystemPrompt {
+                step_id: self.step_id,
+                agent_execution_id: ae_id,
+                agent_name: self.agent_name.clone(),
+                content: content.to_string(),
+            },
+        );
+    }
+
+    async fn debug_user_message(&self, ae_id: Uuid, content: &str) {
+        broadcast_workflow_event(
+            &self.state,
+            &self.ctx,
+            self.workflow_id,
+            WorkflowEventKind::DebugUserMessage {
+                step_id: self.step_id,
+                agent_execution_id: ae_id,
+                agent_name: self.agent_name.clone(),
+                content: content.to_string(),
+            },
+        );
+    }
+
+    async fn debug_assistant_message(&self, ae_id: Uuid, content: &str) {
+        broadcast_workflow_event(
+            &self.state,
+            &self.ctx,
+            self.workflow_id,
+            WorkflowEventKind::DebugAssistantMessage {
+                step_id: self.step_id,
+                agent_execution_id: ae_id,
+                agent_name: self.agent_name.clone(),
+                content: content.to_string(),
+            },
+        );
+    }
+
+    async fn debug_tool_call(&self, ae_id: Uuid, tool_name: &str, tool_id: &str, input: &Value) {
+        broadcast_workflow_event(
+            &self.state,
+            &self.ctx,
+            self.workflow_id,
+            WorkflowEventKind::DebugToolCall {
+                step_id: self.step_id,
+                agent_execution_id: ae_id,
+                agent_name: self.agent_name.clone(),
+                tool_name: tool_name.to_string(),
+                tool_id: tool_id.to_string(),
+                input: input.clone(),
+            },
+        );
+    }
+
+    async fn debug_tool_result(&self, ae_id: Uuid, tool_name: &str, tool_id: &str, result: &str) {
+        broadcast_workflow_event(
+            &self.state,
+            &self.ctx,
+            self.workflow_id,
+            WorkflowEventKind::DebugToolResult {
+                step_id: self.step_id,
+                agent_execution_id: ae_id,
+                agent_name: self.agent_name.clone(),
+                tool_name: tool_name.to_string(),
+                tool_id: tool_id.to_string(),
+                result: result.to_string(),
+            },
+        );
     }
 }

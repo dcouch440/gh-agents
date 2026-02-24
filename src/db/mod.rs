@@ -1083,6 +1083,24 @@ pub async fn init_db() -> Result<PgPool> {
     init_db_with_url(&database_url).await
 }
 
+/// Flat row for the execution timeline view — joins agent_executions + execution_messages + workflow_steps.
+#[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
+pub struct TimelineRow {
+    pub id: Uuid,
+    pub ts: DateTime<Utc>,
+    pub role: String,
+    pub content: String,
+    pub tool_call_id: Option<String>,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub agent_execution_id: Uuid,
+    pub execution_type: String,
+    pub step_id: Option<Uuid>,
+    pub step_name: Option<String>,
+    pub agent_name: Option<String>,
+    pub agent_status: String,
+}
+
 /// Initialize the database with an explicit URL
 pub async fn init_db_with_url(database_url: &str) -> Result<PgPool> {
     let max_connections: u32 = std::env::var(crate::constants::ENV_DB_MAX_CONNECTIONS)

@@ -171,10 +171,8 @@ impl ExecutionStrategy for DispatchStrategy {
         .await
         .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
 
-        let dispatch_status_xml = crate::server::hub::dispatch_status::build(
-            self.state.task_registry(),
-            self.step_id,
-        );
+        let dispatch_status_xml =
+            crate::server::hub::dispatch_status::build(self.state.task_registry(), self.step_id);
 
         let mut vars = HashMap::new();
         vars.insert("System.board_state".to_string(), board_state_xml);

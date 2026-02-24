@@ -533,9 +533,7 @@ pub async fn unapply_protocol(
         run_id: None,
         workflow_id: step.workflow_id,
         user_id: Some(auth.user_id.0),
-        kind: crate::server::ws::events::WorkflowEventKind::ProtocolUnapplied {
-            step_id,
-        },
+        kind: crate::server::ws::events::WorkflowEventKind::ProtocolUnapplied { step_id },
     });
 
     // Suppress unused variable warning — protocol_id identifies the route

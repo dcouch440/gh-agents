@@ -213,10 +213,22 @@ pub(crate) fn classify(elements: &[ExcalidrawElement]) -> ClassifiedElements {
         }
 
         // Compute stroke bounding box
-        let stroke_min_x = abs_points.iter().map(|p| p[0]).fold(f64::INFINITY, f64::min);
-        let stroke_max_x = abs_points.iter().map(|p| p[0]).fold(f64::NEG_INFINITY, f64::max);
-        let stroke_min_y = abs_points.iter().map(|p| p[1]).fold(f64::INFINITY, f64::min);
-        let stroke_max_y = abs_points.iter().map(|p| p[1]).fold(f64::NEG_INFINITY, f64::max);
+        let stroke_min_x = abs_points
+            .iter()
+            .map(|p| p[0])
+            .fold(f64::INFINITY, f64::min);
+        let stroke_max_x = abs_points
+            .iter()
+            .map(|p| p[0])
+            .fold(f64::NEG_INFINITY, f64::max);
+        let stroke_min_y = abs_points
+            .iter()
+            .map(|p| p[1])
+            .fold(f64::INFINITY, f64::min);
+        let stroke_max_y = abs_points
+            .iter()
+            .map(|p| p[1])
+            .fold(f64::NEG_INFINITY, f64::max);
 
         // Find which nodes this stroke overlaps (AABB overlap test)
         let mut overlapping_node_id = None;

@@ -188,7 +188,14 @@ pub async fn run_dispatch_task(
             // Persist passdown as structured JSON in agent_execution output
             let passdown_json = serde_json::to_string(&passdown).unwrap_or_default();
             persist_outcome(&state, session_id, user_id, &passdown.summary).await;
-            persist_trace(&state, execution_id, ae_id, "completed", Some(&passdown_json)).await;
+            persist_trace(
+                &state,
+                execution_id,
+                ae_id,
+                "completed",
+                Some(&passdown_json),
+            )
+            .await;
 
             // Write question + summary into step_question_state for board state.
             // This replaces the old cheap-LLM question detection — the builder
@@ -196,11 +203,7 @@ pub async fn run_dispatch_task(
             if let Err(e) = state
                 .repos()
                 .workflows
-                .upsert_step_question_state(
-                    step_id,
-                    &passdown.summary,
-                    passdown.question.clone(),
-                )
+                .upsert_step_question_state(step_id, &passdown.summary, passdown.question.clone())
                 .await
             {
                 tracing::warn!(

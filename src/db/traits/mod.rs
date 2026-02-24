@@ -11,16 +11,15 @@ use uuid::Uuid;
 use crate::db::{
     AgentDesignerOutputRow, AgentDesignerRunRow, AgentExecutionRow, AgentGuidanceRow, AgentRow,
     BeliefExtractionPlanRow, BeliefRow, CanvasElementMapRow, CanvasSnapshotRow, ChatMessageRow,
-    CollectionRunRow,
-    CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContentVersionRow, DocumentRow,
-    DocumentSearchResult, EnvelopeSnapshotRow, ExecutionMessageRow, OutputSchemaRow,
+    CollectionRunRow, CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContentVersionRow,
+    DocumentRow, DocumentSearchResult, EnvelopeSnapshotRow, ExecutionMessageRow, OutputSchemaRow,
     PromptTemplateRow, ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow,
     ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomStepConfigRow,
     RoomStepMemberRow, RoomTranscriptEntry, RunSnapshotRow, RunTemplateRow, SessionRow,
     StepDocumentRow, StepInputRow, StepOutputRow, StepQuestionStateRow, StepRoutingRuleRow,
-    SystemConfigRow, TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow,
-    ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
-    WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
+    SystemConfigRow, TaskAgentRosterRow, TaskMissionBriefRow, TimelineRow, TokenLedgerRow,
+    ToolCapabilityRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow,
+    WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
 };
 use crate::types::{User, UserId};
 
@@ -1008,6 +1007,18 @@ pub trait AgentExecutionRepo: Send + Sync {
         &self,
         step_id: Uuid,
     ) -> Result<Option<AgentExecutionRow>>;
+
+    /// List a unified execution timeline for a workflow run.
+    /// Joins agent_executions + execution_messages + workflow_steps into a flat
+    /// chronological stream. Cursor-based pagination: returns entries with
+    /// `ts < before`, limited to `limit`, ordered newest-first for pagination
+    /// (caller reverses for display).
+    async fn list_execution_timeline(
+        &self,
+        workflow_execution_id: Uuid,
+        limit: i64,
+        before: Option<DateTime<Utc>>,
+    ) -> Result<Vec<TimelineRow>>;
 }
 
 // ============================================================================

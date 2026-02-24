@@ -183,10 +183,7 @@ pub(crate) fn filter_changeset(
 /// Returns `(surviving_moves, pan_noise)`. If all deltas match within epsilon,
 /// all moves become noise. Single moves always survive (can't distinguish
 /// pan from intentional placement with one node).
-fn detect_pan(
-    moved_nodes: &[NodeMove],
-    epsilon: f64,
-) -> (Vec<NodeMove>, Vec<FilteredNoise>) {
+fn detect_pan(moved_nodes: &[NodeMove], epsilon: f64) -> (Vec<NodeMove>, Vec<FilteredNoise>) {
     if moved_nodes.len() < 2 {
         return (moved_nodes.to_vec(), vec![]);
     }
@@ -202,10 +199,9 @@ fn detect_pan(
         .collect();
 
     let (ref_dx, ref_dy) = deltas[0];
-    let all_same =
-        deltas
-            .iter()
-            .all(|(dx, dy)| (dx - ref_dx).abs() < epsilon && (dy - ref_dy).abs() < epsilon);
+    let all_same = deltas
+        .iter()
+        .all(|(dx, dy)| (dx - ref_dx).abs() < epsilon && (dy - ref_dy).abs() < epsilon);
 
     if all_same {
         let noise = moved_nodes
@@ -391,8 +387,7 @@ fn topological_sort_nodes(node_ids: &[String], edges: &[CanvasEdge]) -> Vec<Stri
 
     let id_set: HashSet<&str> = node_ids.iter().map(|s| s.as_str()).collect();
 
-    let mut in_degree: HashMap<&str, usize> =
-        node_ids.iter().map(|id| (id.as_str(), 0)).collect();
+    let mut in_degree: HashMap<&str, usize> = node_ids.iter().map(|id| (id.as_str(), 0)).collect();
     let mut adjacency: HashMap<&str, Vec<&str>> =
         node_ids.iter().map(|id| (id.as_str(), vec![])).collect();
 

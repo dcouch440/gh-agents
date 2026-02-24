@@ -19,16 +19,15 @@ use crate::db::traits::{
 use crate::db::{
     AgentDesignerOutputRow, AgentDesignerRunRow, AgentExecutionRow, AgentRow,
     BeliefExtractionPlanRow, BeliefRow, CanvasElementMapRow, CanvasSnapshotRow, ChatMessageRow,
-    CollectionRunRow,
-    CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContentVersionRow, DocumentRow,
-    DocumentSearchResult, EnvelopeSnapshotRow, ExecutionMessageRow, OutputSchemaRow,
+    CollectionRunRow, CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContentVersionRow,
+    DocumentRow, DocumentSearchResult, EnvelopeSnapshotRow, ExecutionMessageRow, OutputSchemaRow,
     PromptTemplateRow, ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow,
     ResultRow, RoomExecutionOutputRow, RoomMemberRow, RoomRow, RoomSessionRow, RoomStepConfigRow,
     RoomStepMemberRow, RoomTranscriptEntry, RunSnapshotRow, RunTemplateRow, SessionRow,
     StepDocumentRow, StepInputRow, StepOutputRow, StepQuestionStateRow, StepRoutingRuleRow,
-    SystemConfigRow, TaskAgentRosterRow, TaskMissionBriefRow, TokenLedgerRow, ToolCapabilityRow,
-    ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow, WorkflowStepAgentRow,
-    WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
+    SystemConfigRow, TaskAgentRosterRow, TaskMissionBriefRow, TimelineRow, TokenLedgerRow,
+    ToolCapabilityRow, ToolRow, WorkflowCollectionRow, WorkflowExecutionRow, WorkflowRow,
+    WorkflowStepAgentRow, WorkflowStepEdgeRow, WorkflowStepProtocolRow, WorkflowStepRow,
 };
 use crate::types::{User, UserId};
 
@@ -1402,12 +1401,11 @@ impl WorkflowRepo for PgRepo {
     }
 
     async fn delete_edge_by_id(&self, edge_id: Uuid) -> Result<WorkflowStepEdgeRow> {
-        let row: WorkflowStepEdgeRow = sqlx::query_as(
-            "DELETE FROM workflow_step_edges WHERE id = $1 RETURNING *",
-        )
-        .bind(edge_id)
-        .fetch_one(&self.pool)
-        .await?;
+        let row: WorkflowStepEdgeRow =
+            sqlx::query_as("DELETE FROM workflow_step_edges WHERE id = $1 RETURNING *")
+                .bind(edge_id)
+                .fetch_one(&self.pool)
+                .await?;
         Ok(row)
     }
 
@@ -2734,6 +2732,96 @@ impl AgentExecutionRepo for PgRepo {
         .fetch_optional(&self.pool)
         .await?;
         Ok(row)
+    }
+
+    async fn list_execution_timeline(
+        &self,
+        workflow_execution_id: Uuid,
+        limit: i64,
+        before: Option<DateTime<Utc>>,
+    ) -> Result<Vec<TimelineRow>> {
+        let rows = if let Some(before_ts) = before {
+            sqlx::query_as::<_, TimelineRow>(
+                "SELECT \
+                   em.id, \
+                   em.created_at AS ts, \
+                   em.role, \
+                   em.content, \
+                   em.tool_call_id, \
+                   em.input_tokens, \
+                   em.output_tokens, \
+                   ae.id AS agent_execution_id, \
+                   ae.execution_type, \
+                   ae.workflow_step_id AS step_id, \
+                   ws.name AS step_name, \
+                   CASE WHEN ae.execution_type = 'pipeline_agent' \
+                     THEN pe.agent_name \
+                     ELSE a.name \
+                   END AS agent_name, \
+                   ae.status AS agent_status \
+                 FROM execution_messages em \
+                 JOIN agent_executions ae ON ae.id = em.agent_execution_id \
+                 LEFT JOIN workflow_steps ws ON ws.id = ae.workflow_step_id \
+                 LEFT JOIN agents a ON a.id = ae.agent_id \
+                 LEFT JOIN protocol_executions pe \
+                   ON pe.protocol_step_id = ae.workflow_step_id \
+                   AND pe.workflow_run_id = $1 \
+                   AND pe.phase LIKE 'agent_%' \
+                   AND pe.agent_name IS NOT NULL \
+                   AND ae.execution_type = 'pipeline_agent' \
+                   AND ae.started_at >= pe.created_at \
+                   AND (pe.completed_at IS NULL OR ae.started_at <= pe.completed_at) \
+                 WHERE ae.workflow_execution_id = $1 \
+                   AND em.created_at < $2 \
+                 ORDER BY em.created_at DESC \
+                 LIMIT $3",
+            )
+            .bind(workflow_execution_id)
+            .bind(before_ts)
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as::<_, TimelineRow>(
+                "SELECT \
+                   em.id, \
+                   em.created_at AS ts, \
+                   em.role, \
+                   em.content, \
+                   em.tool_call_id, \
+                   em.input_tokens, \
+                   em.output_tokens, \
+                   ae.id AS agent_execution_id, \
+                   ae.execution_type, \
+                   ae.workflow_step_id AS step_id, \
+                   ws.name AS step_name, \
+                   CASE WHEN ae.execution_type = 'pipeline_agent' \
+                     THEN pe.agent_name \
+                     ELSE a.name \
+                   END AS agent_name, \
+                   ae.status AS agent_status \
+                 FROM execution_messages em \
+                 JOIN agent_executions ae ON ae.id = em.agent_execution_id \
+                 LEFT JOIN workflow_steps ws ON ws.id = ae.workflow_step_id \
+                 LEFT JOIN agents a ON a.id = ae.agent_id \
+                 LEFT JOIN protocol_executions pe \
+                   ON pe.protocol_step_id = ae.workflow_step_id \
+                   AND pe.workflow_run_id = $1 \
+                   AND pe.phase LIKE 'agent_%' \
+                   AND pe.agent_name IS NOT NULL \
+                   AND ae.execution_type = 'pipeline_agent' \
+                   AND ae.started_at >= pe.created_at \
+                   AND (pe.completed_at IS NULL OR ae.started_at <= pe.completed_at) \
+                 WHERE ae.workflow_execution_id = $1 \
+                 ORDER BY em.created_at DESC \
+                 LIMIT $2",
+            )
+            .bind(workflow_execution_id)
+            .bind(limit)
+            .fetch_all(&self.pool)
+            .await?
+        };
+        Ok(rows)
     }
 }
 

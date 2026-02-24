@@ -136,9 +136,7 @@ pub async fn create_roster_agent(
         run_id: None,
         workflow_id: wid,
         user_id: Some(auth.user_id.0),
-        kind: crate::server::ws::events::WorkflowEventKind::RosterChanged {
-            step_id: sid,
-        },
+        kind: crate::server::ws::events::WorkflowEventKind::RosterChanged { step_id: sid },
     });
 
     Ok((
@@ -181,9 +179,7 @@ pub async fn delete_roster_agent(
         run_id: None,
         workflow_id: wid,
         user_id: Some(auth.user_id.0),
-        kind: crate::server::ws::events::WorkflowEventKind::RosterChanged {
-            step_id: sid,
-        },
+        kind: crate::server::ws::events::WorkflowEventKind::RosterChanged { step_id: sid },
     });
 
     Ok(StatusCode::NO_CONTENT)

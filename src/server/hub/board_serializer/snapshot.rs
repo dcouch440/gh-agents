@@ -2,8 +2,8 @@
 //! into a [`CanvasSnapshot`].
 
 use super::classify::{ClassifiedEdge, ClassifiedElements, ClassifiedNode, ClassifiedStroke};
-use super::resolve::ResolvedAnnotations;
 use super::rasterize;
+use super::resolve::ResolvedAnnotations;
 use super::types::*;
 
 // ============================================================================

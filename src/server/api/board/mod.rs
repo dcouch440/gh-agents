@@ -6,9 +6,7 @@ use uuid::Uuid;
 
 use crate::server::api::AppError;
 use crate::server::auth::AuthUser;
-use crate::server::hub::board_serializer::{
-    CanvasSnapshot, ExcalidrawElement, FilteredChangeset,
-};
+use crate::server::hub::board_serializer::{CanvasSnapshot, ExcalidrawElement, FilteredChangeset};
 use crate::server::services::board;
 use crate::server::state::AppState;
 

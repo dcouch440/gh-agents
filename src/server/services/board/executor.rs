@@ -75,9 +75,10 @@ pub async fn execute_phase_zero(
     // ── 1. Create new nodes ─────────────────────────────────────────────────
     for change in &changeset.meaningful {
         if let ScoredChange::NewNode { node, .. } = change {
-            let step_id =
-                create_node(repo, workflow_id, user_id, node, &mut element_map).await?;
-            result.created_steps.push((node.element_id.clone(), step_id));
+            let step_id = create_node(repo, workflow_id, user_id, node, &mut element_map).await?;
+            result
+                .created_steps
+                .push((node.element_id.clone(), step_id));
         }
     }
 
