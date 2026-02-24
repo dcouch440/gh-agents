@@ -931,4 +931,725 @@ mod tests {
         assert!(changeset.deleted_node_ids.is_empty());
         assert!(changeset.moved_nodes.is_empty());
     }
+
+    // ========================================================================
+    // Changeset Filter — Helpers
+    // ========================================================================
+
+    use crate::server::hub::board_serializer::filter_changeset;
+
+    fn make_node_update(id: &str, old_text: &str, new_text: &str) -> NodeUpdate {
+        NodeUpdate {
+            element_id: id.to_string(),
+            old_text: old_text.to_string(),
+            new_text: new_text.to_string(),
+            old_annotations: vec![],
+            new_annotations: vec![],
+        }
+    }
+
+    fn make_node_update_with_annotations(
+        id: &str,
+        old_text: &str,
+        new_text: &str,
+        old_ann: Vec<&str>,
+        new_ann: Vec<&str>,
+    ) -> NodeUpdate {
+        NodeUpdate {
+            element_id: id.to_string(),
+            old_text: old_text.to_string(),
+            new_text: new_text.to_string(),
+            old_annotations: old_ann.into_iter().map(String::from).collect(),
+            new_annotations: new_ann.into_iter().map(String::from).collect(),
+        }
+    }
+
+    fn make_node_move(id: &str, old_x: f64, old_y: f64, new_x: f64, new_y: f64) -> NodeMove {
+        NodeMove {
+            element_id: id.to_string(),
+            old_bounds: CanvasBounds { x: old_x, y: old_y, width: 200.0, height: 100.0 },
+            new_bounds: CanvasBounds { x: new_x, y: new_y, width: 200.0, height: 100.0 },
+        }
+    }
+
+    fn empty_changeset() -> CanvasChangeset {
+        CanvasChangeset {
+            new_nodes: vec![],
+            updated_nodes: vec![],
+            deleted_node_ids: vec![],
+            moved_nodes: vec![],
+            new_edges: vec![],
+            deleted_edge_ids: vec![],
+            rewired_edges: vec![],
+        }
+    }
+
+    // ========================================================================
+    // Changeset Filter — Pan detection
+    // ========================================================================
+
+    #[test]
+    fn filter_pan_all_same_delta() {
+        let mut changeset = empty_changeset();
+        changeset.moved_nodes = vec![
+            make_node_move("n1", 0.0, 0.0, 50.0, 30.0),
+            make_node_move("n2", 200.0, 0.0, 250.0, 30.0),
+            make_node_move("n3", 400.0, 0.0, 450.0, 30.0),
+        ];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert!(result.agentless.moved_nodes.is_empty(), "all moves are pan");
+        assert_eq!(result.noise.len(), 3);
+        assert!(result.noise.iter().all(|n| n.reason == NoiseReason::CanvasPan));
+    }
+
+    #[test]
+    fn filter_pan_different_deltas() {
+        let mut changeset = empty_changeset();
+        changeset.moved_nodes = vec![
+            make_node_move("n1", 0.0, 0.0, 50.0, 30.0),
+            make_node_move("n2", 200.0, 0.0, 300.0, 0.0),   // different delta
+            make_node_move("n3", 400.0, 0.0, 450.0, 30.0),
+        ];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert_eq!(result.agentless.moved_nodes.len(), 3, "different deltas survive");
+        assert!(result.noise.is_empty());
+    }
+
+    #[test]
+    fn filter_pan_single_move_not_pan() {
+        let mut changeset = empty_changeset();
+        changeset.moved_nodes = vec![make_node_move("n1", 0.0, 0.0, 50.0, 30.0)];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert_eq!(result.agentless.moved_nodes.len(), 1, "single move always survives");
+        assert!(result.noise.is_empty());
+    }
+
+    #[test]
+    fn filter_pan_empty_moves() {
+        let changeset = empty_changeset();
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert!(result.agentless.moved_nodes.is_empty());
+        assert!(result.noise.is_empty());
+    }
+
+    #[test]
+    fn filter_pan_within_epsilon() {
+        // Deltas differ by 0.5px — within default epsilon of 1.0
+        let mut changeset = empty_changeset();
+        changeset.moved_nodes = vec![
+            make_node_move("n1", 0.0, 0.0, 50.0, 30.0),
+            make_node_move("n2", 200.0, 0.0, 250.5, 29.5), // delta: (50.5, 29.5) vs (50, 30)
+        ];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert!(result.agentless.moved_nodes.is_empty(), "within epsilon → pan");
+        assert_eq!(result.noise.len(), 2);
+    }
+
+    // ========================================================================
+    // Changeset Filter — Whitespace normalization
+    // ========================================================================
+
+    #[test]
+    fn filter_whitespace_only_text() {
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![
+            make_node_update("n1", "  hello   world ", "hello world"),
+        ];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert!(result.meaningful.is_empty());
+        assert_eq!(result.noise.len(), 1);
+        assert_eq!(result.noise[0].reason, NoiseReason::WhitespaceOnly);
+    }
+
+    #[test]
+    fn filter_whitespace_with_real_change() {
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![
+            make_node_update("n1", "  hello   world ", "hello universe"),
+        ];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert_eq!(result.meaningful.len(), 1, "real change survives");
+        assert!(result.noise.is_empty());
+    }
+
+    #[test]
+    fn filter_whitespace_annotation_only() {
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![
+            make_node_update_with_annotations(
+                "n1", "same text", "same text",
+                vec!["  old  note  "], vec!["old note"],
+            ),
+        ];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert!(result.meaningful.is_empty());
+        assert_eq!(result.noise.len(), 1);
+        assert_eq!(result.noise[0].reason, NoiseReason::WhitespaceOnly);
+    }
+
+    #[test]
+    fn filter_whitespace_tabs_and_newlines() {
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![
+            make_node_update("n1", "hello\t\tworld\n\n", "hello world"),
+        ];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert!(result.meaningful.is_empty());
+        assert_eq!(result.noise[0].reason, NoiseReason::WhitespaceOnly);
+    }
+
+    // ========================================================================
+    // Changeset Filter — Oscillation detection
+    // ========================================================================
+
+    #[test]
+    fn filter_oscillation_matches_baseline() {
+        let baseline = make_snapshot(
+            vec![make_canvas_node("n1", "original text", 0.0, 0.0)],
+            vec![],
+            vec![],
+        );
+
+        let mut changeset = empty_changeset();
+        // User changed "original text" → "edited text" → "original text"
+        // diff sees: old="edited text", new="original text"
+        changeset.updated_nodes = vec![
+            make_node_update("n1", "edited text", "original text"),
+        ];
+
+        let result = filter_changeset(&changeset, &[], Some(&baseline), &FilterConfig::default());
+
+        assert!(result.meaningful.is_empty());
+        assert_eq!(result.noise.len(), 1);
+        assert_eq!(result.noise[0].reason, NoiseReason::Oscillation);
+    }
+
+    #[test]
+    fn filter_oscillation_no_baseline() {
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![
+            make_node_update("n1", "edited text", "original text"),
+        ];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert_eq!(result.meaningful.len(), 1, "no baseline → oscillation skipped");
+    }
+
+    #[test]
+    fn filter_oscillation_no_match() {
+        let baseline = make_snapshot(
+            vec![make_canvas_node("n1", "original text", 0.0, 0.0)],
+            vec![],
+            vec![],
+        );
+
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![
+            make_node_update("n1", "edited text", "completely new text"),
+        ];
+
+        let result = filter_changeset(&changeset, &[], Some(&baseline), &FilterConfig::default());
+
+        assert_eq!(result.meaningful.len(), 1, "no match → survives");
+    }
+
+    #[test]
+    fn filter_oscillation_node_not_in_baseline() {
+        let baseline = make_snapshot(vec![], vec![], vec![]);
+
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![
+            make_node_update("n1", "old text", "new text"),
+        ];
+
+        let result = filter_changeset(&changeset, &[], Some(&baseline), &FilterConfig::default());
+
+        assert_eq!(result.meaningful.len(), 1, "node not in baseline → survives");
+    }
+
+    // ========================================================================
+    // Changeset Filter — Reorder detection
+    // ========================================================================
+
+    #[test]
+    fn filter_reorder_same_lines() {
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![
+            make_node_update("n1", "Line A\nLine B\nLine C", "Line C\nLine A\nLine B"),
+        ];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert!(result.meaningful.is_empty());
+        assert_eq!(result.noise.len(), 1);
+        assert_eq!(result.noise[0].reason, NoiseReason::ReorderOnly);
+    }
+
+    #[test]
+    fn filter_reorder_different_content() {
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![
+            make_node_update("n1", "Line A\nLine B", "Line C\nLine A"),
+        ];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert_eq!(result.meaningful.len(), 1, "different content survives");
+    }
+
+    #[test]
+    fn filter_reorder_different_count() {
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![
+            make_node_update("n1", "Line A\nLine B\nLine C", "Line A\nLine B"),
+        ];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert_eq!(result.meaningful.len(), 1, "different line count survives");
+    }
+
+    #[test]
+    fn filter_reorder_blank_lines_ignored() {
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![
+            make_node_update("n1", "Line A\n\nLine B\nLine C", "Line C\nLine A\n\nLine B"),
+        ];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert!(result.meaningful.is_empty());
+        assert_eq!(result.noise[0].reason, NoiseReason::ReorderOnly);
+    }
+
+    // ========================================================================
+    // Changeset Filter — Token scoring
+    // ========================================================================
+
+    #[test]
+    fn score_low_significance() {
+        // 1 word changed out of 50 words → 2 token diffs / 50 total = 0.04 < 0.05
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![make_node_update(
+            "n1",
+            "the quick brown fox jumps over the lazy dog and then runs across the big open field to find the hidden treasure chest buried deep beneath the ancient oak tree standing tall in the middle of a vast green meadow near the old stone wall",
+            "the quick brown fox jumps over the lazy dog and then runs across the big open field to find the hidden treasure chest buried deep beneath the ancient oak tree standing tall in the middle of a vast green meadow near the old stone fence",
+        )];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert_eq!(result.meaningful.len(), 1);
+        let sig = result.meaningful[0].significance();
+        assert_eq!(sig, ChangeSignificance::Low, "<5% change → Low");
+    }
+
+    #[test]
+    fn score_medium_significance() {
+        // 1 word changed out of 15 words → 2 token diffs / 15 total ≈ 0.13
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![make_node_update(
+            "n1",
+            "query the database for user records and return them as json formatted output today",
+            "query the database for user records and return them as json formatted result today",
+        )];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert_eq!(result.meaningful.len(), 1);
+        let sig = result.meaningful[0].significance();
+        assert_eq!(sig, ChangeSignificance::Medium, "~13% change → Medium");
+    }
+
+    #[test]
+    fn score_high_significance() {
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![make_node_update(
+            "n1",
+            "Research competitors",
+            "Research competitors\n- Q3 and Q4 pricing data\n- Compare year-over-year trends\n- Flag anomalies above 10%",
+        )];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert_eq!(result.meaningful.len(), 1);
+        let sig = result.meaningful[0].significance();
+        assert_eq!(sig, ChangeSignificance::High, "major rewrite → High");
+    }
+
+    #[test]
+    fn score_new_node_always_high() {
+        let mut changeset = empty_changeset();
+        changeset.new_nodes = vec![make_canvas_node("n1", "Brand new node", 0.0, 0.0)];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert_eq!(result.meaningful.len(), 1);
+        assert_eq!(result.meaningful[0].significance(), ChangeSignificance::High);
+    }
+
+    #[test]
+    fn score_new_edge_always_medium() {
+        let mut changeset = empty_changeset();
+        changeset.new_edges = vec![make_canvas_edge("e1", "n1", "n2")];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert_eq!(result.meaningful.len(), 1);
+        assert_eq!(result.meaningful[0].significance(), ChangeSignificance::Medium);
+    }
+
+    // ========================================================================
+    // Changeset Filter — Token scoring (blind-spot coverage)
+    // ========================================================================
+
+    #[test]
+    fn score_morphological_variant() {
+        // "database" → "databases" and "stores" → "store" — similar words, not a rewrite
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![make_node_update(
+            "n1",
+            "the database stores user records and returns them as json formatted output for the client application today",
+            "the databases store user records and returns them as json formatted output for the client application today",
+        )];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert_eq!(result.meaningful.len(), 1);
+        let sig = result.meaningful[0].significance();
+        assert_eq!(sig, ChangeSignificance::Low, "morphological variants should score Low");
+    }
+
+    #[test]
+    fn score_hyphenation_change() {
+        // "JSON formatted" → "JSON-formatted" — formatting change, not a rewrite
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![make_node_update(
+            "n1",
+            "return the data as JSON formatted output for the downstream service to consume",
+            "return the data as JSON-formatted output for the downstream service to consume",
+        )];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert_eq!(result.meaningful.len(), 1);
+        let sig = result.meaningful[0].significance();
+        assert!(
+            sig == ChangeSignificance::Low || sig == ChangeSignificance::Medium,
+            "hyphenation change should score Low or Medium, got {:?}",
+            sig
+        );
+    }
+
+    #[test]
+    fn score_completely_different_words() {
+        // Single word with zero character overlap — should score High
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![make_node_update("n1", "database", "frontend")];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert_eq!(result.meaningful.len(), 1);
+        let sig = result.meaningful[0].significance();
+        assert_eq!(sig, ChangeSignificance::High, "completely different words should score High");
+    }
+
+    #[test]
+    fn score_similar_prefix_words() {
+        // "userId" → "userIds" in a longer text — similar prefix, should be Low
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![make_node_update(
+            "n1",
+            "fetch the userId from the authentication service and validate the token before returning the response payload",
+            "fetch the userIds from the authentication service and validate the token before returning the response payload",
+        )];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert_eq!(result.meaningful.len(), 1);
+        let sig = result.meaningful[0].significance();
+        assert_eq!(sig, ChangeSignificance::Low, "similar prefix words should score Low in long text");
+    }
+
+    // ========================================================================
+    // Changeset Filter — Topological sort
+    // ========================================================================
+
+    #[test]
+    fn filter_topo_sort_upstream_first() {
+        // Chain: A → B → C — all updated
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![
+            make_node_update("C", "old C", "new C"),
+            make_node_update("A", "old A", "new A"),
+            make_node_update("B", "old B", "new B"),
+        ];
+
+        let edges = vec![
+            make_canvas_edge("e1", "A", "B"),
+            make_canvas_edge("e2", "B", "C"),
+        ];
+
+        let result = filter_changeset(&changeset, &edges, None, &FilterConfig::default());
+
+        let ids: Vec<&str> = result.meaningful.iter().map(|c| c.element_id()).collect();
+        assert_eq!(ids, vec!["A", "B", "C"], "should be in topological order");
+    }
+
+    #[test]
+    fn filter_topo_sort_no_edges() {
+        let mut changeset = empty_changeset();
+        changeset.new_nodes = vec![
+            make_canvas_node("n2", "Second", 200.0, 0.0),
+            make_canvas_node("n1", "First", 0.0, 0.0),
+        ];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        // No edges — stable insertion order preserved
+        let ids: Vec<&str> = result.meaningful.iter().map(|c| c.element_id()).collect();
+        assert_eq!(ids, vec!["n2", "n1"], "no edges → insertion order");
+    }
+
+    #[test]
+    fn filter_topo_sort_edges_after_endpoints() {
+        let mut changeset = empty_changeset();
+        changeset.new_nodes = vec![
+            make_canvas_node("B", "Node B", 200.0, 0.0),
+            make_canvas_node("A", "Node A", 0.0, 0.0),
+        ];
+        changeset.new_edges = vec![make_canvas_edge("e1", "A", "B")];
+
+        let edges = vec![make_canvas_edge("e1", "A", "B")];
+
+        let result = filter_changeset(&changeset, &edges, None, &FilterConfig::default());
+
+        let ids: Vec<&str> = result.meaningful.iter().map(|c| c.element_id()).collect();
+        // A first (upstream), B second, then edge e1 (after both endpoints)
+        assert_eq!(ids, vec!["A", "B", "e1"]);
+    }
+
+    #[test]
+    fn filter_topo_sort_mixed_types() {
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![make_node_update("B", "old B", "new B")];
+        changeset.new_nodes = vec![make_canvas_node("A", "Node A", 0.0, 0.0)];
+        changeset.new_edges = vec![make_canvas_edge("e1", "A", "B")];
+
+        let edges = vec![make_canvas_edge("e1", "A", "B")];
+
+        let result = filter_changeset(&changeset, &edges, None, &FilterConfig::default());
+
+        let ids: Vec<&str> = result.meaningful.iter().map(|c| c.element_id()).collect();
+        assert_eq!(ids[0], "A", "upstream node first");
+        assert_eq!(ids[1], "B", "downstream node second");
+        assert_eq!(ids[2], "e1", "edge after both endpoints");
+    }
+
+    // ========================================================================
+    // Changeset Filter — Aggregate score & dispatch decision
+    // ========================================================================
+
+    #[test]
+    fn filter_aggregate_low_score_still_dispatches() {
+        // One Low-significance update. Score = 0.2, default threshold = 0.1
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![make_node_update(
+            "n1",
+            "the quick brown fox jumps over the lazy dog and then runs across the big open field to find the hidden treasure chest buried deep beneath the ancient oak tree standing tall in the middle of a vast green meadow near the old stone wall",
+            "the quick brown fox jumps over the lazy dog and then runs across the big open field to find the hidden treasure chest buried deep beneath the ancient oak tree standing tall in the middle of a vast green meadow near the old stone fence",
+        )];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert!(result.should_dispatch, "Low score (0.2) >= threshold (0.1)");
+    }
+
+    #[test]
+    fn filter_aggregate_empty_meaningful() {
+        // All changes filtered as noise
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![
+            make_node_update("n1", "  hello  ", "hello"),
+        ];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert_eq!(result.aggregate_score, 0.0);
+        assert!(!result.should_dispatch, "no meaningful changes → don't dispatch");
+    }
+
+    #[test]
+    fn filter_aggregate_custom_threshold() {
+        let config = FilterConfig {
+            dispatch_threshold: 0.8,
+            pan_epsilon: 1.0,
+        };
+
+        let mut changeset = empty_changeset();
+        changeset.new_edges = vec![make_canvas_edge("e1", "n1", "n2")];
+
+        let result = filter_changeset(&changeset, &[], None, &config);
+
+        // One Medium edge → score = 0.5 < 0.8
+        assert!(!result.should_dispatch, "score 0.5 < threshold 0.8");
+    }
+
+    // ========================================================================
+    // Changeset Filter — Integration
+    // ========================================================================
+
+    #[test]
+    fn filter_full_pipeline_mixed() {
+        let mut changeset = empty_changeset();
+
+        // 3 pan moves (same delta)
+        changeset.moved_nodes = vec![
+            make_node_move("m1", 0.0, 0.0, 50.0, 30.0),
+            make_node_move("m2", 200.0, 0.0, 250.0, 30.0),
+            make_node_move("m3", 400.0, 0.0, 450.0, 30.0),
+        ];
+
+        // 1 whitespace-only update
+        changeset.updated_nodes.push(make_node_update("ws1", "  hello  world  ", "hello world"));
+
+        // 1 real text change
+        changeset.updated_nodes.push(make_node_update(
+            "real1",
+            "Research competitors",
+            "Research competitors\n- Q3 pricing\n- Q4 pricing\n- Year-over-year trends",
+        ));
+
+        // 1 new node
+        changeset.new_nodes = vec![make_canvas_node("new1", "Brand new node", 600.0, 0.0)];
+
+        // 1 deleted node
+        changeset.deleted_node_ids = vec!["del1".to_string()];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        // 3 pan noise + 1 whitespace noise = 4 noise entries
+        assert_eq!(result.noise.len(), 4);
+
+        // 2 meaningful: 1 real update + 1 new node
+        assert_eq!(result.meaningful.len(), 2);
+
+        // 1 agentless deletion
+        assert_eq!(result.agentless.deleted_node_ids, vec!["del1"]);
+
+        // Pan moves filtered out
+        assert!(result.agentless.moved_nodes.is_empty());
+
+        assert!(result.should_dispatch);
+    }
+
+    #[test]
+    fn filter_full_pipeline_all_noise() {
+        let mut changeset = empty_changeset();
+
+        // Only whitespace changes and pan moves
+        changeset.updated_nodes = vec![
+            make_node_update("n1", "  hello  ", "hello"),
+            make_node_update("n2", "world  ", "world"),
+        ];
+        changeset.moved_nodes = vec![
+            make_node_move("m1", 0.0, 0.0, 50.0, 30.0),
+            make_node_move("m2", 200.0, 0.0, 250.0, 30.0),
+        ];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert!(result.meaningful.is_empty());
+        assert!(!result.should_dispatch, "all noise → no dispatch");
+        assert_eq!(result.noise.len(), 4); // 2 whitespace + 2 pan
+    }
+
+    #[test]
+    fn filter_full_pipeline_with_baseline() {
+        let baseline = make_snapshot(
+            vec![
+                make_canvas_node("n1", "original text", 0.0, 0.0),
+                make_canvas_node("n2", "other original", 200.0, 0.0),
+            ],
+            vec![],
+            vec![],
+        );
+
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![
+            // n1: oscillation (back to baseline)
+            make_node_update("n1", "edited text", "original text"),
+            // n2: real change (not back to baseline)
+            make_node_update("n2", "other original", "completely rewritten content for node two"),
+        ];
+
+        let result = filter_changeset(&changeset, &[], Some(&baseline), &FilterConfig::default());
+
+        assert_eq!(result.noise.len(), 1);
+        assert_eq!(result.noise[0].element_id, "n1");
+        assert_eq!(result.noise[0].reason, NoiseReason::Oscillation);
+
+        assert_eq!(result.meaningful.len(), 1);
+        assert_eq!(result.meaningful[0].element_id(), "n2");
+    }
+
+    // ========================================================================
+    // Changeset Filter — Tier 1 pass-through
+    // ========================================================================
+
+    #[test]
+    fn filter_agentless_pass_through() {
+        let mut changeset = empty_changeset();
+        changeset.deleted_node_ids = vec!["d1".to_string(), "d2".to_string()];
+        changeset.deleted_edge_ids = vec!["de1".to_string()];
+        changeset.rewired_edges = vec![EdgeRewire {
+            element_id: "re1".to_string(),
+            old_source: "a".to_string(),
+            old_target: "b".to_string(),
+            new_source: "a".to_string(),
+            new_target: "c".to_string(),
+        }];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert_eq!(result.agentless.deleted_node_ids, vec!["d1", "d2"]);
+        assert_eq!(result.agentless.deleted_edge_ids, vec!["de1"]);
+        assert_eq!(result.agentless.rewired_edges.len(), 1);
+        assert_eq!(result.agentless.rewired_edges[0].new_target, "c");
+    }
+
+    #[test]
+    fn filter_agentless_moved_nodes_after_pan() {
+        let mut changeset = empty_changeset();
+        changeset.moved_nodes = vec![
+            // These two share same delta → pan
+            make_node_move("pan1", 0.0, 0.0, 50.0, 30.0),
+            make_node_move("pan2", 200.0, 0.0, 250.0, 30.0),
+        ];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        // Pan moves filtered out of agentless
+        assert!(result.agentless.moved_nodes.is_empty());
+        assert_eq!(result.noise.len(), 2);
+        assert!(result.noise.iter().all(|n| n.reason == NoiseReason::CanvasPan));
+    }
 }

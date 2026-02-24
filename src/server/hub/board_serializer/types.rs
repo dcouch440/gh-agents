@@ -259,3 +259,143 @@ pub struct EdgeRewire {
     pub new_source: String,
     pub new_target: String,
 }
+
+// ============================================================================
+// Changeset Filter & Scoring Types
+// ============================================================================
+
+/// Configuration for changeset filtering thresholds.
+#[derive(Debug, Clone)]
+pub struct FilterConfig {
+    /// Minimum aggregate significance score to dispatch to an agent.
+    /// Below this threshold, the entire changeset is considered not worth dispatching.
+    pub dispatch_threshold: f64,
+    /// Floating-point tolerance for comparing movement deltas in pan detection (px).
+    pub pan_epsilon: f64,
+}
+
+impl Default for FilterConfig {
+    fn default() -> Self {
+        Self {
+            dispatch_threshold: 0.1,
+            pan_epsilon: 1.0,
+        }
+    }
+}
+
+/// The significance level of a single change, based on token change ratio.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ChangeSignificance {
+    /// Token change ratio < 0.05 — minor edit (typo fix, small tweak).
+    Low,
+    /// Token change ratio 0.05..=0.20 — moderate edit.
+    Medium,
+    /// Token change ratio > 0.20, or new node/edge.
+    High,
+}
+
+impl ChangeSignificance {
+    /// Numeric score for aggregation.
+    pub fn score(&self) -> f64 {
+        match self {
+            ChangeSignificance::Low => 0.2,
+            ChangeSignificance::Medium => 0.5,
+            ChangeSignificance::High => 1.0,
+        }
+    }
+}
+
+/// A single meaningful change with its significance score.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScoredChange {
+    NewNode {
+        node: CanvasNode,
+        significance: ChangeSignificance,
+    },
+    UpdatedNode {
+        update: NodeUpdate,
+        significance: ChangeSignificance,
+        token_change_ratio: f64,
+    },
+    NewEdge {
+        edge: CanvasEdge,
+        significance: ChangeSignificance,
+    },
+}
+
+impl ScoredChange {
+    /// The element ID for this change (used for topological ordering).
+    pub fn element_id(&self) -> &str {
+        match self {
+            ScoredChange::NewNode { node, .. } => &node.element_id,
+            ScoredChange::UpdatedNode { update, .. } => &update.element_id,
+            ScoredChange::NewEdge { edge, .. } => &edge.element_id,
+        }
+    }
+
+    /// The significance level of this change.
+    pub fn significance(&self) -> ChangeSignificance {
+        match self {
+            ScoredChange::NewNode { significance, .. }
+            | ScoredChange::UpdatedNode { significance, .. }
+            | ScoredChange::NewEdge { significance, .. } => *significance,
+        }
+    }
+}
+
+/// Changes that can be applied directly via DB writes without AI involvement.
+#[derive(Debug, Clone, PartialEq)]
+pub struct AgentlessChanges {
+    /// Node element IDs that were deleted.
+    pub deleted_node_ids: Vec<String>,
+    /// Edge element IDs that were deleted.
+    pub deleted_edge_ids: Vec<String>,
+    /// Edges that were rewired (same ID, different endpoints).
+    pub rewired_edges: Vec<EdgeRewire>,
+    /// Moved nodes that survived pan filtering (actual rearrangements).
+    pub moved_nodes: Vec<NodeMove>,
+}
+
+/// The reason a change was classified as noise.
+#[derive(Debug, Clone, PartialEq)]
+pub enum NoiseReason {
+    /// Normalized whitespace forms are identical.
+    WhitespaceOnly,
+    /// Current state matches the baseline (oscillation — user undid a change).
+    Oscillation,
+    /// All moved nodes share the same delta — canvas pan, not rearrangement.
+    CanvasPan,
+    /// Text lines are the same when compared as sorted sets (reordered bullets).
+    ReorderOnly,
+}
+
+/// A change that was classified as noise with the reason.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FilteredNoise {
+    /// The element ID of the noisy change.
+    pub element_id: String,
+    /// Why this change was classified as noise.
+    pub reason: NoiseReason,
+}
+
+/// The complete result of filtering and scoring a [`CanvasChangeset`].
+///
+/// Three tiers:
+/// - **Agentless**: structural changes handled as pure DB writes (deletes, rewires, moves)
+/// - **Noise**: changes that survived diff but have no semantic meaning
+/// - **Meaningful**: changes worth sending to an AI agent, sorted by topology
+#[derive(Debug, Clone, PartialEq)]
+pub struct FilteredChangeset {
+    /// Tier 1: Agentless changes — pure DB writes, no AI needed.
+    pub agentless: AgentlessChanges,
+    /// Tier 2: Noise — changes that survived diff but have no semantic meaning.
+    pub noise: Vec<FilteredNoise>,
+    /// Tier 3: Meaningful changes — sorted by topological order (upstream first),
+    /// each with a significance score.
+    pub meaningful: Vec<ScoredChange>,
+    /// Aggregate significance score across all meaningful changes.
+    /// Computed as the mean of individual significance scores.
+    pub aggregate_score: f64,
+    /// Whether the aggregate score meets the dispatch threshold.
+    pub should_dispatch: bool,
+}
