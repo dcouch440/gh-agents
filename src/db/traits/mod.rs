@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::db::{
     AgentDesignerOutputRow, AgentDesignerRunRow, AgentExecutionRow, AgentGuidanceRow, AgentRow,
-    BeliefExtractionPlanRow, BeliefRow, ChatMessageRow, CollectionRunRow,
+    BeliefExtractionPlanRow, BeliefRow, CanvasSnapshotRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContentVersionRow, DocumentRow,
     DocumentSearchResult, EnvelopeSnapshotRow, ExecutionMessageRow, OutputSchemaRow,
     PromptTemplateRow, ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow,
@@ -877,6 +877,14 @@ pub trait WorkflowRepo: Send + Sync {
 
     /// Delete a run template.
     async fn delete_template(&self, template_id: Uuid) -> Result<()>;
+
+    // --- Canvas Snapshots ---
+
+    /// Get the latest canvas snapshot for a workflow (for diffing on next submit).
+    async fn get_canvas_snapshot(&self, workflow_id: Uuid) -> Result<Option<CanvasSnapshotRow>>;
+
+    /// Create or replace the canvas snapshot for a workflow.
+    async fn upsert_canvas_snapshot(&self, row: CanvasSnapshotRow) -> Result<CanvasSnapshotRow>;
 }
 
 // ============================================================================

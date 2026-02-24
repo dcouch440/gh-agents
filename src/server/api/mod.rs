@@ -5,6 +5,7 @@ pub mod agent_executions;
 pub mod agents;
 pub mod archetypes;
 pub mod auth;
+pub mod board;
 pub mod cancellation;
 pub mod chat;
 pub mod collections;
@@ -23,6 +24,9 @@ pub mod tools;
 pub mod workflows;
 
 pub use error::AppError;
+
+// Re-export board handlers and types
+pub use board::{submit_board, BoardSubmitRequest, BoardSubmitResponse};
 
 // Re-export auth handlers and types
 pub use auth::{
