@@ -18,7 +18,7 @@ use crate::db::traits::{
 };
 use crate::db::{
     AgentDesignerOutputRow, AgentDesignerRunRow, AgentExecutionRow, AgentRow,
-    BeliefExtractionPlanRow, BeliefRow, ChatMessageRow, CollectionRunRow,
+    BeliefExtractionPlanRow, BeliefRow, CanvasSnapshotRow, ChatMessageRow, CollectionRunRow,
     CollectionWorkflowEdgeRow, CollectionWorkflowRow, ContentVersionRow, DocumentRow,
     DocumentSearchResult, EnvelopeSnapshotRow, ExecutionMessageRow, OutputSchemaRow,
     PromptTemplateRow, ProtocolDocumentDefRow, ProtocolExecutionRow, ProtocolPortRow, ProtocolRow,
@@ -2426,6 +2426,32 @@ impl WorkflowRepo for PgRepo {
             .execute(&self.pool)
             .await?;
         Ok(())
+    }
+
+    async fn get_canvas_snapshot(&self, workflow_id: Uuid) -> Result<Option<CanvasSnapshotRow>> {
+        let row = sqlx::query_as::<_, CanvasSnapshotRow>(
+            "SELECT * FROM canvas_snapshots WHERE workflow_id = $1",
+        )
+        .bind(workflow_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn upsert_canvas_snapshot(&self, row: CanvasSnapshotRow) -> Result<CanvasSnapshotRow> {
+        let result = sqlx::query_as::<_, CanvasSnapshotRow>(
+            r#"INSERT INTO canvas_snapshots (workflow_id, snapshot_json, elements_json, created_at, updated_at)
+               VALUES ($1, $2, $3, NOW(), NOW())
+               ON CONFLICT (workflow_id) DO UPDATE
+               SET snapshot_json = $2, elements_json = $3, updated_at = NOW()
+               RETURNING *"#,
+        )
+        .bind(row.workflow_id)
+        .bind(&row.snapshot_json)
+        .bind(&row.elements_json)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(result)
     }
 }
 

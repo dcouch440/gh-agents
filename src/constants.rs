@@ -395,6 +395,9 @@ pub mod routes {
     pub const PROTOCOL_UNAPPLY: &str = "/protocols/:protocol_id/unapply/:step_id";
     pub const PROTOCOL_EXECUTIONS: &str = "/protocols/:id/executions";
 
+    // Board
+    pub const WORKFLOW_BOARD_SUBMIT: &str = "/workflows/:id/board/submit";
+
     // Dispatch trace + direct dispatch
     pub const DISPATCH_TRACE: &str = "/dispatch/:execution_id/trace";
     pub const DISPATCH_STEP_TASKS: &str = "/dispatch/step/:step_id";

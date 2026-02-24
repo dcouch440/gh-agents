@@ -12,7 +12,7 @@
 //! classification and annotation resolution. [`CanvasChangeset`] is the result
 //! of diffing two snapshots.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 // ============================================================================
 // Excalidraw Input Types
@@ -147,7 +147,7 @@ pub struct TextElement {
 /// Structured snapshot of the Excalidraw board after classification and
 /// annotation resolution. Contains nodes (rectangles with text), edges
 /// (arrows between nodes), and global notes (text not near any node).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CanvasSnapshot {
     pub nodes: Vec<CanvasNode>,
     pub edges: Vec<CanvasEdge>,
@@ -158,7 +158,7 @@ pub struct CanvasSnapshot {
 ///
 /// The `raw_text` contains the full box content — name, protocol hint,
 /// instruction — as written by the user. The AI parses it downstream.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CanvasNode {
     /// Excalidraw element ID (stable across sessions).
     pub element_id: String,
@@ -174,7 +174,7 @@ pub struct CanvasNode {
 }
 
 /// An edge: an arrow connecting two node candidates.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CanvasEdge {
     /// Excalidraw arrow element ID.
     pub element_id: String,
@@ -185,7 +185,7 @@ pub struct CanvasEdge {
 }
 
 /// Text on the board not near any node — board-level context for the AI.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GlobalNote {
     /// Excalidraw text element ID.
     pub element_id: String,
@@ -194,7 +194,7 @@ pub struct GlobalNote {
 }
 
 /// Axis-aligned bounding box on the canvas.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CanvasBounds {
     pub x: f64,
     pub y: f64,
@@ -214,7 +214,7 @@ pub struct CanvasBounds {
 /// - **Deleted**: elements in previous but not current
 /// - **Moved**: same element, only position changed
 /// - **Rewired**: same edge, different source or target
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct CanvasChangeset {
     /// Nodes that exist in current but not previous.
     pub new_nodes: Vec<CanvasNode>,
@@ -233,7 +233,7 @@ pub struct CanvasChangeset {
 }
 
 /// A node whose text or annotations changed between snapshots.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct NodeUpdate {
     pub element_id: String,
     pub old_text: String,
@@ -243,7 +243,7 @@ pub struct NodeUpdate {
 }
 
 /// A node that moved (bounds changed) but content stayed the same.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct NodeMove {
     pub element_id: String,
     pub old_bounds: CanvasBounds,
@@ -251,7 +251,7 @@ pub struct NodeMove {
 }
 
 /// An edge that was rewired — same element ID but different endpoints.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct EdgeRewire {
     pub element_id: String,
     pub old_source: String,
@@ -284,7 +284,7 @@ impl Default for FilterConfig {
 }
 
 /// The significance level of a single change, based on token change ratio.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub enum ChangeSignificance {
     /// Token change ratio < 0.05 — minor edit (typo fix, small tweak).
     Low,
@@ -306,7 +306,7 @@ impl ChangeSignificance {
 }
 
 /// A single meaningful change with its significance score.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum ScoredChange {
     NewNode {
         node: CanvasNode,
@@ -344,7 +344,7 @@ impl ScoredChange {
 }
 
 /// Changes that can be applied directly via DB writes without AI involvement.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct AgentlessChanges {
     /// Node element IDs that were deleted.
     pub deleted_node_ids: Vec<String>,
@@ -357,7 +357,7 @@ pub struct AgentlessChanges {
 }
 
 /// The reason a change was classified as noise.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub enum NoiseReason {
     /// Normalized whitespace forms are identical.
     WhitespaceOnly,
@@ -370,7 +370,7 @@ pub enum NoiseReason {
 }
 
 /// A change that was classified as noise with the reason.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct FilteredNoise {
     /// The element ID of the noisy change.
     pub element_id: String,
@@ -384,7 +384,7 @@ pub struct FilteredNoise {
 /// - **Agentless**: structural changes handled as pure DB writes (deletes, rewires, moves)
 /// - **Noise**: changes that survived diff but have no semantic meaning
 /// - **Meaningful**: changes worth sending to an AI agent, sorted by topology
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct FilteredChangeset {
     /// Tier 1: Agentless changes — pure DB writes, no AI needed.
     pub agentless: AgentlessChanges,

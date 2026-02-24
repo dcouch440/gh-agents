@@ -597,6 +597,18 @@ mod tests {
             ) -> Result<Vec<(String, String, bool)>> {
                 unimplemented!()
             }
+            async fn get_canvas_snapshot(
+                &self,
+                _: Uuid,
+            ) -> Result<Option<crate::db::CanvasSnapshotRow>> {
+                unimplemented!()
+            }
+            async fn upsert_canvas_snapshot(
+                &self,
+                _: crate::db::CanvasSnapshotRow,
+            ) -> Result<crate::db::CanvasSnapshotRow> {
+                unimplemented!()
+            }
         }
 
         // Create test data

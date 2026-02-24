@@ -767,6 +767,16 @@ pub struct EnvelopeSnapshotRow {
     pub source_id: Uuid,
 }
 
+/// Row type for persisted canvas snapshots (one per workflow, upserted on board submit).
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct CanvasSnapshotRow {
+    pub workflow_id: Uuid,
+    pub snapshot_json: String,
+    pub elements_json: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 // ============================================================================
 // Default Implementations
 // ============================================================================
