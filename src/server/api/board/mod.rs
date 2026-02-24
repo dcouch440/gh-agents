@@ -27,6 +27,7 @@ pub struct PhaseZeroResponse {
     pub deleted_edges: Vec<String>,
     pub rewired_edges: Vec<String>,
     pub moved_steps: Vec<String>,
+    pub updated_steps: Vec<ElementStepPair>,
 }
 
 #[derive(Serialize)]
@@ -97,6 +98,15 @@ pub async fn submit_board(
         deleted_edges: result.phase_zero.deleted_edges,
         rewired_edges: result.phase_zero.rewired_edges,
         moved_steps: result.phase_zero.moved_steps,
+        updated_steps: result
+            .phase_zero
+            .updated_steps
+            .into_iter()
+            .map(|(element_id, step_id)| ElementStepPair {
+                element_id,
+                step_id,
+            })
+            .collect(),
     };
 
     Ok(Json(BoardSubmitResponse {

@@ -4,10 +4,11 @@
 //! Execution order is dependency-driven:
 //! 1. Create new nodes (so edges can reference them)
 //! 2. Create new edges (nodes must exist first)
-//! 3. Delete edges (before nodes, to avoid FK violations)
-//! 4. Rewire edges (update endpoints)
-//! 5. Delete nodes (edges already cleaned up)
-//! 6. Move nodes (position updates)
+//! 3. Update existing nodes (text/annotation edits)
+//! 4. Delete edges (before nodes, to avoid FK violations)
+//! 5. Rewire edges (update endpoints)
+//! 6. Delete nodes (edges already cleaned up)
+//! 7. Move nodes (position updates)
 
 use std::collections::HashMap;
 
@@ -34,6 +35,8 @@ pub struct PhaseZeroResult {
     pub rewired_edges: Vec<String>,
     /// Element IDs of moved steps.
     pub moved_steps: Vec<String>,
+    /// Steps updated from canvas node text/annotation edits: (element_id, step_id).
+    pub updated_steps: Vec<(String, Uuid)>,
 }
 
 /// Execute Phase 0: apply structural changes from a board submit as DB writes.
@@ -43,7 +46,7 @@ pub struct PhaseZeroResult {
 ///
 /// The `FilteredChangeset` contains three tiers:
 /// - **Agentless**: deletes, rewires, moves — all handled here
-/// - **Meaningful**: new nodes and new edges — created here (updated nodes deferred)
+/// - **Meaningful**: new nodes, new edges, and updated nodes — all handled here
 /// - **Noise**: ignored
 pub async fn execute_phase_zero(
     repo: &dyn WorkflowRepo,
@@ -66,6 +69,7 @@ pub async fn execute_phase_zero(
         deleted_edges: Vec::new(),
         rewired_edges: Vec::new(),
         moved_steps: Vec::new(),
+        updated_steps: Vec::new(),
     };
 
     // ── 1. Create new nodes ─────────────────────────────────────────────────
@@ -101,7 +105,33 @@ pub async fn execute_phase_zero(
         }
     }
 
-    // ── 3. Delete edges (before nodes to avoid FK violations) ───────────────
+    // ── 3. Update existing nodes (text/annotation edits) ───────────────────
+    for change in &changeset.meaningful {
+        if let ScoredChange::UpdatedNode { update, .. } = change {
+            let step_id = resolve_step_id(&element_map, &update.element_id)?;
+            let mut step = repo
+                .get_step(step_id)
+                .await?
+                .ok_or_else(|| ServiceError::not_found("Step"))?;
+
+            let (name, prompt_template) = parse_node_text(&update.new_text);
+            step.name = Some(name);
+            step.prompt_template = prompt_template;
+
+            let new_context = build_board_context(&update.new_annotations, &None);
+            if !new_context.is_empty() || !step.board_context_cache.is_empty() {
+                step.board_context_cache = new_context;
+                step.board_context_updated_at = Some(chrono::Utc::now());
+            }
+
+            repo.update_step(step).await?;
+            result
+                .updated_steps
+                .push((update.element_id.clone(), step_id));
+        }
+    }
+
+    // ── 4. Delete edges (before nodes to avoid FK violations) ───────────────
     for element_id in &changeset.agentless.deleted_edge_ids {
         let edge_id = resolve_edge_id(&element_map, element_id)?;
         let _deleted = repo.delete_edge_by_id(edge_id).await?;
@@ -110,7 +140,7 @@ pub async fn execute_phase_zero(
         result.deleted_edges.push(element_id.clone());
     }
 
-    // ── 4. Rewire edges ─────────────────────────────────────────────────────
+    // ── 5. Rewire edges ─────────────────────────────────────────────────────
     for rewire in &changeset.agentless.rewired_edges {
         let old_edge_id = resolve_edge_id(&element_map, &rewire.element_id)?;
         let new_from = resolve_step_id(&element_map, &rewire.new_source)?;
@@ -134,7 +164,7 @@ pub async fn execute_phase_zero(
         result.rewired_edges.push(rewire.element_id.clone());
     }
 
-    // ── 5. Delete nodes ─────────────────────────────────────────────────────
+    // ── 6. Delete nodes ─────────────────────────────────────────────────────
     for element_id in &changeset.agentless.deleted_node_ids {
         let step_id = resolve_step_id(&element_map, element_id)?;
         steps::delete_step(repo, session_repo, user_id, workflow_id, step_id).await?;
@@ -143,7 +173,7 @@ pub async fn execute_phase_zero(
         result.deleted_steps.push(element_id.clone());
     }
 
-    // ── 6. Move nodes ───────────────────────────────────────────────────────
+    // ── 7. Move nodes ───────────────────────────────────────────────────────
     for node_move in &changeset.agentless.moved_nodes {
         let step_id = resolve_step_id(&element_map, &node_move.element_id)?;
         let mut step = repo
@@ -196,6 +226,7 @@ async fn create_node(
     if !board_context_cache.is_empty() {
         let mut updated = step.clone();
         updated.board_context_cache = board_context_cache;
+        updated.board_context_updated_at = Some(chrono::Utc::now());
         repo.update_step(updated).await?;
     }
 
