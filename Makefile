@@ -2,6 +2,7 @@
        ui-install ui-dev ui-build ui-lint ui-preview \
        cli-install cli-dev cli-build \
        dev build-all lint-all test-all ci \
+       test-ascii \
        report-last-run report-token-usage report-tool-calls report-sessions report-all
 
 # Default target
@@ -13,6 +14,7 @@ help:
 	@echo "    make release     - Build release binary"
 	@echo "    make check       - Fast type checking"
 	@echo "    make test        - Run all tests"
+	@echo "    make test-ascii  - Run ASCII drawing → LLM integration tests"
 	@echo "    make fmt         - Format code"
 	@echo "    make lint        - Run clippy linter"
 	@echo "    make run         - Run the application (Sonnet)"
@@ -65,6 +67,9 @@ test:
 
 test-verbose:
 	cargo test -- --nocapture
+
+test-ascii:
+	cargo test hub::board_serializer::tests::tests::ascii_ -- --ignored --nocapture
 
 fmt:
 	cargo fmt

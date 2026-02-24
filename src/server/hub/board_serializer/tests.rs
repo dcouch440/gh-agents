@@ -1857,4 +1857,380 @@ mod tests {
             .iter()
             .all(|n| n.reason == NoiseReason::CanvasPan));
     }
+
+    // ========================================================================
+    // ASCII Drawing → LLM Integration
+    // ========================================================================
+    //
+    // End-to-end test: simulate a user drawing freehand strokes inside a board
+    // node, rasterize them to ASCII art via the board serializer pipeline,
+    // then send the sketch to a (mocked) xAI/Grok endpoint and verify the
+    // full round-trip.
+
+    #[tokio::test]
+    #[ignore] // Run with: cargo test ascii_drawing_round_trip -- --ignored
+    async fn ascii_drawing_round_trip_to_grok() {
+        use crate::llm::{LLMProvider, XaiClient, XaiConfig};
+        use wiremock::matchers::{method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        // ── Step 1: Build a board with freehand strokes inside a node ──
+        //
+        // Node: 400×200 rectangle at (0,0) labelled "Architecture Diagram".
+        // Freedraw strokes trace a rough arrow shape inside the node:
+        //   - Horizontal line from left to right (shaft)
+        //   - Two diagonal lines forming the arrowhead
+        let mut elements = make_rect("node1", 0.0, 0.0, 400.0, 200.0, "Architecture Diagram");
+
+        // Arrow shaft: horizontal stroke from (50,100) to (300,100)
+        // Points are relative to freedraw base position.
+        elements.push(make_freedraw(
+            "stroke_shaft",
+            50.0,
+            100.0,
+            vec![
+                vec![0.0, 0.0],
+                vec![50.0, 0.0],
+                vec![100.0, 0.0],
+                vec![150.0, 0.0],
+                vec![200.0, 0.0],
+                vec![250.0, 0.0],
+            ],
+        ));
+
+        // Arrowhead upper: diagonal from (250,60) to (300,100)
+        elements.push(make_freedraw(
+            "stroke_head_upper",
+            250.0,
+            60.0,
+            vec![vec![0.0, 0.0], vec![25.0, 20.0], vec![50.0, 40.0]],
+        ));
+
+        // Arrowhead lower: diagonal from (250,140) to (300,100)
+        elements.push(make_freedraw(
+            "stroke_head_lower",
+            250.0,
+            140.0,
+            vec![vec![0.0, 0.0], vec![25.0, -20.0], vec![50.0, -40.0]],
+        ));
+
+        // ── Step 2: Classify board → snapshot with ASCII sketch ──
+
+        let snapshot = classify_board(&elements);
+
+        assert_eq!(snapshot.nodes.len(), 1);
+        assert_eq!(snapshot.nodes[0].raw_text, "Architecture Diagram");
+
+        let sketch = snapshot.nodes[0]
+            .sketch
+            .as_ref()
+            .expect("freedraw strokes inside node should produce an ASCII sketch");
+
+        // Verify the sketch is non-trivial (has filled characters)
+        let filled_count = sketch.chars().filter(|&c| c == '█').count();
+        assert!(
+            filled_count > 10,
+            "sketch should have substantial filled cells, got {}",
+            filled_count
+        );
+
+        // Verify it has multiple rows (it's a 2D drawing, not a single line)
+        let row_count = sketch.lines().count();
+        assert!(
+            row_count > 1,
+            "sketch should span multiple rows, got {}",
+            row_count
+        );
+
+        // ── Step 3: Format the sketch as an LLM prompt ──
+
+        let prompt = format!(
+            "A user drew the following ASCII sketch on a workflow design board. \
+             The node is labelled \"{}\".\n\n\
+             ```\n{}\n```\n\n\
+             Describe what the drawing appears to represent. \
+             What is the user trying to communicate with this sketch?",
+            snapshot.nodes[0].raw_text, sketch
+        );
+
+        // ── Step 4: Mock Grok's response ──
+
+        let mock_server = MockServer::start().await;
+
+        let grok_response = serde_json::json!({
+            "model": "grok-3-latest",
+            "output": [{
+                "type": "message",
+                "role": "assistant",
+                "content": [{
+                    "type": "output_text",
+                    "text": "The sketch shows a rightward-pointing arrow, suggesting a directional flow or data pipeline. Combined with the node label \"Architecture Diagram\", the user appears to be indicating a unidirectional data flow — likely from an input source on the left to a processing stage on the right."
+                }]
+            }],
+            "usage": {"input_tokens": 180, "output_tokens": 45},
+            "status": "completed"
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/v1/responses"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&grok_response))
+            .mount(&mock_server)
+            .await;
+
+        // ── Step 5: Send to Grok and verify round-trip ──
+
+        let config = XaiConfig {
+            api_key: "test-key".to_string(),
+            base_url: mock_server.uri(),
+            model: "grok-3-latest".to_string(),
+            timeout_secs: 30,
+            web_search: false,
+            x_search: false,
+        };
+        let client = XaiClient::with_config(config).unwrap();
+
+        let request = crate::llm::LLMRequest::new(
+            "grok-3-latest",
+            vec![crate::llm::Message::user(prompt)],
+        )
+        .with_system(
+            "You are a visual design assistant. \
+             Interpret ASCII sketches drawn on workflow boards and explain \
+             what the user is trying to communicate.",
+        );
+
+        let response: crate::llm::LLMResponse = client.send_message(request).await.unwrap();
+
+        // Verify we got a meaningful response back
+        assert!(!response.content.is_empty(), "Grok response should not be empty");
+        assert!(
+            response.content.contains("arrow"),
+            "Grok should identify the arrow shape in the sketch"
+        );
+        assert_eq!(response.stop_reason, crate::llm::StopReason::EndTurn);
+        assert_eq!(response.model, "grok-3-latest");
+    }
+
+    #[test]
+    #[ignore] // Run with: cargo test ascii_sketch_captures_complex -- --ignored
+    fn ascii_sketch_captures_complex_drawing() {
+        // Build a more complex drawing: a box shape drawn freehand inside a node.
+        // This tests that the rasterizer handles multi-stroke complex shapes.
+        let mut elements = make_rect("node1", 0.0, 0.0, 400.0, 300.0, "Database Schema");
+
+        // Top edge: horizontal line from (50,50) to (350,50)
+        elements.push(make_freedraw(
+            "box_top",
+            50.0,
+            50.0,
+            vec![
+                vec![0.0, 0.0],
+                vec![75.0, 0.0],
+                vec![150.0, 0.0],
+                vec![225.0, 0.0],
+                vec![300.0, 0.0],
+            ],
+        ));
+
+        // Right edge: vertical line from (350,50) to (350,250)
+        elements.push(make_freedraw(
+            "box_right",
+            350.0,
+            50.0,
+            vec![
+                vec![0.0, 0.0],
+                vec![0.0, 50.0],
+                vec![0.0, 100.0],
+                vec![0.0, 150.0],
+                vec![0.0, 200.0],
+            ],
+        ));
+
+        // Bottom edge: horizontal line from (350,250) to (50,250)
+        elements.push(make_freedraw(
+            "box_bottom",
+            350.0,
+            250.0,
+            vec![
+                vec![0.0, 0.0],
+                vec![-75.0, 0.0],
+                vec![-150.0, 0.0],
+                vec![-225.0, 0.0],
+                vec![-300.0, 0.0],
+            ],
+        ));
+
+        // Left edge: vertical line from (50,250) to (50,50)
+        elements.push(make_freedraw(
+            "box_left",
+            50.0,
+            250.0,
+            vec![
+                vec![0.0, 0.0],
+                vec![0.0, -50.0],
+                vec![0.0, -100.0],
+                vec![0.0, -150.0],
+                vec![0.0, -200.0],
+            ],
+        ));
+
+        // Horizontal divider inside the box: (50,150) to (350,150)
+        elements.push(make_freedraw(
+            "divider",
+            50.0,
+            150.0,
+            vec![
+                vec![0.0, 0.0],
+                vec![75.0, 0.0],
+                vec![150.0, 0.0],
+                vec![225.0, 0.0],
+                vec![300.0, 0.0],
+            ],
+        ));
+
+        let snapshot = classify_board(&elements);
+
+        assert_eq!(snapshot.nodes.len(), 1);
+        let sketch = snapshot.nodes[0]
+            .sketch
+            .as_ref()
+            .expect("complex multi-stroke drawing should produce a sketch");
+
+        // The sketch should show a box shape with a horizontal divider.
+        // Verify structural properties:
+
+        // Should have substantial filled cells (5 strokes worth)
+        let filled_count = sketch.chars().filter(|&c| c == '█').count();
+        assert!(
+            filled_count > 30,
+            "complex sketch should have many filled cells, got {}",
+            filled_count
+        );
+
+        // Should span most of the vertical space
+        let rows: Vec<&str> = sketch.lines().collect();
+        assert!(
+            rows.len() > 5,
+            "box sketch should span many rows, got {}",
+            rows.len()
+        );
+
+        // Top row and bottom row should have filled cells (horizontal edges)
+        assert!(
+            rows.first().unwrap().contains('█'),
+            "top row should have strokes"
+        );
+        assert!(
+            rows.last().unwrap().contains('█'),
+            "bottom row should have strokes"
+        );
+
+        // Verify the sketch is suitable for LLM consumption:
+        // It should be a reasonable size for a text prompt
+        assert!(
+            sketch.len() < 5000,
+            "sketch should be compact enough for LLM context, got {} bytes",
+            sketch.len()
+        );
+    }
+
+    #[tokio::test]
+    #[ignore] // Run with: cargo test ascii_sketch_included -- --ignored
+    async fn ascii_sketch_included_in_changeset_dispatch() {
+        use crate::llm::{LLMProvider, XaiClient, XaiConfig};
+        use wiremock::matchers::{body_string_contains, method, path};
+        use wiremock::{Mock, MockServer, ResponseTemplate};
+
+        // Build a board, classify it, diff against empty → all new
+        let mut elements = make_rect("node1", 0.0, 0.0, 300.0, 200.0, "Data Pipeline");
+
+        // Simple V-shape stroke
+        elements.push(make_freedraw(
+            "v_stroke",
+            50.0,
+            50.0,
+            vec![
+                vec![0.0, 0.0],
+                vec![50.0, 50.0],
+                vec![100.0, 100.0],
+                vec![150.0, 50.0],
+                vec![200.0, 0.0],
+            ],
+        ));
+
+        let snapshot = classify_board(&elements);
+        let sketch = snapshot.nodes[0].sketch.as_ref().unwrap();
+
+        // Diff against empty previous → new node with sketch
+        let empty = make_snapshot(vec![], vec![], vec![]);
+        let changeset = diff_snapshots(&empty, &snapshot);
+
+        assert_eq!(changeset.new_nodes.len(), 1);
+        assert!(
+            changeset.new_nodes[0].sketch.is_some(),
+            "new node in changeset should carry the sketch"
+        );
+
+        // Filter → should dispatch (new node = High significance)
+        let filtered = filter_changeset(&changeset, &snapshot.edges, None, &FilterConfig::default());
+        assert!(filtered.should_dispatch);
+        assert_eq!(filtered.meaningful.len(), 1);
+
+        // Build a prompt including the sketch
+        let node = &changeset.new_nodes[0];
+        let prompt = format!(
+            "New node added to the workflow board:\n\
+             Label: {}\n\
+             Sketch:\n```\n{}\n```\n\
+             Configure this workflow step based on the visual context.",
+            node.raw_text,
+            node.sketch.as_ref().unwrap()
+        );
+
+        // Mock Grok recognizing the V-shape as a funnel/filter
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/responses"))
+            .and(body_string_contains(sketch.lines().next().unwrap()))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "model": "grok-3-latest",
+                "output": [{
+                    "type": "message",
+                    "role": "assistant",
+                    "content": [{
+                        "type": "output_text",
+                        "text": "The V-shaped sketch suggests a funnel or convergence pattern. This data pipeline step should aggregate or filter incoming data streams into a single output."
+                    }]
+                }],
+                "usage": {"input_tokens": 200, "output_tokens": 35},
+                "status": "completed"
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let client = XaiClient::with_config(XaiConfig {
+            api_key: "test-key".to_string(),
+            base_url: mock_server.uri(),
+            model: "grok-3-latest".to_string(),
+            timeout_secs: 30,
+            web_search: false,
+            x_search: false,
+        })
+        .unwrap();
+
+        let response: crate::llm::LLMResponse = client
+            .send_message(
+                crate::llm::LLMRequest::new(
+                    "grok-3-latest",
+                    vec![crate::llm::Message::user(prompt)],
+                )
+                .with_system("Interpret board sketches and configure workflow steps."),
+            )
+            .await
+            .unwrap();
+
+        assert!(response.content.contains("funnel") || response.content.contains("convergence"));
+        assert_eq!(response.stop_reason, crate::llm::StopReason::EndTurn);
+    }
 }
