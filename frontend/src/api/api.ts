@@ -84,6 +84,7 @@ import type {
   DispatchSendRequest,
   DispatchActionResponse,
   DispatchSessionResponse,
+  BoardSubmitResponse,
 } from '@/types'
 
 // ============================================================================
@@ -369,6 +370,9 @@ const workflows = freeze({
 
   getWorkshopStatus: (workflowId: string, config?: RequestConfig) =>
     baseApi.get<WorkshopStatusResponse>(API.WORKFLOW_WORKSHOP(workflowId), config),
+
+  submitBoard: (workflowId: string, elements: ReadonlyArray<unknown>, config?: RequestConfig) =>
+    baseApi.post<BoardSubmitResponse>(API.WORKFLOW_BOARD_SUBMIT(workflowId), { elements }, config),
 })
 
 const contextResponse = freeze({

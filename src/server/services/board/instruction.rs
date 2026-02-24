@@ -29,11 +29,11 @@ pub fn format_board_instruction(
 
     // Build element_id → ref_id lookup from Phase 0 results
     let mut ref_ids: HashMap<&str, &str> = HashMap::new();
-    for (eid, _sid, rid) in &phase_zero.created_steps {
-        ref_ids.insert(eid.as_str(), rid.as_str());
+    for (eid, step) in &phase_zero.created_steps {
+        ref_ids.insert(eid.as_str(), step.ref_id.as_deref().unwrap_or(""));
     }
-    for (eid, _sid, rid) in &phase_zero.updated_steps {
-        ref_ids.insert(eid.as_str(), rid.as_str());
+    for (eid, step) in &phase_zero.updated_steps {
+        ref_ids.insert(eid.as_str(), step.ref_id.as_deref().unwrap_or(""));
     }
 
     // Build element_id → node name lookup from snapshot

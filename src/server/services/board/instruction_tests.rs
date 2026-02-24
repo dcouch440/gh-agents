@@ -2,6 +2,7 @@
 mod tests {
     use uuid::Uuid;
 
+    use crate::db::WorkflowStepRow;
     use crate::server::hub::board_serializer::{
         AgentlessChanges, CanvasBounds, CanvasEdge, CanvasNode, CanvasSnapshot, ChangeSignificance,
         EdgeRewire, FilteredChangeset, GlobalNote, NodeMove, NodeUpdate, ScoredChange,
@@ -35,6 +36,15 @@ mod tests {
             rewired_edges: vec![],
             moved_steps: vec![],
             updated_steps: vec![],
+        }
+    }
+
+    /// Create a minimal WorkflowStepRow with the given ID and ref_id.
+    fn make_step_row(id: Uuid, ref_id: &str) -> WorkflowStepRow {
+        WorkflowStepRow {
+            id,
+            ref_id: Some(ref_id.to_string()),
+            ..Default::default()
         }
     }
 
@@ -115,8 +125,8 @@ mod tests {
 
         let phase_zero = PhaseZeroResult {
             created_steps: vec![
-                ("n1".to_string(), step_id_1, "workforce-1".to_string()),
-                ("n2".to_string(), step_id_2, "workforce-2".to_string()),
+                ("n1".to_string(), make_step_row(step_id_1, "workforce-1")),
+                ("n2".to_string(), make_step_row(step_id_2, "workforce-2")),
             ],
             ..empty_phase_zero()
         };
@@ -155,7 +165,7 @@ mod tests {
         };
 
         let phase_zero = PhaseZeroResult {
-            updated_steps: vec![("n1".to_string(), step_id, "workforce-1".to_string())],
+            updated_steps: vec![("n1".to_string(), make_step_row(step_id, "workforce-1"))],
             ..empty_phase_zero()
         };
 
@@ -213,8 +223,11 @@ mod tests {
         };
 
         let phase_zero = PhaseZeroResult {
-            created_steps: vec![("n1".to_string(), new_step_id, "workforce-1".to_string())],
-            updated_steps: vec![("n2".to_string(), updated_step_id, "workforce-2".to_string())],
+            created_steps: vec![("n1".to_string(), make_step_row(new_step_id, "workforce-1"))],
+            updated_steps: vec![(
+                "n2".to_string(),
+                make_step_row(updated_step_id, "workforce-2"),
+            )],
             ..empty_phase_zero()
         };
 
@@ -252,7 +265,10 @@ mod tests {
         };
 
         let phase_zero = PhaseZeroResult {
-            created_steps: vec![("n1".to_string(), Uuid::new_v4(), "workforce-1".to_string())],
+            created_steps: vec![(
+                "n1".to_string(),
+                make_step_row(Uuid::new_v4(), "workforce-1"),
+            )],
             ..empty_phase_zero()
         };
 
@@ -281,7 +297,10 @@ mod tests {
         };
 
         let phase_zero = PhaseZeroResult {
-            created_steps: vec![("n1".to_string(), Uuid::new_v4(), "workforce-1".to_string())],
+            created_steps: vec![(
+                "n1".to_string(),
+                make_step_row(Uuid::new_v4(), "workforce-1"),
+            )],
             ..empty_phase_zero()
         };
 
@@ -326,7 +345,10 @@ mod tests {
         };
 
         let phase_zero = PhaseZeroResult {
-            created_steps: vec![("n1".to_string(), Uuid::new_v4(), "workforce-1".to_string())],
+            created_steps: vec![(
+                "n1".to_string(),
+                make_step_row(Uuid::new_v4(), "workforce-1"),
+            )],
             ..empty_phase_zero()
         };
 

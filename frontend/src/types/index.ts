@@ -93,6 +93,27 @@ export type {
   CreatePortRequest,
 } from './protocol'
 export type { DispatchTraceResponse, DispatchTaskSummary, DispatchTasksResponse, DispatchSendRequest, DispatchActionResponse, DispatchSessionResponse } from './dispatch'
+export type {
+  BoardSubmitResponse,
+  PhaseZeroResponse,
+  PhaseZeroStep,
+  ElementEdgePair,
+  BoardDispatchInfo,
+  CanvasSnapshot,
+  CanvasNode,
+  CanvasEdge,
+  GlobalNote,
+  CanvasBounds,
+  FilteredChangeset,
+  AgentlessChanges,
+  ScoredChange,
+  ChangeSignificance,
+  NodeUpdate,
+  NodeMove,
+  EdgeRewire,
+  FilteredNoise,
+  NoiseReason,
+} from './board'
 export { SSE_EVENT, isContentEvent } from './streaming'
 export type { ToolStatus, ToolIndicatorData, MessageSegment, StreamEventType } from './streaming'
 export { ACTIVITY } from './activity'
