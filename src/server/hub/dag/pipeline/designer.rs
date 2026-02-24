@@ -20,6 +20,8 @@ use crate::server::hub::protocols::execution_recorder::{
 };
 use crate::server::ws::events::WorkflowEventKind;
 
+use crate::server::hub::streaming::NullSink;
+
 use super::super::agent_designer;
 use super::super::designer_input::workforce::build_workforce_designer_input;
 use super::super::{broadcast_workflow_event, DagContext};
@@ -99,6 +101,7 @@ impl PipelinePhase for DesignerPhase {
             "",
             dag.cancel,
             Some(designer_phase.id),
+            &NullSink,
         )
         .await
         {
