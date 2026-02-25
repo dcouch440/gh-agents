@@ -14,7 +14,6 @@ pub mod execution;
 pub mod dag;
 pub mod error;
 pub mod pricing;
-pub mod prompt_registry;
 pub mod protocols;
 pub mod run_results;
 
@@ -47,9 +46,9 @@ use engine::filters::{
     SchemaValidationRetryFilter,
 };
 
+pub use crate::config::prompt_registry::PromptRegistry;
 pub use engine::{ExecutionEngine, ExecutionResult};
 pub use error::HubError;
-pub use prompt_registry::PromptRegistry;
 pub use recorder::ExecutionRecorder;
 pub use strategies::{ChatConfig, ChatStrategy, DagStepStrategy, StepChatContext};
 pub use strategy::ExecutionStrategy;

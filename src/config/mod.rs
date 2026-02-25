@@ -4,6 +4,7 @@ pub mod capability_registry;
 mod credentials;
 mod global;
 mod project;
+pub mod prompt_registry;
 pub mod protocols;
 pub mod sync;
 mod validation;

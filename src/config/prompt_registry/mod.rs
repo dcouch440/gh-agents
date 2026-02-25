@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use super::error::HubError;
+use crate::server::hub::error::HubError;
 
 /// Registry of prompt templates loaded from disk.
 ///
