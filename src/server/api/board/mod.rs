@@ -177,8 +177,7 @@ async fn try_dispatch_board(
     // Find or create the manager step for this workflow.
     // The manager step is a hidden, persistent anchor for dispatch sessions.
     // It's created once on first board submit and reused for all future dispatches.
-    let manager_step_id =
-        find_or_create_manager_step(state, workflow_id, user_id).await?;
+    let manager_step_id = find_or_create_manager_step(state, workflow_id, user_id).await?;
 
     // Dispatch via the shared dispatch service
     let output = dispatch::dispatch_to_builder(

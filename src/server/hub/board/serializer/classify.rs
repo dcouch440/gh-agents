@@ -167,7 +167,14 @@ pub(crate) fn classify(elements: &[ExcalidrawElement]) -> ClassifiedElements {
         }
 
         if !texts.is_empty() {
-            adoptions.push((rect.id.clone(), rect.x, rect.y, rect.width, rect.height, texts));
+            adoptions.push((
+                rect.id.clone(),
+                rect.x,
+                rect.y,
+                rect.width,
+                rect.height,
+                texts,
+            ));
         }
     }
 

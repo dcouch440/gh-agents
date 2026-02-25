@@ -7,17 +7,17 @@
 mod tests;
 
 use async_trait::async_trait;
-use serde_json::{json, Value};
+use serde_json::Value;
 use tracing::info;
 use uuid::Uuid;
 
-use crate::server::tools::execution as execution_tools;
 use crate::execution::{ContainerHandle, ExecutionContext};
 use crate::llm::{Message, TokenUsage, Tool};
 use crate::server::hub::error::HubError;
 use crate::server::hub::strategies;
 use crate::server::hub::strategy::ExecutionStrategy;
 use crate::server::state::AppState;
+use crate::server::tools::execution as execution_tools;
 use crate::types::UserId;
 
 /// Configuration for a single workforce agent execution.
@@ -97,46 +97,6 @@ impl ExecutionStrategy for WorkforceAgentStrategy {
     }
 
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
-        // Stateful tools that need DB access (AppState + optionally UserId).
-        // These are intercepted before the container/local cascade because they
-        // operate on the knowledge base, not the filesystem.
-        match name {
-            "read_document" => {
-                if let Some(ref state) = self.config.state {
-                    return crate::server::tools::documents::execute_read_document(input, state)
-                        .await;
-                }
-                return json!({ "error": "Document reading not available in this context" });
-            }
-            "create_doc" => {
-                if let (Some(ref state), Some(user_id)) = (&self.config.state, self.config.user_id)
-                {
-                    return crate::server::tools::documents::execute_create_doc(
-                        input, state, user_id,
-                    )
-                    .await;
-                }
-                return json!({ "error": "Document creation not available in this context" });
-            }
-            "update_doc" => {
-                if let Some(ref state) = self.config.state {
-                    return crate::server::tools::documents::execute_update_doc(input, state).await;
-                }
-                return json!({ "error": "Document update not available in this context" });
-            }
-            "search_docs" => {
-                if let (Some(ref state), Some(user_id)) = (&self.config.state, self.config.user_id)
-                {
-                    return crate::server::tools::documents::execute_search_docs(
-                        input, state, user_id,
-                    )
-                    .await;
-                }
-                return json!({ "error": "Document search not available in this context" });
-            }
-            _ => {}
-        }
-
         info!(tool = %name, "Workforce agent tool call");
         execution_tools::dispatch_tool_cascade(
             name,
@@ -144,6 +104,8 @@ impl ExecutionStrategy for WorkforceAgentStrategy {
             self.config.container_handle.as_ref(),
             self.config.execution_context.as_ref(),
             Some(&self.config.tool_names),
+            self.config.state.as_ref(),
+            self.config.user_id,
         )
         .await
     }

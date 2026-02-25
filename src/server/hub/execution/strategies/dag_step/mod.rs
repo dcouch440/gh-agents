@@ -9,14 +9,15 @@ use serde_json::Value;
 use tracing::info;
 use uuid::Uuid;
 
-use crate::server::tools::execution as execution_tools;
 use crate::db::{AgentRow, WorkflowStepRow};
 use crate::execution::{ContainerHandle, ExecutionContext};
 use crate::llm::{Message, TokenUsage, Tool};
 use crate::server::state::AppState;
+use crate::server::tools::execution as execution_tools;
+use crate::types::UserId;
 
-use super::super::error::HubError;
 use super::super::strategy::ExecutionStrategy;
+use crate::server::hub::error::HubError;
 
 /// Configuration for a DAG step execution.
 pub struct DagStepConfig {
@@ -112,12 +113,6 @@ impl ExecutionStrategy for DagStepStrategy {
     }
 
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
-        // Stateful tools that need DB access (AppState)
-        if name == "read_document" {
-            return crate::server::tools::documents::execute_read_document(input, &self.state)
-                .await;
-        }
-
         info!(agent = %self.config.agent.name, tool = %name, "DAG step tool call");
         execution_tools::dispatch_tool_cascade(
             name,
@@ -125,6 +120,8 @@ impl ExecutionStrategy for DagStepStrategy {
             self.config.container_handle.as_ref(),
             self.config.execution_context.as_ref(),
             Some(&self.config.tool_names),
+            Some(&self.state),
+            Some(UserId(self.config.user_id)),
         )
         .await
     }
