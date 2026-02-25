@@ -1,21 +1,20 @@
 import { useEffect, useState } from 'react'
 import { api } from '@/api'
+import type { BoardElements } from '../elements'
+import { deserializeFromExcalidraw } from '../elements'
 
-type BoardElementsState = {
-  loading: boolean
-  elements: readonly Record<string, unknown>[] | null
-}
+type SetElements = (fn: (s: BoardElements) => BoardElements) => void
 
 /**
- * Fetch saved Excalidraw elements for a workflow from the backend.
+ * Fetch saved board elements from the backend and deserialize into BoardElements.
  *
- * Returns `loading: true` until the fetch completes, then `elements`
- * is either the saved array or `null` (no previous submit).
- * Excalidraw should only mount after loading is false, so that
- * `initialData.elements` is set on first render.
+ * Returns `loading: true` until the fetch completes. On success, calls
+ * `setElements` with the deserialized board state. The backend returns
+ * the same Excalidraw JSON array that was last POSTed, so
+ * `deserializeFromExcalidraw` reconstructs the internal representation.
  */
-const useBoardElements = (workflowId: string): BoardElementsState => {
-  const [state, setState] = useState<BoardElementsState>({ loading: true, elements: null })
+const useBoardElements = (workflowId: string, setElements: SetElements): { loading: boolean } => {
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -24,20 +23,24 @@ const useBoardElements = (workflowId: string): BoardElementsState => {
     api.workflows.getBoardElements(workflowId, { signal }).then(
       (resp) => {
         if (!signal.aborted) {
-          setState({ loading: false, elements: resp.elements })
+          if (resp.elements !== null) {
+            const board = deserializeFromExcalidraw(resp.elements as Record<string, unknown>[])
+            setElements(() => board)
+          }
+          setLoading(false)
         }
       },
       () => {
         if (!signal.aborted) {
-          setState({ loading: false, elements: null })
+          setLoading(false)
         }
       },
     )
 
     return () => { controller.abort() }
-  }, [workflowId])
+  }, [workflowId, setElements])
 
-  return state
+  return { loading }
 }
 
 export { useBoardElements }

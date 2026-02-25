@@ -1,16 +1,32 @@
 import { useTheme } from '@mui/material/styles'
 
+type BoardTheme = {
+  readonly canvasBg: string
+  readonly gridDotColor: string
+  readonly connectorColor: string
+  readonly surfaceBg: string
+  readonly accent: string
+  readonly textPrimary: string
+}
+
 /**
- * Map the app's MUI palette mode to Excalidraw's theme value.
+ * Extract canvas theme tokens from the MUI theme.
  *
- * Excalidraw accepts `"light" | "dark"`. MUI's `palette.mode` uses the same
- * string literal union, so this is a direct pass-through today. Extracting it
- * as a hook keeps Board.tsx free of theme logic and lets us extend the mapping
- * later (e.g. Excalidraw-specific color overrides) without touching the component.
+ * Returns the specific color values needed by the board canvas components
+ * (Grid, EditableBox, ArrowLayer) so they don't need to import useTheme
+ * themselves.
  */
-const useBoardTheme = (): 'light' | 'dark' => {
+const useBoardTheme = (): BoardTheme => {
   const theme = useTheme()
-  return theme.palette.mode === 'light' ? 'light' : 'dark'
+  return {
+    canvasBg: theme.palette.custom.canvasBg,
+    gridDotColor: theme.palette.custom.gridDotColor,
+    connectorColor: theme.palette.custom.connectorColor,
+    surfaceBg: theme.palette.custom.surfaceBg,
+    accent: theme.palette.custom.accent,
+    textPrimary: theme.palette.text.primary,
+  }
 }
 
 export { useBoardTheme }
+export type { BoardTheme }

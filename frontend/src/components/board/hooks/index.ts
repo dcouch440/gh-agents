@@ -1,4 +1,5 @@
 export { useBoardTheme } from './useBoardTheme'
+export type { BoardTheme } from './useBoardTheme'
 export { useBoardSubmit } from './useBoardSubmit'
 export { useBoardElements } from './useBoardElements'
 export { useDispatchPoll } from './useDispatchPoll'
