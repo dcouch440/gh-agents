@@ -50,6 +50,7 @@ type Canvas2DProps = {
   readonly onBoxPointerDown: (boxId: string, e: React.PointerEvent) => void
   readonly onAnchorPointerDown: (boxId: string, anchor: AnchorPoint, e: React.PointerEvent) => void
   readonly onResizePointerDown: (boxId: string, handle: ResizeHandle, e: React.PointerEvent) => void
+  readonly onContextMenu: (x: number, y: number, elementId: string | null) => void
 }
 
 // ── Edge Hover Detection ──────────────────────────────────────────────────
@@ -200,6 +201,7 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
     onBoxPointerDown,
     onAnchorPointerDown,
     onResizePointerDown,
+    onContextMenu,
   },
   ref,
 ) {
@@ -495,6 +497,31 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
     }
   }, [editingBoxId, onBoxBlur])
 
+  // ── Context Menu ────────────────────────────────────────────────────
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+
+    const wrapper = e.currentTarget as HTMLElement
+    const rect = wrapper.getBoundingClientRect()
+    const canvas = screenToCanvas(e.clientX, e.clientY, viewport, rect)
+
+    // Hit-test boxes (reverse z-order)
+    for (let i = elements.boxOrder.length - 1; i >= 0; i--) {
+      const boxId = elements.boxOrder[i]!
+      const box = elements.boxes.get(boxId)
+      if (box === undefined) continue
+      if (canvas.x >= box.x && canvas.x <= box.x + box.width &&
+          canvas.y >= box.y && canvas.y <= box.y + box.height) {
+        onContextMenu(e.clientX, e.clientY, boxId)
+        return
+      }
+    }
+
+    // Hit-test arrows would go here in the future
+
+    onContextMenu(e.clientX, e.clientY, null)
+  }, [elements, onContextMenu, viewport])
+
   // ── Textarea Position (screen coords) ─────────────────────────────────
 
   const editingBox = editingBoxId !== null ? elements.boxes.get(editingBoxId) ?? null : null
@@ -507,6 +534,7 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
       onPointerUp={onPointerUp}
       onWheel={onWheel}
       onDoubleClick={handleDoubleClick}
+      onContextMenu={handleContextMenu}
       style={{
         position: 'relative',
         width: '100%',
