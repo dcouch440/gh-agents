@@ -10,6 +10,7 @@ import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import rough from 'roughjs'
 import type { Side } from '@/utils/geometry'
 import { computeArrowPathPoints, computeDrawingArrowPathPoints } from '../arrows/routing'
+import type { ArrowPath } from '../arrows/routing'
 import { BOARD } from '../constants'
 import type { AnchorPoint, BoardElements, DrawingArrow, ResizeHandle, SelectionState, ViewportState } from '../elements'
 import { screenToCanvas } from '../elements'
@@ -173,6 +174,29 @@ const RESIZE_CURSORS: Record<ResizeHandle, string> = {
 }
 
 const clamp = (v: number, min: number, max: number): number => Math.max(min, Math.min(max, v))
+
+/**
+ * Check if a point is within `threshold` px of a cubic bezier curve.
+ * Samples 20 points along the curve and checks distance to each.
+ */
+const pointNearCubicBezier = (
+  px: number,
+  py: number,
+  path: ArrowPath,
+  threshold: number,
+): boolean => {
+  const steps = 20
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps
+    const it = 1 - t
+    const x = it * it * it * path.start.x + 3 * it * it * t * path.cp1.x + 3 * it * t * t * path.cp2.x + t * t * t * path.end.x
+    const y = it * it * it * path.start.y + 3 * it * it * t * path.cp1.y + 3 * it * t * t * path.cp2.y + t * t * t * path.end.y
+    const dx = px - x
+    const dy = py - y
+    if (dx * dx + dy * dy <= threshold * threshold) return true
+  }
+  return false
+}
 
 // ── Component ─────────────────────────────────────────────────────────────
 
@@ -517,7 +541,18 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
       }
     }
 
-    // Hit-test arrows would go here in the future
+    // Hit-test arrows (sample points along bezier, check proximity)
+    for (const [arrowId, arrow] of elements.arrows) {
+      const sourceBox = elements.boxes.get(arrow.sourceBoxId)
+      const targetBox = elements.boxes.get(arrow.targetBoxId)
+      if (sourceBox === undefined || targetBox === undefined) continue
+
+      const path = computeArrowPathPoints(sourceBox, arrow.sourceAnchor, targetBox, arrow.targetAnchor)
+      if (pointNearCubicBezier(canvas.x, canvas.y, path, 8)) {
+        onContextMenu(e.clientX, e.clientY, arrowId)
+        return
+      }
+    }
 
     onContextMenu(e.clientX, e.clientY, null)
   }, [elements, onContextMenu, viewport])
