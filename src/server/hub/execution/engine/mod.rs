@@ -15,10 +15,10 @@ use crate::llm::{
     StreamChunk as LLMStreamChunk, TokenUsage,
 };
 
-use super::error::HubError;
 use super::recorder::ExecutionRecorder;
 use super::strategy::ExecutionStrategy;
 use super::streaming::StreamSink;
+use crate::server::hub::error::HubError;
 
 pub mod filters;
 

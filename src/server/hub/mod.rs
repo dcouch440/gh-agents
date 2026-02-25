@@ -5,25 +5,34 @@
 //! parameterized by an `ExecutionStrategy`. Different strategies handle chat
 //! sessions, DAG workflow steps, and tool routing.
 
-pub mod board_overview;
-pub mod board_serializer;
-pub mod board_state;
-pub mod capability_resolver;
-pub mod chat_beliefs;
+// ── Grouped submodules ──────────────────────────────────────────────────────
+pub mod board;
+pub mod context;
+pub mod execution;
+
+// ── Standalone submodules ───────────────────────────────────────────────────
 pub mod dag;
-pub mod dispatch_status;
-pub mod engine;
 pub mod error;
-pub mod graph_context;
 pub mod pricing;
 pub mod prompt_registry;
 pub mod protocols;
-pub mod question_extraction;
-pub mod recorder;
 pub mod run_results;
-pub mod strategies;
-pub mod strategy;
-pub mod streaming;
+
+// ── Backward-compatible re-exports ──────────────────────────────────────────
+// External consumers (executors, api, services) import these at their old paths.
+pub use board::overview as board_overview;
+pub use board::serializer as board_serializer;
+pub use board::state as board_state;
+pub use context::beliefs as chat_beliefs;
+pub use context::capabilities as capability_resolver;
+pub use context::dispatch_status;
+pub use context::graph as graph_context;
+pub use context::questions as question_extraction;
+pub use execution::engine;
+pub use execution::recorder;
+pub use execution::strategies;
+pub use execution::strategy;
+pub use execution::streaming;
 
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;

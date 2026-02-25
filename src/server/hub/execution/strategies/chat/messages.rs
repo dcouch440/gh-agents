@@ -6,7 +6,7 @@ use crate::llm::{Message, Role};
 use crate::server::state::AppState;
 use crate::server::tools;
 
-use super::super::super::error::HubError;
+use crate::server::hub::error::HubError;
 
 /// Build the initial message list for a chat session.
 ///

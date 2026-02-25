@@ -15,8 +15,8 @@ use uuid::Uuid;
 use crate::llm::{Message, TokenUsage, Tool};
 use crate::server::state::AppState;
 
-use super::error::HubError;
 use super::strategies;
+use crate::server::hub::error::HubError;
 
 /// A strategy that parameterizes the execution engine loop.
 ///

@@ -18,8 +18,8 @@ use crate::llm::{Message, TokenUsage, Tool};
 use crate::server::state::AppState;
 use crate::types::UserId;
 
-use super::super::error::HubError;
 use super::super::strategy::ExecutionStrategy;
+use crate::server::hub::error::HubError;
 
 pub(crate) mod broadcast;
 mod completion;

@@ -12,6 +12,9 @@ use crate::execution::{
     GitOps, Sandbox, TestRunner,
 };
 use crate::llm::Tool;
+use crate::server::state::AppState;
+use crate::server::tools::documents;
+use crate::types::UserId;
 
 // ── Shared File I/O Abstraction ───────────────────────────────────────────
 
@@ -432,19 +435,46 @@ pub async fn execute_context_free_tool(
     }
 }
 
-/// Dispatch a tool call through the container → local → context-free cascade.
+/// Dispatch a tool call through the unified cascade.
 ///
-/// Tries container execution first (if a handle is provided), then local
-/// execution via the host execution context, then context-free tools (external
-/// APIs only). Strategies should intercept any DB-backed tools *before* calling
-/// this function.
+/// Document tools (read_document, create_doc, update_doc, search_docs) are
+/// handled first when `state` is provided. Then tries container execution
+/// (if a handle is provided), then local execution via the host execution
+/// context, then context-free tools (external APIs only).
 pub async fn dispatch_tool_cascade(
     name: &str,
     input: &Value,
     container_handle: Option<&ContainerHandle>,
     execution_context: Option<&ExecutionContext>,
     allowed_tools: Option<&[String]>,
+    state: Option<&AppState>,
+    user_id: Option<UserId>,
 ) -> Value {
+    // Document tools need DB access (AppState), not filesystem.
+    match name {
+        "read_document" => {
+            if let Some(state) = state {
+                return documents::execute_read_document(input, state).await;
+            }
+        }
+        "create_doc" => {
+            if let (Some(state), Some(uid)) = (state, user_id) {
+                return documents::execute_create_doc(input, state, uid).await;
+            }
+        }
+        "update_doc" => {
+            if let Some(state) = state {
+                return documents::execute_update_doc(input, state).await;
+            }
+        }
+        "search_docs" => {
+            if let (Some(state), Some(uid)) = (state, user_id) {
+                return documents::execute_search_docs(input, state, uid).await;
+            }
+        }
+        _ => {}
+    }
+
     if let Some(handle) = container_handle {
         return execute_tool_in_container(name, input, handle, allowed_tools).await;
     }

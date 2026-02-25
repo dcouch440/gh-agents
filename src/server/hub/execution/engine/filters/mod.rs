@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::llm::{LLMResponse, Message};
 
-use super::super::error::HubError;
+use crate::server::hub::error::HubError;
 
 pub mod agent_guidance;
 pub mod debate_verification;

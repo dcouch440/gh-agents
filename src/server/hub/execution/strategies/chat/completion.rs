@@ -9,8 +9,8 @@ use crate::server::state::AppState;
 use crate::server::tools;
 use crate::types::UserId;
 
-use super::super::super::error::HubError;
 use super::config::StepChatContext;
+use crate::server::hub::error::HubError;
 
 /// Post-processing after the final LLM response.
 ///
