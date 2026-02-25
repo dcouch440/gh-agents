@@ -474,7 +474,7 @@ mod tests {
     fn workforce_builder_config_parses() {
         let cfg = &*WORKFORCE_BUILDER;
         let dispatcher = cfg.agent("dispatcher");
-        assert_eq!(dispatcher.model_id, crate::constants::MODEL_TIER1);
+        assert_eq!(dispatcher.model_id, crate::constants::MODEL_TIER2);
         assert_eq!(dispatcher.temperature, 0.3);
         assert_eq!(dispatcher.max_tokens, 8192);
         assert_eq!(dispatcher.max_rounds, 6);
@@ -506,7 +506,7 @@ mod tests {
     fn board_dispatcher_config_parses() {
         let cfg = &*BOARD_DISPATCHER;
         let dispatcher = cfg.agent("dispatcher");
-        assert_eq!(dispatcher.model_id, crate::constants::MODEL_TIER1);
+        assert_eq!(dispatcher.model_id, crate::constants::MODEL_TIER2);
         assert_eq!(dispatcher.temperature, 0.3);
         assert_eq!(dispatcher.max_tokens, 8192);
         assert_eq!(dispatcher.max_rounds, 2);

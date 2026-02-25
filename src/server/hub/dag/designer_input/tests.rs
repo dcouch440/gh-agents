@@ -115,7 +115,7 @@ mod tests {
         assert_eq!(input.dependencies[0].to_agent_name, "Analyzer");
         assert!(input.archetype_guidance.contains("Scanner"));
         assert!(input.archetype_guidance.contains("Analyzer"));
-        assert!(input.archetype_guidance.contains("receives_from"));
+        assert!(input.archetype_guidance.contains("runs before"));
     }
 
     #[test]
@@ -156,7 +156,7 @@ mod tests {
         assert!(input.dependencies.is_empty());
         assert!(input
             .archetype_guidance
-            .contains("No inter-agent dependencies"));
+            .contains("all agents run in parallel"));
     }
 
     #[test]
@@ -184,6 +184,6 @@ mod tests {
         assert!(input.dependencies.is_empty());
         assert!(input
             .archetype_guidance
-            .contains("No inter-agent dependencies"));
+            .contains("all agents run in parallel"));
     }
 }
