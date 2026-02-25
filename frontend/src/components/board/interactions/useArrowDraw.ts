@@ -5,7 +5,7 @@
 import { useCallback } from 'react'
 import { computeBindingAnchor } from '../arrows'
 import type { AnchorPoint, BoardElements, InteractionMode, ViewportState } from '../elements'
-import { addArrow, createArrow, hitTestBox, screenToCanvas } from '../elements'
+import { addArrow, containerEventToCanvas, createArrow, hitTestBox } from '../elements'
 import type { SetElements, SetInteraction } from './types'
 
 const useArrowDraw = (
@@ -15,11 +15,8 @@ const useArrowDraw = (
   containerRef: React.RefObject<HTMLDivElement | null>,
 ) => {
   const onArrowStart = useCallback((sourceBoxId: string, anchor: AnchorPoint, e: React.PointerEvent) => {
-    const container = containerRef.current
-    if (container === null) return
-
-    const rect = container.getBoundingClientRect()
-    const canvas = screenToCanvas(e.clientX, e.clientY, viewport, rect)
+    const canvas = containerEventToCanvas(containerRef, e, viewport)
+    if (canvas === null) return
 
     setInteraction({
       type: 'drawing-arrow',
@@ -33,11 +30,8 @@ const useArrowDraw = (
   const onArrowMove = useCallback((e: React.PointerEvent, interaction: InteractionMode) => {
     if (interaction.type !== 'drawing-arrow') return
 
-    const container = containerRef.current
-    if (container === null) return
-
-    const rect = container.getBoundingClientRect()
-    const canvas = screenToCanvas(e.clientX, e.clientY, viewport, rect)
+    const canvas = containerEventToCanvas(containerRef, e, viewport)
+    if (canvas === null) return
 
     setInteraction({
       ...interaction,
@@ -49,16 +43,12 @@ const useArrowDraw = (
   const onArrowEnd = useCallback((e: React.PointerEvent, interaction: InteractionMode, elements: BoardElements) => {
     if (interaction.type !== 'drawing-arrow') return
 
-    const container = containerRef.current
-    if (container === null) {
+    const canvas = containerEventToCanvas(containerRef, e, viewport)
+    if (canvas === null) {
       setInteraction({ type: 'idle' })
       return
     }
 
-    const rect = container.getBoundingClientRect()
-    const canvas = screenToCanvas(e.clientX, e.clientY, viewport, rect)
-
-    // Hit test for target box (excluding source)
     const targetBoxId = hitTestBox(elements, canvas)
     if (targetBoxId !== null && targetBoxId !== interaction.sourceBoxId) {
       const targetBox = elements.boxes.get(targetBoxId)

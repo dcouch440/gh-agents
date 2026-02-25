@@ -7,23 +7,12 @@
 // positioned over the box being edited — the same approach as Excalidraw.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import rough from 'roughjs'
-import type { Point, Side } from '@/utils/geometry'
-import { computeArrowPathPoints, computeDrawingArrowPathPoints } from '../arrows/routing'
-import type { ArrowPath } from '../arrows/routing'
 import { BOARD } from '../constants'
-import type { AnchorPoint, BoardElements, DrawingArrow, ResizeHandle, SelectionState, ViewportState } from '../elements'
-import { hitTestBox, screenToCanvas } from '../elements'
-import {
-  drawArrow,
-  drawBox,
-  drawBoxHighlight,
-  drawDrawingArrow,
-  drawGrid,
-  drawHandle,
-  drawSelectionRect,
-} from './renderer'
+import type { AnchorPoint, BoardElements, DrawingArrow, EdgeHover, ResizeHandle, SelectionState, ViewportState } from '../elements'
+import { detectEdgeHover, eventToCanvas, hitTestArrow, hitTestBox, hitTestResizeHandles, RESIZE_CURSORS } from '../elements'
+import { renderBoard } from './renderer'
 import type { DrawTheme } from './renderer'
+import { computeTextareaStyle } from './textareaStyle'
 
 // ── Props ─────────────────────────────────────────────────────────────────
 
@@ -53,160 +42,6 @@ type Canvas2DProps = {
   readonly onAnchorPointerDown: (boxId: string, anchor: AnchorPoint, e: React.PointerEvent) => void
   readonly onResizePointerDown: (boxId: string, handle: ResizeHandle, e: React.PointerEvent) => void
   readonly onContextMenu: (x: number, y: number, elementId: string | null) => void
-}
-
-// ── Edge Hover Detection ──────────────────────────────────────────────────
-
-type EdgeHover = {
-  readonly boxId: string
-  readonly side: Side
-  readonly ratio: number
-  readonly cx: number // canvas coordinates
-  readonly cy: number // canvas coordinates
-}
-
-const EDGE_HOVER_THRESHOLD = 16
-
-const detectEdgeHover = (
-  canvasX: number,
-  canvasY: number,
-  elements: BoardElements,
-): EdgeHover | null => {
-  // Check boxes in reverse z-order (frontmost first)
-  for (let i = elements.boxOrder.length - 1; i >= 0; i--) {
-    const boxId = elements.boxOrder[i]!
-    const box = elements.boxes.get(boxId)
-    if (box === undefined) continue
-
-    // Check if point is within the box's expanded bounds
-    const expandedLeft = box.x - EDGE_HOVER_THRESHOLD
-    const expandedTop = box.y - EDGE_HOVER_THRESHOLD
-    const expandedRight = box.x + box.width + EDGE_HOVER_THRESHOLD
-    const expandedBottom = box.y + box.height + EDGE_HOVER_THRESHOLD
-
-    if (canvasX < expandedLeft || canvasX > expandedRight || canvasY < expandedTop || canvasY > expandedBottom) {
-      continue
-    }
-
-    // Local coordinates relative to box
-    const localX = canvasX - box.x
-    const localY = canvasY - box.y
-
-    const distances: { side: Side; dist: number; ratio: number }[] = [
-      { side: 'top', dist: Math.abs(localY), ratio: clamp(localX / box.width, BOARD.ANCHOR_CLAMP_MIN, BOARD.ANCHOR_CLAMP_MAX) },
-      { side: 'bottom', dist: Math.abs(localY - box.height), ratio: clamp(localX / box.width, BOARD.ANCHOR_CLAMP_MIN, BOARD.ANCHOR_CLAMP_MAX) },
-      { side: 'left', dist: Math.abs(localX), ratio: clamp(localY / box.height, BOARD.ANCHOR_CLAMP_MIN, BOARD.ANCHOR_CLAMP_MAX) },
-      { side: 'right', dist: Math.abs(localX - box.width), ratio: clamp(localY / box.height, BOARD.ANCHOR_CLAMP_MIN, BOARD.ANCHOR_CLAMP_MAX) },
-    ]
-
-    let best = distances[0]!
-    for (let d = 1; d < distances.length; d++) {
-      if (distances[d]!.dist < best.dist) best = distances[d]!
-    }
-
-    if (best.dist > EDGE_HOVER_THRESHOLD) continue
-
-    // Compute handle position in canvas coords
-    let cx: number
-    let cy: number
-    if (best.side === 'top' || best.side === 'bottom') {
-      cx = box.x + best.ratio * box.width
-      cy = best.side === 'top' ? box.y : box.y + box.height
-    } else {
-      cx = best.side === 'left' ? box.x : box.x + box.width
-      cy = box.y + best.ratio * box.height
-    }
-
-    return { boxId, side: best.side, ratio: best.ratio, cx, cy }
-  }
-
-  return null
-}
-
-// ── Resize Handle Hit Testing ─────────────────────────────────────────────
-
-const RESIZE_HIT_SIZE = 10
-
-type ResizeHit = {
-  readonly boxId: string
-  readonly handle: ResizeHandle
-}
-
-const hitTestResizeHandles = (
-  canvasX: number,
-  canvasY: number,
-  elements: BoardElements,
-  selectedIds: ReadonlySet<string>,
-): ResizeHit | null => {
-  for (const boxId of selectedIds) {
-    const box = elements.boxes.get(boxId)
-    if (box === undefined) continue
-
-    const { x, y, width: w, height: h } = box
-    const half = RESIZE_HIT_SIZE / 2
-
-    const handles: { handle: ResizeHandle; hx: number; hy: number }[] = [
-      { handle: 'nw', hx: x, hy: y },
-      { handle: 'ne', hx: x + w, hy: y },
-      { handle: 'sw', hx: x, hy: y + h },
-      { handle: 'se', hx: x + w, hy: y + h },
-      { handle: 'n', hx: x + w / 2, hy: y },
-      { handle: 's', hx: x + w / 2, hy: y + h },
-      { handle: 'e', hx: x + w, hy: y + h / 2 },
-      { handle: 'w', hx: x, hy: y + h / 2 },
-    ]
-
-    for (let i = 0; i < handles.length; i++) {
-      const { handle, hx, hy } = handles[i]!
-      if (Math.abs(canvasX - hx) <= half && Math.abs(canvasY - hy) <= half) {
-        return { boxId, handle }
-      }
-    }
-  }
-
-  return null
-}
-
-// ── Cursor Helpers ────────────────────────────────────────────────────────
-
-const RESIZE_CURSORS: Record<ResizeHandle, string> = {
-  nw: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize', se: 'nwse-resize',
-  n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize',
-}
-
-const clamp = (v: number, min: number, max: number): number => Math.max(min, Math.min(max, v))
-
-/**
- * Convert a React event to canvas coordinates using the event target's bounding rect.
- */
-const eventToCanvas = (e: { clientX: number; clientY: number; currentTarget: EventTarget | null }, viewport: ViewportState): Point => {
-  // currentTarget is always the div we attached the handler to
-  const wrapper = e.currentTarget as HTMLElement // safe: event handler is on a div
-  const rect = wrapper.getBoundingClientRect()
-  return screenToCanvas(e.clientX, e.clientY, viewport, rect)
-}
-
-/**
- * Check if a point is within `threshold` px of a cubic bezier curve.
- * Samples 20 points along the curve and checks distance to each.
- */
-const pointNearCubicBezier = (
-  px: number,
-  py: number,
-  path: ArrowPath,
-  threshold: number,
-): boolean => {
-  const steps = 20
-  for (let i = 0; i <= steps; i++) {
-    const t = i / steps
-    const it = 1 - t
-    const x = it * it * it * path.start.x + 3 * it * it * t * path.cp1.x + 3 * it * t * t * path.cp2.x + t * t * t * path.end.x
-    const y = it * it * it * path.start.y + 3 * it * it * t * path.cp1.y + 3 * it * t * t * path.cp2.y + t * t * t * path.end.y
-    const dx = px - x
-    const dy = py - y
-    if (dx * dx + dy * dy <= threshold * threshold) return true
-  }
-  return false
 }
 
 // ── Component ─────────────────────────────────────────────────────────────
@@ -286,86 +121,11 @@ function Canvas2D({
 
   // ── Canvas Render Pipeline ────────────────────────────────────────────
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (canvas === null) return
-
-    const ctx = canvas.getContext('2d')
-    if (ctx === null) return
-
-    const dpr = window.devicePixelRatio || 1
-    const { width: canvasWidth, height: canvasHeight } = sizeRef.current
-
-    // Create RoughCanvas for hand-drawn rendering
-    const rc = rough.canvas(canvas)
-
-    // Clear
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight)
-
-    // Viewport transform
-    ctx.save()
-    ctx.translate(viewport.panX, viewport.panY)
-    ctx.scale(viewport.zoom, viewport.zoom)
-
-    // Grid
-    drawGrid(ctx, viewport, canvasWidth, canvasHeight, theme)
-
-    // Box highlight for edge hover (draw under boxes so the glow is behind)
-    if (edgeHover !== null && editingBoxId === null) {
-      const hoverBox = elements.boxes.get(edgeHover.boxId)
-      if (hoverBox !== undefined) {
-        drawBoxHighlight(ctx, hoverBox, accentColor)
-      }
-    }
-
-    // Boxes in z-order
-    for (let i = 0; i < elements.boxOrder.length; i++) {
-      const boxId = elements.boxOrder[i]!
-      const box = elements.boxes.get(boxId)
-      if (box === undefined) continue
-
-      const isSelected = selection.selectedIds.has(boxId)
-      const isEditing = editingBoxId === boxId
-      drawBox(ctx, rc, box, isSelected, isEditing, theme)
-    }
-
-    // Arrows
-    for (const [arrowId, arrow] of elements.arrows) {
-      const sourceBox = elements.boxes.get(arrow.sourceBoxId)
-      const targetBox = elements.boxes.get(arrow.targetBoxId)
-      if (sourceBox === undefined || targetBox === undefined) continue
-
-      const path = computeArrowPathPoints(sourceBox, arrow.sourceAnchor, targetBox, arrow.targetAnchor)
-      const isSelected = selection.selectedIds.has(arrowId)
-      drawArrow(rc, path, arrowId, isSelected, theme)
-    }
-
-    // Drawing arrow preview
-    if (drawingArrow !== null) {
-      const sourceBox = elements.boxes.get(drawingArrow.sourceBoxId)
-      if (sourceBox !== undefined) {
-        const path = computeDrawingArrowPathPoints(
-          sourceBox,
-          drawingArrow.sourceAnchor,
-          drawingArrow.cursorX,
-          drawingArrow.cursorY,
-        )
-        drawDrawingArrow(ctx, path, accentColor)
-      }
-    }
-
-    // Edge hover handle (small dot on top of the highlight)
-    if (edgeHover !== null && editingBoxId === null) {
-      drawHandle(ctx, edgeHover.cx, edgeHover.cy, theme)
-    }
-
-    // Selection marquee
-    if (selection.marquee !== null) {
-      drawSelectionRect(ctx, selection.marquee, accentColor)
-    }
-
-    ctx.restore()
-  }, [elements, selection, editingBoxId, viewport, drawingArrow, edgeHover, theme, accentColor, fontGeneration])
+    const cvs = canvasRef.current
+    if (cvs === null) return
+    const { width, height } = sizeRef.current
+    renderBoard(cvs, width, height, elements, selection, editingBoxId, viewport, drawingArrow, edgeHover, theme)
+  }, [elements, selection, editingBoxId, viewport, drawingArrow, edgeHover, theme, fontGeneration])
 
   // ── Focus textarea when editing starts ────────────────────────────────
   useEffect(() => {
@@ -375,7 +135,6 @@ function Canvas2D({
         textareaRef.current.value = box.text
       }
       textareaRef.current.focus()
-      // Place cursor at end
       const len = textareaRef.current.value.length
       textareaRef.current.setSelectionRange(len, len)
     }
@@ -384,7 +143,6 @@ function Canvas2D({
   // ── Pointer Event Handlers ────────────────────────────────────────────
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    // Forward to parent handler (drag, arrow draw, resize)
     onPointerMove(e)
 
     const canvas = eventToCanvas(e, viewport)
@@ -452,14 +210,12 @@ function Canvas2D({
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     const canvas = eventToCanvas(e, viewport)
 
-    // Check if double-clicking on a box
     const boxId = hitTestBox(elements, canvas)
     if (boxId !== null) {
       onBoxDoubleClick(boxId)
       return
     }
 
-    // Double-click on empty space
     onDoubleClick(e)
   }, [elements, onBoxDoubleClick, onDoubleClick, viewport])
 
@@ -470,7 +226,6 @@ function Canvas2D({
 
     const text = textareaRef.current.value
     const el = textareaRef.current
-    // Reset height to get accurate scrollHeight
     el.style.height = 'auto'
     const contentWidth = Math.max(BOARD.MIN_BOX_WIDTH - BOARD.BOX_PADDING_X * 2, el.scrollWidth)
     const contentHeight = el.scrollHeight
@@ -490,7 +245,6 @@ function Canvas2D({
       }
       return
     }
-    // Stop propagation to prevent board keyboard shortcuts while typing
     e.stopPropagation()
   }, [editingBoxId, onBoxBlur])
 
@@ -506,30 +260,22 @@ function Canvas2D({
 
     const canvas = eventToCanvas(e, viewport)
 
-    // Hit-test boxes
     const boxId = hitTestBox(elements, canvas)
     if (boxId !== null) {
       onContextMenu(e.clientX, e.clientY, boxId)
       return
     }
 
-    // Hit-test arrows (sample points along bezier, check proximity)
-    for (const [arrowId, arrow] of elements.arrows) {
-      const sourceBox = elements.boxes.get(arrow.sourceBoxId)
-      const targetBox = elements.boxes.get(arrow.targetBoxId)
-      if (sourceBox === undefined || targetBox === undefined) continue
-
-      const path = computeArrowPathPoints(sourceBox, arrow.sourceAnchor, targetBox, arrow.targetAnchor)
-      if (pointNearCubicBezier(canvas.x, canvas.y, path, 8)) {
-        onContextMenu(e.clientX, e.clientY, arrowId)
-        return
-      }
+    const arrowId = hitTestArrow(elements, canvas, 8)
+    if (arrowId !== null) {
+      onContextMenu(e.clientX, e.clientY, arrowId)
+      return
     }
 
     onContextMenu(e.clientX, e.clientY, null)
   }, [elements, onContextMenu, viewport])
 
-  // ── Textarea Position (screen coords) ─────────────────────────────────
+  // ── Render ──────────────────────────────────────────────────────────────
 
   const editingBox = editingBoxId !== null ? elements.boxes.get(editingBoxId) ?? null : null
 
@@ -560,34 +306,13 @@ function Canvas2D({
         }}
       />
 
-      {/* Textarea overlay for text editing */}
       {editingBox !== null && (
         <textarea
           ref={textareaRef}
           onInput={handleTextareaInput}
           onKeyDown={handleTextareaKeyDown}
           onBlur={handleTextareaBlur}
-          style={{
-            position: 'absolute',
-            left: editingBox.x * viewport.zoom + viewport.panX + BOARD.BOX_PADDING_X * viewport.zoom,
-            top: editingBox.y * viewport.zoom + viewport.panY + BOARD.BOX_PADDING_Y * viewport.zoom,
-            width: (editingBox.width - BOARD.BOX_PADDING_X * 2) * viewport.zoom,
-            minHeight: (editingBox.height - BOARD.BOX_PADDING_Y * 2) * viewport.zoom,
-            fontFamily: BOARD.FONT_FAMILY,
-            fontSize: BOARD.FONT_SIZE * viewport.zoom,
-            lineHeight: BOARD.LINE_HEIGHT,
-            color: textColor,
-            background: 'transparent',
-            border: 'none',
-            outline: 'none',
-            resize: 'none',
-            overflow: 'hidden',
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            padding: 0,
-            margin: 0,
-            zIndex: 1,
-          }}
+          style={computeTextareaStyle(editingBox, viewport, textColor)}
         />
       )}
     </div>

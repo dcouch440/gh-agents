@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
+import type { Point } from '@/utils/geometry'
 import { boardStore } from '@/stores'
 import { useBoardTheme, useBoardSubmit, useBoardElements, useDispatchHistory, useActivityHistory } from './hooks'
 import { BoardContextMenu } from './BoardContextMenu'
@@ -13,7 +14,7 @@ import { useHistory } from './history'
 import { useArrowDraw, useDrag, useKeyboard, usePanZoom, useResize, useSelection, EMPTY_SELECTION } from './interactions'
 import { BOARD } from './constants'
 import type { ActiveTool, AnchorPoint, BoardElements, DrawingArrow, InteractionMode, ResizeHandle, SelectionState, ViewportState } from './elements'
-import { addBox, createBox, emptyBoard, hitTest, removeElements, screenToCanvas, selectAllIds, updateBoxText } from './elements'
+import { addBox, containerEventToCanvas, createBox, emptyBoard, hitTest, removeElements, selectAllIds, updateBoxText } from './elements'
 
 type BoardProps = {
   readonly workflowId: string
@@ -63,24 +64,27 @@ function Board({ workflowId }: BoardProps) {
     ? { sourceBoxId: interaction.sourceBoxId, sourceAnchor: interaction.sourceAnchor, cursorX: interaction.cursorX, cursorY: interaction.cursorY }
     : null
 
+  // ── Helpers ─────────────────────────────────────────────────────────────
+
+  const createBoxAtPoint = useCallback((point: Point) => {
+    history.push(elements)
+    const box = createBox(point.x - BOARD.DEFAULT_BOX_WIDTH / 2, point.y - BOARD.DEFAULT_BOX_HEIGHT / 2)
+    setElements((s) => addBox(s, box))
+    setInteraction({ type: 'editing', boxId: box.id })
+    sel.selectElement(box.id, false)
+  }, [elements, history, sel])
+
   // ── Event handlers ─────────────────────────────────────────────────────
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    // Only handle primary button
     if (e.button !== 0) return
 
-    const container = containerRef.current
-    if (container === null) return
-    const rect = container.getBoundingClientRect()
-    const canvas = screenToCanvas(e.clientX, e.clientY, viewport, rect)
+    const canvas = containerEventToCanvas(containerRef, e, viewport)
+    if (canvas === null) return
 
     // Box tool: create a new box at click position
     if (activeTool === 'box') {
-      history.push(elements)
-      const box = createBox(canvas.x - BOARD.DEFAULT_BOX_WIDTH / 2, canvas.y - BOARD.DEFAULT_BOX_HEIGHT / 2)
-      setElements((s) => addBox(s, box))
-      setInteraction({ type: 'editing', boxId: box.id })
-      sel.selectElement(box.id, false)
+      createBoxAtPoint(canvas)
       setActiveTool('select')
       return
     }
@@ -92,7 +96,7 @@ function Board({ workflowId }: BoardProps) {
     } else {
       sel.clearSelection()
     }
-  }, [activeTool, elements, history, sel, setActiveTool, viewport])
+  }, [activeTool, createBoxAtPoint, elements, sel, setActiveTool, viewport])
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     if (interaction.type === 'dragging') {
@@ -115,10 +119,8 @@ function Board({ workflowId }: BoardProps) {
   }, [arrowDraw, drag, elements, interaction, resize])
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-    const container = containerRef.current
-    if (container === null) return
-    const rect = container.getBoundingClientRect()
-    const canvas = screenToCanvas(e.clientX, e.clientY, viewport, rect)
+    const canvas = containerEventToCanvas(containerRef, e, viewport)
+    if (canvas === null) return
 
     // Check if we hit an existing box
     const hitId = hitTest(elements, canvas)
@@ -128,12 +130,8 @@ function Board({ workflowId }: BoardProps) {
     }
 
     // Create new box at double-click position
-    history.push(elements)
-    const box = createBox(canvas.x - BOARD.DEFAULT_BOX_WIDTH / 2, canvas.y - BOARD.DEFAULT_BOX_HEIGHT / 2)
-    setElements((s) => addBox(s, box))
-    setInteraction({ type: 'editing', boxId: box.id })
-    sel.selectElement(box.id, false)
-  }, [elements, history, sel, viewport])
+    createBoxAtPoint(canvas)
+  }, [createBoxAtPoint, elements, viewport])
 
   const handleBoxPointerDown = useCallback((boxId: string, e: React.PointerEvent) => {
     e.stopPropagation()
@@ -175,7 +173,6 @@ function Board({ workflowId }: BoardProps) {
     const elementId = contextMenu?.elementId
     if (elementId === null || elementId === undefined) return
     history.push(elements)
-    // If right-clicked element is in selection, delete the whole selection
     const ids = selection.selectedIds.has(elementId)
       ? selection.selectedIds
       : new Set([elementId])
@@ -191,7 +188,6 @@ function Board({ workflowId }: BoardProps) {
     setContextMenu(null)
   }, [])
 
-  // Close context menu on any pointer down outside the menu
   const handleRootPointerDown = useCallback(() => {
     if (contextMenu !== null) {
       setContextMenu(null)

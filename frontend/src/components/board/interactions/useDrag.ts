@@ -6,7 +6,7 @@ import { useCallback } from 'react'
 import { Geometry } from '@/utils/geometry'
 import { BOARD } from '../constants'
 import type { BoardElements, InteractionMode, ViewportState } from '../elements'
-import { screenToCanvas, updateBoxPosition } from '../elements'
+import { containerEventToCanvas, updateBoxPosition } from '../elements'
 import type { SetElements, SetInteraction } from './types'
 
 const useDrag = (
@@ -16,11 +16,9 @@ const useDrag = (
   containerRef: React.RefObject<HTMLDivElement | null>,
 ) => {
   const onDragStart = useCallback((elementId: string, e: React.PointerEvent, elements: BoardElements) => {
-    const container = containerRef.current
-    if (container === null) return
+    const canvas = containerEventToCanvas(containerRef, e, viewport)
+    if (canvas === null) return
 
-    const rect = container.getBoundingClientRect()
-    const canvas = screenToCanvas(e.clientX, e.clientY, viewport, rect)
     const box = elements.boxes.get(elementId)
     if (box === undefined) return
 
@@ -33,11 +31,8 @@ const useDrag = (
   const onDragMove = useCallback((e: React.PointerEvent, interaction: InteractionMode) => {
     if (interaction.type !== 'dragging') return
 
-    const container = containerRef.current
-    if (container === null) return
-
-    const rect = container.getBoundingClientRect()
-    const canvas = screenToCanvas(e.clientX, e.clientY, viewport, rect)
+    const canvas = containerEventToCanvas(containerRef, e, viewport)
+    if (canvas === null) return
 
     const rawX = canvas.x - interaction.offsetX
     const rawY = canvas.y - interaction.offsetY
