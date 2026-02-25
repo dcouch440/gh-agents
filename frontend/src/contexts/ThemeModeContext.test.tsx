@@ -55,7 +55,7 @@ describe('ThemeModeContext', () => {
       expect(screen.getByTestId('theme')).toHaveTextContent('linen')
     })
 
-    it('cycles through themes: linen → midnight → slate → linen', () => {
+    it('cycles through themes: linen → paper → obsidian → midnight → slate → linen', () => {
       render(
         <ThemeModeProvider>
           <TestConsumer />
@@ -63,6 +63,18 @@ describe('ThemeModeContext', () => {
       )
 
       expect(screen.getByTestId('theme')).toHaveTextContent('linen')
+
+      act(() => {
+        screen.getByText('cycle').click()
+      })
+
+      expect(screen.getByTestId('theme')).toHaveTextContent('paper')
+
+      act(() => {
+        screen.getByText('cycle').click()
+      })
+
+      expect(screen.getByTestId('theme')).toHaveTextContent('obsidian')
 
       act(() => {
         screen.getByText('cycle').click()
