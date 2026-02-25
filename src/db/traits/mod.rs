@@ -899,6 +899,13 @@ pub trait WorkflowRepo: Send + Sync {
     /// Create or replace the canvas snapshot for a workflow.
     async fn upsert_canvas_snapshot(&self, row: CanvasSnapshotRow) -> Result<CanvasSnapshotRow>;
 
+    /// Update the last board submit response JSON for debug panel rehydration.
+    async fn update_canvas_snapshot_response(
+        &self,
+        workflow_id: Uuid,
+        response_json: String,
+    ) -> Result<()>;
+
     // --- Canvas Element Maps ---
 
     /// Load all element→step/edge mappings for a workflow.

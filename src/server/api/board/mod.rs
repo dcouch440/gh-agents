@@ -138,13 +138,24 @@ pub async fn submit_board(
             .collect(),
     };
 
-    Ok(Json(BoardSubmitResponse {
+    let response_body = BoardSubmitResponse {
         is_first_submit: result.is_first_submit,
         changeset: result.changeset,
         snapshot: result.snapshot,
         phase_zero,
         dispatch,
-    }))
+    };
+
+    // Persist the response for debug panel rehydration on page refresh
+    if let Ok(response_json) = serde_json::to_string(&response_body) {
+        let _ = state
+            .repos()
+            .workflows
+            .update_canvas_snapshot_response(workflow_id, response_json)
+            .await;
+    }
+
+    Ok(Json(response_body))
 }
 
 /// Try to dispatch meaningful changes to the board dispatcher agent.
@@ -193,6 +204,8 @@ async fn try_dispatch_board(
 pub struct BoardElementsResponse {
     /// Raw Excalidraw elements JSON, or null if no snapshot exists.
     pub elements: Option<serde_json::Value>,
+    /// The last board submit response, for debug panel rehydration on refresh.
+    pub last_submit: Option<serde_json::Value>,
 }
 
 /// Return the last saved Excalidraw elements for a workflow.
@@ -209,16 +222,22 @@ pub async fn get_board_elements(
         .get_canvas_snapshot(workflow_id)
         .await?;
 
-    let elements = match row {
+    let (elements, last_submit) = match row {
         Some(r) => {
             let val: serde_json::Value = serde_json::from_str(&r.elements_json)
                 .map_err(|e| AppError::Internal(format!("Bad stored elements: {e}")))?;
-            Some(val)
+            let last = r
+                .last_response_json
+                .and_then(|json| serde_json::from_str(&json).ok());
+            (Some(val), last)
         }
-        None => None,
+        None => (None, None),
     };
 
-    Ok(Json(BoardElementsResponse { elements }))
+    Ok(Json(BoardElementsResponse {
+        elements,
+        last_submit,
+    }))
 }
 
 mod tests;

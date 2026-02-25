@@ -188,6 +188,7 @@ mod tests {
                 workflow_id,
                 snapshot_json: snapshot_json_clone.clone(),
                 elements_json: String::new(),
+                last_response_json: None,
                 created_at: chrono::Utc::now(),
                 updated_at: chrono::Utc::now(),
             }))

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '@/api'
+import { boardStore } from '@/stores'
+import { mergeElementStepMap, mergeElementEdgeMap } from '@/stores/boardStore/submit'
 import type { BoardElements } from '../elements'
 import { deserializeFromExcalidraw } from '../elements'
 
@@ -12,6 +14,9 @@ type SetElements = (fn: (s: BoardElements) => BoardElements) => void
  * `setElements` with the deserialized board state. The backend returns
  * the same Excalidraw JSON array that was last POSTed, so
  * `deserializeFromExcalidraw` reconstructs the internal representation.
+ *
+ * Also hydrates boardStore.lastResponse from the persisted last submit
+ * response, so the debug panel shows Phase 0 results on page refresh.
  *
  * Uses a boolean `cancelled` flag instead of AbortController to avoid a race
  * condition with the API client's request deduplication under React StrictMode.
@@ -33,6 +38,18 @@ const useBoardElements = (workflowId: string, setElements: SetElements): { loadi
             const board = deserializeFromExcalidraw(resp.elements as Record<string, unknown>[])
             setElements(() => board)
           }
+
+          // Hydrate boardStore from persisted last submit response
+          if (resp.last_submit !== null) {
+            boardStore.store.setState({
+              status: 'success',
+              lastResponse: resp.last_submit,
+              isFirstSubmit: resp.last_submit.is_first_submit,
+              elementStepMap: mergeElementStepMap({}, resp.last_submit.phase_zero),
+              elementEdgeMap: mergeElementEdgeMap({}, resp.last_submit.phase_zero),
+            })
+          }
+
           setLoading(false)
         }
       },

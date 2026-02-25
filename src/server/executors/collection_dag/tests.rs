@@ -634,6 +634,13 @@ mod tests {
             async fn delete_element_map(&self, _: Uuid, _: &str) -> Result<()> {
                 unimplemented!()
             }
+            async fn update_canvas_snapshot_response(
+                &self,
+                _: Uuid,
+                _: String,
+            ) -> Result<()> {
+                unimplemented!()
+            }
         }
 
         // Create test data

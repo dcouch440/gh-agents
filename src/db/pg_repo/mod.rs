@@ -2467,18 +2467,34 @@ impl WorkflowRepo for PgRepo {
 
     async fn upsert_canvas_snapshot(&self, row: CanvasSnapshotRow) -> Result<CanvasSnapshotRow> {
         let result = sqlx::query_as::<_, CanvasSnapshotRow>(
-            r#"INSERT INTO canvas_snapshots (workflow_id, snapshot_json, elements_json, created_at, updated_at)
-               VALUES ($1, $2, $3, NOW(), NOW())
+            r#"INSERT INTO canvas_snapshots (workflow_id, snapshot_json, elements_json, last_response_json, created_at, updated_at)
+               VALUES ($1, $2, $3, $4, NOW(), NOW())
                ON CONFLICT (workflow_id) DO UPDATE
-               SET snapshot_json = $2, elements_json = $3, updated_at = NOW()
+               SET snapshot_json = $2, elements_json = $3, last_response_json = $4, updated_at = NOW()
                RETURNING *"#,
         )
         .bind(row.workflow_id)
         .bind(&row.snapshot_json)
         .bind(&row.elements_json)
+        .bind(&row.last_response_json)
         .fetch_one(&self.pool)
         .await?;
         Ok(result)
+    }
+
+    async fn update_canvas_snapshot_response(
+        &self,
+        workflow_id: Uuid,
+        response_json: String,
+    ) -> Result<()> {
+        sqlx::query(
+            "UPDATE canvas_snapshots SET last_response_json = $1, updated_at = NOW() WHERE workflow_id = $2",
+        )
+        .bind(&response_json)
+        .bind(workflow_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     async fn list_element_maps(&self, workflow_id: Uuid) -> Result<Vec<CanvasElementMapRow>> {

@@ -773,6 +773,7 @@ pub struct CanvasSnapshotRow {
     pub workflow_id: Uuid,
     pub snapshot_json: String,
     pub elements_json: String,
+    pub last_response_json: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
