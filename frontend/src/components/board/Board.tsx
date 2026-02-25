@@ -3,6 +3,8 @@ import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import { boardStore } from '@/stores'
 import { useBoardTheme, useBoardSubmit, useBoardElements, useDispatchHistory } from './hooks'
+import { BoardContextMenu } from './BoardContextMenu'
+import type { MenuPosition } from './BoardContextMenu'
 import { SubmitBar } from './SubmitBar'
 import { DebugPanel } from './debug'
 import { Canvas2D } from './canvas'
@@ -10,7 +12,7 @@ import { Toolbar } from './toolbar'
 import { useHistory } from './history'
 import { useArrowDraw, useDrag, useKeyboard, usePanZoom, useResize, useSelection, EMPTY_SELECTION } from './interactions'
 import type { ActiveTool, AnchorPoint, BoardElements, DrawingArrow, InteractionMode, ResizeHandle, SelectionState, ViewportState } from './elements'
-import { addBox, createBox, emptyBoard, hitTest, screenToCanvas, updateBoxText } from './elements'
+import { addBox, createBox, emptyBoard, hitTest, removeElements, screenToCanvas, updateBoxText } from './elements'
 
 type BoardProps = {
   readonly workflowId: string
@@ -30,6 +32,7 @@ function Board({ workflowId }: BoardProps) {
   const [viewport, setViewport] = useState<ViewportState>({ panX: 0, panY: 0, zoom: 1 })
   const [activeTool, setActiveTool] = useState<ActiveTool>('select')
   const [showDebug, setShowDebug] = useState(false)
+  const [contextMenu, setContextMenu] = useState<MenuPosition | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   // ── Hooks ────────────────────────────────────────────────────────────────
@@ -160,10 +163,46 @@ function Board({ workflowId }: BoardProps) {
     resize.onResizeStart(boxId, handle, e, elements)
   }, [elements, history, resize])
 
+  // ── Context menu handlers ──────────────────────────────────────────────
+
+  const handleContextMenu = useCallback((x: number, y: number, elementId: string | null) => {
+    setContextMenu({ x, y, elementId })
+  }, [])
+
+  const handleContextMenuDelete = useCallback(() => {
+    const elementId = contextMenu?.elementId
+    if (elementId === null || elementId === undefined) return
+    history.push(elements)
+    // If right-clicked element is in selection, delete the whole selection
+    const ids = selection.selectedIds.has(elementId)
+      ? selection.selectedIds
+      : new Set([elementId])
+    setElements((s) => removeElements(s, ids))
+    setSelection(() => ({ selectedIds: new Set(), marquee: null }))
+  }, [contextMenu, elements, history, selection.selectedIds])
+
+  const handleContextMenuSelectAll = useCallback(() => {
+    const allIds = new Set<string>()
+    for (const id of elements.boxes.keys()) allIds.add(id)
+    for (const id of elements.arrows.keys()) allIds.add(id)
+    setSelection(() => ({ selectedIds: allIds, marquee: null }))
+  }, [elements])
+
+  const closeContextMenu = useCallback(() => {
+    setContextMenu(null)
+  }, [])
+
+  // Close context menu on any pointer down outside the menu
+  const handleRootPointerDown = useCallback(() => {
+    if (contextMenu !== null) {
+      setContextMenu(null)
+    }
+  }, [contextMenu])
+
   // ── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <Box sx={{ width: '100%', height: '100%', position: 'relative' }}>
+    <Box onPointerDown={handleRootPointerDown} sx={{ width: '100%', height: '100%', position: 'relative' }}>
       {loading ? (
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
           <CircularProgress size={32} />
@@ -194,6 +233,7 @@ function Board({ workflowId }: BoardProps) {
           onBoxPointerDown={handleBoxPointerDown}
           onAnchorPointerDown={handleAnchorPointerDown}
           onResizePointerDown={handleResizePointerDown}
+          onContextMenu={handleContextMenu}
         />
       )}
 
@@ -215,6 +255,15 @@ function Board({ workflowId }: BoardProps) {
       />
 
       {showDebug && <DebugPanel onClose={() => setShowDebug(false)} />}
+
+      {contextMenu !== null && (
+        <BoardContextMenu
+          position={contextMenu}
+          onDelete={handleContextMenuDelete}
+          onSelectAll={handleContextMenuSelectAll}
+          onClose={closeContextMenu}
+        />
+      )}
     </Box>
   )
 }
