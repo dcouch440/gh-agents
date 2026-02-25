@@ -179,6 +179,7 @@ function Board({ workflowId }: BoardProps) {
           canvasBg={theme.canvasBg}
           gridDotColor={theme.gridDotColor}
           connectorColor={theme.connectorColor}
+          strokeColor={theme.strokeColor}
           accentColor={theme.accent}
           surfaceBg={theme.surfaceBg}
           textColor={theme.textPrimary}

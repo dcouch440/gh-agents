@@ -35,6 +35,7 @@ type Canvas2DProps = {
   readonly canvasBg: string
   readonly gridDotColor: string
   readonly connectorColor: string
+  readonly strokeColor: string
   readonly accentColor: string
   readonly surfaceBg: string
   readonly textColor: string
@@ -184,6 +185,7 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
     canvasBg,
     gridDotColor,
     connectorColor,
+    strokeColor,
     accentColor,
     surfaceBg,
     textColor,
@@ -209,8 +211,8 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
   const [fontGeneration, setFontGeneration] = useState(0)
 
   const theme: DrawTheme = useMemo(() => (
-    { canvasBg, gridDotColor, connectorColor, accentColor, surfaceBg, textColor }
-  ), [canvasBg, gridDotColor, connectorColor, accentColor, surfaceBg, textColor])
+    { canvasBg, gridDotColor, connectorColor, strokeColor, accentColor, surfaceBg, textColor }
+  ), [canvasBg, gridDotColor, connectorColor, strokeColor, accentColor, surfaceBg, textColor])
 
   // ── Re-render when fonts finish loading (Virgil woff2) ──────────────
   // Guard: jsdom test environment doesn't implement document.fonts
@@ -302,7 +304,7 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
 
       const path = computeArrowPathPoints(sourceBox, arrow.sourceAnchor, targetBox, arrow.targetAnchor)
       const isSelected = selection.selectedIds.has(arrowId)
-      drawArrow(ctx, path, isSelected, theme)
+      drawArrow(rc, path, arrowId, isSelected, theme)
     }
 
     // Drawing arrow preview

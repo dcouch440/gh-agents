@@ -14,8 +14,8 @@ const BOARD = {
   DEFAULT_BOX_HEIGHT: 48,
   BOX_PADDING_X: 20,
   BOX_PADDING_Y: 12,
-  BOX_BORDER_RADIUS: 6,
-  BOX_BORDER_WIDTH: 1.5,
+  BOX_BORDER_RADIUS: 14,
+  BOX_BORDER_WIDTH: 2,
 
   // ── Arrow rendering ──────────────────────────────────────────────────────
   /** Gap between arrow endpoint and box edge (px). */
@@ -23,7 +23,7 @@ const BOARD = {
   /** Snap-to-midpoint threshold when binding an arrow to a box side (px). */
   ARROW_SNAP_THRESHOLD: 20,
   ARROW_STROKE_WIDTH: 2,
-  ARROW_HEAD_SIZE: 8,
+  ARROW_HEAD_SIZE: 12,
 
   // ── Handles ──────────────────────────────────────────────────────────────
   HANDLE_SIZE: 8,

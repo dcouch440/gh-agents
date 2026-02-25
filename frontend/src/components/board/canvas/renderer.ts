@@ -18,6 +18,7 @@ type DrawTheme = {
   readonly canvasBg: string
   readonly gridDotColor: string
   readonly connectorColor: string
+  readonly strokeColor: string
   readonly accentColor: string
   readonly surfaceBg: string
   readonly textColor: string
@@ -81,11 +82,12 @@ const drawBox = (
   // Stable seed from box id — keeps sketchy lines consistent across re-renders
   const seed = hashStringToSeed(box.id)
 
-  // Rough.js rectangle with hand-drawn fill + stroke
-  rc.rectangle(x, y, width, height, {
+  // Rough.js rounded rectangle via SVG path for hand-drawn rounded corners
+  const d = roundedRectPath(x, y, width, height, BOARD.BOX_BORDER_RADIUS)
+  rc.path(d, {
     fill: theme.surfaceBg,
     fillStyle: 'solid',
-    stroke: isSelected ? theme.accentColor : theme.connectorColor,
+    stroke: isSelected ? theme.accentColor : theme.strokeColor,
     strokeWidth: BOARD.BOX_BORDER_WIDTH,
     roughness: 1.0,
     bowing: 1.5,
@@ -153,39 +155,64 @@ const hashStringToSeed = (s: string): number => {
   return Math.abs(hash)
 }
 
+/**
+ * SVG path string for a rounded rectangle.
+ * Uses quadratic bezier (Q) for corners, producing smooth arcs
+ * that rough.js will render with its hand-drawn effect.
+ */
+const roundedRectPath = (x: number, y: number, w: number, h: number, r: number): string => {
+  // Clamp radius to half the smallest dimension
+  const cr = Math.min(r, w / 2, h / 2)
+  return [
+    `M ${x + cr} ${y}`,
+    `L ${x + w - cr} ${y}`,
+    `Q ${x + w} ${y} ${x + w} ${y + cr}`,
+    `L ${x + w} ${y + h - cr}`,
+    `Q ${x + w} ${y + h} ${x + w - cr} ${y + h}`,
+    `L ${x + cr} ${y + h}`,
+    `Q ${x} ${y + h} ${x} ${y + h - cr}`,
+    `L ${x} ${y + cr}`,
+    `Q ${x} ${y} ${x + cr} ${y}`,
+    'Z',
+  ].join(' ')
+}
+
 // ── Arrow ─────────────────────────────────────────────────────────────────
 
 /**
- * Draw a smooth cubic bezier arrow with arrowhead.
+ * Draw a hand-drawn cubic bezier arrow with arrowhead using rough.js.
  */
 const drawArrow = (
-  ctx: CanvasRenderingContext2D,
+  rc: RoughCanvas,
   path: ArrowPath,
+  arrowId: string,
   isSelected: boolean,
   theme: DrawTheme,
 ): void => {
-  const color = isSelected ? theme.accentColor : theme.connectorColor
+  const color = isSelected ? theme.accentColor : theme.strokeColor
+  const seed = hashStringToSeed(arrowId)
 
-  ctx.save()
-  ctx.strokeStyle = color
-  ctx.lineWidth = BOARD.ARROW_STROKE_WIDTH
-  ctx.lineCap = 'round'
-  ctx.lineJoin = 'round'
-
-  ctx.beginPath()
-  ctx.moveTo(path.start.x, path.start.y)
-  ctx.bezierCurveTo(path.cp1.x, path.cp1.y, path.cp2.x, path.cp2.y, path.end.x, path.end.y)
-  ctx.stroke()
+  // Rough.js curve through the 4 bezier points
+  rc.curve(
+    [[path.start.x, path.start.y], [path.cp1.x, path.cp1.y], [path.cp2.x, path.cp2.y], [path.end.x, path.end.y]],
+    {
+      stroke: color,
+      strokeWidth: BOARD.ARROW_STROKE_WIDTH,
+      roughness: 0.8,
+      bowing: 1.0,
+      seed,
+    },
+  )
 
   // Compute arrowhead angle from curve tangent at endpoint
   const angle = Math.atan2(path.end.y - path.cp2.y, path.end.x - path.cp2.x)
-  drawArrowhead(ctx, path.end, angle, BOARD.ARROW_HEAD_SIZE, color)
-
-  ctx.restore()
+  drawArrowhead(rc, path.end, angle, BOARD.ARROW_HEAD_SIZE, color, seed)
 }
 
 /**
  * Draw a dashed arrow preview while the user is drawing.
+ * Kept smooth (no rough.js) — the preview moves every frame and rough
+ * jitter on each pixel of cursor movement looks bad.
  */
 const drawDrawingArrow = (
   ctx: CanvasRenderingContext2D,
@@ -206,39 +233,55 @@ const drawDrawingArrow = (
 
   ctx.setLineDash([])
 
+  // Smooth arrowhead for preview
   const angle = Math.atan2(path.end.y - path.cp2.y, path.end.x - path.cp2.x)
-  drawArrowhead(ctx, path.end, angle, BOARD.ARROW_HEAD_SIZE, color)
+  const spread = Math.PI / 6
+  ctx.beginPath()
+  ctx.moveTo(
+    path.end.x - BOARD.ARROW_HEAD_SIZE * Math.cos(angle - spread),
+    path.end.y - BOARD.ARROW_HEAD_SIZE * Math.sin(angle - spread),
+  )
+  ctx.lineTo(path.end.x, path.end.y)
+  ctx.lineTo(
+    path.end.x - BOARD.ARROW_HEAD_SIZE * Math.cos(angle + spread),
+    path.end.y - BOARD.ARROW_HEAD_SIZE * Math.sin(angle + spread),
+  )
+  ctx.stroke()
 
   ctx.restore()
 }
 
 /**
- * Draw an arrowhead (two lines from tip going backward at ±30°).
+ * Draw a hand-drawn arrowhead (two rough lines from tip going backward at ±30°).
  */
 const drawArrowhead = (
-  ctx: CanvasRenderingContext2D,
+  rc: RoughCanvas,
   tip: { x: number; y: number },
   angle: number,
   size: number,
   color: string,
+  seed: number,
 ): void => {
   const spread = Math.PI / 6 // 30 degrees
+  const opts = { stroke: color, strokeWidth: BOARD.ARROW_STROKE_WIDTH, roughness: 0.6, seed }
 
-  ctx.strokeStyle = color
-  ctx.lineWidth = BOARD.ARROW_STROKE_WIDTH
-  ctx.lineCap = 'round'
-
-  ctx.beginPath()
-  ctx.moveTo(
+  // Left barb
+  rc.line(
     tip.x - size * Math.cos(angle - spread),
     tip.y - size * Math.sin(angle - spread),
+    tip.x,
+    tip.y,
+    opts,
   )
-  ctx.lineTo(tip.x, tip.y)
-  ctx.lineTo(
+
+  // Right barb
+  rc.line(
     tip.x - size * Math.cos(angle + spread),
     tip.y - size * Math.sin(angle + spread),
+    tip.x,
+    tip.y,
+    opts,
   )
-  ctx.stroke()
 }
 
 // ── Handles ───────────────────────────────────────────────────────────────

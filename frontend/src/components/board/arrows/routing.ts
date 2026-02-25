@@ -35,8 +35,8 @@ const controlPointDistance = (start: Point, end: Point): number => {
   const dx = end.x - start.x
   const dy = end.y - start.y
   const dist = Math.sqrt(dx * dx + dy * dy)
-  // Clamp between 30 and 200, scale at ~40% of distance
-  return Math.max(30, Math.min(dist * 0.4, 200))
+  // Clamp between 30 and 120, scale at ~25% of distance for gentle curves
+  return Math.max(30, Math.min(dist * 0.25, 120))
 }
 
 /**
