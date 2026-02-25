@@ -36,6 +36,8 @@ type CustomTokens = {
   accentRing: string
   userBarBg: string
   connectorColor: string
+  /** Dark stroke color for board element outlines (boxes, arrows) */
+  strokeColor: string
   /** MUI Card, Paper default background */
   surfaceBg: string
   /** MUI Menu, Dialog elevated background */
