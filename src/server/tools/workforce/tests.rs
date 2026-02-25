@@ -243,6 +243,19 @@ mod tests {
         // create agent step (pipeline already exists, just adds step)
         repo.expect_create_step().times(1).returning(|s| Ok(s));
 
+        // auto-create sequential edge from Agent1 → Agent2
+        repo.expect_add_edge()
+            .withf(move |_, from, _to| *from == prev_child_step_id)
+            .returning(|wid, from, to| {
+                Ok(WorkflowStepEdgeRow {
+                    id: Uuid::new_v4(),
+                    from_step_id: from,
+                    to_step_id: to,
+                    workflow_id: wid,
+                    ..Default::default()
+                })
+            });
+
         // recompute_execution_order: list_steps + list_edges
         repo.expect_list_steps().returning(|_| Ok(vec![]));
         repo.expect_list_edges().returning(|_| Ok(vec![]));
