@@ -4,8 +4,7 @@
 
 import { useCallback } from 'react'
 import type { SelectionState } from '../elements'
-
-type SetSelection = (fn: (s: SelectionState) => SelectionState) => void
+import type { SetSelection } from './types'
 
 const EMPTY_SELECTION: SelectionState = {
   selectedIds: new Set(),
@@ -34,14 +33,7 @@ const useSelection = (
     setSelection(() => EMPTY_SELECTION)
   }, [setSelection])
 
-  const selectMultiple = useCallback((ids: readonly string[]) => {
-    setSelection((s) => ({
-      ...s,
-      selectedIds: new Set(ids),
-    }))
-  }, [setSelection])
-
-  return { selectElement, clearSelection, selectMultiple, EMPTY_SELECTION } as const
+  return { selectElement, clearSelection, EMPTY_SELECTION } as const
 }
 
 export { EMPTY_SELECTION, useSelection }

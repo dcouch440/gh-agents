@@ -6,6 +6,7 @@
 // ActivityEntry format used by the live WebSocket flight recorder.
 // ============================================================================
 
+import { Collections } from '@/utils/collections'
 import { ACTIVITY } from '@/types/activity'
 import type { ActivityEvent } from '@/types/activity'
 import type { ActivityEntry } from './activityStore'
@@ -39,9 +40,19 @@ const buildHistoricalEntries = (
   const runId = execution.id
   const workflowId = execution.workflow_id
 
+  // Filter once, sort once
+  const activeSteps = Collections.filterMap(steps, (s) =>
+    s.status !== 'skipped' ? s : null,
+  )
+  const sortedSteps = Collections.sortedCopy(activeSteps, (a, b) => {
+    if (a.started_at === null && b.started_at === null) return 0
+    if (a.started_at === null) return 1
+    if (b.started_at === null) return -1
+    return new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
+  })
+
   // Workflow started
   if (execution.started_at !== null) {
-    const activeSteps = steps.filter((s) => s.status !== 'skipped')
     entries.push(
       makeEntry(
         { type: ACTIVITY.WORKFLOW_STARTED, workflowId, totalSteps: activeSteps.length },
@@ -50,16 +61,6 @@ const buildHistoricalEntries = (
       ),
     )
   }
-
-  // Per-step events (sorted by started_at when available)
-  const sortedSteps = [...steps]
-    .filter((s) => s.status !== 'skipped')
-    .sort((a, b) => {
-      if (a.started_at === null && b.started_at === null) return 0
-      if (a.started_at === null) return 1
-      if (b.started_at === null) return -1
-      return new Date(a.started_at).getTime() - new Date(b.started_at).getTime()
-    })
 
   for (const step of sortedSteps) {
     const stepName = step.step_name ?? 'Unknown step'

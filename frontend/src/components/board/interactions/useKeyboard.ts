@@ -3,25 +3,20 @@
 // ============================================================================
 
 import { useCallback, useEffect } from 'react'
-import type { BoardElements, InteractionMode, SelectionState } from '../elements'
-import { removeElements } from '../elements'
-
-type SetElements = (fn: (s: BoardElements) => BoardElements) => void
-type SetSelection = (fn: (s: SelectionState) => SelectionState) => void
-type SetInteraction = (mode: InteractionMode) => void
-type HistoryActions = {
-  readonly undo: () => BoardElements | null
-  readonly redo: () => BoardElements | null
-}
+import type { BoardElements } from '../elements'
+import { removeElements, selectAllIds } from '../elements'
+import type { HistoryActions } from '../history/useHistory'
+import { EMPTY_SELECTION } from './useSelection'
+import type { SetElements, SetInteraction, SetSelection } from './types'
 
 const useKeyboard = (
   elements: BoardElements,
   setElements: SetElements,
-  selection: SelectionState,
+  selection: { readonly selectedIds: ReadonlySet<string> },
   setSelection: SetSelection,
-  interaction: InteractionMode,
+  interaction: { readonly type: string },
   setInteraction: SetInteraction,
-  history: HistoryActions,
+  history: Pick<HistoryActions, 'undo' | 'redo'>,
 ) => {
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Don't intercept when editing text
@@ -31,7 +26,7 @@ const useKeyboard = (
     if ((e.key === 'Delete' || e.key === 'Backspace') && selection.selectedIds.size > 0) {
       e.preventDefault()
       setElements((s) => removeElements(s, selection.selectedIds))
-      setSelection(() => ({ selectedIds: new Set(), marquee: null }))
+      setSelection(() => EMPTY_SELECTION)
       return
     }
 
@@ -61,10 +56,7 @@ const useKeyboard = (
     // Select all
     if (e.key === 'a' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault()
-      const allIds = new Set<string>()
-      for (const id of elements.boxes.keys()) allIds.add(id)
-      for (const id of elements.arrows.keys()) allIds.add(id)
-      setSelection(() => ({ selectedIds: allIds, marquee: null }))
+      setSelection(() => ({ selectedIds: selectAllIds(elements), marquee: null }))
       return
     }
 
@@ -74,7 +66,7 @@ const useKeyboard = (
       if (interaction.type !== 'idle') {
         setInteraction({ type: 'idle' })
       } else if (selection.selectedIds.size > 0) {
-        setSelection(() => ({ selectedIds: new Set(), marquee: null }))
+        setSelection(() => EMPTY_SELECTION)
       }
       return
     }

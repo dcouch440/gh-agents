@@ -6,9 +6,7 @@ import { useCallback } from 'react'
 import { computeBindingAnchor } from '../arrows'
 import type { AnchorPoint, BoardElements, InteractionMode, ViewportState } from '../elements'
 import { addArrow, createArrow, hitTestBox, screenToCanvas } from '../elements'
-
-type SetElements = (fn: (s: BoardElements) => BoardElements) => void
-type SetInteraction = (mode: InteractionMode) => void
+import type { SetElements, SetInteraction } from './types'
 
 const useArrowDraw = (
   setElements: SetElements,

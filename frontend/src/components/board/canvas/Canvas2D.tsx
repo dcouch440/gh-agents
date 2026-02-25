@@ -6,14 +6,14 @@
 // <canvas> element. Text editing uses a temporary <textarea> overlay
 // positioned over the box being edited — the same approach as Excalidraw.
 
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import rough from 'roughjs'
-import type { Side } from '@/utils/geometry'
+import type { Point, Side } from '@/utils/geometry'
 import { computeArrowPathPoints, computeDrawingArrowPathPoints } from '../arrows/routing'
 import type { ArrowPath } from '../arrows/routing'
 import { BOARD } from '../constants'
 import type { AnchorPoint, BoardElements, DrawingArrow, ResizeHandle, SelectionState, ViewportState } from '../elements'
-import { screenToCanvas } from '../elements'
+import { hitTestBox, screenToCanvas } from '../elements'
 import {
   drawArrow,
   drawBox,
@@ -28,6 +28,7 @@ import type { DrawTheme } from './renderer'
 // ── Props ─────────────────────────────────────────────────────────────────
 
 type Canvas2DProps = {
+  readonly ref: React.Ref<HTMLDivElement>
   readonly elements: BoardElements
   readonly selection: SelectionState
   readonly editingBoxId: string | null
@@ -92,10 +93,10 @@ const detectEdgeHover = (
     const localY = canvasY - box.y
 
     const distances: { side: Side; dist: number; ratio: number }[] = [
-      { side: 'top', dist: Math.abs(localY), ratio: clamp(localX / box.width, 0.1, 0.9) },
-      { side: 'bottom', dist: Math.abs(localY - box.height), ratio: clamp(localX / box.width, 0.1, 0.9) },
-      { side: 'left', dist: Math.abs(localX), ratio: clamp(localY / box.height, 0.1, 0.9) },
-      { side: 'right', dist: Math.abs(localX - box.width), ratio: clamp(localY / box.height, 0.1, 0.9) },
+      { side: 'top', dist: Math.abs(localY), ratio: clamp(localX / box.width, BOARD.ANCHOR_CLAMP_MIN, BOARD.ANCHOR_CLAMP_MAX) },
+      { side: 'bottom', dist: Math.abs(localY - box.height), ratio: clamp(localX / box.width, BOARD.ANCHOR_CLAMP_MIN, BOARD.ANCHOR_CLAMP_MAX) },
+      { side: 'left', dist: Math.abs(localX), ratio: clamp(localY / box.height, BOARD.ANCHOR_CLAMP_MIN, BOARD.ANCHOR_CLAMP_MAX) },
+      { side: 'right', dist: Math.abs(localX - box.width), ratio: clamp(localY / box.height, BOARD.ANCHOR_CLAMP_MIN, BOARD.ANCHOR_CLAMP_MAX) },
     ]
 
     let best = distances[0]!
@@ -176,6 +177,16 @@ const RESIZE_CURSORS: Record<ResizeHandle, string> = {
 const clamp = (v: number, min: number, max: number): number => Math.max(min, Math.min(max, v))
 
 /**
+ * Convert a React event to canvas coordinates using the event target's bounding rect.
+ */
+const eventToCanvas = (e: { clientX: number; clientY: number; currentTarget: EventTarget | null }, viewport: ViewportState): Point => {
+  // currentTarget is always the div we attached the handler to
+  const wrapper = e.currentTarget as HTMLElement // safe: event handler is on a div
+  const rect = wrapper.getBoundingClientRect()
+  return screenToCanvas(e.clientX, e.clientY, viewport, rect)
+}
+
+/**
  * Check if a point is within `threshold` px of a cubic bezier curve.
  * Samples 20 points along the curve and checks distance to each.
  */
@@ -200,35 +211,33 @@ const pointNearCubicBezier = (
 
 // ── Component ─────────────────────────────────────────────────────────────
 
-const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
-  {
-    elements,
-    selection,
-    editingBoxId,
-    viewport,
-    drawingArrow,
-    canvasBg,
-    gridDotColor,
-    connectorColor,
-    strokeColor,
-    accentColor,
-    surfaceBg,
-    textColor,
-    onPointerDown,
-    onPointerMove,
-    onPointerUp,
-    onWheel,
-    onDoubleClick,
-    onBoxTextChange,
-    onBoxDoubleClick,
-    onBoxBlur,
-    onBoxPointerDown,
-    onAnchorPointerDown,
-    onResizePointerDown,
-    onContextMenu,
-  },
+function Canvas2D({
   ref,
-) {
+  elements,
+  selection,
+  editingBoxId,
+  viewport,
+  drawingArrow,
+  canvasBg,
+  gridDotColor,
+  connectorColor,
+  strokeColor,
+  accentColor,
+  surfaceBg,
+  textColor,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onWheel,
+  onDoubleClick,
+  onBoxTextChange,
+  onBoxDoubleClick,
+  onBoxBlur,
+  onBoxPointerDown,
+  onAnchorPointerDown,
+  onResizePointerDown,
+  onContextMenu,
+}: Canvas2DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const sizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 })
@@ -318,8 +327,6 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
       const isSelected = selection.selectedIds.has(boxId)
       const isEditing = editingBoxId === boxId
       drawBox(ctx, rc, box, isSelected, isEditing, theme)
-
-      // Resize still works via cursor change on edge hover — no visible handles
     }
 
     // Arrows
@@ -380,10 +387,7 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
     // Forward to parent handler (drag, arrow draw, resize)
     onPointerMove(e)
 
-    // Edge hover detection (only when idle)
-    const wrapper = (e.currentTarget as HTMLElement)
-    const rect = wrapper.getBoundingClientRect()
-    const canvas = screenToCanvas(e.clientX, e.clientY, viewport, rect)
+    const canvas = eventToCanvas(e, viewport)
 
     // Check resize handles first (for cursor)
     const resizeHit = hitTestResizeHandles(canvas.x, canvas.y, elements, selection.selectedIds)
@@ -407,27 +411,14 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
     }
 
     // Check if over a box (for grab cursor)
-    let overBox = false
-    for (let i = elements.boxOrder.length - 1; i >= 0; i--) {
-      const boxId = elements.boxOrder[i]!
-      const box = elements.boxes.get(boxId)
-      if (box === undefined) continue
-      if (canvas.x >= box.x && canvas.x <= box.x + box.width &&
-          canvas.y >= box.y && canvas.y <= box.y + box.height) {
-        overBox = true
-        break
-      }
-    }
-
+    const overBox = hitTestBox(elements, canvas) !== null
     setCursor(overBox ? 'grab' : 'default')
   }, [editingBoxId, elements, onPointerMove, selection.selectedIds, viewport])
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return
 
-    const wrapper = (e.currentTarget as HTMLElement)
-    const rect = wrapper.getBoundingClientRect()
-    const canvas = screenToCanvas(e.clientX, e.clientY, viewport, rect)
+    const canvas = eventToCanvas(e, viewport)
 
     // Check resize handles first
     const resizeHit = hitTestResizeHandles(canvas.x, canvas.y, elements, selection.selectedIds)
@@ -448,15 +439,10 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
     }
 
     // Check if clicking on a box
-    for (let i = elements.boxOrder.length - 1; i >= 0; i--) {
-      const boxId = elements.boxOrder[i]!
-      const box = elements.boxes.get(boxId)
-      if (box === undefined) continue
-      if (canvas.x >= box.x && canvas.x <= box.x + box.width &&
-          canvas.y >= box.y && canvas.y <= box.y + box.height) {
-        onBoxPointerDown(boxId, e)
-        return
-      }
+    const boxId = hitTestBox(elements, canvas)
+    if (boxId !== null) {
+      onBoxPointerDown(boxId, e)
+      return
     }
 
     // Clicked on empty space
@@ -464,20 +450,13 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
   }, [edgeHover, elements, onAnchorPointerDown, onBoxPointerDown, onPointerDown, onResizePointerDown, selection.selectedIds, viewport])
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
-    const wrapper = (e.currentTarget as HTMLElement)
-    const rect = wrapper.getBoundingClientRect()
-    const canvas = screenToCanvas(e.clientX, e.clientY, viewport, rect)
+    const canvas = eventToCanvas(e, viewport)
 
     // Check if double-clicking on a box
-    for (let i = elements.boxOrder.length - 1; i >= 0; i--) {
-      const boxId = elements.boxOrder[i]!
-      const box = elements.boxes.get(boxId)
-      if (box === undefined) continue
-      if (canvas.x >= box.x && canvas.x <= box.x + box.width &&
-          canvas.y >= box.y && canvas.y <= box.y + box.height) {
-        onBoxDoubleClick(boxId)
-        return
-      }
+    const boxId = hitTestBox(elements, canvas)
+    if (boxId !== null) {
+      onBoxDoubleClick(boxId)
+      return
     }
 
     // Double-click on empty space
@@ -525,20 +504,13 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
 
-    const wrapper = e.currentTarget as HTMLElement
-    const rect = wrapper.getBoundingClientRect()
-    const canvas = screenToCanvas(e.clientX, e.clientY, viewport, rect)
+    const canvas = eventToCanvas(e, viewport)
 
-    // Hit-test boxes (reverse z-order)
-    for (let i = elements.boxOrder.length - 1; i >= 0; i--) {
-      const boxId = elements.boxOrder[i]!
-      const box = elements.boxes.get(boxId)
-      if (box === undefined) continue
-      if (canvas.x >= box.x && canvas.x <= box.x + box.width &&
-          canvas.y >= box.y && canvas.y <= box.y + box.height) {
-        onContextMenu(e.clientX, e.clientY, boxId)
-        return
-      }
+    // Hit-test boxes
+    const boxId = hitTestBox(elements, canvas)
+    if (boxId !== null) {
+      onContextMenu(e.clientX, e.clientY, boxId)
+      return
     }
 
     // Hit-test arrows (sample points along bezier, check proximity)
@@ -620,6 +592,6 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
       )}
     </div>
   )
-})
+}
 
 export { Canvas2D }

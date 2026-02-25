@@ -22,10 +22,10 @@ const useDispatchHistory = (workflowId: string): void => {
     const fetchHistory = async (stepIds: readonly string[]) => {
       if (stepIds.length === 0) return
 
-      for (const stepId of stepIds) {
+      await Promise.all(stepIds.map(async (stepId) => {
         try {
           const tasksResp = await api.dispatch.listForStep(stepId)
-          if (tasksResp.tasks.length === 0) continue
+          if (tasksResp.tasks.length === 0) return
 
           const latest = tasksResp.tasks[tasksResp.tasks.length - 1]!
           const traceResp = await api.dispatch.trace(latest.execution_id)
@@ -33,7 +33,7 @@ const useDispatchHistory = (workflowId: string): void => {
         } catch {
           // Silently skip — historical data is best-effort
         }
-      }
+      }))
     }
 
     // Check if steps are already loaded

@@ -2,6 +2,7 @@
 // dispatchStore — Tracks active dispatch tasks per step with execution trace
 // ============================================================================
 
+import { Collections } from '@/utils/collections'
 import { createStore } from './lib'
 import { SESSION_EVENT } from '@/types/ws'
 import type { WsWireMessage } from '@/types/ws'
@@ -214,11 +215,10 @@ const hydrateFromApi = (resp: DispatchTraceResponse): void => {
   const existing = store.getState().byStep[stepId]
   if (existing?.status === 'running') return
 
-  const trace = resp.trace.map(mapApiTraceEvent)
-  const tokenBuffer = trace
-    .filter((e): e is DispatchTraceEvent & { type: 'token' } => e.type === 'token')
-    .map((e) => e.content)
-    .join('')
+  const trace = Collections.mapBy(resp.trace, mapApiTraceEvent)
+  const tokenBuffer = Collections.filterMap(trace, (e) =>
+    e.type === 'token' ? e.content : null,
+  ).join('')
 
   const entry: DispatchEntry = {
     executionId: resp.execution_id,
