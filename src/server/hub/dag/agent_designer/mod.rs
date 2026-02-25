@@ -22,7 +22,7 @@ use uuid::Uuid;
 use crate::config::protocols::{roles, vars, DESIGNER};
 use crate::db::traits::{CreateAgentExecutionInput, CreateDesignerOutputGenericInput};
 use crate::db::WorkflowStepRow;
-use crate::server::hub::engine::filters::{FilterContext, ReasoningTraceFilter};
+use crate::server::hub::engine::filters::FilterContext;
 use crate::server::hub::engine::ExecutionEngine;
 use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::json_utils::parse_structured_output;
@@ -212,11 +212,8 @@ pub(crate) async fn run_agent_designer(
         agent_execution_id: designer_ae_id,
     });
 
-    // 6. Execute the designer call with reasoning trace filter
-    let mut filter_ctx = FilterContext::new(&designer_cfg.model_id, step.id);
-    filter_ctx.has_output_schema = true;
-    let filters: Vec<Arc<dyn crate::server::hub::engine::filters::ExecutionFilter>> =
-        vec![Arc::new(ReasoningTraceFilter::new())];
+    // 6. Execute the designer call
+    let filter_ctx = FilterContext::new(&designer_cfg.model_id, step.id);
 
     let recorder = ExecutionRecorder::new(
         &*state.repos().sessions,
@@ -226,7 +223,6 @@ pub(crate) async fn run_agent_designer(
     );
     let result = engine
         .clone_with_provider()
-        .with_filters(filters)
         .with_filter_context(filter_ctx)
         .execute(
             &strategy,
