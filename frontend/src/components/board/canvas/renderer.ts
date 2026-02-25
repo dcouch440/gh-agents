@@ -309,6 +309,42 @@ const drawHandle = (
   ctx.stroke()
 }
 
+// ── Resize Handles ───────────────────────────────────────────────────
+
+/**
+ * Draw 8 resize handles (corners + midpoints) around a selected box.
+ */
+const drawResizeHandles = (
+  ctx: CanvasRenderingContext2D,
+  box: BoxElement,
+  theme: DrawTheme,
+): void => {
+  const { x, y, width: w, height: h } = box
+  const size = BOARD.HANDLE_SIZE
+  const half = size / 2
+
+  const handles = [
+    { hx: x, hy: y },             // nw
+    { hx: x + w, hy: y },         // ne
+    { hx: x, hy: y + h },         // sw
+    { hx: x + w, hy: y + h },     // se
+    { hx: x + w / 2, hy: y },     // n
+    { hx: x + w / 2, hy: y + h }, // s
+    { hx: x + w, hy: y + h / 2 }, // e
+    { hx: x, hy: y + h / 2 },     // w
+  ]
+
+  ctx.fillStyle = theme.surfaceBg
+  ctx.strokeStyle = theme.accentColor
+  ctx.lineWidth = 1.5
+
+  for (let i = 0; i < handles.length; i++) {
+    const { hx, hy } = handles[i]!
+    ctx.fillRect(hx - half, hy - half, size, size)
+    ctx.strokeRect(hx - half, hy - half, size, size)
+  }
+}
+
 // ── Selection ─────────────────────────────────────────────────────────────
 
 /**
@@ -388,6 +424,14 @@ const renderBoard = (
     drawBox(ctx, rc, box, isSelected, isEditing, theme)
   }
 
+  // Resize handles on selected boxes
+  for (const boxId of selection.selectedIds) {
+    const box = elements.boxes.get(boxId)
+    if (box !== undefined) {
+      drawResizeHandles(ctx, box, theme)
+    }
+  }
+
   // Arrows
   for (const [arrowId, arrow] of elements.arrows) {
     const sourceBox = elements.boxes.get(arrow.sourceBoxId)
@@ -433,6 +477,7 @@ export {
   drawDrawingArrow,
   drawGrid,
   drawHandle,
+  drawResizeHandles,
   drawSelectionRect,
   renderBoard,
 }
