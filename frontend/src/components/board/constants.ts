@@ -30,9 +30,9 @@ const BOARD = {
   HANDLE_HOVER_SIZE: 12,
 
   // ── Typography ───────────────────────────────────────────────────────────
-  FONT_SIZE: 14,
+  FONT_SIZE: 16,
   LINE_HEIGHT: 1.4,
-  FONT_FAMILY: 'system-ui, -apple-system, sans-serif',
+  FONT_FAMILY: 'Virgil, Segoe Print, Bradley Hand, system-ui, sans-serif',
 
   // ── Viewport ─────────────────────────────────────────────────────────────
   MIN_ZOOM: 0.25,
