@@ -7,6 +7,7 @@
 // positioned over the box being edited — the same approach as Excalidraw.
 
 import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import rough from 'roughjs'
 import type { Side } from '@/utils/geometry'
 import { computeArrowPathPoints, computeDrawingArrowPathPoints } from '../arrows/routing'
 import { BOARD } from '../constants'
@@ -15,10 +16,10 @@ import { screenToCanvas } from '../elements'
 import {
   drawArrow,
   drawBox,
+  drawBoxHighlight,
   drawDrawingArrow,
   drawGrid,
   drawHandle,
-  drawResizeHandles,
   drawSelectionRect,
 } from './renderer'
 import type { DrawTheme } from './renderer'
@@ -205,10 +206,21 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
   const sizeRef = useRef<{ width: number; height: number }>({ width: 0, height: 0 })
   const [edgeHover, setEdgeHover] = useState<EdgeHover | null>(null)
   const [cursor, setCursor] = useState('default')
+  const [fontGeneration, setFontGeneration] = useState(0)
 
   const theme: DrawTheme = useMemo(() => (
     { canvasBg, gridDotColor, connectorColor, accentColor, surfaceBg, textColor }
   ), [canvasBg, gridDotColor, connectorColor, accentColor, surfaceBg, textColor])
+
+  // ── Re-render when fonts finish loading (Virgil woff2) ──────────────
+  // Guard: jsdom test environment doesn't implement document.fonts
+  useEffect(() => {
+    if (!('fonts' in document)) return
+
+    const onLoadingDone = () => { setFontGeneration((g) => g + 1) }
+    document.fonts.addEventListener('loadingdone', onLoadingDone)
+    return () => { document.fonts.removeEventListener('loadingdone', onLoadingDone) }
+  }, [])
 
   // ── High-DPI Setup + ResizeObserver ───────────────────────────────────
   useEffect(() => {
@@ -246,6 +258,9 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
     const dpr = window.devicePixelRatio || 1
     const { width: canvasWidth, height: canvasHeight } = sizeRef.current
 
+    // Create RoughCanvas for hand-drawn rendering
+    const rc = rough.canvas(canvas)
+
     // Clear
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, canvasWidth, canvasHeight)
@@ -258,6 +273,14 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
     // Grid
     drawGrid(ctx, viewport, canvasWidth, canvasHeight, theme)
 
+    // Box highlight for edge hover (draw under boxes so the glow is behind)
+    if (edgeHover !== null && editingBoxId === null) {
+      const hoverBox = elements.boxes.get(edgeHover.boxId)
+      if (hoverBox !== undefined) {
+        drawBoxHighlight(ctx, hoverBox, accentColor)
+      }
+    }
+
     // Boxes in z-order
     for (let i = 0; i < elements.boxOrder.length; i++) {
       const boxId = elements.boxOrder[i]!
@@ -266,12 +289,9 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
 
       const isSelected = selection.selectedIds.has(boxId)
       const isEditing = editingBoxId === boxId
-      drawBox(ctx, box, isSelected, isEditing, theme)
+      drawBox(ctx, rc, box, isSelected, isEditing, theme)
 
-      // Resize handles on selected boxes (not while editing)
-      if (isSelected && !isEditing) {
-        drawResizeHandles(ctx, box, theme)
-      }
+      // Resize still works via cursor change on edge hover — no visible handles
     }
 
     // Arrows
@@ -299,7 +319,7 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
       }
     }
 
-    // Edge hover handle
+    // Edge hover handle (small dot on top of the highlight)
     if (edgeHover !== null && editingBoxId === null) {
       drawHandle(ctx, edgeHover.cx, edgeHover.cy, theme)
     }
@@ -310,7 +330,7 @@ const Canvas2D = forwardRef<HTMLDivElement, Canvas2DProps>(function Canvas2D(
     }
 
     ctx.restore()
-  }, [elements, selection, editingBoxId, viewport, drawingArrow, edgeHover, theme, accentColor])
+  }, [elements, selection, editingBoxId, viewport, drawingArrow, edgeHover, theme, accentColor, fontGeneration])
 
   // ── Focus textarea when editing starts ────────────────────────────────
   useEffect(() => {

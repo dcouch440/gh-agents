@@ -1,6 +1,15 @@
 /* All styling is handled by MUI ThemeProvider + CssBaseline */
 /* Fonts are loaded via index.html (Inter, Roboto) */
 
+/* Hand-drawn font for board canvas (from Excalidraw, OFL-1.1 license) */
+@font-face {
+  font-family: 'Virgil';
+  src: url('/fonts/Virgil-Regular.woff2') format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* Custom scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;

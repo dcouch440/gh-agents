@@ -5,7 +5,10 @@
 // All functions are stateless, pure, and accept CanvasRenderingContext2D.
 // No React, no hooks, no side effects. The render pipeline calls these
 // in order to paint the board onto a single <canvas> element.
+//
+// Box borders use rough.js for a hand-drawn/sketchy aesthetic.
 
+import type { RoughCanvas } from 'roughjs/bin/canvas'
 import { BOARD } from '../constants'
 import type { ArrowPath } from '../arrows/routing'
 import type { BoxElement, MarqueeRect, ViewportState } from '../elements'
@@ -60,42 +63,34 @@ const drawGrid = (
 // ── Box ───────────────────────────────────────────────────────────────────
 
 /**
- * Draw a box with rounded rectangle border, background fill, and text.
+ * Draw a box with rough.js hand-drawn border, background fill, and text.
  * Skips text rendering when isEditing (textarea overlay handles it).
+ *
+ * Uses a stable seed per box so the sketchy lines don't jitter on re-render.
  */
 const drawBox = (
   ctx: CanvasRenderingContext2D,
+  rc: RoughCanvas,
   box: BoxElement,
   isSelected: boolean,
   isEditing: boolean,
   theme: DrawTheme,
 ): void => {
   const { x, y, width, height } = box
-  const r = BOARD.BOX_BORDER_RADIUS
 
-  // Background fill
-  ctx.fillStyle = theme.surfaceBg
-  ctx.beginPath()
-  ctx.roundRect(x, y, width, height, r)
-  ctx.fill()
+  // Stable seed from box id — keeps sketchy lines consistent across re-renders
+  const seed = hashStringToSeed(box.id)
 
-  // Border stroke
-  ctx.strokeStyle = isSelected ? theme.accentColor : theme.connectorColor
-  ctx.lineWidth = BOARD.BOX_BORDER_WIDTH
-  ctx.beginPath()
-  ctx.roundRect(x, y, width, height, r)
-  ctx.stroke()
-
-  // Editing glow
-  if (isEditing) {
-    ctx.save()
-    ctx.strokeStyle = theme.accentColor + '40' // 25% alpha
-    ctx.lineWidth = 4
-    ctx.beginPath()
-    ctx.roundRect(x, y, width, height, r)
-    ctx.stroke()
-    ctx.restore()
-  }
+  // Rough.js rectangle with hand-drawn fill + stroke
+  rc.rectangle(x, y, width, height, {
+    fill: theme.surfaceBg,
+    fillStyle: 'solid',
+    stroke: isSelected ? theme.accentColor : theme.connectorColor,
+    strokeWidth: BOARD.BOX_BORDER_WIDTH,
+    roughness: 1.0,
+    bowing: 1.5,
+    seed,
+  })
 
   // Text (skip when editing — textarea overlay is visible)
   if (!isEditing && box.text.length > 0) {
@@ -117,6 +112,45 @@ const drawBox = (
 
     ctx.restore()
   }
+}
+
+/**
+ * Draw a highlight glow around a box when hovering for arrow binding.
+ * Draws a translucent accent border + subtle fill to clearly signal connection.
+ */
+const drawBoxHighlight = (
+  ctx: CanvasRenderingContext2D,
+  box: BoxElement,
+  accentColor: string,
+): void => {
+  const pad = 4
+  const { x, y, width, height } = box
+
+  // Glow fill
+  ctx.save()
+  ctx.fillStyle = accentColor + '15' // ~8% alpha
+  ctx.beginPath()
+  ctx.roundRect(x - pad, y - pad, width + pad * 2, height + pad * 2, BOARD.BOX_BORDER_RADIUS + pad)
+  ctx.fill()
+
+  // Glow border
+  ctx.strokeStyle = accentColor + '80' // 50% alpha
+  ctx.lineWidth = 2.5
+  ctx.beginPath()
+  ctx.roundRect(x - pad, y - pad, width + pad * 2, height + pad * 2, BOARD.BOX_BORDER_RADIUS + pad)
+  ctx.stroke()
+  ctx.restore()
+}
+
+/**
+ * Deterministic seed from string — so each box gets consistent sketchy lines.
+ */
+const hashStringToSeed = (s: string): number => {
+  let hash = 0
+  for (let i = 0; i < s.length; i++) {
+    hash = ((hash << 5) - hash + s.charCodeAt(i)) | 0
+  }
+  return Math.abs(hash)
 }
 
 // ── Arrow ─────────────────────────────────────────────────────────────────
@@ -230,39 +264,33 @@ const drawHandle = (
 }
 
 /**
- * Draw resize handles (8 small squares at corners and edge midpoints).
+ * Draw resize handles — 4 corner circles only (clean, Excalidraw-style).
  */
 const drawResizeHandles = (
   ctx: CanvasRenderingContext2D,
   box: BoxElement,
   theme: DrawTheme,
 ): void => {
-  const s = 8 // handle size
-  const half = s / 2
+  const radius = 5
   const { x, y, width: w, height: h } = box
 
-  const positions = [
-    // Corners
+  const corners = [
     { px: x, py: y },         // nw
     { px: x + w, py: y },     // ne
     { px: x, py: y + h },     // sw
     { px: x + w, py: y + h }, // se
-    // Edge midpoints
-    { px: x + w / 2, py: y },         // n
-    { px: x + w / 2, py: y + h },     // s
-    { px: x + w, py: y + h / 2 },     // e
-    { px: x, py: y + h / 2 },         // w
   ]
 
-  for (let i = 0; i < positions.length; i++) {
-    const { px, py } = positions[i]!
+  for (let i = 0; i < corners.length; i++) {
+    const { px, py } = corners[i]!
 
+    ctx.beginPath()
+    ctx.arc(px, py, radius, 0, Math.PI * 2)
     ctx.fillStyle = theme.surfaceBg
-    ctx.fillRect(px - half, py - half, s, s)
-
+    ctx.fill()
     ctx.strokeStyle = theme.accentColor
     ctx.lineWidth = 1.5
-    ctx.strokeRect(px - half, py - half, s, s)
+    ctx.stroke()
   }
 }
 
@@ -293,6 +321,7 @@ const drawSelectionRect = (
 export {
   drawArrow,
   drawBox,
+  drawBoxHighlight,
   drawDrawingArrow,
   drawGrid,
   drawHandle,
