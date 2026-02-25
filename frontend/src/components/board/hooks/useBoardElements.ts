@@ -12,17 +12,23 @@ type SetElements = (fn: (s: BoardElements) => BoardElements) => void
  * `setElements` with the deserialized board state. The backend returns
  * the same Excalidraw JSON array that was last POSTed, so
  * `deserializeFromExcalidraw` reconstructs the internal representation.
+ *
+ * Uses a boolean `cancelled` flag instead of AbortController to avoid a race
+ * condition with the API client's request deduplication under React StrictMode.
+ * StrictMode double-mounts: if mount 1 aborts its signal, the cached promise
+ * rejects, and mount 2 (reusing the cache) gets the rejected promise too.
+ * A boolean flag lets mount 1's request complete normally so mount 2's dedup
+ * hit returns the successful result.
  */
 const useBoardElements = (workflowId: string, setElements: SetElements): { loading: boolean } => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const controller = new AbortController()
-    const { signal } = controller
+    let cancelled = false
 
-    api.workflows.getBoardElements(workflowId, { signal }).then(
+    api.workflows.getBoardElements(workflowId).then(
       (resp) => {
-        if (!signal.aborted) {
+        if (!cancelled) {
           if (resp.elements !== null) {
             const board = deserializeFromExcalidraw(resp.elements as Record<string, unknown>[])
             setElements(() => board)
@@ -31,13 +37,13 @@ const useBoardElements = (workflowId: string, setElements: SetElements): { loadi
         }
       },
       () => {
-        if (!signal.aborted) {
+        if (!cancelled) {
           setLoading(false)
         }
       },
     )
 
-    return () => { controller.abort() }
+    return () => { cancelled = true }
   }, [workflowId, setElements])
 
   return { loading }
