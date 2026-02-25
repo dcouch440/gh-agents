@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import { boardStore } from '@/stores'
-import { useBoardTheme, useBoardSubmit, useBoardElements, useDispatchHistory } from './hooks'
+import { useBoardTheme, useBoardSubmit, useBoardElements, useDispatchHistory, useActivityHistory } from './hooks'
 import { BoardContextMenu } from './BoardContextMenu'
 import type { MenuPosition } from './BoardContextMenu'
 import { SubmitBar } from './SubmitBar'
@@ -42,6 +42,7 @@ function Board({ workflowId }: BoardProps) {
   const history = useHistory(elements)
 
   useDispatchHistory(workflowId)
+  useActivityHistory(workflowId)
 
   useEffect(() => {
     return () => { boardStore.resetBoard() }
