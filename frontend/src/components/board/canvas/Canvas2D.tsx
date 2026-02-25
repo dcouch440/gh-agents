@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BOARD } from '../constants'
-import type { AnchorPoint, BoardElements, DrawingArrow, EdgeHover, InteractionMode, ResizeHandle, SelectionState, ViewportState } from '../elements'
+import type { ActiveTool, AnchorPoint, BoardElements, DrawingArrow, EdgeHover, InteractionMode, ResizeHandle, SelectionState, ViewportState } from '../elements'
 import { detectEdgeHover, eventToCanvas, hitTestArrow, hitTestBox, hitTestResizeHandles, RESIZE_CURSORS } from '../elements'
 import { renderBoard } from './renderer'
 import type { DrawTheme } from './renderer'
@@ -21,6 +21,7 @@ type Canvas2DProps = {
   readonly elements: BoardElements
   readonly selection: SelectionState
   readonly editingBoxId: string | null
+  readonly activeTool: ActiveTool
   readonly interaction: InteractionMode
   readonly viewport: ViewportState
   readonly drawingArrow: DrawingArrow
@@ -52,6 +53,7 @@ function Canvas2D({
   elements,
   selection,
   editingBoxId,
+  activeTool,
   interaction,
   viewport,
   drawingArrow,
@@ -169,8 +171,8 @@ function Canvas2D({
       return
     }
 
-    // Check edge hover
-    if (editingBoxId === null) {
+    // Check edge hover (only when arrow tool is active)
+    if (activeTool === 'arrow' && editingBoxId === null) {
       const hover = detectEdgeHover(canvas.x, canvas.y, elements)
       setEdgeHover(hover)
 
@@ -185,7 +187,7 @@ function Canvas2D({
     // Check if over a box (for grab cursor)
     const overBox = hitTestBox(elements, canvas) !== null
     setCursor(overBox ? 'grab' : 'default')
-  }, [editingBoxId, elements, interaction.type, onPointerMove, selection.selectedIds, viewport])
+  }, [activeTool, editingBoxId, elements, interaction.type, onPointerMove, selection.selectedIds, viewport])
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return

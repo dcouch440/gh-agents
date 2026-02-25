@@ -226,6 +226,7 @@ function Board({ workflowId }: BoardProps) {
           elements={elements}
           selection={selection}
           editingBoxId={editingBoxId}
+          activeTool={activeTool}
           interaction={interaction}
           viewport={viewport}
           drawingArrow={drawingArrow}
