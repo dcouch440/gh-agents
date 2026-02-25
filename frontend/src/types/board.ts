@@ -160,6 +160,8 @@ type NoiseReason = 'WhitespaceOnly' | 'Oscillation' | 'CanvasPan' | 'ReorderOnly
 /** Response from `GET /workflows/:id/board/elements`. */
 type BoardElementsResponse = {
   readonly elements: readonly Record<string, unknown>[] | null
+  /** Last board submit response for debug panel rehydration on refresh. */
+  readonly last_submit: BoardSubmitResponse | null
 }
 
 // ── Exports ─────────────────────────────────────────────────────────────────

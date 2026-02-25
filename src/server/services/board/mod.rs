@@ -95,6 +95,7 @@ pub async fn submit_board(
         workflow_id: input.workflow_id,
         snapshot_json,
         elements_json: input.elements_json,
+        last_response_json: None,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
     })
