@@ -68,6 +68,24 @@ const messages: MessageMap = {
   [ACTIVITY.SESSION_UPDATED]: (e) => (e.title !== null ? `Session updated: "${e.title}"` : 'Session updated'),
 
   [ACTIVITY.SESSION_DELETED]: (e) => `Session ${e.sessionId} deleted`,
+
+  [ACTIVITY.DISPATCH_STARTED]: (e) => `Dispatch started for step ${e.stepId.slice(0, 8)}`,
+
+  [ACTIVITY.DISPATCH_PROGRESS]: (e) => `Dispatch: ${e.message}`,
+
+  [ACTIVITY.DISPATCH_COMPLETED]: (e) => `Dispatch completed: ${e.summary}`,
+
+  [ACTIVITY.DISPATCH_FAILED]: (e) => `Dispatch FAILED: ${e.error}`,
+
+  [ACTIVITY.DISPATCH_CANCELLED]: () => 'Dispatch cancelled',
+
+  [ACTIVITY.DISPATCH_STREAM_TOKEN]: (e) => `Token: ${e.content.slice(0, 80)}${e.content.length > 80 ? '...' : ''}`,
+
+  [ACTIVITY.DISPATCH_STREAM_TOOL_START]: (e) => `Tool call: ${e.toolName}`,
+
+  [ACTIVITY.DISPATCH_STREAM_TOOL_END]: (e) => `Tool result: ${e.toolName}`,
+
+  [ACTIVITY.DISPATCH_STREAM_ERROR]: (e) => `Stream error: ${e.error}`,
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────

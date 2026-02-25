@@ -33,6 +33,16 @@ export const ACTIVITY = {
   SESSION_CREATED: 'session:created',
   SESSION_UPDATED: 'session:updated',
   SESSION_DELETED: 'session:deleted',
+  // Dispatch
+  DISPATCH_STARTED: 'dispatch:started',
+  DISPATCH_PROGRESS: 'dispatch:progress',
+  DISPATCH_COMPLETED: 'dispatch:completed',
+  DISPATCH_FAILED: 'dispatch:failed',
+  DISPATCH_CANCELLED: 'dispatch:cancelled',
+  DISPATCH_STREAM_TOKEN: 'dispatch:stream_token',
+  DISPATCH_STREAM_TOOL_START: 'dispatch:stream_tool_start',
+  DISPATCH_STREAM_TOOL_END: 'dispatch:stream_tool_end',
+  DISPATCH_STREAM_ERROR: 'dispatch:stream_error',
 } as const
 
 // ── Workflow variants ────────────────────────────────────────────────────────
@@ -202,6 +212,64 @@ type SessionDeletedEvent = {
   sessionId: string
 }
 
+// ── Dispatch variants ──────────────────────────────────────────────────────
+
+type DispatchStartedEvent = {
+  type: typeof ACTIVITY.DISPATCH_STARTED
+  stepId: string
+  executionId: string
+  instruction: string
+}
+
+type DispatchProgressEvent = {
+  type: typeof ACTIVITY.DISPATCH_PROGRESS
+  stepId: string
+  message: string
+}
+
+type DispatchCompletedEvent = {
+  type: typeof ACTIVITY.DISPATCH_COMPLETED
+  stepId: string
+  summary: string
+}
+
+type DispatchFailedEvent = {
+  type: typeof ACTIVITY.DISPATCH_FAILED
+  stepId: string
+  error: string
+}
+
+type DispatchCancelledEvent = {
+  type: typeof ACTIVITY.DISPATCH_CANCELLED
+  stepId: string
+}
+
+type DispatchStreamTokenEvent = {
+  type: typeof ACTIVITY.DISPATCH_STREAM_TOKEN
+  stepId: string
+  content: string
+}
+
+type DispatchStreamToolStartEvent = {
+  type: typeof ACTIVITY.DISPATCH_STREAM_TOOL_START
+  stepId: string
+  toolName: string
+  toolId: string
+}
+
+type DispatchStreamToolEndEvent = {
+  type: typeof ACTIVITY.DISPATCH_STREAM_TOOL_END
+  stepId: string
+  toolName: string
+  toolId: string
+}
+
+type DispatchStreamErrorEvent = {
+  type: typeof ACTIVITY.DISPATCH_STREAM_ERROR
+  stepId: string
+  error: string
+}
+
 // ── Union ────────────────────────────────────────────────────────────────────
 
 type ActivityEvent =
@@ -225,6 +293,15 @@ type ActivityEvent =
   | SessionCreatedEvent
   | SessionUpdatedEvent
   | SessionDeletedEvent
+  | DispatchStartedEvent
+  | DispatchProgressEvent
+  | DispatchCompletedEvent
+  | DispatchFailedEvent
+  | DispatchCancelledEvent
+  | DispatchStreamTokenEvent
+  | DispatchStreamToolStartEvent
+  | DispatchStreamToolEndEvent
+  | DispatchStreamErrorEvent
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -262,4 +339,13 @@ export type {
   SessionCreatedEvent,
   SessionUpdatedEvent,
   SessionDeletedEvent,
+  DispatchStartedEvent,
+  DispatchProgressEvent,
+  DispatchCompletedEvent,
+  DispatchFailedEvent,
+  DispatchCancelledEvent,
+  DispatchStreamTokenEvent,
+  DispatchStreamToolStartEvent,
+  DispatchStreamToolEndEvent,
+  DispatchStreamErrorEvent,
 }
