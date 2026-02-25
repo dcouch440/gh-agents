@@ -91,6 +91,12 @@ export const WORKFLOW_EVENT = {
   STEP_STREAM_TOOL_START: 'step_stream_tool_start',
   STEP_STREAM_TOOL_END: 'step_stream_tool_end',
   STEP_STREAM_ERROR: 'step_stream_error',
+  // Debug stream (per-agent execution details)
+  DEBUG_SYSTEM_PROMPT: 'debug_system_prompt',
+  DEBUG_USER_MESSAGE: 'debug_user_message',
+  DEBUG_ASSISTANT_MESSAGE: 'debug_assistant_message',
+  DEBUG_TOOL_CALL: 'debug_tool_call',
+  DEBUG_TOOL_RESULT: 'debug_tool_result',
 } as const
 
 export type WorkflowStartedData = { workflow_id: string; total_steps: number }
@@ -142,6 +148,13 @@ export type StepStreamTokenData = { workflow_id: string; step_id: string; source
 export type StepStreamToolStartData = { workflow_id: string; step_id: string; source_id: string; source_name: string; tool_name: string; tool_id: string }
 export type StepStreamToolEndData = { workflow_id: string; step_id: string; source_id: string; source_name: string; tool_name: string; tool_id: string }
 export type StepStreamErrorData = { workflow_id: string; step_id: string; source_id: string; source_name: string; error: string }
+
+// Debug stream (per-agent execution details)
+export type DebugSystemPromptData = { workflow_id: string; step_id: string; agent_execution_id: string; agent_name: string | null; content: string }
+export type DebugUserMessageData = { workflow_id: string; step_id: string; agent_execution_id: string; agent_name: string | null; content: string }
+export type DebugAssistantMessageData = { workflow_id: string; step_id: string; agent_execution_id: string; agent_name: string | null; content: string }
+export type DebugToolCallData = { workflow_id: string; step_id: string; agent_execution_id: string; agent_name: string | null; tool_name: string; tool_id: string; input: Record<string, unknown> }
+export type DebugToolResultData = { workflow_id: string; step_id: string; agent_execution_id: string; agent_name: string | null; tool_name: string; tool_id: string; result: string }
 
 // ============================================================================
 // Room Events

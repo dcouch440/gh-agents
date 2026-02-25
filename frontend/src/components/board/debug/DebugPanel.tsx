@@ -7,6 +7,7 @@ import Divider from '@mui/material/Divider'
 import { PhaseZeroSummary } from './PhaseZeroSummary'
 import { ActivityFeed } from './ActivityFeed'
 import { DispatchTrace } from './DispatchTrace'
+import { AgentTracePanel } from './AgentTracePanel'
 
 type DebugPanelProps = {
   readonly onClose: () => void
@@ -70,6 +71,13 @@ function DebugPanel({ onClose }: DebugPanelProps) {
       {/* Dispatch Trace */}
       <Box sx={{ flexShrink: 0, maxHeight: '30%', overflowY: 'auto', p: 1 }}>
         <DispatchTrace />
+      </Box>
+
+      <Divider />
+
+      {/* Agent Execution Trace */}
+      <Box sx={{ flexShrink: 0, maxHeight: '30%', overflowY: 'auto', p: 1 }}>
+        <AgentTracePanel />
       </Box>
 
       <Divider />
