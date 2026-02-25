@@ -423,7 +423,7 @@ impl ToolRepo for PgRepo {
     }
 
     async fn seed_builtin_tools(&self) -> Result<()> {
-        for tool in crate::agents::execution_tools::builtin_tool_rows() {
+        for tool in crate::server::tools::execution::builtin_tool_rows() {
             sqlx::query(
                 r#"
                 INSERT INTO tools (id, name, display_name, description, parameters)

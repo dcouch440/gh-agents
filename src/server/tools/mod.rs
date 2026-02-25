@@ -5,6 +5,7 @@
 //! `node_assistant` (step config), `workforce` (team config).
 
 pub mod documents;
+pub mod execution;
 pub mod haiku;
 pub mod manager;
 pub mod node_assistant;

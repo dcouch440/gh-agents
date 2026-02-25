@@ -1,6 +1,5 @@
 //! nexor: AI Agent Orchestration for GitHub Workflows
 
-pub mod agents;
 pub mod cli;
 pub mod commands;
 pub mod config;

@@ -11,7 +11,7 @@ use serde_json::{json, Value};
 use tracing::info;
 use uuid::Uuid;
 
-use crate::agents::execution_tools;
+use crate::server::tools::execution as execution_tools;
 use crate::execution::{ContainerHandle, ExecutionContext};
 use crate::llm::{Message, TokenUsage, Tool};
 use crate::server::hub::error::HubError;
