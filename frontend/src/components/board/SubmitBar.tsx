@@ -1,16 +1,23 @@
+import type { ReactNode } from 'react'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
 import PublishIcon from '@mui/icons-material/Publish'
+import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined'
+import CheckCircleOutline from '@mui/icons-material/CheckCircleOutline'
+import ErrorOutline from '@mui/icons-material/ErrorOutline'
 import BugReportIcon from '@mui/icons-material/BugReport'
 import { GradientButton } from '@/components/primitives'
 import type { SubmitStatus } from '@/stores/boardStore'
+import type { RunStatus } from '@/components/canvas/useWorkflowRun'
 
 type SubmitBarProps = {
   readonly onSubmit: () => void
   readonly isSubmitting: boolean
   readonly status: SubmitStatus
   readonly error: string | null
+  readonly onRun: () => void
+  readonly runStatus: RunStatus
   readonly showDebug: boolean
   readonly onToggleDebug: () => void
 }
@@ -21,7 +28,21 @@ type SubmitBarProps = {
  * Renders a submit button with loading/error feedback. Entirely stateless —
  * all state flows in via props from `useBoardSubmit`.
  */
-function SubmitBar({ onSubmit, isSubmitting, status, error, showDebug, onToggleDebug }: SubmitBarProps) {
+const RUN_ICON: Record<RunStatus, ReactNode> = {
+  idle: <PlayArrowOutlined sx={{ fontSize: 18 }} />,
+  running: null,
+  completed: <CheckCircleOutline sx={{ fontSize: 18 }} />,
+  error: <ErrorOutline sx={{ fontSize: 18 }} />,
+}
+
+const RUN_LABEL: Record<RunStatus, string> = {
+  idle: 'Run',
+  running: 'Running…',
+  completed: 'Started!',
+  error: 'Failed',
+}
+
+function SubmitBar({ onSubmit, isSubmitting, status, error, onRun, runStatus, showDebug, onToggleDebug }: SubmitBarProps) {
   return (
     <Paper
       elevation={4}
@@ -45,6 +66,16 @@ function SubmitBar({ onSubmit, isSubmitting, status, error, showDebug, onToggleD
         icon={<PublishIcon sx={{ fontSize: 18 }} />}
       >
         Submit
+      </GradientButton>
+
+      <GradientButton
+        onClick={onRun}
+        loading={runStatus === 'running'}
+        disabled={runStatus === 'running'}
+        icon={RUN_ICON[runStatus]}
+        color={runStatus === 'error' ? 'error' : 'success'}
+      >
+        {RUN_LABEL[runStatus]}
       </GradientButton>
 
       <IconButton

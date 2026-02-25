@@ -8,6 +8,7 @@ import { workflowExecutionStore } from '@/stores/workflowExecutionStore'
 import { workflowStore } from '@/stores/workflowStore'
 import { stepStreamStore } from '@/stores/stepStreamStore'
 import { activityStore } from '@/stores/activity'
+import { agentTraceStore } from '@/stores/agentTraceStore'
 
 function WsStoreRouter() {
   const { subscribe } = useWebSocket()
@@ -21,6 +22,7 @@ function WsStoreRouter() {
       subscribe(WS_TOPIC.WORKFLOW, workflowExecutionStore.handleWsEvent),
       subscribe(WS_TOPIC.WORKFLOW, workflowStore.handleWsEvent),
       subscribe(WS_TOPIC.WORKFLOW, stepStreamStore.handleWsEvent),
+      subscribe(WS_TOPIC.WORKFLOW, agentTraceStore.handleWsEvent),
       // Flight recorder — receives ALL topics
       subscribe(WS_TOPIC.SESSION, activityStore.handleWsEvent),
       subscribe(WS_TOPIC.ROOM, activityStore.handleWsEvent),

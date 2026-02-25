@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import type { Point } from '@/utils/geometry'
-import { boardStore, workflowStore, sidebarStore } from '@/stores'
+import { boardStore, workflowStore, sidebarStore, useStore } from '@/stores'
+import { useWorkflowRun } from '@/components/canvas/useWorkflowRun'
 import { useBoardTheme, useBoardSubmit, useBoardElements, useDispatchHistory, useActivityHistory } from './hooks'
 import { BoardContextMenu } from './BoardContextMenu'
 import type { MenuPosition } from './BoardContextMenu'
@@ -43,6 +44,14 @@ function Board({ workflowId }: BoardProps) {
   const { loading } = useBoardElements(workflowId, setElements)
   const { handleSubmit, isSubmitting, error, status } = useBoardSubmit(workflowId, elements)
   const history = useHistory(elements)
+
+  const steps = useStore(workflowStore.store, workflowStore.selectSteps)
+  const entryStep = useMemo(() => {
+    const inputStep = steps.find((s) => s.execution_mode === 'input')
+    if (inputStep) return inputStep
+    return steps.find((s) => s.execution_mode === 'context') ?? null
+  }, [steps])
+  const { status: runStatus, handleRun } = useWorkflowRun(entryStep?.prompt_template ?? '')
 
   useDispatchHistory(workflowId)
   useActivityHistory(workflowId)
@@ -281,6 +290,8 @@ function Board({ workflowId }: BoardProps) {
         isSubmitting={isSubmitting}
         status={status}
         error={error}
+        onRun={handleRun}
+        runStatus={runStatus}
         showDebug={showDebug}
         onToggleDebug={() => setShowDebug((v) => !v)}
       />
