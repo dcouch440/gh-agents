@@ -2,13 +2,11 @@ import { toArray, nmGet } from '../lib'
 import type { WorkflowState } from './types'
 import type { Workflow, WorkflowStep, WorkflowStepEdge, RosterAgent, RoomStepMember, StepQuestionState } from '@/types/workflow'
 import type { Document } from '@/types/document'
-import type { ConsistencyIssue } from '@/types/ws'
 import { STALE_THRESHOLD_MS } from './_store'
 
 const EMPTY_DOCS: Document[] = []
 const EMPTY_ROSTER: RosterAgent[] = []
 const EMPTY_ROOM_MEMBERS: RoomStepMember[] = []
-const EMPTY_ISSUES: ConsistencyIssue[] = []
 
 const selectAll = (s: WorkflowState): Workflow[] => toArray(s.items)
 
@@ -65,14 +63,6 @@ const selectDirty = (s: WorkflowState): boolean => s.dirty
 
 const selectDirtyStepIds = (s: WorkflowState): Set<string> => s.dirtyStepIds
 
-const selectIssuesByStep = (s: WorkflowState): Record<string, ConsistencyIssue[]> =>
-  s.issuesByStep
-
-const selectStepIssues =
-  (stepId: string) =>
-  (s: WorkflowState): ConsistencyIssue[] =>
-    s.issuesByStep[stepId] ?? EMPTY_ISSUES
-
 const selectRosterAgentById =
   (id: string) =>
   (s: WorkflowState): RosterAgent | null => {
@@ -118,8 +108,6 @@ export {
   selectError,
   selectDirty,
   selectDirtyStepIds,
-  selectIssuesByStep,
-  selectStepIssues,
   selectRosterAgentById,
   selectRoomMemberById,
   selectStepQuestionState,

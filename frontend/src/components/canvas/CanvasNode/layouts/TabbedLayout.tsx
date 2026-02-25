@@ -4,7 +4,6 @@ import Box from '@mui/material/Box'
 import InfoOutlined from '@mui/icons-material/InfoOutlined'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
 import OpenInFullOutlined from '@mui/icons-material/OpenInFullOutlined'
 import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -12,7 +11,6 @@ import AssignmentOutlined from '@mui/icons-material/AssignmentOutlined'
 import { useStore, shareStore, dispatchStore, workflowStore } from '@/stores'
 import { CanvasFormNode } from '../../CanvasFormNode'
 import { CanvasHandle } from '../../CanvasHandle'
-import { NOTES_ACCENT } from '../../constants'
 import { HighlightMode } from '../../canvasKinds'
 import { ProtocolBadge } from '../../ProtocolBadge'
 import { useEnterFocusMode } from '../../useEnterFocusMode'
@@ -21,7 +19,6 @@ import { NodeHeader, ExecutionStatusBadge } from '../../execution'
 import { SharePickerPanel } from '../../SharePickerPanel'
 import { Archetype, ARCHETYPE_CONFIGS, AGENT_CONSTRAINTS } from '../registry'
 import { useDynamicNodeExecution } from '../hooks'
-import { useStepStoreData } from '../hooks'
 import { buildStepTabs } from '../tabs/buildStepTabs'
 import { AgentStreamTab } from '../tabs/AgentStreamTab'
 import { AgentInfoTab } from '../tabs/AgentInfoTab'
@@ -49,7 +46,6 @@ function TabbedLayout({ nodeId, data, selected, accentColor, highlightMode }: Ta
   const protocolStepId = data.protocolStepId
   const { isExecuting, resolvedExecStatus, agentSourceStatus, stepExecStatus } =
     useDynamicNodeExecution(nodeId, isAgent, rosterAgentId, protocolStepId)
-  const { stepIssues } = useStepStoreData(nodeId)
   const activeDispatch = useStore(dispatchStore.store, dispatchStore.selectActiveForStep(nodeId))
   const questionState = useStore(workflowStore.store, workflowStore.selectStepQuestionState(nodeId))
 
@@ -128,22 +124,6 @@ function TabbedLayout({ nodeId, data, selected, accentColor, highlightMode }: Ta
     <ProtocolBadge color={DISPATCH_COLOR} label="Dispatching..." animated />
   ) : questionState?.question_text ? (
     <ProtocolBadge color={QUESTION_COLOR} label="Has Question" animated />
-  ) : stepIssues.length > 0 ? (
-    <Tooltip
-      title={
-        <Box sx={{ py: 0.5 }}>
-          {stepIssues.map((issue, i) => (
-            <Typography key={i} sx={{ fontSize: 12, lineHeight: 1.4 }}>{issue.description}</Typography>
-          ))}
-        </Box>
-      }
-      arrow
-      placement="top"
-    >
-      <span>
-        <ProtocolBadge color={NOTES_ACCENT} label={`${stepIssues.length} Issue${stepIssues.length > 1 ? 's' : ''}`} animated />
-      </span>
-    </Tooltip>
   ) : data.variant !== 'blank' ? (
     <ProtocolBadge color={accentColor} label={config.label} animated />
   ) : undefined

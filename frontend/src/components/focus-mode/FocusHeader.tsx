@@ -1,5 +1,4 @@
 import Box from '@mui/material/Box'
-import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import { useTheme } from '@mui/material/styles'
 import { ProtocolBadge } from '@/components/canvas/ProtocolBadge'
@@ -7,21 +6,16 @@ import { Archetype, ARCHETYPE_CONFIGS } from '@/components/canvas/CanvasNode/reg
 import type { Archetype as ArchetypeType } from '@/components/canvas/CanvasNode/registry'
 import { FOCUS_MODE } from '@/constants'
 
-const ISSUE_COLOR = '#f85149'
-
 type FocusHeaderProps = {
   name: string
   archetype: ArchetypeType
   subtitle: string | null
-  issueCount?: number
-  issueDescriptions?: string[]
 }
 
-function FocusHeader({ name, archetype, subtitle, issueCount, issueDescriptions }: FocusHeaderProps) {
+function FocusHeader({ name, archetype, subtitle }: FocusHeaderProps) {
   const theme = useTheme()
   const config = ARCHETYPE_CONFIGS[archetype]
   const IconComponent = config.icon
-  const hasIssues = issueCount !== undefined && issueCount > 0
 
   return (
     <Box
@@ -86,29 +80,7 @@ function FocusHeader({ name, archetype, subtitle, issueCount, issueDescriptions 
         </Typography>
       </Box>
 
-      {hasIssues ? (
-        <Tooltip
-          title={
-            <Box sx={{ py: 0.5 }}>
-              {(issueDescriptions ?? []).map((desc, i) => (
-                <Typography key={i} sx={{ fontSize: 12, lineHeight: 1.4 }}>
-                  {desc}
-                </Typography>
-              ))}
-            </Box>
-          }
-          arrow
-          placement="bottom"
-        >
-          <span>
-            <ProtocolBadge
-              color={ISSUE_COLOR}
-              label={`${issueCount} Issue${issueCount > 1 ? 's' : ''}`}
-              animated
-            />
-          </span>
-        </Tooltip>
-      ) : archetype !== Archetype.BLANK ? (
+      {archetype !== Archetype.BLANK ? (
         <ProtocolBadge color={config.color} label={config.label} animated />
       ) : null}
     </Box>

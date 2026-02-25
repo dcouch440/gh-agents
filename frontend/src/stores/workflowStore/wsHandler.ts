@@ -1,8 +1,7 @@
 import { nmSet } from '../lib'
-import { Collections } from '@/utils/collections'
 import { api } from '@/api'
 import { WORKFLOW_EVENT } from '@/types/ws'
-import type { WsWireMessage, StepConfigUpdatedData, RosterChangedData, RoomMembersChangedData, PlanUpdatedData, ConsistencyIssuesData } from '@/types/ws'
+import type { WsWireMessage, StepConfigUpdatedData, RosterChangedData, RoomMembersChangedData, PlanUpdatedData } from '@/types/ws'
 import { store, getActiveId } from './_store'
 import { fetchRoster, fetchRoomStepMembers } from './roster'
 
@@ -53,13 +52,6 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         store.setState((s) => ({
           planByStep: { ...s.planByStep, [d.step_id]: d.content },
         }))
-        break
-      }
-      case WORKFLOW_EVENT.CONSISTENCY_ISSUES: {
-        const d = msg.data as ConsistencyIssuesData
-        if (d.workflow_id !== activeId) break
-        const grouped = Collections.groupBy(d.issues, (issue) => issue.step_id)
-        store.setState({ issuesByStep: Object.fromEntries(grouped) })
         break
       }
     }
