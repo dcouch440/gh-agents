@@ -32,7 +32,7 @@ const computeBindingAnchor = (box: BoxElement, cursor: Point): AnchorPoint => {
   }
 
   const ratio = ratioAlongSide(box, side, cursor)
-  return { side, ratio: Geometry.clamp(ratio, 0.1, 0.9) }
+  return { side, ratio: Geometry.clamp(ratio, BOARD.ANCHOR_CLAMP_MIN, BOARD.ANCHOR_CLAMP_MAX) }
 }
 
 /**
@@ -71,4 +71,4 @@ const ratioAlongSide = (box: BoxElement, side: Side, point: Point): number => {
   }
 }
 
-export { applyBindingGap, computeBindingAnchor, resolveAnchorWithGap }
+export { applyBindingGap, computeBindingAnchor, ratioAlongSide, resolveAnchorWithGap }

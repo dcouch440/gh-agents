@@ -5,7 +5,7 @@
 // Every function accepts a BoardElements and returns a new one. No side effects.
 // Map/Set are rebuilt via new Map(existing) to preserve immutability.
 
-import type { AnchorPoint, ArrowElement, BoardElements, BoxElement } from './types'
+import type { ArrowElement, BoardElements, BoxElement } from './types'
 
 // ── Box mutations ──────────────────────────────────────────────────────────
 
@@ -76,20 +76,6 @@ const bringToFront = (state: BoardElements, boxId: string): BoardElements => {
   return { ...state, boxOrder }
 }
 
-/**
- * Batch move multiple boxes by deltas. Used for multi-select drag.
- */
-const moveBoxes = (state: BoardElements, deltas: ReadonlyMap<string, { dx: number; dy: number }>): BoardElements => {
-  const boxes = new Map(state.boxes)
-  for (const [boxId, delta] of deltas) {
-    const existing = boxes.get(boxId)
-    if (existing !== undefined) {
-      boxes.set(boxId, { ...existing, x: existing.x + delta.dx, y: existing.y + delta.dy })
-    }
-  }
-  return { ...state, boxes }
-}
-
 // ── Arrow mutations ────────────────────────────────────────────────────────
 
 const addArrow = (state: BoardElements, arrow: ArrowElement): BoardElements => {
@@ -101,20 +87,6 @@ const addArrow = (state: BoardElements, arrow: ArrowElement): BoardElements => {
 const removeArrow = (state: BoardElements, arrowId: string): BoardElements => {
   const arrows = new Map(state.arrows)
   arrows.delete(arrowId)
-  return { ...state, arrows }
-}
-
-const updateArrowAnchors = (
-  state: BoardElements,
-  arrowId: string,
-  sourceAnchor: AnchorPoint,
-  targetAnchor: AnchorPoint,
-): BoardElements => {
-  const existing = state.arrows.get(arrowId)
-  if (existing === undefined) return state
-
-  const arrows = new Map(state.arrows)
-  arrows.set(arrowId, { ...existing, sourceAnchor, targetAnchor })
   return { ...state, arrows }
 }
 
@@ -148,11 +120,8 @@ export {
   addArrow,
   addBox,
   bringToFront,
-  moveBoxes,
-  removeArrow,
   removeBox,
   removeElements,
-  updateArrowAnchors,
   updateBoxPosition,
   updateBoxSize,
   updateBoxText,

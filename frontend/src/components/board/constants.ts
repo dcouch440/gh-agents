@@ -39,8 +39,18 @@ const BOARD = {
   MAX_ZOOM: 2.0,
   ZOOM_SPEED: 0.001,
 
+  // ── Anchor clamping ─────────────────────────────────────────────────────
+  /** Min ratio along a side for arrow anchor (avoids corners). */
+  ANCHOR_CLAMP_MIN: 0.1,
+  /** Max ratio along a side for arrow anchor (avoids corners). */
+  ANCHOR_CLAMP_MAX: 0.9,
+
   // ── Snap & alignment ────────────────────────────────────────────────────
   SNAP_MAGNETIC_THRESHOLD: 16,
+
+  // ── Zoom ───────────────────────────────────────────────────────────────
+  /** Zoom step multiplier for toolbar zoom in/out buttons. */
+  ZOOM_BUTTON_STEP: 1.2,
 
   // ── History ──────────────────────────────────────────────────────────────
   HISTORY_MAX_DEPTH: 100,

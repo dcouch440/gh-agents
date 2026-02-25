@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo } from 'react'
+import { useRef, useEffect } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import { useStore } from '@/stores/lib'
@@ -14,13 +14,8 @@ function ActivityFeed() {
   const scrollRef = useRef<HTMLDivElement>(null)
   const isAutoScrolling = useRef(true)
 
-  // Reference time = first entry's receivedAt, or now
-  const referenceMs = useMemo(
-    () => (entries.length > 0 ? entries[0]!.receivedAt : Date.now()),
-    // Only recompute when the first entry appears
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [entries.length > 0],
-  )
+  // Reference time = first entry's receivedAt, or 0 (only used when entries exist)
+  const referenceMs = entries.length > 0 ? entries[0]!.receivedAt : 0
 
   // Auto-scroll to bottom when new entries arrive
   useEffect(() => {

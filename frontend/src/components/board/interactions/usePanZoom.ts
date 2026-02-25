@@ -56,14 +56,14 @@ const usePanZoom = (
   const zoomIn = useCallback(() => {
     setViewport((v) => ({
       ...v,
-      zoom: Geometry.clamp(v.zoom * 1.2, BOARD.MIN_ZOOM, BOARD.MAX_ZOOM),
+      zoom: Geometry.clamp(v.zoom * BOARD.ZOOM_BUTTON_STEP, BOARD.MIN_ZOOM, BOARD.MAX_ZOOM),
     }))
   }, [setViewport])
 
   const zoomOut = useCallback(() => {
     setViewport((v) => ({
       ...v,
-      zoom: Geometry.clamp(v.zoom / 1.2, BOARD.MIN_ZOOM, BOARD.MAX_ZOOM),
+      zoom: Geometry.clamp(v.zoom / BOARD.ZOOM_BUTTON_STEP, BOARD.MIN_ZOOM, BOARD.MAX_ZOOM),
     }))
   }, [setViewport])
 

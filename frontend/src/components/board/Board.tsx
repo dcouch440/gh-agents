@@ -11,8 +11,9 @@ import { Canvas2D } from './canvas'
 import { Toolbar } from './toolbar'
 import { useHistory } from './history'
 import { useArrowDraw, useDrag, useKeyboard, usePanZoom, useResize, useSelection, EMPTY_SELECTION } from './interactions'
+import { BOARD } from './constants'
 import type { ActiveTool, AnchorPoint, BoardElements, DrawingArrow, InteractionMode, ResizeHandle, SelectionState, ViewportState } from './elements'
-import { addBox, createBox, emptyBoard, hitTest, removeElements, screenToCanvas, updateBoxText } from './elements'
+import { addBox, createBox, emptyBoard, hitTest, removeElements, screenToCanvas, selectAllIds, updateBoxText } from './elements'
 
 type BoardProps = {
   readonly workflowId: string
@@ -76,7 +77,7 @@ function Board({ workflowId }: BoardProps) {
     // Box tool: create a new box at click position
     if (activeTool === 'box') {
       history.push(elements)
-      const box = createBox(canvas.x - 100, canvas.y - 24)
+      const box = createBox(canvas.x - BOARD.DEFAULT_BOX_WIDTH / 2, canvas.y - BOARD.DEFAULT_BOX_HEIGHT / 2)
       setElements((s) => addBox(s, box))
       setInteraction({ type: 'editing', boxId: box.id })
       sel.selectElement(box.id, false)
@@ -128,7 +129,7 @@ function Board({ workflowId }: BoardProps) {
 
     // Create new box at double-click position
     history.push(elements)
-    const box = createBox(canvas.x - 100, canvas.y - 24)
+    const box = createBox(canvas.x - BOARD.DEFAULT_BOX_WIDTH / 2, canvas.y - BOARD.DEFAULT_BOX_HEIGHT / 2)
     setElements((s) => addBox(s, box))
     setInteraction({ type: 'editing', boxId: box.id })
     sel.selectElement(box.id, false)
@@ -179,14 +180,11 @@ function Board({ workflowId }: BoardProps) {
       ? selection.selectedIds
       : new Set([elementId])
     setElements((s) => removeElements(s, ids))
-    setSelection(() => ({ selectedIds: new Set(), marquee: null }))
+    setSelection(() => EMPTY_SELECTION)
   }, [contextMenu, elements, history, selection.selectedIds])
 
   const handleContextMenuSelectAll = useCallback(() => {
-    const allIds = new Set<string>()
-    for (const id of elements.boxes.keys()) allIds.add(id)
-    for (const id of elements.arrows.keys()) allIds.add(id)
-    setSelection(() => ({ selectedIds: allIds, marquee: null }))
+    setSelection(() => ({ selectedIds: selectAllIds(elements), marquee: null }))
   }, [elements])
 
   const closeContextMenu = useCallback(() => {

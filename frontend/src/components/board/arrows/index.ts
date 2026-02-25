@@ -1,4 +1,4 @@
-export { applyBindingGap, computeBindingAnchor, resolveAnchorWithGap } from './binding'
+export { applyBindingGap, computeBindingAnchor, ratioAlongSide, resolveAnchorWithGap } from './binding'
 export {
   computeArrowPath,
   computeArrowPathPoints,

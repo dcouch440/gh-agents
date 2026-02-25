@@ -3,9 +3,8 @@
 // ============================================================================
 
 import { Geometry } from '@/utils/geometry'
-import type { Point, Rect, Side } from '@/utils/geometry'
-import { BOARD } from '../constants'
-import type { AnchorPoint, BoardElements, BoxElement } from './types'
+import type { Point, Rect } from '@/utils/geometry'
+import type { BoardElements } from './types'
 
 /**
  * Returns the element ID under the given canvas point, or null.
@@ -36,47 +35,6 @@ const hitTestBox = (state: BoardElements, point: Point): string | null => {
 }
 
 /**
- * Determine the best anchor point on a box for an arrow binding.
- *
- * Finds the nearest side and computes the ratio along it. If the
- * pointer is within `ARROW_SNAP_THRESHOLD` of the side midpoint,
- * snaps to ratio 0.5 (Excalidraw-style magnetic midpoint snapping).
- *
- * Ratio is clamped to [0.1, 0.9] to avoid corners.
- */
-const hitTestBoxAnchor = (box: BoxElement, point: Point): AnchorPoint => {
-  const side = Geometry.nearestSide(box, point)
-  const midpoint = Geometry.pointAlongSide(box, side, 0.5)
-  const distToMid = Geometry.distanceBetweenPoints(point, midpoint)
-
-  if (distToMid <= BOARD.ARROW_SNAP_THRESHOLD) {
-    return { side, ratio: 0.5 }
-  }
-
-  const ratio = computeRatioAlongSide(box, side, point)
-  return { side, ratio: Geometry.clamp(ratio, 0.1, 0.9) }
-}
-
-/**
- * Returns the best anchor for an arrow arriving at a target box from
- * a given source point. Picks the side facing the source.
- */
-const computeTargetAnchor = (box: BoxElement, sourcePoint: Point): AnchorPoint => {
-  const center = Geometry.rectCenter(box)
-  const dx = sourcePoint.x - center.x
-  const dy = sourcePoint.y - center.y
-
-  let side: Side
-  if (Math.abs(dx) > Math.abs(dy)) {
-    side = dx > 0 ? 'right' : 'left'
-  } else {
-    side = dy > 0 ? 'bottom' : 'top'
-  }
-
-  return { side, ratio: 0.5 }
-}
-
-/**
  * Returns all element IDs whose bounding boxes intersect a selection rectangle.
  */
 const hitTestRect = (state: BoardElements, rect: Rect): string[] => {
@@ -89,8 +47,9 @@ const hitTestRect = (state: BoardElements, rect: Rect): string[] => {
   }
 
   // Include arrows whose source and target are both in the selection
+  const idSet = new Set(ids)
   for (const [arrowId, arrow] of state.arrows) {
-    if (ids.includes(arrow.sourceBoxId) && ids.includes(arrow.targetBoxId)) {
+    if (idSet.has(arrow.sourceBoxId) && idSet.has(arrow.targetBoxId)) {
       ids.push(arrowId)
     }
   }
@@ -99,32 +58,13 @@ const hitTestRect = (state: BoardElements, rect: Rect): string[] => {
 }
 
 /**
- * Check if a point is near a box edge (within handle hover distance).
- * Returns the side if within range, null otherwise.
+ * Returns a Set of all element IDs (boxes + arrows).
  */
-const hitTestBoxEdge = (box: BoxElement, point: Point, threshold: number): Side | null => {
-  const sides: readonly Side[] = ['top', 'right', 'bottom', 'left']
-  for (let i = 0; i < sides.length; i++) {
-    const side = sides[i]!
-    const mid = Geometry.pointAlongSide(box, side, 0.5)
-    if (Geometry.distanceBetweenPoints(point, mid) <= threshold) {
-      return side
-    }
-  }
-  return null
+const selectAllIds = (state: BoardElements): Set<string> => {
+  const ids = new Set<string>()
+  for (const id of state.boxes.keys()) ids.add(id)
+  for (const id of state.arrows.keys()) ids.add(id)
+  return ids
 }
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-const computeRatioAlongSide = (box: BoxElement, side: Side, point: Point): number => {
-  switch (side) {
-    case 'top':
-    case 'bottom':
-      return (point.x - box.x) / box.width
-    case 'left':
-    case 'right':
-      return (point.y - box.y) / box.height
-  }
-}
-
-export { computeTargetAnchor, hitTest, hitTestBox, hitTestBoxAnchor, hitTestBoxEdge, hitTestRect }
+export { hitTest, hitTestBox, hitTestRect, selectAllIds }

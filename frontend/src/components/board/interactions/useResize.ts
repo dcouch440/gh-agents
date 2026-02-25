@@ -6,9 +6,7 @@ import { useCallback } from 'react'
 import { BOARD } from '../constants'
 import type { BoardElements, InteractionMode, ResizeHandle, ViewportState } from '../elements'
 import { screenToCanvas, updateBoxPosition, updateBoxSize } from '../elements'
-
-type SetElements = (fn: (s: BoardElements) => BoardElements) => void
-type SetInteraction = (mode: InteractionMode) => void
+import type { SetElements, SetInteraction } from './types'
 
 const useResize = (
   setElements: SetElements,

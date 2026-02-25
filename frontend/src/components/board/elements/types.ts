@@ -35,8 +35,6 @@ type ArrowElement = {
   readonly targetAnchor: AnchorPoint
 }
 
-type CanvasElement = BoxElement | ArrowElement
-
 // ── Board State ────────────────────────────────────────────────────────────
 
 type BoardElements = {
@@ -110,7 +108,6 @@ export type {
   BoxElement,
   ArrowElement,
   AnchorPoint,
-  CanvasElement,
   BoardElements,
   SelectionState,
   MarqueeRect,

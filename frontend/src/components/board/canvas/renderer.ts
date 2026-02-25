@@ -306,37 +306,6 @@ const drawHandle = (
   ctx.stroke()
 }
 
-/**
- * Draw resize handles — 4 corner circles only (clean, Excalidraw-style).
- */
-const drawResizeHandles = (
-  ctx: CanvasRenderingContext2D,
-  box: BoxElement,
-  theme: DrawTheme,
-): void => {
-  const radius = 5
-  const { x, y, width: w, height: h } = box
-
-  const corners = [
-    { px: x, py: y },         // nw
-    { px: x + w, py: y },     // ne
-    { px: x, py: y + h },     // sw
-    { px: x + w, py: y + h }, // se
-  ]
-
-  for (let i = 0; i < corners.length; i++) {
-    const { px, py } = corners[i]!
-
-    ctx.beginPath()
-    ctx.arc(px, py, radius, 0, Math.PI * 2)
-    ctx.fillStyle = theme.surfaceBg
-    ctx.fill()
-    ctx.strokeStyle = theme.accentColor
-    ctx.lineWidth = 1.5
-    ctx.stroke()
-  }
-}
-
 // ── Selection ─────────────────────────────────────────────────────────────
 
 /**
@@ -368,7 +337,6 @@ export {
   drawDrawingArrow,
   drawGrid,
   drawHandle,
-  drawResizeHandles,
   drawSelectionRect,
 }
 export type { DrawTheme }

@@ -105,4 +105,4 @@ const getMeasurer = (): HTMLDivElement => {
   return el
 }
 
-export { computeBoxSize, estimateBoxSize, resolveAnchor }
+export { computeBoxSize, resolveAnchor }

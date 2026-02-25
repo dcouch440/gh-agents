@@ -1,16 +1,13 @@
-export { computeBoxSize, estimateBoxSize, resolveAnchor } from './bounds'
+export { computeBoxSize, resolveAnchor } from './bounds'
 export { deserializeFromExcalidraw } from './deserialize'
-export { createArrow, createArrowFromSaved, createBox, createBoxFromSaved, emptyBoard } from './factory'
-export { computeTargetAnchor, hitTest, hitTestBox, hitTestBoxAnchor, hitTestBoxEdge, hitTestRect } from './hitTest'
+export { createArrow, createBox, emptyBoard } from './factory'
+export { hitTest, hitTestBox, hitTestRect, selectAllIds } from './hitTest'
 export {
   addArrow,
   addBox,
   bringToFront,
-  moveBoxes,
-  removeArrow,
   removeBox,
   removeElements,
-  updateArrowAnchors,
   updateBoxPosition,
   updateBoxSize,
   updateBoxText,
@@ -22,7 +19,6 @@ export type {
   ArrowElement,
   BoardElements,
   BoxElement,
-  CanvasElement,
   DrawingArrow,
   InteractionMode,
   MarqueeRect,

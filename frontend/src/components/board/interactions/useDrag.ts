@@ -7,9 +7,7 @@ import { Geometry } from '@/utils/geometry'
 import { BOARD } from '../constants'
 import type { BoardElements, InteractionMode, ViewportState } from '../elements'
 import { screenToCanvas, updateBoxPosition } from '../elements'
-
-type SetElements = (fn: (s: BoardElements) => BoardElements) => void
-type SetInteraction = (mode: InteractionMode) => void
+import type { SetElements, SetInteraction } from './types'
 
 const useDrag = (
   setElements: SetElements,
