@@ -1,0 +1,302 @@
+// ============================================================================
+// Canvas Renderer — Pure Drawing Functions
+// ============================================================================
+//
+// All functions are stateless, pure, and accept CanvasRenderingContext2D.
+// No React, no hooks, no side effects. The render pipeline calls these
+// in order to paint the board onto a single <canvas> element.
+
+import { BOARD } from '../constants'
+import type { ArrowPath } from '../arrows/routing'
+import type { BoxElement, MarqueeRect, ViewportState } from '../elements'
+import { wrapText } from './textMeasure'
+
+type DrawTheme = {
+  readonly canvasBg: string
+  readonly gridDotColor: string
+  readonly connectorColor: string
+  readonly accentColor: string
+  readonly surfaceBg: string
+  readonly textColor: string
+}
+
+// ── Grid ──────────────────────────────────────────────────────────────────
+
+/**
+ * Draw dot grid, culling off-screen dots for performance.
+ */
+const drawGrid = (
+  ctx: CanvasRenderingContext2D,
+  viewport: ViewportState,
+  canvasWidth: number,
+  canvasHeight: number,
+  theme: DrawTheme,
+): void => {
+  const { zoom, panX, panY } = viewport
+  const gridSize = BOARD.GRID_SIZE
+
+  // Compute visible canvas-space bounds
+  const left = -panX / zoom
+  const top = -panY / zoom
+  const right = left + canvasWidth / zoom
+  const bottom = top + canvasHeight / zoom
+
+  // Snap to grid boundaries
+  const startX = Math.floor(left / gridSize) * gridSize
+  const startY = Math.floor(top / gridSize) * gridSize
+  const endX = Math.ceil(right / gridSize) * gridSize
+  const endY = Math.ceil(bottom / gridSize) * gridSize
+
+  ctx.fillStyle = theme.gridDotColor
+  const dotRadius = 1
+
+  for (let x = startX; x <= endX; x += gridSize) {
+    for (let y = startY; y <= endY; y += gridSize) {
+      ctx.fillRect(x - dotRadius, y - dotRadius, dotRadius * 2, dotRadius * 2)
+    }
+  }
+}
+
+// ── Box ───────────────────────────────────────────────────────────────────
+
+/**
+ * Draw a box with rounded rectangle border, background fill, and text.
+ * Skips text rendering when isEditing (textarea overlay handles it).
+ */
+const drawBox = (
+  ctx: CanvasRenderingContext2D,
+  box: BoxElement,
+  isSelected: boolean,
+  isEditing: boolean,
+  theme: DrawTheme,
+): void => {
+  const { x, y, width, height } = box
+  const r = BOARD.BOX_BORDER_RADIUS
+
+  // Background fill
+  ctx.fillStyle = theme.surfaceBg
+  ctx.beginPath()
+  ctx.roundRect(x, y, width, height, r)
+  ctx.fill()
+
+  // Border stroke
+  ctx.strokeStyle = isSelected ? theme.accentColor : theme.connectorColor
+  ctx.lineWidth = BOARD.BOX_BORDER_WIDTH
+  ctx.beginPath()
+  ctx.roundRect(x, y, width, height, r)
+  ctx.stroke()
+
+  // Editing glow
+  if (isEditing) {
+    ctx.save()
+    ctx.strokeStyle = theme.accentColor + '40' // 25% alpha
+    ctx.lineWidth = 4
+    ctx.beginPath()
+    ctx.roundRect(x, y, width, height, r)
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  // Text (skip when editing — textarea overlay is visible)
+  if (!isEditing && box.text.length > 0) {
+    const maxTextWidth = width - BOARD.BOX_PADDING_X * 2
+    const lineHeight = BOARD.FONT_SIZE * BOARD.LINE_HEIGHT
+
+    ctx.save()
+    ctx.font = `${BOARD.FONT_SIZE}px ${BOARD.FONT_FAMILY}`
+    ctx.fillStyle = theme.textColor
+    ctx.textBaseline = 'top'
+
+    const lines = wrapText(ctx, box.text, maxTextWidth, lineHeight)
+    const textX = x + BOARD.BOX_PADDING_X
+    const textY = y + BOARD.BOX_PADDING_Y
+
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i]!.text, textX, textY + lines[i]!.y)
+    }
+
+    ctx.restore()
+  }
+}
+
+// ── Arrow ─────────────────────────────────────────────────────────────────
+
+/**
+ * Draw a smooth cubic bezier arrow with arrowhead.
+ */
+const drawArrow = (
+  ctx: CanvasRenderingContext2D,
+  path: ArrowPath,
+  isSelected: boolean,
+  theme: DrawTheme,
+): void => {
+  const color = isSelected ? theme.accentColor : theme.connectorColor
+
+  ctx.save()
+  ctx.strokeStyle = color
+  ctx.lineWidth = BOARD.ARROW_STROKE_WIDTH
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+
+  ctx.beginPath()
+  ctx.moveTo(path.start.x, path.start.y)
+  ctx.bezierCurveTo(path.cp1.x, path.cp1.y, path.cp2.x, path.cp2.y, path.end.x, path.end.y)
+  ctx.stroke()
+
+  // Compute arrowhead angle from curve tangent at endpoint
+  const angle = Math.atan2(path.end.y - path.cp2.y, path.end.x - path.cp2.x)
+  drawArrowhead(ctx, path.end, angle, BOARD.ARROW_HEAD_SIZE, color)
+
+  ctx.restore()
+}
+
+/**
+ * Draw a dashed arrow preview while the user is drawing.
+ */
+const drawDrawingArrow = (
+  ctx: CanvasRenderingContext2D,
+  path: ArrowPath,
+  color: string,
+): void => {
+  ctx.save()
+  ctx.strokeStyle = color
+  ctx.lineWidth = BOARD.ARROW_STROKE_WIDTH
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  ctx.setLineDash([6, 4])
+
+  ctx.beginPath()
+  ctx.moveTo(path.start.x, path.start.y)
+  ctx.bezierCurveTo(path.cp1.x, path.cp1.y, path.cp2.x, path.cp2.y, path.end.x, path.end.y)
+  ctx.stroke()
+
+  ctx.setLineDash([])
+
+  const angle = Math.atan2(path.end.y - path.cp2.y, path.end.x - path.cp2.x)
+  drawArrowhead(ctx, path.end, angle, BOARD.ARROW_HEAD_SIZE, color)
+
+  ctx.restore()
+}
+
+/**
+ * Draw an arrowhead (two lines from tip going backward at ±30°).
+ */
+const drawArrowhead = (
+  ctx: CanvasRenderingContext2D,
+  tip: { x: number; y: number },
+  angle: number,
+  size: number,
+  color: string,
+): void => {
+  const spread = Math.PI / 6 // 30 degrees
+
+  ctx.strokeStyle = color
+  ctx.lineWidth = BOARD.ARROW_STROKE_WIDTH
+  ctx.lineCap = 'round'
+
+  ctx.beginPath()
+  ctx.moveTo(
+    tip.x - size * Math.cos(angle - spread),
+    tip.y - size * Math.sin(angle - spread),
+  )
+  ctx.lineTo(tip.x, tip.y)
+  ctx.lineTo(
+    tip.x - size * Math.cos(angle + spread),
+    tip.y - size * Math.sin(angle + spread),
+  )
+  ctx.stroke()
+}
+
+// ── Handles ───────────────────────────────────────────────────────────────
+
+/**
+ * Draw a handle circle (for edge hover arrow binding).
+ */
+const drawHandle = (
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  theme: DrawTheme,
+): void => {
+  const radius = BOARD.HANDLE_SIZE / 2
+
+  ctx.beginPath()
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2)
+  ctx.fillStyle = theme.accentColor
+  ctx.fill()
+  ctx.strokeStyle = theme.surfaceBg
+  ctx.lineWidth = 2
+  ctx.stroke()
+}
+
+/**
+ * Draw resize handles (8 small squares at corners and edge midpoints).
+ */
+const drawResizeHandles = (
+  ctx: CanvasRenderingContext2D,
+  box: BoxElement,
+  theme: DrawTheme,
+): void => {
+  const s = 8 // handle size
+  const half = s / 2
+  const { x, y, width: w, height: h } = box
+
+  const positions = [
+    // Corners
+    { px: x, py: y },         // nw
+    { px: x + w, py: y },     // ne
+    { px: x, py: y + h },     // sw
+    { px: x + w, py: y + h }, // se
+    // Edge midpoints
+    { px: x + w / 2, py: y },         // n
+    { px: x + w / 2, py: y + h },     // s
+    { px: x + w, py: y + h / 2 },     // e
+    { px: x, py: y + h / 2 },         // w
+  ]
+
+  for (let i = 0; i < positions.length; i++) {
+    const { px, py } = positions[i]!
+
+    ctx.fillStyle = theme.surfaceBg
+    ctx.fillRect(px - half, py - half, s, s)
+
+    ctx.strokeStyle = theme.accentColor
+    ctx.lineWidth = 1.5
+    ctx.strokeRect(px - half, py - half, s, s)
+  }
+}
+
+// ── Selection ─────────────────────────────────────────────────────────────
+
+/**
+ * Draw a selection marquee rectangle (dashed border + translucent fill).
+ */
+const drawSelectionRect = (
+  ctx: CanvasRenderingContext2D,
+  rect: MarqueeRect,
+  accentColor: string,
+): void => {
+  ctx.save()
+
+  ctx.fillStyle = accentColor + '10' // ~6% alpha
+  ctx.fillRect(rect.x, rect.y, rect.width, rect.height)
+
+  ctx.strokeStyle = accentColor
+  ctx.lineWidth = 1
+  ctx.setLineDash([4, 4])
+  ctx.strokeRect(rect.x, rect.y, rect.width, rect.height)
+
+  ctx.setLineDash([])
+  ctx.restore()
+}
+
+export {
+  drawArrow,
+  drawBox,
+  drawDrawingArrow,
+  drawGrid,
+  drawHandle,
+  drawResizeHandles,
+  drawSelectionRect,
+}
+export type { DrawTheme }
