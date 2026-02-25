@@ -83,10 +83,20 @@ function Canvas2D({
   const [edgeHover, setEdgeHover] = useState<EdgeHover | null>(null)
   const [cursor, setCursor] = useState('default')
   const [fontGeneration, setFontGeneration] = useState(0)
+  const renderRef = useRef<() => void>(() => {})
 
   const theme: DrawTheme = useMemo(() => (
     { canvasBg, gridDotColor, connectorColor, strokeColor, accentColor, surfaceBg, textColor }
   ), [canvasBg, gridDotColor, connectorColor, strokeColor, accentColor, surfaceBg, textColor])
+
+  // Keep renderRef pointing at the latest render closure so the
+  // ResizeObserver can repaint synchronously with current state.
+  renderRef.current = () => {
+    const cvs = canvasRef.current
+    if (cvs === null) return
+    const { width, height } = sizeRef.current
+    renderBoard(cvs, width, height, elements, selection, editingBoxId, viewport, drawingArrow, edgeHover, theme)
+  }
 
   // ── Re-render when fonts finish loading (Virgil woff2) ──────────────
   // Guard: jsdom test environment doesn't implement document.fonts
@@ -114,6 +124,7 @@ function Canvas2D({
       canvas.height = rect.height * dpr
       canvas.style.width = `${rect.width}px`
       canvas.style.height = `${rect.height}px`
+      renderRef.current()
     }
 
     const observer = new ResizeObserver(updateSize)
@@ -125,10 +136,7 @@ function Canvas2D({
 
   // ── Canvas Render Pipeline ────────────────────────────────────────────
   useEffect(() => {
-    const cvs = canvasRef.current
-    if (cvs === null) return
-    const { width, height } = sizeRef.current
-    renderBoard(cvs, width, height, elements, selection, editingBoxId, viewport, drawingArrow, edgeHover, theme)
+    renderRef.current()
   }, [elements, selection, editingBoxId, viewport, drawingArrow, edgeHover, theme, fontGeneration])
 
   // ── Focus textarea when editing starts ────────────────────────────────
