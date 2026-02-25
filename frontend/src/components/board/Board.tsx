@@ -94,7 +94,15 @@ function Board({ workflowId }: BoardProps) {
     if (hitId !== null) {
       sel.selectElement(hitId, e.shiftKey)
     } else {
+      // Click on empty canvas — start panning
       sel.clearSelection()
+      setInteraction({
+        type: 'panning',
+        startX: e.clientX,
+        startY: e.clientY,
+        startPanX: viewport.panX,
+        startPanY: viewport.panY,
+      })
     }
   }, [activeTool, createBoxAtPoint, elements, sel, setActiveTool, viewport])
 
@@ -105,8 +113,16 @@ function Board({ workflowId }: BoardProps) {
       arrowDraw.onArrowMove(e, interaction)
     } else if (interaction.type === 'resizing') {
       resize.onResizeMove(e, interaction)
+    } else if (interaction.type === 'panning') {
+      const dx = e.clientX - interaction.startX
+      const dy = e.clientY - interaction.startY
+      setViewport(() => ({
+        ...viewport,
+        panX: interaction.startPanX + dx,
+        panY: interaction.startPanY + dy,
+      }))
     }
-  }, [arrowDraw, drag, interaction, resize])
+  }, [arrowDraw, drag, interaction, resize, setViewport, viewport])
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
     if (interaction.type === 'dragging') {
@@ -115,6 +131,8 @@ function Board({ workflowId }: BoardProps) {
       arrowDraw.onArrowEnd(e, interaction, elements)
     } else if (interaction.type === 'resizing') {
       resize.onResizeEnd()
+    } else if (interaction.type === 'panning') {
+      setInteraction({ type: 'idle' })
     }
   }, [arrowDraw, drag, elements, interaction, resize])
 
@@ -208,6 +226,7 @@ function Board({ workflowId }: BoardProps) {
           elements={elements}
           selection={selection}
           editingBoxId={editingBoxId}
+          interaction={interaction}
           viewport={viewport}
           drawingArrow={drawingArrow}
           canvasBg={theme.canvasBg}

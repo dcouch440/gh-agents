@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BOARD } from '../constants'
-import type { AnchorPoint, BoardElements, DrawingArrow, EdgeHover, ResizeHandle, SelectionState, ViewportState } from '../elements'
+import type { AnchorPoint, BoardElements, DrawingArrow, EdgeHover, InteractionMode, ResizeHandle, SelectionState, ViewportState } from '../elements'
 import { detectEdgeHover, eventToCanvas, hitTestArrow, hitTestBox, hitTestResizeHandles, RESIZE_CURSORS } from '../elements'
 import { renderBoard } from './renderer'
 import type { DrawTheme } from './renderer'
@@ -21,6 +21,7 @@ type Canvas2DProps = {
   readonly elements: BoardElements
   readonly selection: SelectionState
   readonly editingBoxId: string | null
+  readonly interaction: InteractionMode
   readonly viewport: ViewportState
   readonly drawingArrow: DrawingArrow
   readonly canvasBg: string
@@ -51,6 +52,7 @@ function Canvas2D({
   elements,
   selection,
   editingBoxId,
+  interaction,
   viewport,
   drawingArrow,
   canvasBg,
@@ -145,6 +147,18 @@ function Canvas2D({
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
     onPointerMove(e)
 
+    // During panning, show grabbing cursor and skip hit testing
+    if (interaction.type === 'panning') {
+      setCursor('grabbing')
+      setEdgeHover(null)
+      return
+    }
+
+    // During active drag/resize/draw, skip hit testing
+    if (interaction.type === 'dragging' || interaction.type === 'resizing' || interaction.type === 'drawing-arrow') {
+      return
+    }
+
     const canvas = eventToCanvas(e, viewport)
 
     // Check resize handles first (for cursor)
@@ -171,7 +185,7 @@ function Canvas2D({
     // Check if over a box (for grab cursor)
     const overBox = hitTestBox(elements, canvas) !== null
     setCursor(overBox ? 'grab' : 'default')
-  }, [editingBoxId, elements, onPointerMove, selection.selectedIds, viewport])
+  }, [editingBoxId, elements, interaction.type, onPointerMove, selection.selectedIds, viewport])
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
     if (e.button !== 0) return
