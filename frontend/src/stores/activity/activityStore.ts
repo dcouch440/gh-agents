@@ -59,7 +59,12 @@ const selectByTopic =
   (s: ActivityState): ActivityEntry[] =>
     s.entries.filter((e) => e.event.type.startsWith(`${topic}:`))
 
-const ERROR_TYPES = new Set<ActivityEvent['type']>([ACTIVITY.WORKFLOW_STEP_FAILED, ACTIVITY.WORKFLOW_FAILED])
+const ERROR_TYPES = new Set<ActivityEvent['type']>([
+  ACTIVITY.WORKFLOW_STEP_FAILED,
+  ACTIVITY.WORKFLOW_FAILED,
+  ACTIVITY.DISPATCH_FAILED,
+  ACTIVITY.DISPATCH_STREAM_ERROR,
+])
 
 const selectErrors = (s: ActivityState): ActivityEntry[] => s.entries.filter((e) => ERROR_TYPES.has(e.event.type))
 

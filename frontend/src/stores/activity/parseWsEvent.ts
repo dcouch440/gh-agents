@@ -30,6 +30,15 @@ import type {
   SessionCreatedData,
   SessionUpdatedData,
   SessionDeletedData,
+  DispatchStartedData,
+  DispatchProgressData,
+  DispatchCompletedData,
+  DispatchFailedData,
+  DispatchCancelledData,
+  DispatchStreamTokenData,
+  DispatchStreamToolStartData,
+  DispatchStreamToolEndData,
+  DispatchStreamErrorData,
 } from '@/types/ws'
 import type { ActivityEvent } from '@/types/activity'
 
@@ -247,6 +256,42 @@ const parseSessionEvent = (msg: WsWireMessage): ActivityEvent | null => {
     case SESSION_EVENT.DELETED: {
       const d = msg.data as SessionDeletedData
       return { type: ACTIVITY.SESSION_DELETED, sessionId: d.session_id }
+    }
+    case SESSION_EVENT.DISPATCH_STARTED: {
+      const d = msg.data as DispatchStartedData
+      return { type: ACTIVITY.DISPATCH_STARTED, stepId: d.step_id, executionId: d.execution_id, instruction: d.instruction }
+    }
+    case SESSION_EVENT.DISPATCH_PROGRESS: {
+      const d = msg.data as DispatchProgressData
+      return { type: ACTIVITY.DISPATCH_PROGRESS, stepId: d.step_id, message: d.message }
+    }
+    case SESSION_EVENT.DISPATCH_COMPLETED: {
+      const d = msg.data as DispatchCompletedData
+      return { type: ACTIVITY.DISPATCH_COMPLETED, stepId: d.step_id, summary: d.summary }
+    }
+    case SESSION_EVENT.DISPATCH_FAILED: {
+      const d = msg.data as DispatchFailedData
+      return { type: ACTIVITY.DISPATCH_FAILED, stepId: d.step_id, error: d.error }
+    }
+    case SESSION_EVENT.DISPATCH_CANCELLED: {
+      const d = msg.data as DispatchCancelledData
+      return { type: ACTIVITY.DISPATCH_CANCELLED, stepId: d.step_id }
+    }
+    case SESSION_EVENT.DISPATCH_STREAM_TOKEN: {
+      const d = msg.data as DispatchStreamTokenData
+      return { type: ACTIVITY.DISPATCH_STREAM_TOKEN, stepId: d.step_id, content: d.content }
+    }
+    case SESSION_EVENT.DISPATCH_STREAM_TOOL_START: {
+      const d = msg.data as DispatchStreamToolStartData
+      return { type: ACTIVITY.DISPATCH_STREAM_TOOL_START, stepId: d.step_id, toolName: d.tool_name, toolId: d.tool_id }
+    }
+    case SESSION_EVENT.DISPATCH_STREAM_TOOL_END: {
+      const d = msg.data as DispatchStreamToolEndData
+      return { type: ACTIVITY.DISPATCH_STREAM_TOOL_END, stepId: d.step_id, toolName: d.tool_name, toolId: d.tool_id }
+    }
+    case SESSION_EVENT.DISPATCH_STREAM_ERROR: {
+      const d = msg.data as DispatchStreamErrorData
+      return { type: ACTIVITY.DISPATCH_STREAM_ERROR, stepId: d.step_id, error: d.error }
     }
     default:
       return null
