@@ -5,9 +5,9 @@ import type { CustomTokens } from './customTokens'
 // Theme identity
 // ---------------------------------------------------------------------------
 
-type ThemeId = 'linen' | 'midnight' | 'slate'
+type ThemeId = 'linen' | 'paper' | 'obsidian' | 'midnight' | 'slate'
 
-const THEME_IDS: readonly ThemeId[] = ['linen', 'midnight', 'slate'] as const
+const THEME_IDS: readonly ThemeId[] = ['linen', 'paper', 'obsidian', 'midnight', 'slate'] as const
 
 const DEFAULT_THEME_ID: ThemeId = 'linen'
 
@@ -344,6 +344,206 @@ const slateNodePalette: NodePalette = {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Obsidian — Pitch black + white strokes
+// ═══════════════════════════════════════════════════════════════════════════
+
+const obsidianPalette: PaletteOptions = {
+  mode: 'dark',
+  primary: { main: '#888888', light: '#aaaaaa', dark: '#666666', contrastText: '#000000' },
+  secondary: { main: '#999999', light: '#bbbbbb', dark: '#777777' },
+  background: { default: '#000000', paper: '#1a1a1a' },
+  text: { primary: '#ffffff', secondary: '#aaaaaa', disabled: '#666666' },
+  success: { main: '#4ade80', light: '#86efac', dark: '#22c55e' },
+  warning: { main: '#fbbf24', light: '#fcd34d', dark: '#f59e0b' },
+  error: { main: '#f87171', light: '#fca5a5', dark: '#ef4444' },
+  info: { main: '#888888', light: '#aaaaaa', dark: '#666666' },
+  divider: 'rgba(255, 255, 255, 0.12)',
+}
+
+const obsidianCustom: CustomTokens = {
+  chromeBg: '#0a0a0a',
+  cavityBg: '#000000',
+  bgHeader: '#1a1a1a',
+  bgEditor: '#0a0a0a',
+  bgPanel: '#111111',
+  borderHover: 'rgba(255, 255, 255, 0.20)',
+  textFaint: '#333333',
+  hoverOverlay: 'rgba(255, 255, 255, 0.06)',
+  separatorSubtle: 'rgba(255, 255, 255, 0.06)',
+  activeTint: 'rgba(136, 136, 136, 0.10)',
+  activeTintStrong: 'rgba(136, 136, 136, 0.16)',
+  activeGradient: 'linear-gradient(90deg, #888888, #aaaaaa)',
+  activeGradientVertical: 'linear-gradient(180deg, #888888, #aaaaaa)',
+  activeGlow: 'drop-shadow(0 0 4px rgba(136, 136, 136, 0.3))',
+  gridDotColor: 'rgba(255, 255, 255, 0.06)',
+  gridLineColor: 'rgba(255, 255, 255, 0.03)',
+  canvasVignette: 'rgba(0, 0, 0, 0.0)',
+  canvasGlow: 'transparent',
+  minimapBg: 'rgba(0, 0, 0, 0.9)',
+  minimapMask: 'rgba(0, 0, 0, 0.7)',
+  floatingPanelBg: 'rgba(10, 10, 10, 0.95)',
+  floatingPanelBorder: 'rgba(255, 255, 255, 0.12)',
+  chromeText: '#777777',
+  chromeTextActive: '#ffffff',
+  chromeTextHover: '#cccccc',
+  chromeActiveGlow: 'none',
+  chromeActiveBar: '#ffffff',
+  screenBg: '#0a0a0a',
+  screenBorder: '#333333',
+  screenFrost: 'rgba(0, 0, 0, 0.8)',
+  canvasBg: '#000000',
+  accent: '#888888',
+  accentBg: 'rgba(136, 136, 136, 0.10)',
+  accentRing: 'rgba(136, 136, 136, 0.30)',
+  userBarBg: 'rgba(136, 136, 136, 0.08)',
+  connectorColor: '#444444',
+  strokeColor: '#ffffff',
+  surfaceBg: '#000000',
+  elevatedBg: '#1a1a1a',
+  appBarBg: '#0a0a0a',
+}
+
+const obsidianShadows: Shadows = [
+  'none',
+  '0 1px 2px rgba(255, 255, 255, 0.04)',
+  '0 1px 3px rgba(255, 255, 255, 0.05)',
+  '0 2px 4px rgba(255, 255, 255, 0.05)',
+  '0 2px 6px rgba(255, 255, 255, 0.06)',
+  '0 3px 8px rgba(255, 255, 255, 0.06)',
+  '0 4px 10px rgba(255, 255, 255, 0.07)',
+  '0 4px 12px rgba(255, 255, 255, 0.07)',
+  '0 6px 14px rgba(255, 255, 255, 0.08)',
+  '0 6px 16px rgba(255, 255, 255, 0.08)',
+  '0 8px 18px rgba(255, 255, 255, 0.08)',
+  '0 8px 20px rgba(255, 255, 255, 0.09)',
+  '0 10px 22px rgba(255, 255, 255, 0.09)',
+  '0 10px 24px rgba(255, 255, 255, 0.09)',
+  '0 12px 26px rgba(255, 255, 255, 0.10)',
+  '0 12px 28px rgba(255, 255, 255, 0.10)',
+  '0 14px 30px rgba(255, 255, 255, 0.11)',
+  '0 14px 32px rgba(255, 255, 255, 0.11)',
+  '0 16px 34px rgba(255, 255, 255, 0.11)',
+  '0 16px 36px rgba(255, 255, 255, 0.11)',
+  '0 18px 38px rgba(255, 255, 255, 0.12)',
+  '0 18px 40px rgba(255, 255, 255, 0.12)',
+  '0 20px 42px rgba(255, 255, 255, 0.13)',
+  '0 20px 44px rgba(255, 255, 255, 0.13)',
+  '0 22px 46px rgba(255, 255, 255, 0.13)',
+]
+
+const obsidianNodePalette: NodePalette = {
+  workforce: '#888888',
+  manager: '#aaaaaa',
+  room: '#999999',
+  blank: '#666666',
+  agent: '#bbbbbb',
+  context: '#999999',
+  input: '#cccccc',
+  step: '#666666',
+  sub_workflow: '#999999',
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Paper — Pure white + black strokes
+// ═══════════════════════════════════════════════════════════════════════════
+
+const paperPalette: PaletteOptions = {
+  mode: 'light',
+  primary: { main: '#666666', light: '#888888', dark: '#444444', contrastText: '#ffffff' },
+  secondary: { main: '#777777', light: '#999999', dark: '#555555' },
+  background: { default: '#ffffff', paper: '#f5f5f5' },
+  text: { primary: '#000000', secondary: '#555555', disabled: '#999999' },
+  success: { main: '#16a34a', light: '#22c55e', dark: '#15803d' },
+  warning: { main: '#ca8a04', light: '#eab308', dark: '#a16207' },
+  error: { main: '#dc2626', light: '#ef4444', dark: '#b91c1c' },
+  info: { main: '#666666', light: '#888888', dark: '#444444' },
+  divider: 'rgba(0, 0, 0, 0.10)',
+}
+
+const paperCustom: CustomTokens = {
+  chromeBg: '#f0f0f0',
+  cavityBg: '#ffffff',
+  bgHeader: '#f5f5f5',
+  bgEditor: '#fafafa',
+  bgPanel: '#f7f7f7',
+  borderHover: 'rgba(0, 0, 0, 0.15)',
+  textFaint: '#cccccc',
+  hoverOverlay: 'rgba(0, 0, 0, 0.04)',
+  separatorSubtle: 'rgba(0, 0, 0, 0.06)',
+  activeTint: 'rgba(102, 102, 102, 0.08)',
+  activeTintStrong: 'rgba(102, 102, 102, 0.14)',
+  activeGradient: 'linear-gradient(90deg, #666666, #888888)',
+  activeGradientVertical: 'linear-gradient(180deg, #666666, #888888)',
+  activeGlow: 'drop-shadow(0 0 4px rgba(102, 102, 102, 0.3))',
+  gridDotColor: 'rgba(0, 0, 0, 0.08)',
+  gridLineColor: 'rgba(0, 0, 0, 0.04)',
+  canvasVignette: 'rgba(0, 0, 0, 0.0)',
+  canvasGlow: 'transparent',
+  minimapBg: 'rgba(255, 255, 255, 0.9)',
+  minimapMask: 'rgba(255, 255, 255, 0.7)',
+  floatingPanelBg: 'rgba(250, 250, 250, 0.96)',
+  floatingPanelBorder: 'rgba(0, 0, 0, 0.10)',
+  chromeText: '#888888',
+  chromeTextActive: '#000000',
+  chromeTextHover: '#333333',
+  chromeActiveGlow: 'none',
+  chromeActiveBar: '#000000',
+  screenBg: '#f0f0f0',
+  screenBorder: '#cccccc',
+  screenFrost: 'rgba(255, 255, 255, 0.8)',
+  canvasBg: '#ffffff',
+  accent: '#666666',
+  accentBg: 'rgba(102, 102, 102, 0.08)',
+  accentRing: 'rgba(102, 102, 102, 0.20)',
+  userBarBg: 'rgba(102, 102, 102, 0.06)',
+  connectorColor: '#cccccc',
+  strokeColor: '#000000',
+  surfaceBg: '#ffffff',
+  elevatedBg: '#f5f5f5',
+  appBarBg: '#f0f0f0',
+}
+
+const paperShadows: Shadows = [
+  'none',
+  '0 1px 2px rgba(0, 0, 0, 0.06)',
+  '0 1px 3px rgba(0, 0, 0, 0.07)',
+  '0 2px 4px rgba(0, 0, 0, 0.07)',
+  '0 2px 6px rgba(0, 0, 0, 0.08)',
+  '0 3px 8px rgba(0, 0, 0, 0.08)',
+  '0 4px 10px rgba(0, 0, 0, 0.09)',
+  '0 4px 12px rgba(0, 0, 0, 0.09)',
+  '0 6px 14px rgba(0, 0, 0, 0.10)',
+  '0 6px 16px rgba(0, 0, 0, 0.10)',
+  '0 8px 18px rgba(0, 0, 0, 0.10)',
+  '0 8px 20px rgba(0, 0, 0, 0.11)',
+  '0 10px 22px rgba(0, 0, 0, 0.11)',
+  '0 10px 24px rgba(0, 0, 0, 0.11)',
+  '0 12px 26px rgba(0, 0, 0, 0.12)',
+  '0 12px 28px rgba(0, 0, 0, 0.12)',
+  '0 14px 30px rgba(0, 0, 0, 0.13)',
+  '0 14px 32px rgba(0, 0, 0, 0.13)',
+  '0 16px 34px rgba(0, 0, 0, 0.13)',
+  '0 16px 36px rgba(0, 0, 0, 0.13)',
+  '0 18px 38px rgba(0, 0, 0, 0.14)',
+  '0 18px 40px rgba(0, 0, 0, 0.14)',
+  '0 20px 42px rgba(0, 0, 0, 0.15)',
+  '0 20px 44px rgba(0, 0, 0, 0.15)',
+  '0 22px 46px rgba(0, 0, 0, 0.15)',
+]
+
+const paperNodePalette: NodePalette = {
+  workforce: '#555555',
+  manager: '#333333',
+  room: '#444444',
+  blank: '#888888',
+  agent: '#333333',
+  context: '#555555',
+  input: '#444444',
+  step: '#888888',
+  sub_workflow: '#555555',
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Theme registry
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -356,6 +556,24 @@ const THEMES: Record<ThemeId, ThemeDefinition> = {
     custom: linenCustom,
     shadows: linenShadows,
     nodePalette: linenNodePalette,
+  },
+  paper: {
+    id: 'paper',
+    label: 'Paper',
+    muiMode: 'light',
+    palette: paperPalette,
+    custom: paperCustom,
+    shadows: paperShadows,
+    nodePalette: paperNodePalette,
+  },
+  obsidian: {
+    id: 'obsidian',
+    label: 'Obsidian',
+    muiMode: 'dark',
+    palette: obsidianPalette,
+    custom: obsidianCustom,
+    shadows: obsidianShadows,
+    nodePalette: obsidianNodePalette,
   },
   midnight: {
     id: 'midnight',
@@ -384,7 +602,7 @@ const THEME_LIST: readonly ThemeDefinition[] = THEME_IDS.map((id) => THEMES[id])
 // ---------------------------------------------------------------------------
 
 const isValidThemeId = (value: string): value is ThemeId =>
-  value === 'linen' || value === 'midnight' || value === 'slate'
+  value === 'linen' || value === 'paper' || value === 'obsidian' || value === 'midnight' || value === 'slate'
 
 export { THEMES, THEME_LIST, THEME_IDS, DEFAULT_THEME_ID, isValidThemeId }
 export type { ThemeId, ThemeDefinition, NodePalette }

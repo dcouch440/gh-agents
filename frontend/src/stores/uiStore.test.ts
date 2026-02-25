@@ -114,8 +114,14 @@ describe('uiStore', () => {
       expect(mockStorage.setItem).toHaveBeenCalledWith('nexor_theme', 'midnight')
     })
 
-    it('cycleTheme advances linen → midnight → slate → linen', () => {
+    it('cycleTheme advances linen → paper → obsidian → midnight → slate → linen', () => {
       uiStore.store.setState({ theme: 'linen' })
+
+      uiStore.cycleTheme()
+      expect(getState().theme).toBe('paper')
+
+      uiStore.cycleTheme()
+      expect(getState().theme).toBe('obsidian')
 
       uiStore.cycleTheme()
       expect(getState().theme).toBe('midnight')

@@ -4,11 +4,11 @@ import userEvent from '@testing-library/user-event'
 import { ThemeToggle } from './ThemeToggle'
 import type { ThemeId } from '@/theme'
 
-const mockCycleTheme = vi.hoisted(() => vi.fn())
+const mockSetTheme = vi.hoisted(() => vi.fn())
 let mockThemeId: ThemeId = 'linen'
 
 vi.mock('@/hooks/useThemeMode', () => ({
-  useThemeMode: () => ({ themeId: mockThemeId, cycleTheme: mockCycleTheme, setTheme: vi.fn() }),
+  useThemeMode: () => ({ themeId: mockThemeId, setTheme: mockSetTheme, cycleTheme: vi.fn() }),
 }))
 
 describe('ThemeToggle', () => {
@@ -17,28 +17,41 @@ describe('ThemeToggle', () => {
     mockThemeId = 'linen'
   })
 
-  it('renders sun icon for linen theme', () => {
+  it('renders palette icon button', () => {
     render(<ThemeToggle />)
-    expect(screen.getByTestId('LightModeOutlinedIcon')).toBeInTheDocument()
+    expect(screen.getByLabelText('Theme')).toBeInTheDocument()
   })
 
-  it('renders moon icon for midnight theme', () => {
-    mockThemeId = 'midnight'
-    render(<ThemeToggle />)
-    expect(screen.getByTestId('DarkModeOutlinedIcon')).toBeInTheDocument()
-  })
-
-  it('renders contrast icon for slate theme', () => {
-    mockThemeId = 'slate'
-    render(<ThemeToggle />)
-    expect(screen.getByTestId('ContrastOutlinedIcon')).toBeInTheDocument()
-  })
-
-  it('calls cycleTheme when clicked', async () => {
+  it('opens menu with all five themes on click', async () => {
     const user = userEvent.setup()
     render(<ThemeToggle />)
 
-    await user.click(screen.getByRole('button'))
-    expect(mockCycleTheme).toHaveBeenCalledOnce()
+    await user.click(screen.getByLabelText('Theme'))
+
+    expect(screen.getByText('Linen')).toBeInTheDocument()
+    expect(screen.getByText('Paper')).toBeInTheDocument()
+    expect(screen.getByText('Obsidian')).toBeInTheDocument()
+    expect(screen.getByText('Midnight')).toBeInTheDocument()
+    expect(screen.getByText('Slate')).toBeInTheDocument()
+  })
+
+  it('calls setTheme when a theme is selected', async () => {
+    const user = userEvent.setup()
+    render(<ThemeToggle />)
+
+    await user.click(screen.getByLabelText('Theme'))
+    await user.click(screen.getByText('Midnight'))
+
+    expect(mockSetTheme).toHaveBeenCalledWith('midnight')
+  })
+
+  it('closes menu after selection', async () => {
+    const user = userEvent.setup()
+    render(<ThemeToggle />)
+
+    await user.click(screen.getByLabelText('Theme'))
+    await user.click(screen.getByText('Slate'))
+
+    expect(screen.queryByText('Linen')).not.toBeInTheDocument()
   })
 })
