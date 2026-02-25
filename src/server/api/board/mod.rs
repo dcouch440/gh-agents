@@ -10,6 +10,7 @@ use crate::server::auth::AuthUser;
 use crate::server::hub::board_serializer::{CanvasSnapshot, ExcalidrawElement, FilteredChangeset};
 use crate::server::services::board;
 use crate::server::services::dispatch::{self, DispatchInput};
+use crate::server::services::steps;
 use crate::server::state::AppState;
 use crate::types::UserId;
 
@@ -173,15 +174,17 @@ async fn try_dispatch_board(
     let instruction =
         board::instruction::format_board_instruction(changeset, phase_zero, snapshot)?;
 
-    // Find the manager step to use as the dispatch anchor
-    let steps = state.repos().workflows.list_steps(workflow_id).await.ok()?;
-    let manager_step = steps.iter().find(|s| s.execution_mode == "manager")?;
+    // Find or create the manager step for this workflow.
+    // The manager step is a hidden, persistent anchor for dispatch sessions.
+    // It's created once on first board submit and reused for all future dispatches.
+    let manager_step_id =
+        find_or_create_manager_step(state, workflow_id, user_id).await?;
 
     // Dispatch via the shared dispatch service
     let output = dispatch::dispatch_to_builder(
         state,
         DispatchInput {
-            step_id: manager_step.id,
+            step_id: manager_step_id,
             workflow_id,
             user_id,
             instruction: instruction.clone(),
@@ -193,9 +196,51 @@ async fn try_dispatch_board(
     Some(BoardDispatchInfo {
         execution_id: output.execution_id,
         session_id: output.session_id,
-        step_id: manager_step.id,
+        step_id: manager_step_id,
         instruction,
     })
+}
+
+/// Find the existing manager step for a workflow, or create one.
+///
+/// The manager step is a hidden, persistent step with `execution_mode = "manager"`
+/// and `visible = false`. It's auto-created on first board submit and reused as the
+/// dispatch anchor for all future board dispatches.
+async fn find_or_create_manager_step(
+    state: &AppState,
+    workflow_id: Uuid,
+    user_id: UserId,
+) -> Option<Uuid> {
+    let repo = state.repos().workflows.as_ref();
+    let steps = repo.list_steps(workflow_id).await.ok()?;
+
+    // Return existing manager step if one already exists
+    if let Some(manager) = steps.iter().find(|s| s.execution_mode == "manager") {
+        return Some(manager.id);
+    }
+
+    // Create a new hidden manager step
+    let step = steps::create_step(
+        repo,
+        steps::CreateStepInput {
+            workflow_id,
+            user_id: user_id.0,
+            payload: steps::StepPayload {
+                name: Some("Manager".to_string()),
+                execution_mode: Some("manager".to_string()),
+                ..steps::StepPayload::default()
+            },
+        },
+    )
+    .await
+    .ok()?;
+
+    // Mark it as hidden — not shown on the board or tree
+    let mut hidden = step.clone();
+    hidden.visible = false;
+    let _ = repo.update_step(hidden).await;
+
+    Some(step.id)
 }
 
 // ── GET board elements ───────────────────────────────────────────────────

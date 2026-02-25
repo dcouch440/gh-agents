@@ -214,6 +214,7 @@ async fn create_node(
             user_id,
             payload: StepPayload {
                 name: Some(name),
+                execution_mode: Some("workforce".to_string()),
                 prompt_template: Some(prompt_template),
                 position_x: Some(node.bounds.x),
                 position_y: Some(node.bounds.y),

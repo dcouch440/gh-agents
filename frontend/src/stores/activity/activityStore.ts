@@ -104,6 +104,18 @@ const handleWsEvent = (msg: WsWireMessage): void => {
   append(entry)
 }
 
+const hydrateFromHistory = (historical: ActivityEntry[]): void => {
+  store.setState((s) => {
+    // Guard: don't re-hydrate if already populated with historical data
+    if (s.entries.length > 0 && s.entries[0]!.id.startsWith('hist_')) return s
+    const merged = [...historical, ...s.entries]
+    if (merged.length > s.maxSize) {
+      return { entries: merged.slice(merged.length - s.maxSize) }
+    }
+    return { entries: merged }
+  })
+}
+
 const reset = (): void => {
   seqCounter = 0
   store.setState({ ...initialState })
@@ -148,6 +160,7 @@ export const activityStore = {
   selectLatest,
   selectCount,
   handleWsEvent,
+  hydrateFromHistory,
   append,
   dump,
   reset,
