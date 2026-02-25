@@ -5,7 +5,7 @@
 import { useCallback } from 'react'
 import { BOARD } from '../constants'
 import type { BoardElements, InteractionMode, ResizeHandle, ViewportState } from '../elements'
-import { screenToCanvas, updateBoxPosition, updateBoxSize } from '../elements'
+import { containerEventToCanvas, updateBoxPosition, updateBoxSize } from '../elements'
 import type { SetElements, SetInteraction } from './types'
 
 const useResize = (
@@ -15,14 +15,11 @@ const useResize = (
   containerRef: React.RefObject<HTMLDivElement | null>,
 ) => {
   const onResizeStart = useCallback((boxId: string, handle: ResizeHandle, e: React.PointerEvent, elements: BoardElements) => {
-    const container = containerRef.current
-    if (container === null) return
+    const canvas = containerEventToCanvas(containerRef, e, viewport)
+    if (canvas === null) return
 
     const box = elements.boxes.get(boxId)
     if (box === undefined) return
-
-    const rect = container.getBoundingClientRect()
-    const canvas = screenToCanvas(e.clientX, e.clientY, viewport, rect)
 
     setInteraction({
       type: 'resizing',
@@ -37,11 +34,8 @@ const useResize = (
   const onResizeMove = useCallback((e: React.PointerEvent, interaction: InteractionMode) => {
     if (interaction.type !== 'resizing') return
 
-    const container = containerRef.current
-    if (container === null) return
-
-    const rect = container.getBoundingClientRect()
-    const canvas = screenToCanvas(e.clientX, e.clientY, viewport, rect)
+    const canvas = containerEventToCanvas(containerRef, e, viewport)
+    if (canvas === null) return
 
     const dx = canvas.x - interaction.startX
     const dy = canvas.y - interaction.startY

@@ -1,7 +1,19 @@
 export { computeBoxSize, resolveAnchor } from './bounds'
 export { deserializeFromExcalidraw } from './deserialize'
+export { containerEventToCanvas, eventToCanvas } from './eventToCanvas'
 export { createArrow, createBox, emptyBoard } from './factory'
-export { hitTest, hitTestBox, hitTestRect, selectAllIds } from './hitTest'
+export {
+  detectEdgeHover,
+  hitTest,
+  hitTestArrow,
+  hitTestBox,
+  hitTestRect,
+  hitTestResizeHandles,
+  pointNearCubicBezier,
+  RESIZE_CURSORS,
+  selectAllIds,
+} from './hitTest'
+export type { EdgeHover, ResizeHit } from './hitTest'
 export {
   addArrow,
   addBox,

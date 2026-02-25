@@ -8,10 +8,13 @@
 //
 // Box borders use rough.js for a hand-drawn/sketchy aesthetic.
 
+import rough from 'roughjs'
 import type { RoughCanvas } from 'roughjs/bin/canvas'
-import { BOARD } from '../constants'
+import { computeArrowPathPoints, computeDrawingArrowPathPoints } from '../arrows/routing'
 import type { ArrowPath } from '../arrows/routing'
-import type { BoxElement, MarqueeRect, ViewportState } from '../elements'
+import { BOARD } from '../constants'
+import type { BoardElements, BoxElement, DrawingArrow, MarqueeRect, SelectionState, ViewportState } from '../elements'
+import type { EdgeHover } from '../elements'
 import { wrapText } from './textMeasure'
 
 type DrawTheme = {
@@ -330,6 +333,99 @@ const drawSelectionRect = (
   ctx.restore()
 }
 
+// ── Render Pipeline ──────────────────────────────────────────────────────
+
+/**
+ * Full board render — clears the canvas and draws all layers in order.
+ * Called from Canvas2D's render effect on every frame.
+ */
+const renderBoard = (
+  canvas: HTMLCanvasElement,
+  canvasWidth: number,
+  canvasHeight: number,
+  elements: BoardElements,
+  selection: SelectionState,
+  editingBoxId: string | null,
+  viewport: ViewportState,
+  drawingArrow: DrawingArrow,
+  edgeHover: EdgeHover | null,
+  theme: DrawTheme,
+): void => {
+  const ctx = canvas.getContext('2d')
+  if (ctx === null) return
+
+  const dpr = window.devicePixelRatio || 1
+  const rc = rough.canvas(canvas)
+
+  // Clear
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  ctx.clearRect(0, 0, canvasWidth, canvasHeight)
+
+  // Viewport transform
+  ctx.save()
+  ctx.translate(viewport.panX, viewport.panY)
+  ctx.scale(viewport.zoom, viewport.zoom)
+
+  // Grid
+  drawGrid(ctx, viewport, canvasWidth, canvasHeight, theme)
+
+  // Box highlight for edge hover (draw under boxes so the glow is behind)
+  if (edgeHover !== null && editingBoxId === null) {
+    const hoverBox = elements.boxes.get(edgeHover.boxId)
+    if (hoverBox !== undefined) {
+      drawBoxHighlight(ctx, hoverBox, theme.accentColor)
+    }
+  }
+
+  // Boxes in z-order
+  for (let i = 0; i < elements.boxOrder.length; i++) {
+    const boxId = elements.boxOrder[i]!
+    const box = elements.boxes.get(boxId)
+    if (box === undefined) continue
+
+    const isSelected = selection.selectedIds.has(boxId)
+    const isEditing = editingBoxId === boxId
+    drawBox(ctx, rc, box, isSelected, isEditing, theme)
+  }
+
+  // Arrows
+  for (const [arrowId, arrow] of elements.arrows) {
+    const sourceBox = elements.boxes.get(arrow.sourceBoxId)
+    const targetBox = elements.boxes.get(arrow.targetBoxId)
+    if (sourceBox === undefined || targetBox === undefined) continue
+
+    const path = computeArrowPathPoints(sourceBox, arrow.sourceAnchor, targetBox, arrow.targetAnchor)
+    const isSelected = selection.selectedIds.has(arrowId)
+    drawArrow(rc, path, arrowId, isSelected, theme)
+  }
+
+  // Drawing arrow preview
+  if (drawingArrow !== null) {
+    const sourceBox = elements.boxes.get(drawingArrow.sourceBoxId)
+    if (sourceBox !== undefined) {
+      const path = computeDrawingArrowPathPoints(
+        sourceBox,
+        drawingArrow.sourceAnchor,
+        drawingArrow.cursorX,
+        drawingArrow.cursorY,
+      )
+      drawDrawingArrow(ctx, path, theme.accentColor)
+    }
+  }
+
+  // Edge hover handle
+  if (edgeHover !== null && editingBoxId === null) {
+    drawHandle(ctx, edgeHover.cx, edgeHover.cy, theme)
+  }
+
+  // Selection marquee
+  if (selection.marquee !== null) {
+    drawSelectionRect(ctx, selection.marquee, theme.accentColor)
+  }
+
+  ctx.restore()
+}
+
 export {
   drawArrow,
   drawBox,
@@ -338,5 +434,6 @@ export {
   drawGrid,
   drawHandle,
   drawSelectionRect,
+  renderBoard,
 }
 export type { DrawTheme }
