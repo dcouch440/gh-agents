@@ -19,6 +19,12 @@ vi.mock('@excalidraw/excalidraw', () => ({
 
 vi.mock('@excalidraw/excalidraw/index.css', () => ({}))
 
+// ── Mock useBoardElements to skip async fetch ─────────────────────────
+
+vi.mock('./hooks/useBoardElements', () => ({
+  useBoardElements: () => ({ loading: false, elements: null }),
+}))
+
 // ── Setup ────────────────────────────────────────────────────────────────
 
 beforeEach(() => {

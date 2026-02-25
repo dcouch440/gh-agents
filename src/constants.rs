@@ -408,6 +408,7 @@ pub mod routes {
 
     // Board
     pub const WORKFLOW_BOARD_SUBMIT: &str = "/workflows/:id/board/submit";
+    pub const WORKFLOW_BOARD_ELEMENTS: &str = "/workflows/:id/board/elements";
 
     // Dispatch trace + direct dispatch
     pub const DISPATCH_TRACE: &str = "/dispatch/:execution_id/trace";

@@ -155,9 +155,17 @@ type FilteredNoise = {
 
 type NoiseReason = 'WhitespaceOnly' | 'Oscillation' | 'CanvasPan' | 'ReorderOnly'
 
+// ── Board Elements (GET) ────────────────────────────────────────────────────
+
+/** Response from `GET /workflows/:id/board/elements`. */
+type BoardElementsResponse = {
+  readonly elements: readonly Record<string, unknown>[] | null
+}
+
 // ── Exports ─────────────────────────────────────────────────────────────────
 
 export type {
+  BoardElementsResponse,
   BoardSubmitResponse,
   PhaseZeroResponse,
   PhaseZeroStep,

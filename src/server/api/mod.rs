@@ -27,7 +27,8 @@ pub use error::AppError;
 
 // Re-export board handlers and types
 pub use board::{
-    submit_board, BoardDispatchInfo, BoardSubmitRequest, BoardSubmitResponse, PhaseZeroResponse,
+    get_board_elements, submit_board, BoardDispatchInfo, BoardSubmitRequest, BoardSubmitResponse,
+    PhaseZeroResponse,
 };
 
 // Re-export auth handlers and types

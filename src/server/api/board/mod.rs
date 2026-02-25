@@ -1,4 +1,4 @@
-//! Board submit API handler.
+//! Board API handlers — submit and load saved elements.
 
 use axum::extract::{Json, Path, State};
 use serde::{Deserialize, Serialize};
@@ -185,6 +185,40 @@ async fn try_dispatch_board(
         step_id: manager_step.id,
         instruction,
     })
+}
+
+// ── GET board elements ───────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct BoardElementsResponse {
+    /// Raw Excalidraw elements JSON, or null if no snapshot exists.
+    pub elements: Option<serde_json::Value>,
+}
+
+/// Return the last saved Excalidraw elements for a workflow.
+///
+/// If the workflow has never been submitted, returns `{ "elements": null }`.
+pub async fn get_board_elements(
+    State(state): State<AppState>,
+    _auth: AuthUser,
+    Path(workflow_id): Path<Uuid>,
+) -> Result<Json<BoardElementsResponse>, AppError> {
+    let row = state
+        .repos()
+        .workflows
+        .get_canvas_snapshot(workflow_id)
+        .await?;
+
+    let elements = match row {
+        Some(r) => {
+            let val: serde_json::Value = serde_json::from_str(&r.elements_json)
+                .map_err(|e| AppError::Internal(format!("Bad stored elements: {e}")))?;
+            Some(val)
+        }
+        None => None,
+    };
+
+    Ok(Json(BoardElementsResponse { elements }))
 }
 
 mod tests;
