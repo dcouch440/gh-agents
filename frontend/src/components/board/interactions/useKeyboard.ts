@@ -17,6 +17,7 @@ const useKeyboard = (
   interaction: { readonly type: string },
   setInteraction: SetInteraction,
   history: Pick<HistoryActions, 'undo' | 'redo'>,
+  onDelete?: (deletedIds: ReadonlySet<string>) => void,
 ) => {
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Don't intercept when editing text
@@ -26,6 +27,7 @@ const useKeyboard = (
     if ((e.key === 'Delete' || e.key === 'Backspace') && selection.selectedIds.size > 0) {
       e.preventDefault()
       setElements((s) => removeElements(s, selection.selectedIds))
+      onDelete?.(selection.selectedIds)
       setSelection(() => EMPTY_SELECTION)
       return
     }
@@ -70,7 +72,7 @@ const useKeyboard = (
       }
       return
     }
-  }, [elements, history, interaction, selection, setElements, setInteraction, setSelection])
+  }, [elements, history, interaction, onDelete, selection, setElements, setInteraction, setSelection])
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown)

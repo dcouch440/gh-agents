@@ -81,6 +81,26 @@ const deleteStep = async (stepId: string): Promise<void> => {
   })
 }
 
+/** Remove a step from local state only (no API call). Used when canvas elements are deleted before submit. */
+const removeStepLocal = (stepId: string): void => {
+  store.setState((s) => {
+    let nextEdges = s.edges
+    for (const [edgeId, edge] of s.edges.byId) {
+      if (edge.from_step_id === stepId || edge.to_step_id === stepId) {
+        nextEdges = nmDelete(nextEdges, edgeId)
+      }
+    }
+    const nextDirty = new Set(s.dirtyStepIds)
+    nextDirty.delete(stepId)
+    return {
+      steps: nmDelete(s.steps, stepId),
+      edges: nextEdges,
+      dirtyStepIds: nextDirty,
+      dirty: nextDirty.size > 0,
+    }
+  })
+}
+
 // ── Save / Revert ───────────────────────────────────────────────────
 
 const saveAllDirtySteps = async (): Promise<void> => {
@@ -128,4 +148,4 @@ const revertSteps = async (): Promise<void> => {
   await loadWorkflow(wid)
 }
 
-export { createStep, patchStepLocal, patchStepSilent, updateStep, deleteStep, saveAllDirtySteps, revertSteps }
+export { createStep, patchStepLocal, patchStepSilent, updateStep, deleteStep, removeStepLocal, saveAllDirtySteps, revertSteps }

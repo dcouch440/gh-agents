@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import type { Point } from '@/utils/geometry'
-import { boardStore } from '@/stores'
+import { boardStore, workflowStore, sidebarStore } from '@/stores'
 import { useBoardTheme, useBoardSubmit, useBoardElements, useDispatchHistory, useActivityHistory } from './hooks'
 import { BoardContextMenu } from './BoardContextMenu'
 import type { MenuPosition } from './BoardContextMenu'
@@ -27,6 +27,7 @@ type BoardProps = {
  * so the backend board_serializer remains unchanged.
  */
 function Board({ workflowId }: BoardProps) {
+  console.log("RENDER BOARD")
   // ── State ────────────────────────────────────────────────────────────────
   const [elements, setElements] = useState<BoardElements>(emptyBoard)
   const [selection, setSelection] = useState<SelectionState>(EMPTY_SELECTION)
@@ -50,21 +51,35 @@ function Board({ workflowId }: BoardProps) {
     return () => { boardStore.resetBoard() }
   }, [workflowId])
 
+  // ── Helpers ─────────────────────────────────────────────────────────────
+
+  /** Sync element deletions to the workflow store so the sidebar updates. */
+  const syncDeletedElements = useCallback((deletedIds: ReadonlySet<string>) => {
+    const elementStepMap = boardStore.store.getState().elementStepMap
+    for (const elementId of deletedIds) {
+      const stepId = elementStepMap[elementId]
+      if (stepId) {
+        workflowStore.removeStepLocal(stepId)
+        if (sidebarStore.store.getState().selectedStepId === stepId) {
+          sidebarStore.clearSelection()
+        }
+      }
+    }
+  }, [])
+
   // ── Interaction hooks ────────────────────────────────────────────────────
   const { onWheel, zoomIn, zoomOut, resetZoom } = usePanZoom(viewport, setViewport)
   const drag = useDrag(setElements, setInteraction, viewport, containerRef)
   const arrowDraw = useArrowDraw(setElements, setInteraction, viewport, containerRef)
   const resize = useResize(setElements, setInteraction, viewport, containerRef)
   const sel = useSelection(setSelection)
-  useKeyboard(elements, setElements, selection, setSelection, interaction, setInteraction, history)
+  useKeyboard(elements, setElements, selection, setSelection, interaction, setInteraction, history, syncDeletedElements)
 
   // ── Derived state ────────────────────────────────────────────────────────
   const editingBoxId = interaction.type === 'editing' ? interaction.boxId : null
   const drawingArrow: DrawingArrow = interaction.type === 'drawing-arrow'
     ? { sourceBoxId: interaction.sourceBoxId, sourceAnchor: interaction.sourceAnchor, cursorX: interaction.cursorX, cursorY: interaction.cursorY }
     : null
-
-  // ── Helpers ─────────────────────────────────────────────────────────────
 
   const createBoxAtPoint = useCallback((point: Point) => {
     history.push(elements)
@@ -195,8 +210,9 @@ function Board({ workflowId }: BoardProps) {
       ? selection.selectedIds
       : new Set([elementId])
     setElements((s) => removeElements(s, ids))
+    syncDeletedElements(ids)
     setSelection(() => EMPTY_SELECTION)
-  }, [contextMenu, elements, history, selection.selectedIds])
+  }, [contextMenu, elements, history, selection.selectedIds, syncDeletedElements])
 
   const handleContextMenuSelectAll = useCallback(() => {
     setSelection(() => ({ selectedIds: selectAllIds(elements), marquee: null }))
