@@ -56,6 +56,14 @@ pub(crate) fn filter_changeset(
 
     // --- Tier 2 & 3: Filter updated_nodes through noise pipeline ---
 
+    // Pre-index baseline nodes by ID for O(1) oscillation lookups (was O(N) per update).
+    let baseline_index: Option<HashMap<&str, &CanvasNode>> = baseline.map(|base| {
+        base.nodes
+            .iter()
+            .map(|n| (n.element_id.as_str(), n))
+            .collect()
+    });
+
     for update in &changeset.updated_nodes {
         // Filter 1: whitespace normalization
         if is_whitespace_only(update) {
@@ -67,8 +75,8 @@ pub(crate) fn filter_changeset(
         }
 
         // Filter 2: oscillation detection
-        if let Some(base) = baseline {
-            if is_oscillation(update, base) {
+        if let Some(ref index) = baseline_index {
+            if is_oscillation(update, index) {
                 noise.push(FilteredNoise {
                     element_id: update.element_id.clone(),
                     reason: NoiseReason::Oscillation,
@@ -258,11 +266,11 @@ fn is_whitespace_only(update: &NodeUpdate) -> bool {
 /// The baseline is the last agent-processed snapshot. If the user changed
 /// text A → B → A, the diff sees an update (B → A), but comparing against
 /// the baseline (A) reveals the net change is zero.
-fn is_oscillation(update: &NodeUpdate, baseline: &CanvasSnapshot) -> bool {
-    baseline
-        .nodes
-        .iter()
-        .find(|n| n.element_id == update.element_id)
+///
+/// Takes a pre-built index for O(1) lookup instead of scanning the full snapshot.
+fn is_oscillation(update: &NodeUpdate, baseline_index: &HashMap<&str, &CanvasNode>) -> bool {
+    baseline_index
+        .get(update.element_id.as_str())
         .is_some_and(|node| {
             node.raw_text == update.new_text && node.annotations == update.new_annotations
         })

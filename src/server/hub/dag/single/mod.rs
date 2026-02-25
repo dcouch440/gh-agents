@@ -1,8 +1,7 @@
 //! Single step execution through the ExecutionEngine.
 //!
 //! Contains `execute_single_step` (the default execution path for non-special
-//! step types) and `run_step_via_engine` (the shared low-level engine call
-//! used by single and for-each steps).
+//! step types) and `run_step_via_engine` (the shared low-level engine call).
 
 mod tests;
 
@@ -198,10 +197,7 @@ pub(crate) async fn run_step_via_engine(
     if let Some(schema_id) = step.output_schema_id {
         let os_repo = &dag.state.repos().output_schemas;
         if let Ok(Some(schema)) = os_repo.get_output_schema(schema_id).await {
-            system_prompt.push_str(&format!(
-                "\n\n<schema>\nYour response is parsed directly by a JSON parser. Respond with a valid JSON object matching this schema:\n```json\n{}\n```\n</schema>",
-                serde_json::to_string_pretty(&schema.schema).unwrap_or_default()
-            ));
+            system_prompt.push_str(&crate::server::hub::format_schema_xml(&schema.schema));
             output_schema_value = Some(schema.schema.clone());
         }
     }

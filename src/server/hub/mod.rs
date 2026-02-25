@@ -10,12 +10,12 @@ pub mod board_serializer;
 pub mod board_state;
 pub mod capability_resolver;
 pub mod chat_beliefs;
-pub mod consistency_scanner;
 pub mod dag;
 pub mod dispatch_status;
 pub mod engine;
 pub mod error;
 pub mod graph_context;
+pub mod pricing;
 pub mod prompt_registry;
 pub mod protocols;
 pub mod question_extraction;
@@ -200,11 +200,59 @@ pub async fn run_step_chat(
 
 /// Build the system prompt for a step chat session.
 ///
-/// Uses the base+archetype-block architecture: the `ASSISTANT_BASE` role
-/// definition is resolved with graph context, an archetype-specific block
-/// (e.g. `WORKFORCE_ARCHETYPE`), and the live config snapshot injected via
-/// template variables.
+/// Dispatches to `build_manager_system_prompt` or `build_node_system_prompt`
+/// based on execution mode.
 pub async fn build_step_system_prompt(
+    state: &AppState,
+    workflow_id: Uuid,
+    step_id: Uuid,
+    execution_mode: &str,
+) -> Result<String, HubError> {
+    if execution_mode == "manager" {
+        build_manager_system_prompt(state, workflow_id, step_id).await
+    } else {
+        build_node_system_prompt(state, workflow_id, step_id, execution_mode).await
+    }
+}
+
+/// Build the manager assistant system prompt.
+///
+/// Uses `MANAGER_ASSISTANT_BASE` template with board_state + dispatch_status.
+async fn build_manager_system_prompt(
+    state: &AppState,
+    workflow_id: Uuid,
+    step_id: Uuid,
+) -> Result<String, HubError> {
+    use crate::config::protocols::{roles, vars};
+
+    let board_state_xml = board_state::build(
+        state.repos().workflows.as_ref(),
+        Some(state.repos().sessions.as_ref()),
+        board_state::BoardStateVariant::ManagerAssistant,
+        workflow_id,
+        step_id,
+    )
+    .await
+    .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
+
+    let dispatch_status_xml = dispatch_status::build(state.task_registry(), step_id);
+
+    let mut vars_map = std::collections::HashMap::new();
+    vars_map.insert(vars::system::BOARD_STATE.to_string(), board_state_xml);
+    vars_map.insert(
+        vars::system::DISPATCH_STATUS.to_string(),
+        dispatch_status_xml,
+    );
+
+    let resolved = roles::MANAGER_ASSISTANT_BASE.resolve(&vars_map);
+    Ok(resolved.system_prompt)
+}
+
+/// Build a node assistant system prompt (workforce archetype).
+///
+/// Resolves `ASSISTANT_BASE` with graph context, beliefs, board overview,
+/// plan, dispatch status, and run context.
+async fn build_node_system_prompt(
     state: &AppState,
     workflow_id: Uuid,
     step_id: Uuid,
@@ -212,32 +260,6 @@ pub async fn build_step_system_prompt(
 ) -> Result<String, HubError> {
     use crate::config::protocols::{roles, vars};
 
-    // Manager mode — uses its own prompt template with only board_state + dispatch_status
-    if execution_mode == "manager" {
-        let board_state_xml = board_state::build(
-            state.repos().workflows.as_ref(),
-            Some(state.repos().sessions.as_ref()),
-            board_state::BoardStateVariant::ManagerAssistant,
-            workflow_id,
-            step_id,
-        )
-        .await
-        .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
-
-        let dispatch_status_xml = dispatch_status::build(state.task_registry(), step_id);
-
-        let mut vars_map = std::collections::HashMap::new();
-        vars_map.insert(vars::system::BOARD_STATE.to_string(), board_state_xml);
-        vars_map.insert(
-            vars::system::DISPATCH_STATUS.to_string(),
-            dispatch_status_xml,
-        );
-
-        let resolved = roles::MANAGER_ASSISTANT_BASE.resolve(&vars_map);
-        return Ok(resolved.system_prompt);
-    }
-
-    // 1. Load beliefs from connected nodes
     let connected_beliefs = state
         .repos()
         .workflows
@@ -247,7 +269,6 @@ pub async fn build_step_system_prompt(
 
     let board_context = chat_beliefs::format_beliefs_as_board_context(&connected_beliefs);
 
-    // 1b. Load board overview summary
     let board_overview = state
         .repos()
         .workflows
@@ -260,7 +281,6 @@ pub async fn build_step_system_prompt(
         board_overview
     };
 
-    // 1c. Load plan for this step
     let plan_content = state
         .repos()
         .workflows
@@ -271,12 +291,11 @@ pub async fn build_step_system_prompt(
             "No plan yet. Use update_plan to record the execution blueprint.".to_string()
         });
 
-    // 2. Build archetype block + board state based on execution mode
     let (archetype_block, board_state_xml) = match execution_mode {
         "workforce" => {
             let xml = board_state::build(
                 state.repos().workflows.as_ref(),
-                None, // L3 doesn't need initial_instructions
+                None,
                 board_state::BoardStateVariant::NodeAssistant,
                 workflow_id,
                 step_id,
@@ -295,13 +314,9 @@ pub async fn build_step_system_prompt(
         }
     };
 
-    // 2b. Build dispatch task status for this step
     let dispatch_status = dispatch_status::build(state.task_registry(), step_id);
-
-    // 2c. Build run context (run results summaries from self + connected steps)
     let run_context = build_run_context(state, workflow_id, step_id).await;
 
-    // 3. Resolve base template with all variables
     let mut vars_map = std::collections::HashMap::new();
     vars_map.insert(vars::system::BOARD_CONTEXT.to_string(), board_context);
     vars_map.insert(vars::system::ARCHETYPE_BLOCK.to_string(), archetype_block);
@@ -315,7 +330,6 @@ pub async fn build_step_system_prompt(
     vars_map.insert(vars::system::RUN_CONTEXT.to_string(), run_context);
 
     let resolved = roles::ASSISTANT_BASE.resolve(&vars_map);
-
     Ok(resolved.system_prompt)
 }
 
@@ -345,6 +359,17 @@ async fn build_run_context(state: &AppState, workflow_id: Uuid, step_id: Uuid) -
     format!("<run_context>\n{}\n</run_context>", lines.join("\n"))
 }
 
+/// Format a JSON schema as an XML block for appending to system prompts.
+///
+/// Shared by `load_schema_filters` and `run_step_via_engine` to avoid
+/// duplicate format strings.
+pub(crate) fn format_schema_xml(schema: &serde_json::Value) -> String {
+    format!(
+        "\n\n<schema>\nYour response is parsed directly by a JSON parser. Respond with a valid JSON object matching this schema:\n```json\n{}\n```\n</schema>",
+        serde_json::to_string_pretty(schema).unwrap_or_default()
+    )
+}
+
 /// Truncate a string to at most `max` bytes at a char boundary.
 pub(crate) fn truncate_str(s: &str, max: usize) -> &str {
     if s.len() <= max {
@@ -368,10 +393,7 @@ async fn load_schema_filters(
     let os_repo = &state.repos().output_schemas;
     let schema = os_repo.get_output_schema(schema_id).await.ok()??;
 
-    let schema_xml = format!(
-        "\n\n<schema>\nYour response is parsed directly by a JSON parser. Respond with a valid JSON object matching this schema:\n```json\n{}\n```\n</schema>",
-        serde_json::to_string_pretty(&schema.schema).unwrap_or_default()
-    );
+    let schema_xml = format_schema_xml(&schema.schema);
 
     let filter_ctx = FilterContext::new(model_id, agent_id).with_schema(schema.schema);
     let filters: Vec<Arc<dyn ExecutionFilter>> = vec![
