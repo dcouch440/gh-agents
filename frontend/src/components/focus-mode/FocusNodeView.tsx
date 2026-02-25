@@ -27,7 +27,7 @@ function FocusNodeView({
   const theme = useTheme()
   const accentColor = theme.palette.nodePalette[archetype]
 
-  const { roomStepMembers, stepIssues } = useStepStoreData(stepId)
+  const { roomStepMembers } = useStepStoreData(stepId)
   const rosterAgents = useStore(workflowStore.store, workflowStore.selectStepRoster(stepId))
 
   const tabs = buildStepTabs({
@@ -67,8 +67,6 @@ function FocusNodeView({
           name={stepName}
           archetype={archetype}
           subtitle={subtitle}
-          issueCount={stepIssues.length}
-          issueDescriptions={stepIssues.map((i) => i.description)}
         />
 
         <TabStrip

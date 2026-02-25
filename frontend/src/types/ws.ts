@@ -80,7 +80,6 @@ export const WORKFLOW_EVENT = {
   ROSTER_CHANGED: 'roster_changed',
   ROOM_MEMBERS_CHANGED: 'room_members_changed',
   PLAN_UPDATED: 'plan_updated',
-  CONSISTENCY_ISSUES: 'consistency_issues',
   SUB_WORKFLOW_STARTED: 'sub_workflow_started',
   SUB_WORKFLOW_COMPLETED: 'sub_workflow_completed',
   SUB_WORKFLOW_STEP_PROGRESS: 'sub_workflow_step_progress',
@@ -122,15 +121,6 @@ export type StepConfigUpdatedData = { workflow_id: string; step_id: string }
 export type RosterChangedData = { workflow_id: string; step_id: string }
 export type RoomMembersChangedData = { workflow_id: string; step_id: string }
 export type PlanUpdatedData = { workflow_id: string; step_id: string; content: string }
-export type ConsistencyIssue = {
-  step_id: string
-  step_name: string
-  description: string
-  severity: string
-  deleted_item_name: string
-  deleted_item_type: string
-}
-export type ConsistencyIssuesData = { workflow_id: string; issues: ConsistencyIssue[] }
 export type SubWorkflowStartedData = { workflow_id: string; parent_step_id: string; child_execution_id: string; total_steps: number }
 export type SubWorkflowCompletedData = { workflow_id: string; parent_step_id: string; child_execution_id: string; status: string }
 export type SubWorkflowStepProgressData = {

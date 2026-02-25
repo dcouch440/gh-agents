@@ -22,8 +22,6 @@ export const DEFAULT_STEP_TYPE_COLOR = '#7d8590'
 
 export const GREYSCALE_ACCENT = '#7d8590'
 
-export const NOTES_ACCENT = '#f85149'
-
 export const PROTOCOL_TYPE_COLORS: Record<string, string> = {
   decomp: '#3b82f6',
   route: '#a78bfa',
