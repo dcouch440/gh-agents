@@ -85,6 +85,7 @@ import type {
   DispatchActionResponse,
   DispatchSessionResponse,
   BoardSubmitResponse,
+  BoardElementsResponse,
 } from '@/types'
 
 // ============================================================================
@@ -373,6 +374,9 @@ const workflows = freeze({
 
   submitBoard: (workflowId: string, elements: ReadonlyArray<unknown>, config?: RequestConfig) =>
     baseApi.post<BoardSubmitResponse>(API.WORKFLOW_BOARD_SUBMIT(workflowId), { elements }, config),
+
+  getBoardElements: (workflowId: string, config?: RequestConfig) =>
+    baseApi.get<BoardElementsResponse>(API.WORKFLOW_BOARD_ELEMENTS(workflowId), config),
 })
 
 const contextResponse = freeze({

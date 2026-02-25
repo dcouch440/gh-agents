@@ -335,6 +335,7 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         )
         .route(routes::WORKFLOW_PLANS, get(api::get_workflow_plans))
         .route(routes::WORKFLOW_BOARD_SUBMIT, post(api::submit_board))
+        .route(routes::WORKFLOW_BOARD_ELEMENTS, get(api::get_board_elements))
         .route(
             routes::WORKFLOW_QUESTION_STATES,
             get(api::list_question_states),

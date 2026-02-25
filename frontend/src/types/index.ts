@@ -94,6 +94,7 @@ export type {
 } from './protocol'
 export type { DispatchTraceResponse, DispatchTaskSummary, DispatchTasksResponse, DispatchSendRequest, DispatchActionResponse, DispatchSessionResponse } from './dispatch'
 export type {
+  BoardElementsResponse,
   BoardSubmitResponse,
   PhaseZeroResponse,
   PhaseZeroStep,
