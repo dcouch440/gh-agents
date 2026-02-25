@@ -339,13 +339,18 @@ async fn load_input_ports(
     steps_map: Option<&HashMap<Uuid, WorkflowStepRow>>,
 ) -> Result<Vec<InputPortSnapshot>> {
     let rows = repo.get_step_inputs(step_id).await?;
+
+    // Pre-index: edges targeting this step keyed by input port name → O(1) lookup per port
+    let inbound_by_port: HashMap<&str, &WorkflowStepEdgeRow> = workflow_edges
+        .iter()
+        .filter(|e| e.to_step_id == step_id)
+        .filter_map(|e| e.to_input_port.as_deref().map(|port| (port, e)))
+        .collect();
+
     let mut result = Vec::new();
 
     for row in rows {
-        // Find the edge that connects to this input port to resolve source node + json_path
-        let edge = workflow_edges.iter().find(|e| {
-            e.to_step_id == step_id && e.to_input_port.as_deref() == Some(&row.port_name)
-        });
+        let edge = inbound_by_port.get(row.port_name.as_str()).copied();
 
         let from_node = edge
             .and_then(|e| {
@@ -378,14 +383,19 @@ async fn load_output_ports(
     steps_map: Option<&HashMap<Uuid, WorkflowStepRow>>,
 ) -> Result<Vec<OutputPortSnapshot>> {
     let rows = repo.get_step_outputs(step_id).await?;
+
+    // Pre-index: edges from this step keyed by output port name → O(1) lookup per port
+    let outbound_by_port: HashMap<&str, &WorkflowStepEdgeRow> = workflow_edges
+        .iter()
+        .filter(|e| e.from_step_id == step_id)
+        .filter_map(|e| e.from_output_port.as_deref().map(|port| (port, e)))
+        .collect();
+
     let mut result = Vec::new();
 
     for row in rows {
-        let to_node = workflow_edges
-            .iter()
-            .find(|e| {
-                e.from_step_id == step_id && e.from_output_port.as_deref() == Some(&row.port_name)
-            })
+        let to_node = outbound_by_port
+            .get(row.port_name.as_str())
             .and_then(|e| {
                 if let Some(map) = steps_map {
                     map.get(&e.to_step_id).and_then(|s| s.name.clone())

@@ -11,7 +11,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
 use crate::llm::{
-    ContentBlock, LLMProvider, LLMRequest, Message, StopReason, StreamAccumulator,
+    ContentBlock, LLMProvider, LLMRequest, LLMResponse, Message, StopReason, StreamAccumulator,
     StreamChunk as LLMStreamChunk, TokenUsage,
 };
 
@@ -236,19 +236,12 @@ impl ExecutionEngine {
             // Check stop reason
             match response.stop_reason {
                 StopReason::ToolUse => {
-                    // Extract tool use blocks, execute them, build results
-                    let tool_uses: Vec<_> = response
+                    let has_tool_blocks = response
                         .content_blocks
                         .iter()
-                        .filter_map(|b| match b {
-                            ContentBlock::ToolUse { id, name, input } => {
-                                Some((id.clone(), name.clone(), input.clone()))
-                            }
-                            _ => None,
-                        })
-                        .collect();
+                        .any(|b| matches!(b, ContentBlock::ToolUse { .. }));
 
-                    if tool_uses.is_empty() {
+                    if !has_tool_blocks {
                         warn!(
                             "StopReason::ToolUse but no tool_use blocks at round {}",
                             round
@@ -256,191 +249,271 @@ impl ExecutionEngine {
                         break;
                     }
 
-                    // Append assistant message with all blocks
-                    messages.push(Message::assistant_with_blocks(
-                        response.content_blocks.clone(),
-                    ));
-
-                    // Execute each tool and build result blocks
-                    let mut result_blocks = Vec::new();
-                    for (tool_id, tool_name, tool_input) in &tool_uses {
-                        if cancel.is_some_and(|t| t.is_cancelled()) {
-                            return Err(HubError::Cancelled);
-                        }
-                        debug!(round, tool = %tool_name, "executing tool");
-                        sink.tool_start(tool_name, tool_id, tool_input).await;
-                        let result = strategy.execute_tool(tool_name, tool_input).await;
-                        sink.tool_end(tool_name, tool_id, &result).await;
-
-                        let result_str = match &result {
-                            serde_json::Value::String(s) => s.clone(),
-                            other => other.to_string(),
-                        };
-                        result_blocks.push(ContentBlock::ToolResult {
-                            tool_use_id: tool_id.clone(),
-                            content: result_str,
-                        });
-                    }
-
-                    messages.push(Message::tool_results(result_blocks.clone()));
-
-                    // Persist assistant response (tool calls) + tool results
-                    if let Some(ae_id) = strategy.agent_execution_id() {
-                        let assistant_content = response
-                            .content_blocks
-                            .iter()
-                            .filter_map(|b| match b {
-                                ContentBlock::ToolUse { name, input, .. } => {
-                                    Some(format!("tool_use: {} {}", name, input))
-                                }
-                                ContentBlock::Text { text } => Some(text.clone()),
-                                _ => None,
-                            })
-                            .collect::<Vec<_>>()
-                            .join("\n");
-                        let _ = recorder
-                            .record_execution_message(
-                                ae_id,
-                                "assistant",
-                                &assistant_content,
-                                None,
-                                response.usage.input_tokens as i64,
-                                response.usage.output_tokens as i64,
-                            )
-                            .await;
-
-                        // Debug: emit tool calls with full input payloads
-                        if self.debug_stream {
-                            for (tool_id, tool_name, tool_input) in &tool_uses {
-                                sink.debug_tool_call(ae_id, tool_name, tool_id, tool_input)
-                                    .await;
-                            }
-                        }
-
-                        for block in &result_blocks {
-                            if let ContentBlock::ToolResult {
-                                tool_use_id,
-                                content,
-                            } = block
-                            {
-                                let _ = recorder
-                                    .record_execution_message(
-                                        ae_id,
-                                        "tool",
-                                        content,
-                                        Some(tool_use_id.clone()),
-                                        0,
-                                        0,
-                                    )
-                                    .await;
-
-                                // Debug: emit tool result with full content
-                                if self.debug_stream {
-                                    sink.debug_tool_result(ae_id, "", tool_use_id, content)
-                                        .await;
-                                }
-                            }
-                        }
-                    }
-
-                    // Check if strategy wants to stop (e.g. complete_task was called)
-                    if strategy.should_stop() {
-                        let usage = TokenUsage {
-                            input_tokens: total_input as u32,
-                            output_tokens: total_output as u32,
-                        };
-                        strategy.on_complete("", &usage).await?;
-                        sink.done().await;
-                        return Ok(ExecutionResult {
-                            content: String::new(),
-                            content_blocks: response.content_blocks,
-                            input_tokens: total_input,
-                            output_tokens: total_output,
-                            cost_usd: 0.0,
-                            rounds_used: round + 1,
-                        });
+                    if let Some(result) = self
+                        .handle_tool_use_round(
+                            strategy,
+                            sink,
+                            recorder,
+                            cancel,
+                            round,
+                            &response,
+                            &mut messages,
+                            total_input,
+                            total_output,
+                        )
+                        .await?
+                    {
+                        return Ok(result);
                     }
                 }
                 StopReason::EndTurn | StopReason::MaxTokens | StopReason::StopSequence => {
-                    // ── on_response filters ──
-                    if let Some(ref filter_ctx) = self.filter_ctx {
-                        let mut should_retry = false;
-                        for (i, f) in self.filters.iter().enumerate() {
-                            if filter_retried[i] {
-                                continue;
-                            }
-                            let mut ctx = filter_ctx.clone();
-                            ctx.round = round;
-                            match f.on_response(&ctx, &response).await? {
-                                ResponseAction::Retry { feedback } => {
-                                    debug!(filter = f.name(), round, "filter requested retry");
-                                    messages.push(Message::assistant(&response.content));
-                                    messages.push(Message::user(&feedback));
-                                    filter_retried[i] = true;
-                                    should_retry = true;
-                                    break;
-                                }
-                                ResponseAction::Accept => {}
-                            }
-                        }
-                        if should_retry {
-                            continue;
-                        }
+                    if let Some(result) = self
+                        .handle_end_turn(
+                            strategy,
+                            sink,
+                            recorder,
+                            round,
+                            &response,
+                            &mut messages,
+                            total_input,
+                            total_output,
+                            &mut filter_retried,
+                        )
+                        .await?
+                    {
+                        return Ok(result);
                     }
-
-                    // ── on_output filters ──
-                    let mut final_content = response.content.clone();
-                    if let Some(ref filter_ctx) = self.filter_ctx {
-                        let mut ctx = filter_ctx.clone();
-                        ctx.round = round;
-                        for f in &self.filters {
-                            final_content = f.on_output(&ctx, final_content).await?;
-                        }
-                    }
-
-                    // Persist final assistant response
-                    if let Some(ae_id) = strategy.agent_execution_id() {
-                        let _ = recorder
-                            .record_execution_message(
-                                ae_id,
-                                "assistant",
-                                &final_content,
-                                None,
-                                response.usage.input_tokens as i64,
-                                response.usage.output_tokens as i64,
-                            )
-                            .await;
-
-                        // Debug: emit complete assistant response
-                        if self.debug_stream {
-                            sink.debug_assistant_message(ae_id, &final_content).await;
-                        }
-                    }
-
-                    // Execution complete
-                    let usage = TokenUsage {
-                        input_tokens: total_input as u32,
-                        output_tokens: total_output as u32,
-                    };
-
-                    // Let strategy do post-processing
-                    strategy.on_complete(&final_content, &usage).await?;
-
-                    sink.done().await;
-
-                    return Ok(ExecutionResult {
-                        content: final_content,
-                        content_blocks: response.content_blocks,
-                        input_tokens: total_input,
-                        output_tokens: total_output,
-                        cost_usd: 0.0, // Strategies compute cost in on_complete
-                        rounds_used: round + 1,
-                    });
+                    // None means a filter requested retry — continue the loop
                 }
             }
         }
 
         Err(HubError::MaxRoundsExhausted { max: max_rounds })
+    }
+
+    /// Execute all tool calls from a tool-use round, record them, and check
+    /// whether the strategy wants to stop early.
+    ///
+    /// Returns `Some(ExecutionResult)` if the strategy signalled stop (e.g.
+    /// `complete_task` was called), or `None` to continue the loop.
+    async fn handle_tool_use_round(
+        &self,
+        strategy: &dyn ExecutionStrategy,
+        sink: &dyn StreamSink,
+        recorder: &ExecutionRecorder<'_>,
+        cancel: Option<&CancellationToken>,
+        round: u32,
+        response: &LLMResponse,
+        messages: &mut Vec<Message>,
+        total_input: u64,
+        total_output: u64,
+    ) -> Result<Option<ExecutionResult>, HubError> {
+        // Extract tool use blocks (caller already verified at least one exists)
+        let tool_uses: Vec<_> = response
+            .content_blocks
+            .iter()
+            .filter_map(|b| match b {
+                ContentBlock::ToolUse { id, name, input } => {
+                    Some((id.clone(), name.clone(), input.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+
+        // Append assistant message with all blocks
+        messages.push(Message::assistant_with_blocks(
+            response.content_blocks.clone(),
+        ));
+
+        // Execute each tool and build result blocks
+        let mut result_blocks = Vec::new();
+        for (tool_id, tool_name, tool_input) in &tool_uses {
+            if cancel.is_some_and(|t| t.is_cancelled()) {
+                return Err(HubError::Cancelled);
+            }
+            debug!(round, tool = %tool_name, "executing tool");
+            sink.tool_start(tool_name, tool_id, tool_input).await;
+            let result = strategy.execute_tool(tool_name, tool_input).await;
+            sink.tool_end(tool_name, tool_id, &result).await;
+
+            let result_str = match &result {
+                serde_json::Value::String(s) => s.clone(),
+                other => other.to_string(),
+            };
+            result_blocks.push(ContentBlock::ToolResult {
+                tool_use_id: tool_id.clone(),
+                content: result_str,
+            });
+        }
+
+        messages.push(Message::tool_results(result_blocks.clone()));
+
+        // Persist assistant response (tool calls) + tool results
+        if let Some(ae_id) = strategy.agent_execution_id() {
+            let assistant_content = response
+                .content_blocks
+                .iter()
+                .filter_map(|b| match b {
+                    ContentBlock::ToolUse { name, input, .. } => {
+                        Some(format!("tool_use: {} {}", name, input))
+                    }
+                    ContentBlock::Text { text } => Some(text.clone()),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            let _ = recorder
+                .record_execution_message(
+                    ae_id,
+                    "assistant",
+                    &assistant_content,
+                    None,
+                    response.usage.input_tokens as i64,
+                    response.usage.output_tokens as i64,
+                )
+                .await;
+
+            // Debug: emit tool calls with full input payloads
+            if self.debug_stream {
+                for (tool_id, tool_name, tool_input) in &tool_uses {
+                    sink.debug_tool_call(ae_id, tool_name, tool_id, tool_input)
+                        .await;
+                }
+            }
+
+            for block in &result_blocks {
+                if let ContentBlock::ToolResult {
+                    tool_use_id,
+                    content,
+                } = block
+                {
+                    let _ = recorder
+                        .record_execution_message(
+                            ae_id,
+                            "tool",
+                            content,
+                            Some(tool_use_id.clone()),
+                            0,
+                            0,
+                        )
+                        .await;
+
+                    // Debug: emit tool result with full content
+                    if self.debug_stream {
+                        sink.debug_tool_result(ae_id, "", tool_use_id, content)
+                            .await;
+                    }
+                }
+            }
+        }
+
+        // Check if strategy wants to stop (e.g. complete_task was called)
+        if strategy.should_stop() {
+            let usage = TokenUsage {
+                input_tokens: total_input as u32,
+                output_tokens: total_output as u32,
+            };
+            strategy.on_complete("", &usage).await?;
+            sink.done().await;
+            return Ok(Some(ExecutionResult {
+                content: String::new(),
+                content_blocks: response.content_blocks.clone(),
+                input_tokens: total_input,
+                output_tokens: total_output,
+                cost_usd: 0.0,
+                rounds_used: round + 1,
+            }));
+        }
+
+        Ok(None)
+    }
+
+    /// Run response/output filters, persist the final assistant message,
+    /// and call the strategy's `on_complete` callback.
+    ///
+    /// Returns `Some(ExecutionResult)` when the turn is complete, or `None`
+    /// if a filter requested a retry (the caller should `continue` the loop).
+    async fn handle_end_turn(
+        &self,
+        strategy: &dyn ExecutionStrategy,
+        sink: &dyn StreamSink,
+        recorder: &ExecutionRecorder<'_>,
+        round: u32,
+        response: &LLMResponse,
+        messages: &mut Vec<Message>,
+        total_input: u64,
+        total_output: u64,
+        filter_retried: &mut [bool],
+    ) -> Result<Option<ExecutionResult>, HubError> {
+        // ── on_response filters ──
+        if let Some(ref filter_ctx) = self.filter_ctx {
+            for (i, f) in self.filters.iter().enumerate() {
+                if filter_retried[i] {
+                    continue;
+                }
+                let mut ctx = filter_ctx.clone();
+                ctx.round = round;
+                match f.on_response(&ctx, response).await? {
+                    ResponseAction::Retry { feedback } => {
+                        debug!(filter = f.name(), round, "filter requested retry");
+                        messages.push(Message::assistant(&response.content));
+                        messages.push(Message::user(&feedback));
+                        filter_retried[i] = true;
+                        return Ok(None);
+                    }
+                    ResponseAction::Accept => {}
+                }
+            }
+        }
+
+        // ── on_output filters ──
+        let mut final_content = response.content.clone();
+        if let Some(ref filter_ctx) = self.filter_ctx {
+            let mut ctx = filter_ctx.clone();
+            ctx.round = round;
+            for f in &self.filters {
+                final_content = f.on_output(&ctx, final_content).await?;
+            }
+        }
+
+        // Persist final assistant response
+        if let Some(ae_id) = strategy.agent_execution_id() {
+            let _ = recorder
+                .record_execution_message(
+                    ae_id,
+                    "assistant",
+                    &final_content,
+                    None,
+                    response.usage.input_tokens as i64,
+                    response.usage.output_tokens as i64,
+                )
+                .await;
+
+            // Debug: emit complete assistant response
+            if self.debug_stream {
+                sink.debug_assistant_message(ae_id, &final_content).await;
+            }
+        }
+
+        // Execution complete
+        let usage = TokenUsage {
+            input_tokens: total_input as u32,
+            output_tokens: total_output as u32,
+        };
+
+        // Let strategy do post-processing
+        strategy.on_complete(&final_content, &usage).await?;
+
+        sink.done().await;
+
+        Ok(Some(ExecutionResult {
+            content: final_content,
+            content_blocks: response.content_blocks.clone(),
+            input_tokens: total_input,
+            output_tokens: total_output,
+            cost_usd: 0.0, // Strategies compute cost in on_complete
+            rounds_used: round + 1,
+        }))
     }
 }
 
