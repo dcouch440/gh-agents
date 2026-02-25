@@ -23,7 +23,7 @@ import {
   selectIsStale,
 } from './selectors'
 import { fetchAll, fetchIfStale, fetchOne, create, update, remove, loadWorkflow, clearActive, upsert, setDirty } from './workflows'
-import { createStep, patchStepLocal, patchStepSilent, updateStep, deleteStep, saveAllDirtySteps, revertSteps } from './steps'
+import { createStep, patchStepLocal, patchStepSilent, updateStep, deleteStep, removeStepLocal, saveAllDirtySteps, revertSteps } from './steps'
 import { addEdge, removeEdge } from './edges'
 import { fetchStepDocuments, addStepDocument, removeStepDocument } from './documents'
 import { fetchRoster, createRosterAgent, deleteRosterAgent, fetchRoomStepMembers } from './roster'
@@ -69,6 +69,7 @@ export const workflowStore = {
   saveAllDirtySteps,
   revertSteps,
   deleteStep,
+  removeStepLocal,
   addEdge,
   removeEdge,
   fetchStepDocuments,
