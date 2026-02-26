@@ -2,18 +2,13 @@
 // Arrow Routing — Smooth Cubic Bezier Paths Between Boxes
 // ============================================================================
 //
-// Computes smooth cubic bezier curves between box anchor points.
-// Control points extend from each endpoint in the exit direction, creating
-// natural flowing curves like Excalidraw's default arrow style.
-//
-// Two variants:
-// - Point-based (ArrowPath) — used by Canvas 2D renderer
-// - String-based (SVG path) — used by serialization and SVG fallback
+// Computes smooth cubic bezier curves between box focus points.
+// The actual perimeter connection points are computed at render time via
+// ray-box intersection, so arrows dynamically update when boxes move.
 
 import type { Point, Side } from '@/utils/geometry'
-import { resolveAnchor } from '../elements/bounds'
-import type { AnchorPoint, BoxElement } from '../elements'
-import { applyBindingGap } from './binding'
+import type { BoxElement, FocusPoint } from '../elements'
+import { applyBindingGap, focusToAbsolute, focusToPerimeter } from './binding'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -51,26 +46,69 @@ const controlPointForSide = (point: Point, side: Side, distance: number): Point 
   }
 }
 
+/** Unit normal vector pointing outward from a side. */
+const sideNormal = (side: Side): Point => {
+  switch (side) {
+    case 'top': return { x: 0, y: -1 }
+    case 'bottom': return { x: 0, y: 1 }
+    case 'left': return { x: -1, y: 0 }
+    case 'right': return { x: 1, y: 0 }
+  }
+}
+
+/**
+ * Compute a control point that blends the perpendicular exit direction (70%)
+ * with the direction toward the opposite focus point (30%). This makes arrows
+ * aim more naturally when boxes aren't axis-aligned.
+ */
+const blendedControlPoint = (
+  exitPoint: Point,
+  exitSide: Side,
+  target: Point,
+  distance: number,
+): Point => {
+  const perp = sideNormal(exitSide)
+  const dx = target.x - exitPoint.x
+  const dy = target.y - exitPoint.y
+  const len = Math.sqrt(dx * dx + dy * dy) || 1
+  const toTarget = { x: dx / len, y: dy / len }
+
+  const blendX = perp.x * 0.7 + toTarget.x * 0.3
+  const blendY = perp.y * 0.7 + toTarget.y * 0.3
+  const blendLen = Math.sqrt(blendX * blendX + blendY * blendY) || 1
+
+  return {
+    x: exitPoint.x + (blendX / blendLen) * distance,
+    y: exitPoint.y + (blendY / blendLen) * distance,
+  }
+}
+
 // ── Point-Based API (for Canvas 2D renderer) ──────────────────────────────
 
 /**
- * Compute arrow path points between two anchored boxes.
+ * Compute arrow path points between two boxes using focus-point binding.
  *
- * The curve exits perpendicular to the source side and enters perpendicular
- * to the target side, creating a natural S-curve or C-curve.
+ * The perimeter connection points and exit sides are computed dynamically
+ * via ray-box intersection, so the arrow naturally updates when boxes move.
  */
 const computeArrowPathPoints = (
   sourceBox: BoxElement,
-  sourceAnchor: AnchorPoint,
+  sourceFocus: FocusPoint,
   targetBox: BoxElement,
-  targetAnchor: AnchorPoint,
+  targetFocus: FocusPoint,
 ): ArrowPath => {
-  const start = applyBindingGap(resolveAnchor(sourceBox, sourceAnchor), sourceAnchor.side)
-  const end = applyBindingGap(resolveAnchor(targetBox, targetAnchor), targetAnchor.side)
+  const targetFocusAbs = focusToAbsolute(targetBox, targetFocus)
+  const sourceFocusAbs = focusToAbsolute(sourceBox, sourceFocus)
+
+  const sourceHit = focusToPerimeter(sourceBox, sourceFocus, targetFocusAbs)
+  const targetHit = focusToPerimeter(targetBox, targetFocus, sourceFocusAbs)
+
+  const start = applyBindingGap(sourceHit.point, sourceHit.side)
+  const end = applyBindingGap(targetHit.point, targetHit.side)
 
   const dist = controlPointDistance(start, end)
-  const cp1 = controlPointForSide(start, sourceAnchor.side, dist)
-  const cp2 = controlPointForSide(end, targetAnchor.side, dist)
+  const cp1 = blendedControlPoint(start, sourceHit.side, targetFocusAbs, dist)
+  const cp2 = blendedControlPoint(end, targetHit.side, sourceFocusAbs, dist)
 
   return { start, cp1, cp2, end }
 }
@@ -80,15 +118,18 @@ const computeArrowPathPoints = (
  */
 const computeDrawingArrowPathPoints = (
   sourceBox: BoxElement,
-  sourceAnchor: AnchorPoint,
+  sourceFocus: FocusPoint,
   cursorX: number,
   cursorY: number,
 ): ArrowPath => {
-  const start = applyBindingGap(resolveAnchor(sourceBox, sourceAnchor), sourceAnchor.side)
-  const end: Point = { x: cursorX, y: cursorY }
+  const cursor: Point = { x: cursorX, y: cursorY }
+  const sourceHit = focusToPerimeter(sourceBox, sourceFocus, cursor)
+
+  const start = applyBindingGap(sourceHit.point, sourceHit.side)
+  const end = cursor
 
   const dist = controlPointDistance(start, end)
-  const cp1 = controlPointForSide(start, sourceAnchor.side, dist)
+  const cp1 = controlPointForSide(start, sourceHit.side, dist)
   const approachSide = inferApproachSide(start, end)
   const cp2 = controlPointForSide(end, approachSide, dist)
 
@@ -98,15 +139,15 @@ const computeDrawingArrowPathPoints = (
 // ── String-Based API (for SVG compatibility) ──────────────────────────────
 
 /**
- * Compute an SVG cubic bezier path string between two anchored boxes.
+ * Compute an SVG cubic bezier path string between two boxes.
  */
 const computeArrowPath = (
   sourceBox: BoxElement,
-  sourceAnchor: AnchorPoint,
+  sourceFocus: FocusPoint,
   targetBox: BoxElement,
-  targetAnchor: AnchorPoint,
+  targetFocus: FocusPoint,
 ): string => {
-  const p = computeArrowPathPoints(sourceBox, sourceAnchor, targetBox, targetAnchor)
+  const p = computeArrowPathPoints(sourceBox, sourceFocus, targetBox, targetFocus)
   return `M ${p.start.x} ${p.start.y} C ${p.cp1.x} ${p.cp1.y}, ${p.cp2.x} ${p.cp2.y}, ${p.end.x} ${p.end.y}`
 }
 
@@ -115,11 +156,11 @@ const computeArrowPath = (
  */
 const computeDrawingArrowPath = (
   sourceBox: BoxElement,
-  sourceAnchor: AnchorPoint,
+  sourceFocus: FocusPoint,
   cursorX: number,
   cursorY: number,
 ): string => {
-  const p = computeDrawingArrowPathPoints(sourceBox, sourceAnchor, cursorX, cursorY)
+  const p = computeDrawingArrowPathPoints(sourceBox, sourceFocus, cursorX, cursorY)
   return `M ${p.start.x} ${p.start.y} C ${p.cp1.x} ${p.cp1.y}, ${p.cp2.x} ${p.cp2.y}, ${p.end.x} ${p.end.y}`
 }
 

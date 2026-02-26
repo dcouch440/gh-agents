@@ -7,7 +7,7 @@
 
 import { createArrowFromSaved, createBoxFromSaved, emptyBoard } from './factory'
 import { textIdForBox } from './serialize'
-import type { AnchorPoint, BoardElements } from './types'
+import type { BoardElements } from './types'
 
 type RawElement = Record<string, unknown>
 
@@ -79,15 +79,15 @@ const deserializeFromExcalidraw = (elements: readonly RawElement[]): BoardElemen
     const sourceBox = boxes.get(sourceBoxId)!
     const targetBox = boxes.get(targetBoxId)!
 
-    const sourceAnchor = computeAnchorBetweenBoxes(sourceBox, targetBox)
-    const targetAnchor = computeAnchorBetweenBoxes(targetBox, sourceBox)
+    const sourceFocus = computeFocusBetweenBoxes(sourceBox, targetBox)
+    const targetFocus = computeFocusBetweenBoxes(targetBox, sourceBox)
 
     const arrow = createArrowFromSaved(
       el['id'] as string,
       sourceBoxId,
       targetBoxId,
-      sourceAnchor,
-      targetAnchor,
+      sourceFocus,
+      targetFocus,
     )
     arrows.set(arrow.id, arrow)
   }
@@ -131,13 +131,14 @@ const findBoundText = (rect: RawElement, byId: Map<string, RawElement>): string 
 }
 
 /**
- * Compute the anchor on `fromBox` that faces `toBox`.
- * Uses center-to-center direction to determine the facing side.
+ * Compute a FocusPoint on `fromBox` that faces `toBox`.
+ * Ray-casts from center of fromBox toward center of toBox and converts
+ * the perimeter intersection to a 2D ratio.
  */
-const computeAnchorBetweenBoxes = (
+const computeFocusBetweenBoxes = (
   fromBox: { x: number; y: number; width: number; height: number },
   toBox: { x: number; y: number; width: number; height: number },
-): AnchorPoint => {
+): { fx: number; fy: number } => {
   const fromCx = fromBox.x + fromBox.width / 2
   const fromCy = fromBox.y + fromBox.height / 2
   const toCx = toBox.x + toBox.width / 2
@@ -146,10 +147,18 @@ const computeAnchorBetweenBoxes = (
   const dx = toCx - fromCx
   const dy = toCy - fromCy
 
-  if (Math.abs(dx) > Math.abs(dy)) {
-    return { side: dx > 0 ? 'right' : 'left', ratio: 0.5 }
+  // Determine facing side using aspect-ratio-aware comparison
+  const halfW = fromBox.width / 2 || 1
+  const halfH = fromBox.height / 2 || 1
+  const nx = dx / halfW
+  const ny = dy / halfH
+
+  if (Math.abs(nx) > Math.abs(ny)) {
+    // Horizontal side — fx is 0 (left) or 1 (right), fy is 0.5
+    return { fx: nx > 0 ? 1 : 0, fy: 0.5 }
   }
-  return { side: dy > 0 ? 'bottom' : 'top', ratio: 0.5 }
+  // Vertical side — fy is 0 (top) or 1 (bottom), fx is 0.5
+  return { fx: 0.5, fy: ny > 0 ? 1 : 0 }
 }
 
 export { deserializeFromExcalidraw }

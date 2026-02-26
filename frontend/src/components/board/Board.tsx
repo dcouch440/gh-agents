@@ -86,7 +86,7 @@ function Board({ workflowId }: BoardProps) {
   // ── Derived state ────────────────────────────────────────────────────────
   const editingBoxId = interaction.type === 'editing' ? interaction.boxId : null
   const drawingArrow: DrawingArrow = interaction.type === 'drawing-arrow'
-    ? { sourceBoxId: interaction.sourceBoxId, sourceAnchor: interaction.sourceAnchor, cursorX: interaction.cursorX, cursorY: interaction.cursorY }
+    ? { sourceBoxId: interaction.sourceBoxId, sourceFocus: interaction.sourceFocus, cursorX: interaction.cursorX, cursorY: interaction.cursorY }
     : null
 
   const createBoxAtPoint = useCallback((point: Point) => {

@@ -439,7 +439,7 @@ const renderBoard = (
     const targetBox = elements.boxes.get(arrow.targetBoxId)
     if (sourceBox === undefined || targetBox === undefined) continue
 
-    const path = computeArrowPathPoints(sourceBox, arrow.sourceAnchor, targetBox, arrow.targetAnchor)
+    const path = computeArrowPathPoints(sourceBox, arrow.sourceFocus, targetBox, arrow.targetFocus)
     const isSelected = selection.selectedIds.has(arrowId)
     drawArrow(rc, path, arrowId, isSelected, theme)
   }
@@ -450,7 +450,7 @@ const renderBoard = (
     if (sourceBox !== undefined) {
       const path = computeDrawingArrowPathPoints(
         sourceBox,
-        drawingArrow.sourceAnchor,
+        drawingArrow.sourceFocus,
         drawingArrow.cursorX,
         drawingArrow.cursorY,
       )

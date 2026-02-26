@@ -16,7 +16,7 @@ const boardWith = (...fns: ((b: BoardElements) => BoardElements)[]): BoardElemen
 const boxA = createBox(0, 0, 'A')
 const boxB = createBox(200, 0, 'B')
 const boxC = createBox(400, 0, 'C')
-const anchor = { side: 'right' as const, ratio: 0.5 }
+const focus = { fx: 1, fy: 0.5 }
 
 // ============================================================================
 // hasArrow
@@ -36,7 +36,7 @@ describe('hasArrow', () => {
   })
 
   it('returns true when exact source→target arrow exists', () => {
-    const arrow = createArrow(boxA.id, boxB.id, anchor, anchor)
+    const arrow = createArrow(boxA.id, boxB.id, focus, focus)
     const board = boardWith(
       (b) => addBox(b, boxA),
       (b) => addBox(b, boxB),
@@ -46,7 +46,7 @@ describe('hasArrow', () => {
   })
 
   it('returns false for reverse direction', () => {
-    const arrow = createArrow(boxA.id, boxB.id, anchor, anchor)
+    const arrow = createArrow(boxA.id, boxB.id, focus, focus)
     const board = boardWith(
       (b) => addBox(b, boxA),
       (b) => addBox(b, boxB),
@@ -56,8 +56,8 @@ describe('hasArrow', () => {
   })
 
   it('returns true when multiple arrows exist and one matches', () => {
-    const arrowAB = createArrow(boxA.id, boxB.id, anchor, anchor)
-    const arrowAC = createArrow(boxA.id, boxC.id, anchor, anchor)
+    const arrowAB = createArrow(boxA.id, boxB.id, focus, focus)
+    const arrowAC = createArrow(boxA.id, boxC.id, focus, focus)
     const board = boardWith(
       (b) => addBox(b, boxA),
       (b) => addBox(b, boxB),

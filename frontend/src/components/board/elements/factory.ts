@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { BOARD } from '../constants'
-import type { AnchorPoint, ArrowElement, BoardElements, BoxElement } from './types'
+import type { ArrowElement, BoardElements, BoxElement, FocusPoint } from './types'
 
 const createBox = (x: number, y: number, text = ''): BoxElement => ({
   id: crypto.randomUUID(),
@@ -18,15 +18,15 @@ const createBox = (x: number, y: number, text = ''): BoxElement => ({
 const createArrow = (
   sourceBoxId: string,
   targetBoxId: string,
-  sourceAnchor: AnchorPoint,
-  targetAnchor: AnchorPoint,
+  sourceFocus: FocusPoint,
+  targetFocus: FocusPoint,
 ): ArrowElement => ({
   id: crypto.randomUUID(),
   type: 'arrow',
   sourceBoxId,
   targetBoxId,
-  sourceAnchor,
-  targetAnchor,
+  sourceFocus,
+  targetFocus,
 })
 
 const emptyBoard = (): BoardElements => ({
@@ -58,15 +58,15 @@ const createArrowFromSaved = (
   id: string,
   sourceBoxId: string,
   targetBoxId: string,
-  sourceAnchor: AnchorPoint,
-  targetAnchor: AnchorPoint,
+  sourceFocus: FocusPoint,
+  targetFocus: FocusPoint,
 ): ArrowElement => ({
   id,
   type: 'arrow',
   sourceBoxId,
   targetBoxId,
-  sourceAnchor,
-  targetAnchor,
+  sourceFocus,
+  targetFocus,
 })
 
 export { createArrow, createArrowFromSaved, createBox, createBoxFromSaved, emptyBoard }

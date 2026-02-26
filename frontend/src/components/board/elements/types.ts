@@ -26,13 +26,24 @@ type AnchorPoint = {
   readonly ratio: number // 0..1 along the side (0.5 = midpoint)
 }
 
+/**
+ * A 2D focus point within a box's bounds, expressed as ratios [0..1].
+ * (0,0) = top-left corner, (0.5, 0.5) = center, (1,1) = bottom-right.
+ * The actual perimeter connection point is computed at render time via
+ * ray-box intersection toward the opposite endpoint.
+ */
+type FocusPoint = {
+  readonly fx: number
+  readonly fy: number
+}
+
 type ArrowElement = {
   readonly id: string
   readonly type: 'arrow'
   readonly sourceBoxId: string
   readonly targetBoxId: string
-  readonly sourceAnchor: AnchorPoint
-  readonly targetAnchor: AnchorPoint
+  readonly sourceFocus: FocusPoint
+  readonly targetFocus: FocusPoint
 }
 
 // ── Board State ────────────────────────────────────────────────────────────
@@ -62,7 +73,7 @@ type MarqueeRect = {
 type InteractionMode =
   | { readonly type: 'idle' }
   | { readonly type: 'dragging'; readonly elementId: string; readonly offsetX: number; readonly offsetY: number }
-  | { readonly type: 'drawing-arrow'; readonly sourceBoxId: string; readonly sourceAnchor: AnchorPoint; readonly cursorX: number; readonly cursorY: number }
+  | { readonly type: 'drawing-arrow'; readonly sourceBoxId: string; readonly sourceFocus: FocusPoint; readonly cursorX: number; readonly cursorY: number }
   | { readonly type: 'selecting'; readonly startX: number; readonly startY: number }
   | { readonly type: 'panning'; readonly startX: number; readonly startY: number; readonly startPanX: number; readonly startPanY: number }
   | { readonly type: 'editing'; readonly boxId: string }
@@ -86,7 +97,7 @@ type ViewportState = {
 
 type DrawingArrow = {
   readonly sourceBoxId: string
-  readonly sourceAnchor: AnchorPoint
+  readonly sourceFocus: FocusPoint
   readonly cursorX: number
   readonly cursorY: number
 } | null
@@ -108,6 +119,7 @@ export type {
   BoxElement,
   ArrowElement,
   AnchorPoint,
+  FocusPoint,
   BoardElements,
   SelectionState,
   MarqueeRect,

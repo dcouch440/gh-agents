@@ -25,6 +25,14 @@ const BOARD = {
   ARROW_STROKE_WIDTH: 2,
   ARROW_HEAD_SIZE: 12,
 
+  // ── Edge hover ──────────────────────────────────────────────────────────
+  /** Base distance from box edge to trigger arrow binding hover (px). */
+  EDGE_HOVER_THRESHOLD: 16,
+  /** Minimum edge hover threshold at high zoom. */
+  EDGE_HOVER_MIN_THRESHOLD: 8,
+  /** Maximum edge hover threshold at low zoom. */
+  EDGE_HOVER_MAX_THRESHOLD: 32,
+
   // ── Handles ──────────────────────────────────────────────────────────────
   HANDLE_SIZE: 8,
   HANDLE_HOVER_SIZE: 12,
