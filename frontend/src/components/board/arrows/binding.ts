@@ -217,6 +217,7 @@ const ratioAlongSide = (box: BoxElement, side: Side, point: Point): number => {
 export {
   anchorToFocus,
   applyBindingGap,
+  bestFacingSide,
   computeBindingAnchor,
   computeGeometricFocus,
   focusToAbsolute,

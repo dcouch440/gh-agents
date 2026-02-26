@@ -1,6 +1,7 @@
 export {
   anchorToFocus,
   applyBindingGap,
+  bestFacingSide,
   computeBindingAnchor,
   computeGeometricFocus,
   focusToAbsolute,

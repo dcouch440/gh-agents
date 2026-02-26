@@ -6,9 +6,10 @@
 // The actual perimeter connection points are computed at render time via
 // ray-box intersection, so arrows dynamically update when boxes move.
 
+import { Geometry } from '@/utils/geometry'
 import type { Point, Side } from '@/utils/geometry'
 import type { BoxElement, FocusPoint } from '../elements'
-import { applyBindingGap, focusToAbsolute, focusToPerimeter } from './binding'
+import { applyBindingGap, bestFacingSide, focusToPerimeter } from './binding'
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -86,31 +87,43 @@ const blendedControlPoint = (
 // ── Point-Based API (for Canvas 2D renderer) ──────────────────────────────
 
 /**
- * Compute arrow path points between two boxes using focus-point binding.
+ * Compute arrow path points between two boxes.
  *
- * The perimeter connection points and exit sides are computed dynamically
- * via ray-box intersection, so the arrow naturally updates when boxes move.
+ * Exit sides and perimeter points are computed from box centers using
+ * bestFacingSide (with horizontal bias), always at the side midpoint.
+ * Focus points are kept in the signature for API compatibility but
+ * are not used — sides are determined purely by relative box positions.
  */
 const computeArrowPathPoints = (
   sourceBox: BoxElement,
-  sourceFocus: FocusPoint,
+  _sourceFocus: FocusPoint,
   targetBox: BoxElement,
-  targetFocus: FocusPoint,
+  _targetFocus: FocusPoint,
 ): ArrowPath => {
-  const targetFocusAbs = focusToAbsolute(targetBox, targetFocus)
-  const sourceFocusAbs = focusToAbsolute(sourceBox, sourceFocus)
+  const { side: sourceSide, point: sourcePoint } = computeExitSide(sourceBox, targetBox)
+  const { side: targetSide, point: targetPoint } = computeExitSide(targetBox, sourceBox)
 
-  const sourceHit = focusToPerimeter(sourceBox, sourceFocus, targetFocusAbs)
-  const targetHit = focusToPerimeter(targetBox, targetFocus, sourceFocusAbs)
-
-  const start = applyBindingGap(sourceHit.point, sourceHit.side)
-  const end = applyBindingGap(targetHit.point, targetHit.side)
+  const start = applyBindingGap(sourcePoint, sourceSide)
+  const end = applyBindingGap(targetPoint, targetSide)
 
   const dist = controlPointDistance(start, end)
-  const cp1 = blendedControlPoint(start, sourceHit.side, targetFocusAbs, dist)
-  const cp2 = blendedControlPoint(end, targetHit.side, sourceFocusAbs, dist)
+  const targetCenter: Point = { x: targetBox.x + targetBox.width / 2, y: targetBox.y + targetBox.height / 2 }
+  const sourceCenter: Point = { x: sourceBox.x + sourceBox.width / 2, y: sourceBox.y + sourceBox.height / 2 }
+  const cp1 = blendedControlPoint(start, sourceSide, targetCenter, dist)
+  const cp2 = blendedControlPoint(end, targetSide, sourceCenter, dist)
 
   return { start, cp1, cp2, end }
+}
+
+/** Compute which side of `fromBox` faces `toBox`, with the side midpoint. */
+const computeExitSide = (
+  fromBox: BoxElement,
+  toBox: BoxElement,
+): { side: Side; point: Point } => {
+  const dx = (toBox.x + toBox.width / 2) - (fromBox.x + fromBox.width / 2)
+  const dy = (toBox.y + toBox.height / 2) - (fromBox.y + fromBox.height / 2)
+  const side = bestFacingSide(dx, dy, fromBox.width, fromBox.height)
+  return { side, point: Geometry.sideCenter(fromBox, side) }
 }
 
 /**
