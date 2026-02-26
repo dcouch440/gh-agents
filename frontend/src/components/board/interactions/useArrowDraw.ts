@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { useCallback } from 'react'
-import { anchorToFocus, computeGeometricFocus, focusToAbsolute } from '../arrows'
+import { anchorToFocus, computeGeometricFocus } from '../arrows'
 import type { AnchorPoint, BoardElements, InteractionMode, ViewportState } from '../elements'
 import { addArrow, containerEventToCanvas, createArrow, hasArrow, hitTestBox } from '../elements'
 import type { SetElements, SetInteraction } from './types'
@@ -54,12 +54,12 @@ const useArrowDraw = (
       const targetBox = elements.boxes.get(targetBoxId)
       const sourceBox = elements.boxes.get(interaction.sourceBoxId)
       if (targetBox !== undefined && sourceBox !== undefined && !hasArrow(elements, interaction.sourceBoxId, targetBoxId)) {
-        const sourceFocusAbs = focusToAbsolute(sourceBox, interaction.sourceFocus)
-        const targetFocus = computeGeometricFocus(targetBox, sourceFocusAbs)
+        const sourceFocus = computeGeometricFocus(sourceBox, targetBox)
+        const targetFocus = computeGeometricFocus(targetBox, sourceBox)
         const arrow = createArrow(
           interaction.sourceBoxId,
           targetBoxId,
-          interaction.sourceFocus,
+          sourceFocus,
           targetFocus,
         )
         setElements((s) => addArrow(s, arrow))
