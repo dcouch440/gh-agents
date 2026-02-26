@@ -183,7 +183,7 @@ function Canvas2D({
 
     // Check edge hover (only when arrow tool is active)
     if (activeTool === 'arrow' && editingBoxId === null) {
-      const hover = detectEdgeHover(canvas.x, canvas.y, elements)
+      const hover = detectEdgeHover(canvas.x, canvas.y, elements, viewport.zoom)
       setEdgeHover(hover)
 
       if (hover !== null) {

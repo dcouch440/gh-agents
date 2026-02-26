@@ -1,4 +1,13 @@
-export { applyBindingGap, computeBindingAnchor, computeGeometricAnchor, ratioAlongSide, resolveAnchorWithGap } from './binding'
+export {
+  anchorToFocus,
+  applyBindingGap,
+  computeBindingAnchor,
+  computeGeometricFocus,
+  focusToAbsolute,
+  focusToPerimeter,
+  ratioAlongSide,
+  rayBoxIntersection,
+} from './binding'
 export {
   computeArrowPath,
   computeArrowPathPoints,

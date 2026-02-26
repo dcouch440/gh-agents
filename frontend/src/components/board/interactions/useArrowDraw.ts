@@ -3,9 +3,9 @@
 // ============================================================================
 
 import { useCallback } from 'react'
-import { computeGeometricAnchor } from '../arrows'
+import { anchorToFocus, computeGeometricFocus, focusToAbsolute } from '../arrows'
 import type { AnchorPoint, BoardElements, InteractionMode, ViewportState } from '../elements'
-import { addArrow, containerEventToCanvas, createArrow, hasArrow, hitTestBox, resolveAnchor } from '../elements'
+import { addArrow, containerEventToCanvas, createArrow, hasArrow, hitTestBox } from '../elements'
 import type { SetElements, SetInteraction } from './types'
 
 const useArrowDraw = (
@@ -21,7 +21,7 @@ const useArrowDraw = (
     setInteraction({
       type: 'drawing-arrow',
       sourceBoxId,
-      sourceAnchor: anchor,
+      sourceFocus: anchorToFocus(anchor),
       cursorX: canvas.x,
       cursorY: canvas.y,
     })
@@ -54,14 +54,13 @@ const useArrowDraw = (
       const targetBox = elements.boxes.get(targetBoxId)
       const sourceBox = elements.boxes.get(interaction.sourceBoxId)
       if (targetBox !== undefined && sourceBox !== undefined && !hasArrow(elements, interaction.sourceBoxId, targetBoxId)) {
-        // Use geometric anchor — picks the side facing the source box
-        const sourcePoint = resolveAnchor(sourceBox, interaction.sourceAnchor)
-        const targetAnchor = computeGeometricAnchor(targetBox, sourcePoint)
+        const sourceFocusAbs = focusToAbsolute(sourceBox, interaction.sourceFocus)
+        const targetFocus = computeGeometricFocus(targetBox, sourceFocusAbs)
         const arrow = createArrow(
           interaction.sourceBoxId,
           targetBoxId,
-          interaction.sourceAnchor,
-          targetAnchor,
+          interaction.sourceFocus,
+          targetFocus,
         )
         setElements((s) => addArrow(s, arrow))
       }

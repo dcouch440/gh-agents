@@ -108,7 +108,7 @@ const hitTestArrow = (
     const targetBox = elements.boxes.get(arrow.targetBoxId)
     if (sourceBox === undefined || targetBox === undefined) continue
 
-    const path = computeArrowPathPoints(sourceBox, arrow.sourceAnchor, targetBox, arrow.targetAnchor)
+    const path = computeArrowPathPoints(sourceBox, arrow.sourceFocus, targetBox, arrow.targetFocus)
     if (pointNearCubicBezier(point.x, point.y, path, threshold)) {
       return arrowId
     }
@@ -126,26 +126,32 @@ type EdgeHover = {
   readonly cy: number
 }
 
-const EDGE_HOVER_THRESHOLD = 16
-
 /**
  * Detect which box edge the cursor is near, for arrow binding.
  * Returns the nearest edge within threshold, or null.
+ * Threshold is zoom-adaptive: larger at low zoom, smaller at high zoom.
  */
 const detectEdgeHover = (
   canvasX: number,
   canvasY: number,
   elements: BoardElements,
+  zoom = 1,
 ): EdgeHover | null => {
+  const threshold = Geometry.clamp(
+    BOARD.EDGE_HOVER_THRESHOLD / zoom,
+    BOARD.EDGE_HOVER_MIN_THRESHOLD,
+    BOARD.EDGE_HOVER_MAX_THRESHOLD,
+  )
+
   for (let i = elements.boxOrder.length - 1; i >= 0; i--) {
     const boxId = elements.boxOrder[i]!
     const box = elements.boxes.get(boxId)
     if (box === undefined) continue
 
-    const expandedLeft = box.x - EDGE_HOVER_THRESHOLD
-    const expandedTop = box.y - EDGE_HOVER_THRESHOLD
-    const expandedRight = box.x + box.width + EDGE_HOVER_THRESHOLD
-    const expandedBottom = box.y + box.height + EDGE_HOVER_THRESHOLD
+    const expandedLeft = box.x - threshold
+    const expandedTop = box.y - threshold
+    const expandedRight = box.x + box.width + threshold
+    const expandedBottom = box.y + box.height + threshold
 
     if (canvasX < expandedLeft || canvasX > expandedRight || canvasY < expandedTop || canvasY > expandedBottom) {
       continue
@@ -166,7 +172,7 @@ const detectEdgeHover = (
       if (distances[d]!.dist < best.dist) best = distances[d]!
     }
 
-    if (best.dist > EDGE_HOVER_THRESHOLD) continue
+    if (best.dist > threshold) continue
 
     let cx: number
     let cy: number

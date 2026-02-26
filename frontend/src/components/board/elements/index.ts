@@ -1,4 +1,4 @@
-export { computeBoxSize, resolveAnchor } from './bounds'
+export { computeBoxSize } from './bounds'
 export { deserializeFromExcalidraw } from './deserialize'
 export { containerEventToCanvas, eventToCanvas } from './eventToCanvas'
 export { createArrow, createBox, emptyBoard } from './factory'
@@ -33,6 +33,7 @@ export type {
   BoardElements,
   BoxElement,
   DrawingArrow,
+  FocusPoint,
   InteractionMode,
   MarqueeRect,
   ResizeHandle,

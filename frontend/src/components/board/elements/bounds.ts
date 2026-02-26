@@ -2,19 +2,7 @@
 // Bounds — Bounding Box and Anchor Point Computation
 // ============================================================================
 
-import { Geometry } from '@/utils/geometry'
-import type { Point } from '@/utils/geometry'
 import { BOARD } from '../constants'
-import type { AnchorPoint, BoxElement } from './types'
-
-/**
- * Resolve an anchor point on a box to absolute canvas coordinates.
- *
- * Uses the box's bounding rect and the anchor's side + ratio to compute
- * the exact point where an arrow should connect.
- */
-const resolveAnchor = (box: BoxElement, anchor: AnchorPoint): Point =>
-  Geometry.pointAlongSide(box, anchor.side, anchor.ratio)
 
 /**
  * Compute auto-sized box dimensions from text content.
@@ -105,4 +93,4 @@ const getMeasurer = (): HTMLDivElement => {
   return el
 }
 
-export { computeBoxSize, resolveAnchor }
+export { computeBoxSize }

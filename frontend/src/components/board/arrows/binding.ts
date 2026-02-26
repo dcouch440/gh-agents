@@ -10,8 +10,7 @@
 import { Geometry } from '@/utils/geometry'
 import type { Point, Side } from '@/utils/geometry'
 import { BOARD } from '../constants'
-import { resolveAnchor } from '../elements/bounds'
-import type { AnchorPoint, BoxElement } from '../elements'
+import type { AnchorPoint, BoxElement, FocusPoint } from '../elements'
 
 /**
  * Compute the best anchor point on a box for a cursor position.
@@ -51,37 +50,6 @@ const applyBindingGap = (point: Point, side: Side): Point => {
 }
 
 /**
- * Resolve an anchor to canvas coordinates with binding gap applied.
- */
-const resolveAnchorWithGap = (box: BoxElement, anchor: AnchorPoint): Point => {
-  const point = resolveAnchor(box, anchor)
-  return applyBindingGap(point, anchor.side)
-}
-
-// ── Geometric Anchor ──────────────────────────────────────────────────────
-
-/**
- * Compute the geometrically ideal anchor point on a target box
- * given a source point. Picks the side that faces toward the source,
- * normalized by the box's aspect ratio so wide boxes prefer left/right
- * and tall boxes prefer top/bottom.
- *
- * Always snaps to the side midpoint (ratio 0.5) for clean orthogonal routing.
- */
-const computeGeometricAnchor = (
-  targetBox: BoxElement,
-  sourcePoint: Point,
-): AnchorPoint => {
-  const cx = targetBox.x + targetBox.width / 2
-  const cy = targetBox.y + targetBox.height / 2
-  const dx = sourcePoint.x - cx
-  const dy = sourcePoint.y - cy
-
-  const side = bestFacingSide(dx, dy, targetBox.width, targetBox.height)
-  return { side, ratio: 0.5 }
-}
-
-/**
  * Pick the side of a box that best faces toward a direction vector,
  * normalized by box dimensions to handle non-square boxes.
  */
@@ -99,6 +67,132 @@ const bestFacingSide = (dx: number, dy: number, w: number, h: number): Side => {
   return ny > 0 ? 'bottom' : 'top'
 }
 
+// ── Focus-Point Binding ───────────────────────────────────────────────────
+
+/**
+ * Convert a FocusPoint (ratios within box bounds) to absolute canvas coords.
+ */
+const focusToAbsolute = (box: BoxElement, focus: FocusPoint): Point => ({
+  x: box.x + focus.fx * box.width,
+  y: box.y + focus.fy * box.height,
+})
+
+/**
+ * Ray-box intersection for an axis-aligned rectangle.
+ * Given an origin inside (or on) the box and a target point,
+ * finds where the ray from origin toward target crosses the box perimeter.
+ */
+const rayBoxIntersection = (
+  box: BoxElement,
+  origin: Point,
+  target: Point,
+): { point: Point; side: Side } => {
+  const dx = target.x - origin.x
+  const dy = target.y - origin.y
+
+  // Degenerate: zero-length ray — fall back to facing side center
+  if (dx === 0 && dy === 0) {
+    const side: Side = 'right'
+    return { point: Geometry.sideCenter(box, side), side }
+  }
+
+  let bestT = Infinity
+  let bestSide: Side = 'right'
+  let bestPoint: Point = Geometry.sideCenter(box, 'right')
+
+  // Right edge: x = box.x + box.width
+  if (dx !== 0) {
+    const t = (box.x + box.width - origin.x) / dx
+    if (t > 0 && t < bestT) {
+      const y = origin.y + t * dy
+      if (y >= box.y && y <= box.y + box.height) {
+        bestT = t; bestSide = 'right'; bestPoint = { x: box.x + box.width, y }
+      }
+    }
+    // Left edge: x = box.x
+    const tL = (box.x - origin.x) / dx
+    if (tL > 0 && tL < bestT) {
+      const y = origin.y + tL * dy
+      if (y >= box.y && y <= box.y + box.height) {
+        bestT = tL; bestSide = 'left'; bestPoint = { x: box.x, y }
+      }
+    }
+  }
+
+  if (dy !== 0) {
+    // Bottom edge: y = box.y + box.height
+    const t = (box.y + box.height - origin.y) / dy
+    if (t > 0 && t < bestT) {
+      const x = origin.x + t * dx
+      if (x >= box.x && x <= box.x + box.width) {
+        bestT = t; bestSide = 'bottom'; bestPoint = { x, y: box.y + box.height }
+      }
+    }
+    // Top edge: y = box.y
+    const tT = (box.y - origin.y) / dy
+    if (tT > 0 && tT < bestT) {
+      const x = origin.x + tT * dx
+      if (x >= box.x && x <= box.x + box.width) {
+        bestT = tT; bestSide = 'top'; bestPoint = { x, y: box.y }
+      }
+    }
+  }
+
+  // If no valid intersection found (origin is outside box), use facing side
+  if (bestT === Infinity) {
+    const side = bestFacingSide(dx, dy, box.width, box.height)
+    return { point: Geometry.sideCenter(box, side), side }
+  }
+
+  return { point: bestPoint, side: bestSide }
+}
+
+/**
+ * Compute the perimeter point where a ray from focus toward target
+ * exits the box, plus which side it exits from.
+ */
+const focusToPerimeter = (
+  box: BoxElement,
+  focus: FocusPoint,
+  targetAbs: Point,
+): { point: Point; side: Side } => {
+  const focusAbs = focusToAbsolute(box, focus)
+  return rayBoxIntersection(box, focusAbs, targetAbs)
+}
+
+/**
+ * Convert an AnchorPoint (side + ratio) to a FocusPoint (2D ratio).
+ * Used when creating arrows from edge hover, which detects side + ratio.
+ */
+const anchorToFocus = (anchor: AnchorPoint): FocusPoint => {
+  switch (anchor.side) {
+    case 'top':    return { fx: anchor.ratio, fy: 0 }
+    case 'bottom': return { fx: anchor.ratio, fy: 1 }
+    case 'left':   return { fx: 0, fy: anchor.ratio }
+    case 'right':  return { fx: 1, fy: anchor.ratio }
+  }
+}
+
+/**
+ * Compute a focus point on a target box that faces the source point.
+ * Replaces computeGeometricAnchor — instead of always returning ratio 0.5,
+ * this projects the source direction onto the box perimeter and converts
+ * to a 2D focus ratio.
+ */
+const computeGeometricFocus = (
+  targetBox: BoxElement,
+  sourcePoint: Point,
+): FocusPoint => {
+  const cx = targetBox.x + targetBox.width / 2
+  const cy = targetBox.y + targetBox.height / 2
+  const { point } = rayBoxIntersection(targetBox, { x: cx, y: cy }, sourcePoint)
+
+  return {
+    fx: targetBox.width > 0 ? Geometry.clamp((point.x - targetBox.x) / targetBox.width, 0, 1) : 0.5,
+    fy: targetBox.height > 0 ? Geometry.clamp((point.y - targetBox.y) / targetBox.height, 0, 1) : 0.5,
+  }
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 const ratioAlongSide = (box: BoxElement, side: Side, point: Point): number => {
@@ -112,4 +206,13 @@ const ratioAlongSide = (box: BoxElement, side: Side, point: Point): number => {
   }
 }
 
-export { applyBindingGap, computeBindingAnchor, computeGeometricAnchor, ratioAlongSide, resolveAnchorWithGap }
+export {
+  anchorToFocus,
+  applyBindingGap,
+  computeBindingAnchor,
+  computeGeometricFocus,
+  focusToAbsolute,
+  focusToPerimeter,
+  ratioAlongSide,
+  rayBoxIntersection,
+}
