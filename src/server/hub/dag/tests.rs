@@ -984,4 +984,153 @@ mod tests {
         assert_eq!(result.total_output_tokens, 5);
         assert_eq!(result.outputs.len(), 3);
     }
+
+    // ---------------------------------------------------------------------------
+    // Routing Guard: child_workflow_id with non-workforce mode
+    // ---------------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn step_with_child_workflow_id_routes_through_pipeline() {
+        // A step with execution_mode = "single" but child_workflow_id set
+        // should route through the workforce pipeline (not execute_single_step).
+        // Since no mission brief exists, the pipeline path will error with
+        // "no mission brief" — proving the routing guard activated.
+        let agent_id = Uuid::new_v4();
+        let step_id = Uuid::new_v4();
+        let child_wf_id = Uuid::new_v4();
+
+        let provider = Arc::new(FixedProvider {
+            response: make_llm_response(r#"{"result":"hello"}"#, 10, 5),
+        });
+
+        // Build harness with get_mission_brief returning None
+        let agent = agent(agent_id);
+        let mut agent_repo = MockAgentRepo::new();
+        let agent_clone = agent.clone();
+        agent_repo
+            .expect_get_persisted_agent()
+            .returning(move |id| {
+                if id == agent_id {
+                    Ok(Some(agent_clone.clone()))
+                } else {
+                    Ok(None)
+                }
+            });
+        agent_repo
+            .expect_get_agent_guidances()
+            .returning(|_, _| Ok(vec![]));
+        agent_repo
+            .expect_get_agent_context()
+            .returning(|_| Ok(vec![]));
+
+        let mut tool_repo = MockToolRepo::new();
+        tool_repo.expect_get_agent_tools().returning(|_| Ok(vec![]));
+
+        let mut wf_repo = MockWorkflowRepo::new();
+        wf_repo.expect_get_step_inputs().returning(|_| Ok(vec![]));
+        wf_repo.expect_get_step_outputs().returning(|_| Ok(vec![]));
+        wf_repo
+            .expect_get_step_routing_rules()
+            .returning(|_| Ok(vec![]));
+        wf_repo
+            .expect_list_step_documents()
+            .returning(|_| Ok(vec![]));
+        // Pipeline path calls get_mission_brief — return None to trigger a clear error
+        wf_repo.expect_get_mission_brief().returning(|_| Ok(None));
+
+        let mut ae_repo = MockAgentExecutionRepo::new();
+        ae_repo
+            .expect_create_agent_execution()
+            .returning(|_| Ok(agent_execution()));
+        ae_repo
+            .expect_create_execution_message()
+            .returning(|_, _, _, _, _, _| Ok(execution_message(Uuid::new_v4())));
+        ae_repo
+            .expect_update_agent_execution_status()
+            .returning(|_, _, _, _| Ok(agent_execution()));
+        ae_repo
+            .expect_list_exemplary_executions()
+            .returning(|_, _, _| Ok(vec![]));
+
+        let mut tl_repo = MockTokenLedgerRepo::new();
+        tl_repo
+            .expect_insert_ledger_entry()
+            .returning(|_, _, _, _, _, _| Ok(token_ledger(Uuid::new_v4())));
+
+        let mut cv_repo = MockContentVersionRepo::new();
+        cv_repo.expect_find_or_create_version().returning(
+            |source_id, content_type, content_hash, _content| {
+                Ok(ContentVersionRow {
+                    id: Uuid::new_v4(),
+                    source_id,
+                    content_type: content_type.to_string(),
+                    content_hash: content_hash.to_string(),
+                    content: String::new(),
+                    version_number: 1,
+                    byte_size: 0,
+                    created_at: Utc::now(),
+                })
+            },
+        );
+        cv_repo
+            .expect_get_latest_envelope_for_step()
+            .returning(|_| Ok(None));
+        cv_repo.expect_create_run_snapshot().returning(
+            |run_id, step_id, content_type, role, cv_id, source_id| {
+                Ok(RunSnapshotRow {
+                    id: Uuid::new_v4(),
+                    run_id,
+                    step_id,
+                    content_type: content_type.to_string(),
+                    role: role.to_string(),
+                    content_version_id: cv_id,
+                    source_id,
+                    created_at: Utc::now(),
+                })
+            },
+        );
+
+        let repos = MockReposBuilder::new()
+            .with_agents(Arc::new(agent_repo))
+            .with_tools(Arc::new(tool_repo))
+            .with_workflows(Arc::new(wf_repo))
+            .with_agent_executions(Arc::new(ae_repo))
+            .with_token_ledger(Arc::new(tl_repo))
+            .with_content_versions(Arc::new(cv_repo))
+            .build();
+
+        let engine = ExecutionEngine::new(provider.clone(), false);
+        let (state, _rx) = AppStateBuilder::new()
+            .with_repos(repos)
+            .with_config(AppConfig::default())
+            .with_provider(provider)
+            .build_for_test();
+
+        let ctx = make_ctx();
+
+        // Step: execution_mode = "single", child_workflow_id = Some(...)
+        let mut step = make_integration_step(step_id, agent_id, "Test prompt", Some("output"), 0);
+        step.execution_mode = "single".to_string();
+        step.child_workflow_id = Some(child_wf_id);
+
+        let steps = vec![step];
+        let edges = vec![];
+
+        let result = execute_workflow_via_engine(&engine, &state, &ctx, &steps, &edges, None).await;
+
+        // The pipeline path produces "no mission brief" error — proving
+        // the routing guard activated (single-step path would have succeeded
+        // since the agent exists and provider returns valid output).
+        match result {
+            Err(err) => {
+                let err_msg = format!("{}", err);
+                assert!(
+                    err_msg.contains("mission brief"),
+                    "Expected pipeline 'mission brief' error, got: {}",
+                    err_msg
+                );
+            }
+            Ok(_) => panic!("Expected error from pipeline path, but execution succeeded"),
+        }
+    }
 }

@@ -99,6 +99,9 @@ pub async fn run_workflow(
         }
     };
 
+    // Filter out hidden steps (e.g. manager dispatch anchor)
+    let steps: Vec<_> = steps.into_iter().filter(|s| s.visible).collect();
+
     if steps.is_empty() {
         return Err(AppError::bad_request("Workflow has no steps"));
     }

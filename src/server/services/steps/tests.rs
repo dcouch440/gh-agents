@@ -90,7 +90,7 @@ mod tests {
         )
         .await;
         let step = result.unwrap();
-        assert_eq!(step.execution_mode, "single");
+        assert_eq!(step.execution_mode, "workforce");
         assert_eq!(step.agent_id, Some(crate::constants::DEFAULT_AGENT_ID));
         assert!(!step.reasoning_trace);
         assert_eq!(step.display_order, 0);

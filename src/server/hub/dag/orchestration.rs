@@ -139,6 +139,17 @@ async fn dispatch_step(
                 .execute(dag, step, dag_state)
                 .await
         }
+        _ if step.child_workflow_id.is_some() => {
+            warn!(
+                step_id = %step.id,
+                mode = %step.execution_mode,
+                "Step has child_workflow_id but non-workforce mode — routing as workforce"
+            );
+            Pipeline::new()
+                .before(DesignerPhase)
+                .execute(dag, step, dag_state)
+                .await
+        }
         _ => execute_with_agent(dag, dag_state, step).await,
     }
 }

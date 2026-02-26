@@ -1597,6 +1597,58 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn compose_prompt_falls_back_to_var_outputs() {
+        // When prompt_template is empty, port_inputs is None, and prior_outputs is empty,
+        // compose_prompt should use var_outputs (completed upstream step data) as a last resort.
+        let mut step = make_step(Uuid::new_v4(), 0);
+        step.prompt_template = String::new();
+        let repo = mock_agent_repo();
+        let repos = PromptRepos {
+            prompt_template_repo: None,
+            doc_repo: None,
+            workflow_repo: None,
+            agent_repo: &*repo,
+        };
+        let mut outputs = HashMap::new();
+        outputs.insert(
+            "research".to_string(),
+            serde_json::json!("upstream research data"),
+        );
+        let prior = HashMap::new();
+
+        let result = compose_prompt(&step, &repos, &outputs, &prior, None).await;
+
+        assert!(result.contains("upstream research data"));
+        assert!(result.starts_with("<task>\n"));
+    }
+
+    #[tokio::test]
+    async fn compose_prompt_prefers_port_inputs_over_var_outputs() {
+        // When port_inputs has data, var_outputs should NOT be used as the raw_prompt fallback.
+        let mut step = make_step(Uuid::new_v4(), 0);
+        step.prompt_template = String::new();
+        let repo = mock_agent_repo();
+        let repos = PromptRepos {
+            prompt_template_repo: None,
+            doc_repo: None,
+            workflow_repo: None,
+            agent_repo: &*repo,
+        };
+        let mut outputs = HashMap::new();
+        outputs.insert(
+            "research".to_string(),
+            serde_json::json!("should not appear in raw prompt"),
+        );
+        let prior = HashMap::new();
+        let mut ports = HashMap::new();
+        ports.insert("data".to_string(), serde_json::json!("port data wins"));
+
+        let result = compose_prompt(&step, &repos, &outputs, &prior, Some(&ports)).await;
+
+        assert!(result.contains("port data wins"));
+    }
+
+    #[tokio::test]
     async fn compose_prompt_task_contains_protocol_injection() {
         // Protocol injection is appended to prompt_template before compose_prompt runs.
         // It should end up inside <task> tags.
