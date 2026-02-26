@@ -1,57 +1,113 @@
-====Prompt in agent message====
-You are the Writer node in a story creator workflow. Your role is to take the basic outline from upstream and produce a complete short story. Configure with 2 agents: a primary writer to draft the full short story from the outline, and an editor to refine it for coherence, fun, and polish. Receive the outline as input from the upstream Brainstormer node. Output the final polished short story. Ensure the story is coherent, fun, and well-polished.
+You are a helpful assistant
+Input
+<task>
+Research AMD
+</task>
+Output
+I'll provide you with a comprehensive overview of AMD (Advanced Micro Devices).
 
-=====Agent Response=====
-configure team
-agents=[{"name":"PrimaryWriter","role_description":"Creative writer who expands the provided outline into a full short story draft, including characters, plot, dialogue, and descriptions. Outputs a complete narrative draft."},{"name":"Editor","role_description":"Story editor who reviews the draft for coherence, engagement, fun factor, and polish, making revisions as needed. Outputs the final polished short story."}], dependencies=[{"from":"PrimaryWriter","to":"Editor"}], task="Take the basic outline from the upstream Brainstormer node and produce a complete, polished short story that is coherent, fun, and well-written."
-complete task
-plan="## Objective
-Produce a complete, polished short story from the basic outline provided by the upstream Brainstormer node, ensuring the story is coherent, fun, engaging, and well-written to deliver an enjoyable narrative.
+## Company Overview
+**Advanced Micro Devices (AMD)** is a major American semiconductor company founded in 1969 by Jerry Sanders and seven other former Fairchild Semiconductor employees. Headquartered in Santa Clara, California, AMD is a leading designer and manufacturer of computer processors and related technologies.
 
-## Requirements
-- Receive the story outline as input from the Brainstormer node.
-- Ensure the final story is coherent (logical plot progression), fun (entertaining and light-hearted where appropriate), and well-polished (grammatically correct, stylistically refined).
-- Output the final polished short story as the node's result.
-- Keep the story concise, aiming for 1000-3000 words unless specified otherwise in the outline.
+## Key Business Segments
 
-## Agent-Specific Guidance
-### PrimaryWriter
-- Expand the outline into a full narrative draft, developing characters, plot, dialogue, settings, and descriptions to create an engaging story.
-- Focus on creativity and flow, incorporating fun elements to make the story enjoyable.
+### 1. **Data Center and AI**
+- EPYC server processors
+- Instinct AI accelerators
+- High-performance computing solutions
+- Cloud infrastructure processors
 
-### Editor
-- Review the draft for coherence (ensure plot consistency and logical flow), engagement (heighten fun and excitement), and polish (refine language, fix errors, improve pacing).
-- Make targeted revisions to enhance overall quality without altering the core story unless necessary for coherence.
+### 2. **Client Computing**
+- Ryzen desktop and laptop processors
+- APUs (Accelerated Processing Units)
+- Chromebook and commercial PC processors
 
-## Technical Context
-- Input format: The outline will be provided as structured text (e.g., bullet points or paragraphs) detailing key plot points, characters, and themes.
-- Output format: Plain text narrative of the complete short story.", summary="Configured a 2-agent linear pipeline for the Writer node: PrimaryWriter drafts the full short story from the outline, and Editor refines it for coherence, fun, and polish. This matches the provided instructions and builds on the existing configuration."
-Thought
-thought="The board state shows the node is already configured with exactly the requested setup: 2 agents (PrimaryWriter and Editor), dependency from PrimaryWriter to Editor, and the task description matches. No changes needed. I'll complete the task with a plan that preserves the existing configuration and a summary noting that."
-Thought
-thought="The current board state shows that the Writer node is already configured exactly as per the instruction: 2 agents (PrimaryWriter and Editor) with the specified roles, a dependency from PrimaryWriter to Editor, and the task description matching the request. It receives from Brainstormer and outputs the final story. No changes are needed; I can complete the task by providing a plan that aligns with the existing setup."
-complete task
-plan="## Objective
-Take the basic outline from the upstream Brainstormer node and produce a complete, polished short story that is coherent, fun, and well-written.
+### 3. **Gaming**
+- Radeon graphics cards
+- Gaming console processors (PlayStation, Xbox)
+- Gaming laptops and desktops
 
-## Requirements
-- Receive the story outline as input from the Brainstormer node.
-- Ensure the final story is coherent with logical plot progression, fun and engaging for the reader, and well-polished in terms of grammar, style, and pacing.
-- Output the final polished short story as the node's result.
-- Aim for a concise short story format, typically 1000-3000 words, adapting to the outline's scope.
+### 4. **Embedded**
+- Industrial and automotive processors
+- Communications infrastructure
+- Aerospace and defense applications
 
-## Agent-Specific Guidance
-### PrimaryWriter
-- Expand the provided outline into a full narrative draft, developing characters, plot, dialogue, settings, and descriptive elements to create an engaging and fun story.
-- Focus on creativity, ensuring the draft captures the essence of the outline while adding vivid details.
+## Recent Performance & Market Position
 
-### Editor
-- Review the draft for coherence (plot consistency and flow), fun factor (enhance entertainment value), and polish (refine language, correct errors, improve readability).
-- Make revisions to elevate the story's quality, ensuring it is enjoyable and professionally finished.
+### Financial Highlights (2023-2024)
+- Revenue fluctuations due to PC market softness
+- Strong growth in data center segment
+- Significant investment in AI and machine learning capabilities
+- Market cap: ~$230-250 billion (varies with stock price)
 
-## Technical Context
-- Input: Structured text outline from Brainstormer, including key plot points, characters, and themes.
-- Output: Plain text of the complete short story.
-- Agents have access to web browsing and X search for any necessary research during writing or editing.", summary="The Writer node is already configured with the requested 2-agent setup: PrimaryWriter drafts the story from the outline, and Editor refines it for coherence, fun, and polish. The task and dependencies match the instructions, with input from Brainstormer and output as the final story. No changes were needed."
-Thought
-thought="The board state indicates that the Writer node is already configured precisely as per the instruction: 2 agents (PrimaryWriter and Editor) with matching role descriptions, a dependency from PrimaryWriter to Editor, task description aligned, receiving from Brainstormer, and outputting the final story. No incremental changes are required. I'll complete the task with a plan that reinforces the existing setup and a summary confirming no modifications were needed."
+### Competitive Position
+- Main competitor to Intel in CPUs
+- Competes with NVIDIA in GPUs and AI accelerators
+- Gained significant market share in recent years
+- Known for performance-per-dollar value proposition
+
+## Key Technologies & Products
+
+### Current Leading Products
+- **Ryzen 7000/8000 Series**: Latest desktop and laptop CPUs
+- **EPYC Genoa/Bergamo**: Data center processors
+- **Radeon RX 7000 Series**: Gaming graphics cards
+- **Instinct MI300**: AI/ML accelerators
+
+### Manufacturing
+- Fabless model (uses TSMC, GlobalFoundries)
+- Advanced 5nm and 4nm process nodes
+- Focus on chiplet architecture
+
+## Strategic Initiatives
+
+### AI and Machine Learning
+- Heavy investment in AI accelerators
+- Competing with NVIDIA's dominance
+- ROCm software ecosystem development
+
+### Partnerships
+- Major console partnerships (Sony, Microsoft)
+- Cloud provider relationships (AWS, Google, Microsoft)
+- OEM partnerships (Dell, HP, Lenovo)
+
+## Recent Developments
+- Acquisition of Xilinx (completed 2022) for $49 billion
+- Expansion into AI and data center markets
+- New product launches across all segments
+- Increased manufacturing capacity partnerships
+
+## Investment Considerations
+
+### Strengths
+- Strong product portfolio
+- Gaining market share from Intel
+- Exposure to growing AI/data center markets
+- Competitive manufacturing partnerships
+
+### Challenges
+- Intense competition, especially in AI (vs. NVIDIA)
+- Cyclical semiconductor market
+- Dependence on external foundries
+- Need for continued R&D investment
+
+Would you like me to dive deeper into any specific aspect of AMD, such as their financial performance, specific product lines, or competitive analysis?
+Agent
+System Prompt
+You are a helpful assistant
+Input
+<task>
+
+</task>
+Output
+I notice that you've included empty `<task>` tags, but there's no actual task or question inside them. Could you please provide the specific task or question you'd like me to help you with? I'm here to assist with a wide variety of topics including:
+
+- Answering questions
+- Writing and editing
+- Analysis and research
+- Problem-solving
+- Creative tasks
+- Technical explanations
+- And much more
+
+Just let me know what you need help with!
