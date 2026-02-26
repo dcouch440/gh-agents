@@ -14,9 +14,46 @@ pub use dispatch::DispatchStrategy;
 pub use manager_dispatch::ManagerDispatchStrategy;
 pub use workforce_agent::{WorkforceAgentConfig, WorkforceAgentStrategy};
 
+use crate::db::ChatMessageRow;
 use crate::llm::TokenUsage;
 use crate::server::state::AppState;
 use uuid::Uuid;
+
+/// Build a single instruction string from session history + current instruction.
+///
+/// Drops all prior user messages (stale full-node before/after blocks) and keeps
+/// the last `max_summaries` assistant messages (passdown summaries). These are
+/// formatted as a numbered `<prior_work>` XML block prepended to the instruction.
+///
+/// The board_state in the system prompt is the source of truth for current node
+/// state — prior user messages are redundant. The passdown summaries provide
+/// lightweight continuity about what the builder previously configured.
+pub fn build_pruned_instruction(
+    history: &[ChatMessageRow],
+    instruction: &str,
+    max_summaries: usize,
+) -> String {
+    let assistant_summaries: Vec<&str> = history
+        .iter()
+        .filter(|row| row.role == "assistant")
+        .map(|row| row.content.as_str())
+        .collect();
+
+    let keep = assistant_summaries.len().min(max_summaries);
+    let recent = &assistant_summaries[assistant_summaries.len() - keep..];
+
+    if recent.is_empty() {
+        return instruction.to_string();
+    }
+
+    let mut prior_work = String::from("<prior_work>\n");
+    for (i, summary) in recent.iter().enumerate() {
+        prior_work.push_str(&format!("{}. {}\n", i + 1, summary));
+    }
+    prior_work.push_str("</prior_work>");
+
+    format!("{}\n\n{}", prior_work, instruction)
+}
 
 /// Log token usage to the ledger. Shared by all strategies that track costs.
 pub async fn log_token_usage(
