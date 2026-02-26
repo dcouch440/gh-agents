@@ -240,6 +240,14 @@ async fn execute_single_agent(
         );
     }
 
+    // Inject board context (annotations, sketches from the canvas)
+    if !env.board_context.is_empty() {
+        task_prompt.push_str(&format!(
+            "\n\n<board_context>\n{}\n</board_context>",
+            env.board_context
+        ));
+    }
+
     // Inject user notes
     if !env.user_notes_block.is_empty() {
         task_prompt = format!("{}\n\n{task_prompt}", env.user_notes_block);

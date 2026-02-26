@@ -1248,8 +1248,9 @@ impl WorkflowRepo for PgRepo {
                 output_schema_id = $6, output_variable_name = $7, interactive_agent_id = $8, for_each_label_field = $9, display_order = $10,
                 reasoning_trace = $11, verification_agent_ids = $12, position_x = $13, position_y = $14, width = $15, height = $16,
                 name = $17, system_prompt_suffix = $18, visible = $19, description = $20, child_workflow_id = $21,
+                board_context_cache = $22, board_context_updated_at = $23,
                 version = version + 1
-            WHERE id = $22
+            WHERE id = $24
             RETURNING *
             "#,
         )
@@ -1274,6 +1275,8 @@ impl WorkflowRepo for PgRepo {
         .bind(step.visible)
         .bind(&step.description)
         .bind(step.child_workflow_id)
+        .bind(&step.board_context_cache)
+        .bind(step.board_context_updated_at)
         .bind(step.id)
         .fetch_one(&self.pool)
         .await?;
