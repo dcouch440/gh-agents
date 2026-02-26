@@ -92,7 +92,30 @@ const deserializeFromExcalidraw = (elements: readonly RawElement[]): BoardElemen
     arrows.set(arrow.id, arrow)
   }
 
-  return { boxes, arrows, boxOrder }
+  // Pass 3: Find freedraw elements → PenElements
+  const pens = new Map(board.pens)
+  for (const [, el] of byId) {
+    if (el['type'] !== 'freedraw') continue
+    if (el['isDeleted'] === true) continue
+
+    const id = el['id'] as string
+    const baseX = (el['x'] as number | undefined) ?? 0
+    const baseY = (el['y'] as number | undefined) ?? 0
+    const rawPoints = el['points'] as number[][] | undefined
+    if (rawPoints === undefined || rawPoints.length < 2) continue
+
+    const points: { x: number; y: number }[] = []
+    const pressures: number[] = []
+    for (let j = 0; j < rawPoints.length; j++) {
+      const pt = rawPoints[j]!
+      points.push({ x: baseX + (pt[0] ?? 0), y: baseY + (pt[1] ?? 0) })
+      pressures.push(pt[2] ?? 0.5)
+    }
+
+    pens.set(id, { id, type: 'pen', points, pressures })
+  }
+
+  return { boxes, arrows, pens, boxOrder }
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

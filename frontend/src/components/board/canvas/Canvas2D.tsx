@@ -8,8 +8,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BOARD } from '../constants'
-import type { ActiveTool, AnchorPoint, BoardElements, DrawingArrow, DrawingBox, EdgeHover, InteractionMode, ResizeHandle, SelectionState, ViewportState } from '../elements'
-import { detectEdgeHover, eventToCanvas, hitTestArrow, hitTestBox, hitTestResizeHandles, RESIZE_CURSORS } from '../elements'
+import type { ActiveTool, AnchorPoint, BoardElements, DrawingArrow, DrawingBox, DrawingPen, EdgeHover, InteractionMode, ResizeHandle, SelectionState, ViewportState } from '../elements'
+import { detectEdgeHover, eventToCanvas, hitTestArrow, hitTestBox, hitTestPen, hitTestResizeHandles, RESIZE_CURSORS } from '../elements'
 import { renderBoard } from './renderer'
 import type { DrawTheme } from './renderer'
 import { computeTextareaStyle } from './textareaStyle'
@@ -26,6 +26,7 @@ type Canvas2DProps = {
   readonly viewport: ViewportState
   readonly drawingArrow: DrawingArrow
   readonly drawingBox: DrawingBox
+  readonly drawingPen: DrawingPen
   readonly canvasBg: string
   readonly gridDotColor: string
   readonly connectorColor: string
@@ -59,6 +60,7 @@ function Canvas2D({
   viewport,
   drawingArrow,
   drawingBox,
+  drawingPen,
   canvasBg,
   gridDotColor,
   connectorColor,
@@ -98,7 +100,7 @@ function Canvas2D({
       const cvs = canvasRef.current
       if (cvs === null) return
       const { width, height } = sizeRef.current
-      renderBoard(cvs, width, height, elements, selection, editingBoxId, viewport, drawingArrow, drawingBox, edgeHover, theme)
+      renderBoard(cvs, width, height, elements, selection, editingBoxId, viewport, drawingArrow, drawingBox, drawingPen, edgeHover, theme)
     }
   })
 
@@ -141,7 +143,7 @@ function Canvas2D({
   // ── Canvas Render Pipeline ────────────────────────────────────────────
   useEffect(() => {
     renderRef.current()
-  }, [elements, selection, editingBoxId, viewport, drawingArrow, drawingBox, edgeHover, theme, fontGeneration])
+  }, [elements, selection, editingBoxId, viewport, drawingArrow, drawingBox, drawingPen, edgeHover, theme, fontGeneration])
 
   // ── Focus textarea when editing starts ────────────────────────────────
   useEffect(() => {
@@ -170,6 +172,13 @@ function Canvas2D({
 
     // During box drawing, show crosshair and skip hit testing
     if (interaction.type === 'drawing-box') {
+      setCursor('crosshair')
+      setEdgeHover(null)
+      return
+    }
+
+    // During pen drawing, show crosshair and skip hit testing
+    if (interaction.type === 'drawing-pen') {
       setCursor('crosshair')
       setEdgeHover(null)
       return
@@ -205,7 +214,7 @@ function Canvas2D({
 
     // Check if over a box (for grab cursor)
     const overBox = hitTestBox(elements, canvas) !== null
-    if (activeTool === 'box') {
+    if (activeTool === 'box' || activeTool === 'pen') {
       setCursor('crosshair')
     } else {
       setCursor(overBox ? 'grab' : 'default')
@@ -216,6 +225,12 @@ function Canvas2D({
     if (e.button !== 0) return
 
     const canvas = eventToCanvas(e, viewport)
+
+    // Pen tool: always pass through to Board handler (draw anywhere, including over boxes)
+    if (activeTool === 'pen') {
+      onPointerDown(e)
+      return
+    }
 
     // Check resize handles first
     const resizeHit = hitTestResizeHandles(canvas.x, canvas.y, elements, selection.selectedIds)
@@ -244,7 +259,7 @@ function Canvas2D({
 
     // Clicked on empty space
     onPointerDown(e)
-  }, [edgeHover, elements, onAnchorPointerDown, onBoxPointerDown, onPointerDown, onResizePointerDown, selection.selectedIds, viewport])
+  }, [activeTool, edgeHover, elements, onAnchorPointerDown, onBoxPointerDown, onPointerDown, onResizePointerDown, selection.selectedIds, viewport])
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     const canvas = eventToCanvas(e, viewport)
@@ -308,6 +323,12 @@ function Canvas2D({
     const arrowId = hitTestArrow(elements, canvas, 8)
     if (arrowId !== null) {
       onContextMenu(e.clientX, e.clientY, arrowId)
+      return
+    }
+
+    const penId = hitTestPen(elements, canvas, 8)
+    if (penId !== null) {
+      onContextMenu(e.clientX, e.clientY, penId)
       return
     }
 

@@ -13,11 +13,13 @@ import type { BoardElements, ResizeHandle } from './types'
 
 /**
  * Returns the element ID under the given canvas point, or null.
- * Checks boxes in reverse z-order (frontmost first).
+ * Checks boxes in reverse z-order (frontmost first), then pens.
  */
 const hitTest = (state: BoardElements, point: Point): string | null => {
   const boxId = hitTestBox(state, point)
   if (boxId !== null) return boxId
+  const penId = hitTestPen(state, point, 8)
+  if (penId !== null) return penId
   return null
 }
 
@@ -56,17 +58,96 @@ const hitTestRect = (state: BoardElements, rect: Rect): string[] => {
     }
   }
 
+  // Include pens whose bounding box overlaps the selection
+  for (const [penId, pen] of state.pens) {
+    const bounds = penBounds(pen.points)
+    if (bounds !== null && Geometry.rectsOverlap(rect, bounds)) {
+      ids.push(penId)
+    }
+  }
+
   return ids
 }
 
 /**
- * Returns a Set of all element IDs (boxes + arrows).
+ * Returns a Set of all element IDs (boxes + arrows + pens).
  */
 const selectAllIds = (state: BoardElements): Set<string> => {
   const ids = new Set<string>()
   for (const id of state.boxes.keys()) ids.add(id)
   for (const id of state.arrows.keys()) ids.add(id)
+  for (const id of state.pens.keys()) ids.add(id)
   return ids
+}
+
+// ── Pen Hit Testing ──────────────────────────────────────────────────────
+
+/**
+ * Compute bounding rect from raw pen points.
+ * Returns null for empty point arrays.
+ */
+const penBounds = (points: readonly Point[]): Rect | null => {
+  if (points.length === 0) return null
+
+  let minX = points[0]!.x
+  let minY = points[0]!.y
+  let maxX = minX
+  let maxY = minY
+
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i]!
+    if (p.x < minX) minX = p.x
+    if (p.y < minY) minY = p.y
+    if (p.x > maxX) maxX = p.x
+    if (p.y > maxY) maxY = p.y
+  }
+
+  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+}
+
+/**
+ * Check if a point is within `threshold` px of any segment in a pen stroke.
+ */
+const hitTestPen = (
+  state: BoardElements,
+  point: Point,
+  threshold: number,
+): string | null => {
+  for (const [penId, pen] of state.pens) {
+    if (pen.points.length < 2) continue
+
+    for (let i = 0; i < pen.points.length - 1; i++) {
+      const a = pen.points[i]!
+      const b = pen.points[i + 1]!
+      if (pointToSegmentDistance(point.x, point.y, a.x, a.y, b.x, b.y) <= threshold) {
+        return penId
+      }
+    }
+  }
+  return null
+}
+
+/**
+ * Perpendicular distance from point (px, py) to line segment (ax, ay)→(bx, by).
+ */
+const pointToSegmentDistance = (
+  px: number, py: number,
+  ax: number, ay: number,
+  bx: number, by: number,
+): number => {
+  const dx = bx - ax
+  const dy = by - ay
+  const lenSq = dx * dx + dy * dy
+
+  if (lenSq === 0) return Geometry.distanceBetweenPoints({ x: px, y: py }, { x: ax, y: ay })
+
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq))
+  const projX = ax + t * dx
+  const projY = ay + t * dy
+
+  const distX = px - projX
+  const distY = py - projY
+  return Math.sqrt(distX * distX + distY * distY)
 }
 
 // ── Arrow Hit Testing ────────────────────────────────────────────────────
@@ -246,8 +327,10 @@ export {
   hitTest,
   hitTestArrow,
   hitTestBox,
+  hitTestPen,
   hitTestRect,
   hitTestResizeHandles,
+  penBounds,
   pointNearCubicBezier,
   RESIZE_CURSORS,
   selectAllIds,

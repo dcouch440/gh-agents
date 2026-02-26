@@ -21,6 +21,13 @@ type BoxElement = {
   readonly text: string
 }
 
+type PenElement = {
+  readonly id: string
+  readonly type: 'pen'
+  readonly points: readonly Point[]
+  readonly pressures: readonly number[]
+}
+
 type AnchorPoint = {
   readonly side: Side
   readonly ratio: number // 0..1 along the side (0.5 = midpoint)
@@ -51,6 +58,7 @@ type ArrowElement = {
 type BoardElements = {
   readonly boxes: ReadonlyMap<string, BoxElement>
   readonly arrows: ReadonlyMap<string, ArrowElement>
+  readonly pens: ReadonlyMap<string, PenElement>
   readonly boxOrder: readonly string[]
 }
 
@@ -79,12 +87,13 @@ type InteractionMode =
   | { readonly type: 'editing'; readonly boxId: string }
   | { readonly type: 'resizing'; readonly boxId: string; readonly handle: ResizeHandle; readonly startX: number; readonly startY: number; readonly startBox: { x: number; y: number; width: number; height: number } }
   | { readonly type: 'drawing-box'; readonly startX: number; readonly startY: number; readonly cursorX: number; readonly cursorY: number }
+  | { readonly type: 'drawing-pen'; readonly points: readonly Point[]; readonly pressures: readonly number[] }
 
 type ResizeHandle = 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w'
 
 // ── Active Tool ────────────────────────────────────────────────────────────
 
-type ActiveTool = 'select' | 'box' | 'arrow'
+type ActiveTool = 'select' | 'box' | 'arrow' | 'pen'
 
 // ── Viewport ───────────────────────────────────────────────────────────────
 
@@ -124,9 +133,15 @@ type DrawingBox = {
   readonly height: number
 } | null
 
+type DrawingPen = {
+  readonly points: readonly Point[]
+  readonly pressures: readonly number[]
+} | null
+
 export { screenToCanvas }
 export type {
   BoxElement,
+  PenElement,
   ArrowElement,
   AnchorPoint,
   FocusPoint,
@@ -139,4 +154,5 @@ export type {
   ViewportState,
   DrawingArrow,
   DrawingBox,
+  DrawingPen,
 }

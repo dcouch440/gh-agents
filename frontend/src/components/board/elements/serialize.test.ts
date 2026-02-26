@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createArrow, createBox, emptyBoard } from './factory'
-import { addArrow, addBox } from './mutate'
+import { createArrow, createBox, createPen, emptyBoard } from './factory'
+import { addArrow, addBox, addPen } from './mutate'
 import { serializeToExcalidraw, textIdForBox } from './serialize'
 import { deserializeFromExcalidraw } from './deserialize'
 import type { BoardElements } from './types'
@@ -127,6 +127,30 @@ describe('serializeToExcalidraw', () => {
     expect(text['x']).toBe((rect['x'] as number) + paddingX)
     expect(text['y']).toBe((rect['y'] as number) + paddingY)
   })
+
+  it('serializes pen strokes as freedraw elements with relative coordinates', () => {
+    const pen = createPen(
+      [{ x: 100, y: 200 }, { x: 110, y: 205 }, { x: 120, y: 200 }],
+      [0.5, 0.7, 0.5],
+    )
+    const board = addPen(emptyBoard(), pen)
+    const result = serializeToExcalidraw(board)
+
+    expect(result).toHaveLength(1)
+    const freedraw = result[0]!
+    expect(freedraw['type']).toBe('freedraw')
+    expect(freedraw['id']).toBe(pen.id)
+    expect(freedraw['x']).toBe(100) // min x
+    expect(freedraw['y']).toBe(200) // min y
+    expect(freedraw['isDeleted']).toBe(false)
+
+    // Points should be relative to (x, y)
+    const points = freedraw['points'] as number[][]
+    expect(points).toHaveLength(3)
+    expect(points[0]).toEqual([0, 0, 0.5])
+    expect(points[1]).toEqual([10, 5, 0.7])
+    expect(points[2]).toEqual([20, 0, 0.5])
+  })
 })
 
 // ============================================================================
@@ -189,6 +213,30 @@ describe('serialize → deserialize round-trip', () => {
     const restored = deserializeFromExcalidraw(serialized)
 
     expect(restored.boxes.has(box.id)).toBe(true)
+  })
+
+  it('round-trips pen strokes via freedraw format', () => {
+    const pen = createPen(
+      [{ x: 50, y: 60 }, { x: 70, y: 80 }, { x: 90, y: 60 }],
+      [0.5, 0.8, 0.5],
+    )
+    const original = addPen(emptyBoard(), pen)
+    const serialized = serializeToExcalidraw(original)
+    const restored = deserializeFromExcalidraw(serialized)
+
+    expect(restored.pens.size).toBe(1)
+    const restoredPen = restored.pens.get(pen.id)!
+    expect(restoredPen.id).toBe(pen.id)
+    expect(restoredPen.points).toHaveLength(3)
+
+    // Points should be reconstructed to absolute coordinates
+    expect(restoredPen.points[0]!.x).toBeCloseTo(50)
+    expect(restoredPen.points[0]!.y).toBeCloseTo(60)
+    expect(restoredPen.points[2]!.x).toBeCloseTo(90)
+    expect(restoredPen.points[2]!.y).toBeCloseTo(60)
+
+    // Pressures should be preserved
+    expect(restoredPen.pressures[1]).toBeCloseTo(0.8)
   })
 
   it('handles empty text boxes', () => {
