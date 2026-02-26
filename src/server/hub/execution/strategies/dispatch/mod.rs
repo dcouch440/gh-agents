@@ -186,27 +186,20 @@ impl ExecutionStrategy for DispatchStrategy {
 
     async fn build_messages(&self, _input: &str) -> Result<Vec<Message>, HubError> {
         if let Some(session_id) = self.session_id {
-            // Load history from the persistent builder session.
-            // The executor already inserted the current instruction as the last
-            // user message, so history includes everything we need.
             let history = self
                 .state
                 .repos()
                 .sessions
-                .get_session_history(session_id, 20) // 10 pairs max
+                .get_session_history(session_id, 20)
                 .await
                 .unwrap_or_default();
 
             if !history.is_empty() {
-                let mut messages = Vec::with_capacity(history.len());
-                for row in &history {
-                    match row.role.as_str() {
-                        "user" => messages.push(Message::user(&row.content)),
-                        "assistant" => messages.push(Message::assistant(&row.content)),
-                        _ => {}
-                    }
-                }
-                return Ok(messages);
+                // Drop prior user messages (stale full-node before/after blocks).
+                // Keep last 3 assistant passdown summaries as <prior_work> context.
+                // The board_state in the system prompt is the source of truth.
+                let combined = super::build_pruned_instruction(&history, &self.instruction, 3);
+                return Ok(vec![Message::user(&combined)]);
             }
         }
 

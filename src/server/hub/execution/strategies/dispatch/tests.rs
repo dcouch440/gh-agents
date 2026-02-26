@@ -153,4 +153,108 @@ mod tests {
         // Background dispatch has no user_id
         assert!(value["user_id"].is_null());
     }
+
+    // ========================================================================
+    // build_pruned_instruction — shared helper for message history pruning
+    // ========================================================================
+
+    use crate::db::ChatMessageRow;
+    use crate::server::hub::strategies::build_pruned_instruction;
+
+    fn make_msg(role: &str, content: &str) -> ChatMessageRow {
+        ChatMessageRow {
+            id: Uuid::new_v4(),
+            role: role.to_string(),
+            content: content.to_string(),
+            timestamp: chrono::Utc::now(),
+            source_type: None,
+        }
+    }
+
+    #[test]
+    fn pruned_empty_history_returns_instruction() {
+        let result = build_pruned_instruction(&[], "Do the thing.", 3);
+        assert_eq!(result, "Do the thing.");
+    }
+
+    #[test]
+    fn pruned_user_only_history_returns_instruction() {
+        let history = vec![
+            make_msg("user", "Configure a research team."),
+            make_msg("user", "Add a fact checker."),
+        ];
+        let result = build_pruned_instruction(&history, "Current task.", 3);
+        assert_eq!(result, "Current task.");
+    }
+
+    #[test]
+    fn pruned_includes_assistant_summaries_as_prior_work() {
+        let history = vec![
+            make_msg("user", "Configure a research team."),
+            make_msg("assistant", "Configured 3-agent pipeline."),
+            make_msg("user", "Add a fact checker."),
+            make_msg(
+                "assistant",
+                "Added FactChecker between Researcher and Writer.",
+            ),
+        ];
+        let result = build_pruned_instruction(&history, "Current task.", 3);
+
+        assert!(result.contains("<prior_work>"));
+        assert!(result.contains("</prior_work>"));
+        assert!(result.contains("1. Configured 3-agent pipeline."));
+        assert!(result.contains("2. Added FactChecker between Researcher and Writer."));
+        assert!(result.ends_with("Current task."));
+    }
+
+    #[test]
+    fn pruned_drops_user_messages() {
+        let history = vec![
+            make_msg("user", "STALE BEFORE/AFTER BLOCK"),
+            make_msg("assistant", "Summary only."),
+        ];
+        let result = build_pruned_instruction(&history, "Current task.", 3);
+
+        assert!(!result.contains("STALE BEFORE/AFTER BLOCK"));
+        assert!(result.contains("Summary only."));
+    }
+
+    #[test]
+    fn pruned_limits_to_max_summaries() {
+        let history = vec![
+            make_msg("assistant", "First."),
+            make_msg("assistant", "Second."),
+            make_msg("assistant", "Third."),
+            make_msg("assistant", "Fourth."),
+            make_msg("assistant", "Fifth."),
+        ];
+        let result = build_pruned_instruction(&history, "Current task.", 3);
+
+        assert!(!result.contains("First."));
+        assert!(!result.contains("Second."));
+        assert!(result.contains("1. Third."));
+        assert!(result.contains("2. Fourth."));
+        assert!(result.contains("3. Fifth."));
+    }
+
+    #[test]
+    fn pruned_single_summary_works() {
+        let history = vec![make_msg("assistant", "Did one thing.")];
+        let result = build_pruned_instruction(&history, "Next task.", 3);
+
+        assert!(result.contains("<prior_work>"));
+        assert!(result.contains("1. Did one thing."));
+        assert!(result.contains("</prior_work>"));
+        assert!(result.ends_with("Next task."));
+    }
+
+    #[test]
+    fn pruned_structure_is_prior_work_then_instruction() {
+        let history = vec![make_msg("assistant", "Summary.")];
+        let result = build_pruned_instruction(&history, "Do stuff.", 3);
+
+        let prior_end = result.find("</prior_work>").unwrap();
+        let instruction_start = result.find("Do stuff.").unwrap();
+        assert!(instruction_start > prior_end);
+    }
 }
