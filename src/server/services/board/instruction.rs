@@ -73,8 +73,7 @@ pub fn build_per_node_instructions(
     for change in &changeset.meaningful {
         match change {
             ScoredChange::NewNode { node, .. } => {
-                let Some(&(step_id, execution_mode)) =
-                    step_lookup.get(node.element_id.as_str())
+                let Some(&(step_id, execution_mode)) = step_lookup.get(node.element_id.as_str())
                 else {
                     continue;
                 };
@@ -88,8 +87,7 @@ pub fn build_per_node_instructions(
                 });
             }
             ScoredChange::UpdatedNode { update, .. } => {
-                let Some(&(step_id, execution_mode)) =
-                    step_lookup.get(update.element_id.as_str())
+                let Some(&(step_id, execution_mode)) = step_lookup.get(update.element_id.as_str())
                 else {
                     continue;
                 };
