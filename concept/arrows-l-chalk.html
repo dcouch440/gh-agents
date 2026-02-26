@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>L. Chalk</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1e1e2e; color: #cdd6f4; font-family: system-ui, sans-serif; padding: 40px; }
+    h1 { font-size: 24px; margin-bottom: 8px; font-weight: 400; }
+    p.desc { font-size: 13px; color: #6c7086; margin-bottom: 24px; line-height: 1.5; max-width: 700px; }
+    .back { color: #6c7086; text-decoration: none; font-size: 13px; display: inline-block; margin-bottom: 24px; }
+    .back:hover { color: #cdd6f4; }
+    canvas { border-radius: 12px; display: block; background: #181825; margin-bottom: 32px; }
+    .tag { display: inline-block; background: #313244; color: #94e2d5; font-size: 11px; padding: 2px 8px; border-radius: 4px; margin-right: 4px; margin-bottom: 16px; }
+    h2 { font-size: 18px; font-weight: 400; margin-bottom: 8px; color: #a6adc8; }
+    .section { margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <a class="back" href="index.html">&larr; Back to index</a>
+  <h1>L. Chalk</h1>
+  <p class="desc">Chalk on a blackboard. Dusty, grainy texture from many tiny dots and micro-strokes along the curve. The stroke is wide but broken — you can see through it. Imperfect, warm, educational. Like someone drew this on a lecture hall chalkboard.</p>
+
+  <div class="section">
+    <h2>White chalk — 3-box scene</h2>
+    <span class="tag">chalk texture</span><span class="tag">grainy</span><span class="tag">wide but broken</span><span class="tag">20px gap</span>
+    <canvas id="chalk1" width="740" height="360"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>Colored chalk — 3-box scene</h2>
+    <span class="tag">colored chalk</span><span class="tag">softer hues</span>
+    <canvas id="chalk2" width="740" height="360"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>White chalk — 5-box scale</h2>
+    <span class="tag">5 boxes</span><span class="tag">5 arrows</span>
+    <canvas id="chalk3" width="740" height="300"></canvas>
+  </div>
+
+  <script src="shared.js"></script>
+  <script>
+    // ================================================================
+    // Chalk drawing helper
+    // ================================================================
+    function drawChalkArrow(ctx, a, rng, color, opacity) {
+      const segments = 80
+      const chalkWidth = 4 // how wide the chalk "swipe" is
+
+      // Draw chalk texture: many small dots/dashes along the curve
+      for (let i = 0; i < segments; i++) {
+        const t = i / segments
+        const pt = bezierPoint(t, a.start, a.cp1, a.cp2, a.end)
+        const tan = bezierTangent(t, a.start, a.cp1, a.cp2, a.end)
+        const len = Math.sqrt(tan.x*tan.x + tan.y*tan.y) || 1
+        const nx = -tan.y / len
+        const ny = tan.x / len
+
+        // Scatter chalk particles across the width
+        const particles = 6 + Math.floor(rng() * 4)
+        for (let p = 0; p < particles; p++) {
+          const spread = (rng() - 0.5) * chalkWidth * 2
+          const along = (rng() - 0.5) * 4 // slight scatter along curve
+          const px = pt.x + nx * spread + (tan.x/len) * along
+          const py = pt.y + ny * spread + (tan.y/len) * along
+
+          const size = 0.5 + rng() * 1.5
+          const alpha = (0.1 + rng() * 0.35) * opacity
+
+          ctx.fillStyle = color
+          ctx.globalAlpha = alpha
+          ctx.fillRect(px - size/2, py - size/2, size, size)
+        }
+      }
+
+      // Heavier strokes — a few wider dashes for core definition
+      for (let pass = 0; pass < 3; pass++) {
+        const offX = (rng() - 0.5) * 1.5
+        const offY = (rng() - 0.5) * 1.5
+        ctx.strokeStyle = color
+        ctx.globalAlpha = 0.15 + rng() * 0.15 * opacity
+        ctx.lineWidth = 1.5 + rng() * 2
+        ctx.lineCap = 'round'
+
+        ctx.beginPath()
+        const segs = 15
+        for (let i = 0; i <= segs; i++) {
+          const t = i / segs
+          const pt = bezierPoint(t, a.start, a.cp1, a.cp2, a.end)
+          const wx = offX + (rng() - 0.5) * 2
+          const wy = offY + (rng() - 0.5) * 2
+          if (i === 0) ctx.moveTo(pt.x + wx, pt.y + wy)
+          else ctx.lineTo(pt.x + wx, pt.y + wy)
+        }
+        ctx.stroke()
+      }
+      ctx.globalAlpha = 1
+
+      // Chalk arrowhead — scattered particles in triangle shape
+      const angle = Math.atan2(a.end.y - a.cp2.y, a.end.x - a.cp2.x)
+      const spread = Math.PI / 5
+      const headSize = 20
+
+      const tipX = a.end.x, tipY = a.end.y
+      const leftX = tipX - headSize * Math.cos(angle - spread)
+      const leftY = tipY - headSize * Math.sin(angle - spread)
+      const rightX = tipX - headSize * Math.cos(angle + spread)
+      const rightY = tipY - headSize * Math.sin(angle + spread)
+
+      // Fill the arrowhead triangle with chalk dust
+      for (let p = 0; p < 80; p++) {
+        // Random point in triangle using barycentric coords
+        let u = rng(), v = rng()
+        if (u + v > 1) { u = 1 - u; v = 1 - v }
+        const w = 1 - u - v
+        const px = tipX * w + leftX * u + rightX * v
+        const py = tipY * w + leftY * u + rightY * v
+
+        const size = 0.5 + rng() * 2
+        ctx.fillStyle = color
+        ctx.globalAlpha = 0.15 + rng() * 0.4 * opacity
+        ctx.fillRect(px - size/2, py - size/2, size, size)
+      }
+
+      // A couple of rough barb lines on top
+      for (let pass = 0; pass < 2; pass++) {
+        ctx.strokeStyle = color
+        ctx.globalAlpha = 0.2 + rng() * 0.2 * opacity
+        ctx.lineWidth = 1 + rng() * 1.5
+        ctx.beginPath()
+        ctx.moveTo(leftX + (rng()-0.5)*2, leftY + (rng()-0.5)*2)
+        ctx.lineTo(tipX + (rng()-0.5)*1, tipY + (rng()-0.5)*1)
+        ctx.lineTo(rightX + (rng()-0.5)*2, rightY + (rng()-0.5)*2)
+        ctx.stroke()
+      }
+      ctx.globalAlpha = 1
+    }
+
+    // ================================================================
+    // White chalk — 3 box
+    // ================================================================
+    {
+      const { ctx } = initCanvas('chalk1', 740, 360)
+      const scene = getScene(20)
+      drawBoxes(ctx, scene.boxes, 42)
+
+      const rng = mulberry32(200)
+      for (const a of scene.arrows) {
+        drawChalkArrow(ctx, a, rng, STROKE, 1)
+      }
+    }
+
+    // ================================================================
+    // Colored chalk — 3 box
+    // ================================================================
+    {
+      const { ctx } = initCanvas('chalk2', 740, 360)
+      const scene = getScene(20)
+      drawBoxes(ctx, scene.boxes, 55)
+
+      const colors = ['#89b4fa', '#a6e3a1', '#fab387']
+      const rng = mulberry32(300)
+      for (let i = 0; i < scene.arrows.length; i++) {
+        drawChalkArrow(ctx, scene.arrows[i], rng, colors[i], 1)
+      }
+    }
+
+    // ================================================================
+    // White chalk — 5 box scale
+    // ================================================================
+    {
+      const { ctx } = initCanvas('chalk3', 740, 300)
+      const scene = getBigScene(20)
+      drawBoxes(ctx, scene.boxes, 88)
+
+      const rng = mulberry32(400)
+      for (const a of scene.arrows) {
+        drawChalkArrow(ctx, a, rng, STROKE, 1)
+      }
+    }
+  </script>
+</body>
+</html>

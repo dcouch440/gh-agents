@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>J2-J6. Pencil Chunky Variations</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1e1e2e; color: #cdd6f4; font-family: system-ui, sans-serif; padding: 40px; }
+    h1 { font-size: 24px; margin-bottom: 8px; font-weight: 400; }
+    p.desc { font-size: 13px; color: #6c7086; margin-bottom: 32px; line-height: 1.5; max-width: 700px; }
+    .back { color: #6c7086; text-decoration: none; font-size: 13px; display: inline-block; margin-bottom: 24px; }
+    .back:hover { color: #cdd6f4; }
+    canvas { border-radius: 12px; display: block; background: #181825; margin-bottom: 32px; }
+    .tag { display: inline-block; background: #313244; color: #f5c2e7; font-size: 11px; padding: 2px 8px; border-radius: 4px; margin-right: 4px; margin-bottom: 16px; }
+    h2 { font-size: 18px; font-weight: 400; margin-bottom: 8px; color: #a6adc8; }
+    .section { margin-bottom: 24px; }
+    .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
+    .compare canvas { margin-bottom: 0; }
+  </style>
+</head>
+<body>
+  <a class="back" href="index.html">&larr; Back to index</a>
+  <h1>Pencil Sketch — Chunky Variations</h1>
+  <p class="desc">The original J was thin wispy pencil lines. These crank up the weight — fatter strokes, more passes, heavier arrowheads. Same raw hand-drawn energy but with more presence on the canvas.</p>
+
+  <div class="section">
+    <h2>J (original) — for reference</h2>
+    <span class="tag">0.5-1.5px strokes</span><span class="tag">8 passes</span><span class="tag">thin wispy</span>
+    <canvas id="j0" width="740" height="360"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>J2. Medium Chunky</h2>
+    <span class="tag">1-3px strokes</span><span class="tag">10 passes</span><span class="tag">wider scatter</span><span class="tag">fatter barbs</span>
+    <canvas id="j2" width="740" height="360"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>J3. Thicc Pencil</h2>
+    <span class="tag">2-4px strokes</span><span class="tag">12 passes</span><span class="tag">heavy hand</span><span class="tag">big barbs</span>
+    <canvas id="j3" width="740" height="360"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>J4. Charcoal Stick</h2>
+    <span class="tag">3-6px strokes</span><span class="tag">15 passes</span><span class="tag">wide smudgy</span><span class="tag">filled head</span>
+    <canvas id="j4" width="740" height="360"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>J5. Crayon</h2>
+    <span class="tag">4-8px strokes</span><span class="tag">8 passes</span><span class="tag">high opacity</span><span class="tag">waxy chunky</span>
+    <canvas id="j5" width="740" height="360"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>J6. Chunky Pencil + Tapered</h2>
+    <span class="tag">tapered 1-5px</span><span class="tag">10 passes</span><span class="tag">thin at start, fat at tip</span><span class="tag">heavy barbs</span>
+    <canvas id="j6" width="740" height="360"></canvas>
+  </div>
+
+  <h2 style="margin-top: 48px; margin-bottom: 16px;">Scale Test — 5 boxes</h2>
+  <p class="desc" style="margin-bottom: 24px;">How the chunkier variants hold up with more connections.</p>
+
+  <div class="compare">
+    <div>
+      <h2>J3 at scale</h2>
+      <canvas id="j3s" width="740" height="300"></canvas>
+    </div>
+    <div>
+      <h2>J4 at scale</h2>
+      <canvas id="j4s" width="740" height="300"></canvas>
+    </div>
+    <div>
+      <h2>J5 at scale</h2>
+      <canvas id="j5s" width="740" height="300"></canvas>
+    </div>
+    <div>
+      <h2>J6 at scale</h2>
+      <canvas id="j6s" width="740" height="300"></canvas>
+    </div>
+  </div>
+
+  <script src="shared.js"></script>
+  <script>
+    // ================================================================
+    // Pencil arrow drawing — parameterized
+    // ================================================================
+    function drawPencilArrow(ctx, a, rng, opts) {
+      const {
+        strokes = 8,
+        minWidth = 0.5,
+        maxWidth = 1.5,
+        minAlpha = 0.15,
+        maxAlpha = 0.35,
+        scatter = 3,        // how far strokes drift from center
+        wobble = 2,         // per-point wobble
+        headSize = 18,
+        headStrokes = 5,
+        headMinWidth = 0.5,
+        headMaxWidth = 1.0,
+        headStyle = 'barb',  // 'barb' or 'filled'
+        taper = false,       // if true, strokes get fatter toward the tip
+      } = opts
+
+      ctx.lineCap = 'round'
+
+      for (let s = 0; s < strokes; s++) {
+        const baseOffX = (rng() - 0.5) * scatter * 2
+        const baseOffY = (rng() - 0.5) * scatter * 2
+        const baseWidth = minWidth + rng() * (maxWidth - minWidth)
+        const alpha = minAlpha + rng() * (maxAlpha - minAlpha)
+
+        ctx.strokeStyle = STROKE
+        ctx.globalAlpha = alpha
+
+        const segments = 20 + Math.floor(rng() * 10)
+        ctx.beginPath()
+        for (let i = 0; i <= segments; i++) {
+          const t = i / segments
+          const pt = bezierPoint(t, a.start, a.cp1, a.cp2, a.end)
+          const midFactor = 1 + Math.sin(t * Math.PI) * 0.5
+          const wx = baseOffX + (rng() - 0.5) * wobble * midFactor
+          const wy = baseOffY + (rng() - 0.5) * wobble * midFactor
+
+          // Taper: width increases along the curve
+          if (taper) {
+            const taperFactor = 0.3 + t * 0.7
+            ctx.lineWidth = baseWidth * taperFactor
+          } else {
+            ctx.lineWidth = baseWidth
+          }
+
+          if (i === 0) {
+            ctx.moveTo(pt.x + wx, pt.y + wy)
+          } else {
+            ctx.lineTo(pt.x + wx, pt.y + wy)
+          }
+        }
+        ctx.stroke()
+      }
+      ctx.globalAlpha = 1
+
+      // Arrowhead
+      const angle = Math.atan2(a.end.y - a.cp2.y, a.end.x - a.cp2.x)
+      const spread = Math.PI / 5.5
+
+      if (headStyle === 'filled') {
+        // Filled triangle from scattered strokes
+        const tipX = a.end.x, tipY = a.end.y
+        const leftX = tipX - headSize * Math.cos(angle - spread)
+        const leftY = tipY - headSize * Math.sin(angle - spread)
+        const rightX = tipX - headSize * Math.cos(angle + spread)
+        const rightY = tipY - headSize * Math.sin(angle + spread)
+
+        // Scatter particles inside triangle
+        for (let p = 0; p < headStrokes * 12; p++) {
+          let u = rng(), v = rng()
+          if (u + v > 1) { u = 1 - u; v = 1 - v }
+          const w = 1 - u - v
+          const px = tipX * w + leftX * u + rightX * v
+          const py = tipY * w + leftY * u + rightY * v
+          const size = headMinWidth + rng() * (headMaxWidth - headMinWidth) * 2
+          ctx.fillStyle = STROKE
+          ctx.globalAlpha = 0.15 + rng() * 0.3
+          ctx.fillRect(px - size/2, py - size/2, size, size)
+        }
+
+        // A couple of outline strokes
+        for (let pass = 0; pass < 3; pass++) {
+          ctx.strokeStyle = STROKE
+          ctx.globalAlpha = 0.15 + rng() * 0.25
+          ctx.lineWidth = headMinWidth + rng() * headMaxWidth
+          ctx.beginPath()
+          ctx.moveTo(leftX + (rng()-0.5)*2, leftY + (rng()-0.5)*2)
+          ctx.lineTo(tipX + (rng()-0.5)*1, tipY + (rng()-0.5)*1)
+          ctx.lineTo(rightX + (rng()-0.5)*2, rightY + (rng()-0.5)*2)
+          ctx.stroke()
+        }
+        ctx.globalAlpha = 1
+      } else {
+        // Open barb style
+        for (let s = 0; s < headStrokes; s++) {
+          const ox = (rng() - 0.5) * scatter * 0.8
+          const oy = (rng() - 0.5) * scatter * 0.8
+          ctx.strokeStyle = STROKE
+          ctx.globalAlpha = 0.15 + rng() * (maxAlpha - 0.05)
+          ctx.lineWidth = headMinWidth + rng() * (headMaxWidth - headMinWidth)
+
+          ctx.beginPath()
+          ctx.moveTo(
+            a.end.x - headSize * Math.cos(angle - spread) + ox + (rng()-0.5)*wobble,
+            a.end.y - headSize * Math.sin(angle - spread) + oy + (rng()-0.5)*wobble,
+          )
+          ctx.lineTo(a.end.x + ox*0.2, a.end.y + oy*0.2)
+          ctx.stroke()
+
+          ctx.beginPath()
+          ctx.moveTo(
+            a.end.x - headSize * Math.cos(angle + spread) + ox + (rng()-0.5)*wobble,
+            a.end.y - headSize * Math.sin(angle + spread) + oy + (rng()-0.5)*wobble,
+          )
+          ctx.lineTo(a.end.x + ox*0.2, a.end.y + oy*0.2)
+          ctx.stroke()
+        }
+        ctx.globalAlpha = 1
+      }
+    }
+
+    // ================================================================
+    // J0 — Original thin pencil (for reference)
+    // ================================================================
+    {
+      const { ctx } = initCanvas('j0', 740, 360)
+      const scene = getScene(20)
+      drawBoxes(ctx, scene.boxes, 88)
+      const rng = mulberry32(123)
+      for (const a of scene.arrows) {
+        drawPencilArrow(ctx, a, rng, {
+          strokes: 8, minWidth: 0.5, maxWidth: 1.5,
+          minAlpha: 0.15, maxAlpha: 0.35, scatter: 3, wobble: 2,
+          headSize: 18, headStrokes: 5, headMinWidth: 0.5, headMaxWidth: 1.0,
+        })
+      }
+    }
+
+    // ================================================================
+    // J2 — Medium Chunky
+    // ================================================================
+    {
+      const { ctx } = initCanvas('j2', 740, 360)
+      const scene = getScene(20)
+      drawBoxes(ctx, scene.boxes, 88)
+      const rng = mulberry32(200)
+      for (const a of scene.arrows) {
+        drawPencilArrow(ctx, a, rng, {
+          strokes: 10, minWidth: 1.0, maxWidth: 3.0,
+          minAlpha: 0.12, maxAlpha: 0.3, scatter: 4, wobble: 2.5,
+          headSize: 22, headStrokes: 7, headMinWidth: 1.0, headMaxWidth: 2.5,
+        })
+      }
+    }
+
+    // ================================================================
+    // J3 — Thicc Pencil
+    // ================================================================
+    {
+      const { ctx } = initCanvas('j3', 740, 360)
+      const scene = getScene(22)
+      drawBoxes(ctx, scene.boxes, 88)
+      const rng = mulberry32(300)
+      for (const a of scene.arrows) {
+        drawPencilArrow(ctx, a, rng, {
+          strokes: 12, minWidth: 2.0, maxWidth: 4.0,
+          minAlpha: 0.1, maxAlpha: 0.25, scatter: 4, wobble: 3,
+          headSize: 24, headStrokes: 8, headMinWidth: 1.5, headMaxWidth: 3.0,
+        })
+      }
+    }
+
+    // ================================================================
+    // J4 — Charcoal Stick
+    // ================================================================
+    {
+      const { ctx } = initCanvas('j4', 740, 360)
+      const scene = getScene(24)
+      drawBoxes(ctx, scene.boxes, 88)
+      const rng = mulberry32(400)
+      for (const a of scene.arrows) {
+        drawPencilArrow(ctx, a, rng, {
+          strokes: 15, minWidth: 3.0, maxWidth: 6.0,
+          minAlpha: 0.06, maxAlpha: 0.18, scatter: 5, wobble: 3.5,
+          headSize: 26, headStrokes: 10, headMinWidth: 2.0, headMaxWidth: 4.0,
+          headStyle: 'filled',
+        })
+      }
+    }
+
+    // ================================================================
+    // J5 — Crayon
+    // ================================================================
+    {
+      const { ctx } = initCanvas('j5', 740, 360)
+      const scene = getScene(24)
+      drawBoxes(ctx, scene.boxes, 88)
+      const rng = mulberry32(500)
+      for (const a of scene.arrows) {
+        drawPencilArrow(ctx, a, rng, {
+          strokes: 8, minWidth: 4.0, maxWidth: 8.0,
+          minAlpha: 0.12, maxAlpha: 0.3, scatter: 3, wobble: 4,
+          headSize: 28, headStrokes: 6, headMinWidth: 3.0, headMaxWidth: 6.0,
+          headStyle: 'filled',
+        })
+      }
+    }
+
+    // ================================================================
+    // J6 — Chunky Pencil + Tapered
+    // ================================================================
+    {
+      const { ctx } = initCanvas('j6', 740, 360)
+      const scene = getScene(22)
+      drawBoxes(ctx, scene.boxes, 88)
+      const rng = mulberry32(600)
+      for (const a of scene.arrows) {
+        drawPencilArrow(ctx, a, rng, {
+          strokes: 10, minWidth: 1.0, maxWidth: 5.0,
+          minAlpha: 0.1, maxAlpha: 0.28, scatter: 4, wobble: 3,
+          headSize: 24, headStrokes: 8, headMinWidth: 1.5, headMaxWidth: 3.5,
+          taper: true,
+        })
+      }
+    }
+
+    // ================================================================
+    // Scale tests — 5 box scenes
+    // ================================================================
+
+    // J3 at scale
+    {
+      const { ctx } = initCanvas('j3s', 740, 300)
+      const scene = getBigScene(22)
+      drawBoxes(ctx, scene.boxes, 88)
+      const rng = mulberry32(301)
+      for (const a of scene.arrows) {
+        drawPencilArrow(ctx, a, rng, {
+          strokes: 12, minWidth: 2.0, maxWidth: 4.0,
+          minAlpha: 0.1, maxAlpha: 0.25, scatter: 4, wobble: 3,
+          headSize: 24, headStrokes: 8, headMinWidth: 1.5, headMaxWidth: 3.0,
+        })
+      }
+    }
+
+    // J4 at scale
+    {
+      const { ctx } = initCanvas('j4s', 740, 300)
+      const scene = getBigScene(24)
+      drawBoxes(ctx, scene.boxes, 88)
+      const rng = mulberry32(401)
+      for (const a of scene.arrows) {
+        drawPencilArrow(ctx, a, rng, {
+          strokes: 15, minWidth: 3.0, maxWidth: 6.0,
+          minAlpha: 0.06, maxAlpha: 0.18, scatter: 5, wobble: 3.5,
+          headSize: 26, headStrokes: 10, headMinWidth: 2.0, headMaxWidth: 4.0,
+          headStyle: 'filled',
+        })
+      }
+    }
+
+    // J5 at scale
+    {
+      const { ctx } = initCanvas('j5s', 740, 300)
+      const scene = getBigScene(24)
+      drawBoxes(ctx, scene.boxes, 88)
+      const rng = mulberry32(501)
+      for (const a of scene.arrows) {
+        drawPencilArrow(ctx, a, rng, {
+          strokes: 8, minWidth: 4.0, maxWidth: 8.0,
+          minAlpha: 0.12, maxAlpha: 0.3, scatter: 3, wobble: 4,
+          headSize: 28, headStrokes: 6, headMinWidth: 3.0, headMaxWidth: 6.0,
+          headStyle: 'filled',
+        })
+      }
+    }
+
+    // J6 at scale
+    {
+      const { ctx } = initCanvas('j6s', 740, 300)
+      const scene = getBigScene(22)
+      drawBoxes(ctx, scene.boxes, 88)
+      const rng = mulberry32(601)
+      for (const a of scene.arrows) {
+        drawPencilArrow(ctx, a, rng, {
+          strokes: 10, minWidth: 1.0, maxWidth: 5.0,
+          minAlpha: 0.1, maxAlpha: 0.28, scatter: 4, wobble: 3,
+          headSize: 24, headStrokes: 8, headMinWidth: 1.5, headMaxWidth: 3.5,
+          taper: true,
+        })
+      }
+    }
+  </script>
+</body>
+</html>
