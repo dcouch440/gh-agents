@@ -80,7 +80,8 @@ mod tests {
             should_dispatch: false,
         };
 
-        let result = build_per_node_instructions(&changeset, &empty_phase_zero(), &empty_snapshot());
+        let result =
+            build_per_node_instructions(&changeset, &empty_phase_zero(), &empty_snapshot());
         assert!(result.is_empty());
     }
 
@@ -94,7 +95,8 @@ mod tests {
             should_dispatch: true,
         };
 
-        let result = build_per_node_instructions(&changeset, &empty_phase_zero(), &empty_snapshot());
+        let result =
+            build_per_node_instructions(&changeset, &empty_phase_zero(), &empty_snapshot());
         assert!(result.is_empty());
     }
 
@@ -126,7 +128,9 @@ mod tests {
         assert_eq!(result[0].element_id, "n1");
         assert_eq!(result[0].step_id, step_id);
         assert_eq!(result[0].change_type, NodeChangeType::New);
-        assert!(result[0].instruction.contains("Configure this new workflow node."));
+        assert!(result[0]
+            .instruction
+            .contains("Configure this new workflow node."));
         assert!(result[0].instruction.contains("Research competitors"));
     }
 
@@ -233,9 +237,7 @@ mod tests {
         assert_eq!(result[0].element_id, "n1");
         assert_eq!(result[0].step_id, step_id);
         assert_eq!(result[0].change_type, NodeChangeType::Updated);
-        assert!(result[0]
-            .instruction
-            .contains("The user updated this node"));
+        assert!(result[0].instruction.contains("The user updated this node"));
         assert!(result[0].instruction.contains("Before: \"Analyze data\""));
         assert!(result[0]
             .instruction
@@ -295,7 +297,8 @@ mod tests {
             should_dispatch: true,
         };
 
-        let result = build_per_node_instructions(&changeset, &empty_phase_zero(), &empty_snapshot());
+        let result =
+            build_per_node_instructions(&changeset, &empty_phase_zero(), &empty_snapshot());
         assert!(result.is_empty());
     }
 
@@ -380,7 +383,8 @@ mod tests {
         };
 
         // No matching step in phase_zero
-        let result = build_per_node_instructions(&changeset, &empty_phase_zero(), &empty_snapshot());
+        let result =
+            build_per_node_instructions(&changeset, &empty_phase_zero(), &empty_snapshot());
         assert!(result.is_empty());
     }
 

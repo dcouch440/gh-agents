@@ -111,5 +111,4 @@ mod tests {
             .unwrap()
             .contains("Missing required parameter"));
     }
-
 }
