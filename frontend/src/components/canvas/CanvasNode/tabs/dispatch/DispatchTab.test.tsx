@@ -18,29 +18,44 @@ const mockEntry: DispatchEntry = {
   tokenBuffer: 'Working on it...',
 }
 
-const mockSelectByStepId = vi.fn()
-const mockSelectActiveWorkflowId = vi.fn()
+// Track what the selectors return
+let mockActiveEntry: DispatchEntry | null = null
+let mockCompletedEntry: DispatchEntry | null = null
+let mockMessages: unknown[] = []
+let mockIsLoading = false
+let mockError: string | null = null
 
-vi.mock('@/stores', () => ({
-  useStore: (_store: unknown, selector: (s: unknown) => unknown) => selector({ byStep: {} }),
-  dispatchStore: {
-    store: {},
-    selectByStepId: (stepId: string) => mockSelectByStepId(stepId) as (s: unknown) => DispatchEntry | null,
-    hydrateFromApi: vi.fn(),
-  },
-  workflowStore: {
-    store: {},
-    selectActiveWorkflowId: () => mockSelectActiveWorkflowId() as string | null,
-  },
-}))
-
-vi.mock('@/api', () => ({
-  api: {
-    workflows: {
-      getStepDispatchHistory: vi.fn().mockRejectedValue(new Error('not found')),
+vi.mock('@/stores', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/stores')>()
+  return {
+    ...actual,
+    useStore: (_store: unknown, selector: (s: unknown) => unknown) => {
+      // The selector is curried — it returns a function that takes state.
+      // But useStore calls it directly with the store state.
+      // We identify which selector was called by what it returns.
+      const result = selector({
+        byStep: {
+          'step-1': mockCompletedEntry,
+        },
+      })
+      return result
     },
-  },
-}))
+    dispatchStore: {
+      store: {},
+      selectByStepId: (stepId: string) => (s: { byStep: Record<string, DispatchEntry | null> }) => s.byStep[stepId] ?? null,
+      selectActiveForStep: (_stepId: string) => () => mockActiveEntry,
+      hydrateFromApi: vi.fn(),
+    },
+    dispatchSessionStore: {
+      store: {},
+      selectMessages: (_stepId: string) => () => mockMessages,
+      selectLoading: (_stepId: string) => () => mockIsLoading,
+      selectError: (_stepId: string) => () => mockError,
+      loadSession: vi.fn(),
+      appendDispatchResult: vi.fn(),
+    },
+  }
+})
 
 vi.mock('./DispatchTraceView', () => ({
   DispatchTraceView: ({ entry }: { entry: DispatchEntry }) => (
@@ -51,30 +66,36 @@ vi.mock('./DispatchTraceView', () => ({
 describe('DispatchTab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockSelectActiveWorkflowId.mockReturnValue('wf-1')
+    mockActiveEntry = null
+    mockCompletedEntry = null
+    mockMessages = []
+    mockIsLoading = false
+    mockError = null
   })
 
   it('renders empty state when no dispatch entry exists', () => {
-    mockSelectByStepId.mockReturnValue(() => null)
     render(<DispatchTab stepId="step-1" />)
     expect(screen.getByText('No dispatch activity yet.')).toBeInTheDocument()
   })
 
   it('renders instruction header when instruction is present', () => {
-    mockSelectByStepId.mockReturnValue(() => mockEntry)
+    mockActiveEntry = mockEntry
+    mockCompletedEntry = mockEntry
     render(<DispatchTab stepId="step-1" />)
     expect(screen.getByText('Set up the search agent')).toBeInTheDocument()
   })
 
   it('renders DispatchTraceView when entry exists', () => {
-    mockSelectByStepId.mockReturnValue(() => mockEntry)
+    mockActiveEntry = mockEntry
+    mockCompletedEntry = mockEntry
     render(<DispatchTab stepId="step-1" />)
     expect(screen.getByTestId('trace-view')).toHaveTextContent('running')
   })
 
   it('renders completed entry', () => {
     const completedEntry = { ...mockEntry, status: 'completed' as const }
-    mockSelectByStepId.mockReturnValue(() => completedEntry)
+    mockActiveEntry = completedEntry
+    mockCompletedEntry = completedEntry
     render(<DispatchTab stepId="step-1" />)
     expect(screen.getByTestId('trace-view')).toHaveTextContent('completed')
   })
