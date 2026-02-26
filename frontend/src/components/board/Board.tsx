@@ -28,7 +28,6 @@ type BoardProps = {
  * so the backend board_serializer remains unchanged.
  */
 function Board({ workflowId }: BoardProps) {
-  console.log("RENDER BOARD")
   // ── State ────────────────────────────────────────────────────────────────
   const [elements, setElements] = useState<BoardElements>(emptyBoard)
   const [selection, setSelection] = useState<SelectionState>(EMPTY_SELECTION)

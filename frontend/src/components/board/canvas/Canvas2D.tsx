@@ -91,12 +91,14 @@ function Canvas2D({
 
   // Keep renderRef pointing at the latest render closure so the
   // ResizeObserver can repaint synchronously with current state.
-  renderRef.current = () => {
-    const cvs = canvasRef.current
-    if (cvs === null) return
-    const { width, height } = sizeRef.current
-    renderBoard(cvs, width, height, elements, selection, editingBoxId, viewport, drawingArrow, edgeHover, theme)
-  }
+  useEffect(() => {
+    renderRef.current = () => {
+      const cvs = canvasRef.current
+      if (cvs === null) return
+      const { width, height } = sizeRef.current
+      renderBoard(cvs, width, height, elements, selection, editingBoxId, viewport, drawingArrow, edgeHover, theme)
+    }
+  })
 
   // ── Re-render when fonts finish loading (Virgil woff2) ──────────────
   // Guard: jsdom test environment doesn't implement document.fonts

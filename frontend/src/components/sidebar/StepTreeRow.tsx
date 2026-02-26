@@ -79,17 +79,11 @@ const computeLines = (gutter: readonly GutterCell[]): LineDef[] => {
   return lines
 }
 
-// ── Constants ───────────────────────────────────────────────────────────────
-
-const getModeColor = (mode: string, palette: Record<string, string>): string =>
-  palette[mode] ?? palette.step ?? '#888'
-
 // ── Component ───────────────────────────────────────────────────────────────
 
-function StepTreeRow({ name, executionMode, gutter, isSelected, onClick }: StepTreeRowProps) {
+function StepTreeRow({ name, gutter, isSelected, onClick }: StepTreeRowProps) {
   const theme = useTheme()
   const lines = computeLines(gutter)
-  const modeColor = getModeColor(executionMode, theme.palette.nodePalette)
   const lineColor = theme.palette.text.disabled
 
   return (

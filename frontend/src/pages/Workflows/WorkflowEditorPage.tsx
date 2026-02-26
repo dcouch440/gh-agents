@@ -10,7 +10,6 @@ function WorkflowEditorPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const loading = useStore(workflowStore.store, workflowStore.selectLoading)
-  console.log('render')
   useEffect(() => {
     if (!id) {
       void navigate('/workflows')

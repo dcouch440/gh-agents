@@ -18,7 +18,6 @@ const TAB_OPTIONS: TabOption[] = [
 // ── Component ───────────────────────────────────────────────────────────────
 
 function WorkflowSidebar() {
-  console.log("render sidebar")
   const theme = useTheme()
   const activeTab = useStore(sidebarStore.store, sidebarStore.selectActiveTab)
   const width = useStore(sidebarStore.store, sidebarStore.selectWidth)
