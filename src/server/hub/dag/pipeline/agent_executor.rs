@@ -368,7 +368,6 @@ async fn execute_single_agent(
                 input_tokens: exec_result.input_tokens as i64,
                 output_tokens: exec_result.output_tokens as i64,
                 cost,
-                roster_agent_id: designed.agent_roster_entry_id,
             })
         }
         Err(e) => {

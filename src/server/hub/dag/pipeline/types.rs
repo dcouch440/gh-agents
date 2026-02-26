@@ -25,7 +25,6 @@ pub(crate) struct AgentExecutionResult {
     pub input_tokens: i64,
     pub output_tokens: i64,
     pub cost: f32,
-    pub roster_agent_id: Uuid,
 }
 
 /// Per-step execution environment for workforce agent dispatch.

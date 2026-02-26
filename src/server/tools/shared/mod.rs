@@ -33,15 +33,6 @@ pub(crate) fn require_array<'a>(input: &'a Value, field: &str) -> Result<&'a Vec
         .ok_or_else(|| json!({ "error": format!("Missing required parameter: {} (array)", field) }))
 }
 
-/// Extract a required i64 parameter from tool input.
-///
-/// Returns the integer on success, or a JSON error value on failure.
-pub(crate) fn require_i64(input: &Value, field: &str) -> Result<i64, Value> {
-    input[field]
-        .as_i64()
-        .ok_or_else(|| json!({ "error": format!("Missing required parameter: {}", field) }))
-}
-
 /// Extract a required string parameter and parse it as a UUID.
 ///
 /// Returns the UUID on success, or a JSON error value on failure.

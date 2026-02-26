@@ -110,9 +110,6 @@ mod tests {
             &child_edges,
         );
 
-        assert_eq!(input.dependencies.len(), 1);
-        assert_eq!(input.dependencies[0].from_agent_name, "Scanner");
-        assert_eq!(input.dependencies[0].to_agent_name, "Analyzer");
         assert!(input.archetype_guidance.contains("Scanner"));
         assert!(input.archetype_guidance.contains("Analyzer"));
         assert!(input.archetype_guidance.contains("runs before"));
@@ -153,7 +150,6 @@ mod tests {
             &child_edges,
         );
 
-        assert!(input.dependencies.is_empty());
         assert!(input
             .archetype_guidance
             .contains("all agents run in parallel"));
@@ -181,7 +177,6 @@ mod tests {
             &[], // No edges
         );
 
-        assert!(input.dependencies.is_empty());
         assert!(input
             .archetype_guidance
             .contains("all agents run in parallel"));

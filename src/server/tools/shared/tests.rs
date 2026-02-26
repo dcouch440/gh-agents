@@ -7,7 +7,7 @@ mod tests {
     use crate::db::WorkflowStepRow;
 
     use crate::server::tools::shared::{
-        classify_content_status, require_array, require_i64, require_str, require_uuid,
+        classify_content_status, require_array, require_str, require_uuid,
     };
 
     fn make_step(mode: &str) -> WorkflowStepRow {
@@ -102,19 +102,6 @@ mod tests {
         let input = json!({});
         let err = require_array(&input, "tags").unwrap_err();
         assert_eq!(err["error"], "Missing required parameter: tags (array)");
-    }
-
-    #[test]
-    fn require_i64_returns_value_when_present() {
-        let input = json!({ "count": 42 });
-        assert_eq!(require_i64(&input, "count").unwrap(), 42);
-    }
-
-    #[test]
-    fn require_i64_returns_error_when_missing() {
-        let input = json!({});
-        let err = require_i64(&input, "count").unwrap_err();
-        assert_eq!(err["error"], "Missing required parameter: count");
     }
 
     #[test]
