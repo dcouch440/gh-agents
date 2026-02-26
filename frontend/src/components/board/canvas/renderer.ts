@@ -195,17 +195,18 @@ const drawArrow = (
   const color = isSelected ? theme.accentColor : theme.strokeColor
   const seed = hashStringToSeed(arrowId)
 
-  // Rough.js curve through the 4 bezier points
-  rc.curve(
-    [[path.start.x, path.start.y], [path.cp1.x, path.cp1.y], [path.cp2.x, path.cp2.y], [path.end.x, path.end.y]],
-    {
-      stroke: color,
-      strokeWidth: BOARD.ARROW_STROKE_WIDTH,
-      roughness: 0.8,
-      bowing: 1.0,
-      seed,
-    },
-  )
+  // SVG cubic bezier — rc.path() interprets C commands correctly,
+  // unlike rc.curve() which uses Catmull-Rom (pass-through) interpolation
+  const d = `M ${path.start.x} ${path.start.y} C ${path.cp1.x} ${path.cp1.y}, ${path.cp2.x} ${path.cp2.y}, ${path.end.x} ${path.end.y}`
+  rc.path(d, {
+    stroke: color,
+    strokeWidth: BOARD.ARROW_STROKE_WIDTH,
+    roughness: 0.8,
+    bowing: 1.0,
+    seed,
+    fill: 'none',
+    preserveVertices: true,
+  })
 
   // Compute arrowhead angle from curve tangent at endpoint
   const angle = Math.atan2(path.end.y - path.cp2.y, path.end.x - path.cp2.x)
