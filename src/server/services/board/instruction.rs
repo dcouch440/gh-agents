@@ -1,206 +1,172 @@
-//! Instruction formatter — converts a board changeset into a structured
-//! instruction string for the Board Dispatcher agent.
+//! Per-node instruction builder — converts a board changeset into individual
+//! dispatch instructions for each affected node's L4 workforce builder.
 //!
 //! Pure function: no IO, no async, no DB calls. Takes the `FilteredChangeset`,
-//! `PhaseZeroResult`, and `CanvasSnapshot` and produces an XML-formatted
-//! instruction that the Board Dispatcher reads alongside `board_state`.
+//! `PhaseZeroResult`, and `CanvasSnapshot` and produces one instruction per
+//! node that needs configuration.
 
 use std::collections::HashMap;
 
+use uuid::Uuid;
+
 use crate::server::hub::board_serializer::{
-    CanvasSnapshot, FilteredChangeset, GlobalNote, ScoredChange,
+    CanvasNode, CanvasSnapshot, FilteredChangeset, NodeUpdate, ScoredChange,
 };
 
 use super::executor::PhaseZeroResult;
 
-/// Format a board changeset into an instruction string for the Board Dispatcher.
+/// Whether a node is new or being updated.
+#[derive(Debug, Clone, PartialEq)]
+pub enum NodeChangeType {
+    New,
+    Updated,
+}
+
+/// A dispatch instruction for a single node's L4 workforce builder.
+#[derive(Debug, Clone)]
+pub struct NodeDispatchInstruction {
+    /// Excalidraw element ID of the canvas node.
+    pub element_id: String,
+    /// DB step ID created/updated by Phase 0.
+    pub step_id: Uuid,
+    /// The step's execution mode (e.g. "workforce").
+    pub execution_mode: String,
+    /// The instruction text for the L4 builder.
+    pub instruction: String,
+    /// Whether this is a new node or an update.
+    pub change_type: NodeChangeType,
+}
+
+/// Build per-node dispatch instructions from a board changeset.
 ///
-/// Returns `None` if:
+/// Returns an empty vec if:
 /// - `should_dispatch` is false
 /// - `meaningful` changes are empty
-pub fn format_board_instruction(
+/// - No node changes exist (only edge changes)
+pub fn build_per_node_instructions(
     changeset: &FilteredChangeset,
     phase_zero: &PhaseZeroResult,
     snapshot: &CanvasSnapshot,
-) -> Option<String> {
+) -> Vec<NodeDispatchInstruction> {
     if !changeset.should_dispatch || changeset.meaningful.is_empty() {
-        return None;
+        return vec![];
     }
 
-    // Build element_id → ref_id lookup from Phase 0 results
-    let mut ref_ids: HashMap<&str, &str> = HashMap::new();
+    // Build element_id → (step_id, execution_mode) lookup from Phase 0 results
+    let mut step_lookup: HashMap<&str, (Uuid, &str)> = HashMap::new();
     for (eid, step) in &phase_zero.created_steps {
-        ref_ids.insert(eid.as_str(), step.ref_id.as_deref().unwrap_or(""));
+        step_lookup.insert(eid.as_str(), (step.id, step.execution_mode.as_str()));
     }
     for (eid, step) in &phase_zero.updated_steps {
-        ref_ids.insert(eid.as_str(), step.ref_id.as_deref().unwrap_or(""));
+        step_lookup.insert(eid.as_str(), (step.id, step.execution_mode.as_str()));
     }
 
-    // Build element_id → node name lookup from snapshot
-    let node_names: HashMap<&str, &str> = snapshot
-        .nodes
+    // Collect global notes for new node instructions
+    let global_notes: Vec<&str> = snapshot
+        .global_notes
         .iter()
-        .map(|n| (n.element_id.as_str(), node_name(&n.raw_text)))
+        .map(|n| n.text.as_str())
         .collect();
 
-    let mut sections = Vec::new();
+    let mut instructions = Vec::new();
 
-    // Header
-    sections.push(
-        "The user submitted their canvas. Phase 0 has created the structural skeleton.\n\
-         Dispatch configuration instructions to each node below using dispatch_to_builders."
-            .to_string(),
-    );
+    for change in &changeset.meaningful {
+        match change {
+            ScoredChange::NewNode { node, .. } => {
+                let Some(&(step_id, execution_mode)) =
+                    step_lookup.get(node.element_id.as_str())
+                else {
+                    continue;
+                };
 
-    // New nodes
-    let new_nodes: Vec<_> = changeset
-        .meaningful
-        .iter()
-        .filter_map(|c| match c {
-            ScoredChange::NewNode { node, .. } => Some(node),
-            _ => None,
-        })
-        .collect();
-
-    if !new_nodes.is_empty() {
-        let mut section = format!("<new_nodes count=\"{}\">", new_nodes.len());
-        for node in &new_nodes {
-            let ref_id = ref_ids
-                .get(node.element_id.as_str())
-                .copied()
-                .unwrap_or("unknown");
-            section.push_str(&format!("\n  <node ref_id=\"{}\">", ref_id));
-            section.push_str(&format!("\n    User wrote: \"{}\"", node.raw_text));
-            if !node.annotations.is_empty() {
-                section.push_str(&format!(
-                    "\n    Annotations: \"{}\"",
-                    node.annotations.join("\", \"")
-                ));
+                instructions.push(NodeDispatchInstruction {
+                    element_id: node.element_id.clone(),
+                    step_id,
+                    execution_mode: execution_mode.to_string(),
+                    instruction: format_new_node(node, &global_notes),
+                    change_type: NodeChangeType::New,
+                });
             }
-            if let Some(encoding) = &node.stroke_encoding {
-                section.push_str(&format!("\n    Stroke data: {}", encoding));
-            } else if let Some(sketch) = &node.sketch {
-                section.push_str(&format!("\n    Sketch:\n{}", sketch));
+            ScoredChange::UpdatedNode { update, .. } => {
+                let Some(&(step_id, execution_mode)) =
+                    step_lookup.get(update.element_id.as_str())
+                else {
+                    continue;
+                };
+
+                instructions.push(NodeDispatchInstruction {
+                    element_id: update.element_id.clone(),
+                    step_id,
+                    execution_mode: execution_mode.to_string(),
+                    instruction: format_updated_node(update),
+                    change_type: NodeChangeType::Updated,
+                });
             }
-            section.push_str("\n  </node>");
+            // Edges don't need builder dispatch — topology is handled by Phase 0
+            ScoredChange::NewEdge { .. } => {}
         }
-        section.push_str("\n</new_nodes>");
-        sections.push(section);
     }
 
-    // Updated nodes
-    let updated_nodes: Vec<_> = changeset
-        .meaningful
-        .iter()
-        .filter_map(|c| match c {
-            ScoredChange::UpdatedNode { update, .. } => Some(update),
-            _ => None,
-        })
-        .collect();
-
-    if !updated_nodes.is_empty() {
-        let mut section = format!("<updated_nodes count=\"{}\">", updated_nodes.len());
-        for update in &updated_nodes {
-            let ref_id = ref_ids
-                .get(update.element_id.as_str())
-                .copied()
-                .unwrap_or("unknown");
-            section.push_str(&format!("\n  <node ref_id=\"{}\">", ref_id));
-            section.push_str(&format!("\n    Before: \"{}\"", update.old_text));
-            section.push_str(&format!("\n    After: \"{}\"", update.new_text));
-            if update.old_annotations != update.new_annotations {
-                if !update.new_annotations.is_empty() {
-                    section.push_str(&format!(
-                        "\n    New annotations: \"{}\"",
-                        update.new_annotations.join("\", \"")
-                    ));
-                }
-            }
-            section.push_str("\n  </node>");
-        }
-        section.push_str("\n</updated_nodes>");
-        sections.push(section);
-    }
-
-    // New edges
-    let new_edges: Vec<_> = changeset
-        .meaningful
-        .iter()
-        .filter_map(|c| match c {
-            ScoredChange::NewEdge { edge, .. } => Some(edge),
-            _ => None,
-        })
-        .collect();
-
-    if !new_edges.is_empty() {
-        let mut section = format!("<new_edges count=\"{}\">", new_edges.len());
-        for edge in &new_edges {
-            let source = ref_ids
-                .get(edge.source_node_id.as_str())
-                .copied()
-                .or_else(|| node_names.get(edge.source_node_id.as_str()).copied())
-                .unwrap_or("unknown");
-            let target = ref_ids
-                .get(edge.target_node_id.as_str())
-                .copied()
-                .or_else(|| node_names.get(edge.target_node_id.as_str()).copied())
-                .unwrap_or("unknown");
-            section.push_str(&format!("\n  {} -> {}", source, target));
-        }
-        section.push_str("\n</new_edges>");
-        sections.push(section);
-    }
-
-    // Agentless summary
-    let agentless = &changeset.agentless;
-    let mut agentless_parts = Vec::new();
-    if !agentless.deleted_node_ids.is_empty() {
-        agentless_parts.push(format!(
-            "{} deleted node(s)",
-            agentless.deleted_node_ids.len()
-        ));
-    }
-    if !agentless.deleted_edge_ids.is_empty() {
-        agentless_parts.push(format!(
-            "{} deleted edge(s)",
-            agentless.deleted_edge_ids.len()
-        ));
-    }
-    if !agentless.rewired_edges.is_empty() {
-        agentless_parts.push(format!("{} rewired edge(s)", agentless.rewired_edges.len()));
-    }
-    if !agentless.moved_nodes.is_empty() {
-        agentless_parts.push(format!("{} moved node(s)", agentless.moved_nodes.len()));
-    }
-
-    if !agentless_parts.is_empty() {
-        sections.push(format!(
-            "<structural_summary>\n  Phase 0 also handled: {}.\n</structural_summary>",
-            agentless_parts.join(", ")
-        ));
-    }
-
-    // Global notes
-    let global_notes: Vec<&GlobalNote> = snapshot.global_notes.iter().collect();
-    if !global_notes.is_empty() {
-        let mut section = String::from("<global_notes>");
-        for note in &global_notes {
-            section.push_str(&format!("\n  \"{}\"", note.text));
-        }
-        section.push_str("\n</global_notes>");
-        sections.push(section);
-    }
-
-    Some(sections.join("\n\n"))
+    instructions
 }
 
-/// Extract the node name (first non-empty line) from raw text.
-fn node_name(raw_text: &str) -> &str {
-    raw_text
-        .lines()
-        .find(|line| !line.trim().is_empty())
-        .unwrap_or("Untitled")
-        .trim()
+/// Format the instruction for a new canvas node.
+fn format_new_node(node: &CanvasNode, global_notes: &[&str]) -> String {
+    let mut parts = Vec::new();
+
+    parts.push("Configure this new workflow node.".to_string());
+
+    parts.push(format!("<user_text>\n{}\n</user_text>", node.raw_text));
+
+    if !node.annotations.is_empty() {
+        let items: Vec<String> = node.annotations.iter().map(|a| format!("- {a}")).collect();
+        parts.push(format!(
+            "<annotations>\n{}\n</annotations>",
+            items.join("\n")
+        ));
+    }
+
+    if let Some(encoding) = &node.stroke_encoding {
+        parts.push(format!("<sketch>\n{encoding}\n</sketch>"));
+    } else if let Some(sketch) = &node.sketch {
+        parts.push(format!("<sketch>\n{sketch}\n</sketch>"));
+    }
+
+    if !global_notes.is_empty() {
+        let items: Vec<String> = global_notes.iter().map(|n| format!("- {n}")).collect();
+        parts.push(format!(
+            "<board_notes>\n{}\n</board_notes>",
+            items.join("\n")
+        ));
+    }
+
+    parts.join("\n\n")
+}
+
+/// Format the instruction for an updated canvas node.
+fn format_updated_node(update: &NodeUpdate) -> String {
+    let mut parts = Vec::new();
+
+    parts.push("The user updated this node on the canvas.".to_string());
+
+    parts.push(format!(
+        "<change>\nBefore: \"{}\"\nAfter: \"{}\"\n</change>",
+        update.old_text, update.new_text
+    ));
+
+    if update.old_annotations != update.new_annotations && !update.new_annotations.is_empty() {
+        let items: Vec<String> = update
+            .new_annotations
+            .iter()
+            .map(|a| format!("- {a}"))
+            .collect();
+        parts.push(format!(
+            "<annotations>\n{}\n</annotations>",
+            items.join("\n")
+        ));
+    }
+
+    parts.join("\n\n")
 }
 
 #[cfg(test)]
