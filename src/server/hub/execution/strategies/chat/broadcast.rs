@@ -11,7 +11,6 @@ use super::config::StepChatContext;
 
 /// The effect a tool call should produce on the workflow event bus.
 enum ToolEffect {
-    ArchetypeChanged,
     NameUpdated,
     DescriptionUpdated,
     ConfigUpdated,
@@ -23,11 +22,10 @@ impl ToolEffect {
     /// Parse a tool name into its broadcast effect, if any.
     fn from_tool_name(name: &str) -> Option<Self> {
         match name {
-            "set_node_archetype" => Some(Self::ArchetypeChanged),
             "set_node_name" => Some(Self::NameUpdated),
             "set_node_description" => Some(Self::DescriptionUpdated),
 
-            "set_task" | "set_capabilities" | "set_failure_mode" => Some(Self::ConfigUpdated),
+            "set_task" | "set_capabilities" => Some(Self::ConfigUpdated),
 
             "add_agent" | "update_agent" | "remove_agent" | "configure_team" => {
                 Some(Self::RosterChanged)
@@ -43,13 +41,6 @@ impl ToolEffect {
     /// the step/input/result context.
     fn into_event_kind(self, step_id: Uuid, input: &Value, result: &Value) -> WorkflowEventKind {
         match self {
-            Self::ArchetypeChanged => {
-                let archetype = result["archetype"]
-                    .as_str()
-                    .unwrap_or("unknown")
-                    .to_string();
-                WorkflowEventKind::ArchetypeChanged { step_id, archetype }
-            }
             Self::NameUpdated => {
                 let name = result["name"].as_str().unwrap_or("").to_string();
                 WorkflowEventKind::StepNameUpdated { step_id, name }
@@ -68,7 +59,7 @@ impl ToolEffect {
 
 /// Broadcast a workflow event when a step tool mutates data.
 ///
-/// Handles both universal tools (archetype, name, description) and
+/// Handles both universal tools (name, description) and
 /// archetype-specific tools (config, roster). Only emits if the
 /// step context is present and the tool result indicates success.
 ///

@@ -1,8 +1,7 @@
 //! Universal tool handlers for the node assistant.
 //!
 //! These tools are available to all archetypes and handle node-level
-//! configuration: setting the archetype (execution_mode), name, and
-//! description.
+//! configuration: setting the name, description, and rendering panels.
 
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -18,9 +17,6 @@ pub struct StepToolContext {
     pub step_id: Uuid,
 }
 
-/// Valid archetype values that map to execution_mode.
-const VALID_ARCHETYPES: &[&str] = &["workforce"];
-
 /// Execute a universal node assistant tool by name.
 pub async fn execute_node_assistant_tool(
     name: &str,
@@ -29,8 +25,6 @@ pub async fn execute_node_assistant_tool(
     ctx: &StepToolContext,
 ) -> Value {
     match name {
-        // todo: Remove from archetype tools. 
-        "set_node_archetype" => execute_set_archetype(input, repo, ctx).await,
         "set_node_name" => execute_set_name(input, repo, ctx).await,
         "set_node_description" => execute_set_description(input, repo, ctx).await,
         "render_panel" => execute_render_panel(input),
@@ -51,42 +45,6 @@ fn execute_render_panel(input: &Value) -> Value {
         "content": content,
         "submit_label": submit_label,
     })
-}
-
-async fn execute_set_archetype(
-    input: &Value,
-    repo: &dyn WorkflowRepo,
-    ctx: &StepToolContext,
-) -> Value {
-    let archetype = match require_str(input, "archetype") {
-        Ok(v) => v,
-        Err(e) => return e,
-    };
-
-    if !VALID_ARCHETYPES.contains(&archetype) {
-        return json!({
-            "error": format!(
-                "Invalid archetype '{}'. Must be one of: {}",
-                archetype,
-                VALID_ARCHETYPES.join(", ")
-            )
-        });
-    }
-
-    let mut step = match load_step_or_error(repo, ctx.step_id).await {
-        Ok(s) => s,
-        Err(e) => return e,
-    };
-
-    step.execution_mode = archetype.to_string();
-
-    match repo.update_step(step).await {
-        Ok(_) => json!({
-            "archetype": archetype,
-            "step_id": ctx.step_id.to_string(),
-        }),
-        Err(e) => json!({ "error": e.to_string() }),
-    }
 }
 
 async fn execute_set_name(input: &Value, repo: &dyn WorkflowRepo, ctx: &StepToolContext) -> Value {

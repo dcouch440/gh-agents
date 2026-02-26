@@ -131,7 +131,6 @@ mod tests {
         // update_plan is excluded from dispatch — builder uses complete_task
         assert!(!names.contains(&"update_plan"));
         assert!(names.contains(&"complete_task"));
-        assert!(!names.contains(&"set_node_archetype"));
 
         // No archetype-specific tools
         assert!(!names.contains(&"update_config"));
@@ -211,7 +210,6 @@ mod tests {
         assert!(!names.contains(&"set_dependency"));
         assert!(!names.contains(&"remove_dependency"));
         assert!(!names.contains(&"set_capabilities"));
-        assert!(!names.contains(&"set_failure_mode"));
     }
 
     #[test]
@@ -261,47 +259,6 @@ mod tests {
     // ========================================================================
     // broadcast_step_event — universal tools
     // ========================================================================
-
-    #[test]
-    fn broadcast_step_event_emits_archetype_changed() {
-        let state = make_state();
-        let mut rx = state.events().subscribe();
-
-        let step_id = Uuid::new_v4();
-        let workflow_id = Uuid::new_v4();
-        let strategy = ChatStrategy::with_step_context(
-            ChatConfig {
-                system_prompt: "sys".into(),
-                model_id: "m".into(),
-                ..Default::default()
-            },
-            state,
-            UserId::new(),
-            None,
-            Uuid::new_v4(),
-            StepChatContext {
-                workflow_id,
-                step_id,
-                execution_mode: "single".into(),
-                step_name: "Test Step".into(),
-            },
-        );
-
-        let input = serde_json::json!({ "archetype": "workforce" });
-        let result = serde_json::json!({
-            "archetype": "workforce",
-            "step_id": step_id.to_string(),
-        });
-
-        strategy.broadcast_step_event("set_node_archetype", &input, &result);
-
-        let envelope = rx.try_recv().unwrap();
-        assert_eq!(envelope.topic, Topic::Workflow);
-        let value: serde_json::Value = serde_json::from_str(&envelope.json).unwrap();
-        assert_eq!(value["event"], "archetype_changed");
-        assert_eq!(value["data"]["step_id"], step_id.to_string());
-        assert_eq!(value["data"]["archetype"], "workforce");
-    }
 
     #[test]
     fn broadcast_step_event_emits_step_name_updated() {

@@ -82,7 +82,6 @@ pub(crate) fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
             "set_dependency",
             "remove_dependency",
             "set_capabilities",
-            "set_failure_mode",
         ],
         _ => &[],
     };

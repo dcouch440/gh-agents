@@ -9,7 +9,7 @@ mod tests {
         TaskAgentRosterRow, TaskMissionBriefRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
     };
 
-    use super::super::{execute_workforce_tool, WorkforceToolContext, VALID_FAILURE_MODES};
+    use super::super::{execute_workforce_tool, WorkforceToolContext};
 
     fn make_ctx() -> WorkforceToolContext {
         WorkforceToolContext {
@@ -52,18 +52,6 @@ mod tests {
             capabilities: vec!["code_gen".to_string()],
             ..roster_agent(brief_id, name, order)
         }
-    }
-
-    // =========================================================================
-    // VALID_FAILURE_MODES
-    // =========================================================================
-
-    #[test]
-    fn valid_failure_modes_contains_expected() {
-        assert!(VALID_FAILURE_MODES.contains(&"fail_fast"));
-        assert!(VALID_FAILURE_MODES.contains(&"skip_and_continue"));
-        assert!(VALID_FAILURE_MODES.contains(&"retry"));
-        assert!(!VALID_FAILURE_MODES.contains(&"explode"));
     }
 
     // =========================================================================
@@ -901,24 +889,6 @@ mod tests {
 
         let caps = result["capabilities"].as_array().unwrap();
         assert_eq!(caps.len(), 2);
-    }
-
-    // =========================================================================
-    // set_failure_mode
-    // =========================================================================
-
-    #[tokio::test]
-    async fn set_failure_mode_invalid_returns_error() {
-        let ctx = make_ctx();
-        let repo = MockWorkflowRepo::new();
-
-        let input = json!({ "mode": "explode" });
-        let result = execute_workforce_tool("set_failure_mode", &input, &repo, &ctx).await;
-
-        assert!(result["error"]
-            .as_str()
-            .unwrap()
-            .contains("Invalid failure mode"));
     }
 
     // =========================================================================
