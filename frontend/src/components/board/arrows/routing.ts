@@ -115,14 +115,36 @@ const computeArrowPathPoints = (
   return { start, cp1, cp2, end }
 }
 
-/** Compute which side of `fromBox` faces `toBox`, with the side midpoint. */
+/**
+ * Compute which side of `fromBox` faces `toBox`, with the side midpoint.
+ * Uses edge-gap comparison: if the boxes have a vertical gap but overlap
+ * horizontally, exit top/bottom. If horizontal gap but vertical overlap,
+ * exit left/right. Falls back to center-to-center for overlapping boxes.
+ */
 const computeExitSide = (
   fromBox: BoxElement,
   toBox: BoxElement,
 ): { side: Side; point: Point } => {
-  const dx = (toBox.x + toBox.width / 2) - (fromBox.x + fromBox.width / 2)
-  const dy = (toBox.y + toBox.height / 2) - (fromBox.y + fromBox.height / 2)
-  const side = bestFacingSide(dx, dy, fromBox.width, fromBox.height)
+  const fromCx = fromBox.x + fromBox.width / 2
+  const fromCy = fromBox.y + fromBox.height / 2
+  const toCx = toBox.x + toBox.width / 2
+  const toCy = toBox.y + toBox.height / 2
+
+  // Gap between nearest edges on each axis (0 if overlapping)
+  const hGap = Math.max(0,
+    Math.max(toBox.x - (fromBox.x + fromBox.width), fromBox.x - (toBox.x + toBox.width)))
+  const vGap = Math.max(0,
+    Math.max(toBox.y - (fromBox.y + fromBox.height), fromBox.y - (toBox.y + toBox.height)))
+
+  let side: Side
+  if (hGap === 0 && vGap === 0) {
+    side = bestFacingSide(toCx - fromCx, toCy - fromCy, fromBox.width, fromBox.height)
+  } else if (vGap > hGap) {
+    side = toCy > fromCy ? 'bottom' : 'top'
+  } else {
+    side = toCx > fromCx ? 'right' : 'left'
+  }
+
   return { side, point: Geometry.sideCenter(fromBox, side) }
 }
 
