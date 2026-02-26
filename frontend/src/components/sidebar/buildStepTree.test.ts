@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildStepTree } from './buildStepTree'
-import type { TreeEntry } from './buildStepTree'
+import type { TreeEntry, GutterCell } from './buildStepTree'
 import type { WorkflowStep, WorkflowStepEdge, RosterAgent } from '@/types/workflow'
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -40,23 +40,15 @@ const makeEdge = (id: string, from: string, to: string): WorkflowStepEdge => ({
   to_step_id: to,
 })
 
-const makeAgent = (id: string, name: string, order: number): RosterAgent => ({
-  id,
-  name,
-  role_description: `${name} role`,
-  capabilities: [],
-  execution_order: order,
-  created_at: '2025-01-01T00:00:00Z',
-  child_step_id: null,
-  depends_on: [],
-})
-
-const stepId = (entry: TreeEntry): string => {
-  if (entry.kind === 'step') return entry.step.id
-  return entry.agent.id
-}
-
 const NO_ROSTER: Record<string, RosterAgent[]> = {}
+
+/** Extract step IDs from entries, skipping gaps */
+const stepIds = (entries: TreeEntry[]): string[] =>
+  entries.filter((e): e is Extract<TreeEntry, { kind: 'step' }> => e.kind === 'step').map((e) => e.step.id)
+
+/** Extract gutters from entries (gaps become 'gap') */
+const gutters = (entries: TreeEntry[]): (readonly GutterCell[] | 'gap')[] =>
+  entries.map((e) => (e.kind === 'gap' ? 'gap' : e.gutter))
 
 // ── Tests ───────────────────────────────────────────────────────────────────
 
@@ -65,74 +57,293 @@ describe('buildStepTree', () => {
     expect(buildStepTree([], [], NO_ROSTER)).toEqual([])
   })
 
-  it('returns single root with no edges', () => {
+  it('returns single node with corner gutter', () => {
     const steps = [makeStep('a', 'Root', 0)]
     const result = buildStepTree(steps, [], NO_ROSTER)
 
-    expect(result).toHaveLength(1)
-    expect(result[0]!.kind).toBe('step')
-    expect(stepId(result[0]!)).toBe('a')
-    expect(result[0]!.depth).toBe(0)
-    expect(result[0]!.isLast).toBe(true)
+    expect(stepIds(result)).toEqual(['a'])
+    expect(gutters(result)).toEqual([['corner']])
   })
 
-  it('builds a linear chain', () => {
-    const steps = [
-      makeStep('a', 'First', 0),
-      makeStep('b', 'Second', 1),
-      makeStep('c', 'Third', 2),
-    ]
-    const edges = [
-      makeEdge('e1', 'a', 'b'),
-      makeEdge('e2', 'b', 'c'),
-    ]
-    const result = buildStepTree(steps, edges, NO_ROSTER)
-    const stepEntries = result.filter((e) => e.kind === 'step')
-
-    expect(stepEntries).toHaveLength(3)
-    expect(stepId(stepEntries[0]!)).toBe('a')
-    expect(stepEntries[0]!.depth).toBe(0)
-    expect(stepId(stepEntries[1]!)).toBe('b')
-    expect(stepEntries[1]!.depth).toBe(1)
-    expect(stepId(stepEntries[2]!)).toBe('c')
-    expect(stepEntries[2]!.depth).toBe(2)
-  })
-
-  it('builds a branching tree', () => {
-    const steps = [
-      makeStep('root', 'Root', 0),
-      makeStep('left', 'Left', 1),
-      makeStep('right', 'Right', 2),
-    ]
-    const edges = [
-      makeEdge('e1', 'root', 'left'),
-      makeEdge('e2', 'root', 'right'),
-    ]
-    const result = buildStepTree(steps, edges, NO_ROSTER)
-    const stepEntries = result.filter((e) => e.kind === 'step')
-
-    expect(stepEntries).toHaveLength(3)
-    expect(stepId(stepEntries[1]!)).toBe('left')
-    expect(stepEntries[1]!.isLast).toBe(false)
-    expect(stepId(stepEntries[2]!)).toBe('right')
-    expect(stepEntries[2]!.isLast).toBe(true)
-  })
-
-  it('handles merge points without duplication', () => {
+  // Pattern 1: Sequential A → B → C
+  it('sequential chain', () => {
     const steps = [
       makeStep('a', 'A', 0),
       makeStep('b', 'B', 1),
       makeStep('c', 'C', 2),
     ]
+    const edges = [makeEdge('e1', 'a', 'b'), makeEdge('e2', 'b', 'c')]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c'])
+    expect(gutters(result)).toEqual([['branch'], ['branch'], ['corner']])
+  })
+
+  // Pattern 2: Fan-out A → {B, C, D} → E
+  it('parallel fan-out with single merge', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+      makeStep('e', 'E', 4),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+      makeEdge('e3', 'a', 'd'),
+      makeEdge('e4', 'b', 'e'),
+      makeEdge('e5', 'c', 'e'),
+      makeEdge('e6', 'd', 'e'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(gutters(result)).toEqual([
+      ['branch'],           // ├── A
+      ['fork_start'],       // ├─┬─ B
+      ['pipe', 'par_mid'],  // │ ├─ C
+      ['pipe', 'par_end'],  // │ └─ D
+      ['corner'],           // └── E
+    ])
+  })
+
+  // Pattern 3: Two sequential forks
+  // A → {B, C} → D → {E, F} → G
+  it('multiple sequential forks', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+      makeStep('e', 'E', 4),
+      makeStep('f', 'F', 5),
+      makeStep('g', 'G', 6),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+      makeEdge('e3', 'b', 'd'),
+      makeEdge('e4', 'c', 'd'),
+      makeEdge('e5', 'd', 'e'),
+      makeEdge('e6', 'd', 'f'),
+      makeEdge('e7', 'e', 'g'),
+      makeEdge('e8', 'f', 'g'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g'])
+    expect(gutters(result)).toEqual([
+      ['branch'],           // ├── A
+      ['fork_start'],       // ├─┬─ B
+      ['pipe', 'par_end'],  // │ └─ C
+      ['branch'],           // ├── D
+      ['fork_start'],       // ├─┬─ E
+      ['pipe', 'par_end'],  // │ └─ F
+      ['corner'],           // └── G
+    ])
+  })
+
+  // Pattern 4: Nested forks
+  // A → {B, C} → G, B → {D, E} → F → G
+  it('nested forks', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+      makeStep('e', 'E', 4),
+      makeStep('f', 'F', 5),
+      makeStep('g', 'G', 6),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+      makeEdge('e3', 'b', 'd'),
+      makeEdge('e4', 'b', 'e'),
+      makeEdge('e5', 'd', 'f'),
+      makeEdge('e6', 'e', 'f'),
+      makeEdge('e7', 'f', 'g'),
+      makeEdge('e8', 'c', 'g'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'd', 'e', 'f', 'c', 'g'])
+    expect(gutters(result)).toEqual([
+      ['branch'],                       // ├── A
+      ['fork_start'],                   // ├─┬─ B
+      ['pipe', 'pipe', 'fork_start'],   // │ │  ├─┬─ D
+      ['pipe', 'pipe', 'pipe', 'par_end'], // │ │  │ └─ E
+      ['pipe', 'pipe', 'corner'],       // │ │  └── F
+      ['pipe', 'par_end'],              // │ └─ C
+      ['corner'],                       // └── G
+    ])
+  })
+
+  // Pattern 5: Multiple independent roots
+  // A → B, C → D (two separate chains)
+  it('multiple independent roots', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+    ]
+    const edges = [makeEdge('e1', 'a', 'b'), makeEdge('e2', 'c', 'd')]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd'])
+    expect(gutters(result)).toEqual([
+      ['branch'],  // ├── A
+      ['corner'],  // └── B
+      'gap',
+      ['branch'],  // ├── C
+      ['corner'],  // └── D
+    ])
+  })
+
+  // Pattern 6: Fan-in from independent roots
+  // A → C, B → C
+  it('fan-in from independent roots', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+    ]
+    const edges = [makeEdge('e1', 'a', 'c'), makeEdge('e2', 'b', 'c')]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c'])
+    expect(gutters(result)).toEqual([
+      ['root_fork'],  // ┬─ A
+      ['par_end'],     // └─ B
+      ['corner'],      // └── C
+    ])
+  })
+
+  // Pattern 6 variant: Fan-in with continuation
+  // A → C, B → C, C → D
+  it('fan-in from independent roots with continuation', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+    ]
     const edges = [
       makeEdge('e1', 'a', 'c'),
       makeEdge('e2', 'b', 'c'),
+      makeEdge('e3', 'c', 'd'),
     ]
     const result = buildStepTree(steps, edges, NO_ROSTER)
-    const cEntries = result.filter((e) => e.kind === 'step' && e.step.id === 'c')
-    expect(cEntries).toHaveLength(1)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd'])
+    expect(gutters(result)).toEqual([
+      ['root_fork'],  // ┬─ A
+      ['par_end'],     // └─ B
+      ['branch'],      // ├── C
+      ['corner'],      // └── D
+    ])
   })
 
+  // Pattern 8: Wide fan-out
+  // A → {B, C, D, E, F} → G
+  it('wide fan-out', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+      makeStep('e', 'E', 4),
+      makeStep('f', 'F', 5),
+      makeStep('g', 'G', 6),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+      makeEdge('e3', 'a', 'd'),
+      makeEdge('e4', 'a', 'e'),
+      makeEdge('e5', 'a', 'f'),
+      makeEdge('e6', 'b', 'g'),
+      makeEdge('e7', 'c', 'g'),
+      makeEdge('e8', 'd', 'g'),
+      makeEdge('e9', 'e', 'g'),
+      makeEdge('e10', 'f', 'g'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g'])
+    expect(gutters(result)).toEqual([
+      ['branch'],           // ├── A
+      ['fork_start'],       // ├─┬─ B
+      ['pipe', 'par_mid'],  // │ ├─ C
+      ['pipe', 'par_mid'],  // │ ├─ D
+      ['pipe', 'par_mid'],  // │ ├─ E
+      ['pipe', 'par_end'],  // │ └─ F
+      ['corner'],           // └── G
+    ])
+  })
+
+  // Pattern 9: Diamond
+  // A → {B, C} → D
+  it('diamond', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+      makeEdge('e3', 'b', 'd'),
+      makeEdge('e4', 'c', 'd'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd'])
+    expect(gutters(result)).toEqual([
+      ['branch'],           // ├── A
+      ['fork_start'],       // ├─┬─ B
+      ['pipe', 'par_end'],  // │ └─ C
+      ['corner'],           // └── D
+    ])
+  })
+
+  // Pattern 10: Sequential with parallel section in middle
+  // A → {B, C, D} → E → F
+  it('sequential with parallel middle', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+      makeStep('e', 'E', 4),
+      makeStep('f', 'F', 5),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+      makeEdge('e3', 'a', 'd'),
+      makeEdge('e4', 'b', 'e'),
+      makeEdge('e5', 'c', 'e'),
+      makeEdge('e6', 'd', 'e'),
+      makeEdge('e7', 'e', 'f'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd', 'e', 'f'])
+    expect(gutters(result)).toEqual([
+      ['branch'],           // ├── A
+      ['fork_start'],       // ├─┬─ B
+      ['pipe', 'par_mid'],  // │ ├─ C
+      ['pipe', 'par_end'],  // │ └─ D
+      ['branch'],           // ├── E
+      ['corner'],           // └── F
+    ])
+  })
+
+  // Edge cases
   it('sorts roots by display_order', () => {
     const steps = [
       makeStep('b', 'Second', 2),
@@ -140,44 +351,7 @@ describe('buildStepTree', () => {
     ]
     const result = buildStepTree(steps, [], NO_ROSTER)
 
-    expect(stepId(result[0]!)).toBe('a')
-    expect(stepId(result[1]!)).toBe('b')
-  })
-
-  it('includes roster agents under their step', () => {
-    const steps = [makeStep('s1', 'Research', 0)]
-    const roster: Record<string, RosterAgent[]> = {
-      s1: [
-        makeAgent('a1', 'Web Searcher', 1),
-        makeAgent('a2', 'Fact Checker', 2),
-      ],
-    }
-    const result = buildStepTree(steps, [], roster)
-
-    expect(result).toHaveLength(3)
-    expect(result[0]!.kind).toBe('step')
-    expect(result[1]!.kind).toBe('agent')
-    expect(result[2]!.kind).toBe('agent')
-    expect(stepId(result[1]!)).toBe('a1')
-    expect(stepId(result[2]!)).toBe('a2')
-    expect(result[1]!.depth).toBe(1) // indented under step
-    expect(result[2]!.isLast).toBe(true)
-  })
-
-  it('filters out manager agents', () => {
-    const steps = [makeStep('s1', 'Research', 0)]
-    const roster: Record<string, RosterAgent[]> = {
-      s1: [
-        makeAgent('mgr', 'Manager', 0),
-        makeAgent('a1', 'Worker', 1),
-        makeAgent('des', 'Designer', 2),
-      ],
-    }
-    const result = buildStepTree(steps, [], roster)
-    const agentEntries = result.filter((e) => e.kind === 'agent')
-
-    expect(agentEntries).toHaveLength(1)
-    expect(stepId(agentEntries[0]!)).toBe('a1')
+    expect(stepIds(result)).toEqual(['a', 'b'])
   })
 
   it('includes orphaned steps', () => {
@@ -188,8 +362,77 @@ describe('buildStepTree', () => {
     const edges = [makeEdge('e1', 'missing', 'orphan')]
     const result = buildStepTree(steps, edges, NO_ROSTER)
 
-    expect(result).toHaveLength(2)
-    const orphan = result.find((e) => e.kind === 'step' && e.step.id === 'orphan')
-    expect(orphan).toBeDefined()
+    expect(result).toHaveLength(3) // a, gap, orphan
+    const ids = stepIds(result)
+    expect(ids).toContain('a')
+    expect(ids).toContain('orphan')
+  })
+
+  it('handles edges referencing missing steps gracefully', () => {
+    const steps = [makeStep('a', 'A', 0), makeStep('b', 'B', 1)]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'b', 'missing'), // missing target
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b'])
+  })
+
+  it('ignores rosterByStep parameter', () => {
+    const steps = [makeStep('a', 'A', 0)]
+    const roster: Record<string, RosterAgent[]> = {
+      a: [
+        {
+          id: 'agent-1',
+          name: 'Worker',
+          role_description: 'does work',
+          capabilities: [],
+          execution_order: 1,
+          created_at: '2025-01-01T00:00:00Z',
+          child_step_id: null,
+          depends_on: [],
+        },
+      ],
+    }
+    const result = buildStepTree(steps, [], roster)
+
+    // Should only have the step, no agent entries
+    expect(result).toHaveLength(1)
+    expect(result[0]!.kind).toBe('step')
+  })
+
+  it('filters out context and input steps', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      { ...makeStep('ctx', 'Context', 1), execution_mode: 'context' },
+      makeStep('b', 'B', 2),
+      { ...makeStep('inp', 'Input', 3), execution_mode: 'input' },
+      makeStep('c', 'C', 4),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'ctx'),
+      makeEdge('e2', 'ctx', 'b'),
+      makeEdge('e3', 'b', 'inp'),
+      makeEdge('e4', 'inp', 'c'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    // Only visible steps appear — context and input are excluded
+    expect(stepIds(result)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('handles two single-node components with gap', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+    ]
+    const result = buildStepTree(steps, [], NO_ROSTER)
+
+    expect(gutters(result)).toEqual([
+      ['corner'],
+      'gap',
+      ['corner'],
+    ])
   })
 })

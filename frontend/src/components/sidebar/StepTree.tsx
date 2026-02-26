@@ -21,41 +21,23 @@ function StepTree() {
 
   return (
     <Box role="tree" sx={{ py: 0.5 }}>
-      {entries.map((entry) => {
-        if (entry.kind === 'step') {
-          return (
-            <StepTreeRow
-              key={entry.step.id}
-              name={entry.step.name ?? entry.step.description}
-              executionMode={entry.step.execution_mode}
-              depth={entry.depth}
-              isLast={entry.isLast}
-              isSelected={entry.step.id === selectedStepId}
-              onClick={() => {
-                if (selectedStepId === entry.step.id) {
-                  sidebarStore.clearSelection()
-                } else {
-                  sidebarStore.selectStep(entry.step.id)
-                }
-              }}
-            />
-          )
+      {entries.map((entry, i) => {
+        if (entry.kind === 'gap') {
+          return <Box key={`gap-${String(i)}`} sx={{ height: 8 }} />
         }
 
-        // Agent entry — selecting an agent selects its parent step
         return (
           <StepTreeRow
-            key={entry.agent.id}
-            name={entry.agent.name}
-            executionMode="agent"
-            depth={entry.depth}
-            isLast={entry.isLast}
-            isSelected={entry.stepId === selectedStepId}
+            key={entry.step.id}
+            name={entry.step.name ?? entry.step.description}
+            executionMode={entry.step.execution_mode}
+            gutter={entry.gutter}
+            isSelected={entry.step.id === selectedStepId}
             onClick={() => {
-              if (selectedStepId === entry.stepId) {
+              if (selectedStepId === entry.step.id) {
                 sidebarStore.clearSelection()
               } else {
-                sidebarStore.selectStep(entry.stepId)
+                sidebarStore.selectStep(entry.step.id)
               }
             }}
           />
