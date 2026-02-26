@@ -134,6 +134,7 @@ pub(super) async fn execute_single_step(
     let envelope = wrap_in_envelope(&output, agent, step.id, in_tok, out_tok, cost);
 
     // Record output + snapshot envelope for run history
+    let output_text = output.raw_output.clone();
     super::utils::record_and_snapshot_output(dag, dag_state, step.id, output, envelope).await;
 
     // Broadcast: step completed
@@ -145,7 +146,7 @@ pub(super) async fn execute_single_step(
             step_id: step.id,
             step_name: step_display_name(step),
             agent_id: Some(agent.id),
-            output: None,
+            output: Some(output_text),
             input_tokens: Some(in_tok as u64),
             output_tokens: Some(out_tok as u64),
             duration_ms: Some(step_start.elapsed().as_millis() as u64),

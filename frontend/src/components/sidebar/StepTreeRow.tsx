@@ -1,17 +1,27 @@
+import { useRef, useState, useEffect } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import { useTheme } from '@mui/material/styles'
-import { ANIMATION } from '@/constants'
+import { TerminalBlock } from '@/components/primitives/terminal-renderer'
+import { StatusDot } from './StatusDot'
+import { SkeletonLines } from './SkeletonLines'
 import type { GutterCell } from './buildStepTree'
+import type { StepExecutionStatus } from '@/stores/workflowExecutionStore/types'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
 type StepTreeRowProps = {
   readonly name: string
+  readonly stepId: string
   readonly executionMode: string
   readonly gutter: readonly GutterCell[]
-  readonly isSelected: boolean
-  readonly onClick: () => void
+  readonly status: StepExecutionStatus | undefined
+  readonly output: string | null
+  readonly error: string | null
+  readonly isExpanded: boolean
+  readonly isOutputExpanded: boolean
+  readonly onToggle: () => void
+  readonly onToggleOutputExpand: () => void
 }
 
 // ── Gutter Line Rendering ──────────────────────────────────────────────────
@@ -24,11 +34,6 @@ const LINE_X = 4
 /** Line thickness in pixels — string to prevent MUI spacing interpretation */
 const STROKE = '1px'
 
-/**
- * Each line segment is an absolutely-positioned 1px div.
- * Percentage strings ('50%', '100%') are used for y-axis values
- * so lines scale with row height and span through padding.
- */
 type LineDef = {
   readonly left: number
   readonly top: number | string
@@ -37,13 +42,7 @@ type LineDef = {
 }
 
 /**
- * Compute CSS line segments for the entire gutter.
- *
- * Cells that need vertical continuation (pipe, branch, fork_start, par_mid)
- * draw full-height vertical lines. Corner/par_end draw half-height (top→center).
- * Horizontal lines extend from the junction point to the gutter's right edge.
- * Fork junctions draw a vertical line at the next column's position going
- * down from center — this overflows the gutter container slightly.
+ * Compute CSS line segments for the header gutter.
  */
 const computeLines = (gutter: readonly GutterCell[]): LineDef[] => {
   const lines: LineDef[] = []
@@ -55,7 +54,6 @@ const computeLines = (gutter: readonly GutterCell[]): LineDef[] => {
 
     if (cell === 'blank') continue
 
-    // ── Vertical lines ───────────────────────────────────────────────────
     const fullVert = cell === 'pipe' || cell === 'branch' || cell === 'par_mid'
     const halfUp = cell === 'corner' || cell === 'par_end'
     const halfDown = cell === 'root_fork' || cell === 'fork_start'
@@ -68,94 +66,274 @@ const computeLines = (gutter: readonly GutterCell[]): LineDef[] => {
       lines.push({ left: cx, top: '50%', width: STROKE, height: '50%' })
     }
 
-    // ── Horizontal lines (all visible cells except pipe) ─────────────────
-    // Stop 4px short of the gutter edge so the line doesn't collide with the dot
     if (cell !== 'pipe') {
       lines.push({ left: cx, top: '50%', width: rightEdge - cx, height: STROKE })
     }
-
   }
 
   return lines
 }
 
-// ── Component ───────────────────────────────────────────────────────────────
+/**
+ * Derive continuation gutter from header gutter.
+ * Cells that need vertical continuation become 'pipe', others become 'blank'.
+ */
+const toContinuationGutter = (gutter: readonly GutterCell[]): GutterCell[] =>
+  gutter.map((cell) => {
+    if (cell === 'pipe' || cell === 'branch' || cell === 'fork_start' || cell === 'par_mid') {
+      return 'pipe'
+    }
+    return 'blank'
+  })
 
-function StepTreeRow({ name, gutter, isSelected, onClick }: StepTreeRowProps) {
-  const theme = useTheme()
-  const lines = computeLines(gutter)
-  const lineColor = theme.palette.text.disabled
+/**
+ * Compute CSS line segments for the continuation gutter (output body).
+ * Only full-height vertical lines — no horizontals, no half-heights.
+ */
+const computeContinuationLines = (gutter: readonly GutterCell[]): LineDef[] => {
+  const continuation = toContinuationGutter(gutter)
+  const lines: LineDef[] = []
+
+  for (let i = 0; i < continuation.length; i++) {
+    if (continuation[i] === 'pipe') {
+      lines.push({ left: i * CELL_WIDTH + LINE_X, top: 0, width: STROKE, height: '100%' })
+    }
+  }
+
+  return lines
+}
+
+// ── Output Preview ──────────────────────────────────────────────────────────
+
+const PREVIEW_MAX_HEIGHT = 200
+
+type OutputPreviewProps = {
+  readonly output: string
+  readonly isOutputExpanded: boolean
+  readonly onToggleOutputExpand: () => void
+  readonly bgColor: string
+}
+
+function OutputPreview({ output, isOutputExpanded, onToggleOutputExpand, bgColor }: OutputPreviewProps) {
+  const contentRef = useRef<HTMLDivElement>(null)
+  const [overflows, setOverflows] = useState(false)
+
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el || isOutputExpanded) return
+    setOverflows(el.scrollHeight > el.clientHeight)
+  }, [output, isOutputExpanded])
 
   return (
-    <Box
-      role="treeitem"
-      aria-selected={isSelected}
-      onClick={onClick}
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        pl: '8px',
-        pr: 1,
-        py: '5px',
-        cursor: 'pointer',
-        borderLeft: isSelected ? `2px solid ${theme.palette.primary.main}` : '2px solid transparent',
-        backgroundColor: isSelected ? theme.palette.custom.activeTint : 'transparent',
-        transition: `all ${ANIMATION.FAST}ms ease`,
-        '&:hover': isSelected
-          ? {}
-          : { backgroundColor: theme.palette.custom.hoverOverlay },
-      }}
-    >
-      {/* Gutter — CSS-drawn lines that span the full row height including padding.
-          Negative vertical margin extends the gutter into the row's py padding
-          so vertical lines connect continuously between adjacent rows. */}
+    <Box sx={{ position: 'relative', py: 1 }}>
       <Box
+        ref={contentRef}
         sx={{
-          width: gutter.length * CELL_WIDTH,
-          flexShrink: 0,
-          alignSelf: 'stretch',
-          position: 'relative',
-          overflow: 'visible',
-          my: '-5px',
+          ...(isOutputExpanded ? {} : { maxHeight: PREVIEW_MAX_HEIGHT, overflow: 'hidden' }),
         }}
       >
-        {lines.map((line, i) => (
-          <Box
-            key={i}
-            sx={{
-              position: 'absolute',
-              left: line.left,
-              top: line.top,
-              width: line.width,
-              height: line.height,
-              backgroundColor: lineColor,
-            }}
-          />
-        ))}
+        <TerminalBlock content={output} />
       </Box>
 
-      {/* Mode dot */}
+      {/* Fade gradient — only when content actually overflows */}
+      {!isOutputExpanded && overflows && (
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 8,
+            left: 0,
+            right: 0,
+            height: 48,
+            background: `linear-gradient(transparent, ${bgColor})`,
+            pointerEvents: 'none',
+          }}
+        />
+      )}
 
-      {/* Step name */}
-      <Typography
-        variant="body2"
-        sx={{
-          fontSize: 12,
-          fontWeight: isSelected ? 600 : 400,
-          color: isSelected ? 'text.primary' : 'text.secondary',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          minWidth: 0,
-          flex: 1,
-          ml: 1,
-        }}
-      >
-        {name || 'Untitled'}
-      </Typography>
+      {/* Expand/collapse link — only when content overflows or already expanded */}
+      {(overflows || isOutputExpanded) && (
+        <Typography
+          component="span"
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleOutputExpand()
+          }}
+          sx={{
+            display: 'block',
+            fontSize: 11,
+            color: 'text.disabled',
+            cursor: 'pointer',
+            mt: 0.5,
+            '&:hover': { color: 'text.secondary' },
+          }}
+        >
+          {isOutputExpanded ? '\u25B2 collapse' : '\u25BC expand'}
+        </Typography>
+      )}
     </Box>
   )
 }
 
-export { StepTreeRow }
+// ── Component ───────────────────────────────────────────────────────────────
+
+function StepTreeRow({
+  name,
+  gutter,
+  status,
+  output,
+  error,
+  isExpanded,
+  isOutputExpanded,
+  onToggle,
+  onToggleOutputExpand,
+}: StepTreeRowProps) {
+  const theme = useTheme()
+  const lines = computeLines(gutter)
+  const lineColor = theme.palette.text.disabled
+  const gutterWidth = gutter.length * CELL_WIDTH
+
+  const resolved = status ?? 'idle'
+  const hasBody = isExpanded && (resolved === 'running' || output !== null || error !== null)
+
+  return (
+    <Box>
+      {/* Header row */}
+      <Box
+        role="treeitem"
+        onClick={onToggle}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          pl: '8px',
+          pr: 1,
+          py: '5px',
+          cursor: 'pointer',
+          '&:hover': { backgroundColor: theme.palette.custom.hoverOverlay },
+        }}
+      >
+        {/* Gutter */}
+        <Box
+          sx={{
+            width: gutterWidth,
+            flexShrink: 0,
+            alignSelf: 'stretch',
+            position: 'relative',
+            overflow: 'visible',
+            my: '-5px',
+          }}
+        >
+          {lines.map((line, i) => (
+            <Box
+              key={i}
+              sx={{
+                position: 'absolute',
+                left: line.left,
+                top: line.top,
+                width: line.width,
+                height: line.height,
+                backgroundColor: lineColor,
+              }}
+            />
+          ))}
+        </Box>
+
+        {/* Expand chevron */}
+        <Typography
+          sx={{
+            fontSize: 10,
+            width: 12,
+            flexShrink: 0,
+            color: 'text.disabled',
+            lineHeight: 1,
+            userSelect: 'none',
+          }}
+        >
+          {isExpanded ? '\u25BC' : '\u25B6'}
+        </Typography>
+
+        {/* Step name */}
+        <Typography
+          variant="body2"
+          sx={{
+            fontSize: 12,
+            fontWeight: 400,
+            color: 'text.secondary',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            minWidth: 0,
+            flex: 1,
+            ml: 0.5,
+          }}
+        >
+          {name || 'Untitled'}
+        </Typography>
+
+        {/* Status dot */}
+        <Box sx={{ ml: 1, flexShrink: 0 }}>
+          <StatusDot status={status} />
+        </Box>
+      </Box>
+
+      {/* Output body */}
+      {hasBody && (
+        <Box sx={{ display: 'flex', pl: '8px', mt: '-5px' }}>
+          {/* Continuation gutter — mt: -5px closes the gap left by the header's py padding */}
+          <Box
+            sx={{
+              width: gutterWidth,
+              flexShrink: 0,
+              position: 'relative',
+              overflow: 'visible',
+            }}
+          >
+            {computeContinuationLines(gutter).map((line, i) => (
+              <Box
+                key={i}
+                sx={{
+                  position: 'absolute',
+                  left: line.left,
+                  top: line.top,
+                  width: line.width,
+                  height: line.height,
+                  backgroundColor: lineColor,
+                }}
+              />
+            ))}
+          </Box>
+
+          {/* Content */}
+          <Box sx={{ flex: 1, minWidth: 0, pr: 1, pb: 1, ml: 1.5 }}>
+            {resolved === 'running' ? (
+              <SkeletonLines />
+            ) : error ? (
+              <Typography
+                variant="body2"
+                sx={{
+                  color: '#f85149',
+                  fontFamily: '"JetBrains Mono", monospace',
+                  fontSize: '0.75rem',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                  py: 1,
+                }}
+              >
+                {error}
+              </Typography>
+            ) : output ? (
+              <OutputPreview
+                output={output}
+                isOutputExpanded={isOutputExpanded}
+                onToggleOutputExpand={onToggleOutputExpand}
+                bgColor={theme.palette.custom.bgPanel}
+              />
+            ) : null}
+          </Box>
+        </Box>
+      )}
+    </Box>
+  )
+}
+
+export { StepTreeRow, CELL_WIDTH, LINE_X }
 export type { StepTreeRowProps }

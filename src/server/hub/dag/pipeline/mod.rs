@@ -274,6 +274,7 @@ impl Pipeline {
             error: None,
         };
 
+        let output_text = output.raw_output.clone();
         super::utils::record_and_snapshot_output(dag, dag_state, step.id, output, envelope).await;
 
         // 13. Broadcast step completed
@@ -285,7 +286,7 @@ impl Pipeline {
                 step_id: step.id,
                 step_name: step_display_name(step),
                 agent_id: None,
-                output: None,
+                output: Some(output_text),
                 input_tokens: Some(step_in_tokens as u64),
                 output_tokens: Some(step_out_tokens as u64),
                 duration_ms: Some(step_start.elapsed().as_millis() as u64),

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import Box from '@mui/material/Box'
-import { useStore, workflowStore, sidebarStore } from '@/stores'
+import { useStore, workflowStore, workflowExecutionStore, sidebarStore } from '@/stores'
 import { EmptyState } from '@/components/primitives'
 import { StepTreeRow } from './StepTreeRow'
 import { buildStepTree } from './buildStepTree'
@@ -9,7 +9,9 @@ function StepTree() {
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
   const edges = useStore(workflowStore.store, workflowStore.selectEdges)
   const rosterByStep = useStore(workflowStore.store, workflowStore.selectRosterByStep)
-  const selectedStepId = useStore(sidebarStore.store, sidebarStore.selectSelectedStepId)
+  const stepStates = useStore(workflowExecutionStore.store, workflowExecutionStore.selectStepStates)
+  const expandedStepIds = useStore(sidebarStore.store, sidebarStore.selectExpandedStepIds)
+  const outputExpandedStepIds = useStore(sidebarStore.store, sidebarStore.selectOutputExpandedStepIds)
 
   const entries = useMemo(() => buildStepTree(steps, edges, rosterByStep), [steps, edges, rosterByStep])
 
@@ -26,20 +28,22 @@ function StepTree() {
           return <Box key={`gap-${String(i)}`} sx={{ height: 8 }} />
         }
 
+        const stepState = stepStates[entry.step.id]
+
         return (
           <StepTreeRow
             key={entry.step.id}
+            stepId={entry.step.id}
             name={entry.step.name ?? entry.step.description}
             executionMode={entry.step.execution_mode}
             gutter={entry.gutter}
-            isSelected={entry.step.id === selectedStepId}
-            onClick={() => {
-              if (selectedStepId === entry.step.id) {
-                sidebarStore.clearSelection()
-              } else {
-                sidebarStore.selectStep(entry.step.id)
-              }
-            }}
+            status={stepState?.status}
+            output={stepState?.output ?? null}
+            error={stepState?.error ?? null}
+            isExpanded={expandedStepIds[entry.step.id] === true}
+            isOutputExpanded={outputExpandedStepIds[entry.step.id] === true}
+            onToggle={() => { sidebarStore.toggleStep(entry.step.id) }}
+            onToggleOutputExpand={() => { sidebarStore.toggleOutputExpand(entry.step.id) }}
           />
         )
       })}

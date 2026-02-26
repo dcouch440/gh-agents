@@ -19,6 +19,7 @@ import type {
 import type { StepTimelineEvent, ChildStepState } from './types'
 import { store, updateStep } from './_store'
 import { fetchRuns } from './history'
+import { sidebarStore } from '../sidebarStore'
 
 const appendEvent = (log: StepTimelineEvent[], event: StepTimelineEvent): StepTimelineEvent[] => [...log, event]
 
@@ -57,6 +58,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
           }),
           eventLog: appendEvent(s.eventLog, { stepId: d.step_id, stepName: d.step_name, eventType: 'started', ts: msg.ts }),
         }))
+        sidebarStore.expandStep(d.step_id)
         break
       }
       case WORKFLOW_EVENT.STEP_COMPLETED: {

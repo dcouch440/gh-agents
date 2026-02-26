@@ -5,7 +5,6 @@ import { useTheme } from '@mui/material/styles'
 import { TabSelector } from '@/components/primitives'
 import { useStore, sidebarStore } from '@/stores'
 import { StepTree } from './StepTree'
-import { StepOutputPanel } from './StepOutputPanel'
 import type { TabOption } from '@/components/primitives'
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -132,14 +131,8 @@ function WorkflowSidebar() {
 
       {/* Tab content */}
       {activeTab === 'tree' ? (
-        <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-          {/* Tree — scrollable upper region */}
-          <Box sx={{ flex: '0 1 auto', overflow: 'auto', minHeight: 120 }}>
-            <StepTree />
-          </Box>
-
-          {/* Output panel — shows execution output for selected step */}
-          <StepOutputPanel />
+        <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+          <StepTree />
         </Box>
       ) : (
         <Box
