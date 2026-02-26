@@ -19,11 +19,22 @@ const BOARD = {
 
   // ── Arrow rendering ──────────────────────────────────────────────────────
   /** Gap between arrow endpoint and box edge (px). */
-  ARROW_BINDING_GAP: 8,
+  ARROW_BINDING_GAP: 20,
   /** Snap-to-midpoint threshold when binding an arrow to a box side (px). */
   ARROW_SNAP_THRESHOLD: 20,
-  ARROW_STROKE_WIDTH: 2,
-  ARROW_HEAD_SIZE: 12,
+  /** Max stroke width at arrow tip (tapers from ARROW_STROKE_MIN). */
+  ARROW_STROKE_WIDTH: 3.5,
+  /** Min stroke width at arrow source. */
+  ARROW_STROKE_MIN: 1.0,
+  ARROW_HEAD_SIZE: 18,
+  /** Arrowhead barb spread angle (~33°). */
+  ARROW_HEAD_SPREAD: Math.PI / 5.5,
+  /** Arrowhead barb line width. */
+  ARROW_HEAD_STROKE: 3,
+  /** Number of bezier sample points for tapered stroke. */
+  ARROW_TAPER_SEGMENTS: 40,
+  /** Max wobble offset in px for hand-drawn feel. */
+  ARROW_WOBBLE: 1.2,
 
   // ── Edge hover ──────────────────────────────────────────────────────────
   /** Base distance from box edge to trigger arrow binding hover (px). */
