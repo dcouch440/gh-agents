@@ -122,7 +122,7 @@ function DispatchAccordionRow({ stepName, instruction, entry }: DispatchAccordio
 
       {/* Expanded detail */}
       {expanded && entry !== null && (
-        <Box sx={{ maxHeight: 400, display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column' }}>
           {instruction.length > 0 && (
             <Box sx={{ px: 1.5, py: 0.5, borderTop: 1, borderColor: 'divider' }}>
               <Typography sx={{ fontSize: 11, color: 'text.secondary', fontStyle: 'italic' }}>
@@ -139,7 +139,9 @@ function DispatchAccordionRow({ stepName, instruction, entry }: DispatchAccordio
             </Box>
           )}
 
-          <DispatchTraceView entry={entry} />
+          <Box sx={{ maxHeight: '60vh', overflowY: 'auto', minHeight: 80 }}>
+            <DispatchTraceView entry={entry} />
+          </Box>
         </Box>
       )}
 
