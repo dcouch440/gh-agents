@@ -57,7 +57,6 @@ The **strategy** tells the engine *what* to use:
 | `DagStepStrategy` | `strategies/dag_step/` | Single-agent workflow step |
 | `WorkforceAgentStrategy` | `strategies/workforce_agent/` | One roster agent in a workforce pipeline |
 | `DispatchStrategy` | `strategies/dispatch/` | Per-Node Builder (L4) — configures a single node's workforce |
-| `BoardDispatchStrategy` | `strategies/board_dispatch/` | Board Dispatcher — reads Phase 0 changeset, dispatches to builders |
 | `ManagerDispatchStrategy` | `strategies/manager_dispatch/` | Manager Builder (L2) — creates topology + dispatches to builders |
 | `AgentDesignerStrategy` | `strategies/agent_designer/` | Designer pre-phase — generates agent system prompts |
 
@@ -113,10 +112,10 @@ Chat path:                          Board path:
   (ChatStrategy)                      DB writes: create nodes,
        │ dispatch()                   delete removed, rewire edges
        ▼                                    │
-  Manager Builder (L2)                Board Dispatcher
-  (ManagerDispatchStrategy)           (BoardDispatchStrategy)
-  Creates topology + content          Reads changeset
-  dispatch_to_builders                dispatch_to_builders
+  Manager Builder (L2)                Agentless fan-out
+  (ManagerDispatchStrategy)           Iterates changeset,
+  Creates topology + content          dispatches per node
+  dispatch_to_builders                     │
        │                                    │
        └────────────┬───────────────────────┘
                     ▼

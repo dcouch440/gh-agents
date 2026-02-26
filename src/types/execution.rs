@@ -29,7 +29,7 @@ pub enum ExecutionType {
     InteractiveReview,
     /// Verification agent critiquing primary output.
     DebateVerification,
-    /// Board dispatcher: reads changeset, dispatches to per-node builders.
+    /// Deprecated: board dispatch is now agentless. Retained for existing DB rows.
     BoardDispatch,
 }
 

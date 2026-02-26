@@ -45,7 +45,7 @@ function PhaseZeroSummary() {
 
   const p0 = lastResponse.phase_zero
   const snap = lastResponse.snapshot
-  const hasDispatch = lastResponse.dispatch !== null
+  const hasDispatch = lastResponse.dispatches.length > 0
 
   const lines: string[] = []
 

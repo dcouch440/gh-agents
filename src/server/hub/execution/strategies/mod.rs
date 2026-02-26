@@ -1,7 +1,6 @@
 //! ExecutionStrategy implementations.
 
 pub mod agent_designer;
-pub mod board_dispatch;
 pub mod chat;
 pub mod dag_step;
 pub mod dispatch;
@@ -9,7 +8,6 @@ pub mod manager_dispatch;
 pub mod workforce_agent;
 
 pub use agent_designer::{AgentDesignerConfig, AgentDesignerStrategy};
-pub use board_dispatch::BoardDispatchStrategy;
 pub use chat::{ChatConfig, ChatStrategy, StepChatContext};
 pub use dag_step::DagStepStrategy;
 pub use dispatch::DispatchStrategy;

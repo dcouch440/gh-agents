@@ -18,7 +18,8 @@ import { ToolEventList } from './ToolEventList'
  */
 function DispatchTrace() {
   const lastResponse = useStore(boardStore.store, boardStore.selectLastResponse)
-  const dispatch = lastResponse?.dispatch ?? null
+  const dispatches = lastResponse?.dispatches ?? []
+  const dispatch = dispatches.length > 0 ? dispatches[0] ?? null : null
   const stepId = dispatch?.step_id ?? null
 
   const displayEntry: DispatchEntry | null = useStore(

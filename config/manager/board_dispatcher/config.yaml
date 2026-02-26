@@ -1,7 +1,0 @@
-agents:
-  dispatcher:
-    model_id: "tier:2"
-    max_tokens: 8192
-    temperature: 0.3
-    max_rounds: 2
-    context_budget: 300000

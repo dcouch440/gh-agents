@@ -12,7 +12,7 @@ type BoardSubmitResponse = {
   readonly changeset: FilteredChangeset
   readonly snapshot: CanvasSnapshot
   readonly phase_zero: PhaseZeroResponse
-  readonly dispatch: BoardDispatchInfo | null
+  readonly dispatches: readonly BoardDispatchInfo[]
 }
 
 /**

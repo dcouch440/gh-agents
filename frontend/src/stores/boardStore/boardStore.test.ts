@@ -71,7 +71,7 @@ const makeResponse = (overrides: Partial<BoardSubmitResponse> = {}): BoardSubmit
   },
   snapshot: { nodes: [], edges: [], global_notes: [] },
   phase_zero: emptyPhaseZero,
-  dispatch: null,
+  dispatches: [],
   ...overrides,
 })
 

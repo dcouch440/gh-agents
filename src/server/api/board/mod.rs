@@ -10,7 +10,6 @@ use crate::server::auth::AuthUser;
 use crate::server::hub::board_serializer::{CanvasSnapshot, ExcalidrawElement, FilteredChangeset};
 use crate::server::services::board;
 use crate::server::services::dispatch::{self, DispatchInput};
-use crate::server::services::steps;
 use crate::server::state::AppState;
 use crate::types::UserId;
 
@@ -63,8 +62,7 @@ pub struct BoardSubmitResponse {
     pub changeset: FilteredChangeset,
     pub snapshot: CanvasSnapshot,
     pub phase_zero: PhaseZeroResponse,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dispatch: Option<BoardDispatchInfo>,
+    pub dispatches: Vec<BoardDispatchInfo>,
 }
 
 pub async fn submit_board(
@@ -92,9 +90,9 @@ pub async fn submit_board(
     )
     .await?;
 
-    // Try to dispatch to the board dispatcher (best-effort, fire-and-forget)
-    let dispatch = if result.changeset.should_dispatch {
-        try_dispatch_board(
+    // Dispatch meaningful changes directly to per-node builders (agentless fan-out)
+    let dispatches = if result.changeset.should_dispatch {
+        dispatch_board_changes(
             &state,
             workflow_id,
             auth.user_id,
@@ -104,7 +102,7 @@ pub async fn submit_board(
         )
         .await
     } else {
-        None
+        vec![]
     };
 
     let phase_zero = PhaseZeroResponse {
@@ -158,7 +156,7 @@ pub async fn submit_board(
         changeset: result.changeset,
         snapshot: result.snapshot,
         phase_zero,
-        dispatch,
+        dispatches,
     };
 
     // Persist the response for debug panel rehydration on page refresh
@@ -173,87 +171,48 @@ pub async fn submit_board(
     Ok(Json(response_body))
 }
 
-/// Try to dispatch meaningful changes to the board dispatcher agent.
+/// Dispatch meaningful changes directly to per-node L4 builders (agentless fan-out).
 ///
-/// Best-effort: returns `None` on any error. Never fails the board submit.
-async fn try_dispatch_board(
+/// Phase 0 has already created the topology — nodes, edges, positions are in the DB.
+/// This function builds per-node instructions from the changeset and dispatches each
+/// one directly to the node's workforce builder. No LLM intermediary.
+///
+/// Best-effort: individual dispatch failures are logged and skipped.
+async fn dispatch_board_changes(
     state: &AppState,
     workflow_id: Uuid,
     user_id: UserId,
     changeset: &FilteredChangeset,
     phase_zero: &board::PhaseZeroResult,
     snapshot: &CanvasSnapshot,
-) -> Option<BoardDispatchInfo> {
-    // Format the instruction from the changeset
-    let instruction =
-        board::instruction::format_board_instruction(changeset, phase_zero, snapshot)?;
+) -> Vec<BoardDispatchInfo> {
+    let instructions =
+        board::instruction::build_per_node_instructions(changeset, phase_zero, snapshot);
 
-    // Find or create the manager step for this workflow.
-    // The manager step is a hidden, persistent anchor for dispatch sessions.
-    // It's created once on first board submit and reused for all future dispatches.
-    let manager_step_id = find_or_create_manager_step(state, workflow_id, user_id).await?;
+    let mut dispatches = Vec::with_capacity(instructions.len());
 
-    // Dispatch via the shared dispatch service
-    let output = dispatch::dispatch_to_builder(
-        state,
-        DispatchInput {
-            step_id: manager_step_id,
-            workflow_id,
-            user_id,
-            instruction: instruction.clone(),
-            execution_mode: "board_dispatch".to_string(),
-        },
-    )
-    .await;
+    for node_instruction in instructions {
+        let output = dispatch::dispatch_to_builder(
+            state,
+            DispatchInput {
+                step_id: node_instruction.step_id,
+                workflow_id,
+                user_id,
+                instruction: node_instruction.instruction.clone(),
+                execution_mode: node_instruction.execution_mode,
+            },
+        )
+        .await;
 
-    Some(BoardDispatchInfo {
-        execution_id: output.execution_id,
-        session_id: output.session_id,
-        step_id: manager_step_id,
-        instruction,
-    })
-}
-
-/// Find the existing manager step for a workflow, or create one.
-///
-/// The manager step is a hidden, persistent step with `execution_mode = "manager"`
-/// and `visible = false`. It's auto-created on first board submit and reused as the
-/// dispatch anchor for all future board dispatches.
-async fn find_or_create_manager_step(
-    state: &AppState,
-    workflow_id: Uuid,
-    user_id: UserId,
-) -> Option<Uuid> {
-    let repo = state.repos().workflows.as_ref();
-    let steps = repo.list_steps(workflow_id).await.ok()?;
-
-    // Return existing manager step if one already exists
-    if let Some(manager) = steps.iter().find(|s| s.execution_mode == "manager") {
-        return Some(manager.id);
+        dispatches.push(BoardDispatchInfo {
+            execution_id: output.execution_id,
+            session_id: output.session_id,
+            step_id: node_instruction.step_id,
+            instruction: node_instruction.instruction,
+        });
     }
 
-    // Create a new hidden manager step
-    let step = steps::create_step(
-        repo,
-        steps::CreateStepInput {
-            workflow_id,
-            user_id: user_id.0,
-            payload: steps::StepPayload {
-                name: Some("Manager".to_string()),
-                execution_mode: Some("manager".to_string()),
-                ..steps::StepPayload::default()
-            },
-        },
-    )
-    .await
-    .ok()?;
-
-    // Mark it as hidden — not shown on the board or tree
-    let mut hidden = step.clone();
-    hidden.visible = false;
-    let _ = repo.update_step(hidden).await;
-
-    Some(step.id)
+    dispatches
 }
 
 // ── GET board elements ───────────────────────────────────────────────────
