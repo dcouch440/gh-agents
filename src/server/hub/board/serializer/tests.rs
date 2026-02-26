@@ -1063,8 +1063,8 @@ mod tests {
     }
 
     #[test]
-    fn diff_ignores_sketch_changes() {
-        // Two identical nodes except sketch differs — should NOT be reported as updated
+    fn diff_detects_sketch_changes() {
+        // Sketch added to existing node — should be reported as updated
         let mut prev_node = make_canvas_node("n1", "Same text", 0.0, 0.0);
         prev_node.sketch = None;
 
@@ -1076,13 +1076,38 @@ mod tests {
 
         let changeset = diff_snapshots(&previous, &current);
 
-        assert!(
-            changeset.updated_nodes.is_empty(),
-            "sketch change alone should not trigger update"
+        assert_eq!(
+            changeset.updated_nodes.len(),
+            1,
+            "sketch change should trigger update"
         );
+        assert_eq!(changeset.updated_nodes[0].element_id, "n1");
+        assert!(changeset.updated_nodes[0].sketch.is_some());
         assert!(changeset.new_nodes.is_empty());
         assert!(changeset.deleted_node_ids.is_empty());
         assert!(changeset.moved_nodes.is_empty());
+    }
+
+    #[test]
+    fn diff_detects_stroke_encoding_changes() {
+        // Stroke encoding added to existing node — should be reported as updated
+        let mut prev_node = make_canvas_node("n1", "Same text", 0.0, 0.0);
+        prev_node.stroke_encoding = None;
+
+        let mut curr_node = make_canvas_node("n1", "Same text", 0.0, 0.0);
+        curr_node.stroke_encoding =
+            Some(r#"{"canvas":[100,100],"strokes":[{"points":[[10,20],[30,40]]}]}"#.to_string());
+
+        let previous = make_snapshot(vec![prev_node], vec![], vec![]);
+        let current = make_snapshot(vec![curr_node], vec![], vec![]);
+
+        let changeset = diff_snapshots(&previous, &current);
+
+        assert_eq!(
+            changeset.updated_nodes.len(),
+            1,
+            "stroke_encoding change should trigger update"
+        );
     }
 
     // ========================================================================
@@ -1291,6 +1316,54 @@ mod tests {
 
         assert!(result.meaningful.is_empty());
         assert_eq!(result.noise[0].reason, NoiseReason::WhitespaceOnly);
+    }
+
+    // ========================================================================
+    // Changeset Filter — Sketch-only updates
+    // ========================================================================
+
+    #[test]
+    fn sketch_only_update_survives_filtering() {
+        // A node where only the sketch changed (text unchanged) should survive
+        // all filters and appear in the meaningful tier with Medium significance.
+        let mut changeset = empty_changeset();
+        changeset.updated_nodes = vec![NodeUpdate {
+            element_id: "n1".to_string(),
+            old_text: "Describe the drawing".to_string(),
+            new_text: "Describe the drawing".to_string(),
+            old_annotations: vec![],
+            new_annotations: vec![],
+            sketch: Some("██··██".to_string()),
+            stroke_encoding: Some(
+                r#"{"canvas":[100,100],"strokes":[{"points":[[10,20],[30,40]]}]}"#.to_string(),
+            ),
+        }];
+
+        let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
+
+        assert!(result.noise.is_empty(), "sketch-only update should not be noise");
+        assert_eq!(result.meaningful.len(), 1, "sketch-only update should be meaningful");
+
+        match &result.meaningful[0] {
+            ScoredChange::UpdatedNode {
+                significance,
+                token_change_ratio,
+                ..
+            } => {
+                assert!(
+                    *token_change_ratio < 0.01,
+                    "text didn't change so ratio should be ~0"
+                );
+                assert_eq!(
+                    *significance,
+                    ChangeSignificance::Medium,
+                    "sketch-only update should be at least Medium"
+                );
+            }
+            other => panic!("expected UpdatedNode, got {other:?}"),
+        }
+
+        assert!(result.should_dispatch, "sketch-only update should trigger dispatch");
     }
 
     // ========================================================================

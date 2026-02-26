@@ -19,7 +19,7 @@ use super::types::*;
 /// |----------|---------|----------|
 /// | absent   | present | `new_nodes` |
 /// | present  | absent  | `deleted_node_ids` |
-/// | present  | present, text or annotations changed | `updated_nodes` |
+/// | present  | present, text/annotations/sketch changed | `updated_nodes` |
 /// | present  | present, only bounds changed | `moved_nodes` |
 /// | present  | present, nothing changed | (skipped) |
 ///
@@ -77,9 +77,11 @@ fn diff_nodes(previous: &[CanvasNode], current: &[CanvasNode]) -> NodeChanges {
             Some(prev) => {
                 let text_changed = prev.raw_text != curr.raw_text;
                 let annotations_changed = prev.annotations != curr.annotations;
+                let sketch_changed = prev.sketch != curr.sketch
+                    || prev.stroke_encoding != curr.stroke_encoding;
                 let bounds_changed = prev.bounds != curr.bounds;
 
-                if text_changed || annotations_changed {
+                if text_changed || annotations_changed || sketch_changed {
                     updated_nodes.push(NodeUpdate {
                         element_id: curr.element_id.clone(),
                         old_text: prev.raw_text.clone(),
