@@ -50,11 +50,20 @@ const mergeElementEdgeMap = (
   phaseZero: PhaseZeroResponse,
 ): Readonly<Record<string, string>> => {
   const created = phaseZero.created_edges
-  if (created.length === 0 && phaseZero.deleted_edges.length === 0) return existing
+  const rewired = phaseZero.rewired_edges
+  if (created.length === 0 && rewired.length === 0 && phaseZero.deleted_edges.length === 0) {
+    return existing
+  }
 
   const result: Record<string, string> = { ...existing }
   for (let i = 0, n = created.length; i < n; i++) {
     const pair = created[i]!
+    result[pair.element_id] = pair.edge_id
+  }
+
+  // Update rewired edge mappings (element_id stays, edge_id changes)
+  for (let i = 0, n = rewired.length; i < n; i++) {
+    const pair = rewired[i]!
     result[pair.element_id] = pair.edge_id
   }
 
@@ -96,6 +105,30 @@ const syncPhaseZero = (phaseZero: PhaseZeroResponse): void => {
       for (let i = 0, n = updated.length; i < n; i++) {
         const step = updated[i]!
         nextSteps = nmSet(nextSteps, step.id, step as WorkflowStep)
+      }
+
+      // Upsert created edges
+      const createdEdges = phaseZero.created_edges
+      for (let i = 0, n = createdEdges.length; i < n; i++) {
+        const pair = createdEdges[i]!
+        const edge: WorkflowStepEdge = {
+          id: pair.edge_id,
+          from_step_id: pair.from_step_id,
+          to_step_id: pair.to_step_id,
+        }
+        nextEdges = nmSet(nextEdges, edge.id, edge)
+      }
+
+      // Upsert rewired edges (old edge deleted, new edge created)
+      const rewiredEdges = phaseZero.rewired_edges
+      for (let i = 0, n = rewiredEdges.length; i < n; i++) {
+        const pair = rewiredEdges[i]!
+        const edge: WorkflowStepEdge = {
+          id: pair.edge_id,
+          from_step_id: pair.from_step_id,
+          to_step_id: pair.to_step_id,
+        }
+        nextEdges = nmSet(nextEdges, edge.id, edge)
       }
 
       // Delete removed steps
