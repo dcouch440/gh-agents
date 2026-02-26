@@ -100,11 +100,11 @@ describe('buildStepTree', () => {
 
     expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd', 'e'])
     expect(gutters(result)).toEqual([
-      ['branch'],           // ├── A
-      ['fork_start'],       // ├─┬─ B
-      ['pipe', 'par_mid'],  // │ ├─ C
-      ['pipe', 'par_end'],  // │ └─ D
-      ['corner'],           // └── E
+      ['branch'],                // ├── A
+      ['pipe', 'fork_start'],    // │ ┌─ B
+      ['pipe', 'par_mid'],       // │ ├─ C
+      ['pipe', 'par_end'],       // │ └─ D
+      ['corner'],                // └── E
     ])
   })
 
@@ -134,13 +134,13 @@ describe('buildStepTree', () => {
 
     expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g'])
     expect(gutters(result)).toEqual([
-      ['branch'],           // ├── A
-      ['fork_start'],       // ├─┬─ B
-      ['pipe', 'par_end'],  // │ └─ C
-      ['branch'],           // ├── D
-      ['fork_start'],       // ├─┬─ E
-      ['pipe', 'par_end'],  // │ └─ F
-      ['corner'],           // └── G
+      ['branch'],                // ├── A
+      ['pipe', 'fork_start'],    // │ ┌─ B
+      ['pipe', 'par_end'],       // │ └─ C
+      ['branch'],                // ├── D
+      ['pipe', 'fork_start'],    // │ ┌─ E
+      ['pipe', 'par_end'],       // │ └─ F
+      ['corner'],                // └── G
     ])
   })
 
@@ -170,13 +170,13 @@ describe('buildStepTree', () => {
 
     expect(stepIds(result)).toEqual(['a', 'b', 'd', 'e', 'f', 'c', 'g'])
     expect(gutters(result)).toEqual([
-      ['branch'],                       // ├── A
-      ['fork_start'],                   // ├─┬─ B
-      ['pipe', 'pipe', 'fork_start'],   // │ │  ├─┬─ D
-      ['pipe', 'pipe', 'pipe', 'par_end'], // │ │  │ └─ E
-      ['pipe', 'pipe', 'corner'],       // │ │  └── F
-      ['pipe', 'par_end'],              // │ └─ C
-      ['corner'],                       // └── G
+      ['branch'],                                          // ├── A
+      ['pipe', 'fork_start'],                              // │ ┌─ B
+      ['pipe', 'pipe', 'pipe', 'pipe', 'fork_start'],     // │ │  │ │ ┌─ D
+      ['pipe', 'pipe', 'pipe', 'pipe', 'par_end'],        // │ │  │ │ └─ E
+      ['pipe', 'pipe', 'pipe', 'corner'],                  // │ │  └── F
+      ['pipe', 'par_end'],                                 // │ └─ C
+      ['corner'],                                          // └── G
     ])
   })
 
@@ -274,13 +274,13 @@ describe('buildStepTree', () => {
 
     expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g'])
     expect(gutters(result)).toEqual([
-      ['branch'],           // ├── A
-      ['fork_start'],       // ├─┬─ B
-      ['pipe', 'par_mid'],  // │ ├─ C
-      ['pipe', 'par_mid'],  // │ ├─ D
-      ['pipe', 'par_mid'],  // │ ├─ E
-      ['pipe', 'par_end'],  // │ └─ F
-      ['corner'],           // └── G
+      ['branch'],                // ├── A
+      ['pipe', 'fork_start'],    // │ ┌─ B
+      ['pipe', 'par_mid'],       // │ ├─ C
+      ['pipe', 'par_mid'],       // │ ├─ D
+      ['pipe', 'par_mid'],       // │ ├─ E
+      ['pipe', 'par_end'],       // │ └─ F
+      ['corner'],                // └── G
     ])
   })
 
@@ -303,10 +303,10 @@ describe('buildStepTree', () => {
 
     expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd'])
     expect(gutters(result)).toEqual([
-      ['branch'],           // ├── A
-      ['fork_start'],       // ├─┬─ B
-      ['pipe', 'par_end'],  // │ └─ C
-      ['corner'],           // └── D
+      ['branch'],                // ├── A
+      ['pipe', 'fork_start'],    // │ ┌─ B
+      ['pipe', 'par_end'],       // │ └─ C
+      ['corner'],                // └── D
     ])
   })
 
@@ -334,12 +334,12 @@ describe('buildStepTree', () => {
 
     expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd', 'e', 'f'])
     expect(gutters(result)).toEqual([
-      ['branch'],           // ├── A
-      ['fork_start'],       // ├─┬─ B
-      ['pipe', 'par_mid'],  // │ ├─ C
-      ['pipe', 'par_end'],  // │ └─ D
-      ['branch'],           // ├── E
-      ['corner'],           // └── F
+      ['branch'],                // ├── A
+      ['pipe', 'fork_start'],    // │ ┌─ B
+      ['pipe', 'par_mid'],       // │ ├─ C
+      ['pipe', 'par_end'],       // │ └─ D
+      ['branch'],                // ├── E
+      ['corner'],                // └── F
     ])
   })
 
@@ -358,9 +358,9 @@ describe('buildStepTree', () => {
 
     expect(stepIds(result)).toEqual(['a', 'b', 'c'])
     expect(gutters(result)).toEqual([
-      ['branch'],           // ├── A
-      ['fork_start'],       // ├─┬─ B
-      ['pipe', 'par_end'],  // │ └─ C
+      ['branch'],                // ├── A
+      ['pipe', 'fork_start'],    // │ ┌─ B
+      ['pipe', 'par_end'],       // │ └─ C
     ])
   })
 
@@ -381,10 +381,10 @@ describe('buildStepTree', () => {
 
     expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd'])
     expect(gutters(result)).toEqual([
-      ['branch'],           // ├── A
-      ['fork_start'],       // ├─┬─ B
-      ['pipe', 'par_mid'],  // │ ├─ C
-      ['pipe', 'par_end'],  // │ └─ D
+      ['branch'],                // ├── A
+      ['pipe', 'fork_start'],    // │ ┌─ B
+      ['pipe', 'par_mid'],       // │ ├─ C
+      ['pipe', 'par_end'],       // │ └─ D
     ])
   })
 
@@ -405,10 +405,10 @@ describe('buildStepTree', () => {
 
     expect(stepIds(result)).toEqual(['x', 'a', 'b', 'c'])
     expect(gutters(result)).toEqual([
-      ['branch'],           // ├── X
-      ['branch'],           // ├── A
-      ['fork_start'],       // ├─┬─ B
-      ['pipe', 'par_end'],  // │ └─ C
+      ['branch'],                // ├── X
+      ['branch'],                // ├── A
+      ['pipe', 'fork_start'],    // │ ┌─ B
+      ['pipe', 'par_end'],       // │ └─ C
     ])
   })
 
@@ -430,7 +430,7 @@ describe('buildStepTree', () => {
     expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd'])
     expect(gutters(result)).toEqual([
       ['branch'],                    // ├── A
-      ['fork_start'],                // ├─┬─ B
+      ['pipe', 'fork_start'],        // │ ┌─ B
       ['pipe', 'par_end'],           // │ └─ C
       ['pipe', 'pipe', 'corner'],    // │    └── D
     ])
@@ -455,11 +455,11 @@ describe('buildStepTree', () => {
 
     expect(stepIds(result)).toEqual(['a', 'b', 'd', 'e', 'c'])
     expect(gutters(result)).toEqual([
-      ['branch'],                              // ├── A
-      ['fork_start'],                          // ├─┬─ B
-      ['pipe', 'pipe', 'fork_start'],          // │ │  ├─┬─ D
-      ['pipe', 'pipe', 'pipe', 'par_end'],     // │ │  │ └─ E
-      ['pipe', 'par_end'],                     // │ └─ C
+      ['branch'],                                          // ├── A
+      ['pipe', 'fork_start'],                              // │ ┌─ B
+      ['pipe', 'pipe', 'pipe', 'pipe', 'fork_start'],     // │ │  │ │ ┌─ D
+      ['pipe', 'pipe', 'pipe', 'pipe', 'par_end'],        // │ │  │ │ └─ E
+      ['pipe', 'par_end'],                                 // │ └─ C
     ])
   })
 
