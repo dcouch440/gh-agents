@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>M. Street Sign Arrows</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #1e1e2e; color: #cdd6f4; font-family: system-ui, sans-serif; padding: 40px; }
+    h1 { font-size: 24px; margin-bottom: 8px; font-weight: 400; }
+    p.desc { font-size: 13px; color: #6c7086; margin-bottom: 32px; line-height: 1.5; max-width: 700px; }
+    .back { color: #6c7086; text-decoration: none; font-size: 13px; display: inline-block; margin-bottom: 24px; }
+    .back:hover { color: #cdd6f4; }
+    canvas { border-radius: 12px; display: block; background: #181825; margin-bottom: 32px; }
+    .tag { display: inline-block; background: #313244; color: #89dceb; font-size: 11px; padding: 2px 8px; border-radius: 4px; margin-right: 4px; margin-bottom: 16px; }
+    h2 { font-size: 18px; font-weight: 400; margin-bottom: 8px; color: #a6adc8; }
+    .section { margin-bottom: 24px; }
+  </style>
+</head>
+<body>
+  <a class="back" href="index.html">&larr; Back to index</a>
+  <h1>M. Street Sign Arrows</h1>
+  <p class="desc">Bold, solid, no-nonsense. Like highway signs telling you where to go. Clean filled shapes, high contrast, thick strokes. Zero sketchiness — pure graphic clarity.</p>
+
+  <div class="section">
+    <h2>M1. Solid Pipe — round caps, thick</h2>
+    <span class="tag">6px solid</span><span class="tag">round cap</span><span class="tag">filled chevron head</span><span class="tag">20px gap</span>
+    <canvas id="m1" width="740" height="360"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>M2. Highway — flat wide stroke + big filled triangle</h2>
+    <span class="tag">8px flat</span><span class="tag">big triangle</span><span class="tag">24px gap</span>
+    <canvas id="m2" width="740" height="360"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>M3. Signpost — tapered solid band, pointed tip</h2>
+    <span class="tag">tapered 4-10px</span><span class="tag">pointed tip</span><span class="tag">no separate head</span><span class="tag">20px gap</span>
+    <canvas id="m3" width="740" height="360"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>M4. Road Paint — thick rounded with inset stripe</h2>
+    <span class="tag">10px stroke</span><span class="tag">center stripe</span><span class="tag">filled head</span><span class="tag">24px gap</span>
+    <canvas id="m4" width="740" height="360"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>M5. Billboard — solid filled ribbon shape</h2>
+    <span class="tag">12px ribbon</span><span class="tag">solid fill</span><span class="tag">arrow-shaped tip</span><span class="tag">20px gap</span>
+    <canvas id="m5" width="740" height="360"></canvas>
+  </div>
+
+  <div class="section">
+    <h2>M6. Stencil — solid with cutout center</h2>
+    <span class="tag">10px outline</span><span class="tag">hollow center</span><span class="tag">solid triangle head</span><span class="tag">24px gap</span>
+    <canvas id="m6" width="740" height="360"></canvas>
+  </div>
+
+  <h2 style="margin-top: 48px; margin-bottom: 16px;">Scale Test — 5 boxes</h2>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px;">
+    <div>
+      <h2>M1 at scale</h2>
+      <canvas id="m1s" width="740" height="300"></canvas>
+    </div>
+    <div>
+      <h2>M2 at scale</h2>
+      <canvas id="m2s" width="740" height="300"></canvas>
+    </div>
+    <div>
+      <h2>M3 at scale</h2>
+      <canvas id="m3s" width="740" height="300"></canvas>
+    </div>
+    <div>
+      <h2>M5 at scale</h2>
+      <canvas id="m5s" width="740" height="300"></canvas>
+    </div>
+  </div>
+
+  <script src="shared.js"></script>
+  <script>
+    // ================================================================
+    // Helper: solid bezier stroke
+    // ================================================================
+    function solidBezier(ctx, a, width, color, cap) {
+      ctx.strokeStyle = color
+      ctx.lineWidth = width
+      ctx.lineCap = cap || 'round'
+      ctx.lineJoin = 'round'
+      ctx.beginPath()
+      ctx.moveTo(a.start.x, a.start.y)
+      ctx.bezierCurveTo(a.cp1.x, a.cp1.y, a.cp2.x, a.cp2.y, a.end.x, a.end.y)
+      ctx.stroke()
+    }
+
+    // Helper: filled triangle arrowhead
+    function filledHead(ctx, a, size, spread, color) {
+      const angle = Math.atan2(a.end.y - a.cp2.y, a.end.x - a.cp2.x)
+      ctx.fillStyle = color
+      ctx.beginPath()
+      ctx.moveTo(a.end.x, a.end.y)
+      ctx.lineTo(a.end.x - size * Math.cos(angle - spread), a.end.y - size * Math.sin(angle - spread))
+      ctx.lineTo(a.end.x - size * Math.cos(angle + spread), a.end.y - size * Math.sin(angle + spread))
+      ctx.closePath()
+      ctx.fill()
+    }
+
+    // Helper: filled kite/chevron arrowhead (with inset back)
+    function kiteHead(ctx, a, size, spread, inset, color) {
+      const angle = Math.atan2(a.end.y - a.cp2.y, a.end.x - a.cp2.x)
+      ctx.fillStyle = color
+      ctx.beginPath()
+      ctx.moveTo(a.end.x, a.end.y)
+      ctx.lineTo(a.end.x - size * Math.cos(angle - spread), a.end.y - size * Math.sin(angle - spread))
+      ctx.lineTo(a.end.x - size * inset * Math.cos(angle), a.end.y - size * inset * Math.sin(angle))
+      ctx.lineTo(a.end.x - size * Math.cos(angle + spread), a.end.y - size * Math.sin(angle + spread))
+      ctx.closePath()
+      ctx.fill()
+    }
+
+    // Helper: build ribbon outline points along a bezier
+    function ribbonPoints(a, width, taperStart, taperEnd) {
+      const segments = 60
+      const top = [], bottom = []
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments
+        const pt = bezierPoint(t, a.start, a.cp1, a.cp2, a.end)
+        const tan = bezierTangent(t, a.start, a.cp1, a.cp2, a.end)
+        const len = Math.sqrt(tan.x*tan.x + tan.y*tan.y) || 1
+        const nx = -tan.y / len
+        const ny = tan.x / len
+
+        let w = width / 2
+        if (taperStart) w *= Math.min(1, t * 6)
+        if (taperEnd) w *= Math.min(1, (1 - t) * 6)
+
+        top.push({ x: pt.x + nx * w, y: pt.y + ny * w })
+        bottom.push({ x: pt.x - nx * w, y: pt.y - ny * w })
+      }
+      return { top, bottom }
+    }
+
+    // ================================================================
+    // M1 — Solid Pipe
+    // ================================================================
+    function drawM1(canvasId, sceneFn, gap) {
+      const { ctx } = initCanvas(canvasId, canvasId.includes('s') ? 740 : 740, canvasId.includes('s') ? 300 : 360)
+      const scene = sceneFn(gap)
+      drawBoxes(ctx, scene.boxes, 42)
+
+      for (const a of scene.arrows) {
+        solidBezier(ctx, a, 6, STROKE, 'round')
+        kiteHead(ctx, a, 20, Math.PI / 5, 0.55, STROKE)
+      }
+    }
+    drawM1('m1', getScene, 20)
+    drawM1('m1s', getBigScene, 20)
+
+    // ================================================================
+    // M2 — Highway
+    // ================================================================
+    function drawM2(canvasId, sceneFn, gap) {
+      const { ctx } = initCanvas(canvasId, 740, canvasId.includes('s') ? 300 : 360)
+      const scene = sceneFn(gap)
+      drawBoxes(ctx, scene.boxes, 55)
+
+      for (const a of scene.arrows) {
+        solidBezier(ctx, a, 8, STROKE, 'butt')
+        filledHead(ctx, a, 28, Math.PI / 4.5, STROKE)
+      }
+    }
+    drawM2('m2', getScene, 24)
+    drawM2('m2s', getBigScene, 24)
+
+    // ================================================================
+    // M3 — Signpost (tapered band that ends in a point)
+    // ================================================================
+    function drawM3(canvasId, sceneFn, gap) {
+      const { ctx } = initCanvas(canvasId, 740, canvasId.includes('s') ? 300 : 360)
+      const scene = sceneFn(gap)
+      drawBoxes(ctx, scene.boxes, 33)
+
+      for (const a of scene.arrows) {
+        // Build a tapered filled shape that narrows to a point
+        const segments = 60
+        const top = [], bottom = []
+        const maxW = 10
+
+        for (let i = 0; i <= segments; i++) {
+          const t = i / segments
+          const pt = bezierPoint(t, a.start, a.cp1, a.cp2, a.end)
+          const tan = bezierTangent(t, a.start, a.cp1, a.cp2, a.end)
+          const len = Math.sqrt(tan.x*tan.x + tan.y*tan.y) || 1
+          const nx = -tan.y / len
+          const ny = tan.x / len
+
+          // Wide at start, narrows to point at end
+          const w = maxW / 2 * (1 - t * t * 0.95) // quadratic taper, never quite zero until tip
+          const rampIn = Math.min(1, t * 4) // quick ramp from zero at start
+          const hw = w * rampIn
+
+          top.push({ x: pt.x + nx * hw, y: pt.y + ny * hw })
+          bottom.push({ x: pt.x - nx * hw, y: pt.y - ny * hw })
+        }
+
+        // Add the sharp tip
+        top.push({ x: a.end.x, y: a.end.y })
+
+        ctx.fillStyle = STROKE
+        ctx.beginPath()
+        ctx.moveTo(top[0].x, top[0].y)
+        for (let i = 1; i < top.length; i++) ctx.lineTo(top[i].x, top[i].y)
+        for (let i = bottom.length - 1; i >= 0; i--) ctx.lineTo(bottom[i].x, bottom[i].y)
+        ctx.closePath()
+        ctx.fill()
+      }
+    }
+    drawM3('m3', getScene, 20)
+    drawM3('m3s', getBigScene, 20)
+
+    // ================================================================
+    // M4 — Road Paint (thick with inset stripe)
+    // ================================================================
+    {
+      const { ctx } = initCanvas('m4', 740, 360)
+      const scene = getScene(24)
+      drawBoxes(ctx, scene.boxes, 66)
+
+      for (const a of scene.arrows) {
+        // Outer thick stroke
+        solidBezier(ctx, a, 10, STROKE, 'round')
+        // Inner dark stripe
+        solidBezier(ctx, a, 4, '#181825', 'round')
+
+        // Filled head
+        const angle = Math.atan2(a.end.y - a.cp2.y, a.end.x - a.cp2.x)
+        const spread = Math.PI / 4
+        const size = 26
+
+        // Outer head
+        ctx.fillStyle = STROKE
+        ctx.beginPath()
+        ctx.moveTo(a.end.x + 4 * Math.cos(angle), a.end.y + 4 * Math.sin(angle)) // slight overshoot for clean joint
+        ctx.lineTo(a.end.x - size * Math.cos(angle - spread), a.end.y - size * Math.sin(angle - spread))
+        ctx.lineTo(a.end.x - size * 0.5 * Math.cos(angle), a.end.y - size * 0.5 * Math.sin(angle))
+        ctx.lineTo(a.end.x - size * Math.cos(angle + spread), a.end.y - size * Math.sin(angle + spread))
+        ctx.closePath()
+        ctx.fill()
+
+        // Inner dark cutout on head
+        ctx.fillStyle = '#181825'
+        const inSize = size * 0.55
+        const inSpread = spread * 0.6
+        ctx.beginPath()
+        ctx.moveTo(a.end.x, a.end.y)
+        ctx.lineTo(a.end.x - inSize * Math.cos(angle - inSpread), a.end.y - inSize * Math.sin(angle - inSpread))
+        ctx.lineTo(a.end.x - inSize * 0.5 * Math.cos(angle), a.end.y - inSize * 0.5 * Math.sin(angle))
+        ctx.lineTo(a.end.x - inSize * Math.cos(angle + inSpread), a.end.y - inSize * Math.sin(angle + inSpread))
+        ctx.closePath()
+        ctx.fill()
+      }
+    }
+
+    // ================================================================
+    // M5 — Billboard (solid filled ribbon with arrow tip)
+    // ================================================================
+    function drawM5(canvasId, sceneFn, gap) {
+      const { ctx } = initCanvas(canvasId, 740, canvasId.includes('s') ? 300 : 360)
+      const scene = sceneFn(gap)
+      drawBoxes(ctx, scene.boxes, 22)
+
+      for (const a of scene.arrows) {
+        const segments = 60
+        const ribbonW = 12
+        const top = [], bottom = []
+
+        // Stop the ribbon short — leave room for the arrowhead
+        const headLen = 28
+        const angle = Math.atan2(a.end.y - a.cp2.y, a.end.x - a.cp2.x)
+
+        for (let i = 0; i <= segments; i++) {
+          const t = i / segments
+          const pt = bezierPoint(t, a.start, a.cp1, a.cp2, a.end)
+          const tan = bezierTangent(t, a.start, a.cp1, a.cp2, a.end)
+          const len = Math.sqrt(tan.x*tan.x + tan.y*tan.y) || 1
+          const nx = -tan.y / len
+          const ny = tan.x / len
+
+          const rampIn = Math.min(1, t * 5)
+          const rampOut = Math.min(1, (1 - t) * 4)
+          const hw = ribbonW / 2 * rampIn * rampOut
+
+          top.push({ x: pt.x + nx * hw, y: pt.y + ny * hw })
+          bottom.push({ x: pt.x - nx * hw, y: pt.y - ny * hw })
+        }
+
+        // Ribbon body
+        ctx.fillStyle = STROKE
+        ctx.globalAlpha = 0.85
+        ctx.beginPath()
+        ctx.moveTo(top[0].x, top[0].y)
+        for (let i = 1; i < top.length; i++) ctx.lineTo(top[i].x, top[i].y)
+        for (let i = bottom.length - 1; i >= 0; i--) ctx.lineTo(bottom[i].x, bottom[i].y)
+        ctx.closePath()
+        ctx.fill()
+        ctx.globalAlpha = 1
+
+        // Solid arrowhead — wide chevron
+        const spread = Math.PI / 3.5
+        ctx.fillStyle = STROKE
+        ctx.beginPath()
+        ctx.moveTo(a.end.x, a.end.y)
+        ctx.lineTo(a.end.x - headLen * Math.cos(angle - spread), a.end.y - headLen * Math.sin(angle - spread))
+        ctx.lineTo(a.end.x - headLen * 0.45 * Math.cos(angle), a.end.y - headLen * 0.45 * Math.sin(angle))
+        ctx.lineTo(a.end.x - headLen * Math.cos(angle + spread), a.end.y - headLen * Math.sin(angle + spread))
+        ctx.closePath()
+        ctx.fill()
+      }
+    }
+    drawM5('m5', getScene, 20)
+    drawM5('m5s', getBigScene, 20)
+
+    // ================================================================
+    // M6 — Stencil (solid outline with hollow center)
+    // ================================================================
+    {
+      const { ctx } = initCanvas('m6', 740, 360)
+      const scene = getScene(24)
+      drawBoxes(ctx, scene.boxes, 77)
+
+      for (const a of scene.arrows) {
+        // Build ribbon outline
+        const { top, bottom } = ribbonPoints(a, 10, true, false)
+
+        // Outer fill
+        ctx.fillStyle = STROKE
+        ctx.beginPath()
+        ctx.moveTo(top[0].x, top[0].y)
+        for (let i = 1; i < top.length; i++) ctx.lineTo(top[i].x, top[i].y)
+        for (let i = bottom.length - 1; i >= 0; i--) ctx.lineTo(bottom[i].x, bottom[i].y)
+        ctx.closePath()
+        ctx.fill()
+
+        // Inner cutout (background color)
+        const inner = ribbonPoints(a, 5, true, false)
+        ctx.fillStyle = '#181825'
+        ctx.beginPath()
+        ctx.moveTo(inner.top[0].x, inner.top[0].y)
+        for (let i = 1; i < inner.top.length; i++) ctx.lineTo(inner.top[i].x, inner.top[i].y)
+        for (let i = inner.bottom.length - 1; i >= 0; i--) ctx.lineTo(inner.bottom[i].x, inner.bottom[i].y)
+        ctx.closePath()
+        ctx.fill()
+
+        // Solid triangle head
+        const angle = Math.atan2(a.end.y - a.cp2.y, a.end.x - a.cp2.x)
+        const size = 24
+        const spread = Math.PI / 4
+
+        ctx.fillStyle = STROKE
+        ctx.beginPath()
+        ctx.moveTo(a.end.x + 2*Math.cos(angle), a.end.y + 2*Math.sin(angle))
+        ctx.lineTo(a.end.x - size * Math.cos(angle - spread), a.end.y - size * Math.sin(angle - spread))
+        ctx.lineTo(a.end.x - size * Math.cos(angle + spread), a.end.y - size * Math.sin(angle + spread))
+        ctx.closePath()
+        ctx.fill()
+
+        // Cutout in head
+        const inSize = size * 0.5
+        const inSpread = spread * 0.55
+        ctx.fillStyle = '#181825'
+        ctx.beginPath()
+        ctx.moveTo(a.end.x - 2*Math.cos(angle), a.end.y - 2*Math.sin(angle))
+        ctx.lineTo(a.end.x - inSize * Math.cos(angle - inSpread) - 3*Math.cos(angle), a.end.y - inSize * Math.sin(angle - inSpread) - 3*Math.sin(angle))
+        ctx.lineTo(a.end.x - inSize * Math.cos(angle + inSpread) - 3*Math.cos(angle), a.end.y - inSize * Math.sin(angle + inSpread) - 3*Math.sin(angle))
+        ctx.closePath()
+        ctx.fill()
+      }
+    }
+  </script>
+</body>
+</html>
