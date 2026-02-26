@@ -72,6 +72,17 @@ pub(crate) async fn compose_prompt(
                 }
             }
         }
+        // Last resort: inject completed upstream step variable outputs
+        if parts.is_empty() {
+            for value in outputs.values() {
+                match value {
+                    JsonValue::String(s) => parts.push(s.clone()),
+                    other => parts.push(
+                        serde_json::to_string_pretty(other).unwrap_or_else(|_| other.to_string()),
+                    ),
+                }
+            }
+        }
         parts.join("\n\n")
     } else {
         raw_prompt

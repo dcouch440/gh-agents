@@ -65,6 +65,16 @@ pub(crate) async fn execute_step(
 
     match step.execution_mode.as_str() {
         "workforce" => execute_workforce(&dag, step, dag_state, step_start).await,
+        _ if step.child_workflow_id.is_some() => {
+            // Step has a pipeline attached (mission brief + roster) but execution_mode
+            // is stale. Route through the workforce pipeline so the designer phase runs.
+            tracing::warn!(
+                step_id = %step.id,
+                mode = %step.execution_mode,
+                "Step has child_workflow_id but non-workforce mode — routing as workforce"
+            );
+            execute_workforce(&dag, step, dag_state, step_start).await
+        }
         _ => execute_agent(&dag, state, step, dag_state, &engine, step_start).await,
     }
 }

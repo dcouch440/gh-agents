@@ -2,7 +2,8 @@
 mod tests {
     //! Tests for prompt registry
 
-    use crate::server::hub::{error::HubError, prompt_registry::PromptRegistry};
+    use crate::config::prompt_registry::PromptRegistry;
+    use crate::server::hub::error::HubError;
     use std::collections::HashMap;
     use std::path::Path;
     use tempfile::TempDir;

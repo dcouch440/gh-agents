@@ -80,7 +80,7 @@ pub async fn create_step(
     verify_workflow_ownership(repo, input.user_id, input.workflow_id).await?;
 
     let p = input.payload;
-    let execution_mode = p.execution_mode.unwrap_or_else(|| "single".to_string());
+    let execution_mode = p.execution_mode.unwrap_or_else(|| "workforce".to_string());
 
     // Fetch existing steps (used for input constraint + ref_id generation)
     let existing_steps = repo.list_steps(input.workflow_id).await?;
