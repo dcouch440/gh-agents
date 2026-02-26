@@ -96,7 +96,13 @@ pub(crate) fn filter_changeset(
 
         // Survived all filters — score it
         let ratio = token_change_ratio(&update.old_text, &update.new_text);
-        let significance = score_from_ratio(ratio);
+        let has_sketch = update.sketch.is_some() || update.stroke_encoding.is_some();
+        let significance = if has_sketch && ratio < 0.05 {
+            // Sketch-only change (text unchanged) is at least medium significance
+            ChangeSignificance::Medium
+        } else {
+            score_from_ratio(ratio)
+        };
 
         meaningful.push(ScoredChange::UpdatedNode {
             update: update.clone(),
@@ -239,6 +245,11 @@ fn normalize_whitespace(s: &str) -> String {
 /// Normalizes both text and annotations. If all normalized forms match,
 /// the change is purely cosmetic whitespace.
 fn is_whitespace_only(update: &NodeUpdate) -> bool {
+    // Sketch/stroke changes are always meaningful visual content
+    if update.sketch.is_some() || update.stroke_encoding.is_some() {
+        return false;
+    }
+
     if normalize_whitespace(&update.old_text) != normalize_whitespace(&update.new_text) {
         return false;
     }
