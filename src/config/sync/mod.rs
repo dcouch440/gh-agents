@@ -10,6 +10,16 @@ use anyhow::{Context, Result};
 use sqlx::{PgPool, Postgres, Transaction};
 use std::path::Path;
 
+#[derive(sqlx::FromRow)]
+struct IdRow {
+    id: uuid::Uuid,
+}
+
+#[derive(sqlx::FromRow)]
+struct CreatedRow {
+    created: Option<bool>,
+}
+
 /// Main sync function - syncs all config files to database
 pub async fn sync_config(
     pool: &PgPool,
@@ -104,7 +114,7 @@ async fn sync_capabilities(
 ) -> Result<()> {
     for cap in &capabilities.capabilities {
         // UPSERT on capability_key
-        let result = sqlx::query!(
+        let result = sqlx::query_as::<_, CreatedRow>(
             r#"
             INSERT INTO tool_capabilities (
                 capability_key, display_name, category, safety_level, description
@@ -118,12 +128,12 @@ async fn sync_capabilities(
                 description = EXCLUDED.description
             RETURNING (xmax = 0) AS created
             "#,
-            cap.key,
-            cap.display_name,
-            cap.category,
-            cap.safety_level,
-            cap.description
         )
+        .bind(&cap.key)
+        .bind(&cap.display_name)
+        .bind(&cap.category)
+        .bind(&cap.safety_level)
+        .bind(&cap.description)
         .fetch_one(&mut **tx)
         .await
         .with_context(|| format!("Failed to sync capability '{}'", cap.key))?;
@@ -153,7 +163,8 @@ async fn sync_tool_assignments(
 ) -> Result<()> {
     for (tool_name, assignment) in &assignments.tool_assignments {
         // Get tool ID
-        let tool = sqlx::query!(r#"SELECT id FROM tools WHERE name = $1"#, tool_name)
+        let tool = sqlx::query_as::<_, IdRow>("SELECT id FROM tools WHERE name = $1")
+            .bind(tool_name)
             .fetch_optional(&mut **tx)
             .await?;
 
@@ -166,20 +177,18 @@ async fn sync_tool_assignments(
         };
 
         // Delete existing assignments for this tool
-        sqlx::query!(
-            r#"DELETE FROM tool_capability_assignments WHERE tool_id = $1"#,
-            tool.id
-        )
-        .execute(&mut **tx)
-        .await?;
+        sqlx::query("DELETE FROM tool_capability_assignments WHERE tool_id = $1")
+            .bind(tool.id)
+            .execute(&mut **tx)
+            .await?;
 
         // Insert new assignments
         for cap_key in &assignment.capabilities {
             // Get capability ID
-            let cap = sqlx::query!(
-                r#"SELECT id FROM tool_capabilities WHERE capability_key = $1"#,
-                cap_key
+            let cap = sqlx::query_as::<_, IdRow>(
+                "SELECT id FROM tool_capabilities WHERE capability_key = $1",
             )
+            .bind(cap_key)
             .fetch_optional(&mut **tx)
             .await?;
 
@@ -197,15 +206,13 @@ async fn sync_tool_assignments(
                 continue;
             };
 
-            sqlx::query!(
-                r#"
-                INSERT INTO tool_capability_assignments (tool_id, capability_id)
-                VALUES ($1, $2)
-                ON CONFLICT (tool_id, capability_id) DO NOTHING
-                "#,
-                tool.id,
-                cap.id
+            sqlx::query(
+                "INSERT INTO tool_capability_assignments (tool_id, capability_id)
+                 VALUES ($1, $2)
+                 ON CONFLICT (tool_id, capability_id) DO NOTHING",
             )
+            .bind(tool.id)
+            .bind(cap.id)
             .execute(&mut **tx)
             .await?;
         }
