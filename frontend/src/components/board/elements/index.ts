@@ -18,6 +18,7 @@ export {
   addArrow,
   addBox,
   bringToFront,
+  hasArrow,
   removeBox,
   removeElements,
   updateBoxPosition,
