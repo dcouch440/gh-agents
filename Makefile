@@ -2,7 +2,7 @@
        ui-install ui-dev ui-build ui-lint ui-preview \
        cli-install cli-dev cli-build \
        dev build-all lint-all test-all ci \
-       test-ascii \
+       test-ascii compose \
        report-last-run report-token-usage report-tool-calls report-sessions report-all
 
 # Default target
@@ -122,6 +122,11 @@ cli-dev:
 
 cli-build:
 	cd cli && npm run build
+
+# --- Docker ---
+
+compose:
+	docker compose up -d
 
 # --- Combined ---
 
