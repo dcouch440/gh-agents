@@ -162,7 +162,6 @@ pub(super) async fn dispatch_step_tool(
                 "set_dependency",
                 "remove_dependency",
                 "set_capabilities",
-                "set_failure_mode",
             ];
             if WORKFORCE_TOOLS.contains(&name) {
                 let tool_ctx = crate::server::tools::workforce::WorkforceToolContext {

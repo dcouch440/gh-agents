@@ -162,6 +162,39 @@ fn agent_not_found_error(name: &str, roster: &[crate::db::TaskAgentRosterRow]) -
     })
 }
 
+/// Resolve an agent by ID or name.
+///
+/// Tries `agent_id` (UUID) first, falls back to `name` lookup via
+/// `find_agent_by_name`. Returns an actionable error if neither matches.
+async fn resolve_agent_id(
+    input: &Value,
+    repo: &dyn WorkflowRepo,
+    ctx: &WorkforceToolContext,
+) -> Result<Uuid, Value> {
+    // Try UUID first
+    if let Some(id_str) = input["agent_id"].as_str() {
+        if let Ok(id) = Uuid::parse_str(id_str) {
+            return Ok(id);
+        }
+    }
+
+    // Fall back to name lookup
+    if let Some(name) = input["name"].as_str() {
+        let brief = repo
+            .get_mission_brief(ctx.step_id)
+            .await
+            .map_err(|e| json!({ "error": e.to_string() }))?
+            .ok_or_else(|| json!({ "error": "No mission brief found" }))?;
+        let roster = repo.list_agent_roster(brief.id).await.unwrap_or_default();
+        if let Some(agent) = find_agent_by_name(&roster, name) {
+            return Ok(agent.id);
+        }
+        return Err(agent_not_found_error(name, &roster));
+    }
+
+    Err(json!({ "error": "Provide either agent_id or name to identify the agent" }))
+}
+
 /// Recompute execution_order for all roster agents from the dependency graph.
 ///
 /// Uses Kahn's algorithm with a min-heap (tie-break by current execution_order
@@ -761,13 +794,16 @@ async fn execute_add_agent(
         .await
         .unwrap_or_default();
 
+    let sequence_names: Vec<&str> = execution_sequence
+        .iter()
+        .filter_map(|v| v["name"].as_str())
+        .collect();
+
     json!({
-        "agent_id": roster_agent.id.to_string(),
         "name": roster_agent.name,
         "role": roster_agent.role_description,
         "capabilities": roster_agent.capabilities,
-        "child_step_id": step_added.step_id.to_string(),
-        "execution_sequence": execution_sequence,
+        "execution_order": sequence_names,
     })
 }
 
@@ -776,12 +812,19 @@ async fn execute_update_agent(
     repo: &dyn WorkflowRepo,
     ctx: &WorkforceToolContext,
 ) -> Value {
-    let agent_id = match require_uuid(input, "agent_id") {
+    let agent_id = match resolve_agent_id(input, repo, ctx).await {
         Ok(v) => v,
         Err(e) => return e,
     };
 
-    let name = input["name"].as_str().map(String::from);
+    // When name is used for identification (no agent_id), don't treat it as a rename.
+    // Only use name as a rename if agent_id was also provided.
+    let name = if input["agent_id"].as_str().is_some() {
+        input["name"].as_str().map(String::from)
+    } else {
+        // name was used for lookup — check for explicit new_name field
+        input["new_name"].as_str().map(String::from)
+    };
     let role = input["role"].as_str().map(String::from);
     let capabilities: Option<Vec<String>> = input["capabilities"].as_array().map(|arr| {
         arr.iter()
@@ -828,7 +871,7 @@ async fn execute_remove_agent(
     repo: &dyn WorkflowRepo,
     ctx: &WorkforceToolContext,
 ) -> Value {
-    let agent_id = match require_uuid(input, "agent_id") {
+    let agent_id = match resolve_agent_id(input, repo, ctx).await {
         Ok(v) => v,
         Err(e) => return e,
     };
@@ -865,11 +908,15 @@ async fn execute_remove_agent(
         .await
         .unwrap_or_default();
 
+    let sequence_names: Vec<&str> = execution_sequence
+        .iter()
+        .filter_map(|v| v["name"].as_str())
+        .collect();
+
     json!({
         "deleted": true,
         "name": agent_name,
-        "id": agent_id.to_string(),
-        "execution_sequence": execution_sequence,
+        "execution_order": sequence_names,
     })
 }
 
@@ -974,11 +1021,16 @@ async fn execute_set_dependency(
         .await
         .unwrap_or_default();
 
+    let sequence_names: Vec<&str> = execution_sequence
+        .iter()
+        .filter_map(|v| v["name"].as_str())
+        .collect();
+
     json!({
         "created": true,
         "from": from_agent.name,
         "to": to_agent.name,
-        "execution_sequence": execution_sequence,
+        "execution_order": sequence_names,
     })
 }
 
@@ -1035,10 +1087,15 @@ async fn execute_remove_dependency(
         .await
         .unwrap_or_default();
 
+    let sequence_names: Vec<&str> = execution_sequence
+        .iter()
+        .filter_map(|v| v["name"].as_str())
+        .collect();
+
     json!({
         "removed": true,
         "from": from_agent.name,
         "to": to_agent.name,
-        "execution_sequence": execution_sequence,
+        "execution_order": sequence_names,
     })
 }
