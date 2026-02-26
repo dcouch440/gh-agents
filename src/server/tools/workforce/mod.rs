@@ -23,9 +23,6 @@ pub struct WorkforceToolContext {
     pub step_id: Uuid,
 }
 
-/// Valid failure mode values.
-const VALID_FAILURE_MODES: &[&str] = &["fail_fast", "skip_and_continue", "retry"];
-
 /// Execute a workforce tool by name.
 pub async fn execute_workforce_tool(
     name: &str,
@@ -40,7 +37,6 @@ pub async fn execute_workforce_tool(
         "update_agent" => execute_update_agent(input, repo, ctx).await,
         "remove_agent" => execute_remove_agent(input, repo, ctx).await,
         "set_capabilities" => execute_set_capabilities(input, repo, ctx).await,
-        "set_failure_mode" => execute_set_failure_mode(input, repo, ctx).await,
         "set_dependency" => execute_set_dependency(input, repo, ctx).await,
         "remove_dependency" => execute_remove_dependency(input, repo, ctx).await,
         _ => json!({ "error": format!("Unknown workforce tool: {}", name) }),
@@ -895,34 +891,6 @@ async fn execute_set_capabilities(
     {
         Ok(brief) => json!({
             "capabilities": brief.available_capabilities,
-        }),
-        Err(e) => json!({ "error": e }),
-    }
-}
-
-async fn execute_set_failure_mode(
-    input: &Value,
-    repo: &dyn WorkflowRepo,
-    ctx: &WorkforceToolContext,
-) -> Value {
-    let mode = match require_str(input, "mode") {
-        Ok(v) => v,
-        Err(e) => return e,
-    };
-
-    if !VALID_FAILURE_MODES.contains(&mode) {
-        return json!({
-            "error": format!(
-                "Invalid failure mode '{}'. Must be one of: {}",
-                mode,
-                VALID_FAILURE_MODES.join(", ")
-            )
-        });
-    }
-
-    match upsert_mission_brief_field(repo, ctx.step_id, None, None, Some(mode), None).await {
-        Ok(brief) => json!({
-            "failure_mode": brief.failure_mode,
         }),
         Err(e) => json!({ "error": e }),
     }

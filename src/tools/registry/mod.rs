@@ -42,20 +42,18 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "search_docs" => Some(search_docs_tool()),
         "read_document" => Some(read_document_tool()),
 
-        // Universal node assistant tools (5)
-        "set_node_archetype" => Some(set_node_archetype_tool()),
+        // Universal node assistant tools (4)
         "set_node_name" => Some(set_node_name_tool()),
         "set_node_description" => Some(set_node_description_tool()),
         "render_panel" => Some(render_panel_tool()),
         "update_plan" => Some(update_plan_tool()),
 
-        // Workforce archetype tools (6)
+        // Workforce archetype tools (5)
         "set_task" => Some(set_task_tool()),
         "add_agent" => Some(add_agent_tool()),
         "update_agent" => Some(update_agent_tool()),
         "remove_agent" => Some(remove_agent_tool()),
         "set_capabilities" => Some(set_capabilities_tool()),
-        "set_failure_mode" => Some(set_failure_mode_tool()),
 
         "configure_team" => Some(configure_team_tool()),
         "set_dependency" => Some(set_dependency_tool()),
@@ -389,24 +387,6 @@ fn read_document_tool() -> Tool {
 // Universal Node Assistant Tool Definitions
 // ============================================================================
 
-fn set_node_archetype_tool() -> Tool {
-    Tool {
-        name: "set_node_archetype".into(),
-        description: "Set the archetype (execution mode) for this node. This determines what the node does and which tools are available.".into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "archetype": {
-                    "type": "string",
-                    "enum": ["workforce"],
-                    "description": "The archetype to apply to this node"
-                }
-            },
-            "required": ["archetype"]
-        }),
-    }
-}
-
 fn set_node_name_tool() -> Tool {
     Tool {
         name: "set_node_name".into(),
@@ -623,24 +603,6 @@ fn set_capabilities_tool() -> Tool {
                 }
             },
             "required": ["capabilities"]
-        }),
-    }
-}
-
-fn set_failure_mode_tool() -> Tool {
-    Tool {
-        name: "set_failure_mode".into(),
-        description: "Set how the workforce handles agent failures during execution.".into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "mode": {
-                    "type": "string",
-                    "enum": ["fail_fast", "skip_and_continue", "retry"],
-                    "description": "fail_fast: stop on first failure. skip_and_continue: skip failed agent, continue with rest. retry: retry the failed agent."
-                }
-            },
-            "required": ["mode"]
         }),
     }
 }

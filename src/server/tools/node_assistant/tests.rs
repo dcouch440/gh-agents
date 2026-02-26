@@ -27,57 +27,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn set_archetype_updates_execution_mode() {
-        let ctx = make_ctx();
-        let step = make_step(ctx.step_id, ctx.workflow_id);
-        let step_id = ctx.step_id;
-        let step_clone = step.clone();
-
-        let mut repo = MockWorkflowRepo::new();
-        repo.expect_get_step()
-            .withf(move |id| *id == step_id)
-            .returning(move |_| Ok(Some(step_clone.clone())));
-        repo.expect_update_step().returning(|step| {
-            assert_eq!(step.execution_mode, "workforce");
-            Ok(step)
-        });
-
-        let input = json!({ "archetype": "workforce" });
-        let result = execute_node_assistant_tool("set_node_archetype", &input, &repo, &ctx).await;
-
-        assert_eq!(result["archetype"], "workforce");
-        assert!(result.get("error").is_none());
-    }
-
-    #[tokio::test]
-    async fn set_archetype_rejects_invalid() {
-        let ctx = make_ctx();
-        let repo = MockWorkflowRepo::new();
-
-        let input = json!({ "archetype": "invalid_type" });
-        let result = execute_node_assistant_tool("set_node_archetype", &input, &repo, &ctx).await;
-
-        assert!(result["error"]
-            .as_str()
-            .unwrap()
-            .contains("Invalid archetype"));
-    }
-
-    #[tokio::test]
-    async fn set_archetype_rejects_missing() {
-        let ctx = make_ctx();
-        let repo = MockWorkflowRepo::new();
-
-        let input = json!({});
-        let result = execute_node_assistant_tool("set_node_archetype", &input, &repo, &ctx).await;
-
-        assert!(result["error"]
-            .as_str()
-            .unwrap()
-            .contains("Missing required parameter"));
-    }
-
-    #[tokio::test]
     async fn set_name_updates_step() {
         let ctx = make_ctx();
         let step = make_step(ctx.step_id, ctx.workflow_id);
@@ -163,30 +112,4 @@ mod tests {
             .contains("Missing required parameter"));
     }
 
-    #[tokio::test]
-    async fn all_valid_archetypes_accepted() {
-        for archetype in &["workforce"] {
-            let ctx = make_ctx();
-            let step = make_step(ctx.step_id, ctx.workflow_id);
-            let step_id = ctx.step_id;
-            let step_clone = step.clone();
-
-            let mut repo = MockWorkflowRepo::new();
-            repo.expect_get_step()
-                .withf(move |id| *id == step_id)
-                .returning(move |_| Ok(Some(step_clone.clone())));
-            repo.expect_update_step().returning(|step| Ok(step));
-
-            let input = json!({ "archetype": archetype });
-            let result =
-                execute_node_assistant_tool("set_node_archetype", &input, &repo, &ctx).await;
-
-            assert_eq!(
-                result["archetype"].as_str().unwrap(),
-                *archetype,
-                "Failed for archetype: {}",
-                archetype
-            );
-        }
-    }
 }

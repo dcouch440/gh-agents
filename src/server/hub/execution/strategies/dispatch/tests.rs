@@ -34,7 +34,6 @@ mod tests {
         assert!(tool_names.contains(&"set_dependency"));
         assert!(tool_names.contains(&"remove_dependency"));
         assert!(tool_names.contains(&"set_capabilities"));
-        assert!(tool_names.contains(&"set_failure_mode"));
     }
 
     #[test]

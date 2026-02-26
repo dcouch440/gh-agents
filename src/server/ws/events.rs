@@ -244,11 +244,6 @@ pub enum WorkflowEventKind {
     StepConfigUpdated {
         step_id: Uuid,
     },
-    /// Step archetype (execution_mode) was changed.
-    ArchetypeChanged {
-        step_id: Uuid,
-        archetype: String,
-    },
     /// Step name was updated.
     StepNameUpdated {
         step_id: Uuid,
@@ -411,7 +406,6 @@ impl WorkflowEvent {
             WorkflowEventKind::RosterChanged { .. } => "roster_changed",
             WorkflowEventKind::RoomMembersChanged { .. } => "room_members_changed",
             WorkflowEventKind::StepConfigUpdated { .. } => "step_config_updated",
-            WorkflowEventKind::ArchetypeChanged { .. } => "archetype_changed",
             WorkflowEventKind::StepNameUpdated { .. } => "step_name_updated",
             WorkflowEventKind::PlanUpdated { .. } => "plan_updated",
             WorkflowEventKind::SubWorkflowStarted { .. } => "sub_workflow_started",
