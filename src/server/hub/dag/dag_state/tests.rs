@@ -174,4 +174,139 @@ mod tests {
         step.output_variable_name = None;
         assert_eq!(step_display_name(&step), step.id.to_string());
     }
+
+    // =========================================================================
+    // Snapshot / Merge Tests (for parallel DAG execution)
+    // =========================================================================
+
+    #[test]
+    fn snapshot_for_parallel_clones_completed_state() {
+        let mut state = DagExecutionState::new();
+        let step_id = Uuid::new_v4();
+
+        let output = StepOutput {
+            variable_name: "var_a".to_string(),
+            structured_output: Some(json!({"data": 1})),
+            raw_output: "data".to_string(),
+        };
+        let envelope = StepExecutionEnvelope {
+            data: Some(json!({"data": 1})),
+            metadata: crate::types::ExecutionMetadata::new(step_id),
+            ..Default::default()
+        };
+        state.record_step_output(step_id, output, envelope);
+        state.accumulate_tokens(100, 200, 0.5);
+
+        let snapshot = state.snapshot_for_parallel();
+
+        // Completed state is cloned
+        assert!(snapshot.completed.contains_key(&step_id));
+        assert!(snapshot.completed_envelopes.contains_key(&step_id));
+        assert_eq!(snapshot.var_outputs.get("var_a"), Some(&json!({"data": 1})));
+
+        // Accumulators are zeroed
+        assert_eq!(snapshot.total_input_tokens, 0);
+        assert_eq!(snapshot.total_output_tokens, 0);
+        assert!((snapshot.total_cost_usd - 0.0).abs() < f32::EPSILON);
+        assert!(snapshot.failed.is_empty());
+    }
+
+    #[test]
+    fn merge_parallel_result_combines_new_entries() {
+        let mut state = DagExecutionState::new();
+        let step_a = Uuid::new_v4();
+        let step_b = Uuid::new_v4();
+
+        // Pre-existing step in main state
+        state.record_step_output(
+            step_a,
+            StepOutput {
+                variable_name: "var_a".to_string(),
+                structured_output: Some(json!("a")),
+                raw_output: "a".to_string(),
+            },
+            StepExecutionEnvelope {
+                data: Some(json!("a")),
+                metadata: crate::types::ExecutionMetadata::new(step_a),
+                ..Default::default()
+            },
+        );
+
+        // Parallel task adds step_b
+        let mut task_state = state.snapshot_for_parallel();
+        task_state.record_step_output(
+            step_b,
+            StepOutput {
+                variable_name: "var_b".to_string(),
+                structured_output: Some(json!("b")),
+                raw_output: "b".to_string(),
+            },
+            StepExecutionEnvelope {
+                data: Some(json!("b")),
+                metadata: crate::types::ExecutionMetadata::new(step_b),
+                ..Default::default()
+            },
+        );
+        task_state.accumulate_tokens(50, 75, 0.25);
+
+        state.merge_parallel_result(task_state);
+
+        // Both steps present
+        assert!(state.completed.contains_key(&step_a));
+        assert!(state.completed.contains_key(&step_b));
+        assert!(state.completed_envelopes.contains_key(&step_b));
+        assert_eq!(state.var_outputs.get("var_b"), Some(&json!("b")));
+
+        // Tokens accumulated
+        assert_eq!(state.total_input_tokens, 50);
+        assert_eq!(state.total_output_tokens, 75);
+        assert!((state.total_cost_usd - 0.25).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn merge_parallel_result_skips_preexisting_entries() {
+        let mut state = DagExecutionState::new();
+        let step_id = Uuid::new_v4();
+
+        state.record_step_output(
+            step_id,
+            StepOutput {
+                variable_name: "original".to_string(),
+                structured_output: Some(json!("original")),
+                raw_output: "original".to_string(),
+            },
+            StepExecutionEnvelope {
+                data: Some(json!("original")),
+                metadata: crate::types::ExecutionMetadata::new(step_id),
+                ..Default::default()
+            },
+        );
+
+        // Parallel task also has step_id from its snapshot — should not overwrite
+        let task_state = state.snapshot_for_parallel();
+        state.merge_parallel_result(task_state);
+
+        // Original value preserved
+        assert_eq!(state.var_outputs.get("original"), Some(&json!("original")));
+        assert_eq!(state.completed.len(), 1);
+    }
+
+    #[test]
+    fn merge_parallel_result_accumulates_tokens_from_multiple() {
+        let mut state = DagExecutionState::new();
+        state.accumulate_tokens(10, 20, 0.1);
+
+        let mut task_a = state.snapshot_for_parallel();
+        task_a.accumulate_tokens(100, 200, 1.0);
+
+        let mut task_b = state.snapshot_for_parallel();
+        task_b.accumulate_tokens(50, 75, 0.5);
+
+        state.merge_parallel_result(task_a);
+        state.merge_parallel_result(task_b);
+
+        assert_eq!(state.total_input_tokens, 160);
+        assert_eq!(state.total_output_tokens, 295);
+        assert!((state.total_cost_usd - 1.6).abs() < f32::EPSILON);
+    }
 }

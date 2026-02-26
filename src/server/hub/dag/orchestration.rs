@@ -6,9 +6,9 @@
 //! passthrough forwarding, agent loading, provider resolution, and pinned
 //! output replay.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::db::WorkflowStepRow;
@@ -24,7 +24,7 @@ use super::single::execute_single_step;
 use super::utils;
 use super::{
     broadcast_step_failure_if_real, check_step_readiness, compute_dead_path_steps,
-    resolve_output_key, step_display_name, topological_sort, wrap_in_agentless_envelope,
+    resolve_output_key, step_display_name, topological_sort_levels, wrap_in_agentless_envelope,
     DagContext, DagExecutionState, StepOutput, StepReadiness,
 };
 
@@ -32,14 +32,17 @@ use super::{
 
 /// Core step dispatch loop shared by both fresh execution and resume paths.
 ///
-/// Iterates through topologically-sorted steps, executing each according to its
-/// mode. Handles cancellation, conditional edges, pinned replay, dead-path
+/// Iterates through topological levels, executing steps within each level in
+/// parallel when possible. Single-step levels execute directly (no spawn
+/// overhead). Multi-step levels use `JoinSet` for concurrent dispatch.
+///
+/// Handles cancellation, conditional edges, pinned replay, dead-path
 /// elimination, and provider resolution for non-default LLM providers.
 pub(crate) async fn run_dag_loop(
     dag: &DagContext<'_>,
     dag_state: &mut DagExecutionState,
 ) -> Result<(), HubError> {
-    let sorted = topological_sort(dag.steps, dag.edges).map_err(|_| HubError::DagCycle)?;
+    let levels = topological_sort_levels(dag.steps, dag.edges).map_err(|_| HubError::DagCycle)?;
     let step_map: HashMap<Uuid, &WorkflowStepRow> = dag.steps.iter().map(|s| (s.id, s)).collect();
 
     let Some(workflow_id) = dag.steps.first().map(|s| s.workflow_id) else {
@@ -54,18 +57,59 @@ pub(crate) async fn run_dag_loop(
         );
     }
 
-    for step_id in &sorted {
-        if dag_state.completed.contains_key(step_id) {
-            continue;
-        }
-        let step = match step_map.get(step_id) {
-            Some(s) => *s,
-            None => continue,
-        };
-
+    for level in &levels {
         if dag.cancel.is_some_and(|t| t.is_cancelled()) {
             return Err(HubError::Cancelled);
         }
+
+        // Apply guard clauses to find which steps in this level should execute
+        let executable_steps =
+            apply_level_guards(dag, dag_state, level, &step_map, &dead_path_steps).await?;
+
+        if executable_steps.is_empty() {
+            continue;
+        }
+
+        if executable_steps.len() == 1 {
+            // Single step — execute directly (no spawn overhead)
+            let step = step_map[&executable_steps[0]];
+            let step_result = dispatch_step(dag, dag_state, step).await;
+
+            if let Err(ref e) = step_result {
+                broadcast_step_failure_if_real(dag.state, dag.ctx, workflow_id, step, e);
+            }
+            step_result?;
+
+            spawn_summarizer_if_completed(dag.state, step.id, dag_state);
+        } else {
+            // Multiple steps — execute in parallel via JoinSet
+            execute_level_parallel(dag, dag_state, &executable_steps, &step_map, workflow_id)
+                .await?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Apply guard clauses (completed, pinned, dead-path, readiness) to each step
+/// in a level. Returns the IDs of steps that should be dispatched.
+async fn apply_level_guards(
+    dag: &DagContext<'_>,
+    dag_state: &mut DagExecutionState,
+    level: &[Uuid],
+    step_map: &HashMap<Uuid, &WorkflowStepRow>,
+    dead_path_steps: &HashSet<Uuid>,
+) -> Result<Vec<Uuid>, HubError> {
+    let mut executable = Vec::new();
+
+    for &step_id in level {
+        if dag_state.completed.contains_key(&step_id) {
+            continue;
+        }
+        let step = match step_map.get(&step_id) {
+            Some(s) => *s,
+            None => continue,
+        };
 
         // Pinned steps replay their last output — skip execution entirely
         if step.pinned {
@@ -76,17 +120,17 @@ pub(crate) async fn run_dag_loop(
         }
 
         // Dead-path elimination
-        if dead_path_steps.contains(step_id) {
+        if dead_path_steps.contains(&step_id) {
             dag_state
                 .completed
-                .insert(*step_id, StepOutput::skipped(*step_id));
+                .insert(step_id, StepOutput::skipped(step_id));
             info!(step_id = %step.id, "Dead-path step skipped (all consumers pinned)");
             continue;
         }
 
         // Conditional edge readiness
         match check_step_readiness(
-            *step_id,
+            step_id,
             dag.edges,
             &dag_state.completed,
             &dag_state.completed_envelopes,
@@ -99,21 +143,79 @@ pub(crate) async fn run_dag_loop(
                 info!(step_id = %step_id, "Step skipped — no matching conditional edges");
                 dag_state
                     .completed
-                    .insert(*step_id, StepOutput::skipped(*step_id));
+                    .insert(step_id, StepOutput::skipped(step_id));
                 continue;
             }
             StepReadiness::Ready => {}
         }
 
-        // Dispatch and handle failure
-        let step_result = dispatch_step(dag, dag_state, step).await;
+        executable.push(step_id);
+    }
 
-        if let Err(ref e) = step_result {
-            broadcast_step_failure_if_real(dag.state, dag.ctx, workflow_id, step, e);
+    Ok(executable)
+}
+
+/// Execute multiple steps in parallel using `JoinSet`. Each task gets its own
+/// `DagExecutionState` snapshot; results are merged back after all tasks complete.
+async fn execute_level_parallel(
+    dag: &DagContext<'_>,
+    dag_state: &mut DagExecutionState,
+    step_ids: &[Uuid],
+    step_map: &HashMap<Uuid, &WorkflowStepRow>,
+    workflow_id: Uuid,
+) -> Result<(), HubError> {
+    let mut join_set = tokio::task::JoinSet::new();
+
+    for &step_id in step_ids {
+        let step = step_map[&step_id].clone();
+        let mut task_state = dag_state.snapshot_for_parallel();
+
+        // Clone owned data for 'static lifetime in spawned task
+        let state = dag.state.clone();
+        let ctx = dag.ctx.clone();
+        let engine = dag.engine.clone_with_provider();
+        let steps_owned: Vec<WorkflowStepRow> = dag.steps.to_vec();
+        let edges_owned = dag.edges.to_vec();
+        let port_meta = dag.port_meta.clone();
+        let cancel = dag.cancel.cloned();
+
+        join_set.spawn(async move {
+            let cancel_ref = cancel.as_ref();
+            let task_dag = DagContext {
+                engine: &engine,
+                state: &state,
+                ctx: &ctx,
+                steps: &steps_owned,
+                edges: &edges_owned,
+                port_meta: &port_meta,
+                cancel: cancel_ref,
+            };
+            let result = dispatch_step(&task_dag, &mut task_state, &step).await;
+            (step_id, step, result, task_state)
+        });
+    }
+
+    // Collect results — fail-fast on first error
+    while let Some(join_result) = join_set.join_next().await {
+        match join_result {
+            Ok((step_id, _step, Ok(()), task_state)) => {
+                dag_state.merge_parallel_result(task_state);
+                spawn_summarizer_if_completed(dag.state, step_id, dag_state);
+            }
+            Ok((_step_id, step, Err(e), _task_state)) => {
+                broadcast_step_failure_if_real(dag.state, dag.ctx, workflow_id, &step, &e);
+                join_set.abort_all();
+                return Err(e);
+            }
+            Err(join_err) => {
+                error!("DAG step task panicked: {}", join_err);
+                join_set.abort_all();
+                return Err(HubError::Internal(anyhow::anyhow!(
+                    "DAG step task panicked: {}",
+                    join_err
+                )));
+            }
         }
-        step_result?;
-
-        spawn_summarizer_if_completed(dag.state, step.id, dag_state);
     }
 
     Ok(())

@@ -115,6 +115,45 @@ impl DagExecutionState {
         self.total_cost_usd += cost;
     }
 
+    /// Create a snapshot for parallel dispatch: prior completed data is cloned,
+    /// output accumulators are zeroed. Each parallel task writes its own step's
+    /// result into this snapshot, and results are merged back after the level completes.
+    pub fn snapshot_for_parallel(&self) -> Self {
+        Self {
+            var_outputs: self.var_outputs.clone(),
+            completed: self.completed.clone(),
+            completed_envelopes: self.completed_envelopes.clone(),
+            failed: HashMap::new(),
+            total_input_tokens: 0,
+            total_output_tokens: 0,
+            total_cost_usd: 0.0,
+        }
+    }
+
+    /// Merge results from a parallel task's snapshot back into the main state.
+    /// Only new entries (steps executed by the parallel task) are added.
+    pub fn merge_parallel_result(&mut self, other: Self) {
+        for (key, value) in other.var_outputs {
+            if !self.var_outputs.contains_key(&key) {
+                self.var_outputs.insert(key, value);
+            }
+        }
+        for (id, output) in other.completed {
+            if !self.completed.contains_key(&id) {
+                self.completed.insert(id, output);
+            }
+        }
+        for (id, envelope) in other.completed_envelopes {
+            if !self.completed_envelopes.contains_key(&id) {
+                self.completed_envelopes.insert(id, envelope);
+            }
+        }
+        self.failed.extend(other.failed);
+        self.total_input_tokens += other.total_input_tokens;
+        self.total_output_tokens += other.total_output_tokens;
+        self.total_cost_usd += other.total_cost_usd;
+    }
+
     /// Store a step's output in the variable map, completed map, and envelope map.
     pub fn record_step_output(
         &mut self,
@@ -136,6 +175,7 @@ impl DagExecutionState {
 // ── PortMetadata ─────────────────────────────────────────────────────────────
 
 /// Pre-fetched port metadata for all steps in a workflow.
+#[derive(Clone)]
 pub(crate) struct PortMetadata {
     pub step_inputs: HashMap<Uuid, Vec<StepInputRow>>,
     pub step_outputs: HashMap<Uuid, Vec<StepOutputRow>>,
