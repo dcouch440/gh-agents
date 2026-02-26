@@ -56,9 +56,9 @@ const computeLines = (gutter: readonly GutterCell[]): LineDef[] => {
     if (cell === 'blank') continue
 
     // ── Vertical lines ───────────────────────────────────────────────────
-    const fullVert = cell === 'pipe' || cell === 'branch' || cell === 'fork_start' || cell === 'par_mid'
+    const fullVert = cell === 'pipe' || cell === 'branch' || cell === 'par_mid'
     const halfUp = cell === 'corner' || cell === 'par_end'
-    const halfDown = cell === 'root_fork'
+    const halfDown = cell === 'root_fork' || cell === 'fork_start'
 
     if (fullVert) {
       lines.push({ left: cx, top: 0, width: STROKE, height: '100%' })
@@ -74,13 +74,6 @@ const computeLines = (gutter: readonly GutterCell[]): LineDef[] => {
       lines.push({ left: cx, top: '50%', width: rightEdge - cx, height: STROKE })
     }
 
-    // ── Fork junction: vertical line at next column going down from center ─
-    if (cell === 'fork_start') {
-      const forkX = (i + 1) * CELL_WIDTH + LINE_X
-      lines.push({ left: forkX, top: '50%', width: STROKE, height: '50%' })
-      // Extend horizontal to reach the fork junction
-      lines.push({ left: rightEdge, top: '50%', width: forkX - rightEdge, height: STROKE })
-    }
   }
 
   return lines

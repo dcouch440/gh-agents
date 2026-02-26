@@ -396,22 +396,14 @@ const linearizeComponent = (
       // Collect the sub-DAG for this branch (before the merge point)
       const branchNodes = reachableBefore(branchStart, mergeNode, graph, scope)
 
-      // Gutter for the branch start:
-      // First branch: [...parentPrefix, fork_start]
-      // Subsequent: [...parentPrefix, pipe, par_mid/par_end]
-      const branchGutter: GutterCell[] = isFirstBranch
-        ? [...parentPrefix, branchCell]
-        : [...parentPrefix, 'pipe', branchCell]
+      // Gutter for the branch start — all branches use the same column
+      // structure so parallel siblings align at equal visual depth:
+      // [...parentPrefix, pipe, fork_start/par_mid/par_end]
+      const branchGutter: GutterCell[] = [...parentPrefix, 'pipe', branchCell]
 
       // The prefix for content INSIDE this branch:
-      // First branch: [...parentPrefix, pipe] — fork_start occupies one column,
-      //   its children start at parentPrefix.length + 1
-      // Subsequent: [...parentPrefix, pipe, pipe] — pipe for fork group + pipe
-      //   for branch depth (par_mid/par_end is at parentPrefix.length + 1,
-      //   children at parentPrefix.length + 2)
-      const innerPrefix: GutterCell[] = isFirstBranch
-        ? [...parentPrefix, 'pipe']
-        : [...parentPrefix, 'pipe', 'pipe']
+      // [...parentPrefix, pipe, pipe] — pipe for fork group + pipe for branch depth
+      const innerPrefix: GutterCell[] = [...parentPrefix, 'pipe', 'pipe']
 
       // Check if the branch start is itself a fork point
       const branchMerge = mergeOf.get(branchStart) ?? null
