@@ -3,9 +3,9 @@
 // ============================================================================
 
 import { useCallback } from 'react'
-import { computeBindingAnchor } from '../arrows'
+import { computeGeometricAnchor } from '../arrows'
 import type { AnchorPoint, BoardElements, InteractionMode, ViewportState } from '../elements'
-import { addArrow, containerEventToCanvas, createArrow, hitTestBox } from '../elements'
+import { addArrow, containerEventToCanvas, createArrow, hitTestBox, resolveAnchor } from '../elements'
 import type { SetElements, SetInteraction } from './types'
 
 const useArrowDraw = (
@@ -52,8 +52,11 @@ const useArrowDraw = (
     const targetBoxId = hitTestBox(elements, canvas)
     if (targetBoxId !== null && targetBoxId !== interaction.sourceBoxId) {
       const targetBox = elements.boxes.get(targetBoxId)
-      if (targetBox !== undefined) {
-        const targetAnchor = computeBindingAnchor(targetBox, canvas)
+      const sourceBox = elements.boxes.get(interaction.sourceBoxId)
+      if (targetBox !== undefined && sourceBox !== undefined) {
+        // Use geometric anchor — picks the side facing the source box
+        const sourcePoint = resolveAnchor(sourceBox, interaction.sourceAnchor)
+        const targetAnchor = computeGeometricAnchor(targetBox, sourcePoint)
         const arrow = createArrow(
           interaction.sourceBoxId,
           targetBoxId,

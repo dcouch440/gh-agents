@@ -58,6 +58,47 @@ const resolveAnchorWithGap = (box: BoxElement, anchor: AnchorPoint): Point => {
   return applyBindingGap(point, anchor.side)
 }
 
+// ── Geometric Anchor ──────────────────────────────────────────────────────
+
+/**
+ * Compute the geometrically ideal anchor point on a target box
+ * given a source point. Picks the side that faces toward the source,
+ * normalized by the box's aspect ratio so wide boxes prefer left/right
+ * and tall boxes prefer top/bottom.
+ *
+ * Always snaps to the side midpoint (ratio 0.5) for clean orthogonal routing.
+ */
+const computeGeometricAnchor = (
+  targetBox: BoxElement,
+  sourcePoint: Point,
+): AnchorPoint => {
+  const cx = targetBox.x + targetBox.width / 2
+  const cy = targetBox.y + targetBox.height / 2
+  const dx = sourcePoint.x - cx
+  const dy = sourcePoint.y - cy
+
+  const side = bestFacingSide(dx, dy, targetBox.width, targetBox.height)
+  return { side, ratio: 0.5 }
+}
+
+/**
+ * Pick the side of a box that best faces toward a direction vector,
+ * normalized by box dimensions to handle non-square boxes.
+ */
+const bestFacingSide = (dx: number, dy: number, w: number, h: number): Side => {
+  // Normalize by box half-dimensions so the decision boundary
+  // follows the box's diagonal, not a 45-degree line
+  const halfW = w / 2 || 1
+  const halfH = h / 2 || 1
+  const nx = dx / halfW
+  const ny = dy / halfH
+
+  if (Math.abs(nx) > Math.abs(ny)) {
+    return nx > 0 ? 'right' : 'left'
+  }
+  return ny > 0 ? 'bottom' : 'top'
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 const ratioAlongSide = (box: BoxElement, side: Side, point: Point): number => {
@@ -71,4 +112,4 @@ const ratioAlongSide = (box: BoxElement, side: Side, point: Point): number => {
   }
 }
 
-export { applyBindingGap, computeBindingAnchor, ratioAlongSide, resolveAnchorWithGap }
+export { applyBindingGap, computeBindingAnchor, computeGeometricAnchor, ratioAlongSide, resolveAnchorWithGap }
