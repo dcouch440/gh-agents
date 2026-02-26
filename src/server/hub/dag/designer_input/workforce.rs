@@ -11,7 +11,7 @@ use crate::config::capability_registry::CapabilityRegistry;
 use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow, WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::types::StepExecutionEnvelope;
 
-use super::{format_envelopes_as_upstream, AgentDefinition, DependencyEdge, DesignerInput};
+use super::{format_envelopes_as_upstream, AgentDefinition, DesignerInput};
 
 /// Build a `DesignerInput` from a workforce configuration.
 pub fn build_workforce_designer_input(
@@ -41,17 +41,14 @@ pub fn build_workforce_designer_input(
         .filter_map(|r| r.child_step_id.map(|csid| (csid, r.name.as_str())))
         .collect();
 
-    // Convert child workflow edges to agent-name dependency edges
+    // Convert child workflow edges to agent-name dependency pairs
     // (filters out Designer→agent edges since Designer is not in roster)
-    let dependencies: Vec<DependencyEdge> = child_edges
+    let dependencies: Vec<(&str, &str)> = child_edges
         .iter()
         .filter_map(|e| {
             let from = child_step_to_name.get(&e.from_step_id)?;
             let to = child_step_to_name.get(&e.to_step_id)?;
-            Some(DependencyEdge {
-                from_agent_name: from.to_string(),
-                to_agent_name: to.to_string(),
-            })
+            Some((*from, *to))
         })
         .collect();
 
@@ -69,11 +66,8 @@ pub fn build_workforce_designer_input(
         );
     } else {
         guidance.push_str("\n\nExecution order (enforced by runtime — you do not control this):");
-        for dep in &dependencies {
-            guidance.push_str(&format!(
-                "\n  {} runs before {}",
-                dep.from_agent_name, dep.to_agent_name
-            ));
+        for (from, to) in &dependencies {
+            guidance.push_str(&format!("\n  {} runs before {}", from, to));
         }
         guidance.push_str("\nUse this ordering to write position-aware prompts (tell agents who runs before/after them).");
     }
@@ -99,6 +93,5 @@ pub fn build_workforce_designer_input(
         upstream,
         available_tools: capability_registry.tool_descriptions(&brief.available_capabilities),
         archetype_guidance: guidance,
-        dependencies,
     }
 }
