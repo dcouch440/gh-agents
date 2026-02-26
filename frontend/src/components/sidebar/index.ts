@@ -1,4 +1,5 @@
 export { WorkflowSidebar } from './WorkflowSidebar'
 export { StepTree } from './StepTree'
 export { StepTreeRow } from './StepTreeRow'
-export { StepOutputPanel } from './StepOutputPanel'
+export { StatusDot } from './StatusDot'
+export { SkeletonLines } from './SkeletonLines'

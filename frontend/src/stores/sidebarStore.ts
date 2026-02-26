@@ -18,6 +18,8 @@ type SidebarTab = 'tree' | 'chat'
 type SidebarState = {
   activeTab: SidebarTab
   selectedStepId: string | null
+  expandedStepIds: Record<string, boolean>
+  outputExpandedStepIds: Record<string, boolean>
   width: number
   dragging: boolean
 }
@@ -33,6 +35,8 @@ const parseWidth = (raw: string | null): number => {
 const store = createStore<SidebarState>(() => ({
   activeTab: 'tree',
   selectedStepId: null,
+  expandedStepIds: {},
+  outputExpandedStepIds: {},
   width: parseWidth(lsGet(LS_SIDEBAR_WIDTH)),
   dragging: false,
 }))
@@ -46,6 +50,14 @@ const selectSelectedStepId = (s: SidebarState): string | null => s.selectedStepI
 const selectWidth = (s: SidebarState): number => s.width
 
 const selectDragging = (s: SidebarState): boolean => s.dragging
+
+const selectExpandedStepIds = (s: SidebarState): Record<string, boolean> => s.expandedStepIds
+
+const selectOutputExpandedStepIds = (s: SidebarState): Record<string, boolean> => s.outputExpandedStepIds
+
+const selectIsExpanded = (id: string) => (s: SidebarState): boolean => s.expandedStepIds[id] === true
+
+const selectIsOutputExpanded = (id: string) => (s: SidebarState): boolean => s.outputExpandedStepIds[id] === true
 
 // ── Actions ─────────────────────────────────────────────────────────────────
 
@@ -75,8 +87,40 @@ const stopDrag = (): void => {
   store.setState({ dragging: false })
 }
 
+const toggleStep = (id: string): void => {
+  const { expandedStepIds } = store.getState()
+  store.setState({
+    expandedStepIds: { ...expandedStepIds, [id]: !expandedStepIds[id] },
+  })
+}
+
+const expandStep = (id: string): void => {
+  const { expandedStepIds } = store.getState()
+  if (expandedStepIds[id]) return
+  store.setState({ expandedStepIds: { ...expandedStepIds, [id]: true } })
+}
+
+const collapseStep = (id: string): void => {
+  const { expandedStepIds } = store.getState()
+  if (!expandedStepIds[id]) return
+  store.setState({ expandedStepIds: { ...expandedStepIds, [id]: false } })
+}
+
+const toggleOutputExpand = (id: string): void => {
+  const { outputExpandedStepIds } = store.getState()
+  store.setState({
+    outputExpandedStepIds: { ...outputExpandedStepIds, [id]: !outputExpandedStepIds[id] },
+  })
+}
+
 const reset = (): void => {
-  store.setState({ activeTab: 'tree', selectedStepId: null, dragging: false })
+  store.setState({
+    activeTab: 'tree',
+    selectedStepId: null,
+    expandedStepIds: {},
+    outputExpandedStepIds: {},
+    dragging: false,
+  })
 }
 
 // ── Export ───────────────────────────────────────────────────────────────────
@@ -85,11 +129,19 @@ export const sidebarStore = {
   store,
   selectActiveTab,
   selectSelectedStepId,
+  selectExpandedStepIds,
+  selectOutputExpandedStepIds,
+  selectIsExpanded,
+  selectIsOutputExpanded,
   selectWidth,
   selectDragging,
   setActiveTab,
   selectStep,
   clearSelection,
+  toggleStep,
+  expandStep,
+  collapseStep,
+  toggleOutputExpand,
   setWidth,
   startDrag,
   stopDrag,
