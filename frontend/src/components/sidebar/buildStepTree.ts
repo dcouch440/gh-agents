@@ -356,7 +356,7 @@ const linearizeComponent = (
       scopedChildren.sort((a, b) => orderOf(a) - orderOf(b))
     }
 
-    const isFork = scopedChildren.length > 1 && mergeNode !== null
+    const isFork = scopedChildren.length > 1
 
     if (!isFork) {
       emit(id, gutter)
@@ -427,7 +427,7 @@ const linearizeComponent = (
         branchScopedChildren.sort((a, b) => orderOf(a) - orderOf(b))
       }
 
-      const branchIsFork = branchScopedChildren.length > 1 && branchMerge !== null
+      const branchIsFork = branchScopedChildren.length > 1
 
       emit(branchStart, branchGutter)
       branchNodes.delete(branchStart)

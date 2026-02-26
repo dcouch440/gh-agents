@@ -343,6 +343,126 @@ describe('buildStepTree', () => {
     ])
   })
 
+  // Fan-out without merge: A → {B, C}
+  it('fan-out without merge', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c'])
+    expect(gutters(result)).toEqual([
+      ['branch'],           // ├── A
+      ['fork_start'],       // ├─┬─ B
+      ['pipe', 'par_end'],  // │ └─ C
+    ])
+  })
+
+  // Wide fan-out without merge: A → {B, C, D}
+  it('wide fan-out without merge', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+      makeEdge('e3', 'a', 'd'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd'])
+    expect(gutters(result)).toEqual([
+      ['branch'],           // ├── A
+      ['fork_start'],       // ├─┬─ B
+      ['pipe', 'par_mid'],  // │ ├─ C
+      ['pipe', 'par_end'],  // │ └─ D
+    ])
+  })
+
+  // Sequential prefix then fan-out without merge: X → A → {B, C}
+  it('sequential then fan-out without merge', () => {
+    const steps = [
+      makeStep('x', 'X', 0),
+      makeStep('a', 'A', 1),
+      makeStep('b', 'B', 2),
+      makeStep('c', 'C', 3),
+    ]
+    const edges = [
+      makeEdge('e0', 'x', 'a'),
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['x', 'a', 'b', 'c'])
+    expect(gutters(result)).toEqual([
+      ['branch'],           // ├── X
+      ['branch'],           // ├── A
+      ['fork_start'],       // ├─┬─ B
+      ['pipe', 'par_end'],  // │ └─ C
+    ])
+  })
+
+  // Fan-out without merge, one branch has children: A → {B, C}, C → D
+  it('fan-out without merge, branch with children', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+      makeEdge('e3', 'c', 'd'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd'])
+    expect(gutters(result)).toEqual([
+      ['branch'],                    // ├── A
+      ['fork_start'],                // ├─┬─ B
+      ['pipe', 'par_end'],           // │ └─ C
+      ['pipe', 'pipe', 'corner'],    // │    └── D
+    ])
+  })
+
+  // Nested fan-out without merge: A → {B, C}, B → {D, E}
+  it('nested fan-out without merge', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+      makeStep('e', 'E', 4),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+      makeEdge('e3', 'b', 'd'),
+      makeEdge('e4', 'b', 'e'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'd', 'e', 'c'])
+    expect(gutters(result)).toEqual([
+      ['branch'],                              // ├── A
+      ['fork_start'],                          // ├─┬─ B
+      ['pipe', 'pipe', 'fork_start'],          // │ │  ├─┬─ D
+      ['pipe', 'pipe', 'pipe', 'par_end'],     // │ │  │ └─ E
+      ['pipe', 'par_end'],                     // │ └─ C
+    ])
+  })
+
   // Edge cases
   it('sorts roots by display_order', () => {
     const steps = [

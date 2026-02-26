@@ -14,27 +14,76 @@ type StepTreeRowProps = {
   readonly onClick: () => void
 }
 
-// ── Gutter Rendering ────────────────────────────────────────────────────────
+// ── Gutter Line Rendering ──────────────────────────────────────────────────
 
-const CELL_WIDTH = 20
+const CELL_WIDTH = 28
 
-const CELL_CHARS: Record<GutterCell, string> = {
-  blank: '  ',
-  pipe: '\u2502 ',       // │
-  branch: '\u251C\u2500\u2500 ', // ├──
-  corner: '\u2514\u2500\u2500 ', // └──
-  fork_start: '\u251C\u2500\u252C\u2500 ', // ├─┬─
-  par_mid: '\u251C\u2500 ', // ├─
-  par_end: '\u2514\u2500 ', // └─
-  root_fork: '\u252C\u2500 ', // ┬─
+/** x-offset of vertical lines within each cell column */
+const LINE_X = 4
+
+/** Line thickness in pixels — string to prevent MUI spacing interpretation */
+const STROKE = '1px'
+
+/**
+ * Each line segment is an absolutely-positioned 1px div.
+ * Percentage strings ('50%', '100%') are used for y-axis values
+ * so lines scale with row height and span through padding.
+ */
+type LineDef = {
+  readonly left: number
+  readonly top: number | string
+  readonly width: number | string
+  readonly height: number | string
 }
 
-const renderGutter = (gutter: readonly GutterCell[]): string => {
-  let str = ''
+/**
+ * Compute CSS line segments for the entire gutter.
+ *
+ * Cells that need vertical continuation (pipe, branch, fork_start, par_mid)
+ * draw full-height vertical lines. Corner/par_end draw half-height (top→center).
+ * Horizontal lines extend from the junction point to the gutter's right edge.
+ * Fork junctions draw a vertical line at the next column's position going
+ * down from center — this overflows the gutter container slightly.
+ */
+const computeLines = (gutter: readonly GutterCell[]): LineDef[] => {
+  const lines: LineDef[] = []
+  const rightEdge = gutter.length * CELL_WIDTH
+
   for (let i = 0; i < gutter.length; i++) {
-    str += CELL_CHARS[gutter[i]!]
+    const cell = gutter[i]!
+    const cx = i * CELL_WIDTH + LINE_X
+
+    if (cell === 'blank') continue
+
+    // ── Vertical lines ───────────────────────────────────────────────────
+    const fullVert = cell === 'pipe' || cell === 'branch' || cell === 'fork_start' || cell === 'par_mid'
+    const halfUp = cell === 'corner' || cell === 'par_end'
+    const halfDown = cell === 'root_fork'
+
+    if (fullVert) {
+      lines.push({ left: cx, top: 0, width: STROKE, height: '100%' })
+    } else if (halfUp) {
+      lines.push({ left: cx, top: 0, width: STROKE, height: '50%' })
+    } else if (halfDown) {
+      lines.push({ left: cx, top: '50%', width: STROKE, height: '50%' })
+    }
+
+    // ── Horizontal lines (all visible cells except pipe) ─────────────────
+    // Stop 4px short of the gutter edge so the line doesn't collide with the dot
+    if (cell !== 'pipe') {
+      lines.push({ left: cx, top: '50%', width: rightEdge - cx, height: STROKE })
+    }
+
+    // ── Fork junction: vertical line at next column going down from center ─
+    if (cell === 'fork_start') {
+      const forkX = (i + 1) * CELL_WIDTH + LINE_X
+      lines.push({ left: forkX, top: '50%', width: STROKE, height: '50%' })
+      // Extend horizontal to reach the fork junction
+      lines.push({ left: rightEdge, top: '50%', width: forkX - rightEdge, height: STROKE })
+    }
   }
-  return str
+
+  return lines
 }
 
 // ── Constants ───────────────────────────────────────────────────────────────
@@ -46,8 +95,9 @@ const getModeColor = (mode: string, palette: Record<string, string>): string =>
 
 function StepTreeRow({ name, executionMode, gutter, isSelected, onClick }: StepTreeRowProps) {
   const theme = useTheme()
-  const connector = renderGutter(gutter)
+  const lines = computeLines(gutter)
   const modeColor = getModeColor(executionMode, theme.palette.nodePalette)
+  const lineColor = theme.palette.text.disabled
 
   return (
     <Box
@@ -69,33 +119,35 @@ function StepTreeRow({ name, executionMode, gutter, isSelected, onClick }: StepT
           : { backgroundColor: theme.palette.custom.hoverOverlay },
       }}
     >
-      {/* Gutter connector */}
-      <Typography
-        component="span"
-        sx={{
-          fontFamily: '"JetBrains Mono", monospace',
-          fontSize: 11,
-          lineHeight: 1,
-          color: 'text.disabled',
-          width: gutter.length * CELL_WIDTH,
-          flexShrink: 0,
-          userSelect: 'none',
-        }}
-      >
-        {connector}
-      </Typography>
-
-      {/* Mode dot */}
+      {/* Gutter — CSS-drawn lines that span the full row height including padding.
+          Negative vertical margin extends the gutter into the row's py padding
+          so vertical lines connect continuously between adjacent rows. */}
       <Box
         sx={{
-          width: 6,
-          height: 6,
-          borderRadius: '50%',
-          backgroundColor: modeColor,
+          width: gutter.length * CELL_WIDTH,
           flexShrink: 0,
-          mr: 0.75,
+          alignSelf: 'stretch',
+          position: 'relative',
+          overflow: 'visible',
+          my: '-5px',
         }}
-      />
+      >
+        {lines.map((line, i) => (
+          <Box
+            key={i}
+            sx={{
+              position: 'absolute',
+              left: line.left,
+              top: line.top,
+              width: line.width,
+              height: line.height,
+              backgroundColor: lineColor,
+            }}
+          />
+        ))}
+      </Box>
+
+      {/* Mode dot */}
 
       {/* Step name */}
       <Typography
@@ -109,6 +161,7 @@ function StepTreeRow({ name, executionMode, gutter, isSelected, onClick }: StepT
           textOverflow: 'ellipsis',
           minWidth: 0,
           flex: 1,
+          ml: 1,
         }}
       >
         {name || 'Untitled'}
