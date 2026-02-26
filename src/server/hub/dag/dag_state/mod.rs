@@ -321,8 +321,9 @@ pub(crate) fn wrap_in_envelope(
 
 /// Extract a display name for a step (for logging and WebSocket events).
 pub(crate) fn step_display_name(step: &WorkflowStepRow) -> String {
-    step.output_variable_name
+    step.name
         .clone()
+        .or_else(|| step.output_variable_name.clone())
         .unwrap_or_else(|| step.id.to_string())
 }
 
