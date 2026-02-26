@@ -187,8 +187,7 @@ mod tests {
 
         assert_eq!(result["name"], "Scanner");
         assert_eq!(result["role"], "Scan codebase");
-        assert!(result["execution_sequence"].is_array());
-        assert!(result["child_step_id"].is_string());
+        assert!(result["execution_order"].is_array());
     }
 
     #[tokio::test]
@@ -269,7 +268,7 @@ mod tests {
         let result = execute_workforce_tool("add_agent", &input, &repo, &ctx).await;
 
         assert_eq!(result["name"], "Agent2");
-        assert!(result["execution_sequence"].is_array());
+        assert!(result["execution_order"].is_array());
     }
 
     #[tokio::test]
@@ -336,17 +335,62 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn update_agent_missing_id_returns_error() {
+    async fn update_agent_missing_both_id_and_name_returns_error() {
         let ctx = make_ctx();
         let repo = MockWorkflowRepo::new();
 
-        let input = json!({ "name": "Test" });
+        let input = json!({ "role": "New role" });
         let result = execute_workforce_tool("update_agent", &input, &repo, &ctx).await;
 
-        assert_eq!(
-            result["error"].as_str().unwrap(),
-            "Missing required parameter: agent_id"
-        );
+        assert!(result["error"]
+            .as_str()
+            .unwrap()
+            .contains("Provide either agent_id or name"));
+    }
+
+    #[tokio::test]
+    async fn update_agent_by_name() {
+        let ctx = make_ctx();
+        let brief = make_brief(ctx.step_id);
+        let brief_id = brief.id;
+        let agent_id = Uuid::new_v4();
+
+        let mut repo = MockWorkflowRepo::new();
+
+        // resolve_agent_id loads brief + roster for name lookup
+        repo.expect_get_mission_brief().returning(move |_| {
+            Ok(Some(TaskMissionBriefRow {
+                id: brief_id,
+                ..brief.clone()
+            }))
+        });
+
+        let agent = make_roster_agent(brief_id, "Scanner", 0);
+        let agent_with_id = TaskAgentRosterRow {
+            id: agent_id,
+            ..agent
+        };
+        repo.expect_list_agent_roster()
+            .returning(move |_| Ok(vec![agent_with_id.clone()]));
+
+        repo.expect_update_roster_agent()
+            .returning(move |id, _name, role, _caps| {
+                assert_eq!(id, agent_id);
+                Ok(TaskAgentRosterRow {
+                    id,
+                    mission_brief_id: brief_id,
+                    name: "Scanner".to_string(),
+                    role_description: role.unwrap_or_default(),
+                    ..Default::default()
+                })
+            });
+
+        let input = json!({ "name": "Scanner", "role": "Updated scanner role" });
+        let result = execute_workforce_tool("update_agent", &input, &repo, &ctx).await;
+
+        assert!(result.get("error").is_none(), "got error: {:?}", result);
+        assert_eq!(result["name"], "Scanner");
+        assert_eq!(result["role"], "Updated scanner role");
     }
 
     // =========================================================================
@@ -433,16 +477,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn remove_agent_missing_id_returns_error() {
+    async fn remove_agent_missing_both_id_and_name_returns_error() {
         let ctx = make_ctx();
         let repo = MockWorkflowRepo::new();
 
         let result = execute_workforce_tool("remove_agent", &json!({}), &repo, &ctx).await;
 
-        assert_eq!(
-            result["error"].as_str().unwrap(),
-            "Missing required parameter: agent_id"
-        );
+        assert!(result["error"]
+            .as_str()
+            .unwrap()
+            .contains("Provide either agent_id or name"));
     }
 
     // =========================================================================
@@ -848,7 +892,7 @@ mod tests {
         assert_eq!(result["removed"], true);
         assert_eq!(result["from"], "Scanner");
         assert_eq!(result["to"], "Analyzer");
-        assert!(result["execution_sequence"].is_array());
+        assert!(result["execution_order"].is_array());
     }
 
     #[tokio::test]
