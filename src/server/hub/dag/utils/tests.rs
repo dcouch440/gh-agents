@@ -6,7 +6,8 @@ mod tests {
     use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
     use crate::server::hub::dag::utils::{
         collect_upstream_context_data, find_entry_steps, get_child_steps, get_parent_steps,
-        resolve_dot_path, resolve_port_inputs, resolve_variables, topological_sort, DagPaused,
+        resolve_dot_path, resolve_port_inputs, resolve_variables, topological_sort,
+        topological_sort_levels, DagPaused,
     };
     use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
     use std::collections::HashMap;
@@ -1762,5 +1763,149 @@ mod tests {
 
         let dead = compute_dead_path_steps(&steps, &edges);
         assert!(dead.is_empty());
+    }
+
+    // =========================================================================
+    // Topological Sort Levels Tests
+    // =========================================================================
+
+    #[test]
+    fn topological_sort_levels_linear_chain() {
+        // A -> B -> C — three single-element levels
+        let a = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+        let b = Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap();
+        let c = Uuid::parse_str("00000000-0000-0000-0000-000000000003").unwrap();
+
+        let steps = vec![make_step(a, 0), make_step(b, 1), make_step(c, 2)];
+        let edges = vec![edge(a, b), edge(b, c)];
+
+        let levels = topological_sort_levels(&steps, &edges).unwrap();
+        assert_eq!(levels.len(), 3);
+        assert_eq!(levels[0], vec![a]);
+        assert_eq!(levels[1], vec![b]);
+        assert_eq!(levels[2], vec![c]);
+    }
+
+    #[test]
+    fn topological_sort_levels_diamond() {
+        // A -> (B, C) -> D
+        let a = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+        let b = Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap();
+        let c = Uuid::parse_str("00000000-0000-0000-0000-000000000003").unwrap();
+        let d = Uuid::parse_str("00000000-0000-0000-0000-000000000004").unwrap();
+
+        let steps = vec![
+            make_step(a, 0),
+            make_step(b, 1),
+            make_step(c, 2),
+            make_step(d, 3),
+        ];
+        let edges = vec![edge(a, b), edge(a, c), edge(b, d), edge(c, d)];
+
+        let levels = topological_sort_levels(&steps, &edges).unwrap();
+        assert_eq!(levels.len(), 3);
+        assert_eq!(levels[0], vec![a]);
+        // B and C should be in the same level (order by display_order desc)
+        assert_eq!(levels[1].len(), 2);
+        assert!(levels[1].contains(&b));
+        assert!(levels[1].contains(&c));
+        assert_eq!(levels[2], vec![d]);
+    }
+
+    #[test]
+    fn topological_sort_levels_fan_out() {
+        // A -> (B, C, D) — one entry, three parallel
+        let a = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+        let b = Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap();
+        let c = Uuid::parse_str("00000000-0000-0000-0000-000000000003").unwrap();
+        let d = Uuid::parse_str("00000000-0000-0000-0000-000000000004").unwrap();
+
+        let steps = vec![
+            make_step(a, 0),
+            make_step(b, 1),
+            make_step(c, 2),
+            make_step(d, 3),
+        ];
+        let edges = vec![edge(a, b), edge(a, c), edge(a, d)];
+
+        let levels = topological_sort_levels(&steps, &edges).unwrap();
+        assert_eq!(levels.len(), 2);
+        assert_eq!(levels[0], vec![a]);
+        assert_eq!(levels[1].len(), 3);
+        assert!(levels[1].contains(&b));
+        assert!(levels[1].contains(&c));
+        assert!(levels[1].contains(&d));
+    }
+
+    #[test]
+    fn topological_sort_levels_fan_in() {
+        // (A, B, C) -> D — three entries converging
+        let a = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+        let b = Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap();
+        let c = Uuid::parse_str("00000000-0000-0000-0000-000000000003").unwrap();
+        let d = Uuid::parse_str("00000000-0000-0000-0000-000000000004").unwrap();
+
+        let steps = vec![
+            make_step(a, 0),
+            make_step(b, 1),
+            make_step(c, 2),
+            make_step(d, 3),
+        ];
+        let edges = vec![edge(a, d), edge(b, d), edge(c, d)];
+
+        let levels = topological_sort_levels(&steps, &edges).unwrap();
+        assert_eq!(levels.len(), 2);
+        assert_eq!(levels[0].len(), 3);
+        assert!(levels[0].contains(&a));
+        assert!(levels[0].contains(&b));
+        assert!(levels[0].contains(&c));
+        assert_eq!(levels[1], vec![d]);
+    }
+
+    #[test]
+    fn topological_sort_levels_single_node() {
+        let a = Uuid::new_v4();
+        let steps = vec![make_step(a, 0)];
+        let edges: Vec<WorkflowStepEdgeRow> = vec![];
+
+        let levels = topological_sort_levels(&steps, &edges).unwrap();
+        assert_eq!(levels.len(), 1);
+        assert_eq!(levels[0], vec![a]);
+    }
+
+    #[test]
+    fn topological_sort_levels_empty() {
+        let steps: Vec<WorkflowStepRow> = vec![];
+        let edges: Vec<WorkflowStepEdgeRow> = vec![];
+
+        let levels = topological_sort_levels(&steps, &edges).unwrap();
+        assert!(levels.is_empty());
+    }
+
+    #[test]
+    fn topological_sort_levels_cycle_detection() {
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let steps = vec![make_step(a, 0), make_step(b, 1)];
+        let edges = vec![edge(a, b), edge(b, a)];
+
+        assert!(topological_sort_levels(&steps, &edges).is_err());
+    }
+
+    #[test]
+    fn topological_sort_levels_display_order_tiebreak() {
+        // Two independent nodes — sorted by display_order (descending) within level
+        let a = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+        let b = Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap();
+
+        let steps = vec![make_step(a, 5), make_step(b, 10)];
+        let edges: Vec<WorkflowStepEdgeRow> = vec![];
+
+        let levels = topological_sort_levels(&steps, &edges).unwrap();
+        assert_eq!(levels.len(), 1);
+        assert_eq!(levels[0].len(), 2);
+        // Higher display_order first (max-heap behavior)
+        assert_eq!(levels[0][0], b);
+        assert_eq!(levels[0][1], a);
     }
 }
