@@ -76,6 +76,16 @@ const bringToFront = (state: BoardElements, boxId: string): BoardElements => {
   return { ...state, boxOrder }
 }
 
+// ── Arrow queries ─────────────────────────────────────────────────────────
+
+/** Returns true if an arrow already exists from sourceBoxId → targetBoxId. */
+const hasArrow = (state: BoardElements, sourceBoxId: string, targetBoxId: string): boolean => {
+  for (const [, arrow] of state.arrows) {
+    if (arrow.sourceBoxId === sourceBoxId && arrow.targetBoxId === targetBoxId) return true
+  }
+  return false
+}
+
 // ── Arrow mutations ────────────────────────────────────────────────────────
 
 const addArrow = (state: BoardElements, arrow: ArrowElement): BoardElements => {
@@ -120,6 +130,7 @@ export {
   addArrow,
   addBox,
   bringToFront,
+  hasArrow,
   removeBox,
   removeElements,
   updateBoxPosition,
