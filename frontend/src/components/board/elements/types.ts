@@ -78,6 +78,7 @@ type InteractionMode =
   | { readonly type: 'panning'; readonly startX: number; readonly startY: number; readonly startPanX: number; readonly startPanY: number }
   | { readonly type: 'editing'; readonly boxId: string }
   | { readonly type: 'resizing'; readonly boxId: string; readonly handle: ResizeHandle; readonly startX: number; readonly startY: number; readonly startBox: { x: number; y: number; width: number; height: number } }
+  | { readonly type: 'drawing-box'; readonly startX: number; readonly startY: number; readonly cursorX: number; readonly cursorY: number }
 
 type ResizeHandle = 'nw' | 'ne' | 'sw' | 'se' | 'n' | 's' | 'e' | 'w'
 
@@ -114,6 +115,15 @@ const screenToCanvas = (
   y: (screenY - containerRect.top - viewport.panY) / viewport.zoom,
 })
 
+// ── Drawing Box Preview ──────────────────────────────────────────────────
+
+type DrawingBox = {
+  readonly x: number
+  readonly y: number
+  readonly width: number
+  readonly height: number
+} | null
+
 export { screenToCanvas }
 export type {
   BoxElement,
@@ -128,4 +138,5 @@ export type {
   ActiveTool,
   ViewportState,
   DrawingArrow,
+  DrawingBox,
 }

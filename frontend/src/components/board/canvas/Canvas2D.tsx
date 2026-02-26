@@ -8,7 +8,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { BOARD } from '../constants'
-import type { ActiveTool, AnchorPoint, BoardElements, DrawingArrow, EdgeHover, InteractionMode, ResizeHandle, SelectionState, ViewportState } from '../elements'
+import type { ActiveTool, AnchorPoint, BoardElements, DrawingArrow, DrawingBox, EdgeHover, InteractionMode, ResizeHandle, SelectionState, ViewportState } from '../elements'
 import { detectEdgeHover, eventToCanvas, hitTestArrow, hitTestBox, hitTestResizeHandles, RESIZE_CURSORS } from '../elements'
 import { renderBoard } from './renderer'
 import type { DrawTheme } from './renderer'
@@ -25,6 +25,7 @@ type Canvas2DProps = {
   readonly interaction: InteractionMode
   readonly viewport: ViewportState
   readonly drawingArrow: DrawingArrow
+  readonly drawingBox: DrawingBox
   readonly canvasBg: string
   readonly gridDotColor: string
   readonly connectorColor: string
@@ -57,6 +58,7 @@ function Canvas2D({
   interaction,
   viewport,
   drawingArrow,
+  drawingBox,
   canvasBg,
   gridDotColor,
   connectorColor,
@@ -96,7 +98,7 @@ function Canvas2D({
       const cvs = canvasRef.current
       if (cvs === null) return
       const { width, height } = sizeRef.current
-      renderBoard(cvs, width, height, elements, selection, editingBoxId, viewport, drawingArrow, edgeHover, theme)
+      renderBoard(cvs, width, height, elements, selection, editingBoxId, viewport, drawingArrow, drawingBox, edgeHover, theme)
     }
   })
 
@@ -139,7 +141,7 @@ function Canvas2D({
   // ── Canvas Render Pipeline ────────────────────────────────────────────
   useEffect(() => {
     renderRef.current()
-  }, [elements, selection, editingBoxId, viewport, drawingArrow, edgeHover, theme, fontGeneration])
+  }, [elements, selection, editingBoxId, viewport, drawingArrow, drawingBox, edgeHover, theme, fontGeneration])
 
   // ── Focus textarea when editing starts ────────────────────────────────
   useEffect(() => {
@@ -162,6 +164,13 @@ function Canvas2D({
     // During panning, show grabbing cursor and skip hit testing
     if (interaction.type === 'panning') {
       setCursor('grabbing')
+      setEdgeHover(null)
+      return
+    }
+
+    // During box drawing, show crosshair and skip hit testing
+    if (interaction.type === 'drawing-box') {
+      setCursor('crosshair')
       setEdgeHover(null)
       return
     }
@@ -196,7 +205,11 @@ function Canvas2D({
 
     // Check if over a box (for grab cursor)
     const overBox = hitTestBox(elements, canvas) !== null
-    setCursor(overBox ? 'grab' : 'default')
+    if (activeTool === 'box') {
+      setCursor('crosshair')
+    } else {
+      setCursor(overBox ? 'grab' : 'default')
+    }
   }, [activeTool, editingBoxId, elements, interaction.type, onPointerMove, selection.selectedIds, viewport])
 
   const handlePointerDown = useCallback((e: React.PointerEvent) => {

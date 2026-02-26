@@ -13,7 +13,7 @@ import type { RoughCanvas } from 'roughjs/bin/canvas'
 import { computeArrowPathPoints, computeDrawingArrowPathPoints } from '../arrows/routing'
 import type { ArrowPath } from '../arrows/routing'
 import { BOARD } from '../constants'
-import type { BoardElements, BoxElement, DrawingArrow, MarqueeRect, SelectionState, ViewportState } from '../elements'
+import type { BoardElements, BoxElement, DrawingArrow, DrawingBox, MarqueeRect, SelectionState, ViewportState } from '../elements'
 import type { EdgeHover } from '../elements'
 import { wrapText } from './textMeasure'
 
@@ -421,6 +421,31 @@ const drawSelectionRect = (
   ctx.restore()
 }
 
+/**
+ * Draw a preview rectangle while the user is drag-creating a box.
+ * Uses a dashed stroke to distinguish from finalized boxes.
+ */
+const drawDrawingBox = (
+  ctx: CanvasRenderingContext2D,
+  rc: RoughCanvas,
+  box: DrawingBox,
+  theme: DrawTheme,
+): void => {
+  if (box === null) return
+  const { x, y, width, height } = box
+
+  const d = roundedRectPath(x, y, width, height, BOARD.BOX_BORDER_RADIUS)
+  rc.path(d, {
+    fill: `${theme.surfaceBg}80`,
+    fillStyle: 'solid',
+    stroke: theme.accentColor,
+    strokeWidth: BOARD.BOX_BORDER_WIDTH,
+    roughness: 1.0,
+    bowing: 1.5,
+    seed: 42,
+  })
+}
+
 // ── Render Pipeline ──────────────────────────────────────────────────────
 
 /**
@@ -436,6 +461,7 @@ const renderBoard = (
   editingBoxId: string | null,
   viewport: ViewportState,
   drawingArrow: DrawingArrow,
+  drawingBox: DrawingBox,
   edgeHover: EdgeHover | null,
   theme: DrawTheme,
 ): void => {
@@ -507,6 +533,11 @@ const renderBoard = (
       )
       drawDrawingArrow(ctx, path, theme.accentColor)
     }
+  }
+
+  // Drawing box preview
+  if (drawingBox !== null) {
+    drawDrawingBox(ctx, rc, drawingBox, theme)
   }
 
   // Edge hover handle

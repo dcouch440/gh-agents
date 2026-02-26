@@ -15,6 +15,16 @@ const createBox = (x: number, y: number, text = ''): BoxElement => ({
   text,
 })
 
+const createBoxWithSize = (x: number, y: number, width: number, height: number, text = ''): BoxElement => ({
+  id: crypto.randomUUID(),
+  type: 'box',
+  x,
+  y,
+  width,
+  height,
+  text,
+})
+
 const createArrow = (
   sourceBoxId: string,
   targetBoxId: string,
@@ -69,4 +79,4 @@ const createArrowFromSaved = (
   targetFocus,
 })
 
-export { createArrow, createArrowFromSaved, createBox, createBoxFromSaved, emptyBoard }
+export { createArrow, createArrowFromSaved, createBox, createBoxFromSaved, createBoxWithSize, emptyBoard }
