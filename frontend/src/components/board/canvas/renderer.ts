@@ -180,43 +180,83 @@ const roundedRectPath = (x: number, y: number, w: number, h: number, r: number):
   ].join(' ')
 }
 
+// ── Arrow Helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Fast 32-bit seeded PRNG (Mulberry32).
+ * Returns a function that produces deterministic values in [0, 1).
+ */
+const mulberry32 = (seed: number): (() => number) => {
+  let a = seed | 0
+  return () => {
+    a = a + 0x6D2B79F5 | 0
+    let t = Math.imul(a ^ a >>> 15, 1 | a)
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t
+    return ((t ^ t >>> 14) >>> 0) / 4294967296
+  }
+}
+
+/**
+ * Sample a cubic bezier at parameter t ∈ [0, 1].
+ */
+const bezierPointAt = (t: number, path: ArrowPath): { x: number; y: number } => {
+  const u = 1 - t
+  return {
+    x: u * u * u * path.start.x + 3 * u * u * t * path.cp1.x + 3 * u * t * t * path.cp2.x + t * t * t * path.end.x,
+    y: u * u * u * path.start.y + 3 * u * u * t * path.cp1.y + 3 * u * t * t * path.cp2.y + t * t * t * path.end.y,
+  }
+}
+
 // ── Arrow ─────────────────────────────────────────────────────────────────
 
 /**
- * Draw a hand-drawn cubic bezier arrow with arrowhead using rough.js.
+ * Draw an organic tapered arrow — stroke width increases quadratically
+ * from source to tip, with seeded wobble for a hand-drawn pen feel.
  */
 const drawArrow = (
-  rc: RoughCanvas,
+  ctx: CanvasRenderingContext2D,
   path: ArrowPath,
   arrowId: string,
   isSelected: boolean,
   theme: DrawTheme,
 ): void => {
   const color = isSelected ? theme.accentColor : theme.strokeColor
-  const seed = hashStringToSeed(arrowId)
+  const rng = mulberry32(hashStringToSeed(arrowId))
+  const segments = BOARD.ARROW_TAPER_SEGMENTS
+  const minW = BOARD.ARROW_STROKE_MIN
+  const maxW = BOARD.ARROW_STROKE_WIDTH
+  const wobble = BOARD.ARROW_WOBBLE
 
-  // SVG cubic bezier — rc.path() interprets C commands correctly,
-  // unlike rc.curve() which uses Catmull-Rom (pass-through) interpolation
-  const d = `M ${path.start.x} ${path.start.y} C ${path.cp1.x} ${path.cp1.y}, ${path.cp2.x} ${path.cp2.y}, ${path.end.x} ${path.end.y}`
-  rc.path(d, {
-    stroke: color,
-    strokeWidth: BOARD.ARROW_STROKE_WIDTH,
-    roughness: 0.8,
-    bowing: 1.0,
-    seed,
-    fill: 'none',
-    preserveVertices: true,
-  })
+  ctx.strokeStyle = color
+  ctx.lineCap = 'round'
 
-  // Compute arrowhead angle from curve tangent at endpoint
+  for (let i = 0; i < segments; i++) {
+    const t0 = i / segments
+    const t1 = (i + 1) / segments
+    const p0 = bezierPointAt(t0, path)
+    const p1 = bezierPointAt(t1, path)
+
+    // Quadratic taper: thin at source, thick at tip
+    const width = minW + (maxW - minW) * (t0 * t0)
+    const wx = (rng() - 0.5) * wobble
+    const wy = (rng() - 0.5) * wobble
+
+    ctx.lineWidth = width
+    ctx.beginPath()
+    ctx.moveTo(p0.x + wx, p0.y + wy)
+    ctx.lineTo(p1.x + wx, p1.y + wy)
+    ctx.stroke()
+  }
+
+  // Arrowhead
   const angle = Math.atan2(path.end.y - path.cp2.y, path.end.x - path.cp2.x)
-  drawArrowhead(rc, path.end, angle, BOARD.ARROW_HEAD_SIZE, color, seed)
+  drawArrowhead(ctx, path.end, angle, color, rng)
 }
 
 /**
- * Draw a dashed arrow preview while the user is drawing.
- * Kept smooth (no rough.js) — the preview moves every frame and rough
- * jitter on each pixel of cursor movement looks bad.
+ * Draw a tapered arrow preview while the user is drawing.
+ * Same taper shape but no wobble — smooth during interaction since
+ * the cursor moves every frame.
  */
 const drawDrawingArrow = (
   ctx: CanvasRenderingContext2D,
@@ -225,30 +265,38 @@ const drawDrawingArrow = (
 ): void => {
   ctx.save()
   ctx.strokeStyle = color
-  ctx.lineWidth = BOARD.ARROW_STROKE_WIDTH
   ctx.lineCap = 'round'
-  ctx.lineJoin = 'round'
-  ctx.setLineDash([6, 4])
+  ctx.globalAlpha = 0.6
 
-  ctx.beginPath()
-  ctx.moveTo(path.start.x, path.start.y)
-  ctx.bezierCurveTo(path.cp1.x, path.cp1.y, path.cp2.x, path.cp2.y, path.end.x, path.end.y)
-  ctx.stroke()
+  const segments = BOARD.ARROW_TAPER_SEGMENTS
+  const minW = BOARD.ARROW_STROKE_MIN
+  const maxW = BOARD.ARROW_STROKE_WIDTH
 
-  ctx.setLineDash([])
+  for (let i = 0; i < segments; i++) {
+    const t0 = i / segments
+    const t1 = (i + 1) / segments
+    const p0 = bezierPointAt(t0, path)
+    const p1 = bezierPointAt(t1, path)
+
+    ctx.lineWidth = minW + (maxW - minW) * (t0 * t0)
+    ctx.beginPath()
+    ctx.moveTo(p0.x, p0.y)
+    ctx.lineTo(p1.x, p1.y)
+    ctx.stroke()
+  }
 
   // Smooth arrowhead for preview
+  ctx.lineWidth = BOARD.ARROW_HEAD_STROKE
   const angle = Math.atan2(path.end.y - path.cp2.y, path.end.x - path.cp2.x)
-  const spread = Math.PI / 6
   ctx.beginPath()
   ctx.moveTo(
-    path.end.x - BOARD.ARROW_HEAD_SIZE * Math.cos(angle - spread),
-    path.end.y - BOARD.ARROW_HEAD_SIZE * Math.sin(angle - spread),
+    path.end.x - BOARD.ARROW_HEAD_SIZE * Math.cos(angle - BOARD.ARROW_HEAD_SPREAD),
+    path.end.y - BOARD.ARROW_HEAD_SIZE * Math.sin(angle - BOARD.ARROW_HEAD_SPREAD),
   )
   ctx.lineTo(path.end.x, path.end.y)
   ctx.lineTo(
-    path.end.x - BOARD.ARROW_HEAD_SIZE * Math.cos(angle + spread),
-    path.end.y - BOARD.ARROW_HEAD_SIZE * Math.sin(angle + spread),
+    path.end.x - BOARD.ARROW_HEAD_SIZE * Math.cos(angle + BOARD.ARROW_HEAD_SPREAD),
+    path.end.y - BOARD.ARROW_HEAD_SIZE * Math.sin(angle + BOARD.ARROW_HEAD_SPREAD),
   )
   ctx.stroke()
 
@@ -256,36 +304,39 @@ const drawDrawingArrow = (
 }
 
 /**
- * Draw a hand-drawn arrowhead (two rough lines from tip going backward at ±30°).
+ * Draw a hand-drawn arrowhead — two barb lines with a ghost pass
+ * for organic texture. Wobble comes from the arrow's seeded PRNG.
  */
 const drawArrowhead = (
-  rc: RoughCanvas,
+  ctx: CanvasRenderingContext2D,
   tip: { x: number; y: number },
   angle: number,
-  size: number,
   color: string,
-  seed: number,
+  rng: () => number,
 ): void => {
-  const spread = Math.PI / 6 // 30 degrees
-  const opts = { stroke: color, strokeWidth: BOARD.ARROW_STROKE_WIDTH, roughness: 0.6, seed }
+  const size = BOARD.ARROW_HEAD_SIZE
+  const spread = BOARD.ARROW_HEAD_SPREAD
+  const w = BOARD.ARROW_WOBBLE * 0.8
 
-  // Left barb
-  rc.line(
-    tip.x - size * Math.cos(angle - spread),
-    tip.y - size * Math.sin(angle - spread),
-    tip.x,
-    tip.y,
-    opts,
-  )
+  ctx.strokeStyle = color
+  ctx.lineWidth = BOARD.ARROW_HEAD_STROKE
+  ctx.lineCap = 'round'
 
-  // Right barb
-  rc.line(
-    tip.x - size * Math.cos(angle + spread),
-    tip.y - size * Math.sin(angle + spread),
-    tip.x,
-    tip.y,
-    opts,
-  )
+  for (let pass = 0; pass < 2; pass++) {
+    ctx.globalAlpha = pass === 0 ? 1 : 0.3
+    ctx.beginPath()
+    ctx.moveTo(
+      tip.x - size * Math.cos(angle - spread) + (rng() - 0.5) * w,
+      tip.y - size * Math.sin(angle - spread) + (rng() - 0.5) * w,
+    )
+    ctx.lineTo(tip.x, tip.y)
+    ctx.lineTo(
+      tip.x - size * Math.cos(angle + spread) + (rng() - 0.5) * w,
+      tip.y - size * Math.sin(angle + spread) + (rng() - 0.5) * w,
+    )
+    ctx.stroke()
+  }
+  ctx.globalAlpha = 1
 }
 
 // ── Handles ───────────────────────────────────────────────────────────────
@@ -441,7 +492,7 @@ const renderBoard = (
 
     const path = computeArrowPathPoints(sourceBox, arrow.sourceFocus, targetBox, arrow.targetFocus)
     const isSelected = selection.selectedIds.has(arrowId)
-    drawArrow(rc, path, arrowId, isSelected, theme)
+    drawArrow(ctx, path, arrowId, isSelected, theme)
   }
 
   // Drawing arrow preview
