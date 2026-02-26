@@ -44,6 +44,7 @@ pub(super) struct WorkforceStepEnv {
     pub container_handle: Option<ContainerHandle>,
     pub cancel: Option<tokio_util::sync::CancellationToken>,
     pub task_description: String,
+    pub board_context: String,
 }
 
 /// Aggregated results from executing all agent levels.
