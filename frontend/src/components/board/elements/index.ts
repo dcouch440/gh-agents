@@ -1,7 +1,7 @@
 export { computeBoxSize } from './bounds'
 export { deserializeFromExcalidraw } from './deserialize'
 export { containerEventToCanvas, eventToCanvas } from './eventToCanvas'
-export { createArrow, createBox, emptyBoard } from './factory'
+export { createArrow, createBox, createBoxWithSize, emptyBoard } from './factory'
 export {
   detectEdgeHover,
   hitTest,
@@ -33,6 +33,7 @@ export type {
   BoardElements,
   BoxElement,
   DrawingArrow,
+  DrawingBox,
   FocusPoint,
   InteractionMode,
   MarqueeRect,
