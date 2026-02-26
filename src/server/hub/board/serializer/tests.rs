@@ -1098,6 +1098,8 @@ mod tests {
             new_text: new_text.to_string(),
             old_annotations: vec![],
             new_annotations: vec![],
+            sketch: None,
+            stroke_encoding: None,
         }
     }
 
@@ -1114,6 +1116,8 @@ mod tests {
             new_text: new_text.to_string(),
             old_annotations: old_ann.into_iter().map(String::from).collect(),
             new_annotations: new_ann.into_iter().map(String::from).collect(),
+            sketch: None,
+            stroke_encoding: None,
         }
     }
 

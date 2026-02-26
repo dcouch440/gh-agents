@@ -119,7 +119,11 @@ pub async fn execute_phase_zero(
             step.name = Some(name);
             step.prompt_template = prompt_template;
 
-            let new_context = build_board_context(&update.new_annotations, &None, &None);
+            let new_context = build_board_context(
+                &update.new_annotations,
+                &update.sketch,
+                &update.stroke_encoding,
+            );
             if !new_context.is_empty() || !step.board_context_cache.is_empty() {
                 step.board_context_cache = new_context;
                 step.board_context_updated_at = Some(chrono::Utc::now());

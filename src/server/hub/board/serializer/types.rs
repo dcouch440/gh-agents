@@ -254,6 +254,10 @@ pub struct NodeUpdate {
     pub new_text: String,
     pub old_annotations: Vec<String>,
     pub new_annotations: Vec<String>,
+    /// ASCII rasterization of freeform drawings inside this node's bounds (current state).
+    pub sketch: Option<String>,
+    /// RDP-simplified JSON coordinate encoding of strokes (current state).
+    pub stroke_encoding: Option<String>,
 }
 
 /// A node that moved (bounds changed) but content stayed the same.
