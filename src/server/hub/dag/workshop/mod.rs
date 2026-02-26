@@ -13,6 +13,5 @@ pub(crate) use context::{build_execution_context, replay_pinned_step, snapshot_e
 pub(crate) use dispatch::execute_step;
 pub(crate) use readiness::next_executable_steps;
 pub(crate) use reconstruct::reconstruct_state;
-pub(crate) use types::WorkshopStepResult;
 
 mod tests;

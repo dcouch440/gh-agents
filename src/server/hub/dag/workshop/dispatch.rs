@@ -7,7 +7,6 @@ use std::time::Instant;
 
 use serde_json::Value as JsonValue;
 use tracing::info;
-use uuid::Uuid;
 
 use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::server::hub::engine::ExecutionEngine;
