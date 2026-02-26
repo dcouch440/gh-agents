@@ -77,4 +77,19 @@ instead of before every run (optional) the user can run the designer in the menu
 Make titles a priority one.
 
 Make board dispatch prompter make better desicions:
-- dispatch the a user when upstream are connected? In review, I saw it happen.
+
+
+  Notable Gaps Worth Discussing
+
+  1. Protocol Selector is missing — Phase 0 hardcodes execution_mode = "workforce" for every new node. The vision describes a cheap classifier that picks from available
+  protocols.
+  2. Board dispatch executor tests are empty — placeholder file only.
+  3. No transactional Phase 0 — partial failures leave orphaned state in the DB.
+  4. Max rounds = 2 is tight — the dispatcher gets one shot to read the changeset and call dispatch_to_builders. Fine for a single batched call, but no room for error
+  recovery or multi-step reasoning.
+  5. No design status tracking in the tree — the vision describes designing... / designed / pending statuses, but the frontend doesn't surface per-node builder
+  completion.
+  6. Chat path doesn't fan out through board dispatcher — there's a TODO in the vision diagram noting the Builder Agent should also use the Board Dispatcher for per-node
+  configuration.
+  7. Oscillation baseline is imprecise — uses previous submit snapshot rather than last agent-processed state.
+  8. No error recovery for dispatch failures — fire-and-forget with no retry.
