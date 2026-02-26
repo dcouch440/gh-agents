@@ -2,8 +2,9 @@
 // Element Factories — Create New Board Elements
 // ============================================================================
 
+import type { Point } from '@/utils/geometry'
 import { BOARD } from '../constants'
-import type { ArrowElement, BoardElements, BoxElement, FocusPoint } from './types'
+import type { ArrowElement, BoardElements, BoxElement, FocusPoint, PenElement } from './types'
 
 const createBox = (x: number, y: number, text = ''): BoxElement => ({
   id: crypto.randomUUID(),
@@ -39,9 +40,17 @@ const createArrow = (
   targetFocus,
 })
 
+const createPen = (points: readonly Point[], pressures: readonly number[]): PenElement => ({
+  id: crypto.randomUUID(),
+  type: 'pen',
+  points,
+  pressures,
+})
+
 const emptyBoard = (): BoardElements => ({
   boxes: new Map(),
   arrows: new Map(),
+  pens: new Map(),
   boxOrder: [],
 })
 
@@ -79,4 +88,4 @@ const createArrowFromSaved = (
   targetFocus,
 })
 
-export { createArrow, createArrowFromSaved, createBox, createBoxFromSaved, createBoxWithSize, emptyBoard }
+export { createArrow, createArrowFromSaved, createBox, createBoxFromSaved, createBoxWithSize, createPen, emptyBoard }

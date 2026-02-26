@@ -12,9 +12,9 @@ import { DispatchPanel } from './dispatch'
 import { Canvas2D } from './canvas'
 import { Toolbar } from './toolbar'
 import { useHistory } from './history'
-import { useArrowDraw, useDrag, useKeyboard, usePanZoom, useResize, useSelection, EMPTY_SELECTION } from './interactions'
+import { useArrowDraw, useDrag, useKeyboard, usePanZoom, usePenDraw, useResize, useSelection, EMPTY_SELECTION } from './interactions'
 import { BOARD } from './constants'
-import type { ActiveTool, AnchorPoint, BoardElements, DrawingArrow, DrawingBox, InteractionMode, ResizeHandle, SelectionState, ViewportState } from './elements'
+import type { ActiveTool, AnchorPoint, BoardElements, DrawingArrow, DrawingBox, DrawingPen, InteractionMode, ResizeHandle, SelectionState, ViewportState } from './elements'
 import { addBox, containerEventToCanvas, createBox, createBoxWithSize, emptyBoard, hitTest, removeElements, selectAllIds, updateBoxText } from './elements'
 
 type BoardProps = {
@@ -80,8 +80,9 @@ function Board({ workflowId }: BoardProps) {
   const drag = useDrag(setElements, setInteraction, viewport, containerRef)
   const arrowDraw = useArrowDraw(setElements, setInteraction, viewport, containerRef)
   const resize = useResize(setElements, setInteraction, viewport, containerRef)
+  const penDraw = usePenDraw(setElements, setInteraction, viewport, containerRef)
   const sel = useSelection(setSelection)
-  useKeyboard(elements, setElements, selection, setSelection, interaction, setInteraction, history, syncDeletedElements)
+  useKeyboard(elements, setElements, selection, setSelection, interaction, setInteraction, history, syncDeletedElements, setActiveTool)
 
   // ── Derived state ────────────────────────────────────────────────────────
   const editingBoxId = interaction.type === 'editing' ? interaction.boxId : null
@@ -95,6 +96,9 @@ function Board({ workflowId }: BoardProps) {
       width: Math.abs(interaction.cursorX - interaction.startX),
       height: Math.abs(interaction.cursorY - interaction.startY),
     }
+    : null
+  const drawingPen: DrawingPen = interaction.type === 'drawing-pen'
+    ? { points: interaction.points, pressures: interaction.pressures }
     : null
 
   const createBoxAtPoint = useCallback((point: Point) => {
@@ -112,6 +116,12 @@ function Board({ workflowId }: BoardProps) {
 
     const canvas = containerEventToCanvas(containerRef, e, viewport)
     if (canvas === null) return
+
+    // Pen tool: start drawing stroke
+    if (activeTool === 'pen') {
+      penDraw.onPenStart(e)
+      return
+    }
 
     // Box tool: start drag-to-size
     if (activeTool === 'box') {
@@ -134,10 +144,13 @@ function Board({ workflowId }: BoardProps) {
         startPanY: viewport.panY,
       })
     }
-  }, [activeTool, elements, sel, viewport])
+  }, [activeTool, elements, penDraw, sel, viewport])
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (interaction.type === 'dragging') {
+    if (interaction.type === 'drawing-pen') {
+      penDraw.onPenMove(e, interaction)
+      return
+    } else if (interaction.type === 'dragging') {
       drag.onDragMove(e, interaction)
     } else if (interaction.type === 'drawing-box') {
       const canvas = containerEventToCanvas(containerRef, e, viewport)
@@ -157,10 +170,13 @@ function Board({ workflowId }: BoardProps) {
         panY: interaction.startPanY + dy,
       }))
     }
-  }, [arrowDraw, drag, interaction, resize, setViewport, viewport])
+  }, [arrowDraw, drag, interaction, penDraw, resize, setViewport, viewport])
 
   const handlePointerUp = useCallback((e: React.PointerEvent) => {
-    if (interaction.type === 'dragging') {
+    if (interaction.type === 'drawing-pen') {
+      penDraw.onPenEnd(interaction)
+      return
+    } else if (interaction.type === 'dragging') {
       drag.onDragEnd()
     } else if (interaction.type === 'drawing-box') {
       const dx = Math.abs(interaction.cursorX - interaction.startX)
@@ -198,7 +214,7 @@ function Board({ workflowId }: BoardProps) {
     } else if (interaction.type === 'panning') {
       setInteraction({ type: 'idle' })
     }
-  }, [arrowDraw, drag, elements, history, interaction, resize, sel])
+  }, [arrowDraw, drag, elements, history, interaction, penDraw, resize, sel])
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     const canvas = containerEventToCanvas(containerRef, e, viewport)
@@ -296,6 +312,7 @@ function Board({ workflowId }: BoardProps) {
           viewport={viewport}
           drawingArrow={drawingArrow}
           drawingBox={drawingBox}
+          drawingPen={drawingPen}
           canvasBg={theme.canvasBg}
           gridDotColor={theme.gridDotColor}
           connectorColor={theme.connectorColor}

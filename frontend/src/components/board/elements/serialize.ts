@@ -11,7 +11,7 @@
 // See: src/server/hub/board_serializer/types.rs
 
 import { BOARD } from '../constants'
-import type { ArrowElement, BoardElements } from './types'
+import type { ArrowElement, BoardElements, PenElement } from './types'
 
 /**
  * The text element ID for a box. Deterministic so IDs are stable across
@@ -98,6 +98,11 @@ const serializeToExcalidraw = (state: BoardElements): Record<string, unknown>[] 
     elements.push(serializeArrow(arrow))
   }
 
+  // Serialize pen strokes as freedraw elements
+  for (const [, pen] of state.pens) {
+    elements.push(serializePen(pen))
+  }
+
   return elements
 }
 
@@ -112,5 +117,47 @@ const serializeArrow = (arrow: ArrowElement): Record<string, unknown> => ({
   startBinding: { elementId: arrow.sourceBoxId },
   endBinding: { elementId: arrow.targetBoxId },
 })
+
+/**
+ * Serialize a pen stroke to Excalidraw freedraw format.
+ * Points are stored as relative offsets from (x, y) base position.
+ */
+const serializePen = (pen: PenElement): Record<string, unknown> => {
+  if (pen.points.length === 0) {
+    return {
+      type: 'freedraw',
+      id: pen.id,
+      x: 0,
+      y: 0,
+      isDeleted: false,
+      points: [],
+    }
+  }
+
+  // Compute base position (min x, min y)
+  let minX = pen.points[0]!.x
+  let minY = pen.points[0]!.y
+  for (let i = 1; i < pen.points.length; i++) {
+    const p = pen.points[i]!
+    if (p.x < minX) minX = p.x
+    if (p.y < minY) minY = p.y
+  }
+
+  // Convert to relative coordinates with pressure
+  const points: number[][] = []
+  for (let i = 0; i < pen.points.length; i++) {
+    const p = pen.points[i]!
+    points.push([p.x - minX, p.y - minY, pen.pressures[i] ?? 0.5])
+  }
+
+  return {
+    type: 'freedraw',
+    id: pen.id,
+    x: minX,
+    y: minY,
+    isDeleted: false,
+    points,
+  }
+}
 
 export { serializeToExcalidraw, textIdForBox }

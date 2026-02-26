@@ -1,14 +1,16 @@
 export { computeBoxSize } from './bounds'
 export { deserializeFromExcalidraw } from './deserialize'
 export { containerEventToCanvas, eventToCanvas } from './eventToCanvas'
-export { createArrow, createBox, createBoxWithSize, emptyBoard } from './factory'
+export { createArrow, createBox, createBoxWithSize, createPen, emptyBoard } from './factory'
 export {
   detectEdgeHover,
   hitTest,
   hitTestArrow,
   hitTestBox,
+  hitTestPen,
   hitTestRect,
   hitTestResizeHandles,
+  penBounds,
   pointNearCubicBezier,
   RESIZE_CURSORS,
   selectAllIds,
@@ -17,6 +19,7 @@ export type { EdgeHover, ResizeHit } from './hitTest'
 export {
   addArrow,
   addBox,
+  addPen,
   bringToFront,
   hasArrow,
   removeBox,
@@ -34,9 +37,11 @@ export type {
   BoxElement,
   DrawingArrow,
   DrawingBox,
+  DrawingPen,
   FocusPoint,
   InteractionMode,
   MarqueeRect,
+  PenElement,
   ResizeHandle,
   SelectionState,
   ViewportState,

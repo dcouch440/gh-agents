@@ -5,7 +5,7 @@
 // Every function accepts a BoardElements and returns a new one. No side effects.
 // Map/Set are rebuilt via new Map(existing) to preserve immutability.
 
-import type { ArrowElement, BoardElements, BoxElement } from './types'
+import type { ArrowElement, BoardElements, BoxElement, PenElement } from './types'
 
 // ── Box mutations ──────────────────────────────────────────────────────────
 
@@ -76,6 +76,14 @@ const bringToFront = (state: BoardElements, boxId: string): BoardElements => {
   return { ...state, boxOrder }
 }
 
+// ── Pen mutations ─────────────────────────────────────────────────────────
+
+const addPen = (state: BoardElements, pen: PenElement): BoardElements => {
+  const pens = new Map(state.pens)
+  pens.set(pen.id, pen)
+  return { ...state, pens }
+}
+
 // ── Arrow queries ─────────────────────────────────────────────────────────
 
 /** Returns true if an arrow already exists from sourceBoxId → targetBoxId. */
@@ -123,12 +131,26 @@ const removeElements = (state: BoardElements, ids: ReadonlySet<string>): BoardEl
     }
   }
 
+  // Remove pens
+  let pensChanged = false
+  const pens = new Map(result.pens)
+  for (const id of ids) {
+    if (pens.has(id)) {
+      pens.delete(id)
+      pensChanged = true
+    }
+  }
+  if (pensChanged) {
+    result = { ...result, pens }
+  }
+
   return result
 }
 
 export {
   addArrow,
   addBox,
+  addPen,
   bringToFront,
   hasArrow,
   removeBox,

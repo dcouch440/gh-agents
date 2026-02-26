@@ -8,6 +8,7 @@ import Tooltip from '@mui/material/Tooltip'
 import NearMeIcon from '@mui/icons-material/NearMe'
 import CropSquareIcon from '@mui/icons-material/CropSquare'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
+import GestureIcon from '@mui/icons-material/Gesture'
 import ZoomInIcon from '@mui/icons-material/ZoomIn'
 import ZoomOutIcon from '@mui/icons-material/ZoomOut'
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong'
@@ -57,6 +58,12 @@ function Toolbar({ activeTool, onToolChange, onZoomIn, onZoomOut, onResetZoom }:
         tooltip="Arrow (A)"
         active={activeTool === 'arrow'}
         onClick={() => onToolChange('arrow')}
+      />
+      <ToolButton
+        icon={<GestureIcon fontSize="small" />}
+        tooltip="Pen (P)"
+        active={activeTool === 'pen'}
+        onClick={() => onToolChange('pen')}
       />
 
       <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />

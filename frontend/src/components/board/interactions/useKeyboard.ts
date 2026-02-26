@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { useCallback, useEffect } from 'react'
-import type { BoardElements } from '../elements'
+import type { ActiveTool, BoardElements } from '../elements'
 import { removeElements, selectAllIds } from '../elements'
 import type { HistoryActions } from '../history/useHistory'
 import { EMPTY_SELECTION } from './useSelection'
@@ -18,6 +18,7 @@ const useKeyboard = (
   setInteraction: SetInteraction,
   history: Pick<HistoryActions, 'undo' | 'redo'>,
   onDelete?: (deletedIds: ReadonlySet<string>) => void,
+  setActiveTool?: (tool: ActiveTool) => void,
 ) => {
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Don't intercept when editing text
@@ -62,6 +63,14 @@ const useKeyboard = (
       return
     }
 
+    // Tool shortcuts (only when no modifier keys)
+    if (setActiveTool !== undefined && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (e.key === 'v' || e.key === 'V') { setActiveTool('select'); return }
+      if (e.key === 'b' || e.key === 'B') { setActiveTool('box'); return }
+      if (e.key === 'a' || e.key === 'A') { setActiveTool('arrow'); return }
+      if (e.key === 'p' || e.key === 'P') { setActiveTool('pen'); return }
+    }
+
     // Escape — cancel interaction or clear selection
     if (e.key === 'Escape') {
       e.preventDefault()
@@ -72,7 +81,7 @@ const useKeyboard = (
       }
       return
     }
-  }, [elements, history, interaction, onDelete, selection, setElements, setInteraction, setSelection])
+  }, [elements, history, interaction, onDelete, selection, setActiveTool, setElements, setInteraction, setSelection])
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown)

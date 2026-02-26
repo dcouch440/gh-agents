@@ -10,11 +10,14 @@
 
 import rough from 'roughjs'
 import type { RoughCanvas } from 'roughjs/bin/canvas'
+import type { Point } from '@/utils/geometry'
 import { computeArrowPathPoints, computeDrawingArrowPathPoints } from '../arrows/routing'
 import type { ArrowPath } from '../arrows/routing'
 import { BOARD } from '../constants'
-import type { BoardElements, BoxElement, DrawingArrow, DrawingBox, MarqueeRect, SelectionState, ViewportState } from '../elements'
+import type { BoardElements, BoxElement, DrawingArrow, DrawingBox, DrawingPen, MarqueeRect, PenElement, SelectionState, ViewportState } from '../elements'
 import type { EdgeHover } from '../elements'
+import { getStrokeOutline } from '../pen'
+import { fillOutlinePath } from '../pen'
 import { wrapText } from './textMeasure'
 
 type DrawTheme = {
@@ -446,6 +449,47 @@ const drawDrawingBox = (
   })
 }
 
+// ── Pen ──────────────────────────────────────────────────────────────────
+
+/**
+ * Draw a finalized pen stroke as a filled polygon with variable width.
+ * Uses perfect-freehand for outline generation and quadratic bezier smoothing.
+ */
+const drawPen = (
+  ctx: CanvasRenderingContext2D,
+  pen: PenElement,
+  isSelected: boolean,
+  theme: DrawTheme,
+): void => {
+  const outline = getStrokeOutline(pen.points, pen.pressures)
+  if (outline.length < 3) return
+
+  ctx.save()
+  ctx.fillStyle = isSelected ? theme.accentColor : theme.strokeColor
+  fillOutlinePath(ctx, outline)
+  ctx.restore()
+}
+
+/**
+ * Draw a pen stroke preview while the user is actively drawing.
+ * Same rendering as finalized pens but with reduced opacity.
+ */
+const drawDrawingPen = (
+  ctx: CanvasRenderingContext2D,
+  points: readonly Point[],
+  pressures: readonly number[],
+  theme: DrawTheme,
+): void => {
+  const outline = getStrokeOutline(points, pressures)
+  if (outline.length < 3) return
+
+  ctx.save()
+  ctx.globalAlpha = 0.7
+  ctx.fillStyle = theme.strokeColor
+  fillOutlinePath(ctx, outline)
+  ctx.restore()
+}
+
 // ── Render Pipeline ──────────────────────────────────────────────────────
 
 /**
@@ -462,6 +506,7 @@ const renderBoard = (
   viewport: ViewportState,
   drawingArrow: DrawingArrow,
   drawingBox: DrawingBox,
+  drawingPen: DrawingPen,
   edgeHover: EdgeHover | null,
   theme: DrawTheme,
 ): void => {
@@ -521,6 +566,17 @@ const renderBoard = (
     drawArrow(ctx, path, arrowId, isSelected, theme)
   }
 
+  // Pens (draw above boxes and arrows so strokes are visible)
+  for (const [penId, pen] of elements.pens) {
+    const isSelected = selection.selectedIds.has(penId)
+    drawPen(ctx, pen, isSelected, theme)
+  }
+
+  // Drawing pen preview
+  if (drawingPen !== null) {
+    drawDrawingPen(ctx, drawingPen.points, drawingPen.pressures, theme)
+  }
+
   // Drawing arrow preview
   if (drawingArrow !== null) {
     const sourceBox = elements.boxes.get(drawingArrow.sourceBoxId)
@@ -558,8 +614,10 @@ export {
   drawBox,
   drawBoxHighlight,
   drawDrawingArrow,
+  drawDrawingPen,
   drawGrid,
   drawHandle,
+  drawPen,
   drawResizeHandles,
   drawSelectionRect,
   renderBoard,
