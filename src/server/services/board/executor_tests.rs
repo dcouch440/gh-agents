@@ -601,6 +601,8 @@ mod tests {
                 new_text: "Research competitors and pricing\nFocus on Q4 data".to_string(),
                 old_annotations: vec![],
                 new_annotations: vec![],
+                sketch: None,
+                stroke_encoding: None,
             },
             significance: ChangeSignificance::High,
             token_change_ratio: 0.4,
@@ -674,6 +676,8 @@ mod tests {
                     "Focus on pricing".to_string(),
                     "Include Q4 data".to_string(),
                 ],
+                sketch: None,
+                stroke_encoding: None,
             },
             significance: ChangeSignificance::Medium,
             token_change_ratio: 0.1,
@@ -720,6 +724,71 @@ mod tests {
         let steps = updated_steps.lock().unwrap();
         assert!(steps[0].board_context_cache.contains("Focus on pricing"));
         assert!(steps[0].board_context_cache.contains("Include Q4 data"));
+        assert!(steps[0].board_context_updated_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn update_node_preserves_sketch_data() {
+        let workflow_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+        let step_id = Uuid::new_v4();
+
+        let mut changeset = empty_changeset();
+        changeset.meaningful = vec![ScoredChange::UpdatedNode {
+            update: NodeUpdate {
+                element_id: "r1".to_string(),
+                old_text: "Diagram".to_string(),
+                new_text: "Diagram with labels".to_string(),
+                old_annotations: vec![],
+                new_annotations: vec![],
+                sketch: None,
+                stroke_encoding: Some("[{\"points\":[[0,0],[10,10]]}]".to_string()),
+            },
+            significance: ChangeSignificance::High,
+            token_change_ratio: 0.4,
+        }];
+
+        let updated_steps: Arc<Mutex<Vec<WorkflowStepRow>>> = Arc::new(Mutex::new(vec![]));
+        let updated_steps_clone = updated_steps.clone();
+
+        let mut mock = MockWorkflowRepo::new();
+
+        let map = CanvasElementMapRow {
+            workflow_id,
+            element_id: "r1".to_string(),
+            step_id: Some(step_id),
+            edge_id: None,
+            created_at: chrono::Utc::now(),
+        };
+        mock.expect_list_element_maps()
+            .returning(move |_| Ok(vec![map.clone()]));
+
+        mock.expect_get_step().returning(move |_| {
+            Ok(Some(WorkflowStepRow {
+                id: step_id,
+                workflow_id,
+                name: Some("Diagram".to_string()),
+                prompt_template: "Diagram".to_string(),
+                ..Default::default()
+            }))
+        });
+
+        mock.expect_update_step().returning(move |step| {
+            updated_steps_clone.lock().unwrap().push(step.clone());
+            Ok(step)
+        });
+
+        let session_mock = MockSessionRepo::new();
+
+        let result = execute_phase_zero(&mock, &session_mock, workflow_id, user_id, &changeset)
+            .await
+            .unwrap();
+
+        assert_eq!(result.updated_steps.len(), 1);
+
+        let steps = updated_steps.lock().unwrap();
+        assert!(steps[0].board_context_cache.contains("Stroke Coordinates"));
+        assert!(steps[0].board_context_cache.contains("points"));
         assert!(steps[0].board_context_updated_at.is_some());
     }
 }

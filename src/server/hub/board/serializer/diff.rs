@@ -86,6 +86,8 @@ fn diff_nodes(previous: &[CanvasNode], current: &[CanvasNode]) -> NodeChanges {
                         new_text: curr.raw_text.clone(),
                         old_annotations: prev.annotations.clone(),
                         new_annotations: curr.annotations.clone(),
+                        sketch: curr.sketch.clone(),
+                        stroke_encoding: curr.stroke_encoding.clone(),
                     });
                 } else if bounds_changed {
                     moved_nodes.push(NodeMove {

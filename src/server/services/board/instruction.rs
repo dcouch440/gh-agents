@@ -96,7 +96,7 @@ pub fn build_per_node_instructions(
                     element_id: update.element_id.clone(),
                     step_id,
                     execution_mode: execution_mode.to_string(),
-                    instruction: format_updated_node(update),
+                    instruction: format_updated_node(update, &global_notes),
                     change_type: NodeChangeType::Updated,
                 });
             }
@@ -142,7 +142,7 @@ fn format_new_node(node: &CanvasNode, global_notes: &[&str]) -> String {
 }
 
 /// Format the instruction for an updated canvas node.
-fn format_updated_node(update: &NodeUpdate) -> String {
+fn format_updated_node(update: &NodeUpdate, global_notes: &[&str]) -> String {
     let mut parts = Vec::new();
 
     parts.push("The user updated this node on the canvas.".to_string());
@@ -152,14 +152,50 @@ fn format_updated_node(update: &NodeUpdate) -> String {
         update.old_text, update.new_text
     ));
 
-    if update.old_annotations != update.new_annotations && !update.new_annotations.is_empty() {
-        let items: Vec<String> = update
+    if update.old_annotations != update.new_annotations {
+        let removed: Vec<&String> = update
+            .old_annotations
+            .iter()
+            .filter(|a| !update.new_annotations.contains(a))
+            .collect();
+        let added: Vec<&String> = update
             .new_annotations
             .iter()
-            .map(|a| format!("- {a}"))
+            .filter(|a| !update.old_annotations.contains(a))
             .collect();
+        let kept: Vec<&String> = update
+            .new_annotations
+            .iter()
+            .filter(|a| update.old_annotations.contains(a))
+            .collect();
+
+        let mut ann_parts = Vec::new();
+        for a in &removed {
+            ann_parts.push(format!("- [removed] {a}"));
+        }
+        for a in &added {
+            ann_parts.push(format!("- [added] {a}"));
+        }
+        for a in &kept {
+            ann_parts.push(format!("- {a}"));
+        }
+
         parts.push(format!(
             "<annotations>\n{}\n</annotations>",
+            ann_parts.join("\n")
+        ));
+    }
+
+    if let Some(encoding) = &update.stroke_encoding {
+        parts.push(format!("<sketch>\n{encoding}\n</sketch>"));
+    } else if let Some(sketch) = &update.sketch {
+        parts.push(format!("<sketch>\n{sketch}\n</sketch>"));
+    }
+
+    if !global_notes.is_empty() {
+        let items: Vec<String> = global_notes.iter().map(|n| format!("- {n}")).collect();
+        parts.push(format!(
+            "<board_notes>\n{}\n</board_notes>",
             items.join("\n")
         ));
     }

@@ -218,6 +218,8 @@ mod tests {
                     new_text: "Analyze data with year-over-year comparison".to_string(),
                     old_annotations: vec![],
                     new_annotations: vec![],
+                    sketch: None,
+                    stroke_encoding: None,
                 },
                 significance: ChangeSignificance::High,
                 token_change_ratio: 0.5,
@@ -258,6 +260,8 @@ mod tests {
                     new_text: "Research competitors".to_string(),
                     old_annotations: vec![],
                     new_annotations: vec!["Focus on pricing".to_string()],
+                    sketch: None,
+                    stroke_encoding: None,
                 },
                 significance: ChangeSignificance::High,
                 token_change_ratio: 0.5,
@@ -275,7 +279,7 @@ mod tests {
 
         assert_eq!(result.len(), 1);
         assert!(result[0].instruction.contains("<annotations>"));
-        assert!(result[0].instruction.contains("- Focus on pricing"));
+        assert!(result[0].instruction.contains("- [added] Focus on pricing"));
     }
 
     // ── Edge-only changesets ──────────────────────────────────────────────
@@ -329,6 +333,8 @@ mod tests {
                         new_text: "Validate and verify".to_string(),
                         old_annotations: vec![],
                         new_annotations: vec![],
+                        sketch: None,
+                        stroke_encoding: None,
                     },
                     significance: ChangeSignificance::Medium,
                     token_change_ratio: 0.3,
@@ -417,5 +423,180 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert!(result[0].instruction.contains("<sketch>"));
         assert!(result[0].instruction.contains("points"));
+    }
+
+    // ── Updated node: sketch data ────────────────────────────────────────
+
+    #[test]
+    fn updated_node_with_stroke_encoding() {
+        let step_id = Uuid::new_v4();
+
+        let changeset = FilteredChangeset {
+            agentless: empty_agentless(),
+            noise: vec![],
+            meaningful: vec![ScoredChange::UpdatedNode {
+                update: NodeUpdate {
+                    element_id: "n1".to_string(),
+                    old_text: "Diagram".to_string(),
+                    new_text: "Diagram with labels".to_string(),
+                    old_annotations: vec![],
+                    new_annotations: vec![],
+                    sketch: None,
+                    stroke_encoding: Some("[{\"points\":[[0,0],[10,10]]}]".to_string()),
+                },
+                significance: ChangeSignificance::High,
+                token_change_ratio: 0.4,
+            }],
+            aggregate_score: 1.0,
+            should_dispatch: true,
+        };
+
+        let phase_zero = PhaseZeroResult {
+            updated_steps: vec![("n1".to_string(), make_step_row(step_id, "workforce-1"))],
+            ..empty_phase_zero()
+        };
+
+        let result = build_per_node_instructions(&changeset, &phase_zero, &empty_snapshot());
+
+        assert_eq!(result.len(), 1);
+        assert!(result[0].instruction.contains("<sketch>"));
+        assert!(result[0].instruction.contains("points"));
+    }
+
+    // ── Updated node: global notes ───────────────────────────────────────
+
+    #[test]
+    fn updated_node_with_global_notes() {
+        let step_id = Uuid::new_v4();
+
+        let changeset = FilteredChangeset {
+            agentless: empty_agentless(),
+            noise: vec![],
+            meaningful: vec![ScoredChange::UpdatedNode {
+                update: NodeUpdate {
+                    element_id: "n1".to_string(),
+                    old_text: "Research".to_string(),
+                    new_text: "Research competitors".to_string(),
+                    old_annotations: vec![],
+                    new_annotations: vec![],
+                    sketch: None,
+                    stroke_encoding: None,
+                },
+                significance: ChangeSignificance::High,
+                token_change_ratio: 0.5,
+            }],
+            aggregate_score: 1.0,
+            should_dispatch: true,
+        };
+
+        let phase_zero = PhaseZeroResult {
+            updated_steps: vec![("n1".to_string(), make_step_row(step_id, "workforce-1"))],
+            ..empty_phase_zero()
+        };
+
+        let snapshot = CanvasSnapshot {
+            nodes: vec![],
+            edges: vec![],
+            global_notes: vec![GlobalNote {
+                element_id: "t1".to_string(),
+                text: "Prioritize speed over thoroughness".to_string(),
+            }],
+        };
+
+        let result = build_per_node_instructions(&changeset, &phase_zero, &snapshot);
+
+        assert_eq!(result.len(), 1);
+        assert!(result[0].instruction.contains("<board_notes>"));
+        assert!(result[0]
+            .instruction
+            .contains("Prioritize speed over thoroughness"));
+    }
+
+    // ── Updated node: annotation diff ────────────────────────────────────
+
+    #[test]
+    fn updated_node_annotation_diff_shows_added_removed() {
+        let step_id = Uuid::new_v4();
+
+        let changeset = FilteredChangeset {
+            agentless: empty_agentless(),
+            noise: vec![],
+            meaningful: vec![ScoredChange::UpdatedNode {
+                update: NodeUpdate {
+                    element_id: "n1".to_string(),
+                    old_text: "Research".to_string(),
+                    new_text: "Research".to_string(),
+                    old_annotations: vec![
+                        "Focus on pricing".to_string(),
+                        "Q3 data only".to_string(),
+                    ],
+                    new_annotations: vec![
+                        "Focus on pricing".to_string(),
+                        "Include competitor names".to_string(),
+                    ],
+                    sketch: None,
+                    stroke_encoding: None,
+                },
+                significance: ChangeSignificance::Medium,
+                token_change_ratio: 0.1,
+            }],
+            aggregate_score: 0.5,
+            should_dispatch: true,
+        };
+
+        let phase_zero = PhaseZeroResult {
+            updated_steps: vec![("n1".to_string(), make_step_row(step_id, "workforce-1"))],
+            ..empty_phase_zero()
+        };
+
+        let result = build_per_node_instructions(&changeset, &phase_zero, &empty_snapshot());
+
+        assert_eq!(result.len(), 1);
+        let instr = &result[0].instruction;
+        assert!(instr.contains("<annotations>"));
+        assert!(instr.contains("- [removed] Q3 data only"));
+        assert!(instr.contains("- [added] Include competitor names"));
+        assert!(instr.contains("- Focus on pricing"));
+        // "Focus on pricing" should NOT have [added] or [removed] tag
+        assert!(!instr.contains("[added] Focus on pricing"));
+        assert!(!instr.contains("[removed] Focus on pricing"));
+    }
+
+    #[test]
+    fn updated_node_all_annotations_removed() {
+        let step_id = Uuid::new_v4();
+
+        let changeset = FilteredChangeset {
+            agentless: empty_agentless(),
+            noise: vec![],
+            meaningful: vec![ScoredChange::UpdatedNode {
+                update: NodeUpdate {
+                    element_id: "n1".to_string(),
+                    old_text: "Research".to_string(),
+                    new_text: "Research".to_string(),
+                    old_annotations: vec!["Old note".to_string()],
+                    new_annotations: vec![],
+                    sketch: None,
+                    stroke_encoding: None,
+                },
+                significance: ChangeSignificance::Medium,
+                token_change_ratio: 0.1,
+            }],
+            aggregate_score: 0.5,
+            should_dispatch: true,
+        };
+
+        let phase_zero = PhaseZeroResult {
+            updated_steps: vec![("n1".to_string(), make_step_row(step_id, "workforce-1"))],
+            ..empty_phase_zero()
+        };
+
+        let result = build_per_node_instructions(&changeset, &phase_zero, &empty_snapshot());
+
+        assert_eq!(result.len(), 1);
+        let instr = &result[0].instruction;
+        // Annotations block should still appear with removal info
+        assert!(instr.contains("<annotations>"));
+        assert!(instr.contains("- [removed] Old note"));
     }
 }
