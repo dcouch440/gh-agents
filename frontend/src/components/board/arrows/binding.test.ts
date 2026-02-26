@@ -180,38 +180,44 @@ describe('computeGeometricFocus', () => {
   const box = makeBox(100, 100, 200, 100)
 
   it('produces focus facing left when source is to the left', () => {
-    const focus = computeGeometricFocus(box, { x: 0, y: 150 })
+    const sourceBox = makeBox(-200, 100, 200, 100)  // center at (-100, 150)
+    const focus = computeGeometricFocus(box, sourceBox)
     expect(focus.fx).toBe(0)  // left edge
     expect(focus.fy).toBe(0.5)
   })
 
   it('produces focus facing right when source is to the right', () => {
-    const focus = computeGeometricFocus(box, { x: 500, y: 150 })
+    const sourceBox = makeBox(400, 100, 200, 100)  // center at (500, 150)
+    const focus = computeGeometricFocus(box, sourceBox)
     expect(focus.fx).toBe(1)  // right edge
     expect(focus.fy).toBe(0.5)
   })
 
   it('produces focus facing top when source is above', () => {
-    const focus = computeGeometricFocus(box, { x: 200, y: 0 })
+    const sourceBox = makeBox(100, -200, 200, 100)  // center at (200, -150)
+    const focus = computeGeometricFocus(box, sourceBox)
     expect(focus.fx).toBe(0.5)
     expect(focus.fy).toBe(0)  // top edge
   })
 
   it('produces focus facing bottom when source is below', () => {
-    const focus = computeGeometricFocus(box, { x: 200, y: 400 })
+    const sourceBox = makeBox(100, 400, 200, 100)  // center at (200, 450)
+    const focus = computeGeometricFocus(box, sourceBox)
     expect(focus.fx).toBe(0.5)
     expect(focus.fy).toBe(1)  // bottom edge
   })
 
   it('wide box prefers horizontal sides', () => {
     const wideBox = makeBox(100, 100, 400, 100)
-    const focus = computeGeometricFocus(wideBox, { x: 0, y: 150 })
+    const sourceBox = makeBox(-200, 100, 200, 100)  // center at (-100, 150)
+    const focus = computeGeometricFocus(wideBox, sourceBox)
     expect(focus.fx).toBe(0)  // left edge
   })
 
   it('tall box prefers vertical sides', () => {
     const tallBox = makeBox(100, 100, 100, 400)
-    const focus = computeGeometricFocus(tallBox, { x: 150, y: 0 })
+    const sourceBox = makeBox(100, -200, 100, 100)  // center at (150, -150)
+    const focus = computeGeometricFocus(tallBox, sourceBox)
     expect(focus.fy).toBe(0)  // top edge
   })
 })

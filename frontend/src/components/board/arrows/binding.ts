@@ -53,15 +53,19 @@ const applyBindingGap = (point: Point, side: Side): Point => {
  * Pick the side of a box that best faces toward a direction vector,
  * normalized by box dimensions to handle non-square boxes.
  */
+const HORIZONTAL_BIAS = 4.0
+
 const bestFacingSide = (dx: number, dy: number, w: number, h: number): Side => {
   // Normalize by box half-dimensions so the decision boundary
-  // follows the box's diagonal, not a 45-degree line
+  // follows the box's diagonal, not a 45-degree line.
+  // Bias toward horizontal sides — only pick top/bottom when
+  // the vertical component clearly dominates.
   const halfW = w / 2 || 1
   const halfH = h / 2 || 1
   const nx = dx / halfW
   const ny = dy / halfH
 
-  if (Math.abs(nx) > Math.abs(ny)) {
+  if (Math.abs(nx) * HORIZONTAL_BIAS >= Math.abs(ny)) {
     return nx > 0 ? 'right' : 'left'
   }
   return ny > 0 ? 'bottom' : 'top'
@@ -181,15 +185,19 @@ const anchorToFocus = (anchor: AnchorPoint): FocusPoint => {
  */
 const computeGeometricFocus = (
   targetBox: BoxElement,
-  sourcePoint: Point,
+  sourceBox: BoxElement,
 ): FocusPoint => {
+  const sx = sourceBox.x + sourceBox.width / 2
+  const sy = sourceBox.y + sourceBox.height / 2
   const cx = targetBox.x + targetBox.width / 2
   const cy = targetBox.y + targetBox.height / 2
-  const { point } = rayBoxIntersection(targetBox, { x: cx, y: cy }, sourcePoint)
+  const side = bestFacingSide(sx - cx, sy - cy, targetBox.width, targetBox.height)
 
-  return {
-    fx: targetBox.width > 0 ? Geometry.clamp((point.x - targetBox.x) / targetBox.width, 0, 1) : 0.5,
-    fy: targetBox.height > 0 ? Geometry.clamp((point.y - targetBox.y) / targetBox.height, 0, 1) : 0.5,
+  switch (side) {
+    case 'left':   return { fx: 0, fy: 0.5 }
+    case 'right':  return { fx: 1, fy: 0.5 }
+    case 'top':    return { fx: 0.5, fy: 0 }
+    case 'bottom': return { fx: 0.5, fy: 1 }
   }
 }
 
