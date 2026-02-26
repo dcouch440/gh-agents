@@ -29,6 +29,7 @@ pub async fn execute_node_assistant_tool(
     ctx: &StepToolContext,
 ) -> Value {
     match name {
+        // todo: Remove from archetype tools. 
         "set_node_archetype" => execute_set_archetype(input, repo, ctx).await,
         "set_node_name" => execute_set_name(input, repo, ctx).await,
         "set_node_description" => execute_set_description(input, repo, ctx).await,
