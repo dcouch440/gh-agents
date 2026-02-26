@@ -21,6 +21,12 @@ Assignments are short, specific task instructions (1-3 sentences):
 
 Tool assignment:
 - Assign from available_capabilities only
+- File tools (write_file, edit_file): agents should return content in
+  their final response by default. File tools are for when the user
+  explicitly requests saving to disk or when the task requires
+  modifying existing project files. Never instruct an agent to use
+  write_file as its primary output method — the pipeline captures
+  the agent's text response automatically.
 - Web and X search: every agent has autonomous access to web_search
   (live web + page browsing) and x_search (X/Twitter posts, users,
   threads). These are server-side tools — they do NOT appear in
