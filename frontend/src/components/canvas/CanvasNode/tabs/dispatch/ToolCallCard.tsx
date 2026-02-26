@@ -16,17 +16,33 @@ type ToolCallCardProps = {
   status: 'running' | 'complete'
 }
 
-const summarizeInput = (input: Record<string, unknown>): string => {
-  const keys = Object.keys(input)
-  if (keys.length === 0) return ''
+// VS Code-inspired syntax colors (works on dark backgrounds)
+const SYN = {
+  key: '#9CDCFE',     // light blue — property names
+  string: '#CE9178',  // warm orange — string values
+  number: '#B5CEA8',  // soft green — numbers
+  bool: '#569CD6',    // blue — booleans
+  null: '#569CD6',    // blue — null/undefined
+  punct: '#808080',   // gray — punctuation (=, commas)
+} as const
 
-  const pairs = keys.map((k) => {
-    const v = input[k]
-    const val = typeof v === 'string' ? `"${v}"` : String(JSON.stringify(v))
-    return `${k}=${val}`
-  })
+type InputPair = { key: string; value: unknown }
 
-  return pairs.join(', ')
+const renderInputPairs = (input: Record<string, unknown>): InputPair[] =>
+  Object.keys(input).map((k) => ({ key: k, value: input[k] }))
+
+const valueColor = (v: unknown): string => {
+  if (v === null || v === undefined) return SYN.null
+  if (typeof v === 'string') return SYN.string
+  if (typeof v === 'number') return SYN.number
+  if (typeof v === 'boolean') return SYN.bool
+  return SYN.string
+}
+
+const formatValue = (v: unknown): string => {
+  if (v === null || v === undefined) return 'null'
+  if (typeof v === 'string') return `"${v}"`
+  return JSON.stringify(v)
 }
 
 const formatResult = (result: unknown): string => {
@@ -39,7 +55,7 @@ function ToolCallCard({ toolName, toolId, input, result, status }: ToolCallCardP
   const [expanded, setExpanded] = useState(false)
   const isRunning = status === 'running'
   const label = getToolLabel(toolName, status)
-  const inputSummary = summarizeInput(input)
+  const pairs = renderInputPairs(input)
   const hasResult = result !== null && result !== undefined
 
   return (
@@ -79,7 +95,7 @@ function ToolCallCard({ toolName, toolId, input, result, status }: ToolCallCardP
         )}
 
         <Typography
-          sx={{ fontFamily: 'monospace', fontSize: 11, color: 'text.secondary', fontWeight: 500 }}
+          sx={{ fontFamily: 'monospace', fontSize: 11, color: 'text.primary', fontWeight: 500 }}
         >
           {label}
         </Typography>
@@ -100,21 +116,28 @@ function ToolCallCard({ toolName, toolId, input, result, status }: ToolCallCardP
         )}
       </Box>
 
-      {/* Input summary */}
-      {inputSummary.length > 0 && (
-        <Typography
+      {/* Input summary — VS Code-style syntax coloring */}
+      {pairs.length > 0 && (
+        <Box
           sx={{
             fontFamily: 'monospace',
             fontSize: 10,
-            color: 'text.disabled',
             px: 1,
             pb: 0.5,
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
+            lineHeight: 1.6,
           }}
         >
-          {inputSummary}
-        </Typography>
+          {pairs.map((pair, i) => (
+            <Box component="span" key={pair.key}>
+              {i > 0 && <Box component="span" sx={{ color: SYN.punct }}>{', '}</Box>}
+              <Box component="span" sx={{ color: SYN.key }}>{pair.key}</Box>
+              <Box component="span" sx={{ color: SYN.punct }}>{'='}</Box>
+              <Box component="span" sx={{ color: valueColor(pair.value) }}>{formatValue(pair.value)}</Box>
+            </Box>
+          ))}
+        </Box>
       )}
 
       {/* Collapsible output */}

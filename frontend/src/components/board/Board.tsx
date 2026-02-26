@@ -8,7 +8,7 @@ import { useBoardTheme, useBoardSubmit, useBoardElements, useDispatchHistory, us
 import { BoardContextMenu } from './BoardContextMenu'
 import type { MenuPosition } from './BoardContextMenu'
 import { SubmitBar } from './SubmitBar'
-import { DebugPanel } from './debug'
+import { DispatchPanel } from './dispatch'
 import { Canvas2D } from './canvas'
 import { Toolbar } from './toolbar'
 import { useHistory } from './history'
@@ -295,7 +295,7 @@ function Board({ workflowId }: BoardProps) {
         onToggleDebug={() => setShowDebug((v) => !v)}
       />
 
-      {showDebug && <DebugPanel onClose={() => setShowDebug(false)} />}
+      {showDebug && <DispatchPanel onClose={() => setShowDebug(false)} />}
 
       {contextMenu !== null && (
         <BoardContextMenu

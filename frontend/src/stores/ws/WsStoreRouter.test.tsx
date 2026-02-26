@@ -7,10 +7,12 @@ import { workflowExecutionStore } from '@/stores/workflowExecutionStore'
 import { workflowStore } from '@/stores/workflowStore'
 import { stepStreamStore } from '@/stores/stepStreamStore'
 import { activityStore } from '@/stores/activity'
+import { agentTraceStore } from '@/stores/agentTraceStore'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
-const mockUnsubs = vi.hoisted(() => Array.from({ length: 9 }, () => vi.fn()))
+const HANDLER_COUNT = 10
+const mockUnsubs = vi.hoisted(() => Array.from({ length: 10 }, () => vi.fn()))
 const mockSubscribe = vi.hoisted(() => vi.fn())
 
 vi.mock('@/hooks/useWebSocket', () => ({
@@ -32,15 +34,15 @@ describe('WsStoreRouter', () => {
     vi.clearAllMocks()
     mockUnsubs.forEach((fn) => fn.mockClear())
     mockSubscribe.mockReset()
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < HANDLER_COUNT; i++) {
       mockSubscribe.mockReturnValueOnce(mockUnsubs[i])
     }
   })
 
-  it('subscribes to all topics for domain stores + flight recorder (9 total)', () => {
+  it('subscribes to all topics for domain stores + flight recorder (10 total)', () => {
     render(<WsStoreRouter />)
 
-    expect(mockSubscribe).toHaveBeenCalledTimes(9)
+    expect(mockSubscribe).toHaveBeenCalledTimes(HANDLER_COUNT)
 
     // Domain store handlers
     expect(mockSubscribe).toHaveBeenCalledWith('session', sessionStore.handleWsEvent)
@@ -49,6 +51,7 @@ describe('WsStoreRouter', () => {
     expect(mockSubscribe).toHaveBeenCalledWith('workflow', workflowExecutionStore.handleWsEvent)
     expect(mockSubscribe).toHaveBeenCalledWith('workflow', workflowStore.handleWsEvent)
     expect(mockSubscribe).toHaveBeenCalledWith('workflow', stepStreamStore.handleWsEvent)
+    expect(mockSubscribe).toHaveBeenCalledWith('workflow', agentTraceStore.handleWsEvent)
 
     // Flight recorder handlers
     expect(mockSubscribe).toHaveBeenCalledWith('session', activityStore.handleWsEvent)
@@ -56,7 +59,7 @@ describe('WsStoreRouter', () => {
     expect(mockSubscribe).toHaveBeenCalledWith('workflow', activityStore.handleWsEvent)
   })
 
-  it('unsubscribes all 9 handlers on unmount', () => {
+  it('unsubscribes all 10 handlers on unmount', () => {
     const { unmount } = render(<WsStoreRouter />)
 
     unmount()

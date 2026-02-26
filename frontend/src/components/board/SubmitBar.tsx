@@ -6,7 +6,7 @@ import PublishIcon from '@mui/icons-material/Publish'
 import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined'
 import CheckCircleOutline from '@mui/icons-material/CheckCircleOutline'
 import ErrorOutline from '@mui/icons-material/ErrorOutline'
-import BugReportIcon from '@mui/icons-material/BugReport'
+import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import { GradientButton } from '@/components/primitives'
 import type { SubmitStatus } from '@/stores/boardStore'
 import type { RunStatus } from '@/components/canvas/useWorkflowRun'
@@ -81,10 +81,10 @@ function SubmitBar({ onSubmit, isSubmitting, status, error, onRun, runStatus, sh
       <IconButton
         size="small"
         onClick={onToggleDebug}
-        aria-label="Toggle debug panel"
+        aria-label="Toggle dispatch panel"
         sx={{ color: showDebug ? 'primary.main' : 'text.secondary' }}
       >
-        <BugReportIcon sx={{ fontSize: 20 }} />
+        <AccountTreeIcon sx={{ fontSize: 20 }} />
       </IconButton>
 
       {status === 'error' && error !== null && (

@@ -22,19 +22,20 @@ describe('ToolCallCard', () => {
     expect(screen.getByTestId('tool-call-t1')).toBeInTheDocument()
   })
 
-  it('shows input summary', () => {
+  it('shows input keys and values as separate spans', () => {
     render(<ToolCallCard {...baseProps} input={{ query: 'test', limit: 10 }} />)
-    expect(screen.getByText(/query="test"/)).toBeInTheDocument()
-    expect(screen.getByText(/limit=10/)).toBeInTheDocument()
+    // VS Code-style coloring renders keys and values as separate spans
+    expect(screen.getByText('query')).toBeInTheDocument()
+    expect(screen.getByText('"test"')).toBeInTheDocument()
+    expect(screen.getByText('limit')).toBeInTheDocument()
+    expect(screen.getByText('10')).toBeInTheDocument()
   })
 
-  it('s long input values', () => {
+  it('renders long string values', () => {
     const longValue = 'a'.repeat(60)
     render(<ToolCallCard {...baseProps} input={{ data: longValue }} />)
-    // Input summary should contain truncated value with ellipsis
-    const summary = screen.getAllByText(/\.\.\./)
-    // At least the input summary has the truncation (tool label also has "..." for running)
-    expect(summary.length).toBeGreaterThanOrEqual(1)
+    // The full quoted value is rendered (no truncation in the new format)
+    expect(screen.getByText('data')).toBeInTheDocument()
   })
 
   it('does not show expand toggle when result is null', () => {
