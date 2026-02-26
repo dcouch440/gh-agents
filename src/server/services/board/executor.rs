@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::db::traits::{SessionRepo, WorkflowRepo};
-use crate::db::{CanvasElementMapRow, WorkflowStepRow};
+use crate::db::{CanvasElementMapRow, WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::server::hub::board_serializer::{CanvasNode, FilteredChangeset, ScoredChange};
 use crate::server::services::steps::{self, CreateStepInput, StepPayload};
 use crate::server::services::ServiceError;
@@ -25,14 +25,14 @@ use crate::server::services::ServiceError;
 pub struct PhaseZeroResult {
     /// Steps created from new canvas nodes: (element_id, full_step_row).
     pub created_steps: Vec<(String, WorkflowStepRow)>,
-    /// Edges created from new canvas edges: (element_id, edge_id).
-    pub created_edges: Vec<(String, Uuid)>,
+    /// Edges created from new canvas edges: (element_id, full_edge_row).
+    pub created_edges: Vec<(String, WorkflowStepEdgeRow)>,
     /// Element IDs of deleted steps.
     pub deleted_steps: Vec<String>,
     /// Element IDs of deleted edges.
     pub deleted_edges: Vec<String>,
-    /// Element IDs of rewired edges.
-    pub rewired_edges: Vec<String>,
+    /// Edges rewired by Phase 0: (element_id, new_edge_row).
+    pub rewired_edges: Vec<(String, WorkflowStepEdgeRow)>,
     /// Element IDs of moved steps.
     pub moved_steps: Vec<String>,
     /// Steps updated from canvas node text/annotation edits: (element_id, full_step_row).
@@ -102,7 +102,7 @@ pub async fn execute_phase_zero(
 
             result
                 .created_edges
-                .push((edge.element_id.clone(), edge_row.id));
+                .push((edge.element_id.clone(), edge_row));
         }
     }
 
@@ -162,7 +162,9 @@ pub async fn execute_phase_zero(
         repo.upsert_element_map(map_row.clone()).await?;
         element_map.insert(rewire.element_id.clone(), map_row);
 
-        result.rewired_edges.push(rewire.element_id.clone());
+        result
+            .rewired_edges
+            .push((rewire.element_id.clone(), new_edge));
     }
 
     // ── 6. Delete nodes ─────────────────────────────────────────────────────

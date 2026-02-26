@@ -291,7 +291,7 @@ describe('boardStore', () => {
       const response = makeResponse({
         phase_zero: {
           ...emptyPhaseZero,
-          created_edges: [{ element_id: 'el-e1', edge_id: 'edge-1' }],
+          created_edges: [{ element_id: 'el-e1', edge_id: 'edge-1', from_step_id: 's1', to_step_id: 's2' }],
         },
       })
       mockSubmitBoard.mockResolvedValue(response)
@@ -370,7 +370,7 @@ describe('boardStore', () => {
       const existing = {}
       const phaseZero: PhaseZeroResponse = {
         ...emptyPhaseZero,
-        created_edges: [{ element_id: 'el-e1', edge_id: 'edge-1' }],
+        created_edges: [{ element_id: 'el-e1', edge_id: 'edge-1', from_step_id: 's1', to_step_id: 's2' }],
       }
       const result = mergeElementEdgeMap(existing, phaseZero)
       expect(result).toEqual({ 'el-e1': 'edge-1' })

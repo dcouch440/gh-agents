@@ -27,7 +27,7 @@ pub struct PhaseZeroResponse {
     pub created_edges: Vec<ElementEdgePair>,
     pub deleted_steps: Vec<String>,
     pub deleted_edges: Vec<String>,
-    pub rewired_edges: Vec<String>,
+    pub rewired_edges: Vec<ElementEdgePair>,
     pub moved_steps: Vec<String>,
     pub updated_steps: Vec<PhaseZeroStep>,
 }
@@ -45,6 +45,8 @@ pub struct PhaseZeroStep {
 pub struct ElementEdgePair {
     pub element_id: String,
     pub edge_id: Uuid,
+    pub from_step_id: Uuid,
+    pub to_step_id: Uuid,
 }
 
 #[derive(Serialize)]
@@ -119,14 +121,26 @@ pub async fn submit_board(
             .phase_zero
             .created_edges
             .into_iter()
-            .map(|(element_id, edge_id)| ElementEdgePair {
+            .map(|(element_id, edge_row)| ElementEdgePair {
                 element_id,
-                edge_id,
+                edge_id: edge_row.id,
+                from_step_id: edge_row.from_step_id,
+                to_step_id: edge_row.to_step_id,
             })
             .collect(),
         deleted_steps: result.phase_zero.deleted_steps,
         deleted_edges: result.phase_zero.deleted_edges,
-        rewired_edges: result.phase_zero.rewired_edges,
+        rewired_edges: result
+            .phase_zero
+            .rewired_edges
+            .into_iter()
+            .map(|(element_id, edge_row)| ElementEdgePair {
+                element_id,
+                edge_id: edge_row.id,
+                from_step_id: edge_row.from_step_id,
+                to_step_id: edge_row.to_step_id,
+            })
+            .collect(),
         moved_steps: result.phase_zero.moved_steps,
         updated_steps: result
             .phase_zero

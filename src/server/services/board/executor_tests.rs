@@ -425,7 +425,10 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(result.rewired_edges, vec!["arrow1"]);
+        assert_eq!(result.rewired_edges.len(), 1);
+        assert_eq!(result.rewired_edges[0].0, "arrow1");
+        assert_eq!(result.rewired_edges[0].1.from_step_id, step_a);
+        assert_eq!(result.rewired_edges[0].1.to_step_id, step_c);
     }
 
     #[tokio::test]

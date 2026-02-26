@@ -28,7 +28,7 @@ type PhaseZeroResponse = {
   readonly created_edges: readonly ElementEdgePair[]
   readonly deleted_steps: readonly string[]
   readonly deleted_edges: readonly string[]
-  readonly rewired_edges: readonly string[]
+  readonly rewired_edges: readonly ElementEdgePair[]
   readonly moved_steps: readonly string[]
   readonly updated_steps: readonly PhaseZeroStep[]
 }
@@ -44,6 +44,8 @@ type PhaseZeroStep = WorkflowStep & {
 type ElementEdgePair = {
   readonly element_id: string
   readonly edge_id: string
+  readonly from_step_id: string
+  readonly to_step_id: string
 }
 
 type BoardDispatchInfo = {
