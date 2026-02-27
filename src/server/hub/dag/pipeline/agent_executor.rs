@@ -240,6 +240,14 @@ async fn execute_single_agent(
         );
     }
 
+    // Inject upstream DAG step outputs (workforce, single, sub_workflow — not context nodes)
+    if !env.upstream_outputs_block.is_empty() {
+        task_prompt.push_str(&format!(
+            "\n\n<upstream_step_outputs>\n{}\n</upstream_step_outputs>",
+            env.upstream_outputs_block
+        ));
+    }
+
     // Inject board context (annotations, sketches from the canvas)
     if !env.board_context.is_empty() {
         task_prompt.push_str(&format!(

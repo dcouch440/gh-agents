@@ -44,6 +44,7 @@ use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
 
 use super::container::{create_optional_container, destroy_optional_container};
 use super::dag_state::DagExecutionState;
+use super::designer_input::build_upstream_outputs_block;
 use super::utils::collect_upstream_context_data;
 use super::{
     broadcast_workflow_event, compose_prompt, resolve_output_key, resolve_step_port_inputs,
@@ -176,6 +177,9 @@ impl Pipeline {
             .map(|(id, env)| (*id, env.clone()))
             .collect();
 
+        // 7b. Build upstream outputs block for agent task prompts
+        let upstream_outputs_block = build_upstream_outputs_block(&upstream_envelopes, dag.steps);
+
         let pipeline_ctx = PipelineExecutionContext {
             step: step.clone(),
             brief: brief.clone(),
@@ -231,6 +235,7 @@ impl Pipeline {
             cancel: dag.cancel.cloned(),
             task_description: brief.task_description.clone(),
             board_context: step.board_context_cache.clone(),
+            upstream_outputs_block,
         };
 
         let level_result = execute_agent_levels(
