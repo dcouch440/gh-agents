@@ -93,3 +93,8 @@ Make board dispatch prompter make better desicions:
   configuration.
   7. Oscillation baseline is imprecise — uses previous submit snapshot rather than last agent-processed state.
   8. No error recovery for dispatch failures — fire-and-forget with no retry.
+
+
+## Annotations do not get passed to the agents.
+
+How do we know what annotation to route to an agent? It seems like we should have the builder wire it up? Or is there other solutions? Maybe the designer passes it through by adding a annotation tag?
