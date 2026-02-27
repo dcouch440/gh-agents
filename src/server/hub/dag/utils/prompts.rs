@@ -107,14 +107,6 @@ pub(crate) async fn compose_prompt(
 
     let mut full_prompt = format!("<task>\n{}\n</task>", prompt);
 
-    // Inject board context (annotations, sketches from the canvas)
-    if !step.board_context_cache.is_empty() {
-        full_prompt.push_str(&format!(
-            "\n\n<board_context>\n{}\n</board_context>",
-            step.board_context_cache
-        ));
-    }
-
     // Track whether we've opened a <context> block (for port inputs + documents).
     let mut context_opened = false;
 

@@ -44,7 +44,6 @@ pub(super) struct WorkforceStepEnv {
     pub container_handle: Option<ContainerHandle>,
     pub cancel: Option<tokio_util::sync::CancellationToken>,
     pub task_description: String,
-    pub board_context: String,
     /// Base64-encoded PNG rasterized at runtime from stroke coordinates in board_context.
     pub stroke_image: Option<String>,
     /// Pre-formatted block of upstream DAG step outputs (workforce, single,
