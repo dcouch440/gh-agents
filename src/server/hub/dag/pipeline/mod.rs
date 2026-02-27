@@ -234,7 +234,6 @@ impl Pipeline {
             container_handle: managed_container.as_ref().map(|mc| mc.agent_handle.clone()),
             cancel: dag.cancel.cloned(),
             task_description: brief.task_description.clone(),
-            board_context: step.board_context_cache.clone(),
             stroke_image: rasterize_stroke_image_from_context(&step.board_context_cache),
             upstream_outputs_block,
         };
