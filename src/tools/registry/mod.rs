@@ -964,9 +964,8 @@ fn complete_task_tool() -> Tool {
             "blueprint the agent designer reads at runtime), a summary of what you ",
             "configured (displayed to the user), and optionally a question if you need ",
             "user input to proceed. The plan is the only context the designer sees at ",
-            "execution time — structure it with ## Objective, ## Requirements, ",
-            "## Agent-Specific Guidance (### AgentName sub-headings), and ",
-            "## Technical Context.",
+            "execution time — scale it to complexity: a short paragraph for single-agent ",
+            "tasks, structured sections for multi-agent pipelines.",
         )
         .into(),
         input_schema: json!({
@@ -974,7 +973,7 @@ fn complete_task_tool() -> Tool {
             "properties": {
                 "plan": {
                     "type": "string",
-                    "description": "Execution blueprint for the agent designer. Structure with ## Objective (one sentence), ## Requirements (hard constraints as bullets), ## Agent-Specific Guidance (### AgentName sub-headings with per-agent detail), ## Technical Context (API specs, environment details, exact values). This is the only context the designer sees — include everything it needs."
+                    "description": "Execution blueprint for the agent designer. Scale to complexity: a short paragraph for 1-agent tasks (no headers), concise sections for 2-3 agents (## Objective + ## Agent Guidance), full structure for 4+ agents (## Objective, ## Requirements, ## Agent-Specific Guidance, ## Technical Context). This is the only context the designer sees — include everything it needs."
                 },
                 "summary": {
                     "type": "string",
