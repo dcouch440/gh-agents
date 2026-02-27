@@ -20,6 +20,7 @@ type SidebarState = {
   selectedStepId: string | null
   expandedStepIds: Record<string, boolean>
   outputExpandedStepIds: Record<string, boolean>
+  expandedAgentKeys: Record<string, boolean>
   width: number
   dragging: boolean
 }
@@ -37,6 +38,7 @@ const store = createStore<SidebarState>(() => ({
   selectedStepId: null,
   expandedStepIds: {},
   outputExpandedStepIds: {},
+  expandedAgentKeys: {},
   width: parseWidth(lsGet(LS_SIDEBAR_WIDTH)),
   dragging: false,
 }))
@@ -54,6 +56,8 @@ const selectDragging = (s: SidebarState): boolean => s.dragging
 const selectExpandedStepIds = (s: SidebarState): Record<string, boolean> => s.expandedStepIds
 
 const selectOutputExpandedStepIds = (s: SidebarState): Record<string, boolean> => s.outputExpandedStepIds
+
+const selectExpandedAgentKeys = (s: SidebarState): Record<string, boolean> => s.expandedAgentKeys
 
 const selectIsExpanded = (id: string) => (s: SidebarState): boolean => s.expandedStepIds[id] === true
 
@@ -113,12 +117,20 @@ const toggleOutputExpand = (id: string): void => {
   })
 }
 
+const toggleAgent = (key: string): void => {
+  const { expandedAgentKeys } = store.getState()
+  store.setState({
+    expandedAgentKeys: { ...expandedAgentKeys, [key]: !expandedAgentKeys[key] },
+  })
+}
+
 const reset = (): void => {
   store.setState({
     activeTab: 'tree',
     selectedStepId: null,
     expandedStepIds: {},
     outputExpandedStepIds: {},
+    expandedAgentKeys: {},
     dragging: false,
   })
 }
@@ -131,6 +143,7 @@ export const sidebarStore = {
   selectSelectedStepId,
   selectExpandedStepIds,
   selectOutputExpandedStepIds,
+  selectExpandedAgentKeys,
   selectIsExpanded,
   selectIsOutputExpanded,
   selectWidth,
@@ -142,6 +155,7 @@ export const sidebarStore = {
   expandStep,
   collapseStep,
   toggleOutputExpand,
+  toggleAgent,
   setWidth,
   startDrag,
   stopDrag,

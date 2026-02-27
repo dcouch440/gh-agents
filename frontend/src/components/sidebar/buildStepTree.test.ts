@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildStepTree } from './buildStepTree'
-import type { TreeEntry, GutterCell } from './buildStepTree'
+import type { TreeEntry, AgentEntry, GutterCell } from './buildStepTree'
 import type { WorkflowStep, WorkflowStepEdge, RosterAgent } from '@/types/workflow'
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -499,7 +499,7 @@ describe('buildStepTree', () => {
     expect(stepIds(result)).toEqual(['a', 'b'])
   })
 
-  it('ignores rosterByStep parameter', () => {
+  it('ignores roster for non-workforce steps', () => {
     const steps = [makeStep('a', 'A', 0)]
     const roster: Record<string, RosterAgent[]> = {
       a: [
@@ -517,7 +517,7 @@ describe('buildStepTree', () => {
     }
     const result = buildStepTree(steps, [], roster)
 
-    // Should only have the step, no agent entries
+    // Single-mode step should not produce agent entries even with roster
     expect(result).toHaveLength(1)
     expect(result[0]!.kind).toBe('step')
   })
@@ -554,5 +554,118 @@ describe('buildStepTree', () => {
       'gap',
       ['corner'],
     ])
+  })
+
+  // ── Agent entry tests ──────────────────────────────────────────────────
+
+  const makeWorkforceStep = (id: string, name: string, order: number): WorkflowStep => ({
+    ...makeStep(id, name, order),
+    execution_mode: 'workforce',
+  })
+
+  const makeRosterAgent = (name: string, executionOrder: number): RosterAgent => ({
+    id: `roster-${name}`,
+    name,
+    role_description: `${name} role`,
+    capabilities: [],
+    execution_order: executionOrder,
+    created_at: '2025-01-01T00:00:00Z',
+    child_step_id: null,
+    depends_on: [],
+  })
+
+  it('emits agent entries after workforce step', () => {
+    const steps = [makeWorkforceStep('wf', 'Research Team', 0)]
+    const roster: Record<string, RosterAgent[]> = {
+      wf: [
+        makeRosterAgent('Scanner', 0),
+        makeRosterAgent('Writer', 1),
+        makeRosterAgent('Reviewer', 2),
+      ],
+    }
+    const result = buildStepTree(steps, [], roster)
+
+    expect(result).toHaveLength(4) // 1 step + 3 agents
+    expect(result[0]!.kind).toBe('step')
+    expect(result[1]!.kind).toBe('agent')
+    expect(result[2]!.kind).toBe('agent')
+    expect(result[3]!.kind).toBe('agent')
+
+    const agents = result.filter((e): e is AgentEntry => e.kind === 'agent')
+    expect(agents.map((a) => a.agentName)).toEqual(['Scanner', 'Writer', 'Reviewer'])
+    expect(agents.map((a) => a.stepId)).toEqual(['wf', 'wf', 'wf'])
+  })
+
+  it('agent gutter uses continuation + branch/corner', () => {
+    const steps = [
+      makeWorkforceStep('wf', 'Team', 0),
+      makeStep('b', 'Next', 1),
+    ]
+    const edges = [makeEdge('e1', 'wf', 'b')]
+    const roster: Record<string, RosterAgent[]> = {
+      wf: [
+        makeRosterAgent('Alpha', 0),
+        makeRosterAgent('Beta', 1),
+      ],
+    }
+    const result = buildStepTree(steps, edges, roster)
+
+    // step wf gutter = ['branch'], continuation = ['pipe']
+    // Alpha = ['pipe', 'branch'], Beta = ['pipe', 'corner']
+    const agents = result.filter((e): e is AgentEntry => e.kind === 'agent')
+    expect(agents).toHaveLength(2)
+    expect(agents[0]!.gutter).toEqual(['pipe', 'branch'])
+    expect(agents[1]!.gutter).toEqual(['pipe', 'corner'])
+  })
+
+  it('sorts agent entries by execution_order', () => {
+    const steps = [makeWorkforceStep('wf', 'Team', 0)]
+    const roster: Record<string, RosterAgent[]> = {
+      wf: [
+        makeRosterAgent('Zulu', 2),
+        makeRosterAgent('Alpha', 0),
+        makeRosterAgent('Mike', 1),
+      ],
+    }
+    const result = buildStepTree(steps, [], roster)
+
+    const agents = result.filter((e): e is AgentEntry => e.kind === 'agent')
+    expect(agents.map((a) => a.agentName)).toEqual(['Alpha', 'Mike', 'Zulu'])
+  })
+
+  it('emits no agent entries for empty roster', () => {
+    const steps = [makeWorkforceStep('wf', 'Team', 0)]
+    const result = buildStepTree(steps, [], NO_ROSTER)
+
+    expect(result).toHaveLength(1)
+    expect(result[0]!.kind).toBe('step')
+  })
+
+  it('agents nest correctly inside parallel fork', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeWorkforceStep('b', 'B Team', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+      makeEdge('e3', 'b', 'd'),
+      makeEdge('e4', 'c', 'd'),
+    ]
+    const roster: Record<string, RosterAgent[]> = {
+      b: [makeRosterAgent('Worker', 0)],
+    }
+    const result = buildStepTree(steps, edges, roster)
+
+    // A, B(fork_start), Worker(agent), C(par_end), D
+    const agents = result.filter((e): e is AgentEntry => e.kind === 'agent')
+    expect(agents).toHaveLength(1)
+    expect(agents[0]!.agentName).toBe('Worker')
+
+    // B's gutter is ['pipe', 'fork_start'], continuation = ['pipe', 'pipe']
+    // Worker should be ['pipe', 'pipe', 'corner'] (single agent = last)
+    expect(agents[0]!.gutter).toEqual(['pipe', 'pipe', 'corner'])
   })
 })
