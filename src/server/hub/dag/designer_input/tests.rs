@@ -155,6 +155,182 @@ mod tests {
             .contains("all agents run in parallel"));
     }
 
+    // ── Upstream outputs block tests ─────────────────────────────────────────
+
+    #[test]
+    fn upstream_outputs_block_empty_envelopes() {
+        let result = build_upstream_outputs_block(&HashMap::new(), &[]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn upstream_outputs_block_excludes_context_steps() {
+        use crate::db::WorkflowStepRow;
+
+        let step_id = Uuid::new_v4();
+        let step = WorkflowStepRow {
+            id: step_id,
+            execution_mode: "context".to_string(),
+            name: Some("My Context".to_string()),
+            ..Default::default()
+        };
+
+        let mut envelopes = HashMap::new();
+        envelopes.insert(step_id, envelope(serde_json::json!({"key": "value"})));
+
+        let result = build_upstream_outputs_block(&envelopes, &[step]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn upstream_outputs_block_excludes_input_steps() {
+        use crate::db::WorkflowStepRow;
+
+        let step_id = Uuid::new_v4();
+        let step = WorkflowStepRow {
+            id: step_id,
+            execution_mode: "input".to_string(),
+            name: Some("User Input".to_string()),
+            ..Default::default()
+        };
+
+        let mut envelopes = HashMap::new();
+        envelopes.insert(step_id, envelope(serde_json::json!("some input")));
+
+        let result = build_upstream_outputs_block(&envelopes, &[step]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn upstream_outputs_block_includes_workforce_step() {
+        use crate::db::WorkflowStepRow;
+
+        let step_id = Uuid::new_v4();
+        let step = WorkflowStepRow {
+            id: step_id,
+            execution_mode: "workforce".to_string(),
+            name: Some("Research Team".to_string()),
+            ..Default::default()
+        };
+
+        let mut envelopes = HashMap::new();
+        envelopes.insert(
+            step_id,
+            envelope(serde_json::json!({"agents": {"scanner": "scan results", "writer": "written content"}})),
+        );
+
+        let result = build_upstream_outputs_block(&envelopes, &[step]);
+        assert!(result.contains("### Research Team"));
+        assert!(result.contains("**scanner**:"));
+        assert!(result.contains("scan results"));
+        assert!(result.contains("**writer**:"));
+        assert!(result.contains("written content"));
+    }
+
+    #[test]
+    fn upstream_outputs_block_uses_output_variable_name_fallback() {
+        use crate::db::WorkflowStepRow;
+
+        let step_id = Uuid::new_v4();
+        let step = WorkflowStepRow {
+            id: step_id,
+            execution_mode: "single".to_string(),
+            name: None,
+            output_variable_name: Some("research_output".to_string()),
+            ..Default::default()
+        };
+
+        let mut envelopes = HashMap::new();
+        envelopes.insert(step_id, envelope(serde_json::json!("some output")));
+
+        let result = build_upstream_outputs_block(&envelopes, &[step]);
+        assert!(result.contains("### research_output"));
+    }
+
+    #[test]
+    fn upstream_outputs_block_mixed_steps() {
+        use crate::db::WorkflowStepRow;
+
+        let wf_id = Uuid::new_v4();
+        let ctx_id = Uuid::new_v4();
+        let single_id = Uuid::new_v4();
+
+        let steps = vec![
+            WorkflowStepRow {
+                id: wf_id,
+                execution_mode: "workforce".to_string(),
+                name: Some("Research".to_string()),
+                ..Default::default()
+            },
+            WorkflowStepRow {
+                id: ctx_id,
+                execution_mode: "context".to_string(),
+                name: Some("Context Node".to_string()),
+                ..Default::default()
+            },
+            WorkflowStepRow {
+                id: single_id,
+                execution_mode: "single".to_string(),
+                name: Some("Fetcher".to_string()),
+                ..Default::default()
+            },
+        ];
+
+        let mut envelopes = HashMap::new();
+        envelopes.insert(wf_id, envelope(serde_json::json!({"agents": {"a": "out"}})));
+        envelopes.insert(ctx_id, envelope(serde_json::json!("context data")));
+        envelopes.insert(single_id, envelope(serde_json::json!("fetched data")));
+
+        let result = build_upstream_outputs_block(&envelopes, &steps);
+
+        // Workforce and single steps included
+        assert!(result.contains("### Research"));
+        assert!(result.contains("### Fetcher"));
+        // Context step excluded
+        assert!(!result.contains("Context Node"));
+    }
+
+    #[test]
+    fn upstream_outputs_block_skips_none_data() {
+        use crate::db::WorkflowStepRow;
+
+        let step_id = Uuid::new_v4();
+        let step = WorkflowStepRow {
+            id: step_id,
+            execution_mode: "workforce".to_string(),
+            name: Some("Empty".to_string()),
+            ..Default::default()
+        };
+
+        let mut envelopes = HashMap::new();
+        envelopes.insert(step_id, empty_envelope());
+
+        let result = build_upstream_outputs_block(&envelopes, &[step]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn upstream_outputs_block_truncates_large_output() {
+        use crate::db::WorkflowStepRow;
+
+        let step_id = Uuid::new_v4();
+        let step = WorkflowStepRow {
+            id: step_id,
+            execution_mode: "single".to_string(),
+            name: Some("Big Step".to_string()),
+            ..Default::default()
+        };
+
+        let big_data = "x".repeat(5000);
+        let mut envelopes = HashMap::new();
+        envelopes.insert(step_id, envelope(serde_json::Value::String(big_data)));
+
+        let result = build_upstream_outputs_block(&envelopes, &[step]);
+        assert!(result.contains("### Big Step"));
+        // Header + truncated content should be well under the raw 5000 chars
+        assert!(result.len() < 4200);
+    }
+
     #[test]
     fn workforce_input_no_dependencies() {
         let step_id = Uuid::new_v4();
