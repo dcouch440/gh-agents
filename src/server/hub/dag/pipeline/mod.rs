@@ -333,15 +333,18 @@ pub(crate) fn rasterize_stroke_image_from_context(board_context: &str) -> Option
     let val: serde_json::Value = serde_json::from_str(json_str).ok()?;
     let strokes_arr = val.get("strokes")?.as_array()?;
 
-    let strokes: Vec<Vec<[f64; 2]>> = strokes_arr
+    let strokes: Vec<Vec<[f64; 3]>> = strokes_arr
         .iter()
         .filter_map(|s| {
             let points = s.get("points")?.as_array()?;
-            let pts: Vec<[f64; 2]> = points
+            let pts: Vec<[f64; 3]> = points
                 .iter()
                 .filter_map(|p| {
                     let arr = p.as_array()?;
-                    Some([arr.first()?.as_f64()?, arr.get(1)?.as_f64()?])
+                    let x = arr.first()?.as_f64()?;
+                    let y = arr.get(1)?.as_f64()?;
+                    let pressure = arr.get(2).and_then(|v| v.as_f64()).unwrap_or(0.5);
+                    Some([x, y, pressure])
                 })
                 .collect();
             if pts.is_empty() {
@@ -366,8 +369,8 @@ pub(crate) fn rasterize_stroke_image_from_context(board_context: &str) -> Option
     crate::server::hub::board::serializer::rasterize_png::rasterize_strokes_png(
         &strokes,
         &dummy_bounds,
-        768,
+        1536,
         10,
-        3,
+        5,
     )
 }
