@@ -213,13 +213,15 @@ mod tests {
     }
 
     #[test]
-    fn resolve_step_tools_workforce_still_has_mutation_tools() {
+    fn resolve_step_tools_workforce_has_configure_team() {
         // DispatchStrategy uses resolve_step_tools, not resolve_chat_step_tools
         let tools = super::super::resolve_step_tools("workforce");
         let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
 
-        assert!(names.contains(&"set_task"));
-        assert!(names.contains(&"add_agent"));
+        assert!(names.contains(&"configure_team"));
+        // Granular tools removed — configure_team handles everything
+        assert!(!names.contains(&"set_task"));
+        assert!(!names.contains(&"add_agent"));
     }
 
     #[test]

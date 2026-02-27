@@ -671,10 +671,7 @@ fn configure_team_tool() -> Tool {
             "dependencies. The tool diffs against the current state and applies only ",
             "the changes needed — creating new agents, removing unlisted agents, ",
             "updating agents whose role or capabilities changed, and reconciling ",
-            "dependencies. Use this for initial team setup or when multiple things ",
-            "change at once. For single-agent tweaks after setup, use add_agent, ",
-            "update_agent, or remove_agent instead. The plan is provided separately ",
-            "through complete_task.",
+            "dependencies. The plan is provided separately through complete_task.",
         )
         .into(),
         input_schema: json!({

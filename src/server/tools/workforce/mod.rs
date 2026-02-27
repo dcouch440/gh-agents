@@ -339,6 +339,14 @@ async fn execute_configure_team(
         .cloned()
         .unwrap_or_default();
 
+    // Ensure mission brief exists early — before any validation that could
+    // return an error. This guarantees the brief is in the DB even if agent
+    // parsing or dependency validation fails.
+    let brief_id = match ensure_mission_brief(repo, ctx).await {
+        Ok(id) => id,
+        Err(e) => return e,
+    };
+
     // Parse desired agents
     let mut desired_agents: Vec<(String, String, Vec<String>)> = Vec::new();
     for (i, agent_val) in agents_arr.iter().enumerate() {
@@ -361,12 +369,23 @@ async fn execute_configure_team(
         desired_agents.push((name, role_description, capabilities));
     }
 
-    // Check for duplicate agent names
-    let mut seen_names: HashSet<String> = HashSet::new();
-    for (name, _, _) in &desired_agents {
-        if !seen_names.insert(normalize_name(name)) {
-            return json!({ "error": format!("Duplicate agent name: '{}'", name) });
+    // Deduplicate agents by normalized name (last wins).
+    // Models sometimes stutter and produce the same agent twice.
+    {
+        let mut seen: HashMap<String, usize> = HashMap::new();
+        let mut keep = vec![true; desired_agents.len()];
+        for (i, (name, _, _)) in desired_agents.iter().enumerate() {
+            let norm = normalize_name(name);
+            if let Some(prev) = seen.insert(norm, i) {
+                keep[prev] = false;
+            }
         }
+        let mut i = 0;
+        desired_agents.retain(|_| {
+            let k = keep[i];
+            i += 1;
+            k
+        });
     }
 
     // Parse desired dependencies
@@ -401,10 +420,6 @@ async fn execute_configure_team(
     }
 
     // --- Load current state --------------------------------------------
-    let brief_id = match ensure_mission_brief(repo, ctx).await {
-        Ok(id) => id,
-        Err(e) => return e,
-    };
     let current_brief = repo.get_mission_brief(ctx.step_id).await.ok().flatten();
     let current_roster = repo.list_agent_roster(brief_id).await.unwrap_or_default();
     let user_id = match resolve_user_id(repo, ctx).await {

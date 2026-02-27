@@ -985,10 +985,59 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn configure_team_duplicate_agent_names_returns_error() {
+    async fn configure_team_deduplicates_agents_by_name() {
         let ctx = make_ctx();
-        let repo = MockWorkflowRepo::new();
+        let brief = make_brief(ctx.step_id);
+        let mut repo = MockWorkflowRepo::new();
 
+        let step_id = ctx.step_id;
+        let wf_id = ctx.workflow_id;
+        let user_id = Uuid::new_v4();
+        let child_wf_id = Uuid::new_v4();
+
+        let mut parent_step = make_step(step_id, wf_id, "workforce");
+        parent_step.child_workflow_id = Some(child_wf_id);
+
+        // ensure_mission_brief — brief exists
+        let brief_clone = brief.clone();
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(brief_clone.clone())));
+        repo.expect_upsert_mission_brief()
+            .returning(|sid, desc, _, _, _| {
+                Ok(TaskMissionBriefRow {
+                    id: Uuid::new_v4(),
+                    step_id: sid,
+                    task_description: desc.to_string(),
+                    ..Default::default()
+                })
+            });
+        repo.expect_list_agent_roster().returning(|_| Ok(vec![]));
+        repo.expect_get_workflow()
+            .returning(move |_| Ok(Some(make_workflow(wf_id, user_id))));
+        let parent_step_clone = parent_step.clone();
+        repo.expect_get_step()
+            .returning(move |_| Ok(Some(parent_step_clone.clone())));
+        repo.expect_create_step().returning(|s| Ok(s));
+        repo.expect_add_roster_agent()
+            .returning(|bid, name, role, caps, order| {
+                Ok(TaskAgentRosterRow {
+                    id: Uuid::new_v4(),
+                    mission_brief_id: bid,
+                    name: name.to_string(),
+                    role_description: role.to_string(),
+                    capabilities: caps.to_vec(),
+                    execution_order: order,
+                    ..Default::default()
+                })
+            });
+        repo.expect_link_roster_agent_to_child_step()
+            .returning(|_, _| Ok(()));
+        repo.expect_list_edges().returning(|_| Ok(vec![]));
+        repo.expect_list_steps().returning(|_| Ok(vec![]));
+        repo.expect_update_roster_agent_order()
+            .returning(|_, _| Ok(()));
+
+        // Duplicate names should be deduped (last wins), not rejected
         let input = json!({
             "task": "Scan repos",
             "agents": [
@@ -998,16 +1047,22 @@ mod tests {
         });
         let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
 
-        assert!(result["error"]
-            .as_str()
-            .unwrap()
-            .contains("Duplicate agent name"));
+        assert!(result.get("error").is_none(), "Expected success, got: {result}");
+        let agents = result["agents"].as_array().unwrap();
+        // Only one agent (deduped from two "Scanner"/"scanner" entries)
+        assert_eq!(agents.len(), 1);
     }
 
     #[tokio::test]
     async fn configure_team_dependency_unknown_agent_returns_error() {
         let ctx = make_ctx();
-        let repo = MockWorkflowRepo::new();
+        let brief = make_brief(ctx.step_id);
+        let mut repo = MockWorkflowRepo::new();
+
+        // ensure_mission_brief runs before dependency validation now
+        let brief_clone = brief.clone();
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(brief_clone.clone())));
 
         let input = json!({
             "task": "Scan repos",
@@ -1026,7 +1081,13 @@ mod tests {
     #[tokio::test]
     async fn configure_team_self_dependency_returns_error() {
         let ctx = make_ctx();
-        let repo = MockWorkflowRepo::new();
+        let brief = make_brief(ctx.step_id);
+        let mut repo = MockWorkflowRepo::new();
+
+        // ensure_mission_brief runs before dependency validation now
+        let brief_clone = brief.clone();
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(brief_clone.clone())));
 
         let input = json!({
             "task": "Scan repos",
