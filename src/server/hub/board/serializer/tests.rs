@@ -1341,8 +1341,15 @@ mod tests {
 
         let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());
 
-        assert!(result.noise.is_empty(), "sketch-only update should not be noise");
-        assert_eq!(result.meaningful.len(), 1, "sketch-only update should be meaningful");
+        assert!(
+            result.noise.is_empty(),
+            "sketch-only update should not be noise"
+        );
+        assert_eq!(
+            result.meaningful.len(),
+            1,
+            "sketch-only update should be meaningful"
+        );
 
         match &result.meaningful[0] {
             ScoredChange::UpdatedNode {
@@ -1363,7 +1370,10 @@ mod tests {
             other => panic!("expected UpdatedNode, got {other:?}"),
         }
 
-        assert!(result.should_dispatch, "sketch-only update should trigger dispatch");
+        assert!(
+            result.should_dispatch,
+            "sketch-only update should trigger dispatch"
+        );
     }
 
     // ========================================================================
