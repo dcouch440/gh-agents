@@ -186,7 +186,12 @@ fn to_pixel(x: f64, y: f64, bbox: &StrokeBBox, scale: f64, padding: u32) -> (i32
 /// Subdivide an outline polygon using quadratic bezier midpoint interpolation.
 ///
 /// Matches the frontend's `outlineToPath.ts` which uses `quadraticCurveTo`
-/// with midpoints between consecutive outline points.
+/// with midpoints between consecutive outline points as an open path:
+///
+///   moveTo(outline[0])
+///   for i in 1..n-1: quadraticCurveTo(outline[i], mid(outline[i], outline[i+1]))
+///   lineTo(outline[n-1])
+///   closePath()   // implicit straight line back to start
 fn subdivide_outline(outline: &[[f64; 2]], segments_per_curve: usize) -> Vec<[f64; 2]> {
     if outline.len() < 3 {
         return outline.to_vec();
@@ -195,26 +200,30 @@ fn subdivide_outline(outline: &[[f64; 2]], segments_per_curve: usize) -> Vec<[f6
     let n = outline.len();
     let mut result = Vec::with_capacity(n * segments_per_curve);
 
-    for i in 0..n {
-        let p0 = outline[i];
-        let p1 = outline[(i + 1) % n];
-        let p2 = outline[(i + 2) % n];
+    // Start at outline[0] (the moveTo)
+    let mut cursor = outline[0];
+    result.push(cursor);
 
-        // Midpoint between p1 and p2 is the "end" of this curve segment
-        let mid = [(p1[0] + p2[0]) * 0.5, (p1[1] + p2[1]) * 0.5];
+    // For i = 1..n-2: quadratic bezier from cursor through outline[i] to midpoint
+    for i in 1..n - 1 {
+        let ctrl = outline[i];
+        let next = outline[i + 1];
+        let end = [(ctrl[0] + next[0]) * 0.5, (ctrl[1] + next[1]) * 0.5];
 
-        // Start from midpoint between p0 and p1
-        let start = [(p0[0] + p1[0]) * 0.5, (p0[1] + p1[1]) * 0.5];
-
-        // Quadratic bezier from start through p1 to mid
-        for s in 0..segments_per_curve {
+        // Subdivide quadratic bezier: cursor -> ctrl -> end
+        for s in 1..=segments_per_curve {
             let t = s as f64 / segments_per_curve as f64;
             let inv = 1.0 - t;
-            let x = inv * inv * start[0] + 2.0 * inv * t * p1[0] + t * t * mid[0];
-            let y = inv * inv * start[1] + 2.0 * inv * t * p1[1] + t * t * mid[1];
+            let x = inv * inv * cursor[0] + 2.0 * inv * t * ctrl[0] + t * t * end[0];
+            let y = inv * inv * cursor[1] + 2.0 * inv * t * ctrl[1] + t * t * end[1];
             result.push([x, y]);
         }
+
+        cursor = end;
     }
+
+    // lineTo last point (closePath back to start is implicit for scanline fill)
+    result.push(outline[n - 1]);
 
     result
 }
