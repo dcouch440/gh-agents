@@ -26,14 +26,15 @@ mod tests {
         assert!(!tool_names.contains(&"update_plan"));
         assert!(tool_names.contains(&"complete_task"));
 
-        // Must include workforce tools
-        assert!(tool_names.contains(&"set_task"));
-        assert!(tool_names.contains(&"add_agent"));
-        assert!(tool_names.contains(&"update_agent"));
-        assert!(tool_names.contains(&"remove_agent"));
-        assert!(tool_names.contains(&"set_dependency"));
-        assert!(tool_names.contains(&"remove_dependency"));
-        assert!(tool_names.contains(&"set_capabilities"));
+        // Must include configure_team (only workforce tool)
+        assert!(tool_names.contains(&"configure_team"));
+        // Granular tools removed — configure_team handles everything
+        assert!(!tool_names.contains(&"set_task"));
+        assert!(!tool_names.contains(&"add_agent"));
+        assert!(!tool_names.contains(&"remove_agent"));
+        assert!(!tool_names.contains(&"set_dependency"));
+        assert!(!tool_names.contains(&"remove_dependency"));
+        assert!(!tool_names.contains(&"set_capabilities"));
     }
 
     #[test]
@@ -87,7 +88,7 @@ mod tests {
             "name": "researcher",
         });
 
-        broadcast::broadcast_step_event(&state, Some(&ctx), None, "add_agent", &input, &result);
+        broadcast::broadcast_step_event(&state, Some(&ctx), None, "configure_team", &input, &result);
 
         let envelope = rx.try_recv().unwrap();
         assert_eq!(envelope.topic, Topic::Workflow);
@@ -131,7 +132,7 @@ mod tests {
         let input = serde_json::json!({});
         let result = serde_json::json!({ "error": "Missing required parameter" });
 
-        broadcast::broadcast_step_event(&state, Some(&ctx), None, "add_agent", &input, &result);
+        broadcast::broadcast_step_event(&state, Some(&ctx), None, "configure_team", &input, &result);
 
         assert!(rx.try_recv().is_err());
     }
@@ -146,7 +147,7 @@ mod tests {
         let input = serde_json::json!({ "description": "Scan repos" });
         let result = serde_json::json!({ "status": "ok" });
 
-        broadcast::broadcast_step_event(&state, Some(&ctx), None, "set_task", &input, &result);
+        broadcast::broadcast_step_event(&state, Some(&ctx), None, "configure_team", &input, &result);
 
         let envelope = rx.try_recv().unwrap();
         let value: serde_json::Value = serde_json::from_str(&envelope.json).unwrap();

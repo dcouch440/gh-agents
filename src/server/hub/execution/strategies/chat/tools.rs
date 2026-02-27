@@ -75,13 +75,6 @@ pub(crate) fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
     let archetype_specific: &[&str] = match execution_mode {
         "workforce" => &[
             "configure_team",
-            "set_task",
-            "add_agent",
-            "update_agent",
-            "remove_agent",
-            "set_dependency",
-            "remove_dependency",
-            "set_capabilities",
         ],
         _ => &[],
     };
@@ -155,13 +148,6 @@ pub(super) async fn dispatch_step_tool(
         "workforce" => {
             const WORKFORCE_TOOLS: &[&str] = &[
                 "configure_team",
-                "set_task",
-                "add_agent",
-                "update_agent",
-                "remove_agent",
-                "set_dependency",
-                "remove_dependency",
-                "set_capabilities",
             ];
             if WORKFORCE_TOOLS.contains(&name) {
                 let tool_ctx = crate::server::tools::workforce::WorkforceToolContext {

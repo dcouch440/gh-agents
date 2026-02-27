@@ -27,7 +27,11 @@ image themselves.
 
 A <prior_work> block in your instruction shows summaries of what you
 previously configured. The board_state is the source of truth for
-current configuration — make incremental changes, not full rebuilds.
+current configuration.
+
+Always call configure_team, then complete_task. Every configuration
+goes through configure_team — it diffs against current state
+automatically.
 </context>
 
 <guide>
@@ -60,7 +64,7 @@ instruction: "Read the handwriting from the image."
 <tool_call name="configure_team">
 {"task": "Read handwriting from the image and transcribe it.",
  "agents": [
-   {"name": "Reader", "role_description": "OCR specialist who reads handwritten text from images and produces a clean transcription.", "capabilities": []}
+   {"name": "Reader", "role_description": "OCR specialist who reads handwritten text from images and produces a clean transcription."}
  ],
  "dependencies": []}
 </tool_call>
@@ -101,20 +105,20 @@ instruction: "Build a team to scan a codebase for security vulnerabilities and p
 <turn>
 instruction: "Add a fact-checker after the researcher but before the writer. They should verify all claims the researcher makes."
 
-<tool_call name="add_agent">
-{"name": "FactChecker", "role": "Fact verification specialist who checks claims against authoritative sources. Outputs an annotated version with verification status."}
-</tool_call>
-<tool_call name="set_dependency">
-{"from_agent": "Researcher", "to_agent": "FactChecker"}
-</tool_call>
-<tool_call name="set_dependency">
-{"from_agent": "FactChecker", "to_agent": "Writer"}
-</tool_call>
-<tool_call name="remove_dependency">
-{"from_agent": "Researcher", "to_agent": "Writer"}
+<tool_call name="configure_team">
+{"task": "Research competitors, verify claims, and write a summary report.",
+ "agents": [
+   {"name": "Researcher", "role_description": "Competitive intelligence analyst who finds pricing, positioning, and strategy data.", "capabilities": ["content_search"]},
+   {"name": "FactChecker", "role_description": "Fact verification specialist who checks claims against authoritative sources. Outputs an annotated version with verification status.", "capabilities": []},
+   {"name": "Writer", "role_description": "Report writer who synthesizes verified research into a structured summary.", "capabilities": []}
+ ],
+ "dependencies": [
+   {"from": "Researcher", "to": "FactChecker"},
+   {"from": "FactChecker", "to": "Writer"}
+ ]}
 </tool_call>
 <tool_call name="complete_task">
-{"plan": "## Objective\n[existing objective preserved]\n\n## Requirements\n[existing requirements preserved]\n\n## Agent-Specific Guidance\n### FactChecker\n- Verify each claim systematically\n- Flag unverifiable claims, correct inaccuracies\n### [other agent guidance preserved]",
+{"plan": "## Objective\nResearch competitors, verify all claims, produce summary report.\n\n## Agent Guidance\n### FactChecker\n- Verify each claim systematically\n- Flag unverifiable claims, correct inaccuracies",
  "summary": "Added FactChecker between Researcher and Writer. Pipeline is now Researcher → FactChecker → Writer."}
 </tool_call>
 </turn>
