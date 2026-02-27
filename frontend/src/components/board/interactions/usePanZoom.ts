@@ -24,18 +24,19 @@ const usePanZoom = (
     e.preventDefault()
 
     if (e.ctrlKey || e.metaKey) {
+      // Read DOM values before the updater — React nullifies e.currentTarget after the handler returns
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+      const cursorX = e.clientX - rect.left
+      const cursorY = e.clientY - rect.top
+      const deltaY = e.deltaY
+
       // Zoom centered on cursor
       setViewport((v) => {
         const newZoom = Geometry.clamp(
-          v.zoom * (1 - e.deltaY * BOARD.ZOOM_SPEED),
+          v.zoom * (1 - deltaY * BOARD.ZOOM_SPEED),
           BOARD.MIN_ZOOM,
           BOARD.MAX_ZOOM,
         )
-
-        // Adjust pan to keep the cursor point fixed
-        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-        const cursorX = e.clientX - rect.left
-        const cursorY = e.clientY - rect.top
 
         const scale = newZoom / v.zoom
         const panX = cursorX - (cursorX - v.panX) * scale

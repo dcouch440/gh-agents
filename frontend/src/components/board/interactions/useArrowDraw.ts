@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { useCallback } from 'react'
+import { undoStore } from '@/stores/undoStore'
 import { anchorToFocus, computeGeometricFocus } from '../arrows'
 import type { AnchorPoint, BoardElements, InteractionMode, ViewportState } from '../elements'
 import { addArrow, containerEventToCanvas, createArrow, hasArrow, hitTestBox } from '../elements'
@@ -54,6 +55,7 @@ const useArrowDraw = (
       const targetBox = elements.boxes.get(targetBoxId)
       const sourceBox = elements.boxes.get(interaction.sourceBoxId)
       if (targetBox !== undefined && sourceBox !== undefined && !hasArrow(elements, interaction.sourceBoxId, targetBoxId)) {
+        undoStore.push('draw-arrow')
         const sourceFocus = computeGeometricFocus(sourceBox, targetBox)
         const targetFocus = computeGeometricFocus(targetBox, sourceBox)
         const arrow = createArrow(

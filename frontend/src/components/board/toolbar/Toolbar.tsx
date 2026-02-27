@@ -12,7 +12,11 @@ import GestureIcon from '@mui/icons-material/Gesture'
 import ZoomInIcon from '@mui/icons-material/ZoomIn'
 import ZoomOutIcon from '@mui/icons-material/ZoomOut'
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong'
+import UndoIcon from '@mui/icons-material/Undo'
+import RedoIcon from '@mui/icons-material/Redo'
 import Divider from '@mui/material/Divider'
+import { useStore } from '@/stores'
+import { undoStore } from '@/stores/undoStore'
 import type { ActiveTool } from '../elements'
 
 type ToolbarProps = {
@@ -24,6 +28,9 @@ type ToolbarProps = {
 }
 
 function Toolbar({ activeTool, onToolChange, onZoomIn, onZoomOut, onResetZoom }: ToolbarProps) {
+  const canUndo = useStore(undoStore.store, undoStore.selectCanUndo)
+  const canRedo = useStore(undoStore.store, undoStore.selectCanRedo)
+
   return (
     <Paper
       elevation={2}
@@ -68,6 +75,11 @@ function Toolbar({ activeTool, onToolChange, onZoomIn, onZoomOut, onResetZoom }:
 
       <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 
+      <ToolButton icon={<UndoIcon fontSize="small" />} tooltip="Undo (Cmd+Z)" onClick={undoStore.undo} disabled={!canUndo} />
+      <ToolButton icon={<RedoIcon fontSize="small" />} tooltip="Redo (Cmd+Shift+Z)" onClick={undoStore.redo} disabled={!canRedo} />
+
+      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+
       <ToolButton icon={<ZoomInIcon fontSize="small" />} tooltip="Zoom in" onClick={onZoomIn} />
       <ToolButton icon={<ZoomOutIcon fontSize="small" />} tooltip="Zoom out" onClick={onZoomOut} />
       <ToolButton icon={<CenterFocusStrongIcon fontSize="small" />} tooltip="Reset zoom" onClick={onResetZoom} />
@@ -81,23 +93,27 @@ type ToolButtonProps = {
   readonly icon: React.ReactNode
   readonly tooltip: string
   readonly active?: boolean
+  readonly disabled?: boolean
   readonly onClick: () => void
 }
 
-function ToolButton({ icon, tooltip, active = false, onClick }: ToolButtonProps) {
+function ToolButton({ icon, tooltip, active = false, disabled = false, onClick }: ToolButtonProps) {
   return (
     <Tooltip title={tooltip} arrow>
-      <IconButton
-        size="small"
-        onClick={onClick}
-        sx={{
-          color: active ? 'primary.main' : 'text.secondary',
-          backgroundColor: active ? 'action.selected' : 'transparent',
-          '&:hover': { backgroundColor: 'action.hover' },
-        }}
-      >
-        {icon}
-      </IconButton>
+      <span>
+        <IconButton
+          size="small"
+          onClick={onClick}
+          disabled={disabled}
+          sx={{
+            color: active ? 'primary.main' : 'text.secondary',
+            backgroundColor: active ? 'action.selected' : 'transparent',
+            '&:hover': { backgroundColor: 'action.hover' },
+          }}
+        >
+          {icon}
+        </IconButton>
+      </span>
     </Tooltip>
   )
 }

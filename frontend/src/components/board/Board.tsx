@@ -3,6 +3,8 @@ import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import type { Point } from '@/utils/geometry'
 import { boardStore, workflowStore, sidebarStore, useStore } from '@/stores'
+import { boardElementStore } from '@/stores/boardElementStore'
+import { undoStore } from '@/stores/undoStore'
 import { useWorkflowRun } from '@/components/canvas/useWorkflowRun'
 import { useBoardTheme, useBoardSubmit, useBoardElements, useDispatchHistory, useActivityHistory } from './hooks'
 import { BoardContextMenu } from './BoardContextMenu'
@@ -11,11 +13,10 @@ import { SubmitBar } from './SubmitBar'
 import { DispatchPanel } from './dispatch'
 import { Canvas2D } from './canvas'
 import { Toolbar } from './toolbar'
-import { useHistory } from './history'
 import { useArrowDraw, useDrag, useKeyboard, usePanZoom, usePenDraw, useResize, useSelection, EMPTY_SELECTION } from './interactions'
 import { BOARD } from './constants'
-import type { ActiveTool, AnchorPoint, BoardElements, DrawingArrow, DrawingBox, DrawingPen, InteractionMode, ResizeHandle, SelectionState, ViewportState } from './elements'
-import { addBox, containerEventToCanvas, createBox, createBoxWithSize, emptyBoard, hitTest, removeElements, selectAllIds, updateBoxText } from './elements'
+import type { ActiveTool, AnchorPoint, DrawingArrow, DrawingBox, DrawingPen, InteractionMode, ResizeHandle, SelectionState, ViewportState } from './elements'
+import { addBox, containerEventToCanvas, createBox, createBoxWithSize, hitTest, removeElements, selectAllIds, updateBoxText } from './elements'
 
 type BoardProps = {
   readonly workflowId: string
@@ -29,7 +30,8 @@ type BoardProps = {
  */
 function Board({ workflowId }: BoardProps) {
   // ── State ────────────────────────────────────────────────────────────────
-  const [elements, setElements] = useState<BoardElements>(emptyBoard)
+  const elements = useStore(boardElementStore.store, boardElementStore.selectElements)
+  const setElements = boardElementStore.setElements
   const [selection, setSelection] = useState<SelectionState>(EMPTY_SELECTION)
   const [interaction, setInteraction] = useState<InteractionMode>({ type: 'idle' })
   const [viewport, setViewport] = useState<ViewportState>({ panX: 0, panY: 0, zoom: 1 })
@@ -40,9 +42,8 @@ function Board({ workflowId }: BoardProps) {
 
   // ── Hooks ────────────────────────────────────────────────────────────────
   const theme = useBoardTheme()
-  const { loading } = useBoardElements(workflowId, setElements)
-  const { handleSubmit, isSubmitting, error, status } = useBoardSubmit(workflowId, elements)
-  const history = useHistory(elements)
+  const { loading } = useBoardElements(workflowId)
+  const { handleSubmit, isSubmitting, error, status } = useBoardSubmit(workflowId)
 
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
   const entryStep = useMemo(() => {
@@ -82,7 +83,7 @@ function Board({ workflowId }: BoardProps) {
   const resize = useResize(setElements, setInteraction, viewport, containerRef)
   const penDraw = usePenDraw(setElements, setInteraction, viewport, containerRef)
   const sel = useSelection(setSelection)
-  useKeyboard(elements, setElements, selection, setSelection, interaction, setInteraction, history, syncDeletedElements, setActiveTool)
+  useKeyboard(elements, setElements, selection, setSelection, interaction, setInteraction, syncDeletedElements, setActiveTool)
 
   // ── Derived state ────────────────────────────────────────────────────────
   const editingBoxId = interaction.type === 'editing' ? interaction.boxId : null
@@ -102,12 +103,12 @@ function Board({ workflowId }: BoardProps) {
     : null
 
   const createBoxAtPoint = useCallback((point: Point) => {
-    history.push(elements)
+    undoStore.push('create-box')
     const box = createBox(point.x - BOARD.DEFAULT_BOX_WIDTH / 2, point.y - BOARD.DEFAULT_BOX_HEIGHT / 2)
     setElements((s) => addBox(s, box))
     setInteraction({ type: 'editing', boxId: box.id })
     sel.selectElement(box.id, false)
-  }, [elements, history, sel])
+  }, [sel, setElements])
 
   // ── Event handlers ─────────────────────────────────────────────────────
 
@@ -178,11 +179,12 @@ function Board({ workflowId }: BoardProps) {
       return
     } else if (interaction.type === 'dragging') {
       drag.onDragEnd()
+      undoStore.commit()
     } else if (interaction.type === 'drawing-box') {
       const dx = Math.abs(interaction.cursorX - interaction.startX)
       const dy = Math.abs(interaction.cursorY - interaction.startY)
 
-      history.push(elements)
+      undoStore.push('draw-box')
 
       // Tiny drag — treat as click, use default size
       if (dx < 5 && dy < 5) {
@@ -211,10 +213,11 @@ function Board({ workflowId }: BoardProps) {
       arrowDraw.onArrowEnd(e, interaction, elements)
     } else if (interaction.type === 'resizing') {
       resize.onResizeEnd()
+      undoStore.commit()
     } else if (interaction.type === 'panning') {
       setInteraction({ type: 'idle' })
     }
-  }, [arrowDraw, drag, elements, history, interaction, penDraw, resize, sel])
+  }, [arrowDraw, drag, elements, interaction, penDraw, resize, sel, setElements])
 
   const handleDoubleClick = useCallback((e: React.MouseEvent) => {
     const canvas = containerEventToCanvas(containerRef, e, viewport)
@@ -223,6 +226,7 @@ function Board({ workflowId }: BoardProps) {
     // Check if we hit an existing box
     const hitId = hitTest(elements, canvas)
     if (hitId !== null && elements.boxes.has(hitId)) {
+      undoStore.beginTransaction('edit-text')
       setInteraction({ type: 'editing', boxId: hitId })
       return
     }
@@ -234,32 +238,34 @@ function Board({ workflowId }: BoardProps) {
   const handleBoxPointerDown = useCallback((boxId: string, e: React.PointerEvent) => {
     e.stopPropagation()
     sel.selectElement(boxId, e.shiftKey)
-    history.push(elements)
+    undoStore.beginTransaction('move')
     drag.onDragStart(boxId, e, elements)
-  }, [drag, elements, history, sel])
+  }, [drag, elements, sel])
 
   const handleBoxDoubleClick = useCallback((boxId: string) => {
+    undoStore.beginTransaction('edit-text')
     setInteraction({ type: 'editing', boxId })
   }, [])
 
   const handleBoxBlur = useCallback((boxId: string) => {
     if (interaction.type === 'editing' && interaction.boxId === boxId) {
+      undoStore.commit()
       setInteraction({ type: 'idle' })
     }
   }, [interaction])
 
   const handleBoxTextChange = useCallback((boxId: string, text: string, width: number, height: number) => {
     setElements((s) => updateBoxText(s, boxId, text, width, height))
-  }, [])
+  }, [setElements])
 
   const handleAnchorPointerDown = useCallback((boxId: string, anchor: AnchorPoint, e: React.PointerEvent) => {
     arrowDraw.onArrowStart(boxId, anchor, e)
   }, [arrowDraw])
 
   const handleResizePointerDown = useCallback((boxId: string, handle: ResizeHandle, e: React.PointerEvent) => {
-    history.push(elements)
+    undoStore.beginTransaction('resize')
     resize.onResizeStart(boxId, handle, e, elements)
-  }, [elements, history, resize])
+  }, [elements, resize])
 
   // ── Context menu handlers ──────────────────────────────────────────────
 
@@ -270,14 +276,14 @@ function Board({ workflowId }: BoardProps) {
   const handleContextMenuDelete = useCallback(() => {
     const elementId = contextMenu?.elementId
     if (elementId === null || elementId === undefined) return
-    history.push(elements)
+    undoStore.push('delete')
     const ids = selection.selectedIds.has(elementId)
       ? selection.selectedIds
       : new Set([elementId])
     setElements((s) => removeElements(s, ids))
     syncDeletedElements(ids)
     setSelection(() => EMPTY_SELECTION)
-  }, [contextMenu, elements, history, selection.selectedIds, syncDeletedElements])
+  }, [contextMenu, selection.selectedIds, setElements, syncDeletedElements])
 
   const handleContextMenuSelectAll = useCallback(() => {
     setSelection(() => ({ selectedIds: selectAllIds(elements), marquee: null }))
