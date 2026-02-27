@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::db::{AgentRow, WorkflowStepRow};
 use crate::execution::{ContainerHandle, ExecutionContext};
-use crate::llm::{Message, TokenUsage, Tool};
+use crate::llm::{ContentBlock, Message, TokenUsage, Tool};
 use crate::server::state::AppState;
 use crate::server::tools::execution as execution_tools;
 use crate::types::UserId;
@@ -45,6 +45,8 @@ pub struct DagStepConfig {
     pub user_id: Uuid,
     /// Agent execution ID (created before calling the engine).
     pub agent_execution_id: Uuid,
+    /// Base64-encoded PNG of pen strokes for vision-capable LLMs.
+    pub board_context_image: Option<String>,
 }
 
 /// Strategy for DAG workflow step execution.
@@ -108,8 +110,19 @@ impl ExecutionStrategy for DagStepStrategy {
     }
 
     async fn build_messages(&self, _input: &str) -> Result<Vec<Message>, HubError> {
-        // DAG steps use the pre-composed user prompt, not the raw input
-        Ok(vec![Message::user(&self.config.user_prompt)])
+        // DAG steps use the pre-composed user prompt, not the raw input.
+        // When a stroke image is available, send as multimodal (text + image).
+        if let Some(ref image_data) = self.config.board_context_image {
+            let blocks = vec![
+                ContentBlock::Text {
+                    text: self.config.user_prompt.clone(),
+                },
+                ContentBlock::image_png_base64(image_data.clone()),
+            ];
+            Ok(vec![Message::user_with_blocks(blocks)])
+        } else {
+            Ok(vec![Message::user(&self.config.user_prompt)])
+        }
     }
 
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {

@@ -296,4 +296,46 @@ mod tests {
             _ => panic!("expected ToolUse content block"),
         }
     }
+
+    // ── ContentBlock::Image ─────────────────────────────────────────
+
+    #[test]
+    fn image_content_block_serializes_for_anthropic_api() {
+        let block = ContentBlock::image_png_base64("iVBORw0KGgo".to_string());
+        let json = serde_json::to_value(&block).unwrap();
+        assert_eq!(json["type"], "image");
+        assert_eq!(json["source"]["type"], "base64");
+        assert_eq!(json["source"]["media_type"], "image/png");
+        assert_eq!(json["source"]["data"], "iVBORw0KGgo");
+    }
+
+    #[test]
+    fn image_content_block_roundtrips() {
+        let block = ContentBlock::image_png_base64("AAAA".to_string());
+        let json = serde_json::to_string(&block).unwrap();
+        let parsed: ContentBlock = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, block);
+    }
+
+    #[test]
+    fn user_message_with_text_and_image_blocks() {
+        let msg = Message::user_with_blocks(vec![
+            ContentBlock::Text {
+                text: "Describe this sketch:".to_string(),
+            },
+            ContentBlock::image_png_base64("iVBOR".to_string()),
+        ]);
+        let json = serde_json::to_value(&msg).unwrap();
+        assert_eq!(json["role"], "user");
+        let content = json["content"].as_array().unwrap();
+        assert_eq!(content.len(), 2);
+        assert_eq!(content[0]["type"], "text");
+        assert_eq!(content[1]["type"], "image");
+    }
+
+    #[test]
+    fn image_estimated_chars_returns_data_length() {
+        let block = ContentBlock::image_png_base64("ABCDEF".to_string());
+        assert_eq!(block.estimated_chars(), 6);
+    }
 }

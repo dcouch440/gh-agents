@@ -120,6 +120,14 @@ impl Message {
         }
     }
 
+    /// Create a user message with structured content blocks (text + images).
+    pub fn user_with_blocks(blocks: Vec<ContentBlock>) -> Self {
+        Self {
+            role: Role::User,
+            content: MessageContent::Blocks(blocks),
+        }
+    }
+
     /// Create a user message containing tool results.
     pub fn tool_results(results: Vec<ContentBlock>) -> Self {
         Self {
@@ -239,7 +247,7 @@ pub struct Tool {
     pub input_schema: serde_json::Value,
 }
 
-/// A content block in an LLM response (text or tool use)
+/// A content block in an LLM message (text, tool use, tool result, or image).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentBlock {
@@ -256,9 +264,42 @@ pub enum ContentBlock {
         tool_use_id: String,
         content: String,
     },
+    /// Image content for vision-capable models.
+    ///
+    /// Serializes to Anthropic format by default via serde tags. The xAI adapter
+    /// handles its own serialization in `convert_message`.
+    Image { source: ImageSource },
+}
+
+/// Image source data for vision content blocks.
+///
+/// Serializes to Anthropic's format:
+/// ```json
+/// { "type": "base64", "media_type": "image/png", "data": "..." }
+/// ```
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ImageSource {
+    /// Source type — always `"base64"` for inline images.
+    #[serde(rename = "type")]
+    pub source_type: String,
+    /// MIME type (e.g. `"image/png"`).
+    pub media_type: String,
+    /// Base64-encoded image bytes.
+    pub data: String,
 }
 
 impl ContentBlock {
+    /// Create an image content block from base64-encoded PNG data.
+    pub fn image_png_base64(data: String) -> Self {
+        ContentBlock::Image {
+            source: ImageSource {
+                source_type: "base64".to_string(),
+                media_type: "image/png".to_string(),
+                data,
+            },
+        }
+    }
+
     /// Estimate the character count of this content block.
     pub fn estimated_chars(&self) -> usize {
         match self {
@@ -270,6 +311,7 @@ impl ContentBlock {
                 tool_use_id,
                 content,
             } => tool_use_id.len() + content.len(),
+            ContentBlock::Image { source } => source.data.len(),
         }
     }
 }

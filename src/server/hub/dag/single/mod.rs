@@ -253,6 +253,9 @@ pub(crate) async fn run_step_via_engine(
         run_id: dag.ctx.run_id,
         user_id: dag.ctx.user_id,
         agent_execution_id: ae_row.id,
+        board_context_image: super::pipeline::rasterize_stroke_image_from_context(
+            &step.board_context_cache,
+        ),
     };
     let strategy = DagStepStrategy::new(config, dag.state.clone());
 

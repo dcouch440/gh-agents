@@ -154,6 +154,7 @@ mod tests {
             annotations: vec![],
             sketch: None,
             stroke_encoding: None,
+            stroke_png_base64: None,
         }
     }
 
@@ -1125,6 +1126,7 @@ mod tests {
             new_annotations: vec![],
             sketch: None,
             stroke_encoding: None,
+            stroke_png_base64: None,
         }
     }
 
@@ -1143,6 +1145,7 @@ mod tests {
             new_annotations: new_ann.into_iter().map(String::from).collect(),
             sketch: None,
             stroke_encoding: None,
+            stroke_png_base64: None,
         }
     }
 
@@ -1337,6 +1340,7 @@ mod tests {
             stroke_encoding: Some(
                 r#"{"canvas":[100,100],"strokes":[{"points":[[10,20],[30,40]]}]}"#.to_string(),
             ),
+            stroke_png_base64: None,
         }];
 
         let result = filter_changeset(&changeset, &[], None, &FilterConfig::default());

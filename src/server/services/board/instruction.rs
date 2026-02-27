@@ -35,6 +35,9 @@ pub struct NodeDispatchInstruction {
     pub instruction: String,
     /// Whether this is a new node or an update.
     pub change_type: NodeChangeType,
+    /// Base64-encoded PNG of the node's pen strokes, if any.
+    /// Sent as an image content block to vision-capable LLMs.
+    pub stroke_image: Option<String>,
 }
 
 /// Build per-node dispatch instructions from a board changeset.
@@ -84,6 +87,7 @@ pub fn build_per_node_instructions(
                     execution_mode: execution_mode.to_string(),
                     instruction: format_new_node(node, &global_notes),
                     change_type: NodeChangeType::New,
+                    stroke_image: node.stroke_png_base64.clone(),
                 });
             }
             ScoredChange::UpdatedNode { update, .. } => {
@@ -98,6 +102,7 @@ pub fn build_per_node_instructions(
                     execution_mode: execution_mode.to_string(),
                     instruction: format_updated_node(update, &global_notes),
                     change_type: NodeChangeType::Updated,
+                    stroke_image: update.stroke_png_base64.clone(),
                 });
             }
             // Edges don't need builder dispatch — topology is handled by Phase 0
@@ -124,7 +129,13 @@ fn format_new_node(node: &CanvasNode, global_notes: &[&str]) -> String {
         ));
     }
 
-    if let Some(encoding) = &node.stroke_encoding {
+    // When a PNG image is available, reference it (the image block is sent separately).
+    // Otherwise fall back to text-based encoding.
+    if node.stroke_png_base64.is_some() {
+        parts.push(
+            "<sketch>\nSee the attached image of the user's pen strokes.\n</sketch>".to_string(),
+        );
+    } else if let Some(encoding) = &node.stroke_encoding {
         parts.push(format!("<sketch>\n{encoding}\n</sketch>"));
     } else if let Some(sketch) = &node.sketch {
         parts.push(format!("<sketch>\n{sketch}\n</sketch>"));
@@ -186,7 +197,11 @@ fn format_updated_node(update: &NodeUpdate, global_notes: &[&str]) -> String {
         ));
     }
 
-    if let Some(encoding) = &update.stroke_encoding {
+    if update.stroke_png_base64.is_some() {
+        parts.push(
+            "<sketch>\nSee the attached image of the user's pen strokes.\n</sketch>".to_string(),
+        );
+    } else if let Some(encoding) = &update.stroke_encoding {
         parts.push(format!("<sketch>\n{encoding}\n</sketch>"));
     } else if let Some(sketch) = &update.sketch {
         parts.push(format!("<sketch>\n{sketch}\n</sketch>"));

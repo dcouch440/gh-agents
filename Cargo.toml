@@ -35,6 +35,10 @@ toml = "0.8"
 strsim = "0.11"
 similar = "2"
 
+# Image rasterization (PNG-only for stroke → vision LLM pipeline)
+image = { version = "0.25", default-features = false, features = ["png"] }
+base64 = "0.22"
+
 # Utilities
 regex = "1"
 uuid = { version = "1", features = ["v4", "v5", "serde"] }

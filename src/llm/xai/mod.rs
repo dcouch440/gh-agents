@@ -235,6 +235,28 @@ fn function_tool_json(tool: &Tool) -> serde_json::Value {
     })
 }
 
+/// Flush accumulated content parts as a user message.
+///
+/// If all parts are text-only, emit a plain string content for efficiency.
+/// If any part is structured (e.g. images), emit the full array.
+fn flush_user_content(parts: &[serde_json::Value]) -> serde_json::Value {
+    // If all parts are input_text, join into a plain string
+    let all_text = parts
+        .iter()
+        .all(|p| p.get("type").and_then(|t| t.as_str()) == Some("input_text"));
+
+    if all_text {
+        let joined: String = parts
+            .iter()
+            .filter_map(|p| p.get("text").and_then(|t| t.as_str()))
+            .collect::<Vec<_>>()
+            .join("");
+        serde_json::json!({"role": "user", "content": joined})
+    } else {
+        serde_json::json!({"role": "user", "content": parts})
+    }
+}
+
 /// Convert an internal `Message` into Responses API input items.
 fn convert_message(msg: &Message, out: &mut Vec<serde_json::Value>) {
     match (&msg.role, &msg.content) {
@@ -278,20 +300,31 @@ fn convert_message(msg: &Message, out: &mut Vec<serde_json::Value>) {
             }
         }
         (Role::User, MessageContent::Blocks(blocks)) => {
-            let mut text_parts = Vec::new();
+            let mut content_parts: Vec<serde_json::Value> = Vec::new();
 
             for block in blocks {
                 match block {
-                    ContentBlock::Text { text } => text_parts.push(text.clone()),
+                    ContentBlock::Text { text } => {
+                        content_parts.push(serde_json::json!({
+                            "type": "input_text",
+                            "text": text
+                        }));
+                    }
+                    ContentBlock::Image { source } => {
+                        content_parts.push(serde_json::json!({
+                            "type": "input_image",
+                            "image_url": format!("data:{};base64,{}", source.media_type, source.data),
+                            "detail": "high"
+                        }));
+                    }
                     ContentBlock::ToolResult {
                         tool_use_id,
                         content,
                     } => {
-                        if !text_parts.is_empty() {
-                            out.push(
-                                serde_json::json!({"role": "user", "content": text_parts.join("")}),
-                            );
-                            text_parts.clear();
+                        // Flush accumulated content parts as a user message first
+                        if !content_parts.is_empty() {
+                            out.push(flush_user_content(&content_parts));
+                            content_parts = Vec::new();
                         }
                         out.push(serde_json::json!({
                             "type": "function_call_output",
@@ -303,8 +336,8 @@ fn convert_message(msg: &Message, out: &mut Vec<serde_json::Value>) {
                 }
             }
 
-            if !text_parts.is_empty() {
-                out.push(serde_json::json!({"role": "user", "content": text_parts.join("")}));
+            if !content_parts.is_empty() {
+                out.push(flush_user_content(&content_parts));
             }
         }
     }

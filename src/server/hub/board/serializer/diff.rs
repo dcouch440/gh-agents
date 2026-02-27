@@ -77,8 +77,9 @@ fn diff_nodes(previous: &[CanvasNode], current: &[CanvasNode]) -> NodeChanges {
             Some(prev) => {
                 let text_changed = prev.raw_text != curr.raw_text;
                 let annotations_changed = prev.annotations != curr.annotations;
-                let sketch_changed =
-                    prev.sketch != curr.sketch || prev.stroke_encoding != curr.stroke_encoding;
+                let sketch_changed = prev.sketch != curr.sketch
+                    || prev.stroke_encoding != curr.stroke_encoding
+                    || prev.stroke_png_base64 != curr.stroke_png_base64;
                 let bounds_changed = prev.bounds != curr.bounds;
 
                 if text_changed || annotations_changed || sketch_changed {
@@ -90,6 +91,7 @@ fn diff_nodes(previous: &[CanvasNode], current: &[CanvasNode]) -> NodeChanges {
                         new_annotations: curr.annotations.clone(),
                         sketch: curr.sketch.clone(),
                         stroke_encoding: curr.stroke_encoding.clone(),
+                        stroke_png_base64: curr.stroke_png_base64.clone(),
                     });
                 } else if bounds_changed {
                     moved_nodes.push(NodeMove {
