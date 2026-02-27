@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { useCallback } from 'react'
+import { undoStore } from '@/stores/undoStore'
 import { containerEventToCanvas } from '../elements'
 import type { InteractionMode, ViewportState } from '../elements'
 import { addPen, createPen } from '../elements'
@@ -53,6 +54,7 @@ const usePenDraw = (
     if (interaction.type !== 'drawing-pen') return
 
     if (interaction.points.length >= MIN_POINTS_FOR_STROKE) {
+      undoStore.push('draw-pen')
       const pen = createPen(interaction.points, interaction.pressures)
       setElements((s) => addPen(s, pen))
     }

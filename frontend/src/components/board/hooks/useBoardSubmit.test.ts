@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useBoardSubmit } from './useBoardSubmit'
 import { boardStore } from '@/stores'
+import { boardElementStore } from '@/stores/boardElementStore'
 import { INITIAL_STATE } from '@/stores/boardStore/_store'
 import { addBox, createBox, emptyBoard } from '../elements'
 
@@ -10,6 +11,7 @@ import { addBox, createBox, emptyBoard } from '../elements'
 beforeEach(() => {
   vi.clearAllMocks()
   boardStore.store.setState(INITIAL_STATE)
+  boardElementStore.replaceElements(emptyBoard())
 })
 
 // ── Tests ────────────────────────────────────────────────────────────────
@@ -20,8 +22,9 @@ describe('useBoardSubmit', () => {
 
     const box = createBox(100, 200, 'hello')
     const board = addBox(emptyBoard(), box)
+    boardElementStore.replaceElements(board)
 
-    const { result } = renderHook(() => useBoardSubmit('wf-42', board))
+    const { result } = renderHook(() => useBoardSubmit('wf-42'))
 
     act(() => { result.current.handleSubmit() })
 
@@ -38,7 +41,7 @@ describe('useBoardSubmit', () => {
     const submitSpy = vi.spyOn(boardStore, 'submitBoard').mockResolvedValue()
     boardStore.store.setState({ status: 'submitting' })
 
-    const { result } = renderHook(() => useBoardSubmit('wf-1', emptyBoard()))
+    const { result } = renderHook(() => useBoardSubmit('wf-1'))
 
     act(() => { result.current.handleSubmit() })
 
@@ -48,7 +51,7 @@ describe('useBoardSubmit', () => {
   it('submits empty array for empty board', () => {
     const submitSpy = vi.spyOn(boardStore, 'submitBoard').mockResolvedValue()
 
-    const { result } = renderHook(() => useBoardSubmit('wf-1', emptyBoard()))
+    const { result } = renderHook(() => useBoardSubmit('wf-1'))
 
     act(() => { result.current.handleSubmit() })
 
@@ -58,7 +61,7 @@ describe('useBoardSubmit', () => {
   it('exposes isSubmitting, error, and status from boardStore', () => {
     boardStore.store.setState({ status: 'error', error: 'Network failure' })
 
-    const { result } = renderHook(() => useBoardSubmit('wf-1', emptyBoard()))
+    const { result } = renderHook(() => useBoardSubmit('wf-1'))
 
     expect(result.current.isSubmitting).toBe(false)
     expect(result.current.error).toBe('Network failure')
@@ -68,7 +71,7 @@ describe('useBoardSubmit', () => {
   it('exposes isSubmitting as true during submit', () => {
     boardStore.store.setState({ status: 'submitting' })
 
-    const { result } = renderHook(() => useBoardSubmit('wf-1', emptyBoard()))
+    const { result } = renderHook(() => useBoardSubmit('wf-1'))
 
     expect(result.current.isSubmitting).toBe(true)
     expect(result.current.status).toBe('submitting')

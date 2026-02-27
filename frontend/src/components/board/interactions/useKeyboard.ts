@@ -3,9 +3,9 @@
 // ============================================================================
 
 import { useCallback, useEffect } from 'react'
+import { undoStore } from '@/stores/undoStore'
 import type { ActiveTool, BoardElements } from '../elements'
 import { removeElements, selectAllIds } from '../elements'
-import type { HistoryActions } from '../history/useHistory'
 import { EMPTY_SELECTION } from './useSelection'
 import type { SetElements, SetInteraction, SetSelection } from './types'
 
@@ -16,7 +16,6 @@ const useKeyboard = (
   setSelection: SetSelection,
   interaction: { readonly type: string },
   setInteraction: SetInteraction,
-  history: Pick<HistoryActions, 'undo' | 'redo'>,
   onDelete?: (deletedIds: ReadonlySet<string>) => void,
   setActiveTool?: (tool: ActiveTool) => void,
 ) => {
@@ -27,6 +26,7 @@ const useKeyboard = (
     // Delete selected elements
     if ((e.key === 'Delete' || e.key === 'Backspace') && selection.selectedIds.size > 0) {
       e.preventDefault()
+      undoStore.push('delete')
       setElements((s) => removeElements(s, selection.selectedIds))
       onDelete?.(selection.selectedIds)
       setSelection(() => EMPTY_SELECTION)
@@ -36,10 +36,7 @@ const useKeyboard = (
     // Undo
     if (e.key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
       e.preventDefault()
-      const prev = history.undo()
-      if (prev !== null) {
-        setElements(() => prev)
-      }
+      undoStore.undo()
       return
     }
 
@@ -49,10 +46,7 @@ const useKeyboard = (
       (e.key === 'y' && (e.ctrlKey || e.metaKey))
     ) {
       e.preventDefault()
-      const next = history.redo()
-      if (next !== null) {
-        setElements(() => next)
-      }
+      undoStore.redo()
       return
     }
 
@@ -81,7 +75,7 @@ const useKeyboard = (
       }
       return
     }
-  }, [elements, history, interaction, onDelete, selection, setActiveTool, setElements, setInteraction, setSelection])
+  }, [elements, interaction, onDelete, selection, setActiveTool, setElements, setInteraction, setSelection])
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown)
