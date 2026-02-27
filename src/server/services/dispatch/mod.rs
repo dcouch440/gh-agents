@@ -39,8 +39,6 @@ pub struct DispatchInput {
     pub instruction: String,
     /// `"manager"` for L2 builder, anything else for L4 node builder.
     pub execution_mode: String,
-    /// Base64-encoded PNG of pen strokes for vision-capable LLMs.
-    pub stroke_image: Option<String>,
 }
 
 /// Result of a successful dispatch.
@@ -85,7 +83,6 @@ pub async fn dispatch_to_builder(state: &AppState, input: DispatchInput) -> Disp
     let runner_instruction = input.instruction.clone();
     let runner_execution_id = execution_id;
     let user_id = input.user_id;
-    let stroke_image = input.stroke_image;
 
     if input.execution_mode == "manager" {
         tokio::spawn(async move {
@@ -110,7 +107,6 @@ pub async fn dispatch_to_builder(state: &AppState, input: DispatchInput) -> Disp
                 runner_instruction,
                 session_id,
                 user_id,
-                stroke_image,
             )
             .await;
         });
@@ -219,7 +215,6 @@ pub async fn execute_dispatch_to_builders_tool(
                 user_id,
                 instruction: instruction.to_string(),
                 execution_mode: step.execution_mode.clone(),
-                stroke_image: None,
             },
         )
         .await;

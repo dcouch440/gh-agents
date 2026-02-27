@@ -13,7 +13,6 @@ mod tests {
             user_id: UserId(Uuid::new_v4()),
             instruction: "Configure a 3-agent team".to_string(),
             execution_mode: "workforce".to_string(),
-            stroke_image: None,
         };
 
         assert!(!input.instruction.is_empty());

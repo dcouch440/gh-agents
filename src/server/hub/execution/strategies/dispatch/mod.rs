@@ -12,7 +12,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::config::protocols::{roles, AgentConfig, WORKFORCE_BUILDER};
-use crate::llm::{ContentBlock, Message, Tool};
+use crate::llm::{Message, Tool};
 use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::template_resolve::resolve_template;
 use crate::server::hub::strategy::ExecutionStrategy;
@@ -39,8 +39,6 @@ pub struct DispatchStrategy {
     step_id: Uuid,
     workflow_id: Uuid,
     session_id: Option<Uuid>,
-    /// Base64-encoded PNG of the node's pen strokes, if any.
-    stroke_image: Option<String>,
     /// Captured passdown from `complete_task` tool call.
     passdown: Mutex<Option<Passdown>>,
 }
@@ -85,7 +83,6 @@ impl DispatchStrategy {
         workflow_id: Uuid,
         instruction: String,
         session_id: Option<Uuid>,
-        stroke_image: Option<String>,
     ) -> Result<Self, String> {
         let board_state_xml = crate::server::hub::board_state::build(
             state.repos().workflows.as_ref(),
@@ -113,7 +110,6 @@ impl DispatchStrategy {
             step_id,
             workflow_id,
             session_id,
-            stroke_image,
             passdown: Mutex::new(None),
         })
     }
@@ -207,19 +203,7 @@ impl ExecutionStrategy for DispatchStrategy {
             self.instruction.clone()
         };
 
-        // When a stroke image is available, send as a multimodal message
-        // (text instruction + image content block).
-        if let Some(ref image_data) = self.stroke_image {
-            let blocks = vec![
-                ContentBlock::Text {
-                    text: text_instruction,
-                },
-                ContentBlock::image_png_base64(image_data.clone()),
-            ];
-            Ok(vec![Message::user_with_blocks(blocks)])
-        } else {
-            Ok(vec![Message::user(&text_instruction)])
-        }
+        Ok(vec![Message::user(&text_instruction)])
     }
 
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {

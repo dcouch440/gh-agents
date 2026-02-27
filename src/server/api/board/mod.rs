@@ -200,7 +200,6 @@ async fn dispatch_board_changes(
                 user_id,
                 instruction: node_instruction.instruction.clone(),
                 execution_mode: node_instruction.execution_mode,
-                stroke_image: node_instruction.stroke_image.clone(),
             },
         )
         .await;

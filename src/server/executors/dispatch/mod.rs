@@ -36,7 +36,6 @@ pub async fn run_dispatch_task(
     instruction: String,
     session_id: Uuid,
     user_id: UserId,
-    stroke_image: Option<String>,
 ) {
     // Get the cancel token from the registry
     let cancel_token = match state.task_registry().get_task(execution_id) {
@@ -77,7 +76,6 @@ pub async fn run_dispatch_task(
         workflow_id,
         instruction.clone(),
         Some(session_id),
-        stroke_image,
     )
     .await
     {
