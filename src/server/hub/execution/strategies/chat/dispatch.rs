@@ -46,7 +46,6 @@ async fn handle_dispatch(input: &Value, state: &AppState, ctx: &StepChatContext)
             user_id,
             instruction: instruction.to_string(),
             execution_mode: ctx.execution_mode.clone(),
-            stroke_image: None,
         },
     )
     .await;

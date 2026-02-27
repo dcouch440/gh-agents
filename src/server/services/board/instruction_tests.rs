@@ -398,10 +398,12 @@ mod tests {
         assert!(result.is_empty());
     }
 
-    // ── Sketch data ───────────────────────────────────────────────────────
+    // ── Sketch data excluded from dispatch instructions ─────────────────
+    // Sketch/stroke data is NOT sent to the dispatch agent. It goes directly
+    // to workforce agents as a PNG image at runtime.
 
     #[test]
-    fn new_node_with_stroke_encoding() {
+    fn new_node_with_stroke_encoding_excluded() {
         let step_id = Uuid::new_v4();
         let mut node = make_node("n1", "Diagram node");
         node.stroke_encoding = Some("[{\"points\":[[0,0],[10,10]]}]".to_string());
@@ -425,14 +427,11 @@ mod tests {
         let result = build_per_node_instructions(&changeset, &phase_zero, &empty_snapshot());
 
         assert_eq!(result.len(), 1);
-        assert!(result[0].instruction.contains("<sketch>"));
-        assert!(result[0].instruction.contains("points"));
+        assert!(!result[0].instruction.contains("<sketch>"));
     }
 
-    // ── Updated node: sketch data ────────────────────────────────────────
-
     #[test]
-    fn updated_node_with_stroke_encoding() {
+    fn updated_node_with_stroke_encoding_excluded() {
         let step_id = Uuid::new_v4();
 
         let changeset = FilteredChangeset {
@@ -464,8 +463,7 @@ mod tests {
         let result = build_per_node_instructions(&changeset, &phase_zero, &empty_snapshot());
 
         assert_eq!(result.len(), 1);
-        assert!(result[0].instruction.contains("<sketch>"));
-        assert!(result[0].instruction.contains("points"));
+        assert!(!result[0].instruction.contains("<sketch>"));
     }
 
     // ── Updated node: global notes ───────────────────────────────────────

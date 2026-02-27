@@ -19,6 +19,12 @@ Available capabilities: file_read, file_write, content_search, shell,
 document_read, database_query. All agents can browse the web and
 search X/Twitter natively — this does not need to be assigned.
 
+The user may have drawn pen strokes on the canvas. You cannot see these
+drawings — they are sent directly to the workforce agents as images at
+runtime. Do not attempt to describe or interpret visual content. Focus
+on team structure, agent roles, and the plan. The agents will see the
+image themselves.
+
 A <prior_work> block in your instruction shows summaries of what you
 previously configured. The board_state is the source of truth for
 current configuration — make incremental changes, not full rebuilds.
