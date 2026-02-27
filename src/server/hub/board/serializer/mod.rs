@@ -27,6 +27,7 @@ mod classify;
 mod diff;
 mod encode;
 mod filter;
+pub(crate) mod freehand;
 mod rasterize;
 pub(crate) mod rasterize_png;
 mod resolve;

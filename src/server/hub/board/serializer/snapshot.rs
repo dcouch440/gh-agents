@@ -67,29 +67,35 @@ fn build_node(
         height: node.height,
     };
 
-    // Collect strokes assigned to this node and rasterize them
-    let node_strokes: Vec<Vec<[f64; 2]>> = strokes
+    // Collect strokes assigned to this node (with pressure)
+    let node_strokes_3: Vec<Vec<[f64; 3]>> = strokes
         .iter()
         .filter(|s| s.node_id.as_deref() == Some(&node.id))
         .map(|s| s.points.clone())
         .collect();
 
-    let sketch = if node_strokes.is_empty() {
+    // Project to [x, y] for ASCII rasterizer and coordinate encoder
+    let node_strokes_2: Vec<Vec<[f64; 2]>> = node_strokes_3
+        .iter()
+        .map(|stroke| stroke.iter().map(|p| [p[0], p[1]]).collect())
+        .collect();
+
+    let sketch = if node_strokes_2.is_empty() {
         None
     } else {
-        rasterize::rasterize_strokes(&node_strokes, &bounds, RASTER_COLS, RASTER_ROWS)
+        rasterize::rasterize_strokes(&node_strokes_2, &bounds, RASTER_COLS, RASTER_ROWS)
     };
 
-    let stroke_encoding = if node_strokes.is_empty() {
+    let stroke_encoding = if node_strokes_2.is_empty() {
         None
     } else {
-        encode::encode_strokes(&node_strokes, &bounds)
+        encode::encode_strokes(&node_strokes_2, &bounds)
     };
 
-    let stroke_png_base64 = if node_strokes.is_empty() {
+    let stroke_png_base64 = if node_strokes_3.is_empty() {
         None
     } else {
-        rasterize_png::rasterize_strokes_png(&node_strokes, &bounds, 768, 10, 3)
+        rasterize_png::rasterize_strokes_png(&node_strokes_3, &bounds, 1536, 10, 5)
     };
 
     CanvasNode {

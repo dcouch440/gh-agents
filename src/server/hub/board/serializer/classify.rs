@@ -44,8 +44,8 @@ pub(crate) struct UnboundText {
 
 /// A stroke (freedraw or line) assigned to a node by bounding-box overlap.
 pub(crate) struct ClassifiedStroke {
-    /// Absolute canvas coordinates for this stroke.
-    pub points: Vec<[f64; 2]>,
+    /// Absolute canvas coordinates with pressure: [x, y, pressure].
+    pub points: Vec<[f64; 3]>,
     /// Element ID of the node this stroke is inside, or `None` if it
     /// overlaps zero or multiple nodes.
     pub node_id: Option<String>,
@@ -273,12 +273,13 @@ pub(crate) fn classify(elements: &[ExcalidrawElement]) -> ClassifiedElements {
             continue;
         }
 
-        // Convert relative points to absolute canvas coordinates
-        let abs_points: Vec<[f64; 2]> = points
+        // Convert relative points to absolute canvas coordinates, preserving pressure
+        let abs_points: Vec<[f64; 3]> = points
             .iter()
             .filter_map(|pt| {
                 if pt.len() >= 2 {
-                    Some([base_x + pt[0], base_y + pt[1]])
+                    let pressure = if pt.len() >= 3 { pt[2] } else { 0.5 };
+                    Some([base_x + pt[0], base_y + pt[1], pressure])
                 } else {
                     None
                 }
