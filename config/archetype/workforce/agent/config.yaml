@@ -1,6 +1,6 @@
 agents:
   agent:
-    model_id: "tier:2"
+    model_id: "tier:3"
     max_tokens: 8192
     temperature: 0.3
     max_rounds: 15

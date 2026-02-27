@@ -3,62 +3,52 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import { useTheme } from '@mui/material/styles'
 import { TerminalBlock } from '@/components/primitives/terminal-renderer'
-import { StatusDot } from './StatusDot'
-import { SkeletonLines } from './SkeletonLines'
 import { CELL_WIDTH, computeLines, computeContinuationLines } from './gutterLines'
 import type { GutterCell } from './buildStepTree'
-import type { StepExecutionStatus } from '@/stores/workflowExecutionStore/types'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
-type StepTreeRowProps = {
-  readonly name: string
+type AgentTreeRowProps = {
+  readonly agentName: string
   readonly stepId: string
-  readonly executionMode: string
   readonly gutter: readonly GutterCell[]
-  readonly status: StepExecutionStatus | undefined
   readonly output: string | null
-  readonly error: string | null
   readonly isExpanded: boolean
-  readonly isOutputExpanded: boolean
   readonly onToggle: () => void
-  readonly onToggleOutputExpand: () => void
 }
 
 // ── Output Preview ──────────────────────────────────────────────────────────
 
 const PREVIEW_MAX_HEIGHT = 200
 
-type OutputPreviewProps = {
+type AgentOutputPreviewProps = {
   readonly output: string
-  readonly isOutputExpanded: boolean
-  readonly onToggleOutputExpand: () => void
   readonly bgColor: string
 }
 
-function OutputPreview({ output, isOutputExpanded, onToggleOutputExpand, bgColor }: OutputPreviewProps) {
+function AgentOutputPreview({ output, bgColor }: AgentOutputPreviewProps) {
   const contentRef = useRef<HTMLDivElement>(null)
   const [overflows, setOverflows] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
 
   useEffect(() => {
     const el = contentRef.current
-    if (!el || isOutputExpanded) return
+    if (!el || isExpanded) return
     setOverflows(el.scrollHeight > el.clientHeight)
-  }, [output, isOutputExpanded])
+  }, [output, isExpanded])
 
   return (
     <Box sx={{ position: 'relative', py: 1 }}>
       <Box
         ref={contentRef}
         sx={{
-          ...(isOutputExpanded ? {} : { maxHeight: PREVIEW_MAX_HEIGHT, overflow: 'hidden' }),
+          ...(isExpanded ? {} : { maxHeight: PREVIEW_MAX_HEIGHT, overflow: 'hidden' }),
         }}
       >
         <TerminalBlock content={output} />
       </Box>
 
-      {/* Fade gradient — only when content actually overflows */}
-      {!isOutputExpanded && overflows && (
+      {!isExpanded && overflows && (
         <Box
           sx={{
             position: 'absolute',
@@ -72,13 +62,12 @@ function OutputPreview({ output, isOutputExpanded, onToggleOutputExpand, bgColor
         />
       )}
 
-      {/* Expand/collapse link — only when content overflows or already expanded */}
-      {(overflows || isOutputExpanded) && (
+      {(overflows || isExpanded) && (
         <Typography
           component="span"
           onClick={(e) => {
             e.stopPropagation()
-            onToggleOutputExpand()
+            setIsExpanded((prev) => !prev)
           }}
           sx={{
             display: 'block',
@@ -89,7 +78,7 @@ function OutputPreview({ output, isOutputExpanded, onToggleOutputExpand, bgColor
             '&:hover': { color: 'text.secondary' },
           }}
         >
-          {isOutputExpanded ? '\u25B2 collapse' : '\u25BC expand'}
+          {isExpanded ? '\u25B2 collapse' : '\u25BC expand'}
         </Typography>
       )}
     </Box>
@@ -98,24 +87,19 @@ function OutputPreview({ output, isOutputExpanded, onToggleOutputExpand, bgColor
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-function StepTreeRow({
-  name,
+function AgentTreeRow({
+  agentName,
   gutter,
-  status,
   output,
-  error,
   isExpanded,
-  isOutputExpanded,
   onToggle,
-  onToggleOutputExpand,
-}: StepTreeRowProps) {
+}: AgentTreeRowProps) {
   const theme = useTheme()
   const lines = computeLines(gutter)
   const lineColor = theme.palette.text.disabled
   const gutterWidth = gutter.length * CELL_WIDTH
 
-  const resolved = status ?? 'idle'
-  const hasBody = isExpanded && (resolved === 'running' || output !== null || error !== null)
+  const hasBody = isExpanded && output !== null
 
   return (
     <Box>
@@ -173,34 +157,30 @@ function StepTreeRow({
           {isExpanded ? '\u25BC' : '\u25B6'}
         </Typography>
 
-        {/* Step name */}
+        {/* Agent name */}
         <Typography
           variant="body2"
           sx={{
             fontSize: 12,
             fontWeight: 400,
-            color: 'text.secondary',
+            color: 'text.disabled',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             minWidth: 0,
             flex: 1,
             ml: 0.5,
+            fontStyle: 'italic',
           }}
         >
-          {name || 'Untitled'}
+          {agentName}
         </Typography>
-
-        {/* Status dot */}
-        <Box sx={{ ml: 1, flexShrink: 0 }}>
-          <StatusDot status={status} />
-        </Box>
       </Box>
 
       {/* Output body */}
       {hasBody && (
         <Box sx={{ display: 'flex', pl: '8px', mt: '-5px' }}>
-          {/* Continuation gutter — mt: -5px closes the gap left by the header's py padding */}
+          {/* Continuation gutter */}
           <Box
             sx={{
               width: gutterWidth,
@@ -226,30 +206,10 @@ function StepTreeRow({
 
           {/* Content */}
           <Box sx={{ flex: 1, minWidth: 0, pr: 1, pb: 1, ml: 1.5 }}>
-            {resolved === 'running' ? (
-              <SkeletonLines />
-            ) : error ? (
-              <Typography
-                variant="body2"
-                sx={{
-                  color: '#f85149',
-                  fontFamily: '"JetBrains Mono", monospace',
-                  fontSize: '0.75rem',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  py: 1,
-                }}
-              >
-                {error}
-              </Typography>
-            ) : output ? (
-              <OutputPreview
-                output={output}
-                isOutputExpanded={isOutputExpanded}
-                onToggleOutputExpand={onToggleOutputExpand}
-                bgColor={theme.palette.custom.bgPanel}
-              />
-            ) : null}
+            <AgentOutputPreview
+              output={output}
+              bgColor={theme.palette.custom.bgPanel}
+            />
           </Box>
         </Box>
       )}
@@ -257,5 +217,5 @@ function StepTreeRow({
   )
 }
 
-export { StepTreeRow }
-export type { StepTreeRowProps }
+export { AgentTreeRow }
+export type { AgentTreeRowProps }

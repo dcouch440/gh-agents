@@ -1,5 +1,6 @@
 import { Collections } from '@/utils/collections'
 import type { WorkflowStep, WorkflowStepEdge, RosterAgent } from '@/types/workflow'
+import { toContinuationGutter } from './gutterLines'
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -28,7 +29,14 @@ type GapEntry = {
   readonly kind: 'gap'
 }
 
-type TreeEntry = StepEntry | GapEntry
+type AgentEntry = {
+  readonly kind: 'agent'
+  readonly stepId: string
+  readonly agentName: string
+  readonly gutter: readonly GutterCell[]
+}
+
+type TreeEntry = StepEntry | GapEntry | AgentEntry
 
 // ── Graph Helpers ───────────────────────────────────────────────────────────
 
@@ -610,13 +618,13 @@ const countRemaining = (
  * `depth` + `isLast` approach and can represent forks, merges, parallel
  * branches, nested forks, and independent chains.
  *
- * `rosterByStep` is accepted for forward compatibility but currently unused
- * (sub-agent rows are deferred).
+ * `rosterByStep` provides agent rosters for workforce steps — each agent
+ * becomes a child row beneath its parent step in the tree.
  */
 const buildStepTree = (
   steps: readonly WorkflowStep[],
   edges: readonly WorkflowStepEdge[],
-  _rosterByStep: Readonly<Record<string, RosterAgent[]>>,
+  rosterByStep: Readonly<Record<string, RosterAgent[]>>,
 ): TreeEntry[] => {
   // Filter out non-visible steps (context, input) — consistent with topoSortStepIds
   const visible = Collections.filterMap(steps, (s) =>
@@ -637,13 +645,40 @@ const buildStepTree = (
     return minA - minB
   })
 
-  const result: TreeEntry[] = []
+  const stepEntries: TreeEntry[] = []
 
   for (let c = 0; c < components.length; c++) {
-    if (c > 0) result.push({ kind: 'gap' })
+    if (c > 0) stepEntries.push({ kind: 'gap' })
     const entries = linearizeComponent(components[c]!, graph)
     for (let i = 0; i < entries.length; i++) {
-      result.push(entries[i]!)
+      stepEntries.push(entries[i]!)
+    }
+  }
+
+  // Post-process: insert agent rows after workforce steps
+  const result: TreeEntry[] = []
+  for (let i = 0; i < stepEntries.length; i++) {
+    const entry = stepEntries[i]!
+    result.push(entry)
+
+    if (entry.kind !== 'step' || entry.step.execution_mode !== 'workforce') continue
+
+    const agents = rosterByStep[entry.step.id]
+    if (!agents || agents.length === 0) continue
+
+    const continuation = toContinuationGutter(entry.gutter)
+    const sorted = Collections.sortedCopy(agents, (a, b) => a.execution_order - b.execution_order)
+
+    for (let j = 0; j < sorted.length; j++) {
+      const agent = sorted[j]!
+      const isLast = j === sorted.length - 1
+      const agentGutter: GutterCell[] = [...continuation, isLast ? 'corner' : 'branch']
+      result.push({
+        kind: 'agent',
+        stepId: entry.step.id,
+        agentName: agent.name,
+        gutter: agentGutter,
+      })
     }
   }
 
@@ -651,4 +686,4 @@ const buildStepTree = (
 }
 
 export { buildStepTree }
-export type { TreeEntry, StepEntry, GapEntry, GutterCell }
+export type { TreeEntry, StepEntry, GapEntry, AgentEntry, GutterCell }

@@ -5,6 +5,33 @@ import { EmptyState } from '@/components/primitives'
 import { StepTreeRow } from './StepTreeRow'
 import { buildStepTree } from './buildStepTree'
 
+// ── Output Parsing ──────────────────────────────────────────────────────────
+
+/**
+ * For workforce steps the raw output is `{"agents":{"name":"output",...}}`.
+ * Extract the last agent's output as the step's display content.
+ * Returns the original string unchanged for non-workforce / unparseable output.
+ */
+const extractFinalOutput = (raw: string): string => {
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    if (typeof parsed !== 'object' || parsed === null) return raw
+    const agents = (parsed as Record<string, unknown>).agents
+    if (typeof agents !== 'object' || agents === null) return raw
+
+    const entries = Object.entries(agents as Record<string, unknown>)
+    if (entries.length === 0) return raw
+
+    const lastValue = entries[entries.length - 1]![1]
+    if (typeof lastValue === 'string') return lastValue
+    return JSON.stringify(lastValue, null, 2)
+  } catch {
+    return raw
+  }
+}
+
+// ── Component ───────────────────────────────────────────────────────────────
+
 function StepTree() {
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
   const edges = useStore(workflowStore.store, workflowStore.selectEdges)
@@ -28,6 +55,10 @@ function StepTree() {
           return <Box key={`gap-${String(i)}`} sx={{ height: 8 }} />
         }
 
+        if (entry.kind === 'agent') {
+          return null
+        }
+
         const stepState = stepStates[entry.step.id]
 
         return (
@@ -38,7 +69,7 @@ function StepTree() {
             executionMode={entry.step.execution_mode}
             gutter={entry.gutter}
             status={stepState?.status}
-            output={stepState?.output ?? null}
+            output={stepState?.output ? extractFinalOutput(stepState.output) : null}
             error={stepState?.error ?? null}
             isExpanded={expandedStepIds[entry.step.id] === true}
             isOutputExpanded={outputExpandedStepIds[entry.step.id] === true}
