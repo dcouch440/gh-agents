@@ -69,20 +69,31 @@ fn subdivide_outline(outline: &[Vec2]) -> Vec<Vec2> {
     let n = outline.len();
     let segs = 8;
     let mut result = Vec::with_capacity(n * segs);
-    for i in 0..n {
-        let p0 = outline[i];
-        let p1 = outline[(i + 1) % n];
-        let p2 = outline[(i + 2) % n];
-        let start = [(p0[0] + p1[0]) * 0.5, (p0[1] + p1[1]) * 0.5];
-        let mid = [(p1[0] + p2[0]) * 0.5, (p1[1] + p2[1]) * 0.5];
-        for s in 0..segs {
+
+    // Start at outline[0] (matches frontend moveTo)
+    let mut cursor = outline[0];
+    result.push(cursor);
+
+    // Quadratic bezier curves from point 1 to n-2
+    for i in 1..n - 1 {
+        let ctrl = outline[i];
+        let next = outline[i + 1];
+        let end = [(ctrl[0] + next[0]) * 0.5, (ctrl[1] + next[1]) * 0.5];
+
+        for s in 1..=segs {
             let t = s as f64 / segs as f64;
             let inv = 1.0 - t;
-            let x = inv * inv * start[0] + 2.0 * inv * t * p1[0] + t * t * mid[0];
-            let y = inv * inv * start[1] + 2.0 * inv * t * p1[1] + t * t * mid[1];
+            let x = inv * inv * cursor[0] + 2.0 * inv * t * ctrl[0] + t * t * end[0];
+            let y = inv * inv * cursor[1] + 2.0 * inv * t * ctrl[1] + t * t * end[1];
             result.push([x, y]);
         }
+
+        cursor = end;
     }
+
+    // lineTo last point (scanline fill implicitly closes back to start)
+    result.push(outline[n - 1]);
+
     result
 }
 
