@@ -4,6 +4,7 @@
 use super::classify::{ClassifiedEdge, ClassifiedElements, ClassifiedNode, ClassifiedStroke};
 use super::encode;
 use super::rasterize;
+use super::rasterize_png;
 use super::resolve::ResolvedAnnotations;
 use super::types::*;
 
@@ -85,6 +86,12 @@ fn build_node(
         encode::encode_strokes(&node_strokes, &bounds)
     };
 
+    let stroke_png_base64 = if node_strokes.is_empty() {
+        None
+    } else {
+        rasterize_png::rasterize_strokes_png(&node_strokes, &bounds, 768, 10, 3)
+    };
+
     CanvasNode {
         element_id: node.id,
         raw_text: node.text,
@@ -92,6 +99,7 @@ fn build_node(
         annotations: node_annotations,
         sketch,
         stroke_encoding,
+        stroke_png_base64,
     }
 }
 

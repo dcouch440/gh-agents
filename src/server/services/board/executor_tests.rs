@@ -40,6 +40,7 @@ mod tests {
             annotations: vec![],
             sketch: None,
             stroke_encoding: None,
+            stroke_png_base64: None,
         }
     }
 
@@ -96,6 +97,7 @@ mod tests {
                     annotations: vec!["Focus on pricing".to_string()],
                     sketch: None,
                     stroke_encoding: None,
+                    stroke_png_base64: None,
                 },
                 significance: ChangeSignificance::High,
             },
@@ -603,6 +605,7 @@ mod tests {
                 new_annotations: vec![],
                 sketch: None,
                 stroke_encoding: None,
+                stroke_png_base64: None,
             },
             significance: ChangeSignificance::High,
             token_change_ratio: 0.4,
@@ -678,6 +681,7 @@ mod tests {
                 ],
                 sketch: None,
                 stroke_encoding: None,
+                stroke_png_base64: None,
             },
             significance: ChangeSignificance::Medium,
             token_change_ratio: 0.1,
@@ -743,6 +747,7 @@ mod tests {
                 new_annotations: vec![],
                 sketch: None,
                 stroke_encoding: Some("[{\"points\":[[0,0],[10,10]]}]".to_string()),
+                stroke_png_base64: None,
             },
             significance: ChangeSignificance::High,
             token_change_ratio: 0.4,

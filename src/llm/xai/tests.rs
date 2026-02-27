@@ -293,6 +293,33 @@ mod tests {
         assert_eq!(out[2]["call_id"], "call_2");
     }
 
+    #[test]
+    fn convert_message_user_blocks_with_image() {
+        let blocks = vec![
+            ContentBlock::Text {
+                text: "Describe this sketch:".to_string(),
+            },
+            ContentBlock::image_png_base64("iVBORw0KGgo=".to_string()),
+        ];
+        let msg = Message::user_with_blocks(blocks);
+        let mut out = Vec::new();
+        convert_message(&msg, &mut out);
+
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0]["role"], "user");
+        // With images present, content must be a structured array
+        let content = out[0]["content"].as_array().unwrap();
+        assert_eq!(content.len(), 2);
+        assert_eq!(content[0]["type"], "input_text");
+        assert_eq!(content[0]["text"], "Describe this sketch:");
+        assert_eq!(content[1]["type"], "input_image");
+        assert_eq!(
+            content[1]["image_url"],
+            "data:image/png;base64,iVBORw0KGgo="
+        );
+        assert_eq!(content[1]["detail"], "high");
+    }
+
     // ── Response parsing ────────────────────────────────────────────────
 
     #[test]

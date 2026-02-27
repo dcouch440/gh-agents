@@ -151,6 +151,7 @@ pub async fn dispatch_send(
             user_id,
             instruction: body.instruction,
             execution_mode: step.execution_mode,
+            stroke_image: None,
         },
     )
     .await;

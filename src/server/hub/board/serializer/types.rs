@@ -185,6 +185,9 @@ pub struct CanvasNode {
     /// RDP-simplified JSON coordinate encoding of strokes for LLM consumption.
     /// More token-efficient than ASCII sketch (~30-100 tokens vs ~1,200).
     pub stroke_encoding: Option<String>,
+    /// Base64-encoded PNG rasterization of freeform drawings inside this node's bounds.
+    /// Used for vision-capable LLM prompts (~170 tokens per image tile).
+    pub stroke_png_base64: Option<String>,
 }
 
 /// An edge: an arrow connecting two node candidates.
@@ -258,6 +261,8 @@ pub struct NodeUpdate {
     pub sketch: Option<String>,
     /// RDP-simplified JSON coordinate encoding of strokes (current state).
     pub stroke_encoding: Option<String>,
+    /// Base64-encoded PNG of strokes (current state).
+    pub stroke_png_base64: Option<String>,
 }
 
 /// A node that moved (bounds changed) but content stayed the same.

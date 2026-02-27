@@ -28,6 +28,7 @@ mod diff;
 mod encode;
 mod filter;
 mod rasterize;
+pub(crate) mod rasterize_png;
 mod resolve;
 mod snapshot;
 pub mod types;

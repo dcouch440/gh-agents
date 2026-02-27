@@ -306,6 +306,7 @@ async fn execute_single_agent(
         state: Some(env.state.clone()),
         user_id: Some(UserId(env.ctx.user_id)),
         agent_execution_id: ae_id,
+        stroke_image: env.stroke_image.clone(),
     });
 
     // Execute with live streaming sink

@@ -12,7 +12,7 @@ use tracing::info;
 use uuid::Uuid;
 
 use crate::execution::{ContainerHandle, ExecutionContext};
-use crate::llm::{Message, TokenUsage, Tool};
+use crate::llm::{ContentBlock, Message, TokenUsage, Tool};
 use crate::server::hub::error::HubError;
 use crate::server::hub::strategies;
 use crate::server::hub::strategy::ExecutionStrategy;
@@ -46,6 +46,8 @@ pub struct WorkforceAgentConfig {
     pub user_id: Option<UserId>,
     /// Agent execution ID for message persistence and on_complete updates.
     pub agent_execution_id: Option<Uuid>,
+    /// Base64-encoded PNG of pen strokes for vision-capable LLMs.
+    pub stroke_image: Option<String>,
 }
 
 /// Strategy for executing a single agent within a workforce roster.
@@ -93,7 +95,17 @@ impl ExecutionStrategy for WorkforceAgentStrategy {
     }
 
     async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError> {
-        Ok(vec![Message::user(input)])
+        if let Some(ref image_data) = self.config.stroke_image {
+            let blocks = vec![
+                ContentBlock::Text {
+                    text: input.to_string(),
+                },
+                ContentBlock::image_png_base64(image_data.clone()),
+            ];
+            Ok(vec![Message::user_with_blocks(blocks)])
+        } else {
+            Ok(vec![Message::user(input)])
+        }
     }
 
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
