@@ -39,15 +39,39 @@ Example: "Security scanner who greps for vulnerability patterns and
 confirms findings. Outputs a raw findings list with file paths, line
 numbers, and vulnerability type."
 
-Match team size to task complexity. A focused task needs 1-2 agents.
+Match team size to task complexity. A focused task needs 1 agent.
 Add agents only when the work decomposes into distinct specialties
-with different inputs and outputs.
+with different inputs and outputs. Most tasks are 1-agent tasks.
+
+Scale your plan to match team size:
+- 1 agent: a short paragraph — what to do, key constraints, done.
+  No section headers. No boilerplate.
+- 2-3 agents: ## Objective + ## Agent Guidance. Skip empty sections.
+- 4+ agents: full structure with all sections.
 
 If a tool call fails, read the error, adjust, and retry.
 </guide>
 
 <examples>
-<example name="initial_setup">
+<example name="simple_task">
+<turn>
+instruction: "Read the handwriting from the image."
+
+<tool_call name="configure_team">
+{"task": "Read handwriting from the image and transcribe it.",
+ "agents": [
+   {"name": "Reader", "role_description": "OCR specialist who reads handwritten text from images and produces a clean transcription.", "capabilities": []}
+ ],
+ "dependencies": []}
+</tool_call>
+<tool_call name="complete_task">
+{"plan": "Read handwritten text from the provided image. Transcribe all visible text exactly as written, preserving line breaks and layout. Note any text that is ambiguous or illegible.",
+ "summary": "Configured single agent to read and transcribe handwriting from the image."}
+</tool_call>
+</turn>
+</example>
+
+<example name="multi_agent_pipeline">
 <turn>
 instruction: "Build a team to scan a codebase for security vulnerabilities and produce a remediation report with prioritized fixes."
 
@@ -101,10 +125,12 @@ instruction: "Add a fact-checker after the researcher but before the writer. The
 When done configuring, call complete_task with:
 
 - **plan** — the execution blueprint the agent designer reads at runtime.
-  Format: ## Objective (one sentence), ## Requirements (hard constraints),
-  ## Agent-Specific Guidance (### AgentName sub-headings), ## Technical
-  Context (API specs, environment details). The plan is the only context
-  the designer sees — if it is not in the plan, it does not exist.
+  The plan is the only context the designer sees — if it is not in the
+  plan, it does not exist. Scale the format to complexity:
+  - 1 agent: a short paragraph. No headers, no boilerplate.
+  - 2-3 agents: ## Objective + ## Agent Guidance. Skip empty sections.
+  - 4+ agents: ## Objective, ## Requirements, ## Agent-Specific Guidance
+    (### AgentName sub-headings), ## Technical Context.
 - **summary** — what you configured and key decisions (1-3 sentences).
 - **question** — only if you cannot proceed without input. Make reasonable
   defaults rather than asking about preferences.
