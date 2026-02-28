@@ -78,7 +78,7 @@ pub(crate) fn rasterize_strokes_png(
             continue;
         }
 
-        // Generate freehand outline polygon
+        // Generate freehand outline polygon in canvas coordinates
         let outline = freehand::get_stroke(stroke, &options);
 
         if outline.len() < 3 {
@@ -94,13 +94,13 @@ pub(crate) fn rasterize_strokes_png(
         // quadraticCurveTo midpoint algorithm from outlineToPath.ts)
         let smoothed = subdivide_outline(&outline, 8);
 
-        // Convert outline to pixel coordinates
+        // Convert outline from canvas coordinates to pixel coordinates
         let pixel_polygon: Vec<(i32, i32)> = smoothed
             .iter()
             .map(|p| to_pixel(p[0], p[1], &bbox, scale, padding))
             .collect();
 
-        // Fill the polygon using scanline (even-odd rule)
+        // Fill the polygon using scanline (non-zero winding rule)
         scanline_fill(&mut img, &pixel_polygon, img_w, img_h);
     }
 
