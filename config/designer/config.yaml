@@ -1,6 +1,6 @@
 agents:
   designer:
-    model_id: "tier:1"
+    model_id: "tier:2"
     max_tokens: 16384
     temperature: 0.4
     max_rounds: 1
