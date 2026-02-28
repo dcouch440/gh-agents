@@ -62,16 +62,16 @@ pub(crate) fn get_stroke_points(
     let mut points: Vec<[f64; 3]> = input.to_vec();
 
     if points.len() == 2 {
-        // Subdivide into 5 points via lerp
+        // Subdivide into 5 points via lerp.
+        // JS lrp() only interpolates x/y (Vec2), so the subdivided points
+        // have no pressure — they fall through to DEFAULT_PRESSURE (0.5).
         let a = points[0];
         let b = points[1];
         points = vec![a];
         for i in 1..5 {
             let t = i as f64 / 4.0;
             let pt = vec::lerp([a[0], a[1]], [b[0], b[1]], t);
-            // Interpolate pressure too
-            let p = a[2] + (b[2] - a[2]) * t;
-            points.push([pt[0], pt[1], p]);
+            points.push([pt[0], pt[1], -1.0]);
         }
     }
 

@@ -159,6 +159,111 @@ fn scanline_fill_nz(img: &mut GrayImage, polygon: &[(i32, i32)]) {
 }
 
 // ============================================================================
+// Comparison test — dumps Rust output + generates HTML to run JS side-by-side
+// ============================================================================
+
+#[test]
+fn compare_with_js() {
+    // Simple L-shaped stroke with uniform pressure
+    let input: Vec<[f64; 3]> = vec![
+        [0.0, 0.0, 0.5],
+        [10.0, 0.0, 0.5],
+        [20.0, 0.0, 0.5],
+        [30.0, 0.0, 0.5],
+        [40.0, 0.0, 0.5],
+        [50.0, 0.0, 0.5],
+        [60.0, 0.0, 0.5],
+        [70.0, 0.0, 0.5],
+        [80.0, 0.0, 0.5],
+        [90.0, 0.0, 0.5],
+        [100.0, 0.0, 0.5],
+        [100.0, 10.0, 0.5],
+        [100.0, 20.0, 0.5],
+        [100.0, 30.0, 0.5],
+        [100.0, 40.0, 0.5],
+        [100.0, 50.0, 0.5],
+        [100.0, 60.0, 0.5],
+        [100.0, 70.0, 0.5],
+        [100.0, 80.0, 0.5],
+        [100.0, 90.0, 0.5],
+        [100.0, 100.0, 0.5],
+    ];
+
+    let options = StrokeOptions {
+        size: 16.0,
+        ..StrokeOptions::default()
+    };
+
+    let points = get_stroke_points(&input, &options);
+    let outline = get_stroke(&input, &options);
+
+    eprintln!("\n=== RUST PORT OUTPUT ===");
+    eprintln!("Input: {} points", input.len());
+    eprintln!("Stroke points: {}", points.len());
+    for (i, pt) in points.iter().enumerate() {
+        eprintln!(
+            "  [{:2}] ({:8.3}, {:8.3}) p={:.3} d={:.3} rl={:.3} v=({:.3},{:.3})",
+            i, pt.point[0], pt.point[1], pt.pressure, pt.distance, pt.running_length,
+            pt.vector[0], pt.vector[1]
+        );
+    }
+
+    eprintln!("\nOutline: {} points", outline.len());
+    eprintln!("Outline (first 20): {:?}", &outline[..outline.len().min(20)]);
+
+    // Generate HTML comparison file
+    let input_json: Vec<String> = input.iter().map(|p| format!("[{},{},{}]", p[0], p[1], p[2])).collect();
+    let outline_json: Vec<String> = outline.iter().map(|p| format!("[{:.2},{:.2}]", p[0], p[1])).collect();
+
+    let html = format!(r#"<!DOCTYPE html>
+<html><body>
+<h2>Left=JS (perfect-freehand), Right=Rust port</h2>
+<canvas id="js" width="300" height="300" style="border:1px solid #ccc"></canvas>
+<canvas id="rust" width="300" height="300" style="border:1px solid #ccc"></canvas>
+<pre id="log"></pre>
+<script type="module">
+import getStroke from 'https://esm.sh/perfect-freehand@1.2.2';
+
+const input = [{}];
+const rustOutline = [{}];
+
+// Run JS library
+const jsOutline = getStroke(input, {{ size: 16, thinning: 0.5, smoothing: 0.5, streamline: 0.5, simulatePressure: true }});
+
+document.getElementById('log').textContent =
+  'JS outline: ' + jsOutline.length + ' points\n' +
+  'Rust outline: ' + rustOutline.length + ' points\n' +
+  'JS first 5: ' + JSON.stringify(jsOutline.slice(0, 5).map(p => [+p[0].toFixed(2), +p[1].toFixed(2)])) + '\n' +
+  'Rust first 5: ' + JSON.stringify(rustOutline.slice(0, 5));
+
+function draw(canvasId, outline, color) {{
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  ctx.translate(50, 50);
+  ctx.scale(1.5, 1.5);
+  if (outline.length < 3) return;
+  ctx.beginPath();
+  ctx.moveTo(outline[0][0], outline[0][1]);
+  for (let i = 1; i < outline.length - 1; i++) {{
+    const curr = outline[i];
+    const next = outline[i + 1];
+    ctx.quadraticCurveTo(curr[0], curr[1], (curr[0]+next[0])/2, (curr[1]+next[1])/2);
+  }}
+  ctx.lineTo(outline[outline.length-1][0], outline[outline.length-1][1]);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+}}
+
+draw('js', jsOutline, '#000');
+draw('rust', rustOutline, '#000');
+</script>
+</body></html>"#, input_json.join(","), outline_json.join(","));
+
+    std::fs::write("/tmp/freehand_compare.html", html).expect("write html");
+    eprintln!("\nComparison HTML: open /tmp/freehand_compare.html");
+}
+
+// ============================================================================
 // Visual tests
 // ============================================================================
 
@@ -276,3 +381,41 @@ fn visual_stroke_points_debug() {
         &options,
     );
 }
+
+#[test]
+fn visual_real_strokes() {
+    // Load real stroke data from the database export
+    let json_path = "/tmp/real_strokes.json";
+    let Ok(json_str) = std::fs::read_to_string(json_path) else {
+        eprintln!("Skipping: {} not found (run the python extraction first)", json_path);
+        return;
+    };
+
+    let strokes: Vec<Vec<[f64; 3]>> = serde_json::from_str(&json_str)
+        .expect("parse real_strokes.json");
+
+    eprintln!("Loaded {} strokes from {}", strokes.len(), json_path);
+
+    // Run through the ACTUAL rasterize_strokes_png pipeline (same as production)
+    let bounds = crate::server::hub::board::serializer::types::CanvasBounds {
+        x: 0.0, y: 0.0, width: 1.0, height: 1.0, // unused by rasterizer
+    };
+
+    let result = crate::server::hub::board::serializer::rasterize_png::rasterize_strokes_png(
+        &strokes, &bounds, 1536, 10, 5,
+    );
+
+    if let Some(b64) = &result {
+        // Decode and save to /tmp for visual inspection
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .expect("decode base64");
+        std::fs::write("/tmp/real_strokes_rust.png", &bytes).expect("write png");
+        eprintln!("Saved: /tmp/real_strokes_rust.png");
+    } else {
+        eprintln!("rasterize_strokes_png returned None");
+    }
+}
+
+use serde_json;
+use base64::Engine;
