@@ -95,7 +95,7 @@ fn build_node(
     let stroke_png_base64 = if node_strokes_3.is_empty() {
         None
     } else {
-        rasterize_png::rasterize_strokes_png(&node_strokes_3, &bounds, 1536, 10, 5)
+        rasterize_png::rasterize_strokes_png(&node_strokes_3, &bounds, 1536, 10)
     };
 
     CanvasNode {

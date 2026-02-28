@@ -2,8 +2,9 @@
 //! image (base64-encoded) for vision-capable LLM prompts.
 //!
 //! Uses the `freehand` module (Rust port of `perfect-freehand`) to generate
-//! pressure-sensitive outline polygons, then fills them with scanline raster.
-//! This produces smooth, variable-width strokes matching the frontend rendering.
+//! pressure-sensitive outline polygons, then fills them with `tiny-skia`
+//! (Rust port of Skia, the same engine behind Canvas2D). This produces
+//! smooth, anti-aliased, variable-width strokes matching the frontend rendering.
 //!
 //! # Output
 //!
@@ -16,10 +17,17 @@
 
 use base64::Engine;
 use image::{GrayImage, Luma};
+use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Transform};
 
 use super::freehand;
 use super::freehand::types::StrokeOptions;
 use super::types::CanvasBounds;
+
+/// Stroke width in pixels at output resolution.
+///
+/// At default `thinning=0.5` and neutral pressure (0.5), this produces
+/// strokes ~6px in diameter — clean and readable at 1536px.
+const PIXEL_STROKE_SIZE: f64 = 6.0;
 
 // ============================================================================
 // Public API
@@ -37,7 +45,6 @@ pub(crate) fn rasterize_strokes_png(
     _bounds: &CanvasBounds,
     max_side: u32,
     padding: u32,
-    stroke_size: u32,
 ) -> Option<String> {
     if strokes.is_empty() {
         return None;
@@ -60,7 +67,13 @@ pub(crate) fn rasterize_strokes_png(
         return None;
     }
 
-    let mut img = GrayImage::from_pixel(img_w, img_h, Luma([255u8]));
+    // Create tiny-skia pixmap (white background)
+    let mut pixmap = Pixmap::new(img_w, img_h)?;
+    pixmap.fill(tiny_skia::Color::WHITE);
+
+    let mut paint = Paint::default();
+    paint.set_color_rgba8(0, 0, 0, 255); // black
+    paint.anti_alias = true;
 
     // Detect if any real pressure data exists (not all ~0.5)
     let has_real_pressure = strokes.iter().any(|s| {
@@ -68,48 +81,61 @@ pub(crate) fn rasterize_strokes_png(
     });
 
     let options = StrokeOptions {
-        size: stroke_size as f64,
+        size: PIXEL_STROKE_SIZE,
         simulate_pressure: !has_real_pressure,
         ..StrokeOptions::default()
     };
+
+    let pad = padding as f64;
 
     for stroke in strokes {
         if stroke.is_empty() {
             continue;
         }
 
-        // Generate freehand outline polygon in canvas coordinates
-        let outline = freehand::get_stroke(stroke, &options);
+        // Scale input points from canvas space to pixel space BEFORE freehand
+        let px_stroke: Vec<[f64; 3]> = stroke
+            .iter()
+            .map(|p| [
+                (p[0] - bbox.min_x) * scale + pad,
+                (p[1] - bbox.min_y) * scale + pad,
+                p[2], // pressure unchanged
+            ])
+            .collect();
+
+        // Generate freehand outline polygon in pixel coordinates
+        let outline = freehand::get_stroke(&px_stroke, &options);
 
         if outline.len() < 3 {
-            // Degenerate: just draw a dot
-            if let Some(pt) = stroke.first() {
-                let (px, py) = to_pixel(pt[0], pt[1], &bbox, scale, padding);
-                fill_circle(&mut img, px, py, stroke_size);
+            // Degenerate: draw a dot
+            if let Some(pt) = px_stroke.first() {
+                let r = (PIXEL_STROKE_SIZE * 0.5) as f32;
+                if let Some(path) = PathBuilder::from_circle(pt[0] as f32, pt[1] as f32, r) {
+                    pixmap.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
+                }
             }
             continue;
         }
 
-        // Smooth the outline with quadratic bezier subdivision (matches frontend's
-        // quadraticCurveTo midpoint algorithm from outlineToPath.ts)
-        let smoothed = subdivide_outline(&outline, 8);
-
-        // Convert outline from canvas coordinates to pixel coordinates
-        let pixel_polygon: Vec<(i32, i32)> = smoothed
-            .iter()
-            .map(|p| to_pixel(p[0], p[1], &bbox, scale, padding))
-            .collect();
-
-        // Fill the polygon using scanline (non-zero winding rule)
-        scanline_fill(&mut img, &pixel_polygon, img_w, img_h);
+        // Build tiny-skia path using quadratic bezier curves —
+        // matches the frontend's outlineToPath.ts exactly:
+        //   moveTo(outline[0])
+        //   for i in 1..n-1: quadraticCurveTo(outline[i], mid(outline[i], outline[i+1]))
+        //   lineTo(outline[n-1])
+        //   closePath()
+        if let Some(path) = build_outline_path(&outline) {
+            pixmap.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
+        }
     }
 
-    // Encode to PNG
+    // Convert RGBA pixmap to grayscale PNG
+    let gray = rgba_to_grayscale(pixmap.data(), img_w, img_h);
+
     let mut png_bytes: Vec<u8> = Vec::new();
     let encoder = image::codecs::png::PngEncoder::new(&mut png_bytes);
     image::ImageEncoder::write_image(
         encoder,
-        img.as_raw(),
+        gray.as_raw(),
         img_w,
         img_h,
         image::ExtendedColorType::L8,
@@ -125,6 +151,39 @@ pub(crate) fn rasterize_strokes_png(
     }
 
     Some(base64::engine::general_purpose::STANDARD.encode(&png_bytes))
+}
+
+// ============================================================================
+// Path Building
+// ============================================================================
+
+/// Build a tiny-skia path from a freehand outline polygon.
+///
+/// Matches the frontend's `outlineToPath.ts` algorithm:
+///   moveTo(outline[0])
+///   for i in 1..n-1: quadraticCurveTo(outline[i], mid(outline[i], outline[i+1]))
+///   lineTo(outline[n-1])
+///   closePath()
+fn build_outline_path(outline: &[[f64; 2]]) -> Option<tiny_skia::Path> {
+    let n = outline.len();
+    if n < 3 {
+        return None;
+    }
+
+    let mut pb = PathBuilder::new();
+    pb.move_to(outline[0][0] as f32, outline[0][1] as f32);
+
+    for i in 1..n - 1 {
+        let cx = outline[i][0] as f32;
+        let cy = outline[i][1] as f32;
+        let mid_x = ((outline[i][0] + outline[i + 1][0]) * 0.5) as f32;
+        let mid_y = ((outline[i][1] + outline[i + 1][1]) * 0.5) as f32;
+        pb.quad_to(cx, cy, mid_x, mid_y);
+    }
+
+    pb.line_to(outline[n - 1][0] as f32, outline[n - 1][1] as f32);
+    pb.close();
+    pb.finish()
 }
 
 // ============================================================================
@@ -169,177 +228,31 @@ fn stroke_bbox(strokes: &[Vec<[f64; 3]>]) -> Option<StrokeBBox> {
 }
 
 // ============================================================================
-// Coordinate Mapping
+// Grayscale Conversion
 // ============================================================================
 
-/// Map an absolute canvas point to pixel coordinates.
-fn to_pixel(x: f64, y: f64, bbox: &StrokeBBox, scale: f64, padding: u32) -> (i32, i32) {
-    let px = ((x - bbox.min_x) * scale + padding as f64).round() as i32;
-    let py = ((y - bbox.min_y) * scale + padding as f64).round() as i32;
-    (px, py)
-}
-
-// ============================================================================
-// Outline Smoothing
-// ============================================================================
-
-/// Subdivide an outline polygon using quadratic bezier midpoint interpolation.
+/// Convert RGBA pixel data to grayscale.
 ///
-/// Matches the frontend's `outlineToPath.ts` which uses `quadraticCurveTo`
-/// with midpoints between consecutive outline points as an open path:
-///
-///   moveTo(outline[0])
-///   for i in 1..n-1: quadraticCurveTo(outline[i], mid(outline[i], outline[i+1]))
-///   lineTo(outline[n-1])
-///   closePath()   // implicit straight line back to start
-fn subdivide_outline(outline: &[[f64; 2]], segments_per_curve: usize) -> Vec<[f64; 2]> {
-    if outline.len() < 3 {
-        return outline.to_vec();
-    }
+/// Uses luminance: L = 0.299R + 0.587G + 0.114B, composited over white.
+fn rgba_to_grayscale(rgba: &[u8], width: u32, height: u32) -> GrayImage {
+    let mut gray = GrayImage::from_pixel(width, height, Luma([255u8]));
 
-    let n = outline.len();
-    let mut result = Vec::with_capacity(n * segments_per_curve);
+    for y in 0..height {
+        for x in 0..width {
+            let idx = ((y * width + x) * 4) as usize;
+            let r = rgba[idx] as f32;
+            let g = rgba[idx + 1] as f32;
+            let b = rgba[idx + 2] as f32;
+            let a = rgba[idx + 3] as f32 / 255.0;
 
-    // Start at outline[0] (the moveTo)
-    let mut cursor = outline[0];
-    result.push(cursor);
-
-    // For i = 1..n-2: quadratic bezier from cursor through outline[i] to midpoint
-    for i in 1..n - 1 {
-        let ctrl = outline[i];
-        let next = outline[i + 1];
-        let end = [(ctrl[0] + next[0]) * 0.5, (ctrl[1] + next[1]) * 0.5];
-
-        // Subdivide quadratic bezier: cursor -> ctrl -> end
-        for s in 1..=segments_per_curve {
-            let t = s as f64 / segments_per_curve as f64;
-            let inv = 1.0 - t;
-            let x = inv * inv * cursor[0] + 2.0 * inv * t * ctrl[0] + t * t * end[0];
-            let y = inv * inv * cursor[1] + 2.0 * inv * t * ctrl[1] + t * t * end[1];
-            result.push([x, y]);
-        }
-
-        cursor = end;
-    }
-
-    // lineTo last point (closePath back to start is implicit for scanline fill)
-    result.push(outline[n - 1]);
-
-    result
-}
-
-// ============================================================================
-// Polygon Fill (scanline, even-odd rule)
-// ============================================================================
-
-/// Fill a closed polygon on the image using scanline rendering (non-zero winding rule).
-///
-/// Non-zero winding correctly fills self-intersecting polygons (like freehand
-/// outlines with caps and sharp corner arcs) without punching holes.
-fn scanline_fill(img: &mut GrayImage, polygon: &[(i32, i32)], img_w: u32, img_h: u32) {
-    if polygon.len() < 3 {
-        return;
-    }
-
-    // Find Y bounds
-    let min_y = polygon.iter().map(|p| p.1).min().unwrap().max(0);
-    let max_y = polygon
-        .iter()
-        .map(|p| p.1)
-        .max()
-        .unwrap()
-        .min(img_h as i32 - 1);
-
-    let n = polygon.len();
-
-    for y in min_y..=max_y {
-        // Collect X intersections with winding direction
-        let mut crossings: Vec<(i32, i32)> = Vec::new(); // (x, direction)
-
-        for i in 0..n {
-            let (x0, y0) = polygon[i];
-            let (x1, y1) = polygon[(i + 1) % n];
-
-            // Skip horizontal edges
-            if y0 == y1 {
-                continue;
-            }
-
-            // Check if scanline intersects this edge
-            let (lo, hi) = if y0 < y1 { (y0, y1) } else { (y1, y0) };
-            if y < lo || y >= hi {
-                continue;
-            }
-
-            // Compute X intersection
-            let x = x0 as i64 + (y - y0) as i64 * (x1 - x0) as i64 / (y1 - y0) as i64;
-
-            // Winding direction: +1 if edge goes up, -1 if edge goes down
-            let dir = if y0 < y1 { 1 } else { -1 };
-            crossings.push((x as i32, dir));
-        }
-
-        crossings.sort_unstable_by_key(|c| c.0);
-
-        // Fill using non-zero winding rule: pixel is inside when winding != 0
-        let mut winding: i32 = 0;
-        let mut i = 0;
-        while i < crossings.len() {
-            let prev_winding = winding;
-            winding += crossings[i].1;
-
-            // Transition from outside (0) to inside (non-zero): start filling
-            if prev_winding == 0 && winding != 0 {
-                let xa = crossings[i].0.max(0);
-                // Scan forward to find where winding returns to 0
-                let mut j = i + 1;
-                while j < crossings.len() {
-                    winding += crossings[j].1;
-                    if winding == 0 {
-                        let xb = crossings[j].0.min(img_w as i32 - 1);
-                        for x in xa..=xb {
-                            img.put_pixel(x as u32, y as u32, Luma([0u8]));
-                        }
-                        i = j + 1;
-                        break;
-                    }
-                    j += 1;
-                }
-                if winding != 0 {
-                    // Didn't close — fill to last crossing
-                    let xb = crossings.last().unwrap().0.min(img_w as i32 - 1);
-                    for x in xa..=xb {
-                        img.put_pixel(x as u32, y as u32, Luma([0u8]));
-                    }
-                    break;
-                }
-            } else {
-                i += 1;
-            }
+            // Composite over white: result = src * alpha + white * (1 - alpha)
+            let lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            let val = (lum * a + 255.0 * (1.0 - a)).round() as u8;
+            gray.put_pixel(x, y, Luma([val]));
         }
     }
-}
 
-// ============================================================================
-// Drawing (fallback for degenerate strokes)
-// ============================================================================
-
-/// Fill a circle of `diameter` pixels centered at (cx, cy) with black.
-fn fill_circle(img: &mut GrayImage, cx: i32, cy: i32, diameter: u32) {
-    let r = diameter as i32 / 2;
-    let (w, h) = (img.width() as i32, img.height() as i32);
-
-    for dy in -r..=r {
-        for dx in -r..=r {
-            if dx * dx + dy * dy <= r * r {
-                let px = cx + dx;
-                let py = cy + dy;
-                if px >= 0 && px < w && py >= 0 && py < h {
-                    img.put_pixel(px as u32, py as u32, Luma([0u8]));
-                }
-            }
-        }
-    }
+    gray
 }
 
 #[cfg(test)]

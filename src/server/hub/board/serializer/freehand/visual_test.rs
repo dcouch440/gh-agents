@@ -402,7 +402,7 @@ fn visual_real_strokes() {
     };
 
     let result = crate::server::hub::board::serializer::rasterize_png::rasterize_strokes_png(
-        &strokes, &bounds, 1536, 10, 5,
+        &strokes, &bounds, 1536, 10,
     );
 
     if let Some(b64) = &result {

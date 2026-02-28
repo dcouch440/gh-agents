@@ -35,8 +35,9 @@ toml = "0.8"
 strsim = "0.11"
 similar = "2"
 
-# Image rasterization (PNG-only for stroke → vision LLM pipeline)
+# Image rasterization (stroke → vision LLM pipeline)
 image = { version = "0.25", default-features = false, features = ["png"] }
+tiny-skia = "0.11"
 base64 = "0.22"
 
 # Utilities
