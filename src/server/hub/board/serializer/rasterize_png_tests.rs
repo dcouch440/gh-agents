@@ -15,21 +15,21 @@ mod tests {
 
     #[test]
     fn empty_strokes_returns_none() {
-        let result = rasterize_strokes_png(&[], &dummy_bounds(), 200, 10, 3);
+        let result = rasterize_strokes_png(&[], &dummy_bounds(), 200, 10);
         assert!(result.is_none());
     }
 
     #[test]
     fn empty_points_returns_none() {
         let strokes: Vec<Vec<[f64; 3]>> = vec![vec![]];
-        let result = rasterize_strokes_png(&strokes, &dummy_bounds(), 200, 10, 3);
+        let result = rasterize_strokes_png(&strokes, &dummy_bounds(), 200, 10);
         assert!(result.is_none());
     }
 
     #[test]
     fn single_point_produces_valid_png() {
         let strokes = vec![vec![[100.0, 100.0, 0.5]]];
-        let result = rasterize_strokes_png(&strokes, &dummy_bounds(), 200, 10, 3);
+        let result = rasterize_strokes_png(&strokes, &dummy_bounds(), 200, 10);
         assert!(result.is_some());
 
         // Verify it's valid base64 that decodes to a PNG
@@ -45,7 +45,7 @@ mod tests {
         // Horizontal line 400px wide, 0px tall → bbox_w=400, bbox_h=0
         // Longest side is 400, scale to max_side=200 minus padding
         let strokes = vec![vec![[0.0, 100.0, 0.5], [400.0, 100.0, 0.5]]];
-        let result = rasterize_strokes_png(&strokes, &dummy_bounds(), 200, 10, 3);
+        let result = rasterize_strokes_png(&strokes, &dummy_bounds(), 200, 10);
         assert!(result.is_some());
 
         let b64 = result.unwrap();
@@ -69,7 +69,7 @@ mod tests {
             ],
             vec![[100.0, 100.0, 0.5], [200.0, 200.0, 0.5]],
         ];
-        let result = rasterize_strokes_png(&strokes, &dummy_bounds(), 400, 10, 3);
+        let result = rasterize_strokes_png(&strokes, &dummy_bounds(), 400, 10);
         assert!(result.is_some());
 
         let b64 = result.unwrap();
@@ -92,7 +92,7 @@ mod tests {
             [100.0, 300.0, 0.5],
             [100.0, 100.0, 0.5],
         ]];
-        let result = rasterize_strokes_png(&strokes, &dummy_bounds(), 400, 10, 3);
+        let result = rasterize_strokes_png(&strokes, &dummy_bounds(), 400, 10);
         assert!(result.is_some());
 
         let b64 = result.unwrap();
@@ -118,7 +118,7 @@ mod tests {
             [2000.0, 1000.0, 0.5],
             [0.0, 1000.0, 0.5],
         ]];
-        let result = rasterize_strokes_png(&strokes, &dummy_bounds(), 768, 10, 3);
+        let result = rasterize_strokes_png(&strokes, &dummy_bounds(), 768, 10);
         assert!(result.is_some());
 
         let b64 = result.unwrap();
@@ -143,7 +143,7 @@ mod tests {
             [150.0, 0.0, 0.9],
             [200.0, 0.0, 0.5],
         ]];
-        let result = rasterize_strokes_png(&strokes, &dummy_bounds(), 400, 10, 5);
+        let result = rasterize_strokes_png(&strokes, &dummy_bounds(), 400, 10);
         assert!(result.is_some());
 
         let b64 = result.unwrap();

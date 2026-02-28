@@ -371,6 +371,5 @@ pub(crate) fn rasterize_stroke_image_from_context(board_context: &str) -> Option
         &dummy_bounds,
         1536,
         10,
-        5,
     )
 }
