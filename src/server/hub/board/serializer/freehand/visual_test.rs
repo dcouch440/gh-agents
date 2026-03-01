@@ -19,8 +19,7 @@ fn render_strokes_to_png(
     let mut img = GrayImage::from_pixel(img_size, img_size, Luma([255u8]));
 
     // Compute bbox
-    let (mut min_x, mut min_y, mut max_x, mut max_y) =
-        (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+    let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
     for stroke in strokes {
         for p in stroke {
             min_x = min_x.min(p[0]);
@@ -203,19 +202,35 @@ fn compare_with_js() {
     for (i, pt) in points.iter().enumerate() {
         eprintln!(
             "  [{:2}] ({:8.3}, {:8.3}) p={:.3} d={:.3} rl={:.3} v=({:.3},{:.3})",
-            i, pt.point[0], pt.point[1], pt.pressure, pt.distance, pt.running_length,
-            pt.vector[0], pt.vector[1]
+            i,
+            pt.point[0],
+            pt.point[1],
+            pt.pressure,
+            pt.distance,
+            pt.running_length,
+            pt.vector[0],
+            pt.vector[1]
         );
     }
 
     eprintln!("\nOutline: {} points", outline.len());
-    eprintln!("Outline (first 20): {:?}", &outline[..outline.len().min(20)]);
+    eprintln!(
+        "Outline (first 20): {:?}",
+        &outline[..outline.len().min(20)]
+    );
 
     // Generate HTML comparison file
-    let input_json: Vec<String> = input.iter().map(|p| format!("[{},{},{}]", p[0], p[1], p[2])).collect();
-    let outline_json: Vec<String> = outline.iter().map(|p| format!("[{:.2},{:.2}]", p[0], p[1])).collect();
+    let input_json: Vec<String> = input
+        .iter()
+        .map(|p| format!("[{},{},{}]", p[0], p[1], p[2]))
+        .collect();
+    let outline_json: Vec<String> = outline
+        .iter()
+        .map(|p| format!("[{:.2},{:.2}]", p[0], p[1]))
+        .collect();
 
-    let html = format!(r#"<!DOCTYPE html>
+    let html = format!(
+        r#"<!DOCTYPE html>
 <html><body>
 <h2>Left=JS (perfect-freehand), Right=Rust port</h2>
 <canvas id="js" width="300" height="300" style="border:1px solid #ccc"></canvas>
@@ -257,7 +272,10 @@ function draw(canvasId, outline, color) {{
 draw('js', jsOutline, '#000');
 draw('rust', rustOutline, '#000');
 </script>
-</body></html>"#, input_json.join(","), outline_json.join(","));
+</body></html>"#,
+        input_json.join(","),
+        outline_json.join(",")
+    );
 
     std::fs::write("/tmp/freehand_compare.html", html).expect("write html");
     eprintln!("\nComparison HTML: open /tmp/freehand_compare.html");
@@ -322,22 +340,36 @@ fn visual_hello() {
     };
 
     // "H" - three strokes
-    let h1: Vec<[f64; 3]> = (0..15).map(|i| [20.0, 20.0 + i as f64 * 8.0, 0.5]).collect();
-    let h2: Vec<[f64; 3]> = (0..15).map(|i| [60.0, 20.0 + i as f64 * 8.0, 0.5]).collect();
+    let h1: Vec<[f64; 3]> = (0..15)
+        .map(|i| [20.0, 20.0 + i as f64 * 8.0, 0.5])
+        .collect();
+    let h2: Vec<[f64; 3]> = (0..15)
+        .map(|i| [60.0, 20.0 + i as f64 * 8.0, 0.5])
+        .collect();
     let h3: Vec<[f64; 3]> = (0..8).map(|i| [20.0 + i as f64 * 5.7, 70.0, 0.5]).collect();
 
     // "e" - a curve
     let e_pts: Vec<[f64; 3]> = vec![
-        [100.0, 70.0, 0.5], [110.0, 70.0, 0.5], [115.0, 65.0, 0.5],
-        [115.0, 55.0, 0.5], [110.0, 50.0, 0.5], [100.0, 50.0, 0.5],
-        [95.0, 55.0, 0.5], [95.0, 70.0, 0.5], [100.0, 80.0, 0.5],
+        [100.0, 70.0, 0.5],
+        [110.0, 70.0, 0.5],
+        [115.0, 65.0, 0.5],
+        [115.0, 55.0, 0.5],
+        [110.0, 50.0, 0.5],
+        [100.0, 50.0, 0.5],
+        [95.0, 55.0, 0.5],
+        [95.0, 70.0, 0.5],
+        [100.0, 80.0, 0.5],
         [110.0, 85.0, 0.5],
     ];
 
     // "l" - vertical
-    let l1: Vec<[f64; 3]> = (0..15).map(|i| [135.0, 20.0 + i as f64 * 8.0, 0.5]).collect();
+    let l1: Vec<[f64; 3]> = (0..15)
+        .map(|i| [135.0, 20.0 + i as f64 * 8.0, 0.5])
+        .collect();
     // Another "l"
-    let l2: Vec<[f64; 3]> = (0..15).map(|i| [155.0, 20.0 + i as f64 * 8.0, 0.5]).collect();
+    let l2: Vec<[f64; 3]> = (0..15)
+        .map(|i| [155.0, 20.0 + i as f64 * 8.0, 0.5])
+        .collect();
 
     render_strokes_to_png(
         &[h1, h2, h3, e_pts, l1, l2],
@@ -374,12 +406,7 @@ fn visual_stroke_points_debug() {
         outline.len(),
     );
 
-    render_strokes_to_png(
-        &[curve],
-        "/tmp/freehand_test_sine.png",
-        500,
-        &options,
-    );
+    render_strokes_to_png(&[curve], "/tmp/freehand_test_sine.png", 500, &options);
 }
 
 #[test]
@@ -387,18 +414,24 @@ fn visual_real_strokes() {
     // Load real stroke data from the database export
     let json_path = "/tmp/real_strokes.json";
     let Ok(json_str) = std::fs::read_to_string(json_path) else {
-        eprintln!("Skipping: {} not found (run the python extraction first)", json_path);
+        eprintln!(
+            "Skipping: {} not found (run the python extraction first)",
+            json_path
+        );
         return;
     };
 
-    let strokes: Vec<Vec<[f64; 3]>> = serde_json::from_str(&json_str)
-        .expect("parse real_strokes.json");
+    let strokes: Vec<Vec<[f64; 3]>> =
+        serde_json::from_str(&json_str).expect("parse real_strokes.json");
 
     eprintln!("Loaded {} strokes from {}", strokes.len(), json_path);
 
     // Run through the ACTUAL rasterize_strokes_png pipeline (same as production)
     let bounds = crate::server::hub::board::serializer::types::CanvasBounds {
-        x: 0.0, y: 0.0, width: 1.0, height: 1.0, // unused by rasterizer
+        x: 0.0,
+        y: 0.0,
+        width: 1.0,
+        height: 1.0, // unused by rasterizer
     };
 
     let result = crate::server::hub::board::serializer::rasterize_png::rasterize_strokes_png(
@@ -417,5 +450,5 @@ fn visual_real_strokes() {
     }
 }
 
-use serde_json;
 use base64::Engine;
+use serde_json;

@@ -73,9 +73,7 @@ const DISPATCH_ONLY_TOOLS: &[&str] = &["complete_task"];
 /// (`dispatch`, `cancel_dispatch`) — dispatch agents are workers, not managers.
 pub(crate) fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
     let archetype_specific: &[&str] = match execution_mode {
-        "workforce" => &[
-            "configure_team",
-        ],
+        "workforce" => &["configure_team"],
         _ => &[],
     };
     UNIVERSAL_TOOLS
@@ -146,9 +144,7 @@ pub(super) async fn dispatch_step_tool(
     // Archetype-specific dispatch
     match ctx.execution_mode.as_str() {
         "workforce" => {
-            const WORKFORCE_TOOLS: &[&str] = &[
-                "configure_team",
-            ];
+            const WORKFORCE_TOOLS: &[&str] = &["configure_team"];
             if WORKFORCE_TOOLS.contains(&name) {
                 let tool_ctx = crate::server::tools::workforce::WorkforceToolContext {
                     workflow_id: ctx.workflow_id,

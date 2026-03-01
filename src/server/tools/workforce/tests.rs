@@ -1047,7 +1047,10 @@ mod tests {
         });
         let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
 
-        assert!(result.get("error").is_none(), "Expected success, got: {result}");
+        assert!(
+            result.get("error").is_none(),
+            "Expected success, got: {result}"
+        );
         let agents = result["agents"].as_array().unwrap();
         // Only one agent (deduped from two "Scanner"/"scanner" entries)
         assert_eq!(agents.len(), 1);
