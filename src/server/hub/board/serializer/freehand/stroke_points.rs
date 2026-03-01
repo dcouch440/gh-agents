@@ -1,6 +1,7 @@
 //! Input point processing: streamline smoothing + pressure simulation.
 //!
 //! Port of perfect-freehand's `getStrokePoints` function.
+#![allow(dead_code)]
 
 use super::types::{StrokeOptions, StrokePoint, Vec2};
 use super::vec;

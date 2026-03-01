@@ -3,10 +3,11 @@
 //! Port of perfect-freehand's `getStrokeOutlinePoints` function.
 //! Produces a closed polygon with variable width based on pressure,
 //! tapered ends, and rounded or flat caps.
+#![allow(dead_code)]
 
 use std::f64::consts::PI;
 
-use super::types::{CapOptions, StrokeOptions, StrokePoint, TaperValue, Vec2};
+use super::types::{StrokeOptions, StrokePoint, TaperValue, Vec2};
 use super::vec;
 
 /// Fixed PI with a tiny offset to avoid exact-boundary edge cases.

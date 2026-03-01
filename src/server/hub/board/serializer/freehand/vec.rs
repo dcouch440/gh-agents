@@ -1,4 +1,5 @@
 //! 2D vector math utilities for the freehand stroke algorithm.
+#![allow(dead_code)]
 
 use super::types::Vec2;
 
