@@ -234,7 +234,13 @@ impl Pipeline {
             container_handle: managed_container.as_ref().map(|mc| mc.agent_handle.clone()),
             cancel: dag.cancel.cloned(),
             task_description: brief.task_description.clone(),
-            stroke_image: rasterize_stroke_image_from_context(&step.board_context_cache),
+            stroke_image: dag
+                .state
+                .repos()
+                .workflows
+                .get_step_stroke_image(step.id)
+                .await
+                .unwrap_or(None),
             upstream_outputs_block,
         };
 
@@ -312,64 +318,3 @@ impl Pipeline {
     }
 }
 
-/// Extract stroke coordinate JSON from `board_context_cache` and rasterize to
-/// a base64-encoded PNG at runtime. Returns `None` if no stroke data is found.
-///
-/// The board_context_cache stores strokes as:
-/// ```text
-/// ## Stroke Coordinates
-/// {"canvas":[w,h],"strokes":[{"points":[[x,y],...]}]}
-/// ```
-pub(crate) fn rasterize_stroke_image_from_context(board_context: &str) -> Option<String> {
-    // Extract JSON after "## Stroke Coordinates\n"
-    let marker = "## Stroke Coordinates\n";
-    let start = board_context.find(marker)? + marker.len();
-    let json_str = board_context[start..].lines().next()?.trim();
-    if json_str.is_empty() {
-        return None;
-    }
-
-    // Parse the encoded stroke format: {"canvas":[w,h],"strokes":[{"points":[[x,y],...]}]}
-    let val: serde_json::Value = serde_json::from_str(json_str).ok()?;
-    let strokes_arr = val.get("strokes")?.as_array()?;
-
-    let strokes: Vec<Vec<[f64; 3]>> = strokes_arr
-        .iter()
-        .filter_map(|s| {
-            let points = s.get("points")?.as_array()?;
-            let pts: Vec<[f64; 3]> = points
-                .iter()
-                .filter_map(|p| {
-                    let arr = p.as_array()?;
-                    let x = arr.first()?.as_f64()?;
-                    let y = arr.get(1)?.as_f64()?;
-                    let pressure = arr.get(2).and_then(|v| v.as_f64()).unwrap_or(0.5);
-                    Some([x, y, pressure])
-                })
-                .collect();
-            if pts.is_empty() {
-                None
-            } else {
-                Some(pts)
-            }
-        })
-        .collect();
-
-    if strokes.is_empty() {
-        return None;
-    }
-
-    let dummy_bounds = crate::server::hub::board_serializer::CanvasBounds {
-        x: 0.0,
-        y: 0.0,
-        width: 0.0,
-        height: 0.0,
-    };
-
-    crate::server::hub::board::serializer::rasterize_png::rasterize_strokes_png(
-        &strokes,
-        &dummy_bounds,
-        1536,
-        10,
-    )
-}

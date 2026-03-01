@@ -913,6 +913,14 @@ pub trait WorkflowRepo: Send + Sync {
 
     /// Remove an element mapping.
     async fn delete_element_map(&self, workflow_id: Uuid, element_id: &str) -> Result<()>;
+
+    // --- Step Images ---
+
+    /// Store or update the pre-rendered stroke PNG for a step.
+    async fn upsert_step_image(&self, step_id: Uuid, stroke_image_base64: &str) -> Result<()>;
+
+    /// Load the pre-rendered stroke PNG for a step. Returns None if no image exists.
+    async fn get_step_stroke_image(&self, step_id: Uuid) -> Result<Option<String>>;
 }
 
 // ============================================================================
