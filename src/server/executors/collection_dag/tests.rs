@@ -637,6 +637,12 @@ mod tests {
             async fn update_canvas_snapshot_response(&self, _: Uuid, _: String) -> Result<()> {
                 unimplemented!()
             }
+            async fn upsert_step_image(&self, _: Uuid, _: &str) -> Result<()> {
+                unimplemented!()
+            }
+            async fn get_step_stroke_image(&self, _: Uuid) -> Result<Option<String>> {
+                unimplemented!()
+            }
         }
 
         // Create test data

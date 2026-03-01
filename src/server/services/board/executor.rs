@@ -130,6 +130,11 @@ pub async fn execute_phase_zero(
             }
 
             let updated_step = repo.update_step(step).await?;
+
+            // Store pre-rendered stroke PNG in separate table.
+            if let Some(ref png) = update.stroke_png_base64 {
+                repo.upsert_step_image(updated_step.id, png).await?;
+            }
             result
                 .updated_steps
                 .push((update.element_id.clone(), updated_step));
@@ -241,6 +246,11 @@ async fn create_node(
     } else {
         step
     };
+
+    // Store pre-rendered stroke PNG in separate table (avoids bloating workflow_steps).
+    if let Some(ref png) = node.stroke_png_base64 {
+        repo.upsert_step_image(step.id, png).await?;
+    }
 
     // Insert element → step mapping.
     let map_row = CanvasElementMapRow {

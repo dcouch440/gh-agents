@@ -2531,6 +2531,30 @@ impl WorkflowRepo for PgRepo {
             .await?;
         Ok(())
     }
+
+    async fn upsert_step_image(&self, step_id: Uuid, stroke_image_base64: &str) -> Result<()> {
+        sqlx::query(
+            r#"INSERT INTO step_images (step_id, stroke_image_base64, updated_at)
+               VALUES ($1, $2, NOW())
+               ON CONFLICT (step_id) DO UPDATE
+               SET stroke_image_base64 = $2, updated_at = NOW()"#,
+        )
+        .bind(step_id)
+        .bind(stroke_image_base64)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn get_step_stroke_image(&self, step_id: Uuid) -> Result<Option<String>> {
+        let row: Option<(String,)> = sqlx::query_as(
+            "SELECT stroke_image_base64 FROM step_images WHERE step_id = $1",
+        )
+        .bind(step_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|r| r.0).filter(|s| !s.is_empty()))
+    }
 }
 
 #[async_trait]

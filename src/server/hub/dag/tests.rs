@@ -339,6 +339,9 @@ mod tests {
         wf_repo.expect_get_step_inputs().returning(|_| Ok(vec![]));
         wf_repo.expect_get_step_outputs().returning(|_| Ok(vec![]));
         wf_repo
+            .expect_get_step_stroke_image()
+            .returning(|_| Ok(None));
+        wf_repo
             .expect_get_step_routing_rules()
             .returning(|_| Ok(vec![]));
         wf_repo
@@ -729,6 +732,9 @@ mod tests {
         wf_repo.expect_get_step_inputs().returning(|_| Ok(vec![]));
         wf_repo.expect_get_step_outputs().returning(|_| Ok(vec![]));
         wf_repo
+            .expect_get_step_stroke_image()
+            .returning(|_| Ok(None));
+        wf_repo
             .expect_get_step_routing_rules()
             .returning(|_| Ok(vec![]));
         wf_repo
@@ -1029,6 +1035,9 @@ mod tests {
         let mut wf_repo = MockWorkflowRepo::new();
         wf_repo.expect_get_step_inputs().returning(|_| Ok(vec![]));
         wf_repo.expect_get_step_outputs().returning(|_| Ok(vec![]));
+        wf_repo
+            .expect_get_step_stroke_image()
+            .returning(|_| Ok(None));
         wf_repo
             .expect_get_step_routing_rules()
             .returning(|_| Ok(vec![]));
