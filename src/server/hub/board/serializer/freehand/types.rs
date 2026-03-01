@@ -1,4 +1,8 @@
 //! Type definitions for the perfect-freehand Rust port.
+//!
+//! Some types/variants exist for completeness with the JS library
+//! but are not exercised by the current rendering path.
+#![allow(dead_code)]
 
 /// 2D point alias.
 pub(crate) type Vec2 = [f64; 2];

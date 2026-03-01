@@ -1,29 +1,29 @@
 //! Stroke PNG rasterizer — converts freehand pen strokes into a small PNG
 //! image (base64-encoded) for vision-capable LLM prompts.
 //!
-//! Renders strokes as simple polylines (connecting raw input points with
-//! straight line segments). This preserves the exact geometry the user
-//! drew — sharp corners, straight edges — which is critical for LLM
-//! shape recognition. The freehand smoothing used in the frontend
-//! rendering is intentionally skipped: it rounds corners and softens
-//! edges, making shapes harder for an LLM to interpret.
+//! Uses the `freehand` module (Rust port of `perfect-freehand`) to generate
+//! pressure-sensitive outline polygons, then fills them with `tiny-skia`.
+//! This produces smooth, anti-aliased, variable-width strokes that match
+//! the frontend rendering exactly (numerically verified).
 //!
 //! # Output
 //!
 //! Returns a base64-encoded PNG string ready for inclusion in an LLM image
 //! content block. The image is:
 //!
-//! - Cropped to the tight bounding box of the strokes (plus stroke width)
+//! - Cropped to the tight bounding box of the outline points (not raw input)
 //! - Scaled so the longest side fits within `max_side` pixels
 //! - Black strokes on white background (grayscale)
 
 use base64::Engine;
 use image::{GrayImage, Luma};
-use tiny_skia::{LineCap, LineJoin, Paint, PathBuilder, Pixmap, Stroke, Transform};
+use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Transform};
 
+use super::freehand;
+use super::freehand::types::{StrokeOptions, Vec2};
 use super::types::CanvasBounds;
 
-/// Stroke width in canvas coordinates — matches the frontend's
+/// Stroke size in canvas coordinates — must match the frontend's
 /// `getStrokeOutline.ts` default `size: 5`.
 const CANVAS_STROKE_SIZE: f64 = 5.0;
 
@@ -31,17 +31,25 @@ const CANVAS_STROKE_SIZE: f64 = 5.0;
 // Public API
 // ============================================================================
 
+/// Intermediate result from pass 1: either a full outline polygon
+/// or a degenerate dot (fewer than 3 outline points).
+enum StrokeOutline {
+    Polygon(Vec<Vec2>),
+    Dot { cx: f64, cy: f64, radius: f64 },
+}
+
 /// Rasterize pen strokes into a base64-encoded PNG.
 ///
 /// Strokes are `[x, y, pressure]` triples in absolute canvas coordinates.
-/// Renders as simple polylines connecting raw input points — no freehand
-/// smoothing — to preserve sharp corners for LLM shape recognition.
+/// The freehand algorithm runs in canvas space (matching the frontend),
+/// then outlines are scaled to pixel space for rendering.
 ///
-/// The image is cropped to the tight bounding box of the strokes (expanded
-/// by half the stroke width), scaled so the longest side equals `max_side`,
-/// and encoded as a grayscale PNG.
+/// Uses a two-pass approach:
+/// 1. Generate all freehand outlines in canvas space
+/// 2. Compute bbox from outline points (includes stroke width, caps, corners)
+/// 3. Scale outlines to pixel space and render
 ///
-/// Returns `None` if `strokes` is empty or no stroke points exist.
+/// Returns `None` if `strokes` is empty or no outline points exist.
 pub(crate) fn rasterize_strokes_png(
     strokes: &[Vec<[f64; 3]>],
     _bounds: &CanvasBounds,
@@ -52,19 +60,50 @@ pub(crate) fn rasterize_strokes_png(
         return None;
     }
 
-    // Filter out empty strokes
-    let non_empty: Vec<&Vec<[f64; 3]>> = strokes.iter().filter(|s| !s.is_empty()).collect();
-    if non_empty.is_empty() {
+    // Detect if any real pressure data exists.
+    // Match frontend exactly: JS uses strict !== 0.5 (no epsilon).
+    let has_real_pressure = strokes.iter().any(|s| s.iter().any(|p| p[2] != 0.5));
+
+    let options = StrokeOptions {
+        size: CANVAS_STROKE_SIZE,
+        simulate_pressure: !has_real_pressure,
+        ..StrokeOptions::default()
+    };
+
+    let dot_radius = CANVAS_STROKE_SIZE * 0.5;
+
+    // ── Pass 1: Generate all outlines in canvas space ──────────────
+    let mut outlines: Vec<StrokeOutline> = Vec::with_capacity(strokes.len());
+
+    for stroke in strokes {
+        if stroke.is_empty() {
+            continue;
+        }
+
+        let outline = freehand::get_stroke(stroke, &options);
+
+        if outline.len() < 3 {
+            if let Some(pt) = stroke.first() {
+                outlines.push(StrokeOutline::Dot {
+                    cx: pt[0],
+                    cy: pt[1],
+                    radius: dot_radius,
+                });
+            }
+        } else {
+            outlines.push(StrokeOutline::Polygon(outline));
+        }
+    }
+
+    if outlines.is_empty() {
         return None;
     }
 
-    // Compute bbox from raw input points, expanded by half stroke width
-    let half_stroke = CANVAS_STROKE_SIZE * 0.5;
-    let bbox = stroke_bbox(&non_empty, half_stroke)?;
+    // ── Compute bbox from OUTLINE points (not input points) ────────
+    let bbox = outline_bbox(&outlines)?;
     let bbox_w = (bbox.max_x - bbox.min_x).max(1.0);
     let bbox_h = (bbox.max_y - bbox.min_y).max(1.0);
 
-    // Scale so longest side = max_side (minus padding on both sides)
     let usable = max_side.saturating_sub(padding * 2).max(1) as f64;
     let longest = bbox_w.max(bbox_h);
     let scale = usable / longest;
@@ -76,53 +115,53 @@ pub(crate) fn rasterize_strokes_png(
         return None;
     }
 
-    // Render strokes as polylines
+    // ── Pass 2: Scale outlines to pixel space and render ───────────
     let mut pixmap = Pixmap::new(img_w, img_h)?;
     pixmap.fill(tiny_skia::Color::WHITE);
 
     let mut paint = Paint::default();
-    paint.set_color_rgba8(0, 0, 0, 255); // black
+    paint.set_color_rgba8(0, 0, 0, 255);
     paint.anti_alias = true;
-
-    let mut stroke_style = Stroke::default();
-    stroke_style.width = (CANVAS_STROKE_SIZE * scale) as f32;
-    stroke_style.line_cap = LineCap::Round;
-    stroke_style.line_join = LineJoin::Round;
 
     let pad = padding as f64;
 
-    for stroke in &non_empty {
-        if stroke.len() == 1 {
-            // Single point — draw a filled circle
-            let px = ((stroke[0][0] - bbox.min_x) * scale + pad) as f32;
-            let py = ((stroke[0][1] - bbox.min_y) * scale + pad) as f32;
-            let r = stroke_style.width * 0.5;
-            if let Some(path) = PathBuilder::from_circle(px, py, r) {
-                paint.anti_alias = true;
-                pixmap.fill_path(
-                    &path,
-                    &paint,
-                    tiny_skia::FillRule::Winding,
-                    Transform::identity(),
-                    None,
-                );
+    for outline in &outlines {
+        match outline {
+            StrokeOutline::Polygon(pts) => {
+                let px_outline: Vec<[f64; 2]> = pts
+                    .iter()
+                    .map(|p| {
+                        [
+                            (p[0] - bbox.min_x) * scale + pad,
+                            (p[1] - bbox.min_y) * scale + pad,
+                        ]
+                    })
+                    .collect();
+
+                if let Some(path) = build_outline_path(&px_outline) {
+                    pixmap.fill_path(
+                        &path,
+                        &paint,
+                        FillRule::Winding,
+                        Transform::identity(),
+                        None,
+                    );
+                }
             }
-            continue;
-        }
-
-        let mut pb = PathBuilder::new();
-        let x0 = ((stroke[0][0] - bbox.min_x) * scale + pad) as f32;
-        let y0 = ((stroke[0][1] - bbox.min_y) * scale + pad) as f32;
-        pb.move_to(x0, y0);
-
-        for pt in &stroke[1..] {
-            let px = ((pt[0] - bbox.min_x) * scale + pad) as f32;
-            let py = ((pt[1] - bbox.min_y) * scale + pad) as f32;
-            pb.line_to(px, py);
-        }
-
-        if let Some(path) = pb.finish() {
-            pixmap.stroke_path(&path, &paint, &stroke_style, Transform::identity(), None);
+            StrokeOutline::Dot { cx, cy, radius } => {
+                let px = ((cx - bbox.min_x) * scale + pad) as f32;
+                let py = ((cy - bbox.min_y) * scale + pad) as f32;
+                let r = (radius * scale) as f32;
+                if let Some(path) = PathBuilder::from_circle(px, py, r) {
+                    pixmap.fill_path(
+                        &path,
+                        &paint,
+                        FillRule::Winding,
+                        Transform::identity(),
+                        None,
+                    );
+                }
+            }
         }
     }
 
@@ -151,9 +190,9 @@ pub(crate) fn rasterize_strokes_png(
             eprintln!("DEBUG: saved rasterized PNG to {path}");
         }
         eprintln!(
-            "DEBUG: input={} strokes, rendered={} polylines ({}x{} px, scale={:.2})",
+            "DEBUG: input={} strokes, rendered={} outlines ({}x{} px, scale={:.2})",
             strokes.len(),
-            non_empty.len(),
+            outlines.len(),
             img_w,
             img_h,
             scale
@@ -161,15 +200,42 @@ pub(crate) fn rasterize_strokes_png(
         for (i, stroke) in strokes.iter().enumerate() {
             eprintln!("DEBUG:   stroke[{i}]: {} points", stroke.len());
         }
-        // Dump stroke data as JSON for JS comparison
-        let json_data: Vec<Vec<[f64; 3]>> = strokes.to_vec();
-        if let Ok(json) = serde_json::to_string(&json_data) {
-            let _ = std::fs::write("/tmp/debug_strokes.json", &json);
-            eprintln!("DEBUG: saved stroke data to /tmp/debug_strokes.json");
-        }
     }
 
     Some(base64::engine::general_purpose::STANDARD.encode(&png_bytes))
+}
+
+// ============================================================================
+// Path Building
+// ============================================================================
+
+/// Build a tiny-skia path from a freehand outline polygon.
+///
+/// Matches the frontend's `outlineToPath.ts` algorithm:
+///   moveTo(outline[0])
+///   for i in 1..n-1: quadraticCurveTo(outline[i], mid(outline[i], outline[i+1]))
+///   lineTo(outline[n-1])
+///   closePath()
+fn build_outline_path(outline: &[[f64; 2]]) -> Option<tiny_skia::Path> {
+    let n = outline.len();
+    if n < 3 {
+        return None;
+    }
+
+    let mut pb = PathBuilder::new();
+    pb.move_to(outline[0][0] as f32, outline[0][1] as f32);
+
+    for i in 1..n - 1 {
+        let cx = outline[i][0] as f32;
+        let cy = outline[i][1] as f32;
+        let mid_x = ((outline[i][0] + outline[i + 1][0]) * 0.5) as f32;
+        let mid_y = ((outline[i][1] + outline[i + 1][1]) * 0.5) as f32;
+        pb.quad_to(cx, cy, mid_x, mid_y);
+    }
+
+    pb.line_to(outline[n - 1][0] as f32, outline[n - 1][1] as f32);
+    pb.close();
+    pb.finish()
 }
 
 // ============================================================================
@@ -183,21 +249,32 @@ struct StrokeBBox {
     max_y: f64,
 }
 
-/// Compute bounding box from raw input points, expanded by `expand` on all sides.
-fn stroke_bbox(strokes: &[&Vec<[f64; 3]>], expand: f64) -> Option<StrokeBBox> {
+/// Compute tight bounding box from all outline points and dot extents.
+fn outline_bbox(outlines: &[StrokeOutline]) -> Option<StrokeBBox> {
     let mut min_x = f64::MAX;
     let mut min_y = f64::MAX;
     let mut max_x = f64::MIN;
     let mut max_y = f64::MIN;
     let mut any = false;
 
-    for stroke in strokes {
-        for p in stroke.iter() {
-            any = true;
-            min_x = min_x.min(p[0]);
-            min_y = min_y.min(p[1]);
-            max_x = max_x.max(p[0]);
-            max_y = max_y.max(p[1]);
+    for outline in outlines {
+        match outline {
+            StrokeOutline::Polygon(pts) => {
+                for p in pts {
+                    any = true;
+                    min_x = min_x.min(p[0]);
+                    min_y = min_y.min(p[1]);
+                    max_x = max_x.max(p[0]);
+                    max_y = max_y.max(p[1]);
+                }
+            }
+            StrokeOutline::Dot { cx, cy, radius } => {
+                any = true;
+                min_x = min_x.min(cx - radius);
+                min_y = min_y.min(cy - radius);
+                max_x = max_x.max(cx + radius);
+                max_y = max_y.max(cy + radius);
+            }
         }
     }
 
@@ -206,10 +283,10 @@ fn stroke_bbox(strokes: &[&Vec<[f64; 3]>], expand: f64) -> Option<StrokeBBox> {
     }
 
     Some(StrokeBBox {
-        min_x: min_x - expand,
-        min_y: min_y - expand,
-        max_x: max_x + expand,
-        max_y: max_y + expand,
+        min_x,
+        min_y,
+        max_x,
+        max_y,
     })
 }
 
@@ -231,7 +308,6 @@ fn rgba_to_grayscale(rgba: &[u8], width: u32, height: u32) -> GrayImage {
             let b = rgba[idx + 2] as f32;
             let a = rgba[idx + 3] as f32 / 255.0;
 
-            // Composite over white: result = src * alpha + white * (1 - alpha)
             let lum = 0.299 * r + 0.587 * g + 0.114 * b;
             let val = (lum * a + 255.0 * (1.0 - a)).round() as u8;
             gray.put_pixel(x, y, Luma([val]));
