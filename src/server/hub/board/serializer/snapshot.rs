@@ -95,6 +95,15 @@ fn build_node(
     let stroke_png_base64 = if node_strokes_3.is_empty() {
         None
     } else {
+        if std::env::var("DEBUG_RASTERIZE").is_ok() {
+            let total = strokes.len();
+            let assigned = node_strokes_3.len();
+            let unassigned = strokes.iter().filter(|s| s.node_id.is_none()).count();
+            eprintln!(
+                "DEBUG snapshot: node={}, total_strokes={total}, assigned={assigned}, unassigned={unassigned}",
+                node.id
+            );
+        }
         rasterize_png::rasterize_strokes_png(&node_strokes_3, &bounds, 1536, 10)
     };
 

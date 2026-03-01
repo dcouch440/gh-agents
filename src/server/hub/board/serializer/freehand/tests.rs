@@ -1,9 +1,9 @@
 //! Tests for the perfect-freehand Rust port.
 
+use super::get_stroke;
 use super::stroke_points::get_stroke_points;
 use super::types::*;
 use super::vec;
-use super::get_stroke;
 
 // ============================================================================
 // Vec math
@@ -75,9 +75,7 @@ fn running_length_increases() {
         size: 1.0, // small size so we don't skip jitter
         ..StrokeOptions::default()
     };
-    let input: Vec<[f64; 3]> = (0..20)
-        .map(|i| [i as f64 * 10.0, 0.0, 0.5])
-        .collect();
+    let input: Vec<[f64; 3]> = (0..20).map(|i| [i as f64 * 10.0, 0.0, 0.5]).collect();
     let result = get_stroke_points(&input, &opts);
 
     for pair in result.windows(2) {
@@ -130,9 +128,7 @@ fn straight_line_produces_outline() {
         ..StrokeOptions::default()
     };
 
-    let input: Vec<[f64; 3]> = (0..30)
-        .map(|i| [i as f64 * 5.0, 0.0, 0.5])
-        .collect();
+    let input: Vec<[f64; 3]> = (0..30).map(|i| [i as f64 * 5.0, 0.0, 0.5]).collect();
 
     let outline = get_stroke(&input, &opts);
     assert!(
@@ -152,14 +148,10 @@ fn pressure_affects_width() {
     };
 
     // Light pressure stroke
-    let light: Vec<[f64; 3]> = (0..30)
-        .map(|i| [i as f64 * 5.0, 0.0, 0.1])
-        .collect();
+    let light: Vec<[f64; 3]> = (0..30).map(|i| [i as f64 * 5.0, 0.0, 0.1]).collect();
 
     // Heavy pressure stroke
-    let heavy: Vec<[f64; 3]> = (0..30)
-        .map(|i| [i as f64 * 5.0, 0.0, 0.9])
-        .collect();
+    let heavy: Vec<[f64; 3]> = (0..30).map(|i| [i as f64 * 5.0, 0.0, 0.9]).collect();
 
     let light_outline = get_stroke(&light, &opts);
     let heavy_outline = get_stroke(&heavy, &opts);
@@ -207,4 +199,62 @@ fn sharp_corner_handled() {
         outline.len() >= 10,
         "L-shape should produce a substantial outline"
     );
+}
+
+#[test]
+fn compare_outline_with_js_reference() {
+    // Same stroke from debug_strokes.json, run through JS perfect-freehand v1.2.3
+    // with options: size=5, thinning=0.5, smoothing=0.5, streamline=0.5, simulatePressure=true
+    let stroke: Vec<[f64; 3]> = vec![
+        [213.0, 171.0, 0.5],
+        [210.0, 284.0, 0.5],
+        [198.0, 314.0, 0.5],
+        [190.0, 362.0, 0.5],
+        [197.0, 481.0, 0.5],
+        [189.0, 513.0, 0.5],
+        [194.0, 575.0, 0.5],
+        [186.0, 620.0, 0.5],
+    ];
+
+    let options = StrokeOptions {
+        size: 5.0,
+        simulate_pressure: true,
+        ..StrokeOptions::default()
+    };
+
+    let outline = get_stroke(&stroke, &options);
+
+    // JS produced 58 outline points
+    assert_eq!(
+        outline.len(),
+        58,
+        "Rust should produce same number of outline points as JS (58), got {}",
+        outline.len()
+    );
+
+    // Compare first few points with JS output (tolerance 0.001)
+    let js_first_points = [
+        [214.693241, 171.044953],
+        [212.846010, 236.018947],
+        [205.104154, 281.088164],
+        [197.197598, 327.738235],
+        [197.861631, 415.755028],
+        [193.517818, 471.777534],
+        [194.541943, 531.064511],
+        [190.364244, 582.317036],
+    ];
+
+    for (i, js_pt) in js_first_points.iter().enumerate() {
+        let rust_pt = &outline[i];
+        let dx = (rust_pt[0] - js_pt[0]).abs();
+        let dy = (rust_pt[1] - js_pt[1]).abs();
+        assert!(
+            dx < 0.01 && dy < 0.01,
+            "Point {i}: Rust=[{:.6}, {:.6}] vs JS=[{:.6}, {:.6}] (dx={dx:.6}, dy={dy:.6})",
+            rust_pt[0],
+            rust_pt[1],
+            js_pt[0],
+            js_pt[1]
+        );
+    }
 }

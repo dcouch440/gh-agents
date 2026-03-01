@@ -45,11 +45,7 @@ fn resolve_taper(taper: &TaperValue, size: f64, total_length: f64) -> f64 {
 }
 
 /// Average the first ≤10 points' pressures (simulating if needed).
-fn average_start_pressure(
-    points: &[StrokePoint],
-    simulate: bool,
-    size: f64,
-) -> f64 {
+fn average_start_pressure(points: &[StrokePoint], simulate: bool, size: f64) -> f64 {
     let limit = points.len().min(10);
     let mut pressure = points[0].pressure;
 
@@ -252,19 +248,11 @@ pub(crate) fn get_stroke_outline_points(
 
             let mut t = 0.0;
             while t <= 1.0 {
-                let left = vec::rotate(
-                    vec::sub(pt.point, perp),
-                    pt.point,
-                    FIXED_PI * t,
-                );
+                let left = vec::rotate(vec::sub(pt.point, perp), pt.point, FIXED_PI * t);
                 _last_left = left;
                 left_points.push(left);
 
-                let right = vec::rotate(
-                    vec::add(pt.point, perp),
-                    pt.point,
-                    FIXED_PI * -t,
-                );
+                let right = vec::rotate(vec::add(pt.point, perp), pt.point, FIXED_PI * -t);
                 _last_right = right;
                 right_points.push(right);
 

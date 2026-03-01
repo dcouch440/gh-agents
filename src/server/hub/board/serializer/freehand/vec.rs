@@ -66,7 +66,10 @@ pub fn rotate(a: Vec2, center: Vec2, angle: f64) -> Vec2 {
     let cos = angle.cos();
     let dx = a[0] - center[0];
     let dy = a[1] - center[1];
-    [dx * cos - dy * sin + center[0], dx * sin + dy * cos + center[1]]
+    [
+        dx * cos - dy * sin + center[0],
+        dx * sin + dy * cos + center[1],
+    ]
 }
 
 /// Linear interpolation between `a` and `b` by factor `t`.

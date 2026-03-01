@@ -62,11 +62,7 @@ mod tests {
     #[test]
     fn multiple_strokes_rasterize() {
         let strokes = vec![
-            vec![
-                [10.0, 10.0, 0.5],
-                [50.0, 10.0, 0.5],
-                [50.0, 50.0, 0.5],
-            ],
+            vec![[10.0, 10.0, 0.5], [50.0, 10.0, 0.5], [50.0, 50.0, 0.5]],
             vec![[100.0, 100.0, 0.5], [200.0, 200.0, 0.5]],
         ];
         let result = rasterize_strokes_png(&strokes, &dummy_bounds(), 400, 10);
@@ -150,5 +146,47 @@ mod tests {
         let bytes =
             base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &b64).unwrap();
         assert_eq!(&bytes[..4], &[0x89, 0x50, 0x4E, 0x47]);
+    }
+
+    #[test]
+    fn rectangle_edges_not_clipped() {
+        // Draw a rectangle where all edges sit at the input bbox boundary.
+        // Before the outline-based bbox fix, the stroke outlines extended
+        // beyond the input bbox and were clipped at the image edges.
+        let strokes = vec![vec![
+            [100.0, 100.0, 0.5],
+            [300.0, 100.0, 0.5],
+            [300.0, 300.0, 0.5],
+            [100.0, 300.0, 0.5],
+            [100.0, 100.0, 0.5],
+        ]];
+        let result = rasterize_strokes_png(&strokes, &dummy_bounds(), 400, 10);
+        assert!(result.is_some());
+
+        let b64 = result.unwrap();
+        let bytes =
+            base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &b64).unwrap();
+        let img = image::load_from_memory(&bytes).expect("valid PNG");
+        let gray = img.to_luma8();
+
+        // The top edge of the rectangle is at y=100 (the min y of input points).
+        // With the outline-based bbox, the outline extends above y=100 by the
+        // stroke radius. After scaling, stroke pixels should appear near the
+        // top padding boundary — not clipped away.
+        let has_stroke_near_top =
+            (10..30).any(|y| (0..gray.width()).any(|x| gray.get_pixel(x, y).0[0] < 128));
+        assert!(
+            has_stroke_near_top,
+            "top edge should have visible stroke pixels near padding (not clipped)"
+        );
+
+        // Check bottom edge too
+        let h = gray.height();
+        let has_stroke_near_bottom = (h.saturating_sub(30)..h.saturating_sub(10))
+            .any(|y| (0..gray.width()).any(|x| gray.get_pixel(x, y).0[0] < 128));
+        assert!(
+            has_stroke_near_bottom,
+            "bottom edge should have visible stroke pixels near padding (not clipped)"
+        );
     }
 }

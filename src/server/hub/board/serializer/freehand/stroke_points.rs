@@ -48,10 +48,7 @@ pub(crate) fn simulate_pressure(prev_pressure: f64, distance: f64, size: f64) ->
 ///
 /// The streamline parameter controls how much each point is interpolated
 /// toward the previous point (`0` = no smoothing, `1` = maximum smoothing).
-pub(crate) fn get_stroke_points(
-    input: &[[f64; 3]],
-    options: &StrokeOptions,
-) -> Vec<StrokePoint> {
+pub(crate) fn get_stroke_points(input: &[[f64; 3]], options: &StrokeOptions) -> Vec<StrokePoint> {
     if input.is_empty() {
         return vec![];
     }

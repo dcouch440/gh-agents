@@ -88,7 +88,14 @@ mod tests {
             "name": "researcher",
         });
 
-        broadcast::broadcast_step_event(&state, Some(&ctx), None, "configure_team", &input, &result);
+        broadcast::broadcast_step_event(
+            &state,
+            Some(&ctx),
+            None,
+            "configure_team",
+            &input,
+            &result,
+        );
 
         let envelope = rx.try_recv().unwrap();
         assert_eq!(envelope.topic, Topic::Workflow);
@@ -132,7 +139,14 @@ mod tests {
         let input = serde_json::json!({});
         let result = serde_json::json!({ "error": "Missing required parameter" });
 
-        broadcast::broadcast_step_event(&state, Some(&ctx), None, "configure_team", &input, &result);
+        broadcast::broadcast_step_event(
+            &state,
+            Some(&ctx),
+            None,
+            "configure_team",
+            &input,
+            &result,
+        );
 
         assert!(rx.try_recv().is_err());
     }
@@ -147,7 +161,14 @@ mod tests {
         let input = serde_json::json!({ "description": "Scan repos" });
         let result = serde_json::json!({ "status": "ok" });
 
-        broadcast::broadcast_step_event(&state, Some(&ctx), None, "configure_team", &input, &result);
+        broadcast::broadcast_step_event(
+            &state,
+            Some(&ctx),
+            None,
+            "configure_team",
+            &input,
+            &result,
+        );
 
         let envelope = rx.try_recv().unwrap();
         let value: serde_json::Value = serde_json::from_str(&envelope.json).unwrap();
