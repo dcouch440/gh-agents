@@ -281,15 +281,17 @@ function Canvas2D({
     const text = textareaRef.current.value
     const el = textareaRef.current
     el.style.height = 'auto'
-    const contentWidth = Math.max(BOARD.MIN_BOX_WIDTH - BOARD.BOX_PADDING_X * 2, el.scrollWidth)
     const contentHeight = el.scrollHeight
     el.style.height = `${contentHeight}px`
 
-    const width = Math.max(BOARD.MIN_BOX_WIDTH, Math.min(contentWidth + BOARD.BOX_PADDING_X * 2, BOARD.MAX_BOX_WIDTH))
+    const currentBox = elements.boxes.get(editingBoxId)
+    if (currentBox === undefined) return
+
+    const width = currentBox.width
     const height = Math.max(BOARD.MIN_BOX_HEIGHT, contentHeight + BOARD.BOX_PADDING_Y * 2)
 
     onBoxTextChange(editingBoxId, text, width, height)
-  }, [editingBoxId, onBoxTextChange])
+  }, [editingBoxId, elements.boxes, onBoxTextChange])
 
   const handleTextareaKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {
