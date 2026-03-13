@@ -9,16 +9,23 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 use anyhow::anyhow;
-use tracing::warn;
+use tracing::{info, warn};
+use uuid::Uuid;
 
 use crate::config::protocols::{roles, vars, DESIGNER};
+use crate::db::traits::CreateAgentExecutionInput;
 use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow, WorkflowStepEdgeRow};
+use crate::server::hub::engine::filters::FilterContext;
 use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::context::{build_context_block, ContextDocument};
 use crate::server::hub::protocols::execution_recorder::{
     PhaseCompletion, ProtocolExecutionRecorder,
 };
+use crate::server::hub::recorder::ExecutionRecorder;
+use crate::server::hub::strategies::react_designer::{ReactDesignerConfig, ReactDesignerStrategy};
+use crate::server::services::system_store::store as system_store;
 use crate::server::ws::events::WorkflowEventKind;
+use crate::types::{ExecutionType, UserId};
 
 use crate::server::hub::streaming::NullSink;
 
@@ -92,98 +99,52 @@ impl PipelinePhase for DesignerPhase {
             &child_edges,
         );
 
-        let (designed_prompts, token_usage) = match agent_designer::run_agent_designer(
-            dag.engine,
-            dag.state,
-            dag.ctx,
-            &ctx.step,
-            designer_input,
-            "",
-            dag.cancel,
-            Some(designer_phase.id),
-            &NullSink,
-        )
-        .await
-        {
-            Ok(result) => {
-                recorder
-                    .update_phase(
-                        designer_phase.id,
-                        PhaseCompletion {
-                            status: "complete",
-                            output_content: None,
-                            error_message: None,
-                            tokens_in: result.input_tokens,
-                            tokens_out: result.output_tokens,
-                            cost_usd: result.cost_usd,
-                            model: Some(&DESIGNER.agent("designer").model_id),
+        // Try the ReAct designer if S3 is available, fall back to one-shot
+        let use_react = dag.state.s3().is_some();
+
+        let (designed_prompts, token_usage) = if use_react {
+            match run_react_designer(dag, ctx, &child_edges, &designer_phase.id).await {
+                Ok((prompts, usage)) => {
+                    recorder
+                        .update_phase(
+                            designer_phase.id,
+                            PhaseCompletion {
+                                status: "complete",
+                                output_content: None,
+                                error_message: None,
+                                tokens_in: usage.input_tokens,
+                                tokens_out: usage.output_tokens,
+                                cost_usd: usage.cost_usd,
+                                model: Some(&DESIGNER.agent("react_designer").model_id),
+                            },
+                        )
+                        .await;
+
+                    broadcast_workflow_event(
+                        dag.state,
+                        dag.ctx,
+                        ctx.step.workflow_id,
+                        WorkflowEventKind::WorkforceDesignerProgress {
+                            step_id: ctx.step.id,
+                            status: "completed".to_string(),
                         },
-                    )
-                    .await;
+                    );
 
-                let mut prompts = map_designer_results(&result, &ctx.roster)?;
-                enforce_edge_routing(&mut prompts, &ctx.roster, &child_edges);
-
-                let usage = PhaseTokenUsage {
-                    input_tokens: result.input_tokens,
-                    output_tokens: result.output_tokens,
-                    cost_usd: result.cost_usd,
-                    run_id: Some(result.run_id),
-                };
-
-                broadcast_workflow_event(
-                    dag.state,
-                    dag.ctx,
-                    ctx.step.workflow_id,
-                    WorkflowEventKind::WorkforceDesignerProgress {
-                        step_id: ctx.step.id,
-                        status: "completed".to_string(),
-                    },
-                );
-
-                (prompts, usage)
+                    (prompts, usage)
+                }
+                Err(e) => {
+                    warn!(
+                        step_id = %ctx.step.id,
+                        error = %e,
+                        "ReAct designer failed, falling back to one-shot"
+                    );
+                    // Fall through to the one-shot path below
+                    run_oneshot_designer(dag, ctx, designer_input, &recorder, &designer_phase.id)
+                        .await
+                }
             }
-            Err(e) => {
-                recorder
-                    .update_phase(
-                        designer_phase.id,
-                        PhaseCompletion {
-                            status: "failed",
-                            output_content: None,
-                            error_message: Some(&e.to_string()),
-                            tokens_in: 0,
-                            tokens_out: 0,
-                            cost_usd: 0.0,
-                            model: None,
-                        },
-                    )
-                    .await;
-
-                broadcast_workflow_event(
-                    dag.state,
-                    dag.ctx,
-                    ctx.step.workflow_id,
-                    WorkflowEventKind::WorkforceDesignerProgress {
-                        step_id: ctx.step.id,
-                        status: "failed".to_string(),
-                    },
-                );
-
-                warn!(
-                    step_id = %ctx.step.id,
-                    error = %e,
-                    "Workforce designer failed, using static prompts"
-                );
-                let fallback =
-                    build_static_fallback_prompts(&ctx.brief, &ctx.roster, &ctx.base_prompt);
-                let usage = PhaseTokenUsage {
-                    input_tokens: 0,
-                    output_tokens: 0,
-                    cost_usd: 0.0,
-                    run_id: None,
-                };
-                (fallback, usage)
-            }
+        } else {
+            run_oneshot_designer(dag, ctx, designer_input, &recorder, &designer_phase.id).await
         };
 
         let user_notes_block = build_user_notes_block(&ctx.upstream_context);
@@ -194,6 +155,335 @@ impl PipelinePhase for DesignerPhase {
             token_usage,
         })
     }
+}
+
+/// Run the one-shot designer (existing path).
+async fn run_oneshot_designer(
+    dag: &DagContext<'_>,
+    ctx: &PipelineExecutionContext,
+    designer_input: crate::server::hub::dag::designer_input::DesignerInput,
+    recorder: &ProtocolExecutionRecorder<'_>,
+    phase_id: &Uuid,
+) -> (Vec<DesignedAgentPrompt>, PhaseTokenUsage) {
+    let child_edges = if let Some(child_wf_id) = ctx.step.child_workflow_id {
+        dag.state
+            .repos()
+            .workflows
+            .list_edges(child_wf_id)
+            .await
+            .unwrap_or_default()
+    } else {
+        vec![]
+    };
+
+    match agent_designer::run_agent_designer(
+        dag.engine,
+        dag.state,
+        dag.ctx,
+        &ctx.step,
+        designer_input,
+        "",
+        dag.cancel,
+        Some(*phase_id),
+        &NullSink,
+    )
+    .await
+    {
+        Ok(result) => {
+            recorder
+                .update_phase(
+                    *phase_id,
+                    PhaseCompletion {
+                        status: "complete",
+                        output_content: None,
+                        error_message: None,
+                        tokens_in: result.input_tokens,
+                        tokens_out: result.output_tokens,
+                        cost_usd: result.cost_usd,
+                        model: Some(&DESIGNER.agent("designer").model_id),
+                    },
+                )
+                .await;
+
+            let mut prompts = match map_designer_results(&result, &ctx.roster) {
+                Ok(p) => p,
+                Err(e) => {
+                    warn!(error = %e, "Failed to map designer results, using fallback");
+                    return (
+                        build_static_fallback_prompts(&ctx.brief, &ctx.roster, &ctx.base_prompt),
+                        PhaseTokenUsage {
+                            input_tokens: 0,
+                            output_tokens: 0,
+                            cost_usd: 0.0,
+                            run_id: None,
+                        },
+                    );
+                }
+            };
+            enforce_edge_routing(&mut prompts, &ctx.roster, &child_edges);
+
+            let usage = PhaseTokenUsage {
+                input_tokens: result.input_tokens,
+                output_tokens: result.output_tokens,
+                cost_usd: result.cost_usd,
+                run_id: Some(result.run_id),
+            };
+
+            broadcast_workflow_event(
+                dag.state,
+                dag.ctx,
+                ctx.step.workflow_id,
+                WorkflowEventKind::WorkforceDesignerProgress {
+                    step_id: ctx.step.id,
+                    status: "completed".to_string(),
+                },
+            );
+
+            (prompts, usage)
+        }
+        Err(e) => {
+            recorder
+                .update_phase(
+                    *phase_id,
+                    PhaseCompletion {
+                        status: "failed",
+                        output_content: None,
+                        error_message: Some(&e.to_string()),
+                        tokens_in: 0,
+                        tokens_out: 0,
+                        cost_usd: 0.0,
+                        model: None,
+                    },
+                )
+                .await;
+
+            broadcast_workflow_event(
+                dag.state,
+                dag.ctx,
+                ctx.step.workflow_id,
+                WorkflowEventKind::WorkforceDesignerProgress {
+                    step_id: ctx.step.id,
+                    status: "failed".to_string(),
+                },
+            );
+
+            warn!(
+                step_id = %ctx.step.id,
+                error = %e,
+                "Workforce designer failed, using static prompts"
+            );
+            let fallback = build_static_fallback_prompts(&ctx.brief, &ctx.roster, &ctx.base_prompt);
+            let usage = PhaseTokenUsage {
+                input_tokens: 0,
+                output_tokens: 0,
+                cost_usd: 0.0,
+                run_id: None,
+            };
+            (fallback, usage)
+        }
+    }
+}
+
+/// Run the ReAct designer — writes configs to the store one at a time.
+async fn run_react_designer(
+    dag: &DagContext<'_>,
+    ctx: &PipelineExecutionContext,
+    child_edges: &[WorkflowStepEdgeRow],
+    _phase_id: &Uuid,
+) -> Result<(Vec<DesignedAgentPrompt>, PhaseTokenUsage), HubError> {
+    let plan = dag
+        .state
+        .repos()
+        .workflows
+        .get_plan(ctx.step.id)
+        .await
+        .unwrap_or_default()
+        .unwrap_or_default();
+
+    let designer_cfg = DESIGNER.agent("react_designer");
+
+    // Create agent execution record
+    let ae_repo = &*dag.state.repos().agent_executions;
+    let designer_ae_id = ae_repo
+        .create_agent_execution(CreateAgentExecutionInput {
+            execution_type: ExecutionType::AgentDesigner,
+            agent_id: None,
+            workflow_step_id: Some(ctx.step.id),
+            parent_agent_execution_id: None,
+            system_prompt_rendered: String::new(),
+            input: String::new(),
+            room_session_id: None,
+            speaker_order: None,
+            workflow_execution_id: Some(dag.ctx.stage_execution_id),
+        })
+        .await
+        .ok()
+        .map(|row| row.id);
+
+    // Deterministic session ID for designer persistence
+    let designer_session_id = Uuid::new_v5(
+        &Uuid::NAMESPACE_OID,
+        format!("designer:{}", ctx.step.id).as_bytes(),
+    );
+
+    let strategy = ReactDesignerStrategy::new(ReactDesignerConfig {
+        state: dag.state.clone(),
+        step_id: ctx.step.id,
+        workflow_id: ctx.step.workflow_id,
+        roster: ctx.roster.clone(),
+        session_id: Some(designer_session_id),
+        plan,
+        builder_action: format!("Configured {}-agent roster", ctx.roster.len()),
+        agent_execution_id: designer_ae_id,
+    });
+
+    let filter_ctx = FilterContext::new(&designer_cfg.model_id, ctx.step.id);
+    let recorder = ExecutionRecorder::new(
+        &*dag.state.repos().sessions,
+        &*dag.state.repos().chat_messages,
+        Some(&*dag.state.repos().agent_executions),
+        Some(&*dag.state.repos().token_ledger),
+    );
+
+    info!(
+        step_id = %ctx.step.id,
+        agents = ctx.roster.len(),
+        "Running ReAct designer"
+    );
+
+    let result = dag
+        .engine
+        .clone_with_provider()
+        .with_filter_context(filter_ctx)
+        .execute(&strategy, "", &NullSink, &recorder, dag.cancel)
+        .await?;
+
+    let cost = crate::server::hub::pricing::compute_cost(
+        &designer_cfg.model_id,
+        result.input_tokens as i64,
+        result.output_tokens as i64,
+    );
+
+    // Parse designed configs from the store
+    let s3 = dag
+        .state
+        .s3()
+        .ok_or_else(|| HubError::Internal(anyhow!("S3 not available")))?;
+    let repo = dag.state.repos().system_files.as_ref();
+    let mut prompts =
+        parse_store_configs(s3, repo, ctx.step.workflow_id, ctx.step.id, &ctx.roster).await?;
+
+    enforce_edge_routing(&mut prompts, &ctx.roster, child_edges);
+
+    let usage = PhaseTokenUsage {
+        input_tokens: result.input_tokens as i64,
+        output_tokens: result.output_tokens as i64,
+        cost_usd: cost,
+        run_id: designer_ae_id,
+    };
+
+    // Persist design summary to session for next re-trigger
+    if let Some(summary) = strategy.take_design_summary() {
+        let _ = dag
+            .state
+            .repos()
+            .sessions
+            .insert_session_message(
+                UserId(dag.ctx.user_id),
+                designer_session_id,
+                Uuid::new_v4(),
+                "assistant".to_string(),
+                summary,
+            )
+            .await;
+    }
+
+    Ok((prompts, usage))
+}
+
+/// Stored agent config JSON shape (what the designer writes to the store).
+#[derive(serde::Deserialize)]
+struct StoredAgentConfig {
+    #[serde(default)]
+    tools: Vec<String>,
+    #[serde(default)]
+    system_prompt: String,
+    #[serde(default)]
+    assignment: String,
+    #[serde(default)]
+    expected_output: Option<String>,
+}
+
+/// Read designed agent configs from the store and map to DesignedAgentPrompts.
+async fn parse_store_configs(
+    s3: &crate::server::services::system_store::s3::S3Backend,
+    repo: &dyn crate::db::traits::SystemFileRepo,
+    workflow_id: Uuid,
+    step_id: Uuid,
+    roster: &[TaskAgentRosterRow],
+) -> Result<Vec<DesignedAgentPrompt>, HubError> {
+    let prefix = format!("design/{}/agents/", step_id);
+    let files = system_store::list_files(repo, workflow_id, &prefix)
+        .await
+        .map_err(|e| HubError::Internal(anyhow!("Failed to list store configs: {e}")))?;
+
+    // Build slug → roster entry lookup
+    let roster_by_slug: HashMap<String, &TaskAgentRosterRow> = roster
+        .iter()
+        .map(|r| (agent_designer::agent_name_to_slug(&r.name), r))
+        .collect();
+
+    let mut prompts = Vec::with_capacity(files.len());
+
+    for file in &files {
+        let slug = file
+            .path
+            .rsplit('/')
+            .next()
+            .and_then(|f| f.strip_suffix(".json"))
+            .unwrap_or("");
+
+        let roster_entry = match roster_by_slug.get(slug) {
+            Some(entry) => *entry,
+            None => {
+                warn!(
+                    slug = slug,
+                    "Store config has no matching roster agent, skipping"
+                );
+                continue;
+            }
+        };
+
+        let (bytes, _meta) = system_store::read_file(s3, repo, workflow_id, &file.path)
+            .await
+            .map_err(|e| {
+                HubError::Internal(anyhow!("Failed to read store config {}: {e}", file.path))
+            })?;
+
+        let config: StoredAgentConfig = serde_json::from_slice(&bytes).map_err(|e| {
+            HubError::Internal(anyhow!("Failed to parse store config {}: {e}", file.path))
+        })?;
+
+        prompts.push(DesignedAgentPrompt {
+            agent_roster_entry_id: roster_entry.id,
+            agent_name: roster_entry.name.clone(),
+            tools: config.tools,
+            system_prompt: config.system_prompt,
+            assignment: config.assignment,
+            expected_output: config.expected_output,
+            execution_order: roster_entry.execution_order,
+            receives_from: vec![],
+        });
+    }
+
+    if prompts.is_empty() {
+        return Err(HubError::Internal(anyhow!(
+            "ReAct designer produced no configs in the store"
+        )));
+    }
+
+    prompts.sort_by_key(|p| p.execution_order);
+    Ok(prompts)
 }
 
 // ── Shared Helpers ──────────────────────────────────────────────────────────
@@ -267,6 +557,7 @@ pub(crate) fn build_static_fallback_prompts(
                 tools: entry.capabilities.clone(),
                 system_prompt: role_ctx.system_prompt,
                 assignment: entry.role_description.clone(),
+                expected_output: None,
                 execution_order: entry.execution_order,
                 receives_from,
             }
@@ -300,6 +591,7 @@ fn map_designer_results(
             tools: entry.tools.clone(),
             system_prompt: entry.system_prompt.clone(),
             assignment: entry.assignment.clone(),
+            expected_output: entry.expected_output.clone(),
             execution_order: roster_entry.execution_order,
             receives_from: vec![],
         });

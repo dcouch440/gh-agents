@@ -5,6 +5,7 @@ pub mod chat;
 pub mod dag_step;
 pub mod dispatch;
 pub mod manager_dispatch;
+pub mod react_designer;
 pub mod workforce_agent;
 
 pub use agent_designer::{AgentDesignerConfig, AgentDesignerStrategy};
