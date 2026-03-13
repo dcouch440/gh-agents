@@ -56,11 +56,19 @@ pub struct DesignedAgentPrompt {
     pub tools: Vec<String>,
     pub system_prompt: String,
     pub assignment: String,
+    pub expected_output: Option<String>,
     pub reasoning: String,
     pub execution_order: i32,
 }
 
 // ── Name normalization ─────────────────────────────────────────────────────
+
+/// Convert an agent name to a filesystem-safe slug.
+///
+/// Reuses `normalize_agent_name()` — "Web Researcher" → "webresearcher".
+pub(crate) fn agent_name_to_slug(name: &str) -> String {
+    normalize_agent_name(name)
+}
 
 /// Normalize an agent name for case-insensitive matching across case styles.
 /// Strips spaces, underscores, hyphens, and lowercases.
@@ -88,6 +96,8 @@ pub(crate) struct DesignerAgentEntry {
     system_prompt: String,
     #[serde(alias = "task_prompt")]
     assignment: String,
+    #[serde(default)]
+    expected_output: Option<String>,
     reasoning: String,
 }
 
@@ -342,6 +352,7 @@ pub(crate) async fn run_agent_designer(
             tools: valid_tools,
             system_prompt: entry.system_prompt.clone(),
             assignment: entry.assignment.clone(),
+            expected_output: entry.expected_output.clone(),
             reasoning: entry.reasoning.clone(),
             execution_order: idx as i32,
         });

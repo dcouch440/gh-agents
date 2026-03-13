@@ -25,6 +25,7 @@ mod tests {
             tools: vec![],
             system_prompt: String::new(),
             assignment: String::new(),
+            expected_output: None,
             execution_order: 0,
             receives_from: receives_from.iter().map(|s| s.to_string()).collect(),
         }

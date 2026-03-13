@@ -5,3 +5,9 @@ agents:
     temperature: 0.4
     max_rounds: 1
     context_budget: 480000
+  react_designer:
+    model_id: "tier:2"
+    max_tokens: 8192
+    temperature: 0.4
+    max_rounds: 20
+    context_budget: 480000

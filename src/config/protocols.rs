@@ -168,6 +168,16 @@ pub mod vars {
         pub const ARCHETYPE_GUIDANCE: &str = "Designer.archetype_guidance";
     }
 
+    /// Template variables for the ReAct designer prompts.
+    pub mod react_designer {
+        pub const NODE_NAME: &str = "ReactDesigner.node_name";
+        pub const ROSTER_STATUS: &str = "ReactDesigner.roster_status";
+        pub const PRIOR_DESIGN: &str = "ReactDesigner.prior_design";
+        pub const PLAN: &str = "ReactDesigner.plan";
+        pub const ROSTER: &str = "ReactDesigner.roster";
+        pub const BUILDER_ACTION: &str = "ReactDesigner.builder_action";
+    }
+
     /// Variables assembled by the platform (config, context, runtime state).
     pub mod system {
         pub const DOC_NAME: &str = "System.doc_name";
@@ -284,10 +294,17 @@ pub mod roles {
         )),
     };
 
-    /// Agent Designer: generates optimized prompt pairs for agents.
+    /// Agent Designer: generates optimized prompt pairs for agents (one-shot).
     pub static DESIGNER: RoleDefinition = RoleDefinition {
         system: include_str!("../../config/designer/system.md"),
         prompt: include_str!("../../config/designer/prompt.md"),
+        response: None,
+    };
+
+    /// ReAct Agent Designer: multi-turn designer that writes configs to the store.
+    pub static REACT_DESIGNER: RoleDefinition = RoleDefinition {
+        system: include_str!("../../config/designer/react_system.md"),
+        prompt: include_str!("../../config/designer/react_prompt.md"),
         response: None,
     };
 

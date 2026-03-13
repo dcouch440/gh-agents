@@ -14,6 +14,7 @@ pub(crate) struct DesignedAgentPrompt {
     pub tools: Vec<String>,
     pub system_prompt: String,
     pub assignment: String,
+    pub expected_output: Option<String>,
     pub execution_order: i32,
     pub receives_from: Vec<String>,
 }
