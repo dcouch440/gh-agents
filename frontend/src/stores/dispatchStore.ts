@@ -17,6 +17,7 @@ type DispatchTraceEvent =
   | { type: 'tool_start'; toolName: string; toolId: string; input: Record<string, unknown>; ts: string }
   | { type: 'tool_end'; toolName: string; toolId: string; result: unknown; ts: string }
   | { type: 'error'; error: string; ts: string }
+  | { type: 'phase_marker'; label: string; ts: string }
 
 type DispatchEntry = {
   executionId: string
@@ -110,9 +111,13 @@ const handleWsEvent = (msg: WsWireMessage): void => {
       break
     }
     case SESSION_EVENT.DISPATCH_PROGRESS: {
+      const message = (data.message as string | undefined) ?? null
       updateEntry(stepId, (e) => ({
         ...e,
-        message: (data.message as string | undefined) ?? null,
+        message,
+        trace: message !== null
+          ? [...e.trace, { type: 'phase_marker' as const, label: message, ts: msg.ts }]
+          : e.trace,
       }))
       break
     }

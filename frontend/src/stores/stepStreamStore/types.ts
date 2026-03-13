@@ -19,10 +19,18 @@ type SourceStreamState = {
   completedAt: string | null
 }
 
+type StepDesignState = {
+  status: SourceStreamStatus
+  designedCount: number
+  totalCount: number
+  lastAgentName: string | null
+}
+
 type StepStreamState = {
   sources: Record<string, SourceStreamState>
-  designerStatus: 'idle' | 'running' | 'completed' | 'failed'
+  designerStatus: SourceStreamStatus
+  designStatusByStep: Record<string, StepDesignState>
   activeStepId: string | null
 }
 
-export type { StepStreamState, SourceStreamState, SourceStreamStatus, StreamToolUse }
+export type { StepStreamState, SourceStreamState, SourceStreamStatus, StreamToolUse, StepDesignState }

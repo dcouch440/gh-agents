@@ -14,9 +14,9 @@ use crate::server::hub::execution::strategies::react_designer::{
     ReactDesignerConfig, ReactDesignerStrategy,
 };
 use crate::server::hub::recorder::ExecutionRecorder;
-use crate::server::hub::streaming::NullSink;
+use crate::server::hub::streaming::DispatchStreamSink;
 use crate::server::state::AppState;
-use crate::server::ws::events::WorkflowEventKind;
+use crate::server::ws::events::{SessionEvent, SessionEventKind, WorkflowEventKind};
 use crate::types::{ExecutionType, UserId};
 
 /// Run the designer after the builder dispatch completes.
@@ -24,11 +24,17 @@ use crate::types::{ExecutionType, UserId};
 /// Loads the roster and plan from the DB, creates a ReactDesignerStrategy,
 /// and executes it. Configs are written to the system store. Non-fatal —
 /// logs errors but doesn't propagate them.
+///
+/// `execution_id` is the dispatch execution that triggered this handoff.
+/// Designer tool calls stream through the same dispatch trace via
+/// `DispatchStreamSink`, giving the frontend a continuous builder → designer
+/// trace in the dispatch panel.
 pub async fn run_designer_after_builder(
     state: &AppState,
     step_id: Uuid,
     workflow_id: Uuid,
     user_id: UserId,
+    execution_id: Uuid,
 ) {
     // Gate: S3 must be available
     let Some(_s3) = state.s3() else {
@@ -75,8 +81,16 @@ pub async fn run_designer_after_builder(
         "Starting designer handoff after builder"
     );
 
-    // Broadcast designer started
+    // Broadcast designer started (workflow topic — for StepTree status)
     broadcast_designer_progress(state, workflow_id, step_id, "started");
+
+    // Broadcast phase marker (session topic — for dispatch panel trace)
+    broadcast_dispatch_progress(
+        state,
+        execution_id,
+        step_id,
+        &format!("Designer phase: configuring {} agent(s)...", roster.len()),
+    );
 
     // Create agent execution record
     let designer_ae_id = repos
@@ -134,9 +148,12 @@ pub async fn run_designer_after_builder(
 
     let engine = ExecutionEngine::new(provider, state.env().debug_stream);
 
+    // Stream designer tool calls through the same dispatch trace
+    let sink = DispatchStreamSink::new(state.clone(), execution_id, step_id);
+
     match engine
         .with_filter_context(filter_ctx)
-        .execute(&strategy, "", &NullSink, &recorder, None)
+        .execute(&strategy, "", &sink, &recorder, None)
         .await
     {
         Ok(result) => {
@@ -183,6 +200,23 @@ fn broadcast_designer_progress(state: &AppState, workflow_id: Uuid, step_id: Uui
         kind: WorkflowEventKind::WorkforceDesignerProgress {
             step_id,
             status: status.to_string(),
+        },
+    });
+}
+
+fn broadcast_dispatch_progress(
+    state: &AppState,
+    execution_id: Uuid,
+    step_id: Uuid,
+    message: &str,
+) {
+    state.broadcast_session(SessionEvent {
+        session_id: Uuid::nil(),
+        user_id: None,
+        kind: SessionEventKind::DispatchProgress {
+            execution_id,
+            step_id,
+            message: message.to_string(),
         },
     });
 }

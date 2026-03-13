@@ -3,6 +3,7 @@ import type { WsWireMessage } from '@/types/ws'
 import type {
   WorkforceDesignerProgressData,
   WorkforceAgentProgressData,
+  DesignerAgentDesignedData,
   StepStreamTokenData,
   StepStreamToolStartData,
   StepStreamToolEndData,
@@ -34,7 +35,32 @@ const handleWsEvent = (msg: WsWireMessage): void => {
             : d.status === 'completed' ? 'completed' as const
               : d.status === 'failed' ? 'failed' as const
                 : 'idle' as const
-        store.setState({ designerStatus, activeStepId: d.step_id })
+        store.setState((s) => {
+          const existing = s.designStatusByStep[d.step_id]
+          const stepStatus = designerStatus === 'running'
+            ? { status: 'running' as const, designedCount: 0, totalCount: existing?.totalCount ?? 0, lastAgentName: null }
+            : { status: designerStatus, designedCount: existing?.designedCount ?? 0, totalCount: existing?.totalCount ?? 0, lastAgentName: existing?.lastAgentName ?? null }
+          return {
+            designerStatus,
+            activeStepId: d.step_id,
+            designStatusByStep: { ...s.designStatusByStep, [d.step_id]: stepStatus },
+          }
+        })
+        break
+      }
+      case WORKFLOW_EVENT.DESIGNER_AGENT_DESIGNED: {
+        const d = msg.data as DesignerAgentDesignedData
+        store.setState((s) => ({
+          designStatusByStep: {
+            ...s.designStatusByStep,
+            [d.step_id]: {
+              status: 'running' as const,
+              designedCount: d.designed_count,
+              totalCount: d.total_count,
+              lastAgentName: d.agent_name,
+            },
+          },
+        }))
         break
       }
       case WORKFLOW_EVENT.WORKFORCE_AGENT_PROGRESS: {

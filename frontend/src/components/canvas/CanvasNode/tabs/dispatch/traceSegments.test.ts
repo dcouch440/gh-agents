@@ -93,4 +93,30 @@ describe('buildDispatchSegments', () => {
     const segments = buildDispatchSegments(trace)
     expect(segments).toEqual([])
   })
+
+  it('produces phase segment from phase_marker event', () => {
+    const trace: DispatchTraceEvent[] = [
+      { type: 'token', content: 'Builder done.', ts: '2025-01-01T00:00:00Z' },
+      { type: 'phase_marker', label: 'Designer phase: configuring 3 agent(s)...', ts: '2025-01-01T00:00:01Z' },
+      { type: 'tool_start', toolName: 'write_file', toolId: 't1', input: { path: 'design/agents/scanner.json' }, ts: '2025-01-01T00:00:02Z' },
+      { type: 'tool_end', toolName: 'write_file', toolId: 't1', result: { status: 'written' }, ts: '2025-01-01T00:00:03Z' },
+    ]
+    const segments = buildDispatchSegments(trace)
+    expect(segments).toHaveLength(3)
+    expect(segments[0]).toEqual({ type: 'text', content: 'Builder done.' })
+    expect(segments[1]).toEqual({ type: 'phase', label: 'Designer phase: configuring 3 agent(s)...' })
+    expect(segments[2]).toMatchObject({ type: 'tool', toolName: 'write_file', status: 'complete' })
+  })
+
+  it('flushes text buffer before phase segment', () => {
+    const trace: DispatchTraceEvent[] = [
+      { type: 'token', content: 'thinking...', ts: '2025-01-01T00:00:00Z' },
+      { type: 'phase_marker', label: 'Phase 2', ts: '2025-01-01T00:00:01Z' },
+    ]
+    const segments = buildDispatchSegments(trace)
+    expect(segments).toEqual([
+      { type: 'text', content: 'thinking...' },
+      { type: 'phase', label: 'Phase 2' },
+    ])
+  })
 })

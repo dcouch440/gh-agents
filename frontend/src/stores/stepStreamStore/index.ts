@@ -1,6 +1,6 @@
 import { store } from './_store'
 import { handleWsEvent } from './wsHandler'
-import type { StepStreamState, SourceStreamState } from './types'
+import type { StepStreamState, SourceStreamState, StepDesignState } from './types'
 
 const selectSource = (sourceId: string) => (s: StepStreamState): SourceStreamState | null => s.sources[sourceId] ?? null
 
@@ -13,6 +13,11 @@ const selectDesignerStatus = (s: StepStreamState): StepStreamState['designerStat
 
 const selectActiveStepId = (s: StepStreamState): string | null => s.activeStepId
 
+const selectDesignStatusForStep = (stepId: string) => (s: StepStreamState): StepDesignState | null =>
+  s.designStatusByStep[stepId] ?? null
+
+const selectDesignStatusByStep = (s: StepStreamState): Record<string, StepDesignState> => s.designStatusByStep
+
 export const stepStreamStore = {
   store,
   handleWsEvent,
@@ -21,6 +26,8 @@ export const stepStreamStore = {
   selectSourcesForStep,
   selectDesignerStatus,
   selectActiveStepId,
+  selectDesignStatusForStep,
+  selectDesignStatusByStep,
 }
 
-export type { StepStreamState, SourceStreamState, SourceStreamStatus, StreamToolUse } from './types'
+export type { StepStreamState, SourceStreamState, SourceStreamStatus, StreamToolUse, StepDesignState } from './types'

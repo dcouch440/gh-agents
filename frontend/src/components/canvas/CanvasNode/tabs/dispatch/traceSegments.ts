@@ -15,10 +15,13 @@ type DispatchToolSegment = {
 
 type DispatchErrorSegment = { type: 'error'; error: string }
 
+type DispatchPhaseSegment = { type: 'phase'; label: string }
+
 type DispatchSegment =
   | DispatchTextSegment
   | DispatchToolSegment
   | DispatchErrorSegment
+  | DispatchPhaseSegment
 
 // ── Builder ──────────────────────────────────────────────────────────────────
 
@@ -68,6 +71,11 @@ const buildDispatchSegments = (trace: DispatchTraceEvent[]): DispatchSegment[] =
         segments.push({ type: 'error', error: event.error })
         break
       }
+      case 'phase_marker': {
+        flushText()
+        segments.push({ type: 'phase', label: event.label })
+        break
+      }
     }
   }
 
@@ -76,4 +84,4 @@ const buildDispatchSegments = (trace: DispatchTraceEvent[]): DispatchSegment[] =
 }
 
 export { buildDispatchSegments }
-export type { DispatchSegment, DispatchTextSegment, DispatchToolSegment, DispatchErrorSegment }
+export type { DispatchSegment, DispatchTextSegment, DispatchToolSegment, DispatchErrorSegment, DispatchPhaseSegment }

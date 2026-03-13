@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import Box from '@mui/material/Box'
 import { useStore, workflowStore, workflowExecutionStore, sidebarStore } from '@/stores'
+import { stepStreamStore } from '@/stores/stepStreamStore'
 import { EmptyState } from '@/components/primitives'
 import { StepTreeRow } from './StepTreeRow'
 import { buildStepTree } from './buildStepTree'
@@ -39,6 +40,7 @@ function StepTree() {
   const stepStates = useStore(workflowExecutionStore.store, workflowExecutionStore.selectStepStates)
   const expandedStepIds = useStore(sidebarStore.store, sidebarStore.selectExpandedStepIds)
   const outputExpandedStepIds = useStore(sidebarStore.store, sidebarStore.selectOutputExpandedStepIds)
+  const designStatusByStep = useStore(stepStreamStore.store, stepStreamStore.selectDesignStatusByStep)
 
   const entries = useMemo(() => buildStepTree(steps, edges, rosterByStep), [steps, edges, rosterByStep])
 
@@ -60,6 +62,7 @@ function StepTree() {
         }
 
         const stepState = stepStates[entry.step.id]
+        const designState = designStatusByStep[entry.step.id]
 
         return (
           <StepTreeRow
@@ -75,6 +78,8 @@ function StepTree() {
             isOutputExpanded={outputExpandedStepIds[entry.step.id] === true}
             onToggle={() => { sidebarStore.toggleStep(entry.step.id) }}
             onToggleOutputExpand={() => { sidebarStore.toggleOutputExpand(entry.step.id) }}
+            designStatus={designState?.status ?? null}
+            designProgress={designState !== undefined ? `${String(designState.designedCount)}/${String(designState.totalCount)}` : null}
           />
         )
       })}

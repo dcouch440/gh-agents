@@ -8,6 +8,7 @@ import { SkeletonLines } from './SkeletonLines'
 import { CELL_WIDTH, computeLines, computeContinuationLines } from './gutterLines'
 import type { GutterCell } from './buildStepTree'
 import type { StepExecutionStatus } from '@/stores/workflowExecutionStore/types'
+import type { SourceStreamStatus } from '@/stores/stepStreamStore'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,8 @@ type StepTreeRowProps = {
   readonly isOutputExpanded: boolean
   readonly onToggle: () => void
   readonly onToggleOutputExpand: () => void
+  readonly designStatus?: SourceStreamStatus | null
+  readonly designProgress?: string | null
 }
 
 // ── Output Preview ──────────────────────────────────────────────────────────
@@ -108,6 +111,8 @@ function StepTreeRow({
   isOutputExpanded,
   onToggle,
   onToggleOutputExpand,
+  designStatus,
+  designProgress,
 }: StepTreeRowProps) {
   const theme = useTheme()
   const lines = computeLines(gutter)
@@ -191,9 +196,24 @@ function StepTreeRow({
           {name || 'Untitled'}
         </Typography>
 
+        {/* Design progress label */}
+        {designStatus === 'running' && designProgress !== null && (
+          <Typography
+            sx={{
+              fontSize: 10,
+              color: '#58a6ff',
+              fontFamily: 'monospace',
+              flexShrink: 0,
+              ml: 0.5,
+            }}
+          >
+            {designProgress}
+          </Typography>
+        )}
+
         {/* Status dot */}
         <Box sx={{ ml: 1, flexShrink: 0 }}>
-          <StatusDot status={status} />
+          <StatusDot status={status} designStatus={designStatus} />
         </Box>
       </Box>
 

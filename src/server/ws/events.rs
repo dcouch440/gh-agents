@@ -222,6 +222,13 @@ pub enum WorkflowEventKind {
         step_id: Uuid,
         status: String,
     },
+    /// A single agent config was written by the designer.
+    DesignerAgentDesigned {
+        step_id: Uuid,
+        agent_name: String,
+        designed_count: usize,
+        total_count: usize,
+    },
     Completed {
         #[serde(skip_serializing_if = "Option::is_none")]
         duration_ms: Option<u64>,
@@ -372,6 +379,7 @@ impl WorkflowEvent {
             WorkflowEventKind::StepPaused { .. } => "step_paused",
             WorkflowEventKind::WorkforceAgentProgress { .. } => "workforce_agent_progress",
             WorkflowEventKind::WorkforceDesignerProgress { .. } => "workforce_designer_progress",
+            WorkflowEventKind::DesignerAgentDesigned { .. } => "designer_agent_designed",
             WorkflowEventKind::Completed { .. } => "completed",
             WorkflowEventKind::Failed { .. } => "failed",
             WorkflowEventKind::Resumed { .. } => "resumed",
