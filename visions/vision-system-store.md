@@ -2,7 +2,7 @@
 
 ## What It Is
 
-Every workflow becomes a **system** — a self-contained unit with its own filesystem, metadata index, and semantic search. The store serves two purposes: it's the **designer's workspace** for building agent prompts iteratively, and it's the **shared state** where running agents write their output for downstream steps to discover.
+Every workflow becomes a **system** — a self-contained unit with its own filesystem and metadata index. The store serves two purposes: it's the **designer's workspace** for building agent prompts iteratively, and it's the **shared state** where running agents write their output for downstream steps to discover.
 
 The user's project is their project — a GitHub repo, a folder of documents, whatever they're working on. The workflow operates on it. The system store lives alongside it as `.system/`.
 
@@ -12,15 +12,15 @@ Three problems converge here:
 
 **1. The designer is one-shot.** Today, the Agent Designer generates system prompts for every agent in a single LLM call. For 3 agents this works. For 10+ agents, prompt quality degrades because the LLM can't hold all inter-agent coordination logic in one pass. It can't self-correct — if agent 5's design conflicts with agent 2's, it has no way to go back and fix agent 2.
 
-**2. Data between steps is blind.** Data flows as untyped JSON in `StepExecutionEnvelope.data`. Tools are static — `read_file` says "Read the contents of a file" with no knowledge of what files exist or what they contain. If an image generation step writes a PNG, the video step has no way to discover it exists, what it depicts, or where to find it.
+**2. Data between steps is blind.** Data flows as untyped JSON in `StepExecutionEnvelope.data`. Tools are static — `read_file` says "Read the contents of a file" with no knowledge of what files exist or what they contain. If a research step writes findings, the report step has no way to discover they exist, what they cover, or where to find them.
 
-**3. Multi-modal pipelines can't work without an artifact layer.** You can't build a story-to-movie pipeline when steps pass JSON blobs. You need files with descriptions, types, and semantic searchability — images, video, audio, documents all discoverable by downstream agents.
+**3. Agent output is invisible to other agents.** When steps pass JSON blobs, downstream agents can't discover what upstream agents produced. You need files with descriptions, types, and discoverability — all visible to downstream agents through a shared namespace.
 
-The store fixes all three. The designer writes prompts to files it can read back and revise. Running agents write artifacts as real files with metadata. The designer wires explicit paths between agents, with similarity search as a fallback for discovery.
+The store fixes all three. The designer writes prompts to files it can read back and revise. Running agents write artifacts with metadata. A runtime manifest automatically presents upstream artifacts to downstream agents — the designer shapes what agents produce and consume, the system handles discovery.
 
 ## The Unified Namespace
 
-One filesystem. One `read_file`. One `write_file`. The `.system/` directory is a real directory on disk, volume-mounted into the Docker container. Agents see the whole tree:
+One filesystem. One `read_file`. One `write_file`. The `.system/` namespace is managed by the store service backed by S3 (MinIO in dev, real S3 in production). Agents see the whole tree:
 
 ```
 my-project/                         # THE GOAL — the user's actual project
@@ -39,7 +39,7 @@ my-project/                         # THE GOAL — the user's actual project
 
 `artifacts/` is **not** scoped — it's a shared global namespace. Agents in any step can read artifacts from any other step. The designer picks paths that make sense for the task and avoids collisions by seeing what files already exist.
 
-For workflows that aren't operating on a code repo — like a story-to-movie pipeline — `.system/` itself is the project. The generated assets, documents, and media all live there.
+For workflows that aren't operating on a code repo — like a report-generation pipeline — `.system/` itself is the project. The generated documents and data all live there.
 
 ### System Files vs Project Files
 
@@ -53,16 +53,16 @@ The designer reinforces this in every agent's prompt. The naming itself teaches 
 The designer orchestrates the **transfer** — early agents produce working documents in `.system/`, later agents refine them, and the final agent applies the deliverable to the real project.
 
 ```
-Agent 1 (Researcher):  writes .system/artifacts/legal/tos_research.md   (supporting)
-Agent 2 (Drafter):     reads .system/artifacts/legal/tos_research.md
-                       writes .system/artifacts/legal/tos_draft.md       (supporting)
-Agent 3 (Reviewer):    reads .system/artifacts/legal/tos_draft.md
-                       writes .system/artifacts/legal/tos_final.md       (supporting)
-Agent 4 (Publisher):   reads .system/artifacts/legal/tos_final.md
+Agent 1 (Researcher):  writes research notes to .system/artifacts/      (supporting)
+Agent 2 (Drafter):     reviews Researcher's artifacts
+                       writes draft to .system/artifacts/                (supporting)
+Agent 3 (Reviewer):    reviews Drafter's artifacts
+                       writes final version to .system/artifacts/        (supporting)
+Agent 4 (Publisher):   reviews Reviewer's artifacts
                        writes src/pages/terms-of-use.md                  (THE GOAL)
 ```
 
-Same `write_file` tool for both. The path tells you which is which. The designer's assignment for Agent 4: "Read the final Terms of Use at `.system/artifacts/legal/tos_final.md` and publish it to `src/pages/terms-of-use.md`."
+Same `write_file` tool for both. The path prefix tells you which is which — `.system/` is scaffolding, project paths are the deliverable. The designer's assignment for Agent 4: "Review the Reviewer's final Terms of Use artifacts and publish to `src/pages/terms-of-use.md`." The runtime manifest shows exactly which files the Reviewer produced.
 
 ### Implicit Tools
 
@@ -70,43 +70,77 @@ Every agent always has `read_file` and `write_file` available — these are impl
 
 This means agents with `tools: []` can still write system files and read upstream artifacts. The tools list only contains *additional* capabilities beyond the baseline.
 
-### Real Files, Not Virtual
+### Storage and Container Access
 
-`.system/` is a real directory on disk. Volume-mounted into the Docker container:
+All file operations go through the `SystemStore` service, which delegates to S3 (MinIO in dev, real S3 in production). See [Storage Architecture](#storage-architecture) for details.
 
-```
-Host: /data/workflows/{workflow_id}/system/ → Container: /app/.system/
-```
+When agents run in Docker containers, the store pre-syncs relevant files from S3 into the container's working directory before execution. Shell commands (`ffmpeg`, etc.) operate on the local working directory. Files written during execution are synced back to S3 on completion.
 
-No virtual filesystem. No FUSE. No materialization step. When an agent runs `shell: ffmpeg -i .system/artifacts/art/scene_01.mp4 ...`, it reads a real file. When an agent calls `write_file(".system/artifacts/report.md", content)`, it writes a real file.
-
-Postgres tracks **metadata** as a sidecar index — descriptions, embeddings, tags, who produced the file, media type. But the files themselves are just files on disk. The store service is a thin layer: write the real file, update the metadata row.
+Postgres tracks **metadata** as a sidecar index — descriptions, tags, who produced the file, media type. The store service is a thin layer: write via the backend, update the metadata row.
 
 ```
-write_file(".system/artifacts/research/findings.md", content)
-  1. Write file to disk at /data/workflows/{id}/system/artifacts/research/findings.md
-  2. INSERT/UPDATE system_files SET
-       path = 'artifacts/research/findings.md',
+write_file("findings.md", content, description: "Competitive pricing research notes")
+  1. Store service resolves path → .system/artifacts/findings.md
+  2. Writes to S3 (MinIO in dev, real S3 in prod)
+  3. INSERT/UPDATE system_files SET
+       path = 'artifacts/findings.md',
        media_type = 'text/markdown',
+       description = 'Competitive pricing research notes',
        produced_by = step_id,
+       produced_by_agent = agent_name,
        size_bytes = len(content),
        version = version + 1
-  3. Queue async: generate description + embedding (background Haiku call)
+  4. File immediately visible in workforce manifest + downstream on completion
 ```
 
 ## Storage Architecture
 
-Real files on disk. Postgres tracks metadata. No virtual filesystem, no content-addressing layer.
+Postgres tracks metadata. File content lives in S3-compatible object storage. One code path — same `S3Backend` in dev and prod, different endpoint.
 
-### The Directory
+### The Backend
+
+```rust
+struct S3Backend {
+    client: aws_sdk_s3::Client,
+    bucket: String,
+}
+
+impl S3Backend {
+    async fn read(&self, key: &str) -> Result<Vec<u8>>;
+    async fn write(&self, key: &str, bytes: &[u8]) -> Result<()>;
+    async fn delete(&self, key: &str) -> Result<()>;
+    async fn list(&self, prefix: &str) -> Result<Vec<String>>;
+    async fn exists(&self, key: &str) -> Result<bool>;
+}
+```
+
+**Development**: MinIO in docker-compose, `S3_ENDPOINT=http://minio:9000`. Same S3 API, runs locally.
+
+**Production**: Real S3 (or R2/GCS). Swap the endpoint and credentials. No code change.
+
+```yaml
+# docker-compose.yml
+minio:
+  image: minio/minio
+  command: server /data
+  ports:
+    - "9000:9000"
+    - "9001:9001"  # console
+  environment:
+    MINIO_ROOT_USER: minioadmin
+    MINIO_ROOT_PASSWORD: minioadmin
+```
+
+### The Namespace
 
 ```
-Host filesystem:
-/data/workflows/{workflow_id}/system/     → mounted as /app/.system/ in container
-  ├── design/{step_id}/agents/            # agent configs (real JSON files)
-  ├── artifacts/                          # working files (real files)
-  └── refs/                              # reference material (real files)
+s3://bucket/workflows/{workflow_id}/system/
+  ├── design/{step_id}/agents/            # agent configs (JSON files)
+  ├── artifacts/                          # working files
+  └── refs/                              # reference material
 ```
+
+The `SystemStore` service wraps the `S3Backend` and manages metadata in Postgres. Everything above this layer doesn't know or care about S3.
 
 ### Metadata Index (Postgres)
 
@@ -115,9 +149,8 @@ system_files
 ├── system_id        uuid
 ├── path             text                   # relative to .system/
 ├── media_type       text
-├── description      text                   # auto-generated summary
+├── description      text                   # agent-provided on write
 ├── tags             text[]
-├── embedding        vector(384)            # for similarity search
 ├── produced_by      uuid (step that wrote)
 ├── version          int
 ├── size_bytes       int
@@ -138,39 +171,42 @@ system_mounts
 └── access           text (read/read_write)
 ```
 
-Postgres is a **sidecar index**, not the source of truth for file content. The files on disk are the source of truth. Postgres tracks who produced each file, its description, tags, and embedding vector for similarity search.
+Postgres is a **sidecar index**, not the source of truth for file content. S3 holds the actual bytes. Postgres tracks who produced each file, its description, tags, and media type.
 
 ### The Store Service
 
-A thin layer over the real filesystem + metadata:
+A thin layer over S3 + metadata:
 
 ```rust
 SystemStore {
-    // File ops — read/write real files, update metadata
+    s3: Arc<S3Backend>,
+
+    // File ops — read/write via S3, update metadata
     read(path) -> bytes
-    write(path, bytes, meta) -> updates file on disk + metadata row
-    edit(path, find, replace) -> edits file on disk + bumps version
+    write(path, bytes, meta) -> writes to S3 + metadata row
+    edit(path, find, replace) -> edits via S3 + bumps version
     list(prefix) -> entries from metadata index
 
-    // Discovery — embedding similarity search
-    search(query, scope) -> ranked results from pgvector
+    // Artifact flow — runtime manifest for downstream agents
+    artifacts_for_step(step_id, run_id) -> files written by upstream steps
+    artifacts_for_workforce(step_id, run_id) -> files written by any agent in this step
 
     // Versioning — lightweight bookmarks
     snapshot(label) -> snapshot_id
     restore(snapshot_id) -> reverts files to snapshot versions
 
-    // Cross-system — federated search
+    // Cross-system — mounted stores
     mount(target_system_id, mount_point, access)
 }
 ```
 
 ### Store Lifecycle
 
-**Creation**: When a workflow is created, the host directory `/data/workflows/{workflow_id}/system/` is created. Empty until the first builder → designer cycle or user upload.
+**Creation**: When a workflow is created, the namespace `workflows/{workflow_id}/system/` is initialized as an S3 prefix. Empty until the first builder → designer cycle or user upload.
 
-**Cleanup on node deletion**: When a DAG step is removed, its `design/{step_id}/` directory is deleted (real files removed, metadata rows deleted). Artifacts the step's agents produced remain in `.system/artifacts/` — downstream steps may still reference them. The `produced_by` column lets the user find and clean up orphaned artifacts.
+**Cleanup on node deletion**: When a DAG step is removed, its `design/{step_id}/` prefix is deleted (files removed from backend, metadata rows deleted). Artifacts the step's agents produced remain in `artifacts/` — downstream steps may still reference them. The `produced_by` column lets the user find and clean up orphaned artifacts.
 
-**Cleanup on workflow deletion**: The entire directory is removed (`rm -rf`). All `system_files` metadata rows for that `system_id` are deleted. All snapshots and mounts for that system are deleted.
+**Cleanup on workflow deletion**: The entire namespace is removed. All `system_files` metadata rows for that `system_id` are deleted. All snapshots and mounts for that system are deleted.
 
 **Re-execution**: Files persist across runs. Artifacts from previous executions remain unless explicitly overwritten. Agents writing to the same path create a new version. Input-hash caching can skip steps whose inputs haven't changed.
 
@@ -240,7 +276,7 @@ The builder already owns the roster (names, roles, dependencies, capabilities, e
 {
   "tools": ["file_read", "content_search"],
   "system_prompt": "You are a senior security scanner specializing in OWASP Top 10 vulnerability detection...",
-  "assignment": "Scan the codebase for security vulnerabilities. Write detailed findings to .system/artifacts/security/raw_findings.md. Respond with a compact findings list.",
+  "assignment": "Scan the codebase for security vulnerabilities. Write detailed findings to the store. Respond with a compact findings list.",
   "expected_output": "Numbered list of findings. Each: file:line, vuln type, severity estimate. Full details in store."
 }
 ```
@@ -252,70 +288,77 @@ Same shape as the current `DesignedAgentPrompt` minus the fields the builder alr
 2. **User visibility** — the config panel shows it. The user sees at a glance what each agent produces without reading the full system prompt.
 3. **Self-documentation** — the designer uses it as a contract with itself across turns.
 
-### What The Designer Sees
+### The Designer's Prompt
 
-The designer receives:
+The designer's context is split between the system prompt (rebuilt each turn) and the instruction (static per run). The builder already processed the board state and distilled it into the plan — the designer trusts the builder's interpretation and does not see raw board state.
 
-1. **Roster** — agent names, roles, dependencies, capabilities (from DB, set by builder)
-2. **Plan** — the builder's execution blueprint (from Passdown). This is the designer's primary context. The original node text is the builder's domain — the designer trusts the builder's interpretation.
-3. **Available capabilities** — the pool of tools agents can be assigned
-4. **Roster status** — which agents already have designs in the store (from store state)
-5. **Existing store files** — listing of `.system/artifacts/` files from prior steps or previous runs
-6. **Upstream step info** — what upstream DAG steps produce, for cross-step artifact references
+#### System Prompt
 
-The designer does NOT see:
-- The original canvas text (the builder already interpreted it)
-- An explicit changeset (the designer infers what changed by comparing roster_status against existing configs)
+```xml
+<role>
+You are the agent designer for "{{node_name}}". The builder
+configured a team — names, roles, capabilities, dependencies.
+Your job: write each agent's runtime prompt.
 
-On initial design (new node), roster_status shows all agents as pending. The designer writes all configs from scratch using the plan as its guide.
+You think in cognitive patterns — how each agent reasons,
+what it notices, how its output serves the next agent's input.
+The builder decided WHO. You decide HOW they think.
+</role>
 
-On re-design (roster changed), roster_status shows a mix of designed and pending. The designer reads existing configs for designed agents, writes new configs for pending agents, and checks whether existing configs need updates to coordinate with new agents. No explicit "what changed" — the store state IS the truth.
+{{roster_status}}
 
-### The Designer's Understanding of the Pipeline
+<tools>
+write_file(path, content)
+  Write agent config to design/agents/{slug}.json
+  Content: { tools, system_prompt, assignment, expected_output }
 
-The designer understands the distinction between **working files** and **deliverables** — the same way a tech lead understands that a PR draft isn't the merged commit:
+read_file(path)
+  Read a config you already wrote. Use this to verify
+  the format chain connects across agents.
 
-1. **Choose non-colliding paths** — it sees existing store files and picks paths that make sense.
-2. **Reference upstream artifacts** — it knows which store paths were written by prior steps and tells its agents exactly where to read.
-3. **Orchestrate transfer** — working files flow between agents in the store, the final agent applies the deliverable to the real project.
+complete_design(summary)
+  Signal completion. Summary: topology shape, format chain,
+  key decisions. No tools after this.
+</tools>
 
-The designer tells each agent what to read from the previous agent and what to produce for the next one.
+<guidelines>
+One agent at a time. Your tool history has every config
+you wrote this run — use it to verify the format chain.
+On re-triggers, read existing configs from prior runs first.
 
-### How The Designer Solves Context Doubling
+Each config has four fields:
+- tools: capabilities beyond baseline (read_file/write_file
+  are always implicit)
+- system_prompt: who they are, how they think, what they
+  write to the store
+- assignment: the task, referencing <previous_agent_outputs>
+  for upstream text and upstream agent artifacts for depth
+- expected_output: what the response looks like — the text
+  flowing to downstream agents. Keep it lean. Full work
+  goes to the store.
 
-The DAG already handles routing — `receives_from` is set by the builder via dependencies. The designer doesn't control which agents' outputs get injected. What it controls is **what those outputs look like**.
+Shape data flow through the prompts:
+1. Full work → store (via write_file)
+2. Response → lean, structured
+3. Downstream reviews upstream agents' artifacts for depth
 
-The current problem: every agent's full text response flows to downstream agents via `<previous_agent_outputs>`. Agent 5 sees Agents 1-4's complete outputs, most of it redundant because Agent 3 already synthesized 1+2's work.
+If <builder_action> says no changes and all agents are
+designed, call complete_design immediately.
+</guidelines>
+```
 
-The designer solves this through prompt engineering, not runtime machinery:
-
-1. **Tell agents to write full work to the store**: "Write your complete analysis to `.system/artifacts/security/triage.md`."
-2. **Tell agents to keep responses lean**: "Respond with the prioritized list only — findings sorted by severity, false positives removed."
-3. **Tell downstream agents where to find depth**: "For full context on each finding, read `.system/artifacts/security/triage.md`."
-
-The agent's response becomes the natural handoff — concise, structured, designed for the next agent. The full work product lives in the store for anyone who needs depth. No `<handoff>` tags, no runtime extraction, no new routing abstractions. The designer is smart enough to shape the data flow through the prompts themselves.
-
-### Roster Status Injection
-
-Each turn, the designer's system prompt includes the current state — built from the store, not from conversation history:
+**`{{roster_status}}`** is rebuilt each turn via `rebuild_system_prompt()` so the designer sees its progress after each `write_file`:
 
 ```xml
 <roster_status>
-  ✓ Lead Researcher    — designed (v1)
-  ✓ Market Scanner     — designed (v1)
-  ✓ Data Analyst       — designed (v2, revised)
-  · Fact Checker       — pending
-  · Report Writer      — pending
-  · Editor             — pending
+  ✓ Scanner        — designed (v1)
+  · FactChecker    — pending
+  ✓ Analyzer       — designed (v1)
 
-  Designed: 3/6
-  Dependencies: Lead Researcher → Data Analyst → Report Writer
-                Market Scanner → Fact Checker → Report Writer
-                Report Writer → Editor
+  Designed: 2/3
+  Dependencies: Scanner → FactChecker → Analyzer
 </roster_status>
 ```
-
-The designer doesn't have to reconstruct state from its own tool call history. It sees the truth every turn.
 
 ```rust
 fn build_roster_status(roster: &[TaskAgentRosterRow], store: &SystemStore) -> String {
@@ -329,11 +372,91 @@ fn build_roster_status(roster: &[TaskAgentRosterRow], store: &SystemStore) -> St
 }
 ```
 
+#### Instruction (User Message)
+
+The per-run context. On first design, no `<prior_design>` block. On re-trigger, prior design summaries appear first.
+
+```xml
+<prior_design>
+1. Designed 3-agent linear pipeline. Scanner → Analyzer → Reporter.
+   Format chain: numbered findings → prioritized list → full report.
+   Each agent writes full work to store, responds lean. Downstream
+   agents reference upstream artifacts by agent name via manifest.
+</prior_design>
+
+<plan>
+## Objective
+Scan codebase for OWASP Top 10 vulnerabilities, prioritize
+by severity, produce remediation report.
+
+## Agent Guidance
+### Scanner
+- Systematic grep by vulnerability category
+- Write raw findings with code snippets to store
+
+### Analyzer
+- Severity: CRITICAL/HIGH/MEDIUM/LOW
+- Flag false positives explicitly
+
+### Reporter
+- Executive summary, findings by severity, fix examples
+</plan>
+
+<roster>
+Scanner
+  role: "Security scanner who greps for vulnerability
+        patterns and confirms findings."
+  capabilities: [file_read, content_search]
+  receives_from: []
+
+Analyzer
+  role: "Security analyst who verifies findings and
+        assesses severity."
+  capabilities: [file_read, content_search]
+  receives_from: [Scanner]
+
+Reporter
+  role: "Technical writer who produces remediation docs."
+  capabilities: []
+  receives_from: [Analyzer]
+</roster>
+
+<builder_action>
+Configured 3-agent pipeline: Scanner → Analyzer → Reporter
+for security vulnerability scanning with OWASP Top 10 focus.
+</builder_action>
+```
+
+The designer does NOT see:
+- **Board state** — the builder already interpreted it into the plan
+- **Canvas text** — the builder's domain
+- **Upstream DAG step details** — cross-step routing is handled by the DAG at runtime, not by the designer
+- **Store file listings** — no runtime artifacts exist at design time; the designer tells agents what to produce, the runtime manifest handles discovery
+- **Beliefs** — beliefs are a chat-path concept; the dispatch flow uses DAG topology for cross-node context
+
+On initial design (new node), roster_status shows all agents as pending. The designer writes all configs from scratch using the plan as its guide.
+
+On re-design (roster changed), roster_status shows a mix of designed and pending. The designer reads existing configs, writes new configs for pending agents, checks whether existing agents need updates. The `<builder_action>` tells it what changed.
+
+### How The Designer Solves Context Doubling
+
+The DAG already handles routing — `receives_from` is set by the builder via dependencies. The designer doesn't control which agents' outputs get injected. What it controls is **what those outputs look like**.
+
+The current problem: every agent's full text response flows to downstream agents via `<previous_agent_outputs>`. Agent 5 sees Agents 1-4's complete outputs, most of it redundant because Agent 3 already synthesized 1+2's work.
+
+The designer solves this through prompt engineering, not runtime machinery:
+
+1. **Tell agents to write full work to the store**: "Write your complete analysis to the store."
+2. **Tell agents to keep responses lean**: "Respond with the prioritized list only — findings sorted by severity, false positives removed."
+3. **Tell downstream agents whose artifacts to review**: "Review the Analyzer's triage artifacts for full context on each finding."
+
+The agent's response becomes the natural handoff — concise, structured, designed for the next agent. The full work product lives in the store, discoverable via the `<upstream_artifacts>` manifest. No `<handoff>` tags, no runtime extraction, no new routing abstractions. The designer shapes the data flow through the prompts themselves.
+
 ### The Designer's Tool Loop
 
-The designer works one agent at a time, reading back prior configs to verify format alignment across the pipeline.
+The designer works one agent at a time. On the first run, no read-backs are needed — the tool call history has every config the designer just wrote. On re-triggers, the designer reads existing configs from prior runs before making updates.
 
-#### Example: 3-Agent Security Audit
+#### Example: 3-Agent Security Audit (First Run)
 
 ```
 Roster: Scanner → Analyzer → Reporter
@@ -342,8 +465,8 @@ Plan: "Scan codebase for OWASP Top 10 vulnerabilities, prioritize, produce remed
 Turn 1: [roster_status: 0/3 designed]
   Think: "Linear pipeline. Scanner produces raw findings, Analyzer
          filters and prioritizes, Reporter writes the doc. Scanner
-         should write full findings to store so Analyzer can reference
-         specific files. Scanner's response should be compact."
+         should write full findings to store so Analyzer can review them
+         via the artifact manifest. Scanner's response should be compact."
 
   write_file("design/agents/scanner.json", {
     tools: ["file_read", "content_search"],
@@ -359,21 +482,18 @@ Turn 1: [roster_status: 0/3 designed]
       For each finding: file path, line number, vulnerability type,
       the offending code snippet (3-5 lines).
 
-      Write complete findings to .system/artifacts/security/raw_findings.md
-      with full code context. Keep your response to a structured list —
-      one line per finding with path:line, type, and severity estimate.",
+      Write your complete findings to the store with full code context.
+      Keep your response to a structured list — one line per finding with
+      path:line, type, and severity estimate.",
     assignment: "Scan the codebase for security vulnerabilities. Focus on
-      OWASP Top 10 categories. Write detailed findings to
-      .system/artifacts/security/raw_findings.md. Respond with a compact
-      findings list.",
+      OWASP Top 10 categories. Write detailed findings to the store.
+      Respond with a compact findings list.",
     expected_output: "Numbered list of findings. Each: file:line, vuln type,
-      severity estimate. Full details in store."
+      severity estimate. Full details written to store."
   })
 
 Turn 2: [roster_status: 1/3 designed]
-  read_file("design/agents/scanner.json")
-  → Scanner outputs numbered list with file:line references
-  → Full findings in .system/artifacts/security/raw_findings.md
+  // Scanner's config is in tool history from Turn 1 — no read needed
 
   write_file("design/agents/analyzer.json", {
     tools: ["file_read", "content_search"],
@@ -390,21 +510,18 @@ Turn 2: [roster_status: 1/3 designed]
       3. Use content_search to check if the pattern appears elsewhere
       4. Assign severity: CRITICAL / HIGH / MEDIUM / LOW
 
-      Write full triage to .system/artifacts/security/triage.md. Your response
-      should be the prioritized list only — findings sorted by severity,
-      false positives removed.",
+      Write your full triage to the store. Your response should be the
+      prioritized list only — findings sorted by severity, false positives
+      removed.",
     assignment: "Triage the Scanner's findings in <previous_agent_outputs>.
-      Verify in source code, assess severity. Read full findings at
-      .system/artifacts/security/raw_findings.md for code context. Write triage
-      to .system/artifacts/security/triage.md. Respond with prioritized list.",
+      Verify in source code, assess severity. Review the Scanner's artifacts
+      for full code context. Write triage to the store. Respond with
+      prioritized list.",
     expected_output: "Prioritized findings sorted by severity. False positives
       removed. Each: severity, file:line, type, one-line justification."
   })
 
 Turn 3: [roster_status: 2/3 designed]
-  read_file("design/agents/analyzer.json")
-  → Analyzer outputs prioritized list sorted by severity
-
   write_file("design/agents/reporter.json", {
     tools: [],
     system_prompt: "You are a technical writer specializing in security
@@ -415,20 +532,26 @@ Turn 3: [roster_status: 2/3 designed]
       report: executive summary (3 sentences), findings grouped by
       severity (CRITICAL first), remediation priority checklist.
 
-      Write the report to .system/artifacts/security/remediation_report.md.",
+      Write the report to the store.",
     assignment: "Write a remediation report from the Analyzer's prioritized
-      findings in <previous_agent_outputs>. For full context on each
-      finding, read .system/artifacts/security/triage.md. Write to
-      .system/artifacts/security/remediation_report.md.",
+      findings in <previous_agent_outputs>. Review the Analyzer's artifacts
+      for full context on each finding. Write the report to the store.",
     expected_output: "Complete remediation report with executive summary,
       findings by severity with fix examples, priority checklist."
   })
 
 Turn 4: [roster_status: 3/3 designed]
-  done()
+  complete_design({
+    summary: "Designed 3-agent linear pipeline. Scanner writes raw findings
+      to store, responds with compact list. Analyzer triages with source
+      verification, writes triage to store. Reporter produces remediation
+      doc. Format chain: numbered findings → prioritized list → full report.
+      Each agent writes full work to store, responds lean. Downstream agents
+      reference upstream artifacts by agent name via the manifest."
+  })
 ```
 
-#### Example: 5-Agent Research Pipeline (Diamond Shape)
+#### Example: 5-Agent Research Pipeline (Diamond Shape, First Run)
 
 ```
 Roster: WebResearcher ──→ FactChecker → Synthesizer → Writer
@@ -450,12 +573,11 @@ Turn 1: [roster_status: 0/5 designed]
       specific claim, source URL, publication date, source type
       (primary/secondary).
 
-      Write complete notes to .system/artifacts/research/web_findings.md.
-      Your response: structured claims list, one per line.",
+      Write complete notes to the store. Your response: structured
+      claims list, one per line.",
     assignment: "Search the web for recent nuclear fusion developments.
       Last 12 months: milestones, funding, policy, commercial progress.
-      Write full notes to .system/artifacts/research/web_findings.md.
-      Respond with structured claims list.",
+      Write full notes to the store. Respond with structured claims list.",
     expected_output: "Numbered claims list. Each: claim text, source
       (primary/secondary), date. 10-20 claims."
   })
@@ -468,21 +590,18 @@ Turn 2: [roster_status: 1/5 designed]
       between demonstrated results (net energy gain, sustained plasma)
       and projected timelines (commercialization estimates).
 
-      Write full notes to .system/artifacts/research/academic_findings.md.
-      Your response: structured claims list — same format as any
-      research agent. Mark each as 'demonstrated' or 'projected'.",
+      Write full notes to the store. Your response: structured claims
+      list — same format as any research agent. Mark each as
+      'demonstrated' or 'projected'.",
     assignment: "Search for academic publications on nuclear fusion.
-      Focus on demonstrated results and credible projections. Write to
-      .system/artifacts/research/academic_findings.md. Respond with claims list.",
+      Focus on demonstrated results and credible projections. Write
+      full notes to the store. Respond with claims list.",
     expected_output: "Numbered claims list. Each: claim text, source,
       date, demonstrated/projected. 10-20 claims."
   })
 
 Turn 3: [roster_status: 2/5 designed]
-  read_file("design/agents/web_researcher.json")
-  read_file("design/agents/academic_researcher.json")
-  → Both produce numbered claims lists — compatible format. Good.
-  → FactChecker receives both in <previous_agent_outputs>
+  // Both researchers' configs are in tool history — compatible format verified
 
   write_file("design/agents/fact_checker.json", {
     tools: [],
@@ -496,14 +615,12 @@ Turn 3: [roster_status: 2/5 designed]
       4. Rate: HIGH (cross-confirmed, primary), MEDIUM (single,
          primary), LOW (single, secondary)
 
-      Write full verification to .system/artifacts/research/verification.md.
-      Respond with verified list only — debunked removed,
-      contradictions flagged.",
+      Write full verification to the store. Respond with verified
+      list only — debunked removed, contradictions flagged.",
     assignment: "Verify claims from both researchers in
       <previous_agent_outputs>. Cross-reference and rate confidence.
-      Full analysis at .system/artifacts/research/verification.md. For source
-      context read .system/artifacts/research/web_findings.md and
-      .system/artifacts/research/academic_findings.md.",
+      Review the WebResearcher's and AcademicResearcher's artifacts
+      for source context. Write verification to the store.",
     expected_output: "Verified claims list. Each: claim, confidence
       (HIGH/MEDIUM/LOW), verification note. Contradictions flagged."
   })
@@ -515,19 +632,16 @@ Turn 4: [roster_status: 3/5 designed]
       findings into coherent narrative structure. Group by theme,
       lead with HIGH confidence claims. Identify 3-5 key takeaways.
 
-      Write outline to .system/artifacts/synthesis/outline.md.",
+      Write outline to the store.",
     assignment: "Synthesize verified claims from FactChecker in
       <previous_agent_outputs>. Group by theme, lead with strongest
-      evidence. Write to .system/artifacts/synthesis/outline.md. Respond with
-      outline and top takeaways.",
+      evidence. Write outline to the store. Respond with outline and
+      top takeaways.",
     expected_output: "Thematic outline with 3-5 key takeaways. Each
       section: theme, key claims, evidence strength."
   })
 
 Turn 5: [roster_status: 4/5 designed]
-  read_file("design/agents/synthesizer.json")
-  → Outline with takeaways — good input for Writer
-
   write_file("design/agents/writer.json", {
     tools: [],
     system_prompt: "You are a technical briefing writer for executive
@@ -535,110 +649,131 @@ Turn 5: [roster_status: 4/5 designed]
       Executive summary (5 sentences), sections per theme, conclusion.
       1500-2500 words. Authoritative, no speculation beyond evidence.
 
-      Write to .system/artifacts/reports/fusion_briefing.md.",
+      Write the briefing to the store.",
     assignment: "Write the briefing from the Synthesizer's outline in
-      <previous_agent_outputs>. For claim details, read
-      .system/artifacts/research/verification.md. Write to
-      .system/artifacts/reports/fusion_briefing.md.",
+      <previous_agent_outputs>. Review the FactChecker's artifacts for
+      claim details. Write the briefing to the store.",
     expected_output: "Complete briefing document, 1500-2500 words.
       Executive summary, thematic sections, conclusion."
   })
 
 Turn 6: [roster_status: 5/5 designed]
-  Think: "Format chain check:
-         WebResearcher → claims list ✓
-         AcademicResearcher → claims list (same format) ✓
-         FactChecker expects claims → verified list ✓
-         Synthesizer expects verified list → outline ✓
-         Writer expects outline → full document ✓
-         Store paths distinct, no collisions.
-         FactChecker references both researcher store paths."
-  done()
+  complete_design({
+    summary: "Designed 5-agent diamond pipeline. Two parallel researchers
+      (web + academic) produce compatible claims lists. FactChecker
+      cross-references at merge point, rates confidence. Synthesizer
+      groups by theme. Writer produces full briefing. Format chain verified:
+      claims lists → verified list → outline → briefing. Each agent
+      writes full work to store, downstream references by agent name
+      via the artifact manifest."
+  })
 ```
 
-#### Example: 4-Agent Story-to-Images Pipeline
+#### Example: 4-Agent Content Marketing Pipeline (First Run)
 
 ```
-Roster: StoryWriter → ScenePlanner → ArtDirector → ImageGenerator
-Plan: "Write children's story, break into scenes, define visual direction,
-       generate illustrations."
+Roster: Researcher → SEOAnalyst → Writer → Editor
+Plan: "Research topic, analyze SEO landscape, write optimized article,
+       editorial review and fact-check."
 
 Turn 1: [roster_status: 0/4 designed]
-  Think: "Creative pipeline. Key: visual consistency. StoryWriter must
-         include character physical descriptions since this feeds image
-         generation downstream. ArtDirector establishes style bible."
+  Think: "Linear pipeline with a consistency constraint. SEOAnalyst must
+         establish a keyword brief and editorial style guide that Writer
+         follows — like a style bible. Researcher writes full notes to
+         store, responds lean. Editor reviews all upstream artifacts."
 
-  write_file("design/agents/story_writer.json", {
+  write_file("design/agents/researcher.json", {
     tools: [],
-    system_prompt: "You are a children's story writer for ages 6-10.
-      Vivid, visual prose. Every character gets a physical description
-      (hair, clothing, distinguishing features) — this story will be
-      illustrated. Structure: title, characters section (name +
-      appearance + personality), then story with scene breaks (---).
+    system_prompt: "You are a topic research specialist who gathers
+      comprehensive background on a subject. For each finding: the claim,
+      source URL, publication date, relevance to the topic. Separate
+      hard facts from opinions and estimates.
 
-      Write to .system/artifacts/story/story.md.",
-    assignment: "Write a children's story about a girl who discovers her
-      saxophone can talk to animals. 5-7 scenes. Include detailed
-      character descriptions. Write to .system/artifacts/story/story.md.",
-    expected_output: "Complete story with character descriptions and
-      clear scene breaks. 5-7 scenes."
+      Write complete research notes to the store — organized by subtopic
+      with full source citations. Keep your response to a structured
+      findings summary only.",
+    assignment: "Research the assigned topic thoroughly. Gather recent
+      data, expert opinions, and key statistics. Write full notes to the
+      store. Respond with a structured findings summary.",
+    expected_output: "Numbered findings summary. Each: key point, source,
+      relevance. 10-15 findings. Full notes written to store."
   })
 
 Turn 2: [roster_status: 1/4 designed]
-  write_file("design/agents/scene_planner.json", {
+  write_file("design/agents/seo_analyst.json", {
     tools: [],
-    system_prompt: "You are a storyboard planner who breaks narratives
-      into visual scenes. For each scene: scene_number, setting,
-      characters_present, action, emotion, composition_note.
+    system_prompt: "You are an SEO content strategist who analyzes
+      search landscape and produces editorial briefs.
 
-      Write as JSON to .system/artifacts/story/scenes.json.",
-    assignment: "Break the story in <previous_agent_outputs> into
-      illustrated scenes. Character descriptions are in
-      .system/artifacts/story/story.md. Write to .system/artifacts/story/scenes.json.",
-    expected_output: "JSON array of scenes with visual direction."
+      Produce two deliverables:
+      1. Keyword brief — primary keyword, secondary keywords, search
+         intent, competitor content gaps, target word count.
+      2. Editorial style guide — tone, audience level, structure
+         requirements, key points to cover, points to avoid.
+
+      Write both as separate files to the store. Your response should
+      be the keyword brief summary only.",
+    assignment: "Analyze the SEO landscape for the topic based on the
+      Researcher's findings in <previous_agent_outputs>. Review the
+      Researcher's artifacts for source material. Write keyword brief
+      and editorial style guide to the store.",
+    expected_output: "Keyword brief: primary keyword, 5-8 secondary
+      keywords, search intent, target word count, content gaps."
   })
 
 Turn 3: [roster_status: 2/4 designed]
-  read_file("design/agents/scene_planner.json")
-  → JSON scenes — ArtDirector needs this plus character details
-
-  write_file("design/agents/art_director.json", {
+  write_file("design/agents/writer.json", {
     tools: [],
-    system_prompt: "You are an art director for children's illustration.
-      First establish a style bible: art style, color palette, character
-      consistency rules. Then for each scene write a generation prompt
-      including style, character appearance, composition, lighting.
+    system_prompt: "You are a content writer who produces SEO-optimized
+      articles following editorial briefs precisely.
 
-      Style bible to .system/artifacts/art/style_bible.md.
-      Prompts to .system/artifacts/art/prompts.json (scene_number, prompt, aspect_ratio).",
-    assignment: "Read scenes in <previous_agent_outputs> and full story
-      at .system/artifacts/story/story.md for character details. Create style
-      bible at .system/artifacts/art/style_bible.md. Write per-scene generation
-      prompts to .system/artifacts/art/prompts.json.",
-    expected_output: "Style bible + per-scene generation prompts in JSON."
+      Before writing, review the SEOAnalyst's editorial style guide
+      and keyword brief from the store. Follow the style guide for
+      tone, structure, and audience level. Naturally incorporate
+      keywords from the brief — no keyword stuffing.
+
+      Write the complete article to the store.",
+    assignment: "Write the article following the SEOAnalyst's keyword
+      brief in <previous_agent_outputs>. Review the SEOAnalyst's
+      artifacts for the editorial style guide and the Researcher's
+      artifacts for source material. Write the article to the store.",
+    expected_output: "Complete article following the editorial brief.
+      SEO-optimized, properly structured, target word count met."
   })
 
 Turn 4: [roster_status: 3/4 designed]
-  read_file("design/agents/art_director.json")
-  → Outputs prompts.json — ImageGenerator reads it
+  write_file("design/agents/editor.json", {
+    tools: [],
+    system_prompt: "You are a senior editor who reviews content for
+      accuracy, style compliance, and SEO alignment.
 
-  write_file("design/agents/image_generator.json", {
-    tools: ["generate_image"],
-    system_prompt: "You are an illustration producer. For each scene
-      prompt, call generate_image. After each generation, check the
-      result against the style bible. If a character looks wrong,
-      adjust and regenerate. Save to .system/artifacts/art/illustrations/
-      as scene_01.png, scene_02.png, etc.",
-    assignment: "Read prompts at .system/artifacts/art/prompts.json and style
-      bible at .system/artifacts/art/style_bible.md. Generate an illustration
-      per scene. Validate consistency. Save to
-      .system/artifacts/art/illustrations/.",
-    expected_output: "One illustration per scene. Summary of each with
-      consistency notes."
+      Review process:
+      1. Check factual claims against the Researcher's source notes
+      2. Verify style guide compliance from the SEOAnalyst's brief
+      3. Check keyword usage and density
+      4. Flag any unsupported claims or style violations
+
+      Write your editorial review to the store. Your response is the
+      final edited article with a brief editorial note.",
+    assignment: "Review the Writer's article in <previous_agent_outputs>.
+      Review the Researcher's artifacts for fact-checking, the
+      SEOAnalyst's artifacts for style guide compliance. Write editorial
+      review to the store. Respond with the final article.",
+    expected_output: "Final edited article with editorial note summarizing
+      changes made, claims verified, and style compliance status."
   })
 
 Turn 5: [roster_status: 4/4 designed]
-  done()
+  complete_design({
+    summary: "Designed 4-agent content marketing pipeline. Researcher
+      writes full notes to store, responds with findings summary.
+      SEOAnalyst establishes keyword brief + editorial style guide
+      (written to store) that Writer must follow. Writer produces
+      article per the brief. Editor fact-checks against Researcher's
+      sources and verifies style guide compliance. Each agent writes
+      full work to store, downstream agents reference by name via
+      artifact manifest."
+  })
 ```
 
 #### Example: 1-Agent Simple Task
@@ -653,14 +788,17 @@ Turn 1: [roster_status: 0/1 designed]
     system_prompt: "You are an OCR specialist who reads handwritten text
       and produces clean transcriptions. Preserve line breaks, layout,
       emphasis. Mark ambiguous text with [illegible] or [unclear: guess].
-      Write to .system/artifacts/transcription.md.",
+      Write the transcription to the store.",
     assignment: "Read and transcribe all handwritten text from the
-      provided image. Write to .system/artifacts/transcription.md.",
+      provided image. Write the transcription to the store.",
     expected_output: "Clean transcription with layout preserved."
   })
 
 Turn 2: [roster_status: 1/1 designed]
-  done()
+  complete_design({
+    summary: "Designed single OCR agent. Reads handwritten text, preserves
+      layout, marks ambiguous text. Writes transcription to store."
+  })
 ```
 
 ### The Pattern
@@ -668,21 +806,60 @@ Turn 2: [roster_status: 1/1 designed]
 Every designer loop follows the same rhythm:
 1. **Think about the data flow** — what each agent produces and what the next one needs
 2. **Write one config** — system prompt, assignment, tools, expected output
-3. **Read back prior configs** — verify the format chain connects
+3. **Verify the format chain** — the designer's own tool history has every config it just wrote. On re-triggers, it reads existing configs from prior runs.
 4. **Catch misalignment** — edit if Agent N's output doesn't match Agent N+1's expectations
-5. **Verify at the end** — spot-check the chain before calling done()
+5. **Complete** — call `complete_design` with a summary of the full design
 
-The designer catches its own mistakes. It reads back what it wrote, spots coordination issues, and fixes them. One-shot can't do this.
+The designer catches its own mistakes because its tool history contains every config from this run. On re-triggers, it reads prior configs from the store to understand what exists before making changes. One-shot can't self-correct either way.
 
+### Designer Completion and Session History
+
+The designer follows the same completion and session pattern as the builder.
+
+**Completion tool: `complete_design`**
+
+```json
+{
+  "summary": "What was designed — topology shape, format chain, key decisions (1-5 sentences)."
+}
+```
+
+When the designer calls `complete_design`:
+1. The engine stops (`should_stop() = true`)
+2. The summary is persisted as an assistant message in the designer's session
+3. The design run is marked complete
+
+**Persistent session**: Each step has a designer session (keyed by step_id, role = "designer"), separate from the builder session. Summaries accumulate across design runs.
+
+**Prior design injection**: On re-trigger, the designer's `build_messages` fetches the last 3 summaries from the session and injects them as `<prior_design>`:
+
+```xml
+<prior_design>
+1. Designed 3-agent linear pipeline. Scanner → Analyzer → Reporter.
+   Format chain: numbered findings → prioritized list → full report.
+   Each agent writes full work to store, responds lean.
+2. Added FactChecker between Scanner and Analyzer. Updated Analyzer
+   assignment to reference FactChecker's artifacts. Adjusted format
+   chain: findings → fact-checked findings → prioritized list → report.
+3. Expanded Reporter to include executive summary. Updated expected_output.
+</prior_design>
+```
+
+The designer sees what it designed before without replaying tool calls. Combined with `roster_status` (what exists now) and the store files (readable via `read_file`), it has full context for incremental changes.
+
+**Parallel to the builder**: The builder has `complete_task(plan, summary)` → `<prior_work>`. The designer has `complete_design(summary)` → `<prior_design>`. Same infrastructure, same session persistence, same pruning logic.
 
 ### When The Designer Runs
 
-The designer runs at **design time** — triggered by board submit, not at execution time. This is a change from the current system where the designer runs at the start of each execution.
+The designer runs at **design time** — triggered after each builder dispatch, not at execution time. Every board submit that touches a node triggers: Phase 0 → builder dispatch → designer dispatch.
 
 ```
-Board submit / chat dispatch
-  → Builder configures roster, dependencies, plan
-  → Designer runs async, writes prompts to store
+Board submit
+  → Phase 0: structural changes (agentless)
+  → Builder dispatch: configures roster, plan
+  → Builder calls complete_task
+  → Designer dispatch: writes per-agent prompts to store
+  → Designer calls complete_design
   → Prompts appear in config panel for user review
   → User edits, refines, approves
   → User triggers execution
@@ -692,12 +869,64 @@ Board submit / chat dispatch
 Benefits:
 - **User reviews before execution** — the config panel shows designed prompts with `expected_output` for each agent. The user can edit system prompts, adjust tools, change assignments.
 - **Re-execution reuses prompts** — run the same workflow ten times without redesigning. Prompts persist in the store.
-- **Redesign is explicit** — if the roster changes (builder re-runs), the designer re-runs. If the user edits a prompt manually, it stays edited. Redesign only happens when the user or the builder triggers it.
-- **Design status in the tree** — the sidebar shows which nodes are designed, which are designing, which are pending (already in the visual dispatch vision).
+- **Redesign follows every builder change** — any builder dispatch (roster change, plan change, capability change) triggers a designer re-run. The designer sees `<prior_design>` for continuity.
+
+### Designer Frontend Events
+
+The designer reuses the dispatch infrastructure — same `DispatchStreamSink`, same WebSocket event bus. Builder and designer events are grouped under the same node in the dispatch tab as sequential phases. The designer picks up where the builder left off:
+
+```
+┌ Research Team ──────────────────────────────────────┐
+│ Builder: Configured 3-agent pipeline (Scanner →     │
+│          Analyzer → Reporter)                     ✓ │
+│ Designer: Scanner designed                          │
+│ Designer: Analyzer designed                         │
+│ Designer: Reporter — designing...                 ◐ │
+└─────────────────────────────────────────────────────┘
+┌ Write Report ───────────────────────────────────────┐
+│ Builder: waiting...                               ○ │
+└─────────────────────────────────────────────────────┘
+```
+
+The designer's raw token stream is not shown — the user doesn't need to watch the LLM think. Instead, per-agent completion events fire as the designer writes each config to the store. The backend emits a `designer_agent_designed` event (agent name + step ID) after each successful agent config write. The dispatch tab renders these as progress lines within the node's section.
+
+**Tree status**: The tree tab shows design status per node, driven by these events:
+
+```
+── Research Pipeline
+   ├── Research Team          ◐ designing (2/3)
+   ├── Validation             ● designed
+   └── Write Report           ○ pending
+```
+
+- **○ pending** — awaiting design
+- **◐ designing** — designer is active, with agent count progress (2/6, 4/6...)
+- **● designed** — designer completed all agents. Prompts are in the store.
+- **● designed (edited)** — user manually edited a prompt in the config panel after design
+
+**Config panel**: When the designer completes, the user clicks a node in the tree and sees every designed agent — system prompt, assignment, expected_output, tools. These are read directly from the store (`design/agents/*.json`). The user can edit any field before triggering execution. Edits write back to the store, and the node's status changes to "designed (edited)" so the user knows it diverged from the designer's output.
+
+**Event flow**:
+
+```
+Builder dispatch starts     → dispatch tab: "Builder: configuring..."
+Builder calls complete_task → dispatch tab: "Builder: ✓ Configured 3-agent pipeline"
+Designer dispatch starts    → dispatch tab: "Designer: designing..."
+Designer writes scanner.json → dispatch tab: "Designer: Scanner designed"
+                              tree: ◐ designing (1/3)
+Designer writes analyzer.json → dispatch tab: "Designer: Analyzer designed"
+                               tree: ◐ designing (2/3)
+Designer writes reporter.json → dispatch tab: "Designer: Reporter designed"
+Designer calls complete_design → dispatch tab: "Designer: ✓ All agents designed"
+                                tree: ● designed
+                                config panel: agent configs available for review
+```
+
+The dispatch tab shows one continuous stream per node — builder phase then designer phase. No separate sections, no accordion nesting. The user reads top to bottom: roster was configured, then each agent was designed.
 
 ### Partial Design Recovery
 
-The designer either completes ALL agents or NONE count. No half-designed pipelines reach the executor.
+The designer either completes ALL agents or the step enters an error state. No half-designed pipelines reach the executor.
 
 ```
 Designer fails at agent 4/6:
@@ -706,12 +935,12 @@ Designer fails at agent 4/6:
   3. Fallback fails: step errors out, user notified in config panel
 ```
 
-The step is atomic — fully designed or error state. The user sees the error and can:
-- Trigger a redesign (retry the designer)
+**Tree status on failure**: The tree shows **◐ designing (3/6) — error** so the user sees exactly where the designer stopped. The 3 completed configs stay in the store — a retry picks up at agent 4, not from scratch. The step won't execute until all agents have prompts.
+
+The user can:
+- Trigger a redesign (retry the designer from where it stopped)
 - Edit the prompts manually in the config panel
 - Change the roster via the builder and redesign
-
-No orphan nodes. The step exists but won't execute until all agents have prompts.
 
 ### Cost Comparison
 
@@ -753,6 +982,57 @@ This means:
 - **User edits a prompt before re-running**: edit the file in the config panel. The store versions it.
 - **Designer failed on one agent**: the other 9 are in the store. Re-run designer for just the one.
 - **Rollback**: restore a snapshot, get the prompts from two executions ago.
+
+### Runtime Prompt Assembly
+
+At execution time, the four designer fields map to the LLM call:
+
+**System message** → `designed.system_prompt`
+
+**User message** → assembled by the executor:
+
+```xml
+<context>
+{task_description from mission brief}
+</context>
+
+<assignment>
+{designed.assignment}
+</assignment>
+
+<expected_output>
+{designed.expected_output}
+</expected_output>
+
+<refs>
+  <file path=".system/refs/style_guide.md" type="text/markdown">
+    Visual style rules, color palette, typography.
+  </file>
+  <file path=".system/refs/character_bible.md" type="text/markdown">
+    Character descriptions and personality traits.
+  </file>
+</refs>
+
+<upstream_artifacts>
+  <step name="Research Team">
+    <file path=".system/artifacts/data/research.md" type="text/markdown" by="Web Searcher">
+      Competitive pricing analysis across 4 providers.
+    </file>
+  </step>
+</upstream_artifacts>
+
+<previous_agent_outputs>
+{filtered upstream agent responses}
+</previous_agent_outputs>
+
+<upstream_step_outputs>
+{upstream DAG step outputs}
+</upstream_step_outputs>
+
+{user_notes}
+```
+
+The block order: what to do → what to produce → reference material → upstream files → upstream text → user notes. `<refs>` lists user-uploaded reference material available to all agents in the workflow. `<upstream_artifacts>` lists files produced during this run by upstream agents/steps (workforce-local files plus direct-edge upstream files). Both are built by the executor — no dynamic tool descriptions needed.
 
 ## Builder → Designer Handoff
 
@@ -822,123 +1102,88 @@ Good: "OCR specialist who reads handwritten text from images and produces a clea
 Bad: "A comprehensive security analysis agent that systematically searches through the entire codebase looking for various types of security vulnerabilities including but not limited to SQL injection, XSS, CSRF, authentication bypasses, hardcoded credentials, and insecure API endpoints, then produces a detailed report..."
 ```
 
-## Semantic Search — The Discovery Layer
+## Artifact Flow — Runtime Discovery
 
-The designer handles primary data flow — it tells each agent exactly which store paths to read. Semantic search is the **fallback** for discovering files the designer didn't explicitly reference: user-uploaded refs, cross-mounted artifacts from connected systems, or files from previous executions.
+Agents discover upstream artifacts through a **runtime manifest**, not semantic search. The system tracks every file written during a run and presents upstream artifacts to downstream agents automatically. The designer doesn't need to predict exact file paths — it tells agents what to produce and what to expect, and the runtime handles delivery.
 
-### How It Works
+### Two Scopes
 
-Every file in the store has an embedding vector generated from its description + tags. Before a step executes, similarity search runs against the agent's task and injects relevant refs the designer didn't explicitly wire:
+**Within a workforce step (shared workspace):** All agents see all files written by any agent in the same workforce, regardless of `receives_from` dependencies. The workforce is a team with a shared desk — if the Web Searcher writes a file, the Fact Checker can see it even without a direct dependency edge.
+
+**Across DAG steps (direct edges only):** A downstream step sees artifacts only from steps with a direct edge to it. If A → B → C with no A → C edge, Step C sees Step B's artifacts but not Step A's. If Step C needs Step A's files, the builder wires an edge A → C.
+
+### The Manifest
+
+Before an agent executes, the runtime builds an `<upstream_artifacts>` block from the file save history:
 
 ```xml
-<store_refs context="similarity" relevance="0.82-0.95">
-  <ref path=".system/refs/character_bible.md" type="text/markdown" lines="47">
-    Character descriptions, personality traits, visual style guide.
-  </ref>
-
-  <ref path=".system/mounts/story-engine/docs/world_building.md" relevance="0.84">
-    World rules, magic system, geography.
-  </ref>
-
-  2 additional refs found. Use search_repo("query") for more.
-</store_refs>
+<upstream_artifacts>
+  <step name="Research Team">
+    <file path=".system/artifacts/data/research.md" type="text/markdown" by="Web Searcher">
+      Competitive pricing analysis across 4 providers, Q3-Q4 year-over-year.
+    </file>
+    <file path=".system/artifacts/data/raw_data.csv" type="text/csv" by="Web Searcher">
+      Raw pricing data, 847 rows across 4 competitors.
+    </file>
+    <file path=".system/artifacts/images/chart.png" type="image/png" by="Analyst">
+      Pricing comparison bar chart, enterprise tier highlighted.
+    </file>
+  </step>
+</upstream_artifacts>
 ```
 
-The agent sees a few relevant things it might not have known about. Each has a description, type, and a path it can follow. This supplements the designer's explicit store path references — it doesn't replace them.
+The agent sees paths and descriptions, not file content. It calls `read_file` on whatever it needs. The description comes from the agent at write time — `write_file` takes an optional `description` parameter.
+
+### How The Designer Accounts For This
+
+The designer knows that `<upstream_artifacts>` exists as a runtime mechanism. Its system prompt documents it:
+
+> "Agents with upstream dependencies receive an `<upstream_artifacts>` block at runtime containing a manifest of all files produced by prior steps. You don't need to wire specific file paths — tell agents what to produce via expected_output, and tell downstream agents to look for upstream artifacts."
+
+The designer's job is intent, not plumbing:
+
+- **expected_output**: "Write your findings as markdown files with descriptive names. Include a CSV of raw data."
+- **assignment** (downstream): "Review the upstream research artifacts and synthesize a report. Focus on year-over-year trends."
+
+The runtime delivers the manifest. The designer shapes what agents produce and how they consume.
+
+### No Cross-Run Artifacts
+
+Artifacts from previous executions are **not** included in the manifest. Each run starts clean. The manifest only contains files written during the current execution. This prevents stale data from leaking into new runs.
 
 ### File Descriptions
 
-When an agent writes a file, the description is generated automatically in the background:
+When an agent writes a file via `write_file`, it provides an inline description. This description populates the manifest immediately — no async processing needed for runtime discovery.
 
-- **Text files**: Haiku reads content, generates 1-2 sentence summary + tags
-- **Image files**: Vision model views the image, generates description + tags
-- **JSON files**: Haiku reads structure, generates summary + tags
-- **Binary (audio/video)**: media_type + size + generation prompt (if from `generate_image`/`generate_video`)
-
-On small edits (< 10% of content changed), the existing description is kept. On major rewrites, the description regenerates async. The agent doesn't wait — the file is searchable with the old description until the new one lands.
-
-### The `search_repo` Tool
-
-```
-search_repo: "Search the system store for artifacts by semantic similarity."
-  query: string    — "What to search for"
-  type: optional   — "image/png", "text/markdown", etc.
-  scope: optional  — "artifacts", "refs", "mounts/*"
-
-  Returns: ranked results with descriptions and paths
-```
-
-### Embedding Infrastructure
-
-**`fastembed-rs`** — runs `all-MiniLM-L6-v2` locally in Rust via ONNX Runtime. ~80MB model, milliseconds per embedding on CPU.
-
-**`pgvector`** — adds a `vector(384)` column to `system_files`. Similarity search is a SQL query with HNSW indexing.
-
-```sql
-SELECT path, description, media_type,
-       1 - (embedding <=> $1) as relevance
-FROM system_files
-WHERE system_id = ANY($2)
-AND 1 - (embedding <=> $1) > 0.7
-ORDER BY relevance DESC
-LIMIT 10;
-```
-
-## Dynamic Tool Descriptions
-
-Tools become context-aware by reading from the store at execution time.
-
-### Current Problem
-
-Tool definitions are static:
-
-```rust
-Tool {
-    name: "read_file",
-    description: "Read the contents of a file.",
-    input_schema: json!({ "properties": { "path": { "type": "string" } } })
-}
-```
-
-### The Fix
-
-At step execution time, tool descriptions are built from store metadata:
-
-```
-read_file: "Read a file from the system store. Available files:
-  .system/refs/style_guide.md — Visual style rules, color palette, typography
-  .system/refs/character_bible.md — Character descriptions and personality traits
-  .system/artifacts/docs/research.md — Competitive analysis (42KB, by researcher)
-  .system/artifacts/images/chart_01.png — Pricing comparison chart (1024x768)
-  Use search_repo('query') to find more files."
-```
-
-The agent sees a menu with descriptions, not a blank text field.
+No background processing needed for artifact discovery.
 
 ## Step-to-Step Communication
 
-### Two Layers: DAG Routing + Store
+### Three Layers
 
-Data flows between agents through two channels:
+Data flows between agents through three channels:
 
 1. **DAG routing** (existing) — the agent's text response flows to downstream agents via `<previous_agent_outputs>`, controlled by `receives_from` edges set by the builder.
-2. **Store** (new) — agents write full work product to files. Downstream agents read from the store when they need depth beyond the response.
+2. **Artifact manifest** (new) — `<upstream_artifacts>` lists all files written by upstream steps/agents. The agent sees paths and descriptions, calls `read_file` on what it needs.
+3. **Store files** (new) — agents write full work product to the store. Downstream agents read via `read_file` after discovering paths in the manifest.
 
-The designer controls what travels through each channel by crafting prompts that separate lean responses from detailed store writes:
+The designer shapes what travels through each channel:
 
 ```
 [Scanner]
-  → writes .system/artifacts/security/raw_findings.md   (full work, 2000 words)
-  → response: compact numbered findings list            (lean handoff, 200 words)
-          ↓ (DAG routing — response only)
+  → writes full findings to store                      (full work, 2000 words)
+  → response: compact numbered findings list           (lean handoff, 200 words)
+          ↓ (DAG routing: response text)
+          ↓ (Artifact manifest: Scanner's files listed with descriptions)
 [Analyzer]
   → receives Scanner's compact list in <previous_agent_outputs>
-  → reads .system/artifacts/security/raw_findings.md for code context when needed
-  → writes .system/artifacts/security/triage.md
+  → sees Scanner's files in <upstream_artifacts> manifest
+  → calls read_file to get full findings when needed
+  → writes triage to store
   → response: prioritized list sorted by severity
 ```
 
-No runtime extraction. No handoff tags. The designer tells Scanner: "write full findings to the store, respond with a compact list." The designer tells Analyzer: "read the full findings at this path if you need context." The intelligence is in the prompt engineering.
+The designer tells Scanner: "write full findings to the store, respond with a compact list." The designer tells Analyzer: "review upstream artifacts and the compact findings list." The manifest handles discovery automatically — the designer doesn't need to hardcode paths.
 
 ### Context Doubling — Solved By Design
 
@@ -950,32 +1195,33 @@ The designer knows the full pipeline. It designs outputs with the downstream con
 
 Agent 3 never sees Agent 1's raw data — it's redundant because Agent 2 synthesized it. The designer knows this because it read back Agent 1 and Agent 2's configs before writing Agent 3's.
 
+The artifact manifest is lightweight — just paths and one-line descriptions. The agent decides what to actually read. Context grows linearly with manifest entries, not quadratically with full content.
+
 ```
                     Current                 New (designer-shaped)
-Agent 3 receives:   Agent 1 + 2 full text   Agent 2 lean response
-                    ~4,000 tokens            ~200 tokens
-Agent 3 can read:   nothing else             full store via read_file
+Agent 3 receives:   Agent 1 + 2 full text   Agent 2 lean response + manifest
+                    ~4,000 tokens            ~300 tokens
+Agent 3 can read:   nothing else             any artifact via read_file
 
 5-agent pipeline:   O(n²) context growth     O(n) context growth
 ```
 
-### The Store As Shared State
+### Workforce Shared Workspace
+
+Within a workforce step, all agents share the same artifact view. Every file written by any agent in the step is visible to every other agent — no dependency edges required.
 
 ```
-[Research]
-  → agent writes .system/artifacts/docs/research_notes.md      (full work)
-  → agent writes .system/artifacts/data/competitors.json       (structured data)
-  → response: "Found 12 competitors, 4 increased pricing 12-18% in Q4"
-
-[Write Draft]
-  → receives Research response (lean summary)
-  → reads .system/artifacts/docs/research_notes.md for detail
-  → writes .system/artifacts/docs/draft_v1.md
+[Research Team] (workforce step)
+  Web Searcher → writes research.md, raw_data.csv
+  Paper Reviewer → writes paper_analysis.md (can see research.md in manifest)
+  Fact Checker → writes verification.md (can see all 3 files above)
 ```
 
-Each step sees the cumulative store state. The designer tells each agent exactly which store paths to read — no guessing, no searching for files the designer already knows about.
+This is the shared desk model. The workforce is a team working on the same task — hiding files within the team would be counterproductive.
 
-### Parallel Steps
+### Cross-Step Artifacts (DAG Edges)
+
+Across DAG steps, artifacts flow only through direct edges:
 
 ```
               ┌─→ [Web Research]  ──┐
@@ -983,131 +1229,25 @@ Each step sees the cumulative store state. The designer tells each agent exactly
               └─→ [Paper Review]  ──┘
 ```
 
-Parallel agents write to their own files. Web Research writes `.system/artifacts/research/web_findings.md`. Paper Review writes `.system/artifacts/research/paper_analysis.md`. No shared files, no conflicts — the DAG structure ensures this by design.
+Synthesis sees artifacts from both Web Research and Paper Review (direct edges). It does **not** see Planning's artifacts unless Planning → Synthesis is also wired. The builder controls the topology. The designer writes prompts that account for it.
 
-At the merge point, Synthesis receives both agents' lean responses via DAG routing and can read their full store files for depth.
+At the merge point, Synthesis receives:
+- Text responses from both steps via `<previous_agent_outputs>`
+- File manifest from both steps via `<upstream_artifacts>`
+- Full file content on demand via `read_file`
 
-## Vision — Agents That See Images
+## Store Tools
 
-Agents can view images through vision content blocks. When `read_file` returns an image, it's sent as `ContentBlock::Image` — the agent sees the actual pixels.
-
-### Media-Aware File Reading
-
-```rust
-match meta.media_type.as_str() {
-    "image/png" | "image/jpeg" | "image/webp" => {
-        ContentBlock::Image { source: ImageSource {
-            source_type: "base64",
-            media_type: meta.media_type,
-            data: base64::encode(&bytes),
-        }}
-    }
-    "text/markdown" | "text/plain" | "application/json" => {
-        ContentBlock::Text { text: String::from_utf8_lossy(&bytes) }
-    }
-    "audio/mp3" | "video/mp4" => {
-        // Can't "see" these — return description
-        ContentBlock::Text {
-            text: format!("[{}: {} — {}]", meta.media_type, path, meta.description)
-        }
-    }
-}
-```
-
-### Image Context Compaction
-
-Images are ~1,000-1,600 tokens each. In a tool-use loop, every image persists in conversation history. You can't solve this with text descriptions — a description can never substitute for the actual pixels. The base64 IS the content.
-
-The fix: images live for **one round trip**, then compact to a pointer. The agent can always re-read the image if it needs to see the pixels again.
+### list_artifacts
 
 ```
-Turn 2: Agent calls read_file("character.png")
-Turn 3: [IMAGE — 1,500 tokens] Agent responds, analyzing the image
-        ── COMPACTION ──
-        Image replaced in history with:
-        <image-viewed path=".system/artifacts/art/character.png">
-          [You viewed this image above. Your analysis is in your prior response.]
-          Use read_file(".system/artifacts/art/character.png") to view again.
-        </image-viewed>
-Turn 4+: Pointer — 30 tokens instead of 1,500
-         Agent's own analysis from Turn 3 is still in history as text
-Turn 7:  Agent needs to re-check a detail → read_file(".system/artifacts/art/character.png")
-         Full image loads for one round trip, then compacts again
-```
-
-No description is generated. No summary is attempted. The agent's own response from the turn it viewed the image is the best record of what it saw — and that's already in the conversation history as text. The compaction just removes the raw base64 and leaves a path to re-read.
-
-```
-                        Without compaction    With compaction
-5 images viewed:        7,500 tokens          250 tokens
-10 turns of work:       ×10 round trips       ×10 round trips
-Total image cost:       75,000 tokens         1,500 tokens
-Agent re-reads 1:       +1,500 for 1 turn     (compacts again next turn)
-```
-
-The agent never loses access to the pixels. It just doesn't carry them in context when it's not actively looking at them.
-
-## Multi-Modal Capabilities
-
-### Image Generation
-
-xAI Grok Imagine — same API already integrated:
-
-```
-POST https://api.x.ai/v1/images/generations
-  model: "grok-imagine-image"       $0.02/image
-  model: "grok-imagine-image-pro"   $0.07/image
-
-POST https://api.x.ai/v1/images/edits
-  Accepts up to 3 source images for editing/composition
-```
-
-### Video Generation
-
-```
-POST https://api.x.ai/v1/videos/generations
-  model: "grok-imagine-video"       $0.05/second
-  Supports text-to-video and image-to-video
-  Async: submit → poll → retrieve
-  Duration: 1-15 seconds per clip
-```
-
-### New Tools
-
-```
-generate_image:
-  prompt: string
-  style_ref: optional path
-  aspect_ratio: "16:9" | "1:1" | "9:16"
-  → generates image via Grok Imagine
-  → stores in system store
-  → description auto-generated by vision model viewing the result
-
-generate_video:
-  prompt: string
-  image_url: optional path (for image-to-video)
-  duration: 1-15 seconds
-  → submits to Grok Imagine Video (async poll)
-  → stores in system store with metadata
-
-search_repo:
-  query: string
-  type: optional media type filter
+list_artifacts:
   scope: optional path scope
-  → embedding similarity search across store + mounts
-  → returns ranked results with descriptions and paths
+  → lists files in the store with descriptions
+  → scoped to current step's workspace + refs
 ```
 
-### Input Hash Caching
-
-Hash each step's inputs (upstream artifact hashes + prompt + config). If the hash matches a previous execution, skip the step and reuse cached output. Critical when image gen is $0.02 and video gen is $0.05/second.
-
-```rust
-let input_hash = blake3::hash(&serialize(&step.prompt, &step.config, &upstream_hashes));
-if let Some(cached) = store.get_by_input_hash(input_hash) {
-    return cached;  // skip execution entirely
-}
-```
+An explicit tool for agents to browse the store. Complements the `<upstream_artifacts>` manifest — the manifest shows upstream files automatically, `list_artifacts` lets agents explore the full store namespace when needed.
 
 ## Connected Systems — Federated Mounts
 
@@ -1118,15 +1258,7 @@ INSERT INTO system_mounts (system_id, target_id, mount_point, access)
 VALUES ('art-pipeline', 'story-engine', 'mounts/story-engine', 'read');
 ```
 
-Now `search_repo("character description")` spans both stores. Results come back with mount-prefixed paths:
-
-```xml
-<ref path=".system/mounts/story-engine/docs/character_bible.md" relevance="0.94">
-  Character descriptions, personality traits, visual style guide.
-</ref>
-```
-
-The agent can `read_file` that path. The system resolves the mount and reads from Story Engine's store.
+Now agents in Art Pipeline can `read_file` any path under `.system/mounts/story-engine/`. The system resolves the mount and reads from Story Engine's store. Mounted artifacts appear in the `<upstream_artifacts>` manifest when the mount source is a direct upstream in the collection DAG.
 
 ### Systems of Systems
 
@@ -1142,41 +1274,21 @@ The agent can `read_file` that path. The system resolves the mount and reads fro
 │  └─────────────┘    └─────────────┘    └─────────────┘ │
 │         │                   │                  │        │
 │         └───────────────────┴──────────────────┘        │
-│                    federated search                      │
+│                    mounted stores                         │
 └─────────────────────────────────────────────────────────┘
 ```
 
-Each system is autonomous. Connected systems share artifacts through mounts and federated similarity search.
-
-## The Demo Workflow
-
-```
-[Write Story] → [Split Scenes] → [Generate Images] → [Generate Video] → [Assemble]
-                                        ↑
-                                  [Style Guide]
-```
-
-1. **Write Story** — workforce writes `.system/artifacts/docs/story.md` and `.system/artifacts/docs/characters.md`
-2. **Style Guide** — agent writes `.system/refs/style.md` with visual rules
-3. **Split Scenes** — reads story via similarity search, writes `.system/artifacts/data/scenes.json`
-4. **Generate Images** — parallel fan-out, one image per scene via Grok Imagine, each stored with vision-generated description
-5. **Generate Video** — image-to-video for each scene via Grok Imagine Video
-6. **Assemble** — ffmpeg in Docker container, stitches clips into final video
-
-Each step discovers prior artifacts through similarity search. No explicit port wiring.
-
-**Cost for a 6-scene short film**: ~$0.12 images + ~$1.80 video + ~$2 LLM calls. Under $5.
+Each system is autonomous. Connected systems share artifacts through mounts — read-only access to another system's store via mount-prefixed paths.
 
 ## Implementation Stack
 
 ### What Exists
 
 - Postgres (database)
-- xAI/Grok (LLM + web search + X search + image gen + video gen API)
+- xAI/Grok (LLM + web search + X search)
 - DAG executor with parallel step support
 - Board serializer (canvas to structure)
 - Workforce pipeline with builder (ReAct, 12 rounds) + designer (one-shot)
-- Vision content blocks (`ContentBlock::Image`)
 - Docker container execution
 - Builder → Designer handoff via Passdown { plan, summary }
 
@@ -1184,56 +1296,58 @@ Each step discovers prior artifacts through similarity search. No explicit port 
 
 | Component | Implementation | Effort |
 |-----------|---------------|--------|
-| `pgvector` extension | Extension install + migration | Minimal |
-| `fastembed-rs` | `cargo add fastembed` — local ONNX embeddings | Small |
-| Workflow filesystem | `/data/workflows/{id}/system/` directory per workflow | Small |
+| Workflow filesystem | `s3://bucket/workflows/{id}/system/` prefix per workflow | Small |
 | `system_files` table | One migration | Small |
 | `system_snapshots` table | One migration | Small |
 | `system_mounts` table | One migration | Small |
-| `SystemStore` service | CRUD + search + mount resolution | Medium |
+| `SystemStore` service | CRUD + manifest + mount resolution | Medium |
 | Designer → ReAct agent | New strategy with store tools, roster status injection, `expected_output` field, runs at design time | Medium |
 | Executor reads from store | Replace in-memory vec with store reads | Small |
 | Implicit read/write tools | `read_file` + `write_file` available to all agents (store + project) | Small |
-| `generate_image` tool | xAI Grok Imagine API call + store write | Small |
-| `generate_video` tool | xAI Grok Imagine Video API call (async poll) + store write | Small |
-| `search_repo` tool | pgvector similarity query | Small |
-| Dynamic tool descriptions | Read store metadata at tool build time | Small |
+| Artifact manifest | `<upstream_artifacts>` block built from file save history | Small |
+| `<refs>` prompt block | Inject user-uploaded refs into agent prompts | Small |
 | Designer-shaped handoffs | Designer crafts lean responses + store writes per agent | No runtime cost — prompt engineering only |
-| Ref injection in prompts | Pre-step similarity search + inject `<ref>` blocks | Medium |
-| Image context compaction | Post-response hook, replace base64 with re-read pointer | Medium |
 | Store lifecycle | Create on workflow create, cleanup on node/workflow delete | Small |
 | Design auto-scoping | Transparent `design/{step_id}/` prefix on designer store tools | Small |
-| Auto file descriptions | Background Haiku/vision call on write, debounced on edits | Medium |
+
+### Implementation Slices
+
+Ordered by dependency. Each slice is one plan.
+
+1. **Store Foundation** — `system_files` migration, S3 prefix management (`workflows/{id}/system/`), `SystemStore` service (write, read, list, edit), file save history tracking.
+2. **ReAct Designer** — `expected_output` on `DesignedAgentPrompt`, new system prompt, designer strategy as ReAct agent with store tools, roster status injection, partial recovery. Depends on 1.
+3. **Executor Reads From Store** — Executor reads `design/{step_id}/agents/*.json` instead of in-memory vec. Auto-scoping. `<upstream_artifacts>` manifest built from file save history and injected into runtime prompts. Depends on 1 + 2.
+4. **Implicit Agent Tools** — `read_file` / `write_file` for all executing agents, agents write to `.system/artifacts/`, `<refs>` prompt block for user uploads. Depends on 1.
+5. **Advanced** — Snapshots, federated mounts. Future.
+
+Critical path: **1 → 2 → 3**. Slice 4 can parallelize after 1.
 
 ### What This Builds On
 
 | Capability | Already built | System Store adds |
 |------------|--------------|-------------------|
 | DAG execution | Orchestrator, parallel steps, envelopes | Shared project state via store |
-| Tool dispatch | 15 execution tools, cascade routing | Dynamic descriptions from store metadata |
+| Tool dispatch | 15 execution tools, cascade routing | Implicit read_file/write_file for all agents |
 | Workforce builder | ReAct agent, configure_team, complete_task | Unchanged — still owns roster + plan |
 | Workforce designer | One-shot JSON generation | ReAct agent with store, iterative prompt building, expected_output, context-doubling prevention |
 | Board serializer | Classify, diff, filter, score | Unchanged — still feeds Phase 0 |
 | Beliefs extraction | Haiku extraction, neighbor awareness | Unchanged |
-| Vision support | ContentBlock::Image, PNG rasterization | Media-aware read_file + compaction |
-| Docker execution | Persistent containers, file ops | `.system/` volume-mounted into container, unified namespace |
+| Vision support | ContentBlock::Image, PNG rasterization | Unchanged |
+| Docker execution | Persistent containers, file ops | `.system/` pre-synced into container, unified namespace |
 | Port system | json_path extraction, edge wiring | DAG routing stays (lean responses), store adds depth layer |
 
 ## What This Enables
 
 ### Short Term
-- Multi-modal workflows (text + image + video generation)
-- Self-correcting pipelines (vision agents QA their own output)
-- Context-aware tools (agents know what files exist and what they contain)
+- Artifact manifest (agents discover upstream files automatically)
 - Better prompts for large teams (designer builds iteratively, self-corrects)
 - O(n) context scaling instead of O(n²) (designer shapes lean responses + store depth)
 - Re-run workflows without re-designing (prompts persist in store)
 - User can edit designed prompts before execution (edit the file, re-run)
 
 ### Medium Term
-- Connected workflow systems with federated search
+- Connected workflow systems with federated mounts
 - Workflow templates (clone a system store, swap the refs)
-- Input-hash caching (skip unchanged steps in expensive pipelines)
 
 ### Long Term
 - Always-on systems (workflows that watch for changes and react)
