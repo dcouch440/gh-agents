@@ -18,6 +18,8 @@ use crate::server::ws::events::{SessionEvent, SessionEventKind};
 use crate::types::ExecutionType;
 use crate::types::UserId;
 
+mod designer_handoff;
+
 mod tests;
 
 /// Run a background dispatch task to completion.
@@ -229,6 +231,10 @@ pub async fn run_dispatch_task(
                 }
             }
 
+            // Trigger designer handoff — runs async after builder completes
+            designer_handoff::run_designer_after_builder(&state, step_id, workflow_id, user_id)
+                .await;
+
             state
                 .task_registry()
                 .mark_completed(execution_id, Some(passdown.summary.clone()));
@@ -247,7 +253,7 @@ pub async fn run_dispatch_task(
                 execution_id = %execution_id,
                 step_id = %step_id,
                 rounds = exec_result.rounds_used,
-                "Dispatch task completed"
+                "Dispatch task completed (designer handoff done)"
             );
         }
         Err(e) => {
