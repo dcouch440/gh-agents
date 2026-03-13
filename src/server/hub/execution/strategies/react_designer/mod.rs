@@ -291,7 +291,10 @@ impl ExecutionStrategy for ReactDesignerStrategy {
                     Ok(row) => {
                         // Broadcast per-agent design progress
                         let count = {
-                            let mut guard = self.designed_count.lock().unwrap_or_else(|e| e.into_inner());
+                            let mut guard = self
+                                .designed_count
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
                             *guard += 1;
                             *guard
                         };
