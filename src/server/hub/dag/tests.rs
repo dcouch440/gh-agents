@@ -176,37 +176,6 @@ mod tests {
         }
     }
 
-    /// Returns different responses on sequential calls. Wraps to the last response
-    /// if more calls are made than responses available.
-    struct SequentialProvider {
-        responses: Vec<LLMResponse>,
-        call_count: AtomicU32,
-    }
-
-    #[async_trait]
-    impl LLMProvider for SequentialProvider {
-        async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
-            let n = self.call_count.fetch_add(1, Ordering::SeqCst) as usize;
-            let idx = n.min(self.responses.len() - 1);
-            Ok(self.responses[idx].clone())
-        }
-        async fn send_message_stream(
-            &self,
-            _req: LLMRequest,
-        ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
-        {
-            let n = self.call_count.fetch_add(1, Ordering::SeqCst) as usize;
-            let idx = n.min(self.responses.len() - 1);
-            Ok(response_to_stream(&self.responses[idx]))
-        }
-        fn provider_name(&self) -> &'static str {
-            "sequential"
-        }
-        fn model_id(&self) -> &str {
-            "test-model"
-        }
-    }
-
     /// Returns a valid response but cancels a token on the first call.
     struct CancellingProvider {
         response: LLMResponse,
