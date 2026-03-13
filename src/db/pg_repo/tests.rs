@@ -2,14 +2,19 @@
 mod tests {
     //! Tests for PostgreSQL repository
 
-    use super::super::*;
+    use crate::db::pg_repo::PgRepo;
     use crate::db::test_utils::TestDb;
     use crate::db::traits::{
-        AgentExecutionRepo, CreateAgentExecutionInput, CreateDocumentInput, CreateRoomInput,
-        CreateWorkflowInput, DocumentRepo, RoomRepo, TokenLedgerRepo, WorkflowCollectionRepo,
-        WorkflowRepo,
+        AgentExecutionRepo, AgentRepo, AuthConfigRepo, CreateAgentExecutionInput,
+        CreateDocumentInput, CreateRoomInput, CreateWorkflowInput, DocumentRepo, RoomMemberInput,
+        RoomRepo, TokenLedgerRepo, ToolRepo, UserRepo, WorkflowCollectionRepo, WorkflowRepo,
+    };
+    use crate::db::{
+        AgentRow, RoomRow, ToolRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
     };
     use crate::types::{ExecutionType, UserId};
+    use chrono::Utc;
+    use uuid::Uuid;
 
     // ============================================================================
     // Test helpers
