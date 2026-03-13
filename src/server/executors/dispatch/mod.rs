@@ -190,14 +190,6 @@ pub async fn run_dispatch_task(
             // Persist passdown as structured JSON in agent_execution output
             let passdown_json = serde_json::to_string(&passdown).unwrap_or_default();
             persist_outcome(&state, session_id, user_id, &passdown.summary).await;
-            persist_trace(
-                &state,
-                execution_id,
-                ae_id,
-                "completed",
-                Some(&passdown_json),
-            )
-            .await;
 
             // Write question + summary into step_question_state for board state.
             // This replaces the old cheap-LLM question detection — the builder
@@ -231,9 +223,28 @@ pub async fn run_dispatch_task(
                 }
             }
 
-            // Trigger designer handoff — runs async after builder completes
-            designer_handoff::run_designer_after_builder(&state, step_id, workflow_id, user_id)
-                .await;
+            // Trigger designer handoff — runs async after builder completes.
+            // Designer tool calls stream through the same DispatchStreamSink
+            // (same execution_id) so the trace is continuous.
+            designer_handoff::run_designer_after_builder(
+                &state,
+                step_id,
+                workflow_id,
+                user_id,
+                execution_id,
+            )
+            .await;
+
+            // Persist trace AFTER designer handoff so the persisted trace
+            // includes both builder and designer tool events.
+            persist_trace(
+                &state,
+                execution_id,
+                ae_id,
+                "completed",
+                Some(&passdown_json),
+            )
+            .await;
 
             state
                 .task_registry()

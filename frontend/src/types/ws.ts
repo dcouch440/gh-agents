@@ -83,6 +83,7 @@ export const WORKFLOW_EVENT = {
   // Workforce high-level progress (backend already emits these)
   WORKFORCE_DESIGNER_PROGRESS: 'workforce_designer_progress',
   WORKFORCE_AGENT_PROGRESS: 'workforce_agent_progress',
+  DESIGNER_AGENT_DESIGNED: 'designer_agent_designed',
   // Generic step streaming (token-level events from any execution source)
   STEP_STREAM_TOKEN: 'step_stream_token',
   STEP_STREAM_TOOL_START: 'step_stream_tool_start',
@@ -126,6 +127,10 @@ export type RoomMembersChangedData = { workflow_id: string; step_id: string }
 export type PlanUpdatedData = { workflow_id: string; step_id: string; content: string }
 // Workforce high-level progress
 export type WorkforceDesignerProgressData = { workflow_id: string; step_id: string; status: string }
+export type DesignerAgentDesignedData = {
+  workflow_id: string; step_id: string
+  agent_name: string; designed_count: number; total_count: number
+}
 export type WorkforceAgentProgressData = {
   workflow_id: string; step_id: string
   agent_name: string; roster_agent_id: string

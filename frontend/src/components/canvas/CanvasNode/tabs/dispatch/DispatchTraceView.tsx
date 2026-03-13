@@ -80,6 +80,19 @@ function DispatchTraceView({ entry }: DispatchTraceViewProps) {
                 </Typography>
               </Box>
             )
+          case 'phase':
+            return (
+              <Box
+                key={`phase-${i}`}
+                sx={{ display: 'flex', alignItems: 'center', gap: 1, my: 1 }}
+              >
+                <Box sx={{ flex: 1, height: '1px', bgcolor: 'divider' }} />
+                <Typography sx={{ fontSize: 10, color: 'text.disabled', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                  {segment.label}
+                </Typography>
+                <Box sx={{ flex: 1, height: '1px', bgcolor: 'divider' }} />
+              </Box>
+            )
         }
       })}
 

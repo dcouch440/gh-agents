@@ -1,15 +1,18 @@
 import Box from '@mui/material/Box'
 import type { StepExecutionStatus } from '@/stores/workflowExecutionStore/types'
+import type { SourceStreamStatus } from '@/stores/stepStreamStore'
 
 type StatusDotProps = {
   readonly status: StepExecutionStatus | undefined
+  readonly designStatus?: SourceStreamStatus | null
 }
 
 const SIZE = 6
 
-function StatusDot({ status }: StatusDotProps) {
+function StatusDot({ status, designStatus }: StatusDotProps) {
   const resolved = status ?? 'idle'
 
+  // Execution status takes precedence when active
   if (resolved === 'running') {
     return (
       <Box
@@ -29,12 +32,70 @@ function StatusDot({ status }: StatusDotProps) {
     )
   }
 
-  const filled = resolved === 'success' || resolved === 'error'
-  const color =
-    resolved === 'success' ? '#3fb950' :
-    resolved === 'error' ? '#f85149' :
-    undefined
+  if (resolved === 'success' || resolved === 'error') {
+    const color = resolved === 'success' ? '#3fb950' : '#f85149'
+    return (
+      <Box
+        sx={{
+          width: SIZE,
+          height: SIZE,
+          borderRadius: '50%',
+          flexShrink: 0,
+          backgroundColor: color,
+        }}
+      />
+    )
+  }
 
+  // When idle, show design status if present
+  if (designStatus === 'running') {
+    return (
+      <Box
+        sx={{
+          width: SIZE,
+          height: SIZE,
+          borderRadius: '50%',
+          flexShrink: 0,
+          background: `conic-gradient(#58a6ff 0deg, #58a6ff 180deg, transparent 180deg, transparent 360deg)`,
+          animation: 'statusDotSpin 1s linear infinite',
+          '@keyframes statusDotSpin': {
+            from: { transform: 'rotate(0deg)' },
+            to: { transform: 'rotate(360deg)' },
+          },
+        }}
+      />
+    )
+  }
+
+  if (designStatus === 'completed') {
+    return (
+      <Box
+        sx={{
+          width: SIZE,
+          height: SIZE,
+          borderRadius: '50%',
+          flexShrink: 0,
+          backgroundColor: '#58a6ff',
+        }}
+      />
+    )
+  }
+
+  if (designStatus === 'failed') {
+    return (
+      <Box
+        sx={{
+          width: SIZE,
+          height: SIZE,
+          borderRadius: '50%',
+          flexShrink: 0,
+          backgroundColor: '#f85149',
+        }}
+      />
+    )
+  }
+
+  // Default: idle, no design status
   return (
     <Box
       sx={{
@@ -42,9 +103,8 @@ function StatusDot({ status }: StatusDotProps) {
         height: SIZE,
         borderRadius: '50%',
         flexShrink: 0,
-        ...(filled
-          ? { backgroundColor: color }
-          : { border: '1px solid', borderColor: 'text.disabled' }),
+        border: '1px solid',
+        borderColor: 'text.disabled',
       }}
     />
   )

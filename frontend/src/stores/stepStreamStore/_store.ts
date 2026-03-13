@@ -4,6 +4,7 @@ import type { StepStreamState, SourceStreamState } from './types'
 const initialState: StepStreamState = {
   sources: {},
   designerStatus: 'idle',
+  designStatusByStep: {},
   activeStepId: null,
 }
 

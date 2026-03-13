@@ -214,6 +214,108 @@ describe('stepStreamStore wsHandler', () => {
     })
   })
 
+  describe('designer_agent_designed', () => {
+    it('tracks per-agent design progress', () => {
+      stepStreamStore.handleWsEvent(wire('designer_agent_designed', {
+        workflow_id: 'wf-1', step_id: 's-1',
+        agent_name: 'scanner', designed_count: 1, total_count: 3,
+      }))
+
+      const state = stepStreamStore.store.getState()
+      const ds = state.designStatusByStep['s-1']
+      expect(ds).toBeDefined()
+      expect(ds!.status).toBe('running')
+      expect(ds!.designedCount).toBe(1)
+      expect(ds!.totalCount).toBe(3)
+      expect(ds!.lastAgentName).toBe('scanner')
+    })
+
+    it('increments designed count across agents', () => {
+      stepStreamStore.handleWsEvent(wire('designer_agent_designed', {
+        workflow_id: 'wf-1', step_id: 's-1',
+        agent_name: 'scanner', designed_count: 1, total_count: 3,
+      }))
+      stepStreamStore.handleWsEvent(wire('designer_agent_designed', {
+        workflow_id: 'wf-1', step_id: 's-1',
+        agent_name: 'writer', designed_count: 2, total_count: 3,
+      }))
+
+      const ds = stepStreamStore.store.getState().designStatusByStep['s-1']
+      expect(ds!.designedCount).toBe(2)
+      expect(ds!.lastAgentName).toBe('writer')
+    })
+
+    it('tracks separate steps independently', () => {
+      stepStreamStore.handleWsEvent(wire('designer_agent_designed', {
+        workflow_id: 'wf-1', step_id: 's-1',
+        agent_name: 'a1', designed_count: 1, total_count: 2,
+      }))
+      stepStreamStore.handleWsEvent(wire('designer_agent_designed', {
+        workflow_id: 'wf-1', step_id: 's-2',
+        agent_name: 'b1', designed_count: 1, total_count: 4,
+      }))
+
+      const state = stepStreamStore.store.getState()
+      expect(state.designStatusByStep['s-1']!.totalCount).toBe(2)
+      expect(state.designStatusByStep['s-2']!.totalCount).toBe(4)
+    })
+  })
+
+  describe('designStatusByStep via workforce_designer_progress', () => {
+    it('sets design status to running on started', () => {
+      stepStreamStore.handleWsEvent(wire('workforce_designer_progress', {
+        workflow_id: 'wf-1', step_id: 's-1', status: 'started',
+      }))
+
+      const ds = stepStreamStore.store.getState().designStatusByStep['s-1']
+      expect(ds).toBeDefined()
+      expect(ds!.status).toBe('running')
+    })
+
+    it('sets design status to completed', () => {
+      // Start, then add agent progress, then complete
+      stepStreamStore.handleWsEvent(wire('designer_agent_designed', {
+        workflow_id: 'wf-1', step_id: 's-1',
+        agent_name: 'a', designed_count: 2, total_count: 2,
+      }))
+      stepStreamStore.handleWsEvent(wire('workforce_designer_progress', {
+        workflow_id: 'wf-1', step_id: 's-1', status: 'completed',
+      }))
+
+      const ds = stepStreamStore.store.getState().designStatusByStep['s-1']
+      expect(ds!.status).toBe('completed')
+      expect(ds!.designedCount).toBe(2)
+    })
+
+    it('sets design status to failed', () => {
+      stepStreamStore.handleWsEvent(wire('workforce_designer_progress', {
+        workflow_id: 'wf-1', step_id: 's-1', status: 'failed',
+      }))
+
+      expect(stepStreamStore.store.getState().designStatusByStep['s-1']!.status).toBe('failed')
+    })
+  })
+
+  describe('selectDesignStatusForStep', () => {
+    it('returns null when no design state exists', () => {
+      const state = stepStreamStore.store.getState()
+      expect(stepStreamStore.selectDesignStatusForStep('unknown')(state)).toBeNull()
+    })
+
+    it('returns design state for tracked step', () => {
+      stepStreamStore.handleWsEvent(wire('designer_agent_designed', {
+        workflow_id: 'wf-1', step_id: 's-1',
+        agent_name: 'test', designed_count: 1, total_count: 3,
+      }))
+
+      const state = stepStreamStore.store.getState()
+      const ds = stepStreamStore.selectDesignStatusForStep('s-1')(state)
+      expect(ds).not.toBeNull()
+      expect(ds!.status).toBe('running')
+      expect(ds!.designedCount).toBe(1)
+    })
+  })
+
   describe('selectors', () => {
     it('selectSource returns specific source', () => {
       stepStreamStore.handleWsEvent(wire('workforce_agent_progress', {

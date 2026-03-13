@@ -51,6 +51,7 @@ pub struct ReactDesignerStrategy {
     agent_execution_id: Option<Uuid>,
     completed: Mutex<bool>,
     design_summary: Mutex<Option<String>>,
+    designed_count: Mutex<usize>,
     /// Cached config values to avoid returning references to temporaries.
     cached_model_id: String,
     cached_max_rounds: u32,
@@ -101,6 +102,7 @@ impl ReactDesignerStrategy {
             agent_execution_id: config.agent_execution_id,
             completed: Mutex::new(false),
             design_summary: Mutex::new(None),
+            designed_count: Mutex::new(0),
             cached_model_id: agent_cfg.model_id.clone(),
             cached_max_rounds: agent_cfg.max_rounds,
             cached_context_budget: agent_cfg.context_budget,
@@ -286,11 +288,40 @@ impl ExecutionStrategy for ReactDesignerStrategy {
                 )
                 .await
                 {
-                    Ok(row) => serde_json::json!({
-                        "status": "written",
-                        "path": row.path,
-                        "version": row.version,
-                    }),
+                    Ok(row) => {
+                        // Broadcast per-agent design progress
+                        let count = {
+                            let mut guard = self.designed_count.lock().unwrap_or_else(|e| e.into_inner());
+                            *guard += 1;
+                            *guard
+                        };
+                        let agent_name = row
+                            .path
+                            .rsplit('/')
+                            .next()
+                            .and_then(|f| f.strip_suffix(".json"))
+                            .unwrap_or("unknown")
+                            .to_string();
+                        self.state.broadcast_workflow(
+                            crate::server::ws::events::WorkflowEvent {
+                                workflow_id: self.workflow_id,
+                                run_id: None,
+                                user_id: None,
+                                kind: crate::server::ws::events::WorkflowEventKind::DesignerAgentDesigned {
+                                    step_id: self.step_id,
+                                    agent_name,
+                                    designed_count: count,
+                                    total_count: self.roster.len(),
+                                },
+                            },
+                        );
+
+                        serde_json::json!({
+                            "status": "written",
+                            "path": row.path,
+                            "version": row.version,
+                        })
+                    }
                     Err(e) => serde_json::json!({"error": e.to_string()}),
                 }
             }
