@@ -60,12 +60,6 @@ pub enum HubError {
     #[error("stream interrupted for execution {execution_id}")]
     StreamInterrupted { execution_id: Uuid },
 
-    #[error("prompt '{key}' not found in registry")]
-    PromptNotFound { key: String },
-
-    #[error("prompt render failed for '{key}': missing variable '{var}'")]
-    PromptRenderFailed { key: String, var: String },
-
     #[error(transparent)]
     Db(#[from] sqlx::Error),
 

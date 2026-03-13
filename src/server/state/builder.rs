@@ -16,8 +16,6 @@ use crate::env::Env;
 use crate::llm::{LLMProvider, ProviderRegistry};
 use crate::types::AppConfig;
 
-use crate::server::hub::PromptRegistry;
-
 use super::{AppState, AppStateInner, ConsumerMessage, EventBus, Repos};
 
 /// Errors that can occur during AppState building.
@@ -49,7 +47,6 @@ pub struct AppStateBuilder {
     config: Option<AppConfig>,
     provider: Option<Arc<dyn LLMProvider + Send + Sync>>,
     provider_registry: Option<ProviderRegistry>,
-    prompt_registry: Option<Arc<PromptRegistry>>,
     jwt_secret: Option<Vec<u8>>,
     env: Option<Arc<Env>>,
 }
@@ -64,7 +61,6 @@ impl AppStateBuilder {
             config: None,
             provider: None,
             provider_registry: None,
-            prompt_registry: None,
             jwt_secret: None,
             env: None,
         }
@@ -106,12 +102,6 @@ impl AppStateBuilder {
         self
     }
 
-    /// Set the prompt registry. If not provided, an empty one will be used.
-    pub fn with_prompt_registry(mut self, registry: Arc<PromptRegistry>) -> Self {
-        self.prompt_registry = Some(registry);
-        self
-    }
-
     /// Set the JWT secret. If not provided, a random one will be generated.
     pub fn with_jwt_secret(mut self, secret: Vec<u8>) -> Self {
         self.jwt_secret = Some(secret);
@@ -144,10 +134,6 @@ impl AppStateBuilder {
         let jwt_secret = self
             .jwt_secret
             .unwrap_or_else(|| rand::random::<[u8; 32]>().to_vec());
-        let prompt_registry = self
-            .prompt_registry
-            .unwrap_or_else(|| Arc::new(PromptRegistry::empty()));
-
         let provider_registry = self.provider_registry.unwrap_or_default();
 
         let state = AppState::from_inner(AppStateInner {
@@ -158,7 +144,6 @@ impl AppStateBuilder {
             config: Arc::new(RwLock::new(config)),
             provider: self.provider,
             provider_registry,
-            prompt_registry,
             capability_registry: Arc::new(
                 crate::config::capability_registry::CapabilityRegistry::empty(),
             ),

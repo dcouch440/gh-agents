@@ -104,24 +104,6 @@ mod tests {
     }
 
     #[test]
-    fn display_prompt_not_found() {
-        let err = HubError::PromptNotFound {
-            key: "modes/home".into(),
-        };
-        assert!(err.to_string().contains("modes/home"));
-    }
-
-    #[test]
-    fn display_prompt_render_failed() {
-        let err = HubError::PromptRenderFailed {
-            key: "agents/worker".into(),
-            var: "agent_name".into(),
-        };
-        assert!(err.to_string().contains("agents/worker"));
-        assert!(err.to_string().contains("agent_name"));
-    }
-
-    #[test]
     fn from_anyhow() {
         let inner = anyhow::anyhow!("something broke");
         let err: HubError = inner.into();
