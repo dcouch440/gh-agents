@@ -3,8 +3,7 @@ mod tests {
     //! Tests for execution recorder
 
     use crate::db::traits::{
-        CreateAgentExecutionInput, MockChatMessageRepo, MockSessionRepo,
-        MockTokenLedgerRepo,
+        CreateAgentExecutionInput, MockChatMessageRepo, MockSessionRepo, MockTokenLedgerRepo,
     };
     use crate::server::hub::recorder::ExecutionRecorder;
     use crate::types::{ExecutionType, UserId};

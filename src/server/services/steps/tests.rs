@@ -84,7 +84,6 @@ mod tests {
                     name: None,
                     system_prompt_suffix: None,
                     description: None,
-
                 },
             },
         )
@@ -134,7 +133,6 @@ mod tests {
                     name: None,
                     system_prompt_suffix: None,
                     description: None,
-
                 },
             },
         )

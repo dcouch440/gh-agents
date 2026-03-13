@@ -22,6 +22,7 @@ use crate::llm::{LLMProvider, ProviderRegistry};
 use crate::types::{AppConfig, UserId};
 
 use super::hub::protocols::ProtocolEngine;
+use super::services::system_store::s3::S3Backend;
 use super::ws::events::{RoomEvent, ServerEvent, SessionEvent, WorkflowEvent};
 
 mod builder;
@@ -120,6 +121,9 @@ pub(crate) struct AppStateInner {
     pub(crate) task_registry: TaskRegistry,
     /// Cancellation tokens for in-flight run results summarizations (cancel-and-replace).
     pub(crate) run_results_tokens: super::hub::run_results::RunResultsTokens,
+    /// S3-compatible storage backend (MinIO in dev, real S3 in prod). Optional so tests
+    /// that don't need S3 can skip initialization.
+    pub(crate) s3: Option<Arc<S3Backend>>,
 }
 
 /// Application state shared across all HTTP handlers.
@@ -164,6 +168,7 @@ impl AppState {
             Arc::new(PgRepo::new(db.clone())), // sessions
             Arc::new(PgRepo::new(db.clone())), // chat_messages
             Arc::new(PgRepo::new(db.clone())), // auth_config
+            Arc::new(PgRepo::new(db.clone())), // system_files
         );
 
         let (chat_tx, orchestrator_rx) = mpsc::channel(crate::constants::CHANNEL_ORCHESTRATOR);
@@ -177,6 +182,9 @@ impl AppState {
 
         // Initialize LLM providers
         let (provider, provider_registry) = Self::init_providers(&env).await;
+
+        // Initialize S3 backend (optional — logs warning if unavailable)
+        let s3 = Self::init_s3(&env).await;
 
         let state = Self(Arc::new(AppStateInner {
             env,
@@ -198,6 +206,7 @@ impl AppState {
             ws_connections_by_ip: DashMap::new(),
             task_registry: TaskRegistry::new(),
             run_results_tokens: super::hub::run_results::new_run_results_tokens(),
+            s3,
         }));
 
         (state, orchestrator_rx)
@@ -242,6 +251,7 @@ impl AppState {
                 ws_connections_by_ip: DashMap::new(),
                 task_registry: TaskRegistry::new(),
                 run_results_tokens: super::hub::run_results::new_run_results_tokens(),
+                s3: None,
             })),
             orchestrator_rx,
         )
@@ -442,6 +452,24 @@ impl AppState {
         (provider, registry)
     }
 
+    async fn init_s3(env: &Env) -> Option<Arc<S3Backend>> {
+        let endpoint = env.s3_endpoint.as_deref();
+        match S3Backend::new(endpoint, &env.s3_bucket).await {
+            Ok(backend) => {
+                tracing::info!(
+                    "Initialized S3 backend: bucket={}, endpoint={}",
+                    env.s3_bucket,
+                    endpoint.unwrap_or("AWS default")
+                );
+                Some(Arc::new(backend))
+            }
+            Err(e) => {
+                tracing::warn!("S3 backend not initialized: {e}");
+                None
+            }
+        }
+    }
+
     // =========================================================================
     // Accessor methods
     // =========================================================================
@@ -538,6 +566,11 @@ impl AppState {
     /// Access the background dispatch task registry.
     pub fn task_registry(&self) -> &TaskRegistry {
         &self.0.task_registry
+    }
+
+    /// Access the S3-compatible storage backend.
+    pub fn s3(&self) -> Option<&Arc<S3Backend>> {
+        self.0.s3.as_ref()
     }
 
     /// Access the run results summarization tokens (cancel-and-replace map).

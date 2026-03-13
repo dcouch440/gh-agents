@@ -1,8 +1,8 @@
 //! Configuration types
 
-use serde::{Deserialize, Serialize};
 use super::message::VerbosityLevel;
 use crate::constants::*;
+use serde::{Deserialize, Serialize};
 
 /// Agent pool size configuration
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, utoipa::ToSchema)]

@@ -12,6 +12,7 @@ mod protocol;
 mod room;
 mod session;
 mod system;
+mod system_file;
 mod workflow;
 
 pub use agent::*;
@@ -23,4 +24,5 @@ pub use protocol::*;
 pub use room::*;
 pub use session::*;
 pub use system::*;
+pub use system_file::*;
 pub use workflow::*;

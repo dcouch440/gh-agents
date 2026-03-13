@@ -8,8 +8,8 @@ use std::sync::Arc;
 use crate::db::traits::{
     AgentExecutionRepo, AgentRepo, AuthConfigRepo, ChatMessageRepo, ContentVersionRepo,
     DocumentRepo, OutputSchemaRepo, PromptTemplateRepo, ProtocolRepo, ResultRepo, RoomRepo,
-    SessionRepo, SystemConfigRepo, TokenLedgerRepo, ToolCapabilityRepo, ToolRepo, UserRepo,
-    WorkflowRepo,
+    SessionRepo, SystemConfigRepo, SystemFileRepo, TokenLedgerRepo, ToolCapabilityRepo, ToolRepo,
+    UserRepo, WorkflowRepo,
 };
 
 /// All repository trait objects grouped together.
@@ -54,6 +54,8 @@ pub struct Repos {
     pub chat_messages: Arc<dyn ChatMessageRepo>,
     /// Authentication configuration and health checks
     pub auth_config: Arc<dyn AuthConfigRepo>,
+    /// System store file metadata
+    pub system_files: Arc<dyn SystemFileRepo>,
 }
 
 impl Repos {
@@ -78,6 +80,7 @@ impl Repos {
         sessions: Arc<dyn SessionRepo>,
         chat_messages: Arc<dyn ChatMessageRepo>,
         auth_config: Arc<dyn AuthConfigRepo>,
+        system_files: Arc<dyn SystemFileRepo>,
     ) -> Self {
         Self {
             users,
@@ -98,6 +101,7 @@ impl Repos {
             sessions,
             chat_messages,
             auth_config,
+            system_files,
         }
     }
 }

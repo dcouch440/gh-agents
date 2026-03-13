@@ -37,6 +37,10 @@ pub struct Env {
     // ── Debug ────────────────────────────────────────────────────────────
     pub debug_stream: bool,
 
+    // ── S3 / System Store ──────────────────────────────────────────────
+    pub s3_endpoint: Option<String>,
+    pub s3_bucket: String,
+
     // ── VPN ──────────────────────────────────────────────────────────────
     pub wgeasy_api_url: Option<String>,
     pub wgeasy_password: Option<String>,
@@ -104,6 +108,11 @@ impl Env {
             .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
 
+        let s3_endpoint = std::env::var("S3_ENDPOINT").ok().filter(|s| !s.is_empty());
+
+        let s3_bucket =
+            std::env::var("S3_BUCKET").unwrap_or_else(|_| "nexor-system-store".to_string());
+
         let wgeasy_api_url = std::env::var("WGEASY_API_URL")
             .ok()
             .filter(|s| !s.is_empty());
@@ -127,6 +136,8 @@ impl Env {
             skip_rate_limit,
             github_token,
             debug_stream,
+            s3_endpoint,
+            s3_bucket,
             wgeasy_api_url,
             wgeasy_password,
         }
@@ -157,6 +168,8 @@ impl Env {
             skip_rate_limit: true,
             github_token: None,
             debug_stream: false,
+            s3_endpoint: None,
+            s3_bucket: "nexor-system-store".to_string(),
             wgeasy_api_url: None,
             wgeasy_password: None,
         }
