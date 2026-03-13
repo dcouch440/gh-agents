@@ -1256,6 +1256,16 @@ mod tests {
         repo.expect_get_step()
             .returning(move |_| Ok(Some(parent_step_clone.clone())));
 
+        // caps sync
+        repo.expect_upsert_mission_brief()
+            .returning(|sid, desc, _, _, _| {
+                Ok(TaskMissionBriefRow {
+                    step_id: sid,
+                    task_description: desc.to_string(),
+                    ..Default::default()
+                })
+            });
+
         // No edges (no deps in input or current)
         repo.expect_list_edges().returning(|_| Ok(vec![]));
         repo.expect_list_steps().returning(|_| Ok(vec![]));
@@ -1339,6 +1349,16 @@ mod tests {
 
         repo.expect_link_roster_agent_to_child_step()
             .returning(|_, _| Ok(()));
+
+        // caps sync
+        repo.expect_upsert_mission_brief()
+            .returning(|sid, desc, _, _, _| {
+                Ok(TaskMissionBriefRow {
+                    step_id: sid,
+                    task_description: desc.to_string(),
+                    ..Default::default()
+                })
+            });
 
         repo.expect_list_edges().returning(|_| Ok(vec![]));
         repo.expect_list_steps().returning(|_| Ok(vec![]));
@@ -1435,6 +1455,16 @@ mod tests {
 
         repo.expect_remove_roster_agent().returning(|_| Ok(()));
 
+        // caps sync
+        repo.expect_upsert_mission_brief()
+            .returning(|sid, desc, _, _, _| {
+                Ok(TaskMissionBriefRow {
+                    step_id: sid,
+                    task_description: desc.to_string(),
+                    ..Default::default()
+                })
+            });
+
         let input = json!({
             "task": "Scan repos",
             "agents": [
@@ -1513,6 +1543,16 @@ mod tests {
         // update child step description
         repo.expect_update_step().returning(|s| Ok(s));
 
+        // caps sync
+        repo.expect_upsert_mission_brief()
+            .returning(|sid, desc, _, _, _| {
+                Ok(TaskMissionBriefRow {
+                    step_id: sid,
+                    task_description: desc.to_string(),
+                    ..Default::default()
+                })
+            });
+
         repo.expect_list_edges().returning(|_| Ok(vec![]));
         repo.expect_list_steps().returning(|_| Ok(vec![]));
 
@@ -1574,6 +1614,16 @@ mod tests {
         let parent_step_clone = parent_step.clone();
         repo.expect_get_step()
             .returning(move |_| Ok(Some(parent_step_clone.clone())));
+
+        // caps sync
+        repo.expect_upsert_mission_brief()
+            .returning(|sid, desc, _, _, _| {
+                Ok(TaskMissionBriefRow {
+                    step_id: sid,
+                    task_description: desc.to_string(),
+                    ..Default::default()
+                })
+            });
 
         repo.expect_list_edges().returning(|_| Ok(vec![]));
         repo.expect_list_steps().returning(|_| Ok(vec![]));
@@ -1644,6 +1694,16 @@ mod tests {
         let parent_step_clone = parent_step.clone();
         repo.expect_get_step()
             .returning(move |_| Ok(Some(parent_step_clone.clone())));
+
+        // caps sync
+        repo.expect_upsert_mission_brief()
+            .returning(|sid, desc, _, _, _| {
+                Ok(TaskMissionBriefRow {
+                    step_id: sid,
+                    task_description: desc.to_string(),
+                    ..Default::default()
+                })
+            });
 
         // No existing edges
         repo.expect_list_edges().returning(|_| Ok(vec![]));
@@ -1731,6 +1791,16 @@ mod tests {
         repo.expect_get_step()
             .returning(move |_| Ok(Some(parent_step_clone.clone())));
 
+        // caps sync
+        repo.expect_upsert_mission_brief()
+            .returning(|sid, desc, _, _, _| {
+                Ok(TaskMissionBriefRow {
+                    step_id: sid,
+                    task_description: desc.to_string(),
+                    ..Default::default()
+                })
+            });
+
         // Existing edge Scanner → Analyzer — but desired spec has NO dependencies
         repo.expect_list_edges().returning(move |_| {
             Ok(vec![WorkflowStepEdgeRow {
@@ -1776,5 +1846,104 @@ mod tests {
         let deps = result["dependencies"].as_array().unwrap();
         assert_eq!(deps.len(), 1);
         assert_eq!(deps[0]["status"], "removed");
+    }
+
+    // =========================================================================
+    // configure_team — capabilities aggregation onto mission brief
+    // =========================================================================
+
+    #[tokio::test]
+    async fn configure_team_aggregates_capabilities_to_brief() {
+        let ctx = make_ctx();
+        let mut brief = make_brief(ctx.step_id);
+        brief.task_description = String::new();
+        brief.available_capabilities = vec![];
+        let step_id = ctx.step_id;
+        let wf_id = ctx.workflow_id;
+        let user_id = Uuid::new_v4();
+        let child_wf_id = Uuid::new_v4();
+
+        let mut parent_step = make_step(step_id, wf_id, "workforce");
+        parent_step.child_workflow_id = Some(child_wf_id);
+
+        let mut repo = MockWorkflowRepo::new();
+
+        let brief_clone = brief.clone();
+        repo.expect_get_mission_brief()
+            .returning(move |_| Ok(Some(brief_clone.clone())));
+
+        // Track the capabilities passed to upsert_mission_brief.
+        // Called twice: once for task, once for caps sync.
+        let caps_seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::<Vec<String>>::new()));
+        let caps_seen_clone = caps_seen.clone();
+        repo.expect_upsert_mission_brief()
+            .returning(move |sid, desc, caps, _, _| {
+                caps_seen_clone.lock().unwrap().push(caps.to_vec());
+                Ok(TaskMissionBriefRow {
+                    id: Uuid::new_v4(),
+                    step_id: sid,
+                    task_description: desc.to_string(),
+                    available_capabilities: caps.to_vec(),
+                    ..Default::default()
+                })
+            });
+
+        repo.expect_list_agent_roster().returning(|_| Ok(vec![]));
+
+        repo.expect_get_workflow()
+            .returning(move |_| Ok(Some(make_workflow(wf_id, user_id))));
+
+        let parent_step_clone = parent_step.clone();
+        repo.expect_get_step()
+            .returning(move |_| Ok(Some(parent_step_clone.clone())));
+
+        repo.expect_create_step().returning(|s| Ok(s));
+
+        repo.expect_add_roster_agent()
+            .returning(move |bid, name, role, caps, order| {
+                Ok(TaskAgentRosterRow {
+                    id: Uuid::new_v4(),
+                    mission_brief_id: bid,
+                    name: name.to_string(),
+                    role_description: role.to_string(),
+                    capabilities: caps.to_vec(),
+                    execution_order: order,
+                    child_step_id: Some(Uuid::new_v4()),
+                    ..Default::default()
+                })
+            });
+
+        repo.expect_link_roster_agent_to_child_step()
+            .returning(|_, _| Ok(()));
+
+        repo.expect_list_edges().returning(|_| Ok(vec![]));
+        repo.expect_list_steps().returning(|_| Ok(vec![]));
+        repo.expect_update_roster_agent_order()
+            .returning(|_, _| Ok(()));
+
+        // Two agents with overlapping capabilities
+        let input = json!({
+            "task": "Analyze codebase",
+            "agents": [
+                { "name": "Scanner", "role_description": "Scans code", "capabilities": ["file_read", "content_search"] },
+                { "name": "Reporter", "role_description": "Writes reports", "capabilities": ["file_read", "file_write"] }
+            ]
+        });
+        let result = execute_workforce_tool("configure_team", &input, &repo, &ctx).await;
+
+        assert!(result.get("error").is_none());
+
+        // The last upsert_mission_brief call should have the deduplicated, sorted union
+        let all_caps = caps_seen.lock().unwrap();
+        let caps_sync_call = all_caps.last().unwrap();
+        assert_eq!(
+            caps_sync_call,
+            &vec![
+                "content_search".to_string(),
+                "file_read".to_string(),
+                "file_write".to_string(),
+            ],
+            "Capabilities should be deduplicated and sorted (BTreeSet)"
+        );
     }
 }

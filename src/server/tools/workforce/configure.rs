@@ -273,6 +273,20 @@ pub(super) async fn execute_configure_team(
         }
     }
 
+    // --- Sync available_capabilities on mission brief --------------------
+    let all_caps: Vec<String> = {
+        let mut set = std::collections::BTreeSet::new();
+        for (_, _, caps) in &desired_agents {
+            set.extend(caps.iter().cloned());
+        }
+        set.into_iter().collect()
+    };
+    if let Err(e) =
+        upsert_mission_brief_field(repo, ctx.step_id, None, Some(&all_caps), None, None).await
+    {
+        return json!({ "error": format!("Failed to sync capabilities: {}", e) });
+    }
+
     // --- Diff dependencies ---------------------------------------------
     // Reload roster to get fresh child_step_ids (including new agents)
     let updated_roster = repo.list_agent_roster(brief_id).await.unwrap_or_default();

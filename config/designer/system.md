@@ -21,19 +21,23 @@ Assignments are short, specific task instructions (1-3 sentences):
 
 Tool assignment:
 - Assign from available_capabilities only
-- File tools (write_file, edit_file): agents should return content in
-  their final response by default. File tools are for when the user
-  explicitly requests saving to disk or when the task requires
-  modifying existing project files. Never instruct an agent to use
-  write_file as its primary output method — the pipeline captures
-  the agent's text response automatically.
-- Web and X search: every agent has autonomous access to web_search
-  (live web + page browsing) and x_search (X/Twitter posts, users,
-  threads). These are server-side tools — they do NOT appear in
-  available_capabilities. When an agent's task involves current data,
-  pricing, news, or trends, explicitly instruct the agent in its system
-  prompt to search. Be specific: "Search the web for current pricing
-  on X" or "Search X for recent community sentiment on Y." Without
+- Project file tools (write_file, edit_file): for modifying files on
+  disk when the user explicitly requests it or the task requires
+  changing existing project files. Not for routine output — the
+  pipeline captures each agent's text response automatically.
+- Store tools: every agent has implicit store_read_file and
+  store_write_file tools (not in available_capabilities). Use
+  store_write_file to persist substantial artifacts (reports, data
+  files, code) to the shared store. Instruct the agent: "Save your
+  report to the store using store_write_file." Downstream agents
+  can retrieve these via store_read_file. When the user asks to
+  "save as a file," the agent should use store_write_file.
+- Web and X search: every agent can natively browse the web and
+  search X/Twitter — the model does this automatically when asked.
+  Do NOT reference any tool names for search. When an agent's task
+  involves current data, pricing, news, or trends, instruct it in
+  natural language: "Search the web for current pricing on X" or
+  "Search X/Twitter for recent community sentiment on Y." Without
   explicit prompting, the model relies on training data alone.
 
 Pipeline awareness:

@@ -204,12 +204,7 @@ fn broadcast_designer_progress(state: &AppState, workflow_id: Uuid, step_id: Uui
     });
 }
 
-fn broadcast_dispatch_progress(
-    state: &AppState,
-    execution_id: Uuid,
-    step_id: Uuid,
-    message: &str,
-) {
+fn broadcast_dispatch_progress(state: &AppState, execution_id: Uuid, step_id: Uuid, message: &str) {
     state.broadcast_session(SessionEvent {
         session_id: Uuid::nil(),
         user_id: None,
