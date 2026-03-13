@@ -26,12 +26,14 @@
 //! ```
 
 use anyhow::Result;
+use std::fmt as stdfmt;
 use std::path::Path;
 use tracing::{span, Level, Span};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{
-    fmt::{self, format::FmtSpan},
+    fmt::{self, format::Writer, time::FormatTime, FormatEvent, FormatFields},
     layer::SubscriberExt,
+    registry::LookupSpan,
     util::SubscriberInitExt,
     EnvFilter,
 };
@@ -58,12 +60,107 @@ impl Environment {
             .unwrap_or(Self::Development)
     }
 
-    /// Get default log level for this environment
+    /// Get default log filter for this environment
     fn default_log_level(&self) -> &'static str {
         match self {
-            Self::Development => "debug",
+            // Quiet third-party noise: sqlx query-level DDL, tower-http span events
+            Self::Development => "debug,sqlx::query=warn,tower_http=warn",
             Self::Production => "info",
         }
+    }
+}
+
+/// Minimum column width for the `target (file:line)` prefix before the message starts.
+const TARGET_WIDTH: usize = 60;
+
+/// UTC timestamp with millisecond precision (e.g. `2026-03-13T15:59:29.921Z`)
+struct UtcMillis;
+
+impl FormatTime for UtcMillis {
+    fn format_time(&self, w: &mut Writer<'_>) -> stdfmt::Result {
+        let now = chrono::Utc::now();
+        write!(w, "{}", now.format("%Y-%m-%dT%H:%M:%S%.3fZ"))
+    }
+}
+
+/// Single-line dev console formatter.
+///
+/// Produces lines like:
+/// ```text
+/// 2026-03-13T15:59:29.921Z  INFO nexor::server::state (mod.rs:279)       JWT_SECRET not set
+/// ```
+struct CompactFormatter;
+
+impl<S, N> FormatEvent<S, N> for CompactFormatter
+where
+    S: tracing::Subscriber + for<'a> LookupSpan<'a>,
+    N: for<'a> FormatFields<'a> + 'static,
+{
+    fn format_event(
+        &self,
+        ctx: &fmt::FmtContext<'_, S, N>,
+        mut writer: Writer<'_>,
+        event: &tracing::Event<'_>,
+    ) -> stdfmt::Result {
+        let ansi = writer.has_ansi_escapes();
+
+        // Timestamp (dimmed)
+        if ansi {
+            write!(writer, "\x1b[2m")?;
+        }
+        UtcMillis.format_time(&mut writer)?;
+        if ansi {
+            write!(writer, "\x1b[0m")?;
+        }
+
+        // Level — colored and right-padded to 5 chars
+        let level = *event.metadata().level();
+        if ansi {
+            let color = match level {
+                Level::ERROR => "\x1b[31m", // red
+                Level::WARN => "\x1b[33m",  // yellow
+                Level::INFO => "\x1b[32m",  // green
+                Level::DEBUG => "\x1b[34m", // blue
+                Level::TRACE => "\x1b[35m", // magenta
+            };
+            write!(writer, " {color}{level:>5}\x1b[0m ")?;
+        } else {
+            write!(writer, " {level:>5} ")?;
+        }
+
+        // Target (full module path) — dimmed
+        let target = event.metadata().target();
+        if ansi {
+            write!(writer, "\x1b[2m{target}")?;
+        } else {
+            write!(writer, "{target}")?;
+        }
+
+        // File:line — just the filename, not the full path
+        let prefix_len;
+        if let (Some(file), Some(line)) = (event.metadata().file(), event.metadata().line()) {
+            let filename = Path::new(file)
+                .file_name()
+                .and_then(|f| f.to_str())
+                .unwrap_or(file);
+            let loc = format!(" ({filename}:{line})");
+            write!(writer, "{loc}")?;
+            prefix_len = target.len() + loc.len();
+        } else {
+            prefix_len = target.len();
+        }
+
+        if ansi {
+            write!(writer, "\x1b[0m")?;
+        }
+
+        // Pad to align messages
+        let pad = TARGET_WIDTH.saturating_sub(prefix_len);
+        write!(writer, "{:pad$} ", "", pad = pad)?;
+
+        // Message + structured fields on the same line
+        ctx.format_fields(writer.by_ref(), event)?;
+        writeln!(writer)
     }
 }
 
@@ -88,7 +185,7 @@ pub fn init_logging_with_file(log_dir: Option<&Path>) -> Result<Option<WorkerGua
         .unwrap_or_else(|_| EnvFilter::new(env.default_log_level()));
 
     match (env, log_dir) {
-        // Development with file output: pretty console + JSON file
+        // Development with file output: compact console + JSON file
         (Environment::Development, Some(dir)) => {
             use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
 
@@ -96,16 +193,8 @@ pub fn init_logging_with_file(log_dir: Option<&Path>) -> Result<Option<WorkerGua
             let file_appender = tracing_appender::rolling::daily(dir, "nexor.log");
             let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
-            // Console layer: pretty, colored, hierarchical
-            let console_layer = fmt::layer()
-                .pretty()
-                .with_ansi(true)
-                .with_target(true)
-                .with_thread_ids(false)
-                .with_thread_names(false)
-                .with_file(true)
-                .with_line_number(true)
-                .with_span_events(FmtSpan::CLOSE);
+            // Console layer: single-line format with target (file:line) prefix
+            let console_layer = fmt::layer().event_format(CompactFormatter);
 
             // File layer: Bunyan JSON format for AI parsing
             let json_storage = JsonStorageLayer;
@@ -120,17 +209,9 @@ pub fn init_logging_with_file(log_dir: Option<&Path>) -> Result<Option<WorkerGua
 
             Ok(Some(guard))
         }
-        // Development without file: pretty console only
+        // Development without file: compact console only
         (Environment::Development, None) => {
-            let console_layer = fmt::layer()
-                .pretty()
-                .with_ansi(true)
-                .with_target(true)
-                .with_thread_ids(false)
-                .with_thread_names(false)
-                .with_file(true)
-                .with_line_number(true)
-                .with_span_events(FmtSpan::CLOSE);
+            let console_layer = fmt::layer().event_format(CompactFormatter);
 
             tracing_subscriber::registry()
                 .with(env_filter)
@@ -262,7 +343,10 @@ mod tests {
 
     #[test]
     fn environment_default_log_levels() {
-        assert_eq!(Environment::Development.default_log_level(), "debug");
+        assert_eq!(
+            Environment::Development.default_log_level(),
+            "debug,sqlx::query=warn,tower_http=warn"
+        );
         assert_eq!(Environment::Production.default_log_level(), "info");
     }
 

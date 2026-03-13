@@ -34,7 +34,7 @@ use tower_governor::key_extractor::SmartIpKeyExtractor;
 use tower_governor::GovernorLayer;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
-use tower_http::trace::TraceLayer;
+use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 use tracing::{info, warn};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -159,7 +159,14 @@ fn create_router(state: AppState) -> Router {
         .layer(middleware::from_fn(request_id_middleware))
         .layer(middleware::from_fn(cache_control_middleware))
         .layer(cors)
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().level(tracing::Level::DEBUG))
+                .on_request(tower_http::trace::DefaultOnRequest::new().level(tracing::Level::DEBUG))
+                .on_response(
+                    tower_http::trace::DefaultOnResponse::new().level(tracing::Level::DEBUG),
+                ),
+        )
         .with_state(state)
 }
 
@@ -575,7 +582,14 @@ fn create_router_with_static_dir(state: AppState, static_dir: &str) -> Router {
         .layer(middleware::from_fn(request_id_middleware))
         .layer(middleware::from_fn(cache_control_middleware))
         .layer(cors)
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().level(tracing::Level::DEBUG))
+                .on_request(tower_http::trace::DefaultOnRequest::new().level(tracing::Level::DEBUG))
+                .on_response(
+                    tower_http::trace::DefaultOnResponse::new().level(tracing::Level::DEBUG),
+                ),
+        )
         .with_state(state)
 }
 
@@ -681,15 +695,22 @@ async fn cache_control_middleware(request: Request<Body>, next: Next) -> Respons
     response
 }
 
-/// Middleware to assign a unique request ID to each request.
+/// Middleware to assign a unique request ID to each request and log a one-line summary.
 ///
-/// Generates a UUID, attaches it to the response as `X-Request-Id`, and logs it.
+/// Produces: `GET /api/workflows 200 12ms req=94965f2b`
 async fn request_id_middleware(request: Request<Body>, next: Next) -> Response {
     let request_id = uuid::Uuid::new_v4().to_string();
-    let span = tracing::info_span!("request", id = %request_id, method = %request.method(), path = %request.uri().path());
-    let _enter = span.enter();
+    let method = request.method().clone();
+    let path = request.uri().path().to_owned();
+    let start = std::time::Instant::now();
 
     let mut response = next.run(request).await;
+
+    let elapsed = start.elapsed();
+    let status = response.status().as_u16();
+    let short_id = &request_id[..8];
+    info!("{method} {path} {status} {elapsed:.0?}  req={short_id}");
+
     if let Ok(value) = HeaderValue::from_str(&request_id) {
         response
             .headers_mut()
