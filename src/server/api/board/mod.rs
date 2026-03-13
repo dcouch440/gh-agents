@@ -171,7 +171,7 @@ pub async fn submit_board(
     Ok(Json(response_body))
 }
 
-/// Dispatch meaningful changes directly to per-node L4 builders (agentless fan-out).
+/// Dispatch meaningful changes directly to per-node dispatch builders (agentless fan-out).
 ///
 /// Phase 0 has already created the topology — nodes, edges, positions are in the DB.
 /// This function builds per-node instructions from the changeset and dispatches each

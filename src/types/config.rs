@@ -1,49 +1,6 @@
 //! Configuration types
 
 use serde::{Deserialize, Serialize};
-
-/// Production mode for the scheduler (legacy — pending removal).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum ProductionMode {
-    #[default]
-    Running,
-    RefactorMode,
-    Paused,
-    Resuming,
-}
-
-impl ProductionMode {
-    pub fn is_active(&self) -> bool {
-        matches!(self, ProductionMode::Running)
-    }
-
-    pub fn is_refactoring(&self) -> bool {
-        matches!(self, ProductionMode::RefactorMode | ProductionMode::Paused)
-    }
-
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            ProductionMode::Running => "running",
-            ProductionMode::RefactorMode => "refactor_mode",
-            ProductionMode::Paused => "paused",
-            ProductionMode::Resuming => "resuming",
-        }
-    }
-}
-
-impl std::str::FromStr for ProductionMode {
-    type Err = std::convert::Infallible;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(match s {
-            "refactor_mode" => ProductionMode::RefactorMode,
-            "paused" => ProductionMode::Paused,
-            "resuming" => ProductionMode::Resuming,
-            _ => ProductionMode::Running,
-        })
-    }
-}
 use super::message::VerbosityLevel;
 use crate::constants::*;
 

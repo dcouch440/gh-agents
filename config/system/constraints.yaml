@@ -20,34 +20,6 @@
 
 constraints:
   # ==========================================================================
-  # CAVERNOUS ROUTING CONSTRAINTS
-  # ==========================================================================
-  # Cavernous routing (TIER 3) allows dynamic task decomposition.
-  # These constraints prevent infinite recursion and resource exhaustion.
-
-  max_subtasks_per_cavernous_step:
-    value: 10
-    type: integer
-    description: Maximum number of subtasks in a single cavernous routing execution
-    rationale: >
-      Prevents excessive task decomposition that could overwhelm the system.
-      If a task needs more than 10 subtasks, it should be broken down differently
-      or use multiple cavernous steps.
-    tenant_override: true
-    recommended_range: [5, 20]
-
-  max_cavernous_nesting_depth:
-    value: 3
-    type: integer
-    description: Maximum depth of nested cavernous routing
-    rationale: >
-      Prevents infinite recursion where cavernous steps spawn more cavernous steps.
-      3 levels allows: main workflow → cavernous step → sub-cavernous → leaf execution.
-      Beyond this indicates architectural issues.
-    tenant_override: false  # Safety-critical, no override
-    hard_limit: 5
-
-  # ==========================================================================
   # EXECUTION TIME LIMITS
   # ==========================================================================
 
@@ -258,8 +230,6 @@ constraints:
 #   These prevent resource exhaustion and control costs.
 #
 # Architectural Constraints:
-#   - max_subtasks_per_cavernous_step
-#   - max_cavernous_nesting_depth
 #   - max_room_turns
 #   These enforce good workflow design patterns.
 #

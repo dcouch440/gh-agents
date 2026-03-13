@@ -19,7 +19,7 @@ mod tests {
         UserId(uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap())
     }
 
-    // Helper for Phase 3 tests that use repository traits
+    // Helper for tests that use repository traits
     fn test_repo(db: &TestDb) -> PgRepo {
         PgRepo::new(db.pool.clone())
     }
@@ -141,7 +141,7 @@ mod tests {
     }
 
     // ============================================================================
-    // Phase 3: Tool Capability Tests
+    // Tool Capability Tests
     // ============================================================================
 
     #[tokio::test]
@@ -248,7 +248,7 @@ mod tests {
     }
 
     // ============================================================================
-    // Phase 3: System Config Tests
+    // System Config Tests
     // ============================================================================
 
     #[tokio::test]
@@ -356,7 +356,7 @@ mod tests {
     }
 
     // ============================================================================
-    // Phase 3: Workflow Port Tests
+    // Workflow Port Tests
     // ============================================================================
 
     #[tokio::test]
@@ -547,7 +547,7 @@ mod tests {
     }
 
     // ============================================================================
-    // Phase 3: Room Output Tests
+    // Room Output Tests
     // ============================================================================
 
     #[tokio::test]

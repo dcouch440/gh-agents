@@ -86,7 +86,7 @@ impl DispatchStrategy {
     ) -> Result<Self, String> {
         let board_state_xml = crate::server::hub::board_state::build(
             state.repos().workflows.as_ref(),
-            None, // L4 doesn't need initial_instructions
+            None, // Dispatch doesn't need initial_instructions
             crate::server::hub::board_state::BoardStateVariant::Dispatch,
             workflow_id,
             step_id,
