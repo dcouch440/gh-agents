@@ -8,7 +8,8 @@ use crate::db::traits::{
     MockAgentExecutionRepo, MockAgentRepo, MockAuthConfigRepo, MockChatMessageRepo,
     MockContentVersionRepo, MockDocumentRepo, MockOutputSchemaRepo, MockPromptTemplateRepo,
     MockProtocolRepo, MockResultRepo, MockRoomRepo, MockSessionRepo, MockSystemConfigRepo,
-    MockTokenLedgerRepo, MockToolCapabilityRepo, MockToolRepo, MockUserRepo, MockWorkflowRepo,
+    MockSystemFileRepo, MockTokenLedgerRepo, MockToolCapabilityRepo, MockToolRepo, MockUserRepo,
+    MockWorkflowRepo,
 };
 
 use super::Repos;
@@ -37,6 +38,7 @@ pub fn default_mock_repos() -> Repos {
         Arc::new(MockSessionRepo::new()),
         Arc::new(MockChatMessageRepo::new()),
         Arc::new(MockAuthConfigRepo::new()),
+        Arc::new(MockSystemFileRepo::new()),
     )
 }
 
@@ -164,6 +166,12 @@ impl MockReposBuilder {
     /// Override the auth config repository.
     pub fn with_auth_config(mut self, repo: Arc<dyn crate::db::traits::AuthConfigRepo>) -> Self {
         self.repos.auth_config = repo;
+        self
+    }
+
+    /// Override the system files repository.
+    pub fn with_system_files(mut self, repo: Arc<dyn crate::db::traits::SystemFileRepo>) -> Self {
+        self.repos.system_files = repo;
         self
     }
 

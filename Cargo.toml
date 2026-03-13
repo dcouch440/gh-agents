@@ -68,6 +68,10 @@ dashmap = "6"
 # HTTP client (for LLM APIs)
 reqwest = { version = "0.12", features = ["rustls-tls", "json", "stream", "cookies"] }
 
+# S3-compatible object storage (MinIO in dev, real S3 in prod)
+aws-sdk-s3 = "1"
+aws-config = "1"
+
 # Configuration
 dirs = "5"
 once_cell = "1"

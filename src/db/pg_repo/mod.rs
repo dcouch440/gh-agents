@@ -100,6 +100,7 @@ mod protocol;
 mod room;
 mod session;
 mod system_config;
+mod system_file;
 mod tool;
 mod tool_capability;
 mod user;

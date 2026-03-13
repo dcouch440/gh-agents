@@ -158,6 +158,7 @@ impl AppStateBuilder {
             ws_connections_by_ip: dashmap::DashMap::new(),
             task_registry: crate::server::state::TaskRegistry::new(),
             run_results_tokens: crate::server::hub::run_results::new_run_results_tokens(),
+            s3: None,
         });
 
         Ok((state, orchestrator_rx))

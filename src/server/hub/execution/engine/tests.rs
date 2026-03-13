@@ -7,11 +7,8 @@ mod tests {
         StreamChunk, TokenUsage,
     };
     use crate::server::hub::{
-        engine::ExecutionEngine,
-        error::HubError,
-        recorder::ExecutionRecorder,
-        strategy::ExecutionStrategy,
-        streaming::NullSink,
+        engine::ExecutionEngine, error::HubError, recorder::ExecutionRecorder,
+        strategy::ExecutionStrategy, streaming::NullSink,
     };
     use async_trait::async_trait;
     use futures::Stream;
