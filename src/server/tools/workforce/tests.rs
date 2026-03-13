@@ -1120,7 +1120,6 @@ mod tests {
         let mut brief = make_brief(ctx.step_id);
         brief.task_description = String::new();
         brief.available_capabilities = vec![];
-        let brief_id = brief.id;
         let step_id = ctx.step_id;
         let wf_id = ctx.workflow_id;
         let user_id = Uuid::new_v4();

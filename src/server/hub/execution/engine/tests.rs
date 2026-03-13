@@ -7,7 +7,7 @@ mod tests {
         StreamChunk, TokenUsage,
     };
     use crate::server::hub::{
-        engine::{ExecutionEngine, ExecutionResult},
+        engine::ExecutionEngine,
         error::HubError,
         recorder::ExecutionRecorder,
         strategy::ExecutionStrategy,
@@ -634,9 +634,7 @@ mod tests {
         let token = CancellationToken::new();
         let token_for_strategy = token.clone();
 
-        struct CancelAfterToolProvider {
-            calls: Arc<AtomicU32>,
-        }
+        struct CancelAfterToolProvider;
 
         #[async_trait]
         impl LLMProvider for CancelAfterToolProvider {
@@ -711,9 +709,7 @@ mod tests {
             }
         }
 
-        let provider = Arc::new(CancelAfterToolProvider {
-            calls: call_count.clone(),
-        });
+        let provider = Arc::new(CancelAfterToolProvider);
         let engine = ExecutionEngine::new(provider, false);
         let strategy = CancellingStrategy {
             token: token_for_strategy,

@@ -6,9 +6,6 @@ use anyhow::{Context, Result};
 
 use crate::types::GlobalConfig;
 
-#[cfg(test)]
-use crate::types::VerbosityLevel;
-
 /// Get the path to the global config file
 pub fn global_config_path() -> PathBuf {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));

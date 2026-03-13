@@ -10,9 +10,7 @@ mod tests {
         CreateStepInputPort, RoomRepo, SaveRoomExecutionOutputInput, SystemConfigRepo,
         ToolCapabilityRepo, WorkflowRepo,
     };
-    use crate::db::{
-        AgentExecutionRow, AgentRow, RoomRow, RoomSessionRow, WorkflowRow, WorkflowStepRow,
-    };
+    use crate::db::AgentRow;
     use crate::types::UserId;
 
     fn test_user_id() -> UserId {
@@ -491,7 +489,7 @@ mod tests {
     )
     .bind(workflow.id)
     .bind(agent.id)
-    .bind("for_each")
+    .bind("workforce")
     .bind(0)
     .bind("label")
     .bind("category")

@@ -3,7 +3,7 @@ mod tests {
     //! Tests for chat consumer
 
     use super::super::*;
-    use crate::db::traits::{ChatMessageRepo, MockChatMessageRepo};
+    use crate::db::traits::ChatMessageRepo;
     use crate::db::ChatMessageRow;
     use crate::server::state::test_helpers::MockReposBuilder;
     use crate::server::state::AppStateBuilder;

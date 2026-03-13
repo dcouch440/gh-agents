@@ -804,7 +804,6 @@ mod tests {
         MockAgentRepo, MockAuthConfigRepo, MockChatMessageRepo, MockSessionRepo, MockToolRepo,
     };
     use crate::server::state::test_helpers::MockReposBuilder;
-    use crate::types::UserId;
     use axum::{
         body::Body,
         http::{Request, StatusCode},
@@ -812,7 +811,6 @@ mod tests {
     use std::sync::Arc;
     use tempfile::TempDir;
     use tower::util::ServiceExt;
-    use uuid::Uuid;
 
     fn setup_mock_state() -> AppState {
         // Create focused mocks for each trait that the integration tests exercise.

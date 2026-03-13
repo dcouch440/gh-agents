@@ -12,7 +12,7 @@ mod tests {
     use crate::db::{
         AgentRow, RoomRow, ToolRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
     };
-    use crate::types::{ExecutionType, UserId};
+    use crate::types::ExecutionType;
     use chrono::Utc;
     use uuid::Uuid;
 

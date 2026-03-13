@@ -52,31 +52,6 @@ mod tests {
         }
     }
 
-    /// Set up MockWorkflowRepo with standard expectations for step creation.
-    /// create_step calls verify_workflow_ownership internally, which needs get_workflow.
-    fn setup_create_expectations(mock: &mut MockWorkflowRepo, workflow_id: Uuid, user_id: Uuid) {
-        mock.expect_get_workflow().returning(move |_| {
-            Ok(Some(crate::db::WorkflowRow {
-                id: workflow_id,
-                user_id,
-                ..Default::default()
-            }))
-        });
-
-        mock.expect_list_steps().returning(|_| Ok(vec![]));
-
-        mock.expect_create_step().returning(move |step| {
-            Ok(WorkflowStepRow {
-                workflow_id,
-                ..step
-            })
-        });
-
-        mock.expect_update_step().returning(|step| Ok(step));
-
-        mock.expect_upsert_element_map().returning(|row| Ok(row));
-    }
-
     #[tokio::test]
     async fn create_new_nodes_from_canvas() {
         let workflow_id = Uuid::new_v4();
