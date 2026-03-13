@@ -313,18 +313,18 @@ pub(crate) fn get_stroke_outline_points(
     };
 
     // Single point → dot
-    if points.len() == 1 {
-        if (start_taper == 0.0 && end_taper == 0.0) || options.last {
-            return dot_outline(first_point, first_radius.unwrap_or(radius));
-        }
+    if points.len() == 1 && ((start_taper == 0.0 && end_taper == 0.0) || options.last) {
+        return dot_outline(first_point, first_radius.unwrap_or(radius));
     }
 
     // Build start cap
     // JS: I||L&&e.length===1||(S?Q.push(...A(X,B[0],13)):Q.push(...j(X,z[0],B[0])))
     // = if !(start_taper || (end_taper && len==1)) then add cap
-    let start_cap = if start_taper > 0.0 || (end_taper > 0.0 && points.len() == 1) {
-        vec![]
-    } else if left_points.is_empty() || right_points.is_empty() {
+    let start_cap = if start_taper > 0.0
+        || (end_taper > 0.0 && points.len() == 1)
+        || left_points.is_empty()
+        || right_points.is_empty()
+    {
         vec![]
     } else if options.start.cap {
         round_start_cap(first_point, right_points[0], START_CAP_SEGMENTS)

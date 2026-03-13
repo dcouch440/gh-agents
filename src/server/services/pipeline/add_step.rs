@@ -28,7 +28,7 @@ pub async fn add_step(
     let existing_steps = repo
         .list_steps(pipeline_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     let display_order = match input.display_order {
         Some(order) => order,
@@ -91,7 +91,7 @@ pub async fn add_step(
     let created = repo
         .create_step(child_step)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     // Recompute execution order
     let sequence = recompute_execution_order(repo, pipeline_id).await?;

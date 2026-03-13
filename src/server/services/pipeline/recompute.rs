@@ -23,7 +23,7 @@ pub async fn recompute_execution_order(
     let steps = repo
         .list_steps(pipeline_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     let pipeline_steps: Vec<_> = steps.iter().collect();
     if pipeline_steps.is_empty() {
@@ -33,7 +33,7 @@ pub async fn recompute_execution_order(
     let edges = repo
         .list_edges(pipeline_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     let step_ids: HashSet<Uuid> = pipeline_steps.iter().map(|s| s.id).collect();
     let step_index: HashMap<Uuid, usize> = pipeline_steps
@@ -100,7 +100,7 @@ async fn compute_and_persist(
             updated.display_order = new_order_i32;
             repo.update_step(updated)
                 .await
-                .map_err(|e| ServiceError::Internal(e.into()))?;
+                .map_err(ServiceError::Internal)?;
         }
 
         let name = step.name.clone().unwrap_or_default();

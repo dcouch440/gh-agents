@@ -19,7 +19,7 @@ pub async fn create_pipeline(
     let step = repo
         .get_step(ctx.parent_step_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?
+        .map_err(ServiceError::Internal)?
         .ok_or_else(|| ServiceError::not_found("Parent step"))?;
 
     // Return existing pipeline if already linked
@@ -40,14 +40,14 @@ pub async fn create_pipeline(
             vpn_enabled: false,
         })
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     // Link child workflow to parent step
     let mut updated_step = step;
     updated_step.child_workflow_id = Some(child_workflow.id);
     repo.update_step(updated_step)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     Ok(PipelineCreated {
         pipeline_id: child_workflow.id,

@@ -16,7 +16,7 @@ pub async fn destroy_pipeline(
     let step = repo
         .get_step(ctx.parent_step_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?
+        .map_err(ServiceError::Internal)?
         .ok_or_else(|| ServiceError::not_found("Parent step"))?;
 
     let pipeline_id = match step.child_workflow_id {
@@ -29,25 +29,25 @@ pub async fn destroy_pipeline(
     let child_steps = repo
         .list_steps(pipeline_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     let edges = repo
         .list_edges(pipeline_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     // Remove all edges first
     for edge in &edges {
         repo.remove_edge(edge.from_step_id, edge.to_step_id)
             .await
-            .map_err(|e| ServiceError::Internal(e.into()))?;
+            .map_err(ServiceError::Internal)?;
     }
 
     // Remove all steps (including Designer)
     for child_step in &child_steps {
         repo.delete_step(child_step.id)
             .await
-            .map_err(|e| ServiceError::Internal(e.into()))?;
+            .map_err(ServiceError::Internal)?;
     }
 
     // Clear child_workflow_id on the parent step
@@ -55,7 +55,7 @@ pub async fn destroy_pipeline(
     updated.child_workflow_id = None;
     repo.update_step(updated)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     Ok(())
 }

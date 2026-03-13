@@ -23,7 +23,7 @@ pub async fn remove_step(
     let parent_step = repo
         .get_step(ctx.parent_step_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?
+        .map_err(ServiceError::Internal)?
         .ok_or_else(|| ServiceError::not_found("Parent step"))?;
 
     let pipeline_id = parent_step
@@ -34,26 +34,26 @@ pub async fn remove_step(
     let edges = repo
         .list_edges(pipeline_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     for edge in &edges {
         if edge.from_step_id == step_id || edge.to_step_id == step_id {
             repo.remove_edge(edge.from_step_id, edge.to_step_id)
                 .await
-                .map_err(|e| ServiceError::Internal(e.into()))?;
+                .map_err(ServiceError::Internal)?;
         }
     }
 
     // Delete the step
     repo.delete_step(step_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     // Check if pipeline is now empty
     let remaining_steps = repo
         .list_steps(pipeline_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     if remaining_steps.is_empty() {
         // Destroy the entire pipeline

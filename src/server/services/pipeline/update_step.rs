@@ -19,7 +19,7 @@ pub async fn update_step(
     let mut step = repo
         .get_step(step_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?
+        .map_err(ServiceError::Internal)?
         .ok_or_else(|| ServiceError::not_found("Pipeline step"))?;
 
     if let Some(ref name) = input.name {
@@ -41,7 +41,7 @@ pub async fn update_step(
 
     repo.update_step(step)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     Ok(StepAdded {
         step_id,
