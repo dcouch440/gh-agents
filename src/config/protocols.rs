@@ -449,7 +449,7 @@ mod tests {
     fn designer_config_parses() {
         let cfg = &*DESIGNER;
         let designer = cfg.agent("designer");
-        assert_eq!(designer.model_id, crate::constants::MODEL_TIER1);
+        assert_eq!(designer.model_id, crate::constants::MODEL_TIER2);
         assert_eq!(designer.temperature, 0.4);
         assert_eq!(designer.max_tokens, 16384);
         assert_eq!(designer.max_rounds, 1);

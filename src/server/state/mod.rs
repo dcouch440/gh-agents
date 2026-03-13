@@ -22,7 +22,6 @@ use crate::llm::{LLMProvider, ProviderRegistry};
 use crate::types::{AppConfig, UserId};
 
 use super::hub::protocols::ProtocolEngine;
-use super::hub::PromptRegistry;
 use super::ws::events::{RoomEvent, ServerEvent, SessionEvent, WorkflowEvent};
 
 mod builder;
@@ -97,8 +96,6 @@ pub(crate) struct AppStateInner {
     pub(crate) provider: Option<Arc<dyn LLMProvider + Send + Sync>>,
     /// Multi-provider registry for step-level routing
     pub(crate) provider_registry: ProviderRegistry,
-    /// Prompt registry for core system/agent prompts
-    pub(crate) prompt_registry: Arc<PromptRegistry>,
     /// In-memory capability → tool resolution (loaded from YAML at startup)
     pub(crate) capability_registry: Arc<crate::config::capability_registry::CapabilityRegistry>,
     /// JWT secret for token signing
@@ -175,9 +172,6 @@ impl AppState {
         // JWT secret: require via env var, fall back to random for dev only
         let jwt_secret = Self::load_jwt_secret(&env);
 
-        // Load prompt registry from prompts/ directory
-        let prompt_registry = Self::load_prompt_registry();
-
         // Load capability registry from YAML config files
         let capability_registry = Self::load_capability_registry();
 
@@ -192,7 +186,6 @@ impl AppState {
             config: Arc::new(RwLock::new(config)),
             provider,
             provider_registry,
-            prompt_registry,
             capability_registry,
             jwt_secret,
             chat_tx,
@@ -235,7 +228,6 @@ impl AppState {
                 config: Arc::new(RwLock::new(config)),
                 provider: None,
                 provider_registry: ProviderRegistry::default(),
-                prompt_registry: Arc::new(PromptRegistry::empty()),
                 capability_registry: Arc::new(
                     crate::config::capability_registry::CapabilityRegistry::empty(),
                 ),
@@ -281,28 +273,6 @@ impl AppState {
                     crate::constants::ENV_JWT_SECRET
                 );
                 rand::random::<[u8; 32]>().to_vec()
-            }
-        }
-    }
-
-    fn load_prompt_registry() -> Arc<PromptRegistry> {
-        let prompts_dir = std::env::current_dir().unwrap_or_default().join("prompts");
-        match PromptRegistry::load_from_dir(&prompts_dir) {
-            Ok(registry) => {
-                tracing::info!(
-                    "Loaded {} prompts from {}",
-                    registry.len(),
-                    prompts_dir.display()
-                );
-                Arc::new(registry)
-            }
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to load prompts from {}: {} — using empty registry",
-                    prompts_dir.display(),
-                    e
-                );
-                Arc::new(PromptRegistry::empty())
             }
         }
     }
@@ -551,11 +521,6 @@ impl AppState {
         }
 
         enabled
-    }
-
-    /// Access the prompt registry.
-    pub fn prompt_registry(&self) -> &Arc<PromptRegistry> {
-        &self.0.prompt_registry
     }
 
     /// Access the capability registry (YAML-backed, in-memory).

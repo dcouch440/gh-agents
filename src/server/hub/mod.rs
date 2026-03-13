@@ -46,7 +46,6 @@ use engine::filters::{
     SchemaValidationRetryFilter,
 };
 
-pub use crate::config::prompt_registry::PromptRegistry;
 pub use engine::{ExecutionEngine, ExecutionResult};
 pub use error::HubError;
 pub use recorder::ExecutionRecorder;
