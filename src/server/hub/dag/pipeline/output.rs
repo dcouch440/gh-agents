@@ -3,6 +3,10 @@
 use std::collections::HashMap;
 
 use serde_json::Value as JsonValue;
+use uuid::Uuid;
+
+use crate::db::traits::SystemFileRepo;
+use crate::db::{SystemFileRow, WorkflowStepRow};
 
 use super::super::agent_designer::normalize_agent_name;
 use super::types::DesignedAgentPrompt;
@@ -128,4 +132,87 @@ pub(crate) fn compute_execution_levels(prompts: &[DesignedAgentPrompt]) -> Vec<V
     }
 
     levels
+}
+
+/// Build `<upstream_artifacts>` XML manifest from store metadata.
+///
+/// Lists files produced by:
+/// - Any agent in the current workforce step (shared workspace)
+/// - Agents in upstream DAG steps (direct edges only)
+///
+/// Returns an empty string if no artifacts exist.
+pub(crate) async fn build_upstream_artifacts_block(
+    repo: &dyn SystemFileRepo,
+    workflow_id: Uuid,
+    step_id: Uuid,
+    upstream_step_ids: &[Uuid],
+    steps: &[WorkflowStepRow],
+) -> String {
+    let step_name_map: HashMap<Uuid, &str> = steps
+        .iter()
+        .map(|s| (s.id, s.name.as_deref().unwrap_or("Unnamed")))
+        .collect();
+
+    let mut sections: Vec<String> = Vec::new();
+
+    // Workforce-local files (shared workspace — all agents in this step)
+    if let Ok(local_files) = repo.list_by_producer(workflow_id, step_id).await {
+        let local_xml = format_artifact_section(
+            step_name_map
+                .get(&step_id)
+                .copied()
+                .unwrap_or("Current Step"),
+            &local_files,
+        );
+        if !local_xml.is_empty() {
+            sections.push(local_xml);
+        }
+    }
+
+    // Upstream DAG step files (direct edges)
+    for &upstream_id in upstream_step_ids {
+        if let Ok(files) = repo.list_by_producer(workflow_id, upstream_id).await {
+            let name = step_name_map
+                .get(&upstream_id)
+                .copied()
+                .unwrap_or("Upstream Step");
+            let section = format_artifact_section(name, &files);
+            if !section.is_empty() {
+                sections.push(section);
+            }
+        }
+    }
+
+    if sections.is_empty() {
+        return String::new();
+    }
+
+    format!(
+        "<upstream_artifacts>\n{}\n</upstream_artifacts>",
+        sections.join("\n")
+    )
+}
+
+/// Format a single step's artifacts as XML entries.
+fn format_artifact_section(step_name: &str, files: &[SystemFileRow]) -> String {
+    // Filter out design/ files — those are internal to the designer, not artifacts
+    let artifact_files: Vec<&SystemFileRow> = files
+        .iter()
+        .filter(|f| !f.path.starts_with("design/"))
+        .collect();
+
+    if artifact_files.is_empty() {
+        return String::new();
+    }
+
+    let mut out = format!("  <step name=\"{step_name}\">\n");
+    for file in &artifact_files {
+        let by = file.produced_by_agent.as_deref().unwrap_or("unknown");
+        out.push_str(&format!(
+            "    <file path=\".system/{}\" type=\"{}\" by=\"{}\">\n      {}\n    </file>\n",
+            file.path, file.media_type, by, file.description
+        ));
+    }
+    out.push_str("  </step>");
+    out
 }

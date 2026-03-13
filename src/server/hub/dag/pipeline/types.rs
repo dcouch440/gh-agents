@@ -50,6 +50,9 @@ pub(super) struct WorkforceStepEnv {
     /// Pre-formatted block of upstream DAG step outputs (workforce, single).
     /// Excludes context-mode steps (handled by user_notes_block).
     pub upstream_outputs_block: String,
+    /// Pre-formatted `<upstream_artifacts>` XML manifest listing files in the store.
+    /// Built from SystemFileRow metadata — paths and descriptions only, not content.
+    pub upstream_artifacts_block: String,
 }
 
 /// Aggregated results from executing all agent levels.

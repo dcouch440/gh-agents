@@ -231,6 +231,21 @@ async fn execute_single_agent(
         env.task_description, designed.assignment,
     );
 
+    // Inject expected output shape (from designer)
+    if let Some(expected) = &designed.expected_output {
+        if !expected.is_empty() {
+            task_prompt.push_str(&format!(
+                "\n\n<expected_output>\n{}\n</expected_output>",
+                expected
+            ));
+        }
+    }
+
+    // Inject upstream artifacts manifest (files from store)
+    if !env.upstream_artifacts_block.is_empty() {
+        task_prompt.push_str(&format!("\n\n{}", env.upstream_artifacts_block));
+    }
+
     // Append upstream agent outputs
     if !filtered.is_empty() {
         let previous_outputs = build_filtered_outputs_block(&filtered);
