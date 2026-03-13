@@ -1,15 +1,12 @@
 import { useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Chip from '@mui/material/Chip'
 import Collapse from '@mui/material/Collapse'
-import Button from '@mui/material/Button'
 import ExpandMoreOutlined from '@mui/icons-material/ExpandMoreOutlined'
 import ExpandLessOutlined from '@mui/icons-material/ExpandLessOutlined'
-import OpenInNewOutlined from '@mui/icons-material/OpenInNewOutlined'
 import { TerminalBlock } from '@/components/primitives/terminal-renderer'
-import type { RunStepResult, PhaseExecution, ChildStepResult } from '@/types'
+import type { RunStepResult, PhaseExecution } from '@/types'
 
 type StepResultCardProps = {
   step: RunStepResult
@@ -112,56 +109,9 @@ function PhaseRow({ phase }: { phase: PhaseExecution }) {
   )
 }
 
-function ChildStepRow({ childStep }: { childStep: ChildStepResult }) {
-  return (
-    <Box sx={{ border: 1, borderColor: 'divider', borderRadius: 1, mb: 0.5 }}>
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1,
-          px: 1.5,
-          py: 0.75,
-        }}
-      >
-        <Typography variant="body2" sx={{ fontWeight: 500, flex: 1 }}>
-          {childStep.step_name ?? childStep.execution_mode}
-        </Typography>
-        <Chip
-          label={childStep.execution_mode}
-          size="small"
-          variant="outlined"
-          sx={{ height: 18, fontSize: '0.65rem' }}
-        />
-        <Chip
-          label={childStep.status}
-          size="small"
-          color={STATUS_COLORS[childStep.status] ?? 'default'}
-          sx={{ height: 20, fontSize: '0.7rem' }}
-        />
-        {childStep.input_tokens !== null && childStep.output_tokens !== null && (
-          <MetricChip label="tok" value={`${formatTokens(childStep.input_tokens)}/${formatTokens(childStep.output_tokens)}`} />
-        )}
-        {childStep.duration_ms !== null && (
-          <MetricChip label="" value={formatDuration(childStep.duration_ms)} />
-        )}
-      </Box>
-      {childStep.error !== null && (
-        <Box sx={{ px: 1.5, py: 0.5, borderTop: 1, borderColor: 'divider', bgcolor: 'rgba(248, 81, 73, 0.06)' }}>
-          <Typography variant="caption" sx={{ color: '#f85149', fontFamily: 'monospace', fontSize: '0.7rem' }}>
-            {childStep.error}
-          </Typography>
-        </Box>
-      )}
-    </Box>
-  )
-}
-
 function StepResultCard({ step }: StepResultCardProps) {
-  const { id: workflowId } = useParams<{ id: string }>()
   const [expanded, setExpanded] = useState(false)
-  const hasChildSteps = step.child_steps !== null && step.child_steps.length > 0
-  const hasOutput = step.output !== null || (step.phases !== null && step.phases.length > 0) || hasChildSteps
+  const hasOutput = step.output !== null || (step.phases !== null && step.phases.length > 0)
   const hasError = step.error !== null
 
   return (
@@ -279,31 +229,6 @@ function StepResultCard({ step }: StepResultCardProps) {
               {step.phases.map((phase) => (
                 <PhaseRow key={phase.id} phase={phase} />
               ))}
-            </Box>
-          )}
-
-          {hasChildSteps && (
-            <Box sx={{ mt: 1 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                Child Steps ({step.child_steps!.length})
-              </Typography>
-              {step.child_steps!.map((cs, idx) => (
-                <ChildStepRow key={idx} childStep={cs} />
-              ))}
-              {step.child_execution_id !== null && workflowId && (
-                <Box sx={{ mt: 1, display: 'flex', justifyContent: 'flex-end' }}>
-                  <Button
-                    component={Link}
-                    to={`/workflows/${workflowId}/runs/${step.child_execution_id}`}
-                    size="small"
-                    variant="text"
-                    endIcon={<OpenInNewOutlined sx={{ fontSize: 14 }} />}
-                    sx={{ fontSize: '0.75rem', textTransform: 'none' }}
-                  >
-                    View Full Run
-                  </Button>
-                </Box>
-              )}
             </Box>
           )}
         </Box>

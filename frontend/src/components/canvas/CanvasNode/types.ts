@@ -9,7 +9,6 @@ const NodeVariant = {
   CONTEXT: 'context',
   INPUT: 'input',
   STEP: 'step',
-  SUB_WORKFLOW: 'sub_workflow',
 } as const
 
 type NodeVariant = (typeof NodeVariant)[keyof typeof NodeVariant]
@@ -69,20 +68,13 @@ type CardNodeData = NodeDataBase & {
   isProtocol: boolean
 }
 
-/** Sub-workflow — compact layout */
-type CompactNodeData = NodeDataBase & {
-  variant: 'sub_workflow'
-  templateName: string | null
-}
-
 type CanvasNodeData =
   | TabbedNodeData
   | AgentNodeData
   | EditorNodeData
   | CardNodeData
-  | CompactNodeData
 
-type LayoutMode = 'tabbed' | 'editor' | 'card' | 'compact'
+type LayoutMode = 'tabbed' | 'editor' | 'card'
 
 export { NodeVariant }
 export type {
@@ -91,6 +83,5 @@ export type {
   AgentNodeData,
   EditorNodeData,
   CardNodeData,
-  CompactNodeData,
   LayoutMode,
 }

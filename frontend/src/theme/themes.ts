@@ -24,7 +24,6 @@ type NodePalette = {
   context: string
   input: string
   step: string
-  sub_workflow: string
 }
 
 // ---------------------------------------------------------------------------
@@ -138,7 +137,7 @@ const linenNodePalette: NodePalette = {
   context: '#5A8A6E',
   input: '#C4882A',
   step: '#8B8178',
-  sub_workflow: '#5A8A6E',
+
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -239,7 +238,7 @@ const midnightNodePalette: NodePalette = {
   context: '#10b981',
   input: '#f59e0b',
   step: '#7d8590',
-  sub_workflow: '#10b981',
+
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -340,7 +339,7 @@ const slateNodePalette: NodePalette = {
   context: '#34d399',
   input: '#fbbf24',
   step: '#94a3b8',
-  sub_workflow: '#34d399',
+
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -440,7 +439,7 @@ const obsidianNodePalette: NodePalette = {
   context: '#999999',
   input: '#cccccc',
   step: '#666666',
-  sub_workflow: '#999999',
+
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -540,7 +539,7 @@ const paperNodePalette: NodePalette = {
   context: '#555555',
   input: '#444444',
   step: '#888888',
-  sub_workflow: '#555555',
+
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

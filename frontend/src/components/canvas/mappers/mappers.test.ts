@@ -13,7 +13,6 @@ const testPalette: NodePalette = {
   context: '#10b981',
   input: '#f59e0b',
   step: '#7d8590',
-  sub_workflow: '#10b981',
 }
 
 const step1: WorkflowStep = {

@@ -40,7 +40,6 @@ pub(crate) fn build_execution_context(
         container_config: None,
         wg_client: None,
         snapshot: None,
-        parent_context: None,
     }
 }
 

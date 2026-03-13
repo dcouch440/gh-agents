@@ -24,7 +24,7 @@ pub struct WorkflowStepRow {
     pub id: Uuid,
     pub workflow_id: Uuid,
     pub agent_id: Option<Uuid>,
-    pub execution_mode: String, // "single", "workforce", "context", "input", "sub_workflow", "container"
+    pub execution_mode: String, // "single", "workforce", "context", "input", "container"
     pub agent_execution_mode: Option<String>, // "sequential" or "parallel", NULL = inherit from workflow
     pub for_each_ref: Option<String>,
     pub prompt_template_id: Option<Uuid>,
@@ -53,8 +53,6 @@ pub struct WorkflowStepRow {
     pub board_context_updated_at: Option<DateTime<Utc>>,
     pub goal_summary: String,
     pub goal_summary_updated_at: Option<DateTime<Utc>>,
-    /// Template to execute as a child workflow (sub_workflow execution mode).
-    pub sub_workflow_template_id: Option<Uuid>,
     /// Live child workflow for workforce steps (edited at design time, snapshotted at execution).
     pub child_workflow_id: Option<Uuid>,
     /// Stable readable identifier for LLM-facing references (e.g. "workforce-1").
@@ -197,7 +195,6 @@ impl Default for WorkflowStepRow {
             board_context_updated_at: None,
             goal_summary: String::new(),
             goal_summary_updated_at: None,
-            sub_workflow_template_id: None,
             child_workflow_id: None,
             ref_id: None,
             pinned: false,

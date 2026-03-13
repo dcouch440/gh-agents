@@ -2,7 +2,6 @@ import { workflowExecutionStore } from '.'
 import {
   mapApiStatusToStoreStatus,
   mapRunStepToStepState,
-  buildSubWorkflowProgress,
   buildEventLog,
   hydrateLatestRun,
 } from './hydrate'
@@ -53,8 +52,6 @@ const makeStep = (overrides: Partial<RunStepResult> = {}): RunStepResult => ({
   cost_usd: 0.01,
   error: null,
   phases: null,
-  child_execution_id: null,
-  child_steps: null,
   ...overrides,
 })
 
@@ -103,7 +100,6 @@ describe('mapRunStepToStepState', () => {
     expect(state.error).toBeNull()
     expect(state.agentId).toBeNull()
     expect(state.forEachProgress).toBeNull()
-    expect(state.subWorkflowProgress).toBeNull()
     expect(state.startedAt).toBe('2025-01-01T00:00:10Z')
     expect(state.completedAt).toBe('2025-01-01T00:00:30Z')
   })
@@ -131,57 +127,6 @@ describe('mapRunStepToStepState', () => {
 
     expect(state.status).toBe('skipped')
     expect(state.executionId).toBeNull()
-  })
-})
-
-describe('buildSubWorkflowProgress', () => {
-  it('returns null when child_execution_id is null', () => {
-    const step = makeStep({ child_execution_id: null, child_steps: null })
-    expect(buildSubWorkflowProgress(step)).toBeNull()
-  })
-
-  it('returns null when child_steps is empty', () => {
-    const step = makeStep({ child_execution_id: 'ce-1', child_steps: [] })
-    expect(buildSubWorkflowProgress(step)).toBeNull()
-  })
-
-  it('builds progress from child steps', () => {
-    const step = makeStep({
-      status: 'completed',
-      child_execution_id: 'ce-1',
-      child_steps: [
-        { step_name: 'Designer', execution_mode: 'single', status: 'completed', input_tokens: 50, output_tokens: 25, duration_ms: 1000, error: null },
-        { step_name: 'Agent 1', execution_mode: 'single', status: 'completed', input_tokens: 80, output_tokens: 40, duration_ms: 2000, error: null },
-      ],
-    })
-
-    const progress = buildSubWorkflowProgress(step)
-    expect(progress).not.toBeNull()
-    expect(progress!.childExecutionId).toBe('ce-1')
-    expect(progress!.totalSteps).toBe(2)
-    expect(progress!.completedSteps).toBe(2)
-    expect(progress!.status).toBe('completed')
-    expect(progress!.childSteps).toHaveLength(2)
-    expect(progress!.childSteps[0].childStepName).toBe('Designer')
-    expect(progress!.childSteps[0].status).toBe('success')
-    expect(progress!.childSteps[1].status).toBe('success')
-  })
-
-  it('counts failed child steps as terminal', () => {
-    const step = makeStep({
-      status: 'failed',
-      child_execution_id: 'ce-1',
-      child_steps: [
-        { step_name: 'Designer', execution_mode: 'single', status: 'completed', input_tokens: 50, output_tokens: 25, duration_ms: 1000, error: null },
-        { step_name: 'Agent 1', execution_mode: 'single', status: 'failed', input_tokens: null, output_tokens: null, duration_ms: null, error: 'boom' },
-      ],
-    })
-
-    const progress = buildSubWorkflowProgress(step)
-    expect(progress!.completedSteps).toBe(2)
-    expect(progress!.status).toBe('failed')
-    expect(progress!.childSteps[1].status).toBe('error')
-    expect(progress!.childSteps[1].error).toBe('boom')
   })
 })
 

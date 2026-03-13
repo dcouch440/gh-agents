@@ -172,7 +172,7 @@ pub async fn apply_protocol(
             board_context_updated_at: None,
             goal_summary: String::new(),
             goal_summary_updated_at: None,
-            sub_workflow_template_id: None,
+
             child_workflow_id: None,
             ref_id: None,
             pinned: false,

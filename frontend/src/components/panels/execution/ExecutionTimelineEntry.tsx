@@ -6,7 +6,6 @@ import ExpandMoreOutlined from '@mui/icons-material/ExpandMoreOutlined'
 import ExpandLessOutlined from '@mui/icons-material/ExpandLessOutlined'
 import { StatusBadge } from '@/components/primitives'
 import { ExecutionStepOutput } from './ExecutionStepOutput'
-import { ChildStepTimeline } from './ChildStepTimeline'
 import { STATUS_COLORS, STATUS_LABELS, STATUS_BADGE_VARIANTS } from './constants'
 import type { StepExecutionState } from '@/stores'
 
@@ -31,7 +30,7 @@ function ExecutionTimelineEntry({ stepId, stepState, isLast }: ExecutionTimeline
   const [expanded, setExpanded] = useState(false)
   const toggle = useCallback(() => setExpanded((prev) => !prev), [])
 
-  const { status, stepName, output, error, inputTokens, outputTokens, durationMs, forEachProgress, subWorkflowProgress } = stepState
+  const { status, stepName, output, error, inputTokens, outputTokens, durationMs, forEachProgress } = stepState
   const color = STATUS_COLORS[status]
   const hasOutput = output !== null || error !== null
   const isRunning = status === 'running'
@@ -39,7 +38,6 @@ function ExecutionTimelineEntry({ stepId, stepState, isLast }: ExecutionTimeline
   const tokens = formatTokens(inputTokens, outputTokens)
   const duration = formatDuration(durationMs)
   const forEach = forEachProgress ? `${forEachProgress.completed}/${forEachProgress.total}` : null
-  const subProgress = subWorkflowProgress ? `${subWorkflowProgress.completedSteps}/${subWorkflowProgress.totalSteps}` : null
 
   return (
     <Box sx={{ display: 'flex', minHeight: 48 }}>
@@ -118,7 +116,7 @@ function ExecutionTimelineEntry({ stepId, stepState, isLast }: ExecutionTimeline
         </Box>
 
         {/* Metrics row */}
-        {(duration ?? tokens ?? forEach ?? subProgress) !== null && (
+        {(duration ?? tokens ?? forEach) !== null && (
           <Box sx={{ display: 'flex', gap: 1.5, px: 1, pb: 0.5, flexWrap: 'wrap' }}>
             {duration && (
               <Typography variant="caption" sx={{ color: 'text.secondary' }}>
@@ -135,17 +133,7 @@ function ExecutionTimelineEntry({ stepId, stepState, isLast }: ExecutionTimeline
                 {forEach} items
               </Typography>
             )}
-            {subProgress && (
-              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                {subProgress} child steps
-              </Typography>
-            )}
           </Box>
-        )}
-
-        {/* Child step timeline (always visible when present) */}
-        {subWorkflowProgress !== null && subWorkflowProgress.childSteps.length > 0 && (
-          <ChildStepTimeline progress={subWorkflowProgress} />
         )}
 
         {/* Expanded output */}

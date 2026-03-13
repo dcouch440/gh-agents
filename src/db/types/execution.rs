@@ -15,8 +15,6 @@ pub struct WorkflowExecutionRow {
     pub error: Option<String>,
     pub execution_mode: String,
     pub template_id: Option<Uuid>,
-    /// Parent execution for sub-workflow nesting.
-    pub parent_execution_id: Option<Uuid>,
     /// Root execution for O(1) tree traversal (Temporal pattern).
     pub root_execution_id: Option<Uuid>,
     /// Nesting depth: 0 = top-level, 1 = first sub-workflow, etc.
@@ -106,7 +104,6 @@ impl Default for WorkflowExecutionRow {
             error: None,
             execution_mode: "dag".to_string(),
             template_id: None,
-            parent_execution_id: None,
             root_execution_id: None,
             depth: 0,
         }

@@ -73,13 +73,6 @@ const PORT_CONFIGS: Readonly<Record<CanvasNodeKind, NodePortConfig>> = {
       { side: 'bottom', role: 'document-input', handleType: 'target', handleId: 'document-input' },
     ],
   },
-  [CanvasNodeKind.SUB_WORKFLOW]: {
-    kind: CanvasNodeKind.SUB_WORKFLOW,
-    ports: [
-      { side: 'left', role: 'control-in', handleType: 'target', handleId: null },
-      { side: 'right', role: 'control-out', handleType: 'source', handleId: null },
-    ],
-  },
 }
 
 // ── Query Functions ──────────────────────────────────────────────────

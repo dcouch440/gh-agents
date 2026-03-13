@@ -181,17 +181,6 @@ const VARIANT_CONFIGS: Record<NodeVariant, VariantConfig> = {
     constraints: null,
 
   },
-  sub_workflow: {
-    label: 'Sub-Workflow',
-    color: '#10b981',
-    icon: SmartToyOutlined,
-    layout: 'compact',
-    canvasNodeKind: CanvasNodeKind.SUB_WORKFLOW,
-    defaultWidth: 180,
-    defaultHeight: 56,
-    constraints: null,
-
-  },
 }
 
 // ---------------------------------------------------------------------------
@@ -227,7 +216,6 @@ const resolveVariant = (
 ): NodeVariant => {
   if (step.execution_mode === 'context') return 'context'
   if (step.execution_mode === 'input') return 'input'
-  if (step.execution_mode === 'sub_workflow') return 'sub_workflow'
   if (step.execution_mode === 'workforce') return 'workforce'
   if (step.execution_mode === 'manager') return 'manager'
   if (step.execution_mode === 'room') return 'room'

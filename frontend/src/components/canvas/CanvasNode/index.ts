@@ -2,7 +2,7 @@
 export { CanvasNode } from './CanvasNode'
 
 // Layouts
-export { TabbedLayout, EditorLayout, CardLayout, CompactLayout } from './layouts'
+export { TabbedLayout, EditorLayout, CardLayout } from './layouts'
 
 // Types
 export type {
@@ -11,7 +11,6 @@ export type {
   AgentNodeData,
   EditorNodeData,
   CardNodeData,
-  CompactNodeData,
   LayoutMode,
 } from './types'
 export { NodeVariant } from './types'

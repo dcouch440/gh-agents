@@ -39,12 +39,6 @@ pub struct StepLastRunResponse {
     /// Present for protocol steps (workforce).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub phases: Option<Vec<PhaseExecution>>,
-    /// Present only for sub_workflow steps.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub child_execution_id: Option<uuid::Uuid>,
-    /// Present only for sub_workflow steps.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub child_steps: Option<Vec<super::types::ChildStepResult>>,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -140,7 +134,7 @@ pub async fn get_step_last_run(
 /// Build a `StepLastRunResponse` for a given step + execution pair.
 ///
 /// Shared by `get_step_last_run` (latest run) and the run-detail endpoints
-/// (specific historical run). Handles workforce, sub_workflow, and standard steps.
+/// (specific historical run). Handles workforce and standard steps.
 pub(super) async fn build_step_run_response(
     state: &AppState,
     step: &WorkflowStepRow,
@@ -189,8 +183,6 @@ pub(super) async fn build_step_run_response(
                 cost_usd: None,
                 error: None,
                 phases: None,
-                child_execution_id: None,
-                child_steps: None,
             });
         }
 
@@ -256,99 +248,7 @@ pub(super) async fn build_step_run_response(
             cost_usd: Some(total_cost),
             error: None,
             phases: Some(phases),
-            child_execution_id: None,
-            child_steps: None,
         })
-    } else if step.execution_mode == "sub_workflow" {
-        // Sub-workflow (legacy, see tickets/remove-sub-workflow.md): look up child execution and its step results
-        let db = state
-            .db()
-            .ok_or(AppError::Internal("Database not available".into()))?
-            .clone();
-        let collection_repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
-        let child_executions = collection_repo
-            .list_child_executions(execution_id)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?;
-
-        // Find the child execution that matches this step's template
-        let child_exec = child_executions.first();
-
-        match child_exec {
-            Some(child) => {
-                let child_workflow_repo = &state.repos().workflows;
-                let child_steps = child_workflow_repo
-                    .list_steps(child.workflow_id)
-                    .await
-                    .unwrap_or_default();
-
-                let mut child_step_results = Vec::new();
-                let mut total_in: i64 = 0;
-                let mut total_out: i64 = 0;
-                let mut total_cost: f64 = 0.0;
-
-                for cs in &child_steps {
-                    if cs.execution_mode == "context" || cs.execution_mode == "input" {
-                        continue;
-                    }
-                    match Box::pin(build_step_run_response(state, cs, child.id)).await {
-                        Ok(cr) => {
-                            total_in += cr.input_tokens.unwrap_or(0);
-                            total_out += cr.output_tokens.unwrap_or(0);
-                            total_cost += cr.cost_usd.unwrap_or(0.0);
-                            child_step_results.push(super::types::ChildStepResult {
-                                step_name: cs.name.clone(),
-                                execution_mode: cs.execution_mode.clone(),
-                                status: cr.status,
-                                input_tokens: cr.input_tokens,
-                                output_tokens: cr.output_tokens,
-                                duration_ms: cr.duration_ms,
-                                error: cr.error,
-                            });
-                        }
-                        Err(_) => {
-                            child_step_results.push(super::types::ChildStepResult {
-                                step_name: cs.name.clone(),
-                                execution_mode: cs.execution_mode.clone(),
-                                status: "skipped".to_string(),
-                                input_tokens: None,
-                                output_tokens: None,
-                                duration_ms: None,
-                                error: None,
-                            });
-                        }
-                    }
-                }
-
-                let duration_ms = match (child.started_at, child.completed_at) {
-                    (Some(start), Some(end)) => {
-                        Some((end - start).num_milliseconds().unsigned_abs())
-                    }
-                    _ => None,
-                };
-
-                Ok(StepLastRunResponse {
-                    execution_id: child.id.to_string(),
-                    workflow_execution_id: execution_id.to_string(),
-                    status: child.status.clone(),
-                    started_at: child.started_at.map(|t| t.to_rfc3339()),
-                    completed_at: child.completed_at.map(|t| t.to_rfc3339()),
-                    duration_ms,
-                    output: None,
-                    structured_output: child.outputs.clone(),
-                    input_tokens: Some(total_in),
-                    output_tokens: Some(total_out),
-                    cost_usd: Some(total_cost),
-                    error: child.error.clone(),
-                    phases: None,
-                    child_execution_id: Some(child.id),
-                    child_steps: Some(child_step_results),
-                })
-            }
-            None => Err(AppError::not_found(
-                "No child execution found for sub_workflow step",
-            )),
-        }
     } else {
         // Standard steps: use agent_executions
         let agent_execs = state
@@ -379,8 +279,6 @@ pub(super) async fn build_step_run_response(
             cost_usd: None,
             error: None,
             phases: None,
-            child_execution_id: None,
-            child_steps: None,
         })
     }
 }

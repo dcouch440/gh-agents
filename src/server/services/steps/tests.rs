@@ -84,7 +84,7 @@ mod tests {
                     name: None,
                     system_prompt_suffix: None,
                     description: None,
-                    sub_workflow_template_id: None,
+
                 },
             },
         )
@@ -134,7 +134,7 @@ mod tests {
                     name: None,
                     system_prompt_suffix: None,
                     description: None,
-                    sub_workflow_template_id: None,
+
                 },
             },
         )

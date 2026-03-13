@@ -13,8 +13,8 @@ import { useCanvasLOD } from '../useCanvasLOD'
 import { MinimalNodeShell } from '../MinimalNodeShell'
 import { nodeDataEqual } from '../mappers'
 import { VARIANT_CONFIGS } from './registry'
-import type { CanvasNodeData, TabbedNodeData, AgentNodeData, EditorNodeData, CardNodeData, CompactNodeData } from './types'
-import { TabbedLayout, EditorLayout, CardLayout, CompactLayout } from './layouts'
+import type { CanvasNodeData, TabbedNodeData, AgentNodeData, EditorNodeData, CardNodeData } from './types'
+import { TabbedLayout, EditorLayout, CardLayout } from './layouts'
 
 function CanvasNodeComponent({ id, data, selected }: NodeProps) {
   const theme = useTheme()
@@ -93,14 +93,6 @@ function CanvasNodeComponent({ id, data, selected }: NodeProps) {
           highlight={highlight}
         />
       )
-    case 'compact':
-      return (
-        <CompactLayout
-          data={nodeData as CompactNodeData}
-          accentColor={accentColor}
-          highlight={highlight}
-        />
-      )
   }
 }
 
@@ -140,13 +132,6 @@ const renderMinimalHandles = (data: CanvasNodeData, accentColor: string) => {
         <>
           <CanvasHandle type="target" position={Position.Left} color={accentColor} />
           <CanvasHandle type="source" position={Position.Right} color={accentColor} />
-        </>
-      )
-    case 'sub_workflow':
-      return (
-        <>
-          <CanvasHandle type="target" position={Position.Left} color={accentColor} variant="small" />
-          <CanvasHandle type="source" position={Position.Right} color={accentColor} variant="small" />
         </>
       )
   }

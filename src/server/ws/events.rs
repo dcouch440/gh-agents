@@ -254,34 +254,6 @@ pub enum WorkflowEventKind {
         step_id: Uuid,
         content: String,
     },
-    /// A sub-workflow execution started within a parent step.
-    SubWorkflowStarted {
-        parent_step_id: Uuid,
-        child_execution_id: Uuid,
-        total_steps: usize,
-    },
-    /// A sub-workflow execution completed within a parent step.
-    SubWorkflowCompleted {
-        parent_step_id: Uuid,
-        child_execution_id: Uuid,
-        status: String,
-    },
-    /// Progress event for a child step within a sub-workflow, relayed to the parent's channel.
-    SubWorkflowStepProgress {
-        parent_step_id: Uuid,
-        child_execution_id: Uuid,
-        child_step_id: Uuid,
-        child_step_name: String,
-        status: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        input_tokens: Option<u64>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        output_tokens: Option<u64>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        duration_ms: Option<u64>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        error: Option<String>,
-    },
     /// Live text token from a step-scoped execution source (agent, speaker, child step).
     StepStreamToken {
         step_id: Uuid,
@@ -408,9 +380,6 @@ impl WorkflowEvent {
             WorkflowEventKind::StepConfigUpdated { .. } => "step_config_updated",
             WorkflowEventKind::StepNameUpdated { .. } => "step_name_updated",
             WorkflowEventKind::PlanUpdated { .. } => "plan_updated",
-            WorkflowEventKind::SubWorkflowStarted { .. } => "sub_workflow_started",
-            WorkflowEventKind::SubWorkflowCompleted { .. } => "sub_workflow_completed",
-            WorkflowEventKind::SubWorkflowStepProgress { .. } => "sub_workflow_step_progress",
             WorkflowEventKind::StepStreamToken { .. } => "step_stream_token",
             WorkflowEventKind::StepStreamToolStart { .. } => "step_stream_tool_start",
             WorkflowEventKind::StepStreamToolEnd { .. } => "step_stream_tool_end",

@@ -34,7 +34,6 @@ const makeDefaultStepState = (): StepExecutionState => ({
   outputTokens: null,
   durationMs: null,
   forEachProgress: null,
-  subWorkflowProgress: null,
   startedAt: null,
   completedAt: null,
 })

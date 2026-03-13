@@ -130,20 +130,6 @@ pub trait WorkflowCollectionRepo: Send + Sync {
         user_id: Uuid,
     ) -> Result<WorkflowExecutionRow>;
 
-    // --- Child Workflow Execution (sub-workflow nesting) ---
-    async fn create_child_workflow_execution(
-        &self,
-        parent_execution_id: Uuid,
-        workflow_id: Uuid,
-        user_id: Uuid,
-        template_id: Uuid,
-    ) -> Result<WorkflowExecutionRow>;
-
-    async fn list_child_executions(
-        &self,
-        parent_execution_id: Uuid,
-    ) -> Result<Vec<WorkflowExecutionRow>>;
-
     /// List the full execution tree rooted at `root_id` (O(1) via root_execution_id index).
     async fn list_execution_tree(&self, root_id: Uuid) -> Result<Vec<WorkflowExecutionRow>>;
 
