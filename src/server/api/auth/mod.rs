@@ -157,9 +157,8 @@ pub async fn auth_register(
 
     let user = user_repo.create_user(&request.email, &hash).await?;
 
-    // Seed built-in execution tools and protocols (system-wide)
+    // Seed built-in execution tools (system-wide)
     let _ = state.repos().tools.seed_builtin_tools().await;
-    let _ = state.repos().protocols.seed_builtin_protocols().await;
 
     let token = auth::create_token(state.jwt_secret(), 24, user.id, &user.email, false)
         .map_err(|e| AppError::Internal(e.to_string()))?;

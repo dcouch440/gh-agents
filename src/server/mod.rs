@@ -175,7 +175,30 @@ fn build_public_routes() -> Router<AppState> {
 /// Build the protected route group (auth required).
 fn build_protected_routes(state: AppState) -> Router<AppState> {
     Router::new()
-        .route(routes::AUTH_ME, get(api::auth_me))
+        .merge(auth_routes())
+        .merge(agent_routes())
+        .merge(tool_routes())
+        .merge(chat_routes())
+        .merge(session_routes())
+        .merge(document_routes())
+        .merge(schema_routes())
+        .merge(workflow_routes())
+        .merge(collection_routes())
+        .merge(execution_routes())
+        .merge(room_routes())
+        .merge(step_config_routes())
+        .merge(protocol_routes())
+        .merge(system_routes())
+        .merge(dispatch_routes())
+        .layer(middleware::from_fn_with_state(state.clone(), require_auth))
+}
+
+fn auth_routes() -> Router<AppState> {
+    Router::new().route(routes::AUTH_ME, get(api::auth_me))
+}
+
+fn agent_routes() -> Router<AppState> {
+    Router::new()
         .route(
             routes::AGENTS,
             get(api::list_agents).post(api::create_agent),
@@ -194,6 +217,10 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::AGENT_CONTEXT,
             get(api::get_agent_context).put(api::set_agent_context),
         )
+}
+
+fn tool_routes() -> Router<AppState> {
+    Router::new()
         .route(routes::TOOLS, get(api::list_tools).post(api::create_tool))
         .route(
             routes::TOOL,
@@ -201,17 +228,10 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
                 .patch(api::update_tool)
                 .delete(api::delete_tool),
         )
-        // LEGACY: Pipeline routes removed (workflows replaced pipelines)
-        // .route(routes::PIPELINE_STAGE_RENDER, post(api::render_pipeline_stage))
-        // .route(routes::PIPELINE_RUNS, get(api::list_pipeline_runs))
-        // .route(routes::PIPELINE_RUN, get(api::get_pipeline_run))
-        // .route(routes::PIPELINE_RUN_APPROVE, post(api::approve_pipeline_run))
-        // .route(routes::PIPELINE_RUN_CANCEL, post(api::cancel_pipeline_run))
-        // .route(routes::PIPELINE_RUN_TREE, get(api::get_pipeline_run_tree))
-        .route(
-            routes::AGENT_EXECUTION_CANCEL,
-            post(api::cancel_agent_execution),
-        )
+}
+
+fn chat_routes() -> Router<AppState> {
+    Router::new()
         .route(
             routes::CONFIG,
             get(api::get_config).patch(api::update_config),
@@ -223,6 +243,10 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         )
         .route(routes::CHAT_STREAM, get(api::chat_stream))
         .route(routes::MODES, get(api::list_modes))
+}
+
+fn session_routes() -> Router<AppState> {
+    Router::new()
         .route(
             routes::SESSIONS,
             get(api::list_sessions).post(api::create_session),
@@ -241,6 +265,10 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::SESSION_MESSAGES,
             delete(api::clear_session_messages),
         )
+}
+
+fn document_routes() -> Router<AppState> {
+    Router::new()
         .route(
             routes::DOCUMENTS,
             get(api::list_documents).post(api::create_document),
@@ -252,6 +280,10 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
                 .patch(api::update_document)
                 .delete(api::delete_document),
         )
+}
+
+fn schema_routes() -> Router<AppState> {
+    Router::new()
         .route(
             routes::OUTPUT_SCHEMAS,
             get(api::list_output_schemas).post(api::create_output_schema),
@@ -272,6 +304,10 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
                 .put(api::update_prompt_template)
                 .delete(api::delete_prompt_template),
         )
+}
+
+fn workflow_routes() -> Router<AppState> {
+    Router::new()
         .route(
             routes::WORKFLOWS,
             get(api::list_workflows).post(api::create_workflow),
@@ -370,6 +406,10 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::WORKFLOW_EXECUTION_STEP,
             get(api::get_step_run_for_execution),
         )
+}
+
+fn collection_routes() -> Router<AppState> {
+    Router::new()
         .route(
             routes::COLLECTIONS,
             get(api::list_collections).post(api::create_collection),
@@ -385,9 +425,14 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::COLLECTION_RUN_STATUS,
             get(api::get_collection_run_status),
         )
-        // LEGACY: Pipeline stage member routes removed
-        // .route(routes::PIPELINE_STAGE_MEMBERS, get(api::list_stage_members).post(api::add_stage_member))
-        // .route(routes::PIPELINE_STAGE_MEMBER, delete(api::delete_stage_member).put(api::update_stage_member))
+}
+
+fn execution_routes() -> Router<AppState> {
+    Router::new()
+        .route(
+            routes::AGENT_EXECUTION_CANCEL,
+            post(api::cancel_agent_execution),
+        )
         .route(routes::AGENT_EXECUTIONS, get(api::list_agent_executions))
         .route(routes::AGENT_EXECUTION, get(api::get_agent_execution))
         .route(
@@ -410,6 +455,10 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::RESULT,
             get(api::get_result).delete(api::delete_result),
         )
+}
+
+fn room_routes() -> Router<AppState> {
+    Router::new()
         .route(routes::ROOMS, post(api::create_room))
         .route(
             routes::ROOM,
@@ -417,8 +466,6 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
                 .put(api::update_room)
                 .delete(api::delete_room),
         )
-        // LEGACY: Pipeline rooms route removed
-        // .route(routes::PIPELINE_ROOMS, get(api::list_pipeline_rooms))
         .route(
             routes::ROOM_MEMBERS,
             get(api::list_room_members)
@@ -435,7 +482,10 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
         )
         .route(routes::ROOM_SESSION_CLOSE, post(api::close_room_session))
         .route(routes::ROOM_SESSION_OUTPUTS, get(api::list_room_outputs))
-        // Step Ports
+}
+
+fn step_config_routes() -> Router<AppState> {
+    Router::new()
         .route(
             routes::STEP_INPUTS,
             get(api::list_step_inputs).post(api::create_step_input),
@@ -446,15 +496,12 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             get(api::list_step_outputs).post(api::create_step_output),
         )
         .route(routes::STEP_OUTPUT, delete(api::delete_step_output))
-        // Agent Roster
         .route(
             routes::STEP_AGENT_ROSTER,
             get(api::list_roster_agents).post(api::create_roster_agent),
         )
         .route(routes::STEP_ROSTER_AGENT, delete(api::delete_roster_agent))
-        // Room Step Members (design-time)
         .route(routes::STEP_ROOM_MEMBERS, get(api::list_room_step_members))
-        // Routing Rules
         .route(
             routes::STEP_ROUTING_RULES,
             get(api::list_routing_rules).post(api::create_routing_rule),
@@ -463,15 +510,10 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::STEP_ROUTING_RULE,
             put(api::update_routing_rule).delete(api::delete_routing_rule),
         )
-        // System Config
-        .route(
-            routes::SYSTEM_CONFIGS,
-            get(api::list_system_configs).post(api::upsert_system_config),
-        )
-        .route(routes::SYSTEM_CONFIG, delete(api::delete_system_config))
-        // Archetypes
-        .route(routes::ARCHETYPES, get(api::list_archetypes))
-        // Protocols
+}
+
+fn protocol_routes() -> Router<AppState> {
+    Router::new()
         .route(routes::PROTOCOL_TYPES, get(api::list_protocol_types))
         .route(
             routes::PROTOCOLS,
@@ -495,13 +537,25 @@ fn build_protected_routes(state: AppState) -> Router<AppState> {
             routes::PROTOCOL_EXECUTIONS,
             get(api::list_protocol_executions),
         )
-        // Dispatch trace + direct dispatch
+}
+
+fn system_routes() -> Router<AppState> {
+    Router::new()
+        .route(
+            routes::SYSTEM_CONFIGS,
+            get(api::list_system_configs).post(api::upsert_system_config),
+        )
+        .route(routes::SYSTEM_CONFIG, delete(api::delete_system_config))
+        .route(routes::ARCHETYPES, get(api::list_archetypes))
+}
+
+fn dispatch_routes() -> Router<AppState> {
+    Router::new()
         .route(routes::DISPATCH_TRACE, get(api::get_dispatch_trace))
         .route(routes::DISPATCH_STEP_TASKS, get(api::list_dispatch_tasks))
         .route(routes::DISPATCH_SEND, post(api::dispatch_send))
         .route(routes::DISPATCH_CANCEL, post(api::dispatch_cancel))
         .route(routes::DISPATCH_SESSION, get(api::get_dispatch_session))
-        .layer(middleware::from_fn_with_state(state.clone(), require_auth))
 }
 
 /// Create the application router with a specific static directory (no rate limiting — used by tests)

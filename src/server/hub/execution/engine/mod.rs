@@ -41,6 +41,14 @@ pub struct ExecutionResult {
     pub rounds_used: u32,
 }
 
+/// Immutable context shared across all rounds of an execution loop.
+struct LoopContext<'a> {
+    strategy: &'a dyn ExecutionStrategy,
+    sink: &'a dyn StreamSink,
+    recorder: &'a ExecutionRecorder<'a>,
+    cancel: Option<&'a CancellationToken>,
+}
+
 /// The unified execution engine.
 pub struct ExecutionEngine {
     provider: Arc<dyn LLMProvider>,
@@ -103,6 +111,12 @@ impl ExecutionEngine {
         recorder: &ExecutionRecorder<'_>,
         cancel: Option<&CancellationToken>,
     ) -> Result<ExecutionResult, HubError> {
+        let ctx = LoopContext {
+            strategy,
+            sink,
+            recorder,
+            cancel,
+        };
         let mut messages = strategy.build_messages(input).await?;
         let max_rounds = strategy.max_rounds();
         let budget = strategy.context_budget();
@@ -251,10 +265,7 @@ impl ExecutionEngine {
 
                     if let Some(result) = self
                         .handle_tool_use_round(
-                            strategy,
-                            sink,
-                            recorder,
-                            cancel,
+                            &ctx,
                             round,
                             &response,
                             &mut messages,
@@ -269,9 +280,7 @@ impl ExecutionEngine {
                 StopReason::EndTurn | StopReason::MaxTokens | StopReason::StopSequence => {
                     if let Some(result) = self
                         .handle_end_turn(
-                            strategy,
-                            sink,
-                            recorder,
+                            &ctx,
                             round,
                             &response,
                             &mut messages,
@@ -298,16 +307,20 @@ impl ExecutionEngine {
     /// `complete_task` was called), or `None` to continue the loop.
     async fn handle_tool_use_round(
         &self,
-        strategy: &dyn ExecutionStrategy,
-        sink: &dyn StreamSink,
-        recorder: &ExecutionRecorder<'_>,
-        cancel: Option<&CancellationToken>,
+        ctx: &LoopContext<'_>,
         round: u32,
         response: &LLMResponse,
         messages: &mut Vec<Message>,
         total_input: u64,
         total_output: u64,
     ) -> Result<Option<ExecutionResult>, HubError> {
+        let LoopContext {
+            strategy,
+            sink,
+            recorder,
+            cancel,
+        } = ctx;
+        let cancel = *cancel;
         // Extract tool use blocks (caller already verified at least one exists)
         let tool_uses: Vec<_> = response
             .content_blocks
@@ -433,11 +446,10 @@ impl ExecutionEngine {
     ///
     /// Returns `Some(ExecutionResult)` when the turn is complete, or `None`
     /// if a filter requested a retry (the caller should `continue` the loop).
+    #[allow(clippy::too_many_arguments)] // 8 args (1 over); filter_retried is loop-specific state
     async fn handle_end_turn(
         &self,
-        strategy: &dyn ExecutionStrategy,
-        sink: &dyn StreamSink,
-        recorder: &ExecutionRecorder<'_>,
+        ctx: &LoopContext<'_>,
         round: u32,
         response: &LLMResponse,
         messages: &mut Vec<Message>,
@@ -445,6 +457,12 @@ impl ExecutionEngine {
         total_output: u64,
         filter_retried: &mut [bool],
     ) -> Result<Option<ExecutionResult>, HubError> {
+        let LoopContext {
+            strategy,
+            sink,
+            recorder,
+            ..
+        } = ctx;
         // ── on_response filters ──
         if let Some(ref filter_ctx) = self.filter_ctx {
             for (i, f) in self.filters.iter().enumerate() {

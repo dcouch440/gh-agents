@@ -29,7 +29,7 @@ pub async fn add_edge(
     let parent_step = repo
         .get_step(ctx.parent_step_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?
+        .map_err(ServiceError::Internal)?
         .ok_or_else(|| ServiceError::not_found("Parent step"))?;
 
     let pipeline_id = parent_step
@@ -39,7 +39,7 @@ pub async fn add_edge(
     let edges = repo
         .list_edges(pipeline_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     // No duplicates
     if edges
@@ -59,7 +59,7 @@ pub async fn add_edge(
     // Create the edge
     repo.add_edge(pipeline_id, from_step_id, to_step_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     // Recompute execution order
     recompute_execution_order(repo, pipeline_id).await

@@ -1579,10 +1579,6 @@ pub trait ProtocolRepo: Send + Sync {
     /// List all protocols.
     async fn list_protocols(&self) -> Result<Vec<ProtocolRow>>;
 
-    /// Seed the built-in system protocols and their associated agents,
-    /// output schemas, and prompt templates. Idempotent via ON CONFLICT DO UPDATE.
-    async fn seed_builtin_protocols(&self) -> Result<()>;
-
     /// Update a protocol.
     async fn update_protocol(&self, input: UpdateProtocolInput) -> Result<ProtocolRow>;
 

@@ -134,7 +134,8 @@ pub(crate) fn classify(elements: &[ExcalidrawElement]) -> ClassifiedElements {
     let node_rect_ids: HashSet<&str> = nodes.iter().map(|n| n.id.as_str()).collect();
 
     // Collect adoptions as (rect_id, rect_bounds, Vec<(text_id, text_content)>)
-    let mut adoptions: Vec<(String, f64, f64, f64, f64, Vec<(String, String)>)> = Vec::new();
+    type Adoption = (String, f64, f64, f64, f64, Vec<(String, String)>);
+    let mut adoptions: Vec<Adoption> = Vec::new();
 
     for el in elements {
         let ExcalidrawElement::Rectangle(rect) = el else {

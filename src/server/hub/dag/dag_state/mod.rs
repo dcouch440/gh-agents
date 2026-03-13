@@ -134,19 +134,13 @@ impl DagExecutionState {
     /// Only new entries (steps executed by the parallel task) are added.
     pub fn merge_parallel_result(&mut self, other: Self) {
         for (key, value) in other.var_outputs {
-            if !self.var_outputs.contains_key(&key) {
-                self.var_outputs.insert(key, value);
-            }
+            self.var_outputs.entry(key).or_insert(value);
         }
         for (id, output) in other.completed {
-            if !self.completed.contains_key(&id) {
-                self.completed.insert(id, output);
-            }
+            self.completed.entry(id).or_insert(output);
         }
         for (id, envelope) in other.completed_envelopes {
-            if !self.completed_envelopes.contains_key(&id) {
-                self.completed_envelopes.insert(id, envelope);
-            }
+            self.completed_envelopes.entry(id).or_insert(envelope);
         }
         self.failed.extend(other.failed);
         self.total_input_tokens += other.total_input_tokens;

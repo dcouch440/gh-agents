@@ -23,6 +23,7 @@ pub(crate) async fn verify_workflow_ownership(
 }
 
 /// Create a new workflow.
+#[allow(clippy::too_many_arguments)] // params map directly to HTTP request body fields
 pub async fn create_workflow(
     repo: &dyn WorkflowRepo,
     user_id: Uuid,
@@ -68,6 +69,7 @@ pub async fn list_workflows(
 }
 
 /// Update a workflow (partial update), verifying ownership.
+#[allow(clippy::too_many_arguments)] // params map directly to HTTP request body fields
 pub async fn update_workflow(
     repo: &dyn WorkflowRepo,
     user_id: Uuid,

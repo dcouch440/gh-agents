@@ -99,15 +99,15 @@ pub(crate) fn get_stroke_points(input: &[[f64; 3]], options: &StrokeOptions) -> 
     let mut running_length = 0.0;
     let last_idx = points.len() - 1;
 
-    for i in 1..points.len() {
+    for (i, point) in points.iter().enumerate().skip(1) {
         let is_last = options.last && i == last_idx;
         let prev = result.last().unwrap();
 
         // Interpolate toward previous point (streamline) unless last point
         let current = if is_last {
-            [points[i][0], points[i][1]]
+            [point[0], point[1]]
         } else {
-            vec::lerp(prev.point, [points[i][0], points[i][1]], streamline_t)
+            vec::lerp(prev.point, [point[0], point[1]], streamline_t)
         };
 
         // Skip if point hasn't moved
@@ -126,8 +126,8 @@ pub(crate) fn get_stroke_points(input: &[[f64; 3]], options: &StrokeOptions) -> 
             has_reached_min_length = true;
         }
 
-        let pressure = if is_valid_pressure(points[i][2]) {
-            points[i][2]
+        let pressure = if is_valid_pressure(point[2]) {
+            point[2]
         } else {
             DEFAULT_PRESSURE
         };

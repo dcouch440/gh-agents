@@ -8,7 +8,6 @@
 //! UI → Protocol Layer (compile) → Workflow Primitives → DAG Executor (unchanged)
 //! ```
 
-pub mod builtins;
 pub mod compiler;
 pub mod compilers;
 pub mod context;

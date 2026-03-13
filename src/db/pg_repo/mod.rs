@@ -2547,12 +2547,11 @@ impl WorkflowRepo for PgRepo {
     }
 
     async fn get_step_stroke_image(&self, step_id: Uuid) -> Result<Option<String>> {
-        let row: Option<(String,)> = sqlx::query_as(
-            "SELECT stroke_image_base64 FROM step_images WHERE step_id = $1",
-        )
-        .bind(step_id)
-        .fetch_optional(&self.pool)
-        .await?;
+        let row: Option<(String,)> =
+            sqlx::query_as("SELECT stroke_image_base64 FROM step_images WHERE step_id = $1")
+                .bind(step_id)
+                .fetch_optional(&self.pool)
+                .await?;
         Ok(row.map(|r| r.0).filter(|s| !s.is_empty()))
     }
 }
@@ -4196,33 +4195,6 @@ impl ProtocolRepo for PgRepo {
         .fetch_all(&self.pool)
         .await?;
         Ok(rows)
-    }
-
-    async fn seed_builtin_protocols(&self) -> Result<()> {
-        for p in crate::server::hub::protocols::builtins::builtin_protocol_definitions() {
-            // Upsert protocol row. Agent/schema/template FKs are NULL for builtins —
-            // the compilers generate schemas and prompts dynamically from port config.
-            sqlx::query(
-                r#"
-                INSERT INTO protocols (id, name, description, protocol_type, config)
-                VALUES ($1, $2, $3, $4, $5)
-                ON CONFLICT (name) DO UPDATE SET
-                    description = EXCLUDED.description,
-                    protocol_type = EXCLUDED.protocol_type,
-                    config = EXCLUDED.config,
-                    version = protocols.version + 1,
-                    updated_at = now()
-                "#,
-            )
-            .bind(p.id)
-            .bind(&p.name)
-            .bind(&p.description)
-            .bind(&p.protocol_type)
-            .bind(&p.config)
-            .execute(&self.pool)
-            .await?;
-        }
-        Ok(())
     }
 
     async fn update_protocol(&self, input: UpdateProtocolInput) -> Result<ProtocolRow> {

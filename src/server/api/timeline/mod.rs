@@ -99,7 +99,7 @@ pub async fn get_execution_timeline(
     Path(id): Path<Uuid>,
     Query(query): Query<TimelineQuery>,
 ) -> Result<Json<TimelineApiResponse>, AppError> {
-    let limit = query.limit.unwrap_or(50).min(200).max(1);
+    let limit = query.limit.unwrap_or(50).clamp(1, 200);
 
     let response = svc::get_execution_timeline(
         state.repos().agent_executions.as_ref(),

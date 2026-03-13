@@ -20,7 +20,7 @@ pub async fn build_snapshot(
     let step = repo
         .get_step(ctx.parent_step_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?
+        .map_err(ServiceError::Internal)?
         .ok_or_else(|| ServiceError::not_found("Parent step"))?;
 
     let pipeline_id = match step.child_workflow_id {
@@ -31,12 +31,12 @@ pub async fn build_snapshot(
     let child_steps = repo
         .list_steps(pipeline_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     let child_edges = repo
         .list_edges(pipeline_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     let pipeline_steps: Vec<_> = child_steps.iter().collect();
 
@@ -124,7 +124,7 @@ pub async fn build_snapshot(
     let parent_edges = repo
         .list_edges(ctx.parent_workflow_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     let upstream_step_ids: Vec<Uuid> = parent_edges
         .iter()

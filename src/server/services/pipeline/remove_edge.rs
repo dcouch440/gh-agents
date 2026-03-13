@@ -19,7 +19,7 @@ pub async fn remove_edge(
     let parent_step = repo
         .get_step(ctx.parent_step_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?
+        .map_err(ServiceError::Internal)?
         .ok_or_else(|| ServiceError::not_found("Parent step"))?;
 
     let pipeline_id = parent_step
@@ -29,7 +29,7 @@ pub async fn remove_edge(
     let _deleted = repo
         .remove_edge(from_step_id, to_step_id)
         .await
-        .map_err(|e| ServiceError::Internal(e.into()))?;
+        .map_err(ServiceError::Internal)?;
 
     recompute_execution_order(repo, pipeline_id).await
 }
