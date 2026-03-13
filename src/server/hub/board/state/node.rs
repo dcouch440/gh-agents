@@ -89,7 +89,7 @@ pub fn render_node(node: &NodeSnapshot, variant: BoardStateVariant) -> String {
         }
     }
 
-    // ── L4: capabilities as child element ───────────────────────────────
+    // ── Dispatch: capabilities as child element ─────────────────────────
 
     if matches!(variant, BoardStateVariant::Dispatch) && !node.capabilities.is_empty() {
         el.raw(

@@ -260,7 +260,7 @@ pub(super) async fn build_step_run_response(
             child_steps: None,
         })
     } else if step.execution_mode == "sub_workflow" {
-        // Sub-workflow (legacy): look up child execution and its step results
+        // Sub-workflow (legacy, see tickets/remove-sub-workflow.md): look up child execution and its step results
         let db = state
             .db()
             .ok_or(AppError::Internal("Database not available".into()))?

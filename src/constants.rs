@@ -16,9 +16,9 @@ pub const ENV_NEXOR_STATIC_DIR: &str = "NEXOR_STATIC_DIR";
 
 // ── Active Provider Profile ──────────────────────────────────────────────
 // Switch all agents by commenting/uncommenting a profile block.
-// Tier 1 = orchestrator (assistant, designer, dispatch)
-// Tier 2 = worker (agents, room speakers)
-// Tier 3 = utility (extraction, summarization, gating)
+// Tier 1 = highest capability
+// Tier 2 = fast reasoning
+// Tier 3 = fast non-reasoning
 
 /// The default LLM provider name used by the registry and all internal callers.
 pub const ACTIVE_PROVIDER: &str = "xai";

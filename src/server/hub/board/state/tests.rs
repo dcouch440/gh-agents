@@ -417,12 +417,12 @@ mod tests {
         assert!(BoardStateVariant::NodeAssistant.include_ports());
         assert!(!BoardStateVariant::NodeAssistant.include_port_schemas());
 
-        // L4
+        // Dispatch
         assert!(BoardStateVariant::Dispatch.include_agent_ids());
         assert!(BoardStateVariant::Dispatch.include_port_schemas());
         assert!(BoardStateVariant::Dispatch.include_plan());
 
-        // initial_instructions — L1/L2 only
+        // initial_instructions — manager variants only
         assert!(BoardStateVariant::ManagerAssistant.include_initial_instructions());
         assert!(BoardStateVariant::ManagerBuilder.include_initial_instructions());
         assert!(!BoardStateVariant::NodeAssistant.include_initial_instructions());
