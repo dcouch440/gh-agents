@@ -121,8 +121,7 @@ pub(crate) struct AppStateInner {
     pub(crate) task_registry: TaskRegistry,
     /// Cancellation tokens for in-flight run results summarizations (cancel-and-replace).
     pub(crate) run_results_tokens: super::hub::run_results::RunResultsTokens,
-    /// S3-compatible storage backend (MinIO in dev, real S3 in prod). Optional so tests
-    /// that don't need S3 can skip initialization.
+    /// S3-compatible storage backend (MinIO in dev, real S3 in prod).
     pub(crate) s3: Option<Arc<S3Backend>>,
 }
 
@@ -183,8 +182,8 @@ impl AppState {
         // Initialize LLM providers
         let (provider, provider_registry) = Self::init_providers(&env).await;
 
-        // Initialize S3 backend (optional — logs warning if unavailable)
-        let s3 = Self::init_s3(&env).await;
+        // Initialize S3 backend (panics if unavailable — required for system store)
+        let s3 = Some(Self::init_s3(&env).await);
 
         let state = Self(Arc::new(AppStateInner {
             env,
@@ -452,7 +451,7 @@ impl AppState {
         (provider, registry)
     }
 
-    async fn init_s3(env: &Env) -> Option<Arc<S3Backend>> {
+    async fn init_s3(env: &Env) -> Arc<S3Backend> {
         let endpoint = env.s3_endpoint.as_deref();
         match S3Backend::new(endpoint, &env.s3_bucket).await {
             Ok(backend) => {
@@ -461,11 +460,16 @@ impl AppState {
                     env.s3_bucket,
                     endpoint.unwrap_or("AWS default")
                 );
-                Some(Arc::new(backend))
+                Arc::new(backend)
             }
             Err(e) => {
-                tracing::warn!("S3 backend not initialized: {e}");
-                None
+                panic!(
+                    "S3 backend failed to initialize: {e}. \
+                     Set S3_ENDPOINT=http://localhost:9000, \
+                     AWS_ACCESS_KEY_ID=minioadmin, \
+                     AWS_SECRET_ACCESS_KEY=minioadmin, \
+                     and ensure MinIO is running (docker compose up -d minio)"
+                );
             }
         }
     }

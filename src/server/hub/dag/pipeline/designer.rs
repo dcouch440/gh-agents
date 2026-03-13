@@ -58,9 +58,38 @@ impl PipelinePhase for DesignerPhase {
             ctx.step.id,
             dag.ctx.run_id,
         );
-        let designer_phase = recorder
+        let designer_phase = match recorder
             .create_phase_with_context("designer", None, None, None, Some("workforce"), None)
-            .await?;
+            .await
+        {
+            Ok(phase) => phase,
+            Err(e) => {
+                warn!(step_id = %ctx.step.id, error = %e, "Failed to create designer phase record, continuing without tracking");
+                // Create a dummy row so we can continue — phase tracking is non-critical
+                crate::db::ProtocolExecutionRow {
+                    id: Uuid::new_v4(),
+                    protocol_step_id: ctx.step.id,
+                    workflow_run_id: Some(dag.ctx.run_id),
+                    phase: "designer".to_string(),
+                    document_def_id: None,
+                    agent_id: None,
+                    input_prompt: None,
+                    output_content: None,
+                    status: "running".to_string(),
+                    error_message: None,
+                    tokens_in: None,
+                    tokens_out: None,
+                    cost_usd: None,
+                    model: None,
+                    capabilities_used: None,
+                    created_at: chrono::Utc::now(),
+                    completed_at: None,
+                    agent_name: None,
+                    archetype: Some("workforce".to_string()),
+                    designer_run_id: None,
+                }
+            }
+        };
 
         broadcast_workflow_event(
             dag.state,
@@ -82,6 +111,59 @@ impl PipelinePhase for DesignerPhase {
         } else {
             vec![]
         };
+
+        // Check if configs already exist in the store (from designer_handoff at design time).
+        // If so, reuse them — no need to re-run the designer during execution.
+        if let Some(s3) = dag.state.s3() {
+            let repo = dag.state.repos().system_files.as_ref();
+            if let Ok(mut prompts) =
+                parse_store_configs(s3, repo, ctx.step.workflow_id, ctx.step.id, &ctx.roster).await
+            {
+                info!(
+                    step_id = %ctx.step.id,
+                    agents = prompts.len(),
+                    "Reusing existing store configs — skipping designer"
+                );
+                enforce_edge_routing(&mut prompts, &ctx.roster, &child_edges);
+
+                recorder
+                    .update_phase(
+                        designer_phase.id,
+                        PhaseCompletion {
+                            status: "complete",
+                            output_content: None,
+                            error_message: None,
+                            tokens_in: 0,
+                            tokens_out: 0,
+                            cost_usd: 0.0,
+                            model: None,
+                        },
+                    )
+                    .await;
+
+                broadcast_workflow_event(
+                    dag.state,
+                    dag.ctx,
+                    ctx.step.workflow_id,
+                    WorkflowEventKind::WorkforceDesignerProgress {
+                        step_id: ctx.step.id,
+                        status: "completed".to_string(),
+                    },
+                );
+
+                let user_notes_block = build_user_notes_block(&ctx.upstream_context);
+                return Ok(PhaseOutput {
+                    designed_prompts: prompts,
+                    user_notes_block,
+                    token_usage: PhaseTokenUsage {
+                        input_tokens: 0,
+                        output_tokens: 0,
+                        cost_usd: 0.0,
+                        run_id: None,
+                    },
+                });
+            }
+        }
 
         let designer_input = build_workforce_designer_input(
             &ctx.brief,
@@ -289,7 +371,7 @@ async fn run_react_designer(
     dag: &DagContext<'_>,
     ctx: &PipelineExecutionContext,
     child_edges: &[WorkflowStepEdgeRow],
-    _phase_id: &Uuid,
+    phase_id: &Uuid,
 ) -> Result<(Vec<DesignedAgentPrompt>, PhaseTokenUsage), HubError> {
     let plan = dag
         .state
@@ -301,6 +383,22 @@ async fn run_react_designer(
         .unwrap_or_default();
 
     let designer_cfg = DESIGNER.agent("react_designer");
+
+    // Create designer run record (for FK linkage to protocol_executions)
+    let run_row = dag
+        .state
+        .repos()
+        .workflows
+        .create_designer_run_generic(
+            dag.ctx.stage_execution_id,
+            dag.ctx.stage_execution_id,
+            ctx.step.id,
+            "workforce",
+            &phase_id.to_string(),
+            &designer_cfg.model_id,
+        )
+        .await
+        .map_err(|e| HubError::Internal(anyhow!("failed to create designer run: {e}")))?;
 
     // Create agent execution record
     let ae_repo = &*dag.state.repos().agent_executions;
@@ -379,7 +477,7 @@ async fn run_react_designer(
         input_tokens: result.input_tokens as i64,
         output_tokens: result.output_tokens as i64,
         cost_usd: cost,
-        run_id: designer_ae_id,
+        run_id: Some(run_row.id),
     };
 
     // Persist design summary to session for next re-trigger
