@@ -3,7 +3,7 @@ import type { WorkflowStep } from '@/types/workflow'
 import { Collections } from '@/utils/collections'
 import { CanvasNodeKind } from '../canvasKinds'
 import { ARCHETYPE_CONFIGS, VARIANT_CONFIGS, resolveArchetype, Archetype } from '../CanvasNode/registry'
-import type { EditorNodeData, TabbedNodeData, CardNodeData, CompactNodeData } from '../CanvasNode/types'
+import type { EditorNodeData, TabbedNodeData, CardNodeData } from '../CanvasNode/types'
 import type { StepNodeLookups } from './types'
 import { toAgentArtifactNodes } from './agentArtifactNodes'
 
@@ -46,28 +46,6 @@ const toStepNodes = (steps: WorkflowStep[], lookups: StepNodeLookups): Node[] =>
         content: step.prompt_template,
         protocolColor: groupEntry?.protocolColor ?? null,
         protocolStepId: groupEntry?.protocolStepId ?? null,
-      }
-      return {
-        id: step.id,
-        type: 'canvasNode',
-        position: { x: step.position_x ?? 0, y: step.position_y ?? 0 },
-        style: {
-          width: step.width ?? cfg.defaultWidth,
-          height: step.height ?? cfg.defaultHeight,
-        },
-        data,
-      }
-    }
-
-    // Sub-workflow nodes
-    if (step.execution_mode === 'sub_workflow') {
-      const cfg = VARIANT_CONFIGS.sub_workflow
-      const data: CompactNodeData = {
-        variant: 'sub_workflow',
-        kind: CanvasNodeKind.SUB_WORKFLOW,
-        label: step.name ?? 'Sub-Workflow',
-        templateName: null,
-        protocolStepId: null,
       }
       return {
         id: step.id,

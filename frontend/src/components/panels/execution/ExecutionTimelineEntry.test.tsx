@@ -23,7 +23,6 @@ const makeStep = (overrides: Partial<StepExecutionState> = {}): StepExecutionSta
   outputTokens: 50,
   durationMs: 1500,
   forEachProgress: null,
-  subWorkflowProgress: null,
   startedAt: '2025-01-01T00:00:00Z',
   completedAt: '2025-01-01T00:00:01Z',
   ...overrides,
@@ -77,35 +76,6 @@ describe('ExecutionTimelineEntry', () => {
   it('falls back to stepId when stepName is null', () => {
     render(<ExecutionTimelineEntry stepId="step-uuid-123" stepState={makeStep({ stepName: null })} isLast={false} />)
     expect(screen.getByText('step-uuid-123')).toBeInTheDocument()
-  })
-
-  it('shows sub-workflow progress when subWorkflowProgress is present', () => {
-    render(
-      <ExecutionTimelineEntry
-        stepId="s1"
-        stepState={makeStep({
-          subWorkflowProgress: {
-            childExecutionId: 'ce1',
-            totalSteps: 3,
-            completedSteps: 2,
-            status: 'running',
-            childSteps: [
-              { childStepId: 'cs1', childStepName: 'Designer', status: 'success', inputTokens: 100, outputTokens: 50, durationMs: 1000, error: null },
-              { childStepId: 'cs2', childStepName: 'Agent 1', status: 'running', inputTokens: null, outputTokens: null, durationMs: null, error: null },
-            ],
-          },
-        })}
-        isLast={false}
-      />,
-    )
-    expect(screen.getByText('2/3 child steps')).toBeInTheDocument()
-    expect(screen.getByText('Designer')).toBeInTheDocument()
-    expect(screen.getByText('Agent 1')).toBeInTheDocument()
-  })
-
-  it('does not show child timeline when subWorkflowProgress is null', () => {
-    render(<ExecutionTimelineEntry stepId="s1" stepState={makeStep()} isLast={false} />)
-    expect(screen.queryByText('Sub-workflow')).not.toBeInTheDocument()
   })
 
   it('does not show metrics row when none available', () => {

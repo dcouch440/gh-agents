@@ -13,7 +13,6 @@ describe('nodeDimensions', () => {
       CanvasNodeKind.CONTEXT,
       CanvasNodeKind.INPUT,
       CanvasNodeKind.DOCUMENT,
-      CanvasNodeKind.SUB_WORKFLOW,
     ]
 
     it('returns valid dimensions for every CanvasNodeKind', () => {
@@ -46,14 +45,6 @@ describe('nodeDimensions', () => {
       expect(dims.minHeight).toBe(300)
       expect(dims.maxWidth).toBe(1200)
       expect(dims.maxHeight).toBe(1000)
-    })
-
-    it('returns fixed dimensions for sub_workflow node', () => {
-      const dims = getNodeDimensions(CanvasNodeKind.SUB_WORKFLOW)
-      expect(dims.defaultWidth).toBe(dims.minWidth)
-      expect(dims.defaultWidth).toBe(dims.maxWidth)
-      expect(dims.defaultHeight).toBe(dims.minHeight)
-      expect(dims.defaultHeight).toBe(dims.maxHeight)
     })
 
     it('returns fixed dimensions for step node', () => {
@@ -119,7 +110,7 @@ describe('nodeDimensions', () => {
     })
 
     it('min equals max for fixed-size nodes', () => {
-      const c = toResizeConstraints(CanvasNodeKind.SUB_WORKFLOW)
+      const c = toResizeConstraints(CanvasNodeKind.STEP)
       expect(c.minWidth).toBe(c.maxWidth)
       expect(c.minHeight).toBe(c.maxHeight)
     })

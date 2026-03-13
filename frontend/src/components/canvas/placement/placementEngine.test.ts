@@ -29,7 +29,7 @@ const makeStep = (overrides: Partial<WorkflowStep> & { id: string }): WorkflowSt
   room_id: null,
   system_prompt_suffix: null,
   description: '',
-  sub_workflow_template_id: null,
+
   pinned: false,
   run_results_summary: '',
   ...overrides,

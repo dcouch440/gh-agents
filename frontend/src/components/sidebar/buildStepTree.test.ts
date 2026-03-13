@@ -29,7 +29,7 @@ const makeStep = (id: string, name: string, order: number): WorkflowStep => ({
   room_id: null,
   system_prompt_suffix: null,
   description: `${name} description`,
-  sub_workflow_template_id: null,
+
   pinned: false,
   run_results_summary: '',
 })

@@ -48,7 +48,6 @@ export type {
   RunDetailResponse,
   RebaseRequest,
   RebaseResponse,
-  ChildStepResult,
   RunTemplate,
   WorkshopResponse,
   WorkshopStepResponse,

@@ -80,9 +80,6 @@ export const WORKFLOW_EVENT = {
   ROSTER_CHANGED: 'roster_changed',
   ROOM_MEMBERS_CHANGED: 'room_members_changed',
   PLAN_UPDATED: 'plan_updated',
-  SUB_WORKFLOW_STARTED: 'sub_workflow_started',
-  SUB_WORKFLOW_COMPLETED: 'sub_workflow_completed',
-  SUB_WORKFLOW_STEP_PROGRESS: 'sub_workflow_step_progress',
   // Workforce high-level progress (backend already emits these)
   WORKFORCE_DESIGNER_PROGRESS: 'workforce_designer_progress',
   WORKFORCE_AGENT_PROGRESS: 'workforce_agent_progress',
@@ -127,14 +124,6 @@ export type StepConfigUpdatedData = { workflow_id: string; step_id: string }
 export type RosterChangedData = { workflow_id: string; step_id: string }
 export type RoomMembersChangedData = { workflow_id: string; step_id: string }
 export type PlanUpdatedData = { workflow_id: string; step_id: string; content: string }
-export type SubWorkflowStartedData = { workflow_id: string; parent_step_id: string; child_execution_id: string; total_steps: number }
-export type SubWorkflowCompletedData = { workflow_id: string; parent_step_id: string; child_execution_id: string; status: string }
-export type SubWorkflowStepProgressData = {
-  workflow_id: string; parent_step_id: string; child_execution_id: string
-  child_step_id: string; child_step_name: string; status: string
-  input_tokens: number | null; output_tokens: number | null; duration_ms: number | null; error: string | null
-}
-
 // Workforce high-level progress
 export type WorkforceDesignerProgressData = { workflow_id: string; step_id: string; status: string }
 export type WorkforceAgentProgressData = {

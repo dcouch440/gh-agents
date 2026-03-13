@@ -25,8 +25,8 @@ pub use ports::{
 pub(crate) use prompts::{build_routing_instruction_block, compose_prompt, PromptRepos};
 pub(crate) use types::DagPaused;
 pub use types::{
-    ContainerExecutionConfig, StepOutput, StepReadiness, SubWorkflowParentContext,
-    WorkflowExecutionContext, WorkflowExecutionResult,
+    ContainerExecutionConfig, StepOutput, StepReadiness, WorkflowExecutionContext,
+    WorkflowExecutionResult,
 };
 pub use variables::resolve_variables;
 

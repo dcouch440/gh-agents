@@ -64,12 +64,6 @@ describe('portPlacements', () => {
       expect(config.ports[0]!.handleType).toBe('target')
     })
 
-    it('returns sub_workflow with left-right flow', () => {
-      const config = getPortConfig(CanvasNodeKind.SUB_WORKFLOW)
-      expect(config.ports).toHaveLength(2)
-      expect(config.ports[0]!.side).toBe('left')
-      expect(config.ports[1]!.side).toBe('right')
-    })
   })
 
   // ── getPortsOnSide ──────────────────────────────────────────────────

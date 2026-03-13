@@ -1,6 +1,6 @@
 import { api } from '@/api'
-import type { RunStepResult, ChildStepResult, WorkshopStepSummary } from '@/types'
-import type { StepExecutionState, StepExecutionStatus, StepTimelineEvent, ChildStepState, SubWorkflowProgress } from './types'
+import type { RunStepResult, WorkshopStepSummary } from '@/types'
+import type { StepExecutionState, StepExecutionStatus, StepTimelineEvent } from './types'
 import { store } from './_store'
 
 const mapApiStatusToStoreStatus = (apiStatus: string): StepExecutionStatus => {
@@ -15,41 +15,6 @@ const mapApiStatusToStoreStatus = (apiStatus: string): StepExecutionStatus => {
   }
 }
 
-const mapChildStatus = (status: string): ChildStepState['status'] => {
-  if (status === 'completed') return 'success'
-  if (status === 'failed') return 'error'
-  return 'running'
-}
-
-const buildSubWorkflowProgress = (step: RunStepResult): SubWorkflowProgress | null => {
-  if (step.child_execution_id === null || !step.child_steps || step.child_steps.length === 0) return null
-
-  const terminalCount = step.child_steps.filter(
-    (cs) => cs.status === 'completed' || cs.status === 'failed',
-  ).length
-
-  const progressStatus: SubWorkflowProgress['status'] =
-    step.status === 'completed' ? 'completed'
-      : step.status === 'failed' ? 'failed'
-        : 'running'
-
-  return {
-    childExecutionId: step.child_execution_id,
-    totalSteps: step.child_steps.length,
-    completedSteps: terminalCount,
-    status: progressStatus,
-    childSteps: step.child_steps.map((cs: ChildStepResult) => ({
-      childStepId: cs.step_name ?? 'unknown',
-      childStepName: cs.step_name ?? 'unknown',
-      status: mapChildStatus(cs.status),
-      inputTokens: cs.input_tokens,
-      outputTokens: cs.output_tokens,
-      durationMs: cs.duration_ms,
-      error: cs.error,
-    })),
-  }
-}
-
 const mapRunStepToStepState = (step: RunStepResult): StepExecutionState => ({
   status: mapApiStatusToStoreStatus(step.status),
   stepName: step.step_name,
@@ -61,7 +26,6 @@ const mapRunStepToStepState = (step: RunStepResult): StepExecutionState => ({
   outputTokens: step.output_tokens,
   durationMs: step.duration_ms,
   forEachProgress: null,
-  subWorkflowProgress: buildSubWorkflowProgress(step),
   startedAt: step.started_at,
   completedAt: step.completed_at,
 })
@@ -140,7 +104,6 @@ const mapWorkshopStepToStepState = (step: WorkshopStepSummary, runId: string): S
   outputTokens: null,
   durationMs: null,
   forEachProgress: null,
-  subWorkflowProgress: null,
   startedAt: null,
   completedAt: null,
 })
@@ -177,4 +140,4 @@ const hydrateWorkshop = async (workflowId: string): Promise<void> => {
   }
 }
 
-export { hydrateLatestRun, hydrateWorkshop, mapApiStatusToStoreStatus, mapRunStepToStepState, buildSubWorkflowProgress, buildEventLog }
+export { hydrateLatestRun, hydrateWorkshop, mapApiStatusToStoreStatus, mapRunStepToStepState, buildEventLog }

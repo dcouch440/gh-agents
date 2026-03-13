@@ -135,7 +135,6 @@ pub async fn run_standalone_design(
         container_config: None,
         wg_client: None,
         snapshot: None,
-        parent_context: None,
     };
 
     // 6. Gather upstream envelopes from last execution (if any)

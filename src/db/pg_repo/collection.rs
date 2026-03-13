@@ -401,46 +401,6 @@ impl WorkflowCollectionRepo for PgRepo {
         Ok(row)
     }
 
-    async fn create_child_workflow_execution(
-        &self,
-        parent_execution_id: Uuid,
-        workflow_id: Uuid,
-        user_id: Uuid,
-        template_id: Uuid,
-    ) -> Result<WorkflowExecutionRow> {
-        let row = sqlx::query_as::<_, WorkflowExecutionRow>(
-            "INSERT INTO workflow_executions \
-             (parent_execution_id, workflow_id, user_id, template_id, status, execution_mode, \
-              root_execution_id, depth) \
-             VALUES ($1, $2, $3, $4, 'pending', 'sub_workflow', \
-                     (SELECT COALESCE(root_execution_id, id) FROM workflow_executions WHERE id = $1), \
-                     (SELECT depth + 1 FROM workflow_executions WHERE id = $1)) \
-             RETURNING *",
-        )
-        .bind(parent_execution_id)
-        .bind(workflow_id)
-        .bind(user_id)
-        .bind(template_id)
-        .fetch_one(&self.pool)
-        .await?;
-        Ok(row)
-    }
-
-    async fn list_child_executions(
-        &self,
-        parent_execution_id: Uuid,
-    ) -> Result<Vec<WorkflowExecutionRow>> {
-        let rows = sqlx::query_as::<_, WorkflowExecutionRow>(
-            "SELECT * FROM workflow_executions \
-             WHERE parent_execution_id = $1 \
-             ORDER BY started_at",
-        )
-        .bind(parent_execution_id)
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(rows)
-    }
-
     async fn list_execution_tree(&self, root_id: Uuid) -> Result<Vec<WorkflowExecutionRow>> {
         let rows = sqlx::query_as::<_, WorkflowExecutionRow>(
             "SELECT * FROM workflow_executions \

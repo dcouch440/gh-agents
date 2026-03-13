@@ -137,7 +137,6 @@ describe('ExecutionPanel', () => {
         outputTokens: 5,
         durationMs: 100,
         forEachProgress: null,
-        subWorkflowProgress: null,
         startedAt: '2025-01-01T00:00:01Z',
         completedAt: '2025-01-01T00:00:02Z',
       },

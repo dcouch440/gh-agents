@@ -101,8 +101,6 @@ pub async fn get_run_detail(
                     cost_usd: resp.cost_usd,
                     error: resp.error,
                     phases: resp.phases,
-                    child_execution_id: resp.child_execution_id,
-                    child_steps: resp.child_steps,
                 });
             }
             Err(_) => {
@@ -123,8 +121,6 @@ pub async fn get_run_detail(
                     cost_usd: None,
                     error: None,
                     phases: None,
-                    child_execution_id: None,
-                    child_steps: None,
                 });
             }
         }
@@ -245,7 +241,5 @@ pub async fn get_step_run_for_execution(
         cost_usd: resp.cost_usd,
         error: resp.error,
         phases: resp.phases,
-        child_execution_id: resp.child_execution_id,
-        child_steps: resp.child_steps,
     }))
 }

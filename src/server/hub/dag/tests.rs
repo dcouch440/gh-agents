@@ -244,7 +244,6 @@ mod tests {
             container_config: None,
             wg_client: None,
             snapshot: None,
-            parent_context: None,
         }
     }
 

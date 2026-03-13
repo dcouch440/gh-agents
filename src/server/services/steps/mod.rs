@@ -35,7 +35,6 @@ pub struct StepPayload {
     pub name: Option<String>,
     pub system_prompt_suffix: Option<String>,
     pub description: Option<String>,
-    pub sub_workflow_template_id: Option<Uuid>,
 }
 
 /// Input for creating a new workflow step.
@@ -138,7 +137,6 @@ pub async fn create_step(
         board_context_updated_at: None,
         goal_summary: String::new(),
         goal_summary_updated_at: None,
-        sub_workflow_template_id: p.sub_workflow_template_id,
         child_workflow_id: None,
         ref_id: Some(ref_id),
         pinned: false,
@@ -254,9 +252,6 @@ pub async fn update_step(
         board_context_updated_at: existing.board_context_updated_at,
         goal_summary: existing.goal_summary,
         goal_summary_updated_at: existing.goal_summary_updated_at,
-        sub_workflow_template_id: p
-            .sub_workflow_template_id
-            .or(existing.sub_workflow_template_id),
         child_workflow_id: existing.child_workflow_id,
         ref_id: existing.ref_id.clone(),
         pinned: existing.pinned,

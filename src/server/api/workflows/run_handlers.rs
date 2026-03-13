@@ -140,7 +140,6 @@ pub async fn run_workflow(
         container_config: None,
         wg_client: None,
         snapshot,
-        parent_context: None,
     };
 
     // Spawn execution in background (non-blocking, return 202)
