@@ -66,9 +66,9 @@ Same `write_file` tool for both. The path prefix tells you which is which — `.
 
 ### Implicit Tools
 
-Every agent always has `read_file` and `write_file` available — these are implicit, like web search and X search. The designer doesn't need to include them in the tools list. When the designer assigns `tools: ["content_search"]`, the agent actually gets `read_file` + `write_file` + `content_search` + web search + X search.
+Every agent always has `read_file`, `write_file`, and `summarize_document` available — these are implicit, like web search and X search. The designer doesn't need to include them in the tools list. When the designer assigns `tools: ["content_search"]`, the agent actually gets `read_file` + `write_file` + `summarize_document` + `content_search` + web search + X search.
 
-This means agents with `tools: []` can still write system files and read upstream artifacts. The tools list only contains *additional* capabilities beyond the baseline.
+This means agents with `tools: []` can still write system files, read upstream artifacts, and summarize large documents. The tools list only contains *additional* capabilities beyond the baseline.
 
 ### Storage and Container Access
 
@@ -1249,6 +1249,55 @@ list_artifacts:
 
 An explicit tool for agents to browse the store. Complements the `<upstream_artifacts>` manifest — the manifest shows upstream files automatically, `list_artifacts` lets agents explore the full store namespace when needed.
 
+### summarize_document
+
+```
+summarize_document:
+  prompt: string          # what to extract or how to summarize
+  document: string        # path to file in the store or refs
+  save_to: string         # where to write the result in the store
+
+  → chunks the document internally (by section, page, or token count)
+  → runs parallel extraction agents with the prompt applied to each chunk
+  → synthesizes chunk findings into a single coherent result
+  → writes result to save_to path in the store
+
+  returns:
+    path: string          # save_to path (now readable via read_file)
+    summary: string       # short description of what was found (~2-3 sentences)
+    tokens: int           # size of the result in tokens
+```
+
+Handles documents too large for a single context window. The agent calls it like any other tool — the chunking pipeline runs behind the scenes. The agent gets back the path, a short summary, and the token count. If it needs the full content, it calls `read_file(save_to)`. If it just needs to know the work is done (because a downstream agent will read it via the manifest), it moves on.
+
+The `tokens` field lets the agent decide: small result? Read it inline. Large result? Leave it in the store.
+
+The saved file appears in `<upstream_artifacts>` for downstream agents like any other artifact. The `summary` field populates the file's description in the manifest.
+
+**Example:**
+
+```
+// Agent calls the tool
+summarize_document(
+  prompt: "Extract all liability clauses, exposure limits, and indemnification terms",
+  document: ".system/refs/contracts/master_agreement.pdf",
+  save_to: ".system/artifacts/analysis/liability_extract.md"
+)
+
+// Tool returns
+{
+  "path": ".system/artifacts/analysis/liability_extract.md",
+  "summary": "Extracted 23 liability clauses across 14 sections.
+              Total exposure cap: $5M. 3 uncapped indemnification terms flagged.",
+  "tokens": 3800
+}
+
+// Agent decides to read the full result
+read_file(".system/artifacts/analysis/liability_extract.md")
+```
+
+This is an implicit tool — every agent has it. The designer doesn't assign it. The designer just tells agents when to use it: "Summarize the upstream research corpus to extract competitive pricing data. Save to the store for the Analyst."
+
 ## Connected Systems — Federated Mounts
 
 When workflows connect, they mount each other's stores.
@@ -1303,7 +1352,7 @@ Each system is autonomous. Connected systems share artifacts through mounts — 
 | `SystemStore` service | CRUD + manifest + mount resolution | Medium |
 | Designer → ReAct agent | New strategy with store tools, roster status injection, `expected_output` field, runs at design time | Medium |
 | Executor reads from store | Replace in-memory vec with store reads | Small |
-| Implicit read/write tools | `read_file` + `write_file` available to all agents (store + project) | Small |
+| Implicit tools | `read_file` + `write_file` + `summarize_document` available to all agents | Small–Medium |
 | Artifact manifest | `<upstream_artifacts>` block built from file save history | Small |
 | `<refs>` prompt block | Inject user-uploaded refs into agent prompts | Small |
 | Designer-shaped handoffs | Designer crafts lean responses + store writes per agent | No runtime cost — prompt engineering only |
@@ -1317,7 +1366,7 @@ Ordered by dependency. Each slice is one plan.
 1. **Store Foundation** — `system_files` migration, S3 prefix management (`workflows/{id}/system/`), `SystemStore` service (write, read, list, edit), file save history tracking.
 2. **ReAct Designer** — `expected_output` on `DesignedAgentPrompt`, new system prompt, designer strategy as ReAct agent with store tools, roster status injection, partial recovery. Depends on 1.
 3. **Executor Reads From Store** — Executor reads `design/{step_id}/agents/*.json` instead of in-memory vec. Auto-scoping. `<upstream_artifacts>` manifest built from file save history and injected into runtime prompts. Depends on 1 + 2.
-4. **Implicit Agent Tools** — `read_file` / `write_file` for all executing agents, agents write to `.system/artifacts/`, `<refs>` prompt block for user uploads. Depends on 1.
+4. **Implicit Agent Tools** — `read_file` / `write_file` / `summarize_document` for all executing agents, agents write to `.system/artifacts/`, `<refs>` prompt block for user uploads, `summarize_document` runs a pre-configured chunking pipeline behind the scenes. Depends on 1.
 5. **Advanced** — Snapshots, federated mounts. Future.
 
 Critical path: **1 → 2 → 3**. Slice 4 can parallelize after 1.
