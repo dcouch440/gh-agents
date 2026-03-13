@@ -221,7 +221,18 @@ impl Pipeline {
         )
         .await?;
 
-        // 10. Build env + execute agent levels
+        // 10. Build upstream artifacts manifest from store metadata
+        let upstream_ids: Vec<uuid::Uuid> = upstream_step_ids.iter().copied().collect();
+        let upstream_artifacts_block = output::build_upstream_artifacts_block(
+            dag.state.repos().system_files.as_ref(),
+            step.workflow_id,
+            step.id,
+            &upstream_ids,
+            dag.steps,
+        )
+        .await;
+
+        // 11. Build env + execute agent levels
         let env = WorkforceStepEnv {
             state: dag.state.clone(),
             ctx: dag.ctx.clone(),
@@ -242,6 +253,7 @@ impl Pipeline {
                 .await
                 .unwrap_or(None),
             upstream_outputs_block,
+            upstream_artifacts_block,
         };
 
         let level_result = execute_agent_levels(
