@@ -83,7 +83,8 @@ Manager: "Based on your pipeline, a verification step after the refiner
 User: "Yeah that sounds good, do it."
 Manager: dispatch("Add an online verifier for the refiner")
   → Builder Agent: creates the node, wires edges, fills in description → passdown
-  → Per-Node Builder: configures the workforce team
+  → Per-Node Builder: configures the workforce team (roster, dependencies, plan)
+  → Designer: writes per-agent prompts to .system/design/
 ```
 
 ### Entry Point 2 — Board Submit
@@ -94,7 +95,8 @@ The user draws on the canvas and hits submit. Phase 0 handles the structural dif
 User: draws complete schema on canvas → submits
 POST → Phase 0: create nodes, delete removed ones, rewire edges (agentless DB writes)
   → Board Dispatcher: reads changeset, dispatches to each node
-  → Per-Node Builder: configures the workforce team
+  → Per-Node Builder: configures the workforce team (roster, dependencies, plan)
+  → Designer: writes per-agent prompts to .system/design/
 ```
 
 ### Phase 0 — Structural (Board Submit Only, Instant, Agentless)
@@ -127,23 +129,27 @@ The chat entry point skips Phase 0 — the manager dispatches directly to the Bu
 
 ### The Dispatch Agents
 
-Three dispatch agents. The chat path uses Builder → Per-Node Builder. The board path uses Board Dispatcher → Per-Node Builder. The Per-Node Builder is shared by both paths.
+Three dispatch agents plus the Designer. The chat path uses Builder → Per-Node Builder → Designer. The board path uses Board Dispatcher → Per-Node Builder → Designer. The Per-Node Builder and Designer are shared by both paths.
 
 **Builder Agent** — Chat path only. Creates the workflow structure (nodes, edges, hierarchy) AND fills in the box descriptions — the text that represents each node's job on the canvas. Uses topology tools (`create_pipeline`, `insert_node`, `wire_edge`, etc.) and content tools in a single pass. Produces a passdown with the finalized schema. **The board is locked** while this agent works.
 
 **Board Dispatcher** — Board path only. Reads the changeset from Phase 0 — which nodes were created, which were updated, what the user wrote. Dispatches configuration instructions to the Per-Node Builder for each affected node. No topology tools — the topology is already built by Phase 0. A simple, focused agent whose only tools are `dispatch_to_builders` and `think`.
 
-**Per-Node Builder** — Both paths. Receives a dispatch instruction for a single node. Reads the **full box content** — raw text, annotations, sketches. Configures the workforce: agent rosters, system prompts, capabilities, tools, routing rules. The design populates into the node's config panel. Already built.
+**Per-Node Builder** — Both paths. Receives a dispatch instruction for a single node. Reads the **full box content** — raw text, annotations, sketches. Configures the workforce: agent rosters, dependencies, capabilities, and a plan. Writes configs to the system store (`.system/design/`). Already built.
 
-After configuration, each node is ready for workforce execution — the existing pipeline, no changes needed.
+**Designer** — Both paths. Runs async after the Per-Node Builder completes. Retrieves relevant orchestration examples from the example library (@visions/vision-example-library.md) via embedding similarity, then writes per-agent prompts (system prompt, assignment, expected_output, tools) to the system store as a ReAct agent. Reads back prior configs to verify format chain coherence. Prompts appear in the config panel for user review before execution. See @visions/vision-system-store.md.
 
-### Why Three Agents, Not More
+After design, each node is ready for workforce execution — the executor reads prompts from the store.
+
+### Why This Agent Split
 
 Anthropic's multi-agent research (2025) found that each agent in a chain should have a *meaningfully different job requiring different context*. If two agents read the same context and do similar reasoning, they should be one agent. Each handoff adds 100-500ms latency and risks information loss — the "game of telephone" problem where each summarization step loses nuance.
 
 The Builder Agent combines topology and content creation into one pass because both tasks require the same context: the user's instruction, the current board state, and knowledge of what nodes and edges need to exist. Splitting them into two agents would mean two LLM calls reading the same board state, with a passdown between them that adds latency and loses context.
 
 The Board Dispatcher is separate from the Builder because it does a fundamentally different job — the topology already exists, it just needs to fan out dispatch instructions. And the Per-Node Builder is separate because it operates at a different scope (single node vs. whole workflow) and needs different context (full box content, upstream outputs, beliefs).
+
+The Designer is separate from the Per-Node Builder because it has a meaningfully different job — the builder decides WHO is on the team, the designer decides HOW they work. The builder reads full box content, beliefs, and upstream topology. The designer reads the builder's plan, the roster, and retrieved orchestration examples. Different context, different output, clear handoff: the builder's plan IS the designer's input.
 
 The industry consensus (Google ADK, OpenAI Agents SDK, LangGraph) is: start with the fewest agents that have meaningfully distinct jobs, and only split when you can prove the split improves output quality. Mechanical work that needs no reasoning (Phase 0) should never be an agent. Coordination overhead between agents is real cost — minimize handoffs.
 
@@ -167,6 +173,8 @@ The Builder Agent sees beliefs from all connected nodes via `get_beliefs_for_con
 | Builder Agent (chat only) | Create topology + fill content | Smart, one pass | Seconds |
 | Board Dispatcher (board only) | Read changeset, dispatch to per-node | Smart, one pass | Seconds |
 | Per-Node Builder (both) | Read full box content, configure workforce | Smart, per node | Seconds |
+| Example Retrieval (both) | Embed task, query example library | No LLM (embedding only) | Instant |
+| Designer (both) | Write per-agent prompts to store | Smart, ReAct, per node | Seconds |
 | Execution | Run each node's workforce | Per-node model selection | Background |
 
 ## The Guided Engineering Pipeline
@@ -335,7 +343,7 @@ The selector looks at "File a report" and determines the right protocol from the
 
 The Board Dispatcher reads the changeset — the new node, its protocol, and its position in the topology. It dispatches a configuration instruction to the Per-Node Builder for this node.
 
-The Per-Node Builder picks up the instruction with the full board context — incoming edges, upstream outputs, the user's description, extracted beliefs. It configures the workforce: agent rosters, system prompts, capabilities, tools, routing rules.
+The Per-Node Builder picks up the instruction with the full board context — incoming edges, upstream outputs, the user's description, extracted beliefs. It configures the workforce: agent rosters, dependencies, capabilities, and a plan.
 
 ```
 New: User created a new node:
@@ -343,15 +351,16 @@ New: User created a new node:
   Protocol: workforce (from selector)
   → Board Dispatcher dispatches to Per-Node Builder with board context
   → Per-Node Builder reads full box content, upstream topology, beliefs
-  → Configures workforce: agent roster, system prompts, capabilities
-  → Node is ready for execution
+  → Configures workforce: agent roster, dependencies, capabilities, plan
+  → Designer runs async: writes per-agent prompts to .system/design/
+  → Prompts appear in config panel for user review
 ```
 
 The Per-Node Builder doesn't configure in isolation. It sees what's upstream, understands what data flows into this node, and designs the agents to handle that specific context. "File a report" with research data upstream produces a different configuration than "File a report" with raw database output upstream.
 
-**3. Designer phase (user-triggered, separate):**
+**3. Designer phase (async, part of board submit):**
 
-The designer is NOT part of the board submit pipeline. It runs later, when the user triggers workflow execution. The designer phase generates per-agent system prompts at execution time — it's the existing workforce pipeline, unchanged. The board submit pipeline builds the structure and configures the nodes. The designer phase refines the agents when they actually run.
+The Designer runs async after the Per-Node Builder completes — it is part of the board submit pipeline. It retrieves relevant orchestration examples, then writes per-agent prompts (system prompt, assignment, expected_output, tools) to the system store as a ReAct agent. Prompts appear in the config panel for user review before execution. See @visions/vision-system-store.md.
 
 ### Full Example
 
@@ -370,15 +379,16 @@ Semantic Diff:
       "Search for competitor pricing across Q3 and Q4, compare
        year-over-year trends, flag anomalies above 10%."
 
-  New (Board Dispatcher → Per-Node Builder):
+  New (Board Dispatcher → Per-Node Builder → Designer):
     Node: "Generate executive summary"
     Protocol selector: workforce
     → Board Dispatcher dispatches to Per-Node Builder with upstream context
     → Per-Node Builder configures workforce: 3-agent team (analyst, writer, reviewer)
-    → Node ready for execution
+    → Designer writes per-agent prompts to .system/design/
+    → Prompts appear in config panel for review
 ```
 
-Phase 0 handles the edge rewire instantly as a DB write. The Board Dispatcher reads the changeset (the updated description and new node) and dispatches to the Per-Node Builder for each affected node. The user sees the edge change immediately, watches the designs populate, and runs when ready.
+Phase 0 handles the edge rewire instantly as a DB write. The Board Dispatcher reads the changeset (the updated description and new node) and dispatches to the Per-Node Builder for each affected node. The Designer runs async to write per-agent prompts. The user sees the edge change immediately, watches the designs populate in the config panel, and runs when ready.
 
 ## The Protocol Selector
 
@@ -449,8 +459,26 @@ Drawing and chatting are two ways to build a workflow, but they use different di
                         │
                         ▼
                  ┌──────────────┐
-                 │  Workforce   │
-                 │  Execution   │
+                 │  Example     │──── embed task, query pgvector
+                 │  Retrieval   │     inject 2-3 relevant examples
+                 └──────┬───────┘
+                        │
+                        ▼
+                 ┌──────────────┐
+                 │  Designer    │──── ReAct agent, writes per-agent
+                 │  (async)     │     prompts to .system/design/
+                 └──────┬───────┘
+                        │
+                        ▼
+                 ┌──────────────┐
+                 │  User Review │──── config panel shows prompts
+                 │  (optional)  │     user edits before execution
+                 └──────┬───────┘
+                        │
+                        ▼
+                 ┌──────────────┐
+                 │  Workforce   │──── executor reads prompts
+                 │  Execution   │     from .system/design/
                  └──────────────┘
 ```
 
@@ -458,7 +486,7 @@ Drawing and chatting are two ways to build a workflow, but they use different di
 
 **Chat path** (right): The Manager Assistant dispatches to the Builder Agent, which creates the topology (nodes, edges) and fills in the box descriptions in a single pass. The Per-Node Builder then configures the workforce for each node.
 
-Both paths converge at the Per-Node Builder, which is the same agent regardless of entry point.
+Both paths converge at the Per-Node Builder. After the builder finishes, relevant orchestration examples are retrieved from the example library and injected into the Designer's prompt. The Designer writes per-agent prompts to the system store as a ReAct agent, reading back prior configs to verify coherence. Prompts appear in the config panel for the user to review and edit before triggering execution.
 
 ## Hierarchy Trees Inside Nodes
 
@@ -521,7 +549,7 @@ The existing React Flow canvas (`@xyflow/react`) with `CanvasNode` components st
 - The beliefs extraction system continues as-is — it feeds the pipeline agents with compressed context.
 - The existing canvas view continues to work as an advanced/spatial view.
 - All stores, API endpoints, and types are shared between views.
-- The designer phase still generates per-agent system prompts at execution time.
+- The designer phase generates per-agent system prompts at **design time** (board submit), not execution time. Prompts persist in the system store for user review and re-execution. See @visions/vision-system-store.md.
 
 ## What This Builds On
 
@@ -538,6 +566,8 @@ The existing React Flow canvas (`@xyflow/react`) with `CanvasNode` components st
 | Workforce agent teams | Agent rosters, pipeline service | Visual hierarchy in tree + config panel editing |
 | Canvas with nodes and edges | React Flow (`@xyflow/react`) | Stays as advanced view; Excalidraw overlay for drawing |
 | Agent configuration | Config screens, chat-based dispatch | Config panel in sidebar with full edit capability |
+| System store | — | `.system/` filesystem for agent configs and artifacts (@visions/vision-system-store.md) |
+| Example library | — | Curated orchestration examples retrieved by similarity at design time (@visions/vision-example-library.md) |
 
 Nothing gets thrown away. Nothing gets rewritten. Visual Dispatch is a new front door — a guided engineering pipeline that builds on every system that already exists.
 

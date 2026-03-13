@@ -674,6 +674,7 @@ Every designer loop follows the same rhythm:
 
 The designer catches its own mistakes. It reads back what it wrote, spots coordination issues, and fixes them. One-shot can't do this.
 
+
 ### When The Designer Runs
 
 The designer runs at **design time** — triggered by board submit, not at execution time. This is a change from the current system where the designer runs at the start of each execution.
