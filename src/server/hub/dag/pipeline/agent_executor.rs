@@ -218,11 +218,18 @@ async fn execute_single_agent(
         )
         .await?;
 
-    // Resolve capabilities
-    let (tools, tool_names) = env
+    // Resolve capabilities + inject implicit store tools
+    let (mut tools, mut tool_names) = env
         .state
         .capability_registry()
         .resolve_tools(&designed.tools);
+
+    if env.state.s3().is_some() {
+        tools.push(crate::server::tools::system_store::store_read_file_tool());
+        tools.push(crate::server::tools::system_store::store_write_file_tool());
+        tool_names.push("store_read_file".to_string());
+        tool_names.push("store_write_file".to_string());
+    }
 
     // Build task prompt: shared mission context + designer's assignment
     let filtered = filter_outputs_for_agent(prior_outputs, &designed.receives_from);
@@ -314,6 +321,9 @@ async fn execute_single_agent(
         user_id: Some(UserId(env.ctx.user_id)),
         agent_execution_id: ae_id,
         stroke_image: env.stroke_image.clone(),
+        workflow_id: Some(env.workflow_id),
+        step_id: Some(env.step_id),
+        agent_name: Some(designed.agent_name.clone()),
     });
 
     // Execute with live streaming sink
