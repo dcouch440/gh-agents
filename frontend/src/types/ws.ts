@@ -201,6 +201,7 @@ export const SESSION_EVENT = {
   DISPATCH_STREAM_TOOL_START: 'dispatch_stream_tool_start',
   DISPATCH_STREAM_TOOL_END: 'dispatch_stream_tool_end',
   DISPATCH_STREAM_ERROR: 'dispatch_stream_error',
+  DISPATCH_STREAM_SYSTEM_PROMPT: 'dispatch_stream_system_prompt',
 } as const
 
 export type SessionCreatedData = { session_id: string; title: string; mode_id: string }
@@ -235,6 +236,10 @@ export type DispatchStreamToolEndData = {
 }
 export type DispatchStreamErrorData = {
   session_id: string; execution_id: string; step_id: string; error: string
+}
+export type DispatchStreamSystemPromptData = {
+  session_id: string; execution_id: string; step_id: string
+  content: string; agent_name: string | null
 }
 
 // ============================================================================

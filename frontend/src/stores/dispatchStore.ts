@@ -18,6 +18,7 @@ type DispatchTraceEvent =
   | { type: 'tool_end'; toolName: string; toolId: string; result: unknown; ts: string }
   | { type: 'error'; error: string; ts: string }
   | { type: 'phase_marker'; label: string; ts: string }
+  | { type: 'system_prompt'; content: string; agentName: string | null; ts: string }
 
 type DispatchEntry = {
   executionId: string
@@ -196,6 +197,21 @@ const handleWsEvent = (msg: WsWireMessage): void => {
       }))
       break
     }
+    case SESSION_EVENT.DISPATCH_STREAM_SYSTEM_PROMPT: {
+      updateEntry(stepId, (e) => ({
+        ...e,
+        trace: [
+          ...e.trace,
+          {
+            type: 'system_prompt' as const,
+            content: data.content as string,
+            agentName: (data.agent_name as string | null) ?? null,
+            ts: msg.ts,
+          },
+        ],
+      }))
+      break
+    }
   }
 }
 
@@ -211,6 +227,8 @@ const mapApiTraceEvent = (e: ApiTraceEvent): DispatchTraceEvent => {
       return { type: 'tool_end', toolName: e.tool_name, toolId: e.tool_id, result: e.result, ts: e.ts }
     case 'error':
       return { type: 'error', error: e.error, ts: e.ts }
+    case 'system_prompt':
+      return { type: 'system_prompt', content: e.content, agentName: e.agent_name, ts: e.ts }
   }
 }
 
