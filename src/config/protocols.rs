@@ -173,7 +173,6 @@ pub mod vars {
         pub const NODE_NAME: &str = "ReactDesigner.node_name";
         pub const ROSTER_STATUS: &str = "ReactDesigner.roster_status";
         pub const PRIOR_DESIGN: &str = "ReactDesigner.prior_design";
-        pub const PLAN: &str = "ReactDesigner.plan";
         pub const ROSTER: &str = "ReactDesigner.roster";
         pub const BUILDER_ACTION: &str = "ReactDesigner.builder_action";
         pub const UPSTREAM_TOPOLOGY: &str = "ReactDesigner.upstream_topology";

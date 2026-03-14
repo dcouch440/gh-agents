@@ -170,13 +170,7 @@ impl PipelinePhase for DesignerPhase {
             &ctx.roster,
             &ctx.completed_envelopes,
             dag.steps,
-            dag.state
-                .repos()
-                .workflows
-                .get_plan(ctx.step.id)
-                .await
-                .unwrap_or_default()
-                .as_deref(),
+            None,
             dag.state.capability_registry(),
             &child_edges,
         );
@@ -373,15 +367,6 @@ async fn run_react_designer(
     child_edges: &[WorkflowStepEdgeRow],
     phase_id: &Uuid,
 ) -> Result<(Vec<DesignedAgentPrompt>, PhaseTokenUsage), HubError> {
-    let plan = dag
-        .state
-        .repos()
-        .workflows
-        .get_plan(ctx.step.id)
-        .await
-        .unwrap_or_default()
-        .unwrap_or_default();
-
     let designer_cfg = DESIGNER.agent("react_designer");
 
     // Create designer run record (for FK linkage to protocol_executions)
@@ -431,19 +416,19 @@ async fn run_react_designer(
     )
     .await;
 
-    let strategy = ReactDesignerStrategy::new(ReactDesignerConfig {
+    let mut strategy = ReactDesignerStrategy::new(ReactDesignerConfig {
         state: dag.state.clone(),
         step_id: ctx.step.id,
         workflow_id: ctx.step.workflow_id,
         roster: ctx.roster.clone(),
         session_id: Some(designer_session_id),
-        plan,
         builder_action: format!("Configured {}-agent roster", ctx.roster.len()),
         agent_execution_id: designer_ae_id,
         upstream_topology,
         node_text: ctx.step.prompt_template.clone(),
         dispatch_instruction: ctx.brief.task_description.clone(),
     });
+    strategy.init_roster_status().await;
 
     let filter_ctx = FilterContext::new(&designer_cfg.model_id, ctx.step.id);
     let recorder = ExecutionRecorder::new(

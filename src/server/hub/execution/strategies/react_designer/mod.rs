@@ -31,7 +31,6 @@ pub struct ReactDesignerConfig {
     pub workflow_id: Uuid,
     pub roster: Vec<TaskAgentRosterRow>,
     pub session_id: Option<Uuid>,
-    pub plan: String,
     pub builder_action: String,
     pub agent_execution_id: Option<Uuid>,
     /// Compact upstream/downstream topology description so the designer
@@ -92,7 +91,6 @@ impl ReactDesignerStrategy {
             vars::react_designer::PRIOR_DESIGN.to_string(),
             String::new(), // Filled in build_messages from session history
         );
-        inst_vars.insert(vars::react_designer::PLAN.to_string(), config.plan);
         inst_vars.insert(vars::react_designer::ROSTER.to_string(), roster_text);
         inst_vars.insert(
             vars::react_designer::BUILDER_ACTION.to_string(),
@@ -134,6 +132,24 @@ impl ReactDesignerStrategy {
     /// Take the design summary captured by `complete_design`.
     pub fn take_design_summary(&self) -> Option<String> {
         self.design_summary.lock().ok().and_then(|mut s| s.take())
+    }
+
+    /// Re-build roster status from the store and update the system prompt.
+    ///
+    /// Called after construction so the initial system prompt reflects which
+    /// agents already have configs (from prior designer runs).
+    pub async fn init_roster_status(&mut self) {
+        let roster_status = self.build_roster_status().await;
+        let mut vars = HashMap::new();
+        vars.insert(
+            vars::react_designer::NODE_NAME.to_string(),
+            format!("step:{}", self.step_id),
+        );
+        vars.insert(
+            vars::react_designer::ROSTER_STATUS.to_string(),
+            roster_status,
+        );
+        self.system_prompt = resolve_template(roles::REACT_DESIGNER.system, &vars);
     }
 
     /// Auto-scope a designer path by prefixing with `design/{step_id}/`.

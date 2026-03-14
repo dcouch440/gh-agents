@@ -32,7 +32,6 @@ mod tests {
     #[test]
     fn passdown_serialization_round_trip() {
         let passdown = Passdown {
-            plan: "## Objective\nScan for vulnerabilities".to_string(),
             summary: "Configured 3-agent pipeline".to_string(),
             question: Some("Which repos should we target?".to_string()),
         };
@@ -40,7 +39,6 @@ mod tests {
         let json = serde_json::to_string(&passdown).unwrap();
         let restored: Passdown = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(restored.plan, passdown.plan);
         assert_eq!(restored.summary, passdown.summary);
         assert_eq!(restored.question, passdown.question);
     }
@@ -48,7 +46,6 @@ mod tests {
     #[test]
     fn passdown_question_none_omitted_in_json() {
         let passdown = Passdown {
-            plan: "## Objective\nResearch competitors".to_string(),
             summary: "Configured 4-agent team".to_string(),
             question: None,
         };
@@ -60,12 +57,10 @@ mod tests {
     #[test]
     fn passdown_has_question_derived() {
         let with = Passdown {
-            plan: String::new(),
             summary: "Done".to_string(),
             question: Some("Need input".to_string()),
         };
         let without = Passdown {
-            plan: String::new(),
             summary: "Done".to_string(),
             question: None,
         };
