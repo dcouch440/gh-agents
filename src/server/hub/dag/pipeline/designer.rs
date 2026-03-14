@@ -229,8 +229,7 @@ impl PipelinePhase for DesignerPhase {
                 step_id = %ctx.step.id,
                 "S3 not available, using static fallback prompts"
             );
-            let fallback =
-                build_static_fallback_prompts(&ctx.brief, &ctx.roster, &ctx.base_prompt);
+            let fallback = build_static_fallback_prompts(&ctx.brief, &ctx.roster, &ctx.base_prompt);
             (
                 fallback,
                 PhaseTokenUsage {
