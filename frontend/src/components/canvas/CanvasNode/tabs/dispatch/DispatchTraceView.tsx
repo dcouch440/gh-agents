@@ -95,8 +95,18 @@ function DispatchTraceView({ entry }: DispatchTraceViewProps) {
             )
           case 'system_prompt':
             return (
-              <SystemPromptBlock
+              <DebugMessageBlock
                 key={`sp-${i}`}
+                label="System Prompt"
+                content={segment.content}
+                agentName={segment.agentName}
+              />
+            )
+          case 'user_message':
+            return (
+              <DebugMessageBlock
+                key={`um-${i}`}
+                label="User Message"
                 content={segment.content}
                 agentName={segment.agentName}
               />
@@ -123,16 +133,17 @@ function DispatchTraceView({ entry }: DispatchTraceViewProps) {
   )
 }
 
-// ── System Prompt Debug Block ─────────────────────────────────────────────
+// ── Debug Message Block (system prompt / user message) ────────────────────
 
-type SystemPromptBlockProps = {
+type DebugMessageBlockProps = {
+  label: string
   content: string
   agentName: string | null
 }
 
-function SystemPromptBlock({ content, agentName }: SystemPromptBlockProps) {
+function DebugMessageBlock({ label: baseLabel, content, agentName }: DebugMessageBlockProps) {
   const [expanded, setExpanded] = useState(false)
-  const label = agentName ? `System Prompt (${agentName})` : 'System Prompt'
+  const label = agentName ? `${baseLabel} (${agentName})` : baseLabel
 
   return (
     <Box sx={{ my: 0.5, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>

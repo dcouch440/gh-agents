@@ -41,6 +41,8 @@ pub struct DispatchStrategy {
     session_id: Option<Uuid>,
     /// Captured passdown from `complete_task` tool call.
     passdown: Mutex<Option<Passdown>>,
+    /// Agent execution ID for debug stream events.
+    agent_execution_id: Option<Uuid>,
 }
 
 impl DispatchStrategy {
@@ -111,7 +113,13 @@ impl DispatchStrategy {
             workflow_id,
             session_id,
             passdown: Mutex::new(None),
+            agent_execution_id: None,
         })
+    }
+
+    /// Set the agent execution ID (created after strategy construction).
+    pub fn set_agent_execution_id(&mut self, id: Option<Uuid>) {
+        self.agent_execution_id = id;
     }
 
     /// Take the captured passdown, if any.
@@ -158,6 +166,10 @@ impl ExecutionStrategy for DispatchStrategy {
 
     fn state(&self) -> Option<&AppState> {
         Some(&self.state)
+    }
+
+    fn agent_execution_id(&self) -> Option<Uuid> {
+        self.agent_execution_id
     }
 
     async fn rebuild_system_prompt(&self) -> Result<Option<String>, HubError> {

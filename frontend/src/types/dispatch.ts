@@ -7,6 +7,7 @@ type ApiTraceEvent =
   | { type: 'tool_end'; tool_name: string; tool_id: string; result: unknown; ts: string }
   | { type: 'error'; error: string; ts: string }
   | { type: 'system_prompt'; content: string; agent_name: string | null; ts: string }
+  | { type: 'user_message'; content: string; agent_name: string | null; ts: string }
 
 export type DispatchTraceResponse = {
   execution_id: string

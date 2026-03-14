@@ -448,7 +448,7 @@ async fn run_react_designer(
         .engine
         .clone_with_provider()
         .with_filter_context(filter_ctx)
-        .execute(&strategy, "", &NullSink, &recorder, dag.cancel)
+        .execute(&strategy, strategy.instruction(), &NullSink, &recorder, dag.cancel)
         .await?;
 
     let cost = crate::server::hub::pricing::compute_cost(

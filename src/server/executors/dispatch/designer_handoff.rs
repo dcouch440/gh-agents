@@ -165,7 +165,7 @@ pub async fn run_designer_after_builder(
 
     match engine
         .with_filter_context(filter_ctx)
-        .execute(&strategy, "", &sink, &recorder, None)
+        .execute(&strategy, strategy.instruction(), &sink, &recorder, None)
         .await
     {
         Ok(result) => {
