@@ -51,10 +51,10 @@ function DispatchTraceView({ entry }: DispatchTraceViewProps) {
       sx={{ flex: 1, overflowY: 'auto', px: 1, py: 0.5 }}
     >
       {segments.map((segment, i) => {
-        // Hide builder's system_prompt and user_message (those before the first phase_marker)
+        // Hide text segments that appear before the first tool call (builder preamble/summary)
         if (
-          (segment.type === 'system_prompt' || segment.type === 'user_message') &&
-          !segments.slice(0, i).some((s) => s.type === 'phase')
+          segment.type === 'text' &&
+          !segments.slice(0, i).some((s) => s.type === 'tool')
         ) {
           return null
         }
