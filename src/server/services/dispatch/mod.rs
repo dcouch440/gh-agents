@@ -18,12 +18,10 @@ mod tests;
 
 /// Structured output from a builder's `complete_task` tool call.
 ///
-/// - `plan`: feeds into the designer at execution time
 /// - `summary`: displayed to the manager/user, captures what was done
 /// - `question`: optional, surfaces to manager's board state as `<asking>`
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Passdown {
-    pub plan: String,
     pub summary: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub question: Option<String>,

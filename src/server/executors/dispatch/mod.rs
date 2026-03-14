@@ -177,8 +177,9 @@ pub async fn run_dispatch_task(
     match result {
         Ok(exec_result) => {
             // Retrieve captured passdown from strategy (or fallback)
-            let passdown = strategy.take_passdown().unwrap_or_else(|| Passdown {
-                plan: String::new(),
+            let raw_passdown = strategy.take_passdown();
+            let has_passdown = raw_passdown.is_some();
+            let passdown = raw_passdown.unwrap_or_else(|| Passdown {
                 summary: if exec_result.content.is_empty() {
                     "Completed with no response".to_string()
                 } else {
@@ -207,34 +208,20 @@ pub async fn run_dispatch_task(
                 );
             }
 
-            // Store the plan from passdown
-            if !passdown.plan.is_empty() {
-                if let Err(e) = state
-                    .repos()
-                    .workflows
-                    .upsert_plan(step_id, &passdown.plan)
-                    .await
-                {
-                    tracing::warn!(
-                        step_id = %step_id,
-                        error = %e,
-                        "Failed to persist passdown plan"
-                    );
-                }
+            // Trigger designer handoff only if the builder produced a passdown
+            // (i.e. called complete_task). Designer tool calls stream through the
+            // same DispatchStreamSink (same execution_id) so the trace is continuous.
+            if has_passdown {
+                designer_handoff::run_designer_after_builder(
+                    &state,
+                    step_id,
+                    workflow_id,
+                    user_id,
+                    execution_id,
+                    &instruction,
+                )
+                .await;
             }
-
-            // Trigger designer handoff — runs async after builder completes.
-            // Designer tool calls stream through the same DispatchStreamSink
-            // (same execution_id) so the trace is continuous.
-            designer_handoff::run_designer_after_builder(
-                &state,
-                step_id,
-                workflow_id,
-                user_id,
-                execution_id,
-                &instruction,
-            )
-            .await;
 
             // Persist trace AFTER designer handoff so the persisted trace
             // includes both builder and designer tool events.

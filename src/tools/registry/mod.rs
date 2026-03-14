@@ -671,7 +671,7 @@ fn configure_team_tool() -> Tool {
             "dependencies. The tool diffs against the current state and applies only ",
             "the changes needed — creating new agents, removing unlisted agents, ",
             "updating agents whose role or capabilities changed, and reconciling ",
-            "dependencies. The plan is provided separately through complete_task.",
+            "dependencies.",
         )
         .into(),
         input_schema: json!({
@@ -957,21 +957,14 @@ fn complete_task_tool() -> Tool {
         name: "complete_task".into(),
         description: concat!(
             "Signal that you have finished configuring this node. Call this once when done ",
-            "— do not call any other tools after this. Provide a plan (the execution ",
-            "blueprint the agent designer reads at runtime), a summary of what you ",
+            "— do not call any other tools after this. Provide a summary of what you ",
             "configured (displayed to the user), and optionally a question if you need ",
-            "user input to proceed. The plan is the only context the designer sees at ",
-            "execution time — scale it to complexity: a short paragraph for single-agent ",
-            "tasks, structured sections for multi-agent pipelines.",
+            "user input to proceed.",
         )
         .into(),
         input_schema: json!({
             "type": "object",
             "properties": {
-                "plan": {
-                    "type": "string",
-                    "description": "Execution blueprint for the agent designer. Scale to complexity: a short paragraph for 1-agent tasks (no headers), concise sections for 2-3 agents (## Objective + ## Agent Guidance), full structure for 4+ agents (## Objective, ## Requirements, ## Agent-Specific Guidance, ## Technical Context). This is the only context the designer sees — include everything it needs."
-                },
                 "summary": {
                     "type": "string",
                     "description": "What you configured and key decisions made (1-3 sentences). Displayed to the manager/user."
@@ -982,7 +975,7 @@ fn complete_task_tool() -> Tool {
                     "nullable": true
                 }
             },
-            "required": ["plan", "summary"]
+            "required": ["summary"]
         }),
     }
 }

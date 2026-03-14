@@ -210,7 +210,6 @@ impl ExecutionStrategy for DispatchStrategy {
         // Handle complete_task — capture passdown and signal completion
         if name == "complete_task" {
             let passdown = Passdown {
-                plan: input["plan"].as_str().unwrap_or("").to_string(),
                 summary: input["summary"].as_str().unwrap_or("").to_string(),
                 question: input["question"].as_str().map(String::from),
             };

@@ -20,7 +20,6 @@ mod tests {
         let fallback_content = "Some LLM response content";
 
         let result = passdown.unwrap_or_else(|| Passdown {
-            plan: String::new(),
             summary: if fallback_content.is_empty() {
                 "Completed with no response".to_string()
             } else {
@@ -30,7 +29,6 @@ mod tests {
         });
 
         assert_eq!(result.summary, "Some LLM response content");
-        assert!(result.plan.is_empty());
         assert!(result.question.is_none());
     }
 
@@ -40,7 +38,6 @@ mod tests {
         let fallback_content = "";
 
         let result = passdown.unwrap_or_else(|| Passdown {
-            plan: String::new(),
             summary: if fallback_content.is_empty() {
                 "Completed with no response".to_string()
             } else {
@@ -56,7 +53,6 @@ mod tests {
     fn passdown_json_persistence_format() {
         // Verifies the passdown serializes correctly for agent_execution output
         let passdown = Passdown {
-            plan: "## Objective\nScan repos".to_string(),
             summary: "Configured 3-agent pipeline".to_string(),
             question: Some("Which repos?".to_string()),
         };
@@ -64,7 +60,6 @@ mod tests {
         let json = serde_json::to_string(&passdown).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(parsed["plan"], "## Objective\nScan repos");
         assert_eq!(parsed["summary"], "Configured 3-agent pipeline");
         assert_eq!(parsed["question"], "Which repos?");
     }

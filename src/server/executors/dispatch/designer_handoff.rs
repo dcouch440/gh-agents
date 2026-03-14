@@ -69,13 +69,6 @@ pub async fn run_designer_after_builder(
         }
     };
 
-    let plan = repos
-        .workflows
-        .get_plan(step_id)
-        .await
-        .unwrap_or_default()
-        .unwrap_or_default();
-
     tracing::info!(
         step_id = %step_id,
         agents = roster.len(),
@@ -132,19 +125,19 @@ pub async fn run_designer_after_builder(
         .map(|s| s.prompt_template)
         .unwrap_or_default();
 
-    let strategy = ReactDesignerStrategy::new(ReactDesignerConfig {
+    let mut strategy = ReactDesignerStrategy::new(ReactDesignerConfig {
         state: state.clone(),
         step_id,
         workflow_id,
         roster: roster.clone(),
         session_id: Some(designer_session_id),
-        plan,
         builder_action: format!("Configured {}-agent roster", roster.len()),
         agent_execution_id: designer_ae_id,
         upstream_topology,
         node_text,
         dispatch_instruction: dispatch_instruction.to_string(),
     });
+    strategy.init_roster_status().await;
 
     let designer_cfg = DESIGNER.agent("react_designer");
     let filter_ctx = FilterContext::new(&designer_cfg.model_id, step_id);

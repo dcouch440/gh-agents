@@ -12,10 +12,6 @@
 {{.ReactDesigner.upstream_topology}}
 </upstream_topology>
 
-<plan>
-{{.ReactDesigner.plan}}
-</plan>
-
 <roster>
 {{.ReactDesigner.roster}}
 </roster>
