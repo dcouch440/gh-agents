@@ -192,6 +192,7 @@ async fn assemble_node(
         asking: None, // populated by caller from step_question_state
         receives,
         initial_instructions_sent: false, // populated by caller for L1/L2
+        node_text: step.prompt_template.clone(),
     })
 }
 
@@ -260,6 +261,7 @@ async fn load_agents(
                 id: a.id,
                 name: a.name.clone(),
                 role_description: a.role_description.clone(),
+                design_status: Default::default(),
                 capabilities: a.capabilities.clone(),
                 receives_from,
             }

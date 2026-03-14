@@ -31,17 +31,15 @@ pub struct ReactDesignerConfig {
     pub workflow_id: Uuid,
     pub roster: Vec<TaskAgentRosterRow>,
     pub session_id: Option<Uuid>,
-    pub builder_action: String,
     pub agent_execution_id: Option<Uuid>,
-    /// Compact upstream/downstream topology description so the designer
-    /// understands what data flows into this step and what downstream expects.
+    /// Pre-rendered `<board_state>` XML enriched with design status.
+    pub board_state_xml: String,
+    /// Compact upstream/downstream topology description.
     pub upstream_topology: String,
-    /// The user's raw board text for this node — the source of truth for
-    /// what this node should do, independent of the builder's interpretation.
-    pub node_text: String,
     /// The original dispatch instruction (changeset message) the builder received.
-    /// Lets the designer see the exact same trigger context as the builder.
     pub dispatch_instruction: String,
+    /// Agent names changed by the builder (for `rebuild_system_prompt` enrichment).
+    pub changed_agents: Vec<String>,
 }
 
 /// Multi-turn ReAct designer strategy.
@@ -60,6 +58,8 @@ pub struct ReactDesignerStrategy {
     completed: Mutex<bool>,
     design_summary: Mutex<Option<String>>,
     designed_count: Mutex<usize>,
+    /// Agent names changed by the builder (for rebuild_system_prompt enrichment).
+    changed_agents: Vec<String>,
     /// Cached config values to avoid returning references to temporaries.
     cached_model_id: String,
     cached_max_rounds: u32,
@@ -71,38 +71,28 @@ impl ReactDesignerStrategy {
     /// Build a new ReactDesignerStrategy.
     pub fn new(config: ReactDesignerConfig) -> Self {
         let agent_cfg = DESIGNER.agent("react_designer");
-        let roster_status = build_roster_status_sync(&config.roster);
-        // Build initial system prompt with roster status
-        let mut vars = HashMap::new();
-        vars.insert(
+
+        // Build system prompt with enriched board_state
+        let mut sys_vars = HashMap::new();
+        sys_vars.insert(
             vars::react_designer::NODE_NAME.to_string(),
             format!("step:{}", config.step_id),
         );
-        vars.insert(
-            vars::react_designer::ROSTER_STATUS.to_string(),
-            roster_status,
+        sys_vars.insert(
+            vars::system::BOARD_STATE.to_string(),
+            config.board_state_xml,
         );
-        let system_prompt = resolve_template(roles::REACT_DESIGNER.system, &vars);
+        let system_prompt = resolve_template(roles::REACT_DESIGNER.system, &sys_vars);
 
-        // Build instruction from plan + roster + builder_action
-        let roster_text = format_roster_for_prompt(&config.roster);
+        // Build instruction (user message)
         let mut inst_vars = HashMap::new();
         inst_vars.insert(
             vars::react_designer::PRIOR_DESIGN.to_string(),
             String::new(), // Filled in build_messages from session history
         );
-        inst_vars.insert(vars::react_designer::ROSTER.to_string(), roster_text);
-        inst_vars.insert(
-            vars::react_designer::BUILDER_ACTION.to_string(),
-            config.builder_action,
-        );
         inst_vars.insert(
             vars::react_designer::UPSTREAM_TOPOLOGY.to_string(),
             config.upstream_topology,
-        );
-        inst_vars.insert(
-            vars::react_designer::NODE_TEXT.to_string(),
-            config.node_text,
         );
         inst_vars.insert(
             vars::react_designer::DISPATCH_INSTRUCTION.to_string(),
@@ -122,6 +112,7 @@ impl ReactDesignerStrategy {
             completed: Mutex::new(false),
             design_summary: Mutex::new(None),
             designed_count: Mutex::new(0),
+            changed_agents: config.changed_agents,
             cached_model_id: agent_cfg.model_id.clone(),
             cached_max_rounds: agent_cfg.max_rounds,
             cached_context_budget: agent_cfg.context_budget,
@@ -137,24 +128,6 @@ impl ReactDesignerStrategy {
     /// Get the resolved instruction (user message) for debug output.
     pub fn instruction(&self) -> &str {
         &self.instruction
-    }
-
-    /// Re-build roster status from the store and update the system prompt.
-    ///
-    /// Called after construction so the initial system prompt reflects which
-    /// agents already have configs (from prior designer runs).
-    pub async fn init_roster_status(&mut self) {
-        let roster_status = self.build_roster_status().await;
-        let mut vars = HashMap::new();
-        vars.insert(
-            vars::react_designer::NODE_NAME.to_string(),
-            format!("step:{}", self.step_id),
-        );
-        vars.insert(
-            vars::react_designer::ROSTER_STATUS.to_string(),
-            roster_status,
-        );
-        self.system_prompt = resolve_template(roles::REACT_DESIGNER.system, &vars);
     }
 
     /// Auto-scope a designer path by prefixing with `design/{step_id}/`.
@@ -265,16 +238,40 @@ impl ExecutionStrategy for ReactDesignerStrategy {
     }
 
     async fn rebuild_system_prompt(&self) -> Result<Option<String>, HubError> {
-        let roster_status = self.build_roster_status().await;
+        // Rebuild enriched board_state from current store state
+        let repos = self.state.repos();
+        let board_state_xml = match crate::server::hub::board_state::build_snapshot(
+            repos.workflows.as_ref(),
+            None,
+            crate::server::hub::board_state::BoardStateVariant::Dispatch,
+            self.workflow_id,
+            self.step_id,
+        )
+        .await
+        {
+            Ok(mut snapshot) => {
+                crate::server::hub::board_state::enrich_design_status(
+                    &mut snapshot,
+                    repos.system_files.as_ref(),
+                    self.step_id,
+                    self.workflow_id,
+                    &self.changed_agents,
+                )
+                .await;
+                crate::server::hub::board_state::render(
+                    &snapshot,
+                    crate::server::hub::board_state::BoardStateVariant::Dispatch,
+                )
+            }
+            Err(_) => String::new(),
+        };
+
         let mut vars = HashMap::new();
         vars.insert(
             vars::react_designer::NODE_NAME.to_string(),
             format!("step:{}", self.step_id),
         );
-        vars.insert(
-            vars::react_designer::ROSTER_STATUS.to_string(),
-            roster_status,
-        );
+        vars.insert(vars::system::BOARD_STATE.to_string(), board_state_xml);
         Ok(Some(resolve_template(roles::REACT_DESIGNER.system, &vars)))
     }
 
@@ -424,77 +421,4 @@ impl ExecutionStrategy for ReactDesignerStrategy {
         .await;
         Ok(())
     }
-}
-
-impl ReactDesignerStrategy {
-    /// Build roster status by checking which agents have configs in the store.
-    async fn build_roster_status(&self) -> String {
-        if self.state.s3().is_none() {
-            return build_roster_status_sync(&self.roster);
-        }
-        let repo = self.state.repos().system_files.as_ref();
-        let prefix = format!("design/{}/agents/", self.step_id);
-
-        let files = system_store::list_files(repo, self.workflow_id, &prefix)
-            .await
-            .unwrap_or_default();
-
-        let file_map: HashMap<String, i32> = files
-            .iter()
-            .filter_map(|f| {
-                let filename = f.path.rsplit('/').next()?;
-                let raw_slug = filename.strip_suffix(".json")?;
-                // Normalize to match agent_name_to_slug (case-insensitive)
-                let slug = crate::server::hub::dag::agent_designer::normalize_agent_name(raw_slug);
-                Some((slug, f.version))
-            })
-            .collect();
-
-        let mut status = String::from("<roster_status>\n");
-        let mut designed = 0;
-        let total = self.roster.len();
-
-        for agent in &self.roster {
-            let slug = crate::server::hub::dag::agent_designer::agent_name_to_slug(&agent.name);
-            if let Some(version) = file_map.get(&slug) {
-                status.push_str(&format!("  ✓ {} — designed (v{})\n", agent.name, version));
-                designed += 1;
-            } else {
-                status.push_str(&format!("  · {} — pending\n", agent.name));
-            }
-        }
-
-        status.push_str(&format!("\n  Designed: {}/{}\n", designed, total));
-        status.push_str("</roster_status>");
-        status
-    }
-}
-
-/// Build a synchronous roster status (all pending — used before first round).
-fn build_roster_status_sync(roster: &[TaskAgentRosterRow]) -> String {
-    let mut status = String::from("<roster_status>\n");
-    for agent in roster {
-        status.push_str(&format!("  · {} — pending\n", agent.name));
-    }
-    status.push_str(&format!("\n  Designed: 0/{}\n", roster.len()));
-    status.push_str("</roster_status>");
-    status
-}
-
-/// Format roster entries for the designer's instruction prompt.
-fn format_roster_for_prompt(roster: &[TaskAgentRosterRow]) -> String {
-    let mut out = String::new();
-    for agent in roster {
-        out.push_str(&agent.name);
-        out.push('\n');
-        out.push_str(&format!("  role: \"{}\"\n", agent.role_description));
-        if !agent.capabilities.is_empty() {
-            out.push_str(&format!(
-                "  capabilities: [{}]\n",
-                agent.capabilities.join(", ")
-            ));
-        }
-        out.push('\n');
-    }
-    out
 }

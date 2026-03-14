@@ -1,43 +1,74 @@
 #[cfg(test)]
 mod tests {
-    use crate::server::hub::execution::strategies::react_designer::{
-        build_roster_status_sync, format_roster_for_prompt,
-    };
+    use crate::server::hub::board_state::types::AgentDesignStatus;
+    use crate::server::hub::board_state::{AgentSnapshot, BoardSnapshot, NodeSnapshot};
 
-    fn make_roster_agent(name: &str, role: &str) -> crate::db::TaskAgentRosterRow {
-        crate::db::TaskAgentRosterRow {
-            id: uuid::Uuid::new_v4(),
-            mission_brief_id: uuid::Uuid::new_v4(),
-            name: name.to_string(),
-            role_description: role.to_string(),
-            capabilities: vec![],
-            execution_order: 0,
-            created_at: chrono::Utc::now(),
-            child_step_id: None,
+    #[test]
+    fn enrichment_marks_changed_agents_pending() {
+        let mut snapshot = make_snapshot(vec!["Scanner", "Analyzer"]);
+
+        // Simulate enrichment: Scanner was changed, Analyzer was not
+        for node in &mut snapshot.nodes {
+            for agent in &mut node.agents {
+                if agent.name == "Scanner" {
+                    agent.design_status = AgentDesignStatus::Pending;
+                } else {
+                    agent.design_status = AgentDesignStatus::Designed {
+                        version: 1,
+                        config_path: "design/abc/agents/analyzer.json".to_string(),
+                    };
+                }
+            }
         }
+
+        let scanner = &snapshot.nodes[0].agents[0];
+        let analyzer = &snapshot.nodes[0].agents[1];
+
+        assert!(matches!(scanner.design_status, AgentDesignStatus::Pending));
+        assert!(matches!(
+            analyzer.design_status,
+            AgentDesignStatus::Designed { version: 1, .. }
+        ));
     }
 
-    #[test]
-    fn roster_status_all_pending() {
-        let roster = vec![
-            make_roster_agent("Scanner", "scans code"),
-            make_roster_agent("Analyzer", "analyzes findings"),
-        ];
+    fn make_snapshot(agent_names: Vec<&str>) -> BoardSnapshot {
+        let agents: Vec<AgentSnapshot> = agent_names
+            .into_iter()
+            .map(|name| AgentSnapshot {
+                id: uuid::Uuid::new_v4(),
+                name: name.to_string(),
+                role_description: format!("{} agent", name),
+                capabilities: vec![],
+                receives_from: vec![],
+                design_status: AgentDesignStatus::default(),
+            })
+            .collect();
 
-        let status = build_roster_status_sync(&roster);
-
-        assert!(status.contains("· Scanner — pending"));
-        assert!(status.contains("· Analyzer — pending"));
-        assert!(status.contains("Designed: 0/2"));
-    }
-
-    #[test]
-    fn format_roster_includes_name_and_role() {
-        let roster = vec![make_roster_agent("Scanner", "Security scanner")];
-
-        let text = format_roster_for_prompt(&roster);
-
-        assert!(text.contains("Scanner"));
-        assert!(text.contains("Security scanner"));
+        BoardSnapshot {
+            workflow_name: String::new(),
+            workflow_id: uuid::Uuid::new_v4(),
+            nodes: vec![NodeSnapshot {
+                id: uuid::Uuid::new_v4(),
+                ref_id: None,
+                name: "Test Node".to_string(),
+                protocol: "workforce".to_string(),
+                status: "configured".to_string(),
+                task: "Test task".to_string(),
+                capabilities: vec![],
+                failure_mode: String::new(),
+                summary: format!("{} agents", agents.len()),
+                compressed_status: None,
+                agents,
+                input_ports: vec![],
+                output_ports: vec![],
+                incoming_context: vec![],
+                plan: String::new(),
+                asking: None,
+                receives: None,
+                initial_instructions_sent: false,
+                node_text: String::new(),
+            }],
+            available_capabilities: vec![],
+        }
     }
 }

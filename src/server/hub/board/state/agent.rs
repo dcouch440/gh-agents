@@ -4,7 +4,7 @@
 //! L3 uses flat attributes with text content; L4 uses child elements.
 //! L1/L2 don't render individual agents (they're a summary attribute on `<node>`).
 
-use super::types::*;
+use super::types::{AgentDesignStatus, AgentSnapshot, BoardStateVariant};
 use crate::markup::XmlBuilder;
 
 /// Render an [`AgentSnapshot`] as an `<agent>` XML element.
@@ -17,6 +17,23 @@ pub fn render_agent(agent: &AgentSnapshot, variant: BoardStateVariant, indent: u
 
     el.attr("name", &agent.name);
     el.attr_if(variant.include_agent_ids(), "id", &agent.id.to_string());
+
+    // Design status (L4 only, when enriched)
+    if variant.include_agent_ids() {
+        match &agent.design_status {
+            AgentDesignStatus::Pending => {
+                el.attr("design_status", "pending");
+            }
+            AgentDesignStatus::Designed {
+                version,
+                config_path,
+            } => {
+                el.attr("design_status", &format!("designed (v{})", version));
+                el.attr("config_path", config_path);
+            }
+            AgentDesignStatus::Unknown => {} // builder path — not enriched
+        }
+    }
 
     if variant.include_agent_ids() {
         // L4: structured child elements

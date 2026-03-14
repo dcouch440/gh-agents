@@ -171,12 +171,8 @@ pub mod vars {
     /// Template variables for the ReAct designer prompts.
     pub mod react_designer {
         pub const NODE_NAME: &str = "ReactDesigner.node_name";
-        pub const ROSTER_STATUS: &str = "ReactDesigner.roster_status";
         pub const PRIOR_DESIGN: &str = "ReactDesigner.prior_design";
-        pub const ROSTER: &str = "ReactDesigner.roster";
-        pub const BUILDER_ACTION: &str = "ReactDesigner.builder_action";
         pub const UPSTREAM_TOPOLOGY: &str = "ReactDesigner.upstream_topology";
-        pub const NODE_TEXT: &str = "ReactDesigner.node_text";
         pub const DISPATCH_INSTRUCTION: &str = "ReactDesigner.dispatch_instruction";
     }
 

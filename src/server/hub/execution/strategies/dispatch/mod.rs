@@ -43,6 +43,8 @@ pub struct DispatchStrategy {
     passdown: Mutex<Option<Passdown>>,
     /// Agent execution ID for debug stream events.
     agent_execution_id: Option<Uuid>,
+    /// Agent names changed by `configure_team` (status "created" or "updated").
+    changed_agents: Mutex<Vec<String>>,
 }
 
 impl DispatchStrategy {
@@ -114,12 +116,22 @@ impl DispatchStrategy {
             session_id,
             passdown: Mutex::new(None),
             agent_execution_id: None,
+            changed_agents: Mutex::new(Vec::new()),
         })
     }
 
     /// Set the agent execution ID (created after strategy construction).
     pub fn set_agent_execution_id(&mut self, id: Option<Uuid>) {
         self.agent_execution_id = id;
+    }
+
+    /// Take the list of agents changed by `configure_team` (created or updated).
+    pub fn take_changed_agents(&self) -> Vec<String> {
+        self.changed_agents
+            .lock()
+            .ok()
+            .map(|mut v| std::mem::take(&mut *v))
+            .unwrap_or_default()
     }
 
     /// Take the captured passdown, if any.
@@ -262,6 +274,22 @@ impl ExecutionStrategy for DispatchStrategy {
             )
             .await
         };
+
+        // Capture changed agents from configure_team results
+        if name == "configure_team" {
+            if let Some(agents) = result["agents"].as_array() {
+                let changed: Vec<String> = agents
+                    .iter()
+                    .filter(|a| matches!(a["status"].as_str(), Some("created" | "updated")))
+                    .filter_map(|a| a["name"].as_str().map(String::from))
+                    .collect();
+                if !changed.is_empty() {
+                    if let Ok(mut guard) = self.changed_agents.lock() {
+                        *guard = changed;
+                    }
+                }
+            }
+        }
 
         // Broadcast workflow event so the frontend updates live
         self.broadcast_tool_event(name, input, &result);

@@ -17,6 +17,7 @@ mod tests {
             role_description: desc.to_string(),
             capabilities: caps.iter().map(|s| s.to_string()).collect(),
             receives_from: receives.iter().map(|s| s.to_string()).collect(),
+            design_status: AgentDesignStatus::default(),
         }
     }
 
@@ -49,6 +50,7 @@ mod tests {
             asking: None,
             receives: None,
             initial_instructions_sent: false,
+            node_text: String::new(),
         }
     }
 
@@ -381,6 +383,94 @@ mod tests {
         let xml = render::render(&snapshot, BoardStateVariant::NodeAssistant);
 
         assert!(!xml.contains("initial_instructions"));
+    }
+
+    // ========================================================================
+    // Design Status & Node Text
+    // ========================================================================
+
+    #[test]
+    fn render_l4_node_text() {
+        let mut node = make_node(
+            "Story Writer",
+            vec![make_agent("Writer", &[], &[], "Writes stories")],
+        );
+        node.node_text = "Write a story about weather in Portland.".to_string();
+
+        let snapshot = make_own_node_snapshot(node);
+        let xml = render::render(&snapshot, BoardStateVariant::Dispatch);
+
+        assert!(xml.contains("<node_text>Write a story about weather in Portland.</node_text>"));
+    }
+
+    #[test]
+    fn render_l4_node_text_empty_omitted() {
+        let node = make_node("Minimal", vec![make_agent("Worker", &[], &[], "Works")]);
+        let snapshot = make_own_node_snapshot(node);
+        let xml = render::render(&snapshot, BoardStateVariant::Dispatch);
+
+        assert!(!xml.contains("<node_text>"));
+    }
+
+    #[test]
+    fn render_l3_omits_node_text() {
+        let mut node = make_node("Worker", vec![make_agent("Agent", &[], &[], "Works")]);
+        node.node_text = "Some canvas text".to_string();
+
+        let snapshot = make_own_node_snapshot(node);
+        let xml = render::render(&snapshot, BoardStateVariant::NodeAssistant);
+
+        assert!(!xml.contains("<node_text>"));
+    }
+
+    #[test]
+    fn render_l4_design_status_pending() {
+        let mut agent = make_agent("Scanner", &[], &[], "Scans code");
+        agent.design_status = AgentDesignStatus::Pending;
+
+        let node = make_node("Security", vec![agent]);
+        let snapshot = make_own_node_snapshot(node);
+        let xml = render::render(&snapshot, BoardStateVariant::Dispatch);
+
+        assert!(xml.contains("design_status=\"pending\""));
+        assert!(!xml.contains("config_path"));
+    }
+
+    #[test]
+    fn render_l4_design_status_designed() {
+        let mut agent = make_agent("Scanner", &[], &[], "Scans code");
+        agent.design_status = AgentDesignStatus::Designed {
+            version: 2,
+            config_path: "design/abc/agents/scanner.json".to_string(),
+        };
+
+        let node = make_node("Security", vec![agent]);
+        let snapshot = make_own_node_snapshot(node);
+        let xml = render::render(&snapshot, BoardStateVariant::Dispatch);
+
+        assert!(xml.contains("design_status=\"designed (v2)\""));
+        assert!(xml.contains("config_path=\"design/abc/agents/scanner.json\""));
+    }
+
+    #[test]
+    fn render_l4_design_status_unknown_omitted() {
+        let agent = make_agent("Scanner", &[], &[], "Scans code");
+        // default is Unknown
+
+        let node = make_node("Security", vec![agent]);
+        let snapshot = make_own_node_snapshot(node);
+        let xml = render::render(&snapshot, BoardStateVariant::Dispatch);
+
+        assert!(!xml.contains("design_status"));
+        assert!(!xml.contains("config_path"));
+    }
+
+    #[test]
+    fn render_l4_include_node_text_flag() {
+        assert!(BoardStateVariant::Dispatch.include_node_text());
+        assert!(!BoardStateVariant::NodeAssistant.include_node_text());
+        assert!(!BoardStateVariant::ManagerBuilder.include_node_text());
+        assert!(!BoardStateVariant::ManagerAssistant.include_node_text());
     }
 
     // ========================================================================

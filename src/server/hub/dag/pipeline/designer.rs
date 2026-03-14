@@ -416,19 +416,48 @@ async fn run_react_designer(
     )
     .await;
 
-    let mut strategy = ReactDesignerStrategy::new(ReactDesignerConfig {
+    // Build enriched board_state with design status (no changed_agents — pipeline path)
+    let board_state_xml = match crate::server::hub::board_state::build_snapshot(
+        dag.state.repos().workflows.as_ref(),
+        None,
+        crate::server::hub::board_state::BoardStateVariant::Dispatch,
+        ctx.step.workflow_id,
+        ctx.step.id,
+    )
+    .await
+    {
+        Ok(mut snapshot) => {
+            crate::server::hub::board_state::enrich_design_status(
+                &mut snapshot,
+                dag.state.repos().system_files.as_ref(),
+                ctx.step.id,
+                ctx.step.workflow_id,
+                &[], // no builder changeset in pipeline path
+            )
+            .await;
+            crate::server::hub::board_state::render(
+                &snapshot,
+                crate::server::hub::board_state::BoardStateVariant::Dispatch,
+            )
+        }
+        Err(e) => {
+            warn!(step_id = %ctx.step.id, error = %e, "Failed to build board state for designer");
+            String::new()
+        }
+    };
+
+    let strategy = ReactDesignerStrategy::new(ReactDesignerConfig {
         state: dag.state.clone(),
         step_id: ctx.step.id,
         workflow_id: ctx.step.workflow_id,
         roster: ctx.roster.clone(),
         session_id: Some(designer_session_id),
-        builder_action: format!("Configured {}-agent roster", ctx.roster.len()),
         agent_execution_id: designer_ae_id,
+        board_state_xml,
         upstream_topology,
-        node_text: ctx.step.prompt_template.clone(),
         dispatch_instruction: ctx.brief.task_description.clone(),
+        changed_agents: vec![], // no builder changeset in pipeline path
     });
-    strategy.init_roster_status().await;
 
     let filter_ctx = FilterContext::new(&designer_cfg.model_id, ctx.step.id);
     let recorder = ExecutionRecorder::new(
@@ -448,7 +477,13 @@ async fn run_react_designer(
         .engine
         .clone_with_provider()
         .with_filter_context(filter_ctx)
-        .execute(&strategy, strategy.instruction(), &NullSink, &recorder, dag.cancel)
+        .execute(
+            &strategy,
+            strategy.instruction(),
+            &NullSink,
+            &recorder,
+            dag.cancel,
+        )
         .await?;
 
     let cost = crate::server::hub::pricing::compute_cost(
