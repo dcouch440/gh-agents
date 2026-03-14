@@ -358,7 +358,7 @@ const linearizeComponent = (
     if (fwd) {
       for (let j = 0; j < fwd.length; j++) {
         const child = fwd[j]!
-        if (scope.has(child) && child !== stopBefore && !emitted.has(child)) {
+        if (scope.has(child) && child !== stopBefore && child !== mergeNode && !emitted.has(child)) {
           scopedChildren.push(child)
         }
       }
