@@ -122,4 +122,91 @@ const buildDispatchExport = (): Record<string, PhaseExport> => {
   return result
 }
 
-export { buildDispatchExport }
+// ── Run export ──────────────────────────────────────────────────────────────
+
+import { agentTraceStore } from '@/stores/agentTraceStore'
+import type { AgentTrace, AgentTraceEvent } from '@/stores/agentTraceStore'
+
+type AgentExport = {
+  agent: string
+  system_prompt: string
+  messages: string[]
+  tools: ToolExport[]
+}
+
+const structureAgentTrace = (trace: AgentTrace): AgentExport => {
+  const messages: string[] = []
+  const tools: ToolExport[] = []
+  const pendingTools = new Map<string, ToolExport>()
+  let systemPrompt = ''
+
+  for (const e of trace.events) {
+    switch (e.type) {
+      case 'system_prompt':
+        if (systemPrompt.length === 0) systemPrompt = e.content
+        break
+      case 'user_message':
+        messages.push(e.content)
+        break
+      case 'assistant_message':
+        messages.push(e.content)
+        break
+      case 'tool_call': {
+        const tool: ToolExport = { name: e.toolName, input: e.input, result: null }
+        pendingTools.set(e.toolId, tool)
+        tools.push(tool)
+        break
+      }
+      case 'tool_result': {
+        const pending = pendingTools.get(e.toolId)
+        if (pending) pending.result = e.result
+        break
+      }
+    }
+  }
+
+  return {
+    agent: trace.agentName ?? 'unknown',
+    system_prompt: systemPrompt,
+    messages,
+    tools,
+  }
+}
+
+const buildRunExport = (): Record<string, AgentExport[]> => {
+  const { traces, order } = agentTraceStore.store.getState()
+  const steps = workflowStore.store.getState().steps
+  const stepNameMap = Collections.toLookupMap(steps, (s) => s.id, (s) => s.name ?? null)
+
+  // Build a step→name map from dispatch traces (set_node_name tool calls)
+  const dispatchState = dispatchStore.store.getState()
+  const dispatchNameMap = new Map<string, string>()
+  for (const entry of Object.values(dispatchState.byStep)) {
+    const name = extractNodeName(entry.trace)
+    if (name !== null) dispatchNameMap.set(entry.stepId, name)
+  }
+
+  const resolveStepName = (stepId: string): string =>
+    dispatchNameMap.get(stepId)
+    ?? stepNameMap.get(stepId)
+    ?? stepId.slice(0, 8)
+
+  const result: Record<string, AgentExport[]> = {}
+
+  for (const id of order) {
+    const trace = traces[id]
+    if (trace === undefined) continue
+    const stepName = resolveStepName(trace.stepId)
+    const existing = result[stepName]
+    const exported = structureAgentTrace(trace)
+    if (existing !== undefined) {
+      existing.push(exported)
+    } else {
+      result[stepName] = [exported]
+    }
+  }
+
+  return result
+}
+
+export { buildDispatchExport, buildRunExport }

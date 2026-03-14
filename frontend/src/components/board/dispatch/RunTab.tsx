@@ -1,7 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Divider from '@mui/material/Divider'
+import IconButton from '@mui/material/IconButton'
+import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded'
+import CheckRounded from '@mui/icons-material/CheckRounded'
 import { useStore } from '@/stores/lib'
 import { agentTraceStore } from '@/stores/agentTraceStore'
 import type { AgentTrace } from '@/stores/agentTraceStore'
@@ -10,6 +13,7 @@ import { workflowStore } from '@/stores/workflowStore'
 import { Collections } from '@/utils/collections'
 import { ActivityTimeline } from './ActivityTimeline'
 import { AgentTraceCard } from './AgentTraceCard'
+import { buildRunExport } from './exportDispatch'
 
 /**
  * Run tab content — activity timeline + agent execution traces grouped by step.
@@ -19,6 +23,7 @@ function RunTab() {
   const order = useStore(agentTraceStore.store, agentTraceStore.selectOrder)
   const activities = useStore(activityStore.store, activityStore.selectAll)
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
+  const [copied, setCopied] = useState(false)
 
   const stepNameMap = useMemo(
     () => Collections.toLookupMap(steps, (s) => s.id, (s) => s.name ?? s.id.slice(0, 8)),
@@ -45,6 +50,23 @@ function RunTab() {
 
   return (
     <>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', px: 1, py: 0.5 }}>
+        <IconButton
+          size="small"
+          aria-label="Copy run JSON"
+          onClick={() => {
+            const data = buildRunExport()
+            void navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(() => {
+              setCopied(true)
+              setTimeout(() => { setCopied(false) }, 1500)
+            })
+          }}
+        >
+          {copied
+            ? <CheckRounded sx={{ fontSize: 14, color: 'success.main' }} />
+            : <ContentCopyRounded sx={{ fontSize: 14, color: 'text.disabled' }} />}
+        </IconButton>
+      </Box>
       <ActivityTimeline activities={activities} />
       <Divider />
 

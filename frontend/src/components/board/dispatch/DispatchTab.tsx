@@ -1,7 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Divider from '@mui/material/Divider'
+import IconButton from '@mui/material/IconButton'
+import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded'
+import CheckRounded from '@mui/icons-material/CheckRounded'
 import { useStore } from '@/stores/lib'
 import { boardStore } from '@/stores/boardStore'
 import { workflowStore } from '@/stores/workflowStore'
@@ -10,6 +13,7 @@ import { Collections } from '@/utils/collections'
 import { useDispatchPollAll } from '../hooks/useDispatchPollAll'
 import { PhaseZeroSummary } from './PhaseZeroSummary'
 import { DispatchAccordionRow } from './DispatchAccordionRow'
+import { buildDispatchExport } from './exportDispatch'
 
 /**
  * Dispatch tab content — PhaseZeroSummary + accordion rows for each dispatch.
@@ -18,6 +22,7 @@ import { DispatchAccordionRow } from './DispatchAccordionRow'
 function DispatchTab() {
   const lastResponse = useStore(boardStore.store, boardStore.selectLastResponse)
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
+  const [copied, setCopied] = useState(false)
 
   const dispatches = lastResponse?.dispatches ?? []
 
@@ -30,6 +35,23 @@ function DispatchTab() {
 
   return (
     <>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', px: 1, py: 0.5 }}>
+        <IconButton
+          size="small"
+          aria-label="Copy dispatch JSON"
+          onClick={() => {
+            const data = buildDispatchExport()
+            void navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(() => {
+              setCopied(true)
+              setTimeout(() => { setCopied(false) }, 1500)
+            })
+          }}
+        >
+          {copied
+            ? <CheckRounded sx={{ fontSize: 14, color: 'success.main' }} />
+            : <ContentCopyRounded sx={{ fontSize: 14, color: 'text.disabled' }} />}
+        </IconButton>
+      </Box>
       <PhaseZeroSummary />
       <Divider />
       {dispatches.length === 0 ? (
