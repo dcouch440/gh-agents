@@ -19,12 +19,15 @@ type DispatchPhaseSegment = { type: 'phase'; label: string }
 
 type DispatchSystemPromptSegment = { type: 'system_prompt'; content: string; agentName: string | null }
 
+type DispatchUserMessageSegment = { type: 'user_message'; content: string; agentName: string | null }
+
 type DispatchSegment =
   | DispatchTextSegment
   | DispatchToolSegment
   | DispatchErrorSegment
   | DispatchPhaseSegment
   | DispatchSystemPromptSegment
+  | DispatchUserMessageSegment
 
 // ── Builder ──────────────────────────────────────────────────────────────────
 
@@ -84,6 +87,11 @@ const buildDispatchSegments = (trace: DispatchTraceEvent[]): DispatchSegment[] =
         segments.push({ type: 'system_prompt', content: event.content, agentName: event.agentName })
         break
       }
+      case 'user_message': {
+        flushText()
+        segments.push({ type: 'user_message', content: event.content, agentName: event.agentName })
+        break
+      }
     }
   }
 
@@ -92,4 +100,4 @@ const buildDispatchSegments = (trace: DispatchTraceEvent[]): DispatchSegment[] =
 }
 
 export { buildDispatchSegments }
-export type { DispatchSegment, DispatchTextSegment, DispatchToolSegment, DispatchErrorSegment, DispatchPhaseSegment, DispatchSystemPromptSegment }
+export type { DispatchSegment, DispatchTextSegment, DispatchToolSegment, DispatchErrorSegment, DispatchPhaseSegment, DispatchSystemPromptSegment, DispatchUserMessageSegment }

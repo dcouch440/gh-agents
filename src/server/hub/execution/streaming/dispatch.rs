@@ -148,6 +148,27 @@ impl StreamSink for DispatchStreamSink {
         );
     }
 
+    async fn debug_user_message(&self, _ae_id: Uuid, content: &str) {
+        let content = content.to_string();
+        broadcast_dispatch_stream(
+            &self.state,
+            SessionEventKind::DispatchStreamUserMessage {
+                execution_id: self.execution_id,
+                step_id: self.step_id,
+                content: content.clone(),
+                agent_name: None,
+            },
+        );
+        self.state.task_registry().append_trace(
+            self.execution_id,
+            TraceEvent::UserMessage {
+                content,
+                agent_name: None,
+                ts: Utc::now(),
+            },
+        );
+    }
+
     async fn done(&self) {
         // No-op — lifecycle handled by existing DispatchCompleted event
     }

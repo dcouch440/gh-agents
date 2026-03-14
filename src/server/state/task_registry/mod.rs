@@ -61,6 +61,11 @@ pub enum TraceEvent {
         agent_name: Option<String>,
         ts: DateTime<Utc>,
     },
+    UserMessage {
+        content: String,
+        agent_name: Option<String>,
+        ts: DateTime<Utc>,
+    },
 }
 
 /// A single background dispatch task entry.

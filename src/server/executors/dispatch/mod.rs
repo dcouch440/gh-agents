@@ -72,7 +72,7 @@ pub async fn run_dispatch_task(
     }
 
     // Build the strategy
-    let strategy = match DispatchStrategy::new(
+    let mut strategy = match DispatchStrategy::new(
         state.clone(),
         step_id,
         workflow_id,
@@ -153,6 +153,9 @@ pub async fn run_dispatch_task(
             None
         }
     };
+
+    // Link agent execution ID to strategy for debug stream events
+    strategy.set_agent_execution_id(ae_id);
 
     // Run the engine
     let engine = ExecutionEngine::new(provider, state.env().debug_stream);

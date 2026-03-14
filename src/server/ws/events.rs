@@ -601,6 +601,13 @@ pub enum SessionEventKind {
         content: String,
         agent_name: Option<String>,
     },
+    /// User message sent to LLM during dispatch (debug).
+    DispatchStreamUserMessage {
+        execution_id: Uuid,
+        step_id: Uuid,
+        content: String,
+        agent_name: Option<String>,
+    },
 }
 
 impl SessionEvent {
@@ -620,6 +627,7 @@ impl SessionEvent {
             SessionEventKind::DispatchStreamToolEnd { .. } => "dispatch_stream_tool_end",
             SessionEventKind::DispatchStreamError { .. } => "dispatch_stream_error",
             SessionEventKind::DispatchStreamSystemPrompt { .. } => "dispatch_stream_system_prompt",
+            SessionEventKind::DispatchStreamUserMessage { .. } => "dispatch_stream_user_message",
         }
     }
 

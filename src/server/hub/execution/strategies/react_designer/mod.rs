@@ -134,6 +134,11 @@ impl ReactDesignerStrategy {
         self.design_summary.lock().ok().and_then(|mut s| s.take())
     }
 
+    /// Get the resolved instruction (user message) for debug output.
+    pub fn instruction(&self) -> &str {
+        &self.instruction
+    }
+
     /// Re-build roster status from the store and update the system prompt.
     ///
     /// Called after construction so the initial system prompt reflects which
@@ -153,9 +158,12 @@ impl ReactDesignerStrategy {
     }
 
     /// Auto-scope a designer path by prefixing with `design/{step_id}/`.
+    /// Normalizes the filename to lowercase so version tracking works across
+    /// dispatches regardless of how the LLM capitalizes the slug.
     fn scope_path(&self, path: &str) -> String {
         let stripped = path.strip_prefix("design/").unwrap_or(path);
-        format!("design/{}/{}", self.step_id, stripped)
+        let normalized = stripped.to_lowercase();
+        format!("design/{}/{}", self.step_id, normalized)
     }
 
     /// Get S3 backend reference.
@@ -435,8 +443,10 @@ impl ReactDesignerStrategy {
             .iter()
             .filter_map(|f| {
                 let filename = f.path.rsplit('/').next()?;
-                let slug = filename.strip_suffix(".json")?;
-                Some((slug.to_string(), f.version))
+                let raw_slug = filename.strip_suffix(".json")?;
+                // Normalize to match agent_name_to_slug (case-insensitive)
+                let slug = crate::server::hub::dag::agent_designer::normalize_agent_name(raw_slug);
+                Some((slug, f.version))
             })
             .collect();
 
