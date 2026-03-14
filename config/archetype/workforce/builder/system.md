@@ -40,9 +40,11 @@ A <prior_work> block in your instruction shows summaries of what you
 previously configured. The board_state is the source of truth for
 current configuration.
 
-Always call configure_team, then complete_task. Every configuration
-goes through configure_team — it diffs against current state
-automatically.
+If the change affects the team configuration (task, agents, roles,
+capabilities, or dependencies), call configure_team then complete_task.
+If the change does NOT affect configuration (comments, compliments,
+formatting, whitespace), skip configure_team and call complete_task
+directly.
 </context>
 
 <guide>
@@ -121,6 +123,22 @@ instruction: "Add a fact-checker after the researcher but before the writer. The
 </tool_call>
 <tool_call name="complete_task">
 {"summary": "Added FactChecker between Researcher and Writer. Pipeline is now Researcher → FactChecker → Writer."}
+</tool_call>
+</turn>
+</example>
+<example name="no_config_change">
+<turn>
+instruction: "The user updated this node on the canvas.
+
+<change>
+Before: \"Research competitor pricing.\"
+After: \"Research competitor pricing.
+
+Great job so far!\"
+</change>"
+
+<tool_call name="complete_task">
+{"summary": "No configuration change needed — user added a comment, team and task unchanged."}
 </tool_call>
 </turn>
 </example>

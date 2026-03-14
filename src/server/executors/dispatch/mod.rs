@@ -215,6 +215,7 @@ pub async fn run_dispatch_task(
             // (i.e. called complete_task). Designer tool calls stream through the
             // same DispatchStreamSink (same execution_id) so the trace is continuous.
             if has_passdown {
+                let changed_agents = strategy.take_changed_agents();
                 designer_handoff::run_designer_after_builder(
                     &state,
                     step_id,
@@ -222,6 +223,7 @@ pub async fn run_dispatch_task(
                     user_id,
                     execution_id,
                     &instruction,
+                    changed_agents,
                 )
                 .await;
             }

@@ -54,6 +54,16 @@ pub fn render_node(node: &NodeSnapshot, variant: BoardStateVariant) -> String {
 
     el.text(&node.summary);
 
+    // ── Node text (L4 — raw canvas text) ─────────────────────────────────
+
+    if variant.include_node_text() && !node.node_text.is_empty() {
+        el.raw(
+            &XmlBuilder::new("node_text", indent + 1)
+                .text(&node.node_text)
+                .build(),
+        );
+    }
+
     // ── Compressed status (L1/L2) ───────────────────────────────────────
 
     if variant.include_compressed_status() {

@@ -30,34 +30,36 @@ use uuid::Uuid;
 use crate::db::traits::{SessionRepo, WorkflowRepo};
 
 mod agent;
+pub mod enrich;
 mod fetch;
 mod node;
 mod port;
 mod render;
 pub mod types;
 
+pub use enrich::enrich_design_status;
+pub use render::render;
 pub use types::{
-    AgentSnapshot, BoardSnapshot, BoardStateVariant, IncomingContextSnapshot, InputPortSnapshot,
-    NodeSnapshot, OutputPortSnapshot, Scope,
+    AgentDesignStatus, AgentSnapshot, BoardSnapshot, BoardStateVariant, IncomingContextSnapshot,
+    InputPortSnapshot, NodeSnapshot, OutputPortSnapshot, Scope,
 };
 
 mod tests;
 
-/// Build `<board_state>` XML for the given variant.
+/// Build a [`BoardSnapshot`] without rendering.
 ///
 /// For `OwnNode` scope (L3/L4), fetches the single step and its detail.
 /// For `AllNodes` scope (L1/L2), bulk-loads all visible steps in the workflow.
 ///
-/// When `sessions` is provided and the variant includes initial_instructions,
-/// batch-checks which nodes have received initial instructions and sets the
-/// `initial_instructions_sent` flag on the corresponding `NodeSnapshot`s.
-pub async fn build(
+/// The returned snapshot can be enriched (e.g. with design status) before
+/// rendering via [`render`].
+pub async fn build_snapshot(
     repo: &dyn WorkflowRepo,
     sessions: Option<&dyn SessionRepo>,
     variant: BoardStateVariant,
     workflow_id: Uuid,
     step_id: Uuid,
-) -> Result<String> {
+) -> Result<BoardSnapshot> {
     let mut snapshot = match variant.scope() {
         Scope::OwnNode => {
             let node = fetch::fetch_node(repo, workflow_id, step_id).await?;
@@ -85,5 +87,19 @@ pub async fn build(
         }
     }
 
-    Ok(render::render(&snapshot, variant))
+    Ok(snapshot)
+}
+
+/// Build `<board_state>` XML for the given variant (convenience wrapper).
+///
+/// Calls [`build_snapshot`] then [`render`].
+pub async fn build(
+    repo: &dyn WorkflowRepo,
+    sessions: Option<&dyn SessionRepo>,
+    variant: BoardStateVariant,
+    workflow_id: Uuid,
+    step_id: Uuid,
+) -> Result<String> {
+    let snapshot = build_snapshot(repo, sessions, variant, workflow_id, step_id).await?;
+    Ok(render(&snapshot, variant))
 }

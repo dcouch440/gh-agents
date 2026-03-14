@@ -36,6 +36,7 @@ pub async fn run_designer_after_builder(
     user_id: UserId,
     execution_id: Uuid,
     dispatch_instruction: &str,
+    changed_agents: Vec<String>,
 ) {
     // Gate: S3 must be available
     let Some(_s3) = state.s3() else {
@@ -114,30 +115,48 @@ pub async fn run_designer_after_builder(
         crate::server::services::dispatch::build_upstream_topology(state, step_id, workflow_id)
             .await;
 
-    // Fetch the user's raw board text so the designer sees the same source of truth
-    // as the builder — not just the builder's interpretation.
-    let node_text = repos
-        .workflows
-        .get_step(step_id)
-        .await
-        .ok()
-        .flatten()
-        .map(|s| s.prompt_template)
-        .unwrap_or_default();
+    // Build enriched board_state with design status
+    let board_state_xml = match crate::server::hub::board_state::build_snapshot(
+        repos.workflows.as_ref(),
+        None,
+        crate::server::hub::board_state::BoardStateVariant::Dispatch,
+        workflow_id,
+        step_id,
+    )
+    .await
+    {
+        Ok(mut snapshot) => {
+            crate::server::hub::board_state::enrich_design_status(
+                &mut snapshot,
+                repos.system_files.as_ref(),
+                step_id,
+                workflow_id,
+                &changed_agents,
+            )
+            .await;
+            crate::server::hub::board_state::render(
+                &snapshot,
+                crate::server::hub::board_state::BoardStateVariant::Dispatch,
+            )
+        }
+        Err(e) => {
+            tracing::warn!(step_id = %step_id, error = %e, "Failed to build board state for designer");
+            String::new()
+        }
+    };
 
-    let mut strategy = ReactDesignerStrategy::new(ReactDesignerConfig {
+    let strategy = ReactDesignerStrategy::new(ReactDesignerConfig {
         state: state.clone(),
         step_id,
         workflow_id,
         roster: roster.clone(),
         session_id: Some(designer_session_id),
-        builder_action: format!("Configured {}-agent roster", roster.len()),
         agent_execution_id: designer_ae_id,
+        board_state_xml,
         upstream_topology,
-        node_text,
         dispatch_instruction: dispatch_instruction.to_string(),
+        changed_agents,
     });
-    strategy.init_roster_status().await;
 
     let designer_cfg = DESIGNER.agent("react_designer");
     let filter_ctx = FilterContext::new(&designer_cfg.model_id, step_id);

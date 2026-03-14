@@ -106,6 +106,11 @@ impl BoardStateVariant {
         matches!(self, Self::Dispatch)
     }
 
+    /// Whether `<node_text>` (raw canvas text) is rendered as a child element (L4 only).
+    pub fn include_node_text(&self) -> bool {
+        matches!(self, Self::Dispatch)
+    }
+
     /// Whether the `initial_instructions` attribute is rendered on nodes.
     pub fn include_initial_instructions(&self) -> bool {
         matches!(self, Self::ManagerAssistant | Self::ManagerBuilder)
@@ -155,6 +160,8 @@ pub struct NodeSnapshot {
     /// Whether this node has received initial instructions from a dispatch.
     /// Rendered for L1/L2 variants as `initial_instructions="sent"`.
     pub initial_instructions_sent: bool,
+    /// Raw canvas text (step.prompt_template). Rendered as `<node_text>` for L4.
+    pub node_text: String,
 }
 
 /// Snapshot of an agent in a workforce roster.
@@ -165,6 +172,20 @@ pub struct AgentSnapshot {
     pub role_description: String,
     pub capabilities: Vec<String>,
     pub receives_from: Vec<String>,
+    /// Design status from the system store. Populated by enrichment, not fetch.
+    pub design_status: AgentDesignStatus,
+}
+
+/// Design status for an agent in the roster.
+#[derive(Debug, Clone, Default)]
+pub enum AgentDesignStatus {
+    /// Not enriched — builder path where design info isn't relevant.
+    #[default]
+    Unknown,
+    /// Changed by builder or no config exists — needs (re)design.
+    Pending,
+    /// Has a config in the system store.
+    Designed { version: i32, config_path: String },
 }
 
 /// Snapshot of an incoming context connection (L3 style).
