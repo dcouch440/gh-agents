@@ -77,6 +77,7 @@ export const WORKFLOW_EVENT = {
   FAILED: 'failed',
   RESUMED: 'resumed',
   STEP_CONFIG_UPDATED: 'step_config_updated',
+  STEP_NAME_UPDATED: 'step_name_updated',
   ROSTER_CHANGED: 'roster_changed',
   ROOM_MEMBERS_CHANGED: 'room_members_changed',
   PLAN_UPDATED: 'plan_updated',
@@ -122,6 +123,7 @@ export type WorkflowCompletedData = { workflow_id: string; duration_ms: number |
 export type WorkflowFailedData = { workflow_id: string; error: string }
 export type WorkflowResumedData = { workflow_id: string; step_id: string }
 export type StepConfigUpdatedData = { workflow_id: string; step_id: string }
+export type StepNameUpdatedData = { workflow_id: string; step_id: string; name: string }
 export type RosterChangedData = { workflow_id: string; step_id: string }
 export type RoomMembersChangedData = { workflow_id: string; step_id: string }
 export type PlanUpdatedData = { workflow_id: string; step_id: string; content: string }

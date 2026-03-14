@@ -4,7 +4,9 @@ import { useStore, workflowStore, workflowExecutionStore, sidebarStore } from '@
 import { stepStreamStore } from '@/stores/stepStreamStore'
 import { EmptyState } from '@/components/primitives'
 import { StepTreeRow } from './StepTreeRow'
-import { buildStepTree } from './buildStepTree'
+import { AgentTreeRow } from './AgentTreeRow'
+import { buildStepTree, toAgentSlug } from './buildStepTree'
+import type { SourceStreamStatus } from '@/stores/stepStreamStore'
 
 // ── Output Parsing ──────────────────────────────────────────────────────────
 
@@ -41,6 +43,8 @@ function StepTree() {
   const expandedStepIds = useStore(sidebarStore.store, sidebarStore.selectExpandedStepIds)
   const outputExpandedStepIds = useStore(sidebarStore.store, sidebarStore.selectOutputExpandedStepIds)
   const designStatusByStep = useStore(stepStreamStore.store, stepStreamStore.selectDesignStatusByStep)
+  const sources = useStore(stepStreamStore.store, stepStreamStore.selectAllSources)
+  const expandedAgentKeys = useStore(sidebarStore.store, sidebarStore.selectExpandedAgentKeys)
 
   const entries = useMemo(() => buildStepTree(steps, edges, rosterByStep), [steps, edges, rosterByStep])
 
@@ -58,7 +62,35 @@ function StepTree() {
         }
 
         if (entry.kind === 'agent') {
-          return null
+          const agentSlug = toAgentSlug(entry.agentName)
+          const agentDesignState = designStatusByStep[entry.stepId]
+          const isDesigned = agentDesignState?.designedAgentSlugs.has(agentSlug) === true
+
+          const agentDesignStatus: SourceStreamStatus | null =
+            isDesigned ? 'completed'
+            : agentDesignState?.status === 'running' ? 'idle'
+            : agentDesignState?.status === 'completed' ? 'completed'
+            : null
+
+          const agentSource = sources[entry.agentId]
+          const executionStatus = agentSource?.status ?? null
+          const agentOutput = agentSource?.streamBuffer ?? null
+          const agentKey = `${entry.stepId}:${entry.agentId}`
+
+          return (
+            <AgentTreeRow
+              key={agentKey}
+              agentName={entry.agentName}
+              agentId={entry.agentId}
+              stepId={entry.stepId}
+              gutter={entry.gutter}
+              output={agentOutput}
+              isExpanded={expandedAgentKeys[agentKey] === true}
+              onToggle={() => { sidebarStore.toggleAgent(agentKey) }}
+              designStatus={agentDesignStatus}
+              executionStatus={executionStatus}
+            />
+          )
         }
 
         const stepState = stepStates[entry.step.id]
@@ -79,7 +111,7 @@ function StepTree() {
             onToggle={() => { sidebarStore.toggleStep(entry.step.id) }}
             onToggleOutputExpand={() => { sidebarStore.toggleOutputExpand(entry.step.id) }}
             designStatus={designState?.status ?? null}
-            designProgress={designState !== undefined ? `${String(designState.designedCount)}/${String(designState.totalCount)}` : null}
+            designProgress={designState !== undefined && designState.totalCount > 0 ? `${String(designState.designedCount)}/${String(designState.totalCount)}` : null}
           />
         )
       })}

@@ -103,6 +103,7 @@ function OutputPreview({ output, isOutputExpanded, onToggleOutputExpand, bgColor
 
 function StepTreeRow({
   name,
+  executionMode,
   gutter,
   status,
   output,
@@ -120,7 +121,8 @@ function StepTreeRow({
   const gutterWidth = gutter.length * CELL_WIDTH
 
   const resolved = status ?? 'idle'
-  const hasBody = isExpanded && (resolved === 'running' || output !== null || error !== null)
+  const isWorkforce = executionMode === 'workforce'
+  const hasBody = isExpanded && !isWorkforce && (resolved === 'running' || output !== null || error !== null)
 
   return (
     <Box>

@@ -12,6 +12,27 @@ const SIZE = 6
 function StatusDot({ status, designStatus }: StatusDotProps) {
   const resolved = status ?? 'idle'
 
+  // When execution is running but designer is active, show design status (blue)
+  // instead of generic execution running (yellow) — designer is a sub-phase
+  if (resolved === 'running' && designStatus === 'running') {
+    return (
+      <Box
+        sx={{
+          width: SIZE,
+          height: SIZE,
+          borderRadius: '50%',
+          flexShrink: 0,
+          background: `conic-gradient(#58a6ff 0deg, #58a6ff 180deg, transparent 180deg, transparent 360deg)`,
+          animation: 'statusDotSpin 1s linear infinite',
+          '@keyframes statusDotSpin': {
+            from: { transform: 'rotate(0deg)' },
+            to: { transform: 'rotate(360deg)' },
+          },
+        }}
+      />
+    )
+  }
+
   // Execution status takes precedence when active
   if (resolved === 'running') {
     return (

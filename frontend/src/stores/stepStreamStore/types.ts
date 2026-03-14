@@ -24,6 +24,7 @@ type StepDesignState = {
   designedCount: number
   totalCount: number
   lastAgentName: string | null
+  designedAgentSlugs: ReadonlySet<string>
 }
 
 type StepStreamState = {
