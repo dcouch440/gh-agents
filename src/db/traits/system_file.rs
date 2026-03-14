@@ -15,6 +15,8 @@ pub struct UpsertSystemFileInput {
     pub produced_by: Option<Uuid>,
     pub produced_by_agent: Option<String>,
     pub size_bytes: i64,
+    /// The workflow run that produced this file. NULL for design-time configs.
+    pub workflow_run_id: Option<Uuid>,
 }
 
 /// Database operations for system store file metadata.
@@ -36,10 +38,14 @@ pub trait SystemFileRepo: Send + Sync {
     /// Delete all files whose path starts with the given prefix. Returns count deleted.
     async fn delete_by_prefix(&self, workflow_id: Uuid, prefix: &str) -> Result<u64>;
 
-    /// List all files produced by a specific step.
+    /// List files produced by a specific step, optionally scoped to a run.
+    ///
+    /// When `run_id` is `Some`, only returns files from that run.
+    /// When `None`, returns all files (including design-time configs).
     async fn list_by_producer(
         &self,
         workflow_id: Uuid,
         step_id: Uuid,
+        run_id: Option<Uuid>,
     ) -> Result<Vec<SystemFileRow>>;
 }

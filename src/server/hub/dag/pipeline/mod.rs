@@ -229,6 +229,7 @@ impl Pipeline {
             step.id,
             &upstream_ids,
             dag.steps,
+            Some(dag.ctx.run_id),
         )
         .await;
 

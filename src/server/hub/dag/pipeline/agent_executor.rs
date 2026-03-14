@@ -324,6 +324,7 @@ async fn execute_single_agent(
         workflow_id: Some(env.workflow_id),
         step_id: Some(env.step_id),
         agent_name: Some(designed.agent_name.clone()),
+        workflow_run_id: Some(env.ctx.run_id),
     });
 
     // Execute with live streaming sink

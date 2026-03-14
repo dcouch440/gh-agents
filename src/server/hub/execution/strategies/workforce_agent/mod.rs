@@ -55,6 +55,8 @@ pub struct WorkforceAgentConfig {
     pub step_id: Option<Uuid>,
     /// Agent name for store tool produced_by_agent tracking.
     pub agent_name: Option<String>,
+    /// Workflow run ID for scoping store artifacts to the current execution.
+    pub workflow_run_id: Option<Uuid>,
 }
 
 /// Strategy for executing a single agent within a workforce roster.
@@ -137,6 +139,7 @@ impl ExecutionStrategy for WorkforceAgentStrategy {
                                 wf_id,
                                 self.config.step_id.unwrap_or_default(),
                                 self.config.agent_name.as_deref(),
+                                self.config.workflow_run_id,
                             )
                             .await
                         }

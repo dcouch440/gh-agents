@@ -136,10 +136,11 @@ pub(crate) fn compute_execution_levels(prompts: &[DesignedAgentPrompt]) -> Vec<V
 
 /// Build `<upstream_artifacts>` XML manifest from store metadata.
 ///
-/// Lists files produced by:
-/// - Any agent in the current workforce step (shared workspace)
-/// - Agents in upstream DAG steps (direct edges only)
+/// Lists files scoped to the current run:
+/// - Workforce-local: files from agents in the same step (this run only)
+/// - Upstream DAG: files from upstream connected steps (this run only)
 ///
+/// When `run_id` is `None`, returns all files (no run scoping).
 /// Returns an empty string if no artifacts exist.
 pub(crate) async fn build_upstream_artifacts_block(
     repo: &dyn SystemFileRepo,
@@ -147,6 +148,7 @@ pub(crate) async fn build_upstream_artifacts_block(
     step_id: Uuid,
     upstream_step_ids: &[Uuid],
     steps: &[WorkflowStepRow],
+    run_id: Option<Uuid>,
 ) -> String {
     let step_name_map: HashMap<Uuid, &str> = steps
         .iter()
@@ -155,8 +157,8 @@ pub(crate) async fn build_upstream_artifacts_block(
 
     let mut sections: Vec<String> = Vec::new();
 
-    // Workforce-local files (shared workspace — all agents in this step)
-    if let Ok(local_files) = repo.list_by_producer(workflow_id, step_id).await {
+    // Workforce-local files (agents in this step, this run only)
+    if let Ok(local_files) = repo.list_by_producer(workflow_id, step_id, run_id).await {
         let local_xml = format_artifact_section(
             step_name_map
                 .get(&step_id)
@@ -169,9 +171,12 @@ pub(crate) async fn build_upstream_artifacts_block(
         }
     }
 
-    // Upstream DAG step files (direct edges)
+    // Upstream DAG step files (direct edges, this run only)
     for &upstream_id in upstream_step_ids {
-        if let Ok(files) = repo.list_by_producer(workflow_id, upstream_id).await {
+        if let Ok(files) = repo
+            .list_by_producer(workflow_id, upstream_id, run_id)
+            .await
+        {
             let name = step_name_map
                 .get(&upstream_id)
                 .copied()

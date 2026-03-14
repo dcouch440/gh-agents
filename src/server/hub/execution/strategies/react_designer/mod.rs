@@ -326,6 +326,7 @@ impl ExecutionStrategy for ReactDesignerStrategy {
                         tags: vec!["designer".to_string()],
                         produced_by: None,
                         produced_by_agent: Some("designer".to_string()),
+                        workflow_run_id: None, // design configs persist across runs
                     },
                 )
                 .await

@@ -12,8 +12,8 @@ impl SystemFileRepo for PgRepo {
     async fn upsert_file(&self, input: UpsertSystemFileInput) -> Result<SystemFileRow> {
         let row: SystemFileRow = sqlx::query_as(
             r#"
-            INSERT INTO system_files (workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, size_bytes)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            INSERT INTO system_files (workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, size_bytes, workflow_run_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             ON CONFLICT (workflow_id, path) DO UPDATE SET
                 media_type = EXCLUDED.media_type,
                 description = EXCLUDED.description,
@@ -21,9 +21,10 @@ impl SystemFileRepo for PgRepo {
                 produced_by = EXCLUDED.produced_by,
                 produced_by_agent = EXCLUDED.produced_by_agent,
                 size_bytes = EXCLUDED.size_bytes,
+                workflow_run_id = EXCLUDED.workflow_run_id,
                 version = system_files.version + 1,
                 updated_at = NOW()
-            RETURNING id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, created_at, updated_at
+            RETURNING id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, workflow_run_id, created_at, updated_at
             "#,
         )
         .bind(input.workflow_id)
@@ -34,6 +35,7 @@ impl SystemFileRepo for PgRepo {
         .bind(input.produced_by)
         .bind(&input.produced_by_agent)
         .bind(input.size_bytes)
+        .bind(input.workflow_run_id)
         .fetch_one(&self.pool)
         .await?;
 
@@ -43,7 +45,7 @@ impl SystemFileRepo for PgRepo {
     async fn get_file(&self, workflow_id: Uuid, path: &str) -> Result<Option<SystemFileRow>> {
         let row: Option<SystemFileRow> = sqlx::query_as(
             r#"
-            SELECT id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, created_at, updated_at
+            SELECT id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, workflow_run_id, created_at, updated_at
             FROM system_files
             WHERE workflow_id = $1 AND path = $2
             "#,
@@ -60,7 +62,7 @@ impl SystemFileRepo for PgRepo {
         let like_pattern = format!("{}%", prefix);
         let rows: Vec<SystemFileRow> = sqlx::query_as(
             r#"
-            SELECT id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, created_at, updated_at
+            SELECT id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, workflow_run_id, created_at, updated_at
             FROM system_files
             WHERE workflow_id = $1 AND path LIKE $2
             ORDER BY path
@@ -100,19 +102,36 @@ impl SystemFileRepo for PgRepo {
         &self,
         workflow_id: Uuid,
         step_id: Uuid,
+        run_id: Option<Uuid>,
     ) -> Result<Vec<SystemFileRow>> {
-        let rows: Vec<SystemFileRow> = sqlx::query_as(
-            r#"
-            SELECT id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, created_at, updated_at
-            FROM system_files
-            WHERE workflow_id = $1 AND produced_by = $2
-            ORDER BY path
-            "#,
-        )
-        .bind(workflow_id)
-        .bind(step_id)
-        .fetch_all(&self.pool)
-        .await?;
+        let rows: Vec<SystemFileRow> = if let Some(run_id) = run_id {
+            sqlx::query_as(
+                r#"
+                SELECT id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, workflow_run_id, created_at, updated_at
+                FROM system_files
+                WHERE workflow_id = $1 AND produced_by = $2 AND workflow_run_id = $3
+                ORDER BY path
+                "#,
+            )
+            .bind(workflow_id)
+            .bind(step_id)
+            .bind(run_id)
+            .fetch_all(&self.pool)
+            .await?
+        } else {
+            sqlx::query_as(
+                r#"
+                SELECT id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, workflow_run_id, created_at, updated_at
+                FROM system_files
+                WHERE workflow_id = $1 AND produced_by = $2
+                ORDER BY path
+                "#,
+            )
+            .bind(workflow_id)
+            .bind(step_id)
+            .fetch_all(&self.pool)
+            .await?
+        };
 
         Ok(rows)
     }
