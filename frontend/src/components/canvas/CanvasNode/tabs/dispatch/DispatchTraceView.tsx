@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect } from 'react'
+import { useMemo, useRef, useEffect, useState } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import { TerminalBlock } from '@/components/primitives'
@@ -93,6 +93,14 @@ function DispatchTraceView({ entry }: DispatchTraceViewProps) {
                 <Box sx={{ flex: 1, height: '1px', bgcolor: 'divider' }} />
               </Box>
             )
+          case 'system_prompt':
+            return (
+              <SystemPromptBlock
+                key={`sp-${i}`}
+                content={segment.content}
+                agentName={segment.agentName}
+              />
+            )
         }
       })}
 
@@ -109,6 +117,57 @@ function DispatchTraceView({ entry }: DispatchTraceViewProps) {
           }}
         >
           {'\u258C'}
+        </Box>
+      )}
+    </Box>
+  )
+}
+
+// ── System Prompt Debug Block ─────────────────────────────────────────────
+
+type SystemPromptBlockProps = {
+  content: string
+  agentName: string | null
+}
+
+function SystemPromptBlock({ content, agentName }: SystemPromptBlockProps) {
+  const [expanded, setExpanded] = useState(false)
+  const label = agentName ? `System Prompt (${agentName})` : 'System Prompt'
+
+  return (
+    <Box sx={{ my: 0.5, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+      <Box
+        onClick={() => setExpanded((v) => !v)}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+          px: 1,
+          py: 0.5,
+          cursor: 'pointer',
+          bgcolor: 'action.hover',
+          '&:hover': { bgcolor: 'action.selected' },
+        }}
+      >
+        <Typography sx={{ fontSize: 10, fontFamily: 'monospace', color: 'text.secondary' }}>
+          {expanded ? '▾' : '▸'} {label}
+        </Typography>
+      </Box>
+      {expanded && (
+        <Box sx={{ px: 1, py: 0.5, maxHeight: 300, overflowY: 'auto' }}>
+          <Typography
+            component="pre"
+            sx={{
+              fontSize: 10,
+              fontFamily: 'monospace',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              color: 'text.secondary',
+              m: 0,
+            }}
+          >
+            {content}
+          </Typography>
         </Box>
       )}
     </Box>

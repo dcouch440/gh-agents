@@ -56,6 +56,11 @@ pub enum TraceEvent {
         error: String,
         ts: DateTime<Utc>,
     },
+    SystemPrompt {
+        content: String,
+        agent_name: Option<String>,
+        ts: DateTime<Utc>,
+    },
 }
 
 /// A single background dispatch task entry.
