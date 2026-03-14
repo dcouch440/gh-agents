@@ -38,8 +38,8 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         store.setState((s) => {
           const existing = s.designStatusByStep[d.step_id]
           const stepStatus = designerStatus === 'running'
-            ? { status: 'running' as const, designedCount: 0, totalCount: existing?.totalCount ?? 0, lastAgentName: null }
-            : { status: designerStatus, designedCount: existing?.designedCount ?? 0, totalCount: existing?.totalCount ?? 0, lastAgentName: existing?.lastAgentName ?? null }
+            ? { status: 'running' as const, designedCount: 0, totalCount: existing?.totalCount ?? 0, lastAgentName: null, designedAgentSlugs: new Set<string>() }
+            : { status: designerStatus, designedCount: existing?.designedCount ?? 0, totalCount: existing?.totalCount ?? 0, lastAgentName: existing?.lastAgentName ?? null, designedAgentSlugs: existing?.designedAgentSlugs ?? new Set<string>() }
           return {
             designerStatus,
             activeStepId: d.step_id,
@@ -50,17 +50,24 @@ const handleWsEvent = (msg: WsWireMessage): void => {
       }
       case WORKFLOW_EVENT.DESIGNER_AGENT_DESIGNED: {
         const d = msg.data as DesignerAgentDesignedData
-        store.setState((s) => ({
-          designStatusByStep: {
-            ...s.designStatusByStep,
-            [d.step_id]: {
-              status: 'running' as const,
-              designedCount: d.designed_count,
-              totalCount: d.total_count,
-              lastAgentName: d.agent_name,
+        store.setState((s) => {
+          const existing = s.designStatusByStep[d.step_id]
+          const prevSlugs = existing?.designedAgentSlugs ?? new Set<string>()
+          const nextSlugs = new Set(prevSlugs)
+          nextSlugs.add(d.agent_name)
+          return {
+            designStatusByStep: {
+              ...s.designStatusByStep,
+              [d.step_id]: {
+                status: 'running' as const,
+                designedCount: d.designed_count,
+                totalCount: d.total_count,
+                lastAgentName: d.agent_name,
+                designedAgentSlugs: nextSlugs,
+              },
             },
-          },
-        }))
+          }
+        })
         break
       }
       case WORKFLOW_EVENT.WORKFORCE_AGENT_PROGRESS: {

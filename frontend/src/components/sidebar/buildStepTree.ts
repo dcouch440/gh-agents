@@ -32,6 +32,7 @@ type GapEntry = {
 type AgentEntry = {
   readonly kind: 'agent'
   readonly stepId: string
+  readonly agentId: string
   readonly agentName: string
   readonly gutter: readonly GutterCell[]
 }
@@ -676,6 +677,7 @@ const buildStepTree = (
       result.push({
         kind: 'agent',
         stepId: entry.step.id,
+        agentId: agent.id,
         agentName: agent.name,
         gutter: agentGutter,
       })
@@ -685,5 +687,9 @@ const buildStepTree = (
   return result
 }
 
-export { buildStepTree }
+/** Match backend agent_name_to_slug: strip spaces/underscores/hyphens, lowercase. */
+const toAgentSlug = (name: string): string =>
+  name.replace(/[\s_-]/g, '').toLowerCase()
+
+export { buildStepTree, toAgentSlug }
 export type { TreeEntry, StepEntry, GapEntry, AgentEntry, GutterCell }

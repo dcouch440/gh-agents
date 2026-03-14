@@ -1,7 +1,7 @@
-import { nmSet } from '../lib'
+import { nmGet, nmSet } from '../lib'
 import { api } from '@/api'
 import { WORKFLOW_EVENT } from '@/types/ws'
-import type { WsWireMessage, StepConfigUpdatedData, RosterChangedData, RoomMembersChangedData, PlanUpdatedData } from '@/types/ws'
+import type { WsWireMessage, StepConfigUpdatedData, StepNameUpdatedData, RosterChangedData, RoomMembersChangedData, PlanUpdatedData } from '@/types/ws'
 import { store, getActiveId } from './_store'
 import { fetchRoster, fetchRoomStepMembers } from './roster'
 
@@ -32,6 +32,17 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         const d = msg.data as StepConfigUpdatedData
         if (d.workflow_id !== activeId) break
         void refetchStep(d.workflow_id, d.step_id)
+        break
+      }
+      case WORKFLOW_EVENT.STEP_NAME_UPDATED: {
+        const d = msg.data as StepNameUpdatedData
+        if (d.workflow_id !== activeId) break
+        store.setState((s) => {
+          const existing = nmGet(s.steps, d.step_id)
+          if (!existing) return {}
+          if (s.dirtyStepIds.has(d.step_id)) return {}
+          return { steps: nmSet(s.steps, d.step_id, { ...existing, name: d.name }) }
+        })
         break
       }
       case WORKFLOW_EVENT.ROSTER_CHANGED: {

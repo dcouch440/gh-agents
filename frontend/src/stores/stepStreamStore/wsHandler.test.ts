@@ -259,6 +259,22 @@ describe('stepStreamStore wsHandler', () => {
       expect(state.designStatusByStep['s-1']!.totalCount).toBe(2)
       expect(state.designStatusByStep['s-2']!.totalCount).toBe(4)
     })
+
+    it('accumulates designedAgentSlugs across events', () => {
+      stepStreamStore.handleWsEvent(wire('designer_agent_designed', {
+        workflow_id: 'wf-1', step_id: 's-1',
+        agent_name: 'scanner', designed_count: 1, total_count: 3,
+      }))
+      stepStreamStore.handleWsEvent(wire('designer_agent_designed', {
+        workflow_id: 'wf-1', step_id: 's-1',
+        agent_name: 'writer', designed_count: 2, total_count: 3,
+      }))
+
+      const ds = stepStreamStore.store.getState().designStatusByStep['s-1']
+      expect(ds!.designedAgentSlugs.has('scanner')).toBe(true)
+      expect(ds!.designedAgentSlugs.has('writer')).toBe(true)
+      expect(ds!.designedAgentSlugs.size).toBe(2)
+    })
   })
 
   describe('designStatusByStep via workforce_designer_progress', () => {
@@ -293,6 +309,35 @@ describe('stepStreamStore wsHandler', () => {
       }))
 
       expect(stepStreamStore.store.getState().designStatusByStep['s-1']!.status).toBe('failed')
+    })
+
+    it('resets designedAgentSlugs on started', () => {
+      // Accumulate some slugs first
+      stepStreamStore.handleWsEvent(wire('designer_agent_designed', {
+        workflow_id: 'wf-1', step_id: 's-1',
+        agent_name: 'scanner', designed_count: 1, total_count: 2,
+      }))
+      expect(stepStreamStore.store.getState().designStatusByStep['s-1']!.designedAgentSlugs.size).toBe(1)
+
+      // Reset via started
+      stepStreamStore.handleWsEvent(wire('workforce_designer_progress', {
+        workflow_id: 'wf-1', step_id: 's-1', status: 'started',
+      }))
+      expect(stepStreamStore.store.getState().designStatusByStep['s-1']!.designedAgentSlugs.size).toBe(0)
+    })
+
+    it('preserves designedAgentSlugs on completed', () => {
+      stepStreamStore.handleWsEvent(wire('designer_agent_designed', {
+        workflow_id: 'wf-1', step_id: 's-1',
+        agent_name: 'scanner', designed_count: 1, total_count: 1,
+      }))
+      stepStreamStore.handleWsEvent(wire('workforce_designer_progress', {
+        workflow_id: 'wf-1', step_id: 's-1', status: 'completed',
+      }))
+
+      const ds = stepStreamStore.store.getState().designStatusByStep['s-1']
+      expect(ds!.status).toBe('completed')
+      expect(ds!.designedAgentSlugs.has('scanner')).toBe(true)
     })
   })
 

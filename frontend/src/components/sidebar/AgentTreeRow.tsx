@@ -4,17 +4,31 @@ import Typography from '@mui/material/Typography'
 import { useTheme } from '@mui/material/styles'
 import { TerminalBlock } from '@/components/primitives/terminal-renderer'
 import { CELL_WIDTH, computeLines, computeContinuationLines } from './gutterLines'
+import { StatusDot } from './StatusDot'
+import { SkeletonLines } from './SkeletonLines'
 import type { GutterCell } from './buildStepTree'
+import type { StepExecutionStatus } from '@/stores/workflowExecutionStore/types'
+import type { SourceStreamStatus } from '@/stores/stepStreamStore'
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
 type AgentTreeRowProps = {
   readonly agentName: string
+  readonly agentId: string
   readonly stepId: string
   readonly gutter: readonly GutterCell[]
   readonly output: string | null
   readonly isExpanded: boolean
   readonly onToggle: () => void
+  readonly designStatus: SourceStreamStatus | null
+  readonly executionStatus: SourceStreamStatus | null
+}
+
+const toExecStatus = (s: SourceStreamStatus | null): StepExecutionStatus | undefined => {
+  if (s === null) return undefined
+  if (s === 'completed') return 'success'
+  if (s === 'failed') return 'error'
+  return s
 }
 
 // ── Output Preview ──────────────────────────────────────────────────────────
@@ -93,13 +107,16 @@ function AgentTreeRow({
   output,
   isExpanded,
   onToggle,
+  designStatus,
+  executionStatus,
 }: AgentTreeRowProps) {
   const theme = useTheme()
   const lines = computeLines(gutter)
   const lineColor = theme.palette.text.disabled
   const gutterWidth = gutter.length * CELL_WIDTH
 
-  const hasBody = isExpanded && output !== null
+  const isRunning = executionStatus === 'running'
+  const hasBody = isExpanded && (isRunning || output !== null)
 
   return (
     <Box>
@@ -175,6 +192,11 @@ function AgentTreeRow({
         >
           {agentName}
         </Typography>
+
+        {/* Status dot */}
+        <Box sx={{ ml: 1, flexShrink: 0 }}>
+          <StatusDot status={toExecStatus(executionStatus)} designStatus={designStatus} />
+        </Box>
       </Box>
 
       {/* Output body */}
@@ -206,10 +228,14 @@ function AgentTreeRow({
 
           {/* Content */}
           <Box sx={{ flex: 1, minWidth: 0, pr: 1, pb: 1, ml: 1.5 }}>
-            <AgentOutputPreview
-              output={output}
-              bgColor={theme.palette.custom.bgPanel}
-            />
+            {isRunning ? (
+              <SkeletonLines />
+            ) : output !== null ? (
+              <AgentOutputPreview
+                output={output}
+                bgColor={theme.palette.custom.bgPanel}
+              />
+            ) : null}
           </Box>
         </Box>
       )}

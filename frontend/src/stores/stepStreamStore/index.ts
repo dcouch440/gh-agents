@@ -18,6 +18,9 @@ const selectDesignStatusForStep = (stepId: string) => (s: StepStreamState): Step
 
 const selectDesignStatusByStep = (s: StepStreamState): Record<string, StepDesignState> => s.designStatusByStep
 
+const selectIsAgentDesigned = (stepId: string, agentSlug: string) => (s: StepStreamState): boolean =>
+  s.designStatusByStep[stepId]?.designedAgentSlugs.has(agentSlug) === true
+
 export const stepStreamStore = {
   store,
   handleWsEvent,
@@ -28,6 +31,7 @@ export const stepStreamStore = {
   selectActiveStepId,
   selectDesignStatusForStep,
   selectDesignStatusByStep,
+  selectIsAgentDesigned,
 }
 
 export type { StepStreamState, SourceStreamState, SourceStreamStatus, StreamToolUse, StepDesignState } from './types'
