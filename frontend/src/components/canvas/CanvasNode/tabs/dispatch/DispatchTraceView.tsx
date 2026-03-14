@@ -51,6 +51,14 @@ function DispatchTraceView({ entry }: DispatchTraceViewProps) {
       sx={{ flex: 1, overflowY: 'auto', px: 1, py: 0.5 }}
     >
       {segments.map((segment, i) => {
+        // Hide builder's system_prompt and user_message (those before the first phase_marker)
+        if (
+          (segment.type === 'system_prompt' || segment.type === 'user_message') &&
+          !segments.slice(0, i).some((s) => s.type === 'phase')
+        ) {
+          return null
+        }
+
         switch (segment.type) {
           case 'text':
             return (
@@ -165,7 +173,7 @@ function DebugMessageBlock({ label: baseLabel, content, agentName }: DebugMessag
         </Typography>
       </Box>
       {expanded && (
-        <Box sx={{ px: 1, py: 0.5, maxHeight: 300, overflowY: 'auto' }}>
+        <Box sx={{ px: 1, py: 0.5 }}>
           <Typography
             component="pre"
             sx={{
