@@ -206,6 +206,15 @@ pub async fn execute_dispatch_to_builders_tool(
             }
         };
 
+        // Enhance instruction with upstream/downstream topology so the builder
+        // understands what data flows in and what downstream expects.
+        let topology = build_upstream_topology(state, step.id, workflow_id).await;
+        let enhanced_instruction = if topology.is_empty() {
+            instruction.to_string()
+        } else {
+            format!("{instruction}\n\n<upstream_topology>\n{topology}\n</upstream_topology>")
+        };
+
         // Dispatch directly to the node builder
         let output = dispatch_to_builder(
             state,
@@ -213,7 +222,7 @@ pub async fn execute_dispatch_to_builders_tool(
                 step_id: step.id,
                 workflow_id,
                 user_id,
-                instruction: instruction.to_string(),
+                instruction: enhanced_instruction,
                 execution_mode: step.execution_mode.clone(),
             },
         )
@@ -341,5 +350,99 @@ async fn find_or_create_builder_session(
         }
 
         session_id
+    }
+}
+
+// ── Upstream topology helper ─────────────────────────────────────────────
+
+/// Build a compact upstream/downstream topology description for a workflow step.
+///
+/// Queries the workflow's edges and steps to identify which nodes feed into
+/// and consume from the given step. Returns a formatted string like:
+///
+/// ```text
+/// Upstream nodes feeding into this step:
+///   <- "Write Story": Take the report and write a short story...
+///
+/// Downstream nodes consuming this step's output:
+///   -> "Compare": Compare the weather report with the story.
+/// ```
+///
+/// Returns an empty string for orphan nodes or if the DB query fails.
+pub async fn build_upstream_topology(state: &AppState, step_id: Uuid, workflow_id: Uuid) -> String {
+    let repos = state.repos();
+
+    let edges = repos
+        .workflows
+        .list_edges(workflow_id)
+        .await
+        .unwrap_or_default();
+    if edges.is_empty() {
+        return String::new();
+    }
+
+    let steps = repos
+        .workflows
+        .list_steps(workflow_id)
+        .await
+        .unwrap_or_default();
+
+    let step_map: std::collections::HashMap<Uuid, &crate::db::WorkflowStepRow> =
+        steps.iter().map(|s| (s.id, s)).collect();
+
+    let mut upstream_lines = Vec::new();
+    let mut downstream_lines = Vec::new();
+
+    for edge in &edges {
+        if edge.to_step_id == step_id {
+            if let Some(from_step) = step_map.get(&edge.from_step_id) {
+                let name = from_step.name.as_deref().unwrap_or("Unnamed");
+                let desc = step_description_brief(from_step);
+                upstream_lines.push(format!("  <- \"{name}\": {desc}"));
+            }
+        }
+        if edge.from_step_id == step_id {
+            if let Some(to_step) = step_map.get(&edge.to_step_id) {
+                let name = to_step.name.as_deref().unwrap_or("Unnamed");
+                let desc = step_description_brief(to_step);
+                downstream_lines.push(format!("  -> \"{name}\": {desc}"));
+            }
+        }
+    }
+
+    let mut result = String::new();
+    if !upstream_lines.is_empty() {
+        result.push_str("Upstream nodes feeding into this step:\n");
+        result.push_str(&upstream_lines.join("\n"));
+    }
+    if !downstream_lines.is_empty() {
+        if !result.is_empty() {
+            result.push_str("\n\n");
+        }
+        result.push_str("Downstream nodes consuming this step's output:\n");
+        result.push_str(&downstream_lines.join("\n"));
+    }
+    result
+}
+
+/// Extract a compact description for a step from its board text or description.
+fn step_description_brief(step: &crate::db::WorkflowStepRow) -> String {
+    // Prefer prompt_template (user's raw board text), fall back to description
+    let raw = if !step.prompt_template.is_empty() {
+        &step.prompt_template
+    } else if !step.description.is_empty() {
+        &step.description
+    } else {
+        return "(no description)".to_string();
+    };
+    // Truncate to ~200 chars for context budget
+    if raw.len() > 200 {
+        let mut end = 200;
+        while end > 0 && !raw.is_char_boundary(end) {
+            end -= 1;
+        }
+        format!("{}...", &raw[..end])
+    } else {
+        raw.to_string()
     }
 }

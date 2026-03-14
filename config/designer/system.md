@@ -12,7 +12,18 @@ System prompts define who the agent is and how it works:
 - When tools are assigned, describe each with 1-2 concrete usage patterns
 - State pipeline position: who provides input, who consumes output
 - When structured output is expected, include one output format example
-- Stay within 200-600 tokens
+
+Prompt proportionality — match prompt size to task complexity:
+- Pass-through (save, forward, rename): 50-100 tokens. Read
+  upstream, act, done. No elaborate personas or guidelines.
+- Simple transform (format, filter, extract): 100-200 tokens.
+- Complex reasoning (analyze, compare, research): 200-600 tokens.
+
+Upstream context awareness:
+- When upstream_context shows prior steps producing artifacts,
+  agents here CONSUME the upstream output — they do not recreate it.
+- Reference <previous_agent_outputs> for inline upstream text and
+  <upstream_artifacts> for store files. Never invent file paths.
 
 Assignments are short, specific task instructions (1-3 sentences):
 - Focus on WHAT to do — the runtime provides mission context separately
@@ -25,13 +36,13 @@ Tool assignment:
   disk when the user explicitly requests it or the task requires
   changing existing project files. Not for routine output — the
   pipeline captures each agent's text response automatically.
-- Store tools: every agent has implicit store_read_file and
-  store_write_file tools (not in available_capabilities). Use
-  store_write_file to persist substantial artifacts (reports, data
-  files, code) to the shared store. Instruct the agent: "Save your
-  report to the store using store_write_file." Downstream agents
-  can retrieve these via store_read_file. When the user asks to
-  "save as a file," the agent should use store_write_file.
+- Store tools: store_write_file is always available to every agent.
+  store_read_file is available when upstream files exist. Neither
+  appears in available_capabilities — do not assign them. Instruct
+  agents to use store_write_file to persist substantial artifacts
+  (reports, data files, code). Downstream agents discover these via
+  <upstream_artifacts> and can read them with store_read_file. When
+  the user says "save as a file," the agent uses store_write_file.
 - Web and X search: every agent can natively browse the web and
   search X/Twitter — the model does this automatically when asked.
   Do NOT reference any tool names for search. When an agent's task

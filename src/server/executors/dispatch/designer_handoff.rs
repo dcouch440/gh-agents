@@ -35,6 +35,7 @@ pub async fn run_designer_after_builder(
     workflow_id: Uuid,
     user_id: UserId,
     execution_id: Uuid,
+    dispatch_instruction: &str,
 ) {
     // Gate: S3 must be available
     let Some(_s3) = state.s3() else {
@@ -116,6 +117,21 @@ pub async fn run_designer_after_builder(
         format!("designer:{}", step_id).as_bytes(),
     );
 
+    let upstream_topology =
+        crate::server::services::dispatch::build_upstream_topology(state, step_id, workflow_id)
+            .await;
+
+    // Fetch the user's raw board text so the designer sees the same source of truth
+    // as the builder — not just the builder's interpretation.
+    let node_text = repos
+        .workflows
+        .get_step(step_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|s| s.prompt_template)
+        .unwrap_or_default();
+
     let strategy = ReactDesignerStrategy::new(ReactDesignerConfig {
         state: state.clone(),
         step_id,
@@ -125,6 +141,9 @@ pub async fn run_designer_after_builder(
         plan,
         builder_action: format!("Configured {}-agent roster", roster.len()),
         agent_execution_id: designer_ae_id,
+        upstream_topology,
+        node_text,
+        dispatch_instruction: dispatch_instruction.to_string(),
     });
 
     let designer_cfg = DESIGNER.agent("react_designer");

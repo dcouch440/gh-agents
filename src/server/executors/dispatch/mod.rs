@@ -232,6 +232,7 @@ pub async fn run_dispatch_task(
                 workflow_id,
                 user_id,
                 execution_id,
+                &instruction,
             )
             .await;
 

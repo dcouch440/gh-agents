@@ -176,6 +176,9 @@ pub mod vars {
         pub const PLAN: &str = "ReactDesigner.plan";
         pub const ROSTER: &str = "ReactDesigner.roster";
         pub const BUILDER_ACTION: &str = "ReactDesigner.builder_action";
+        pub const UPSTREAM_TOPOLOGY: &str = "ReactDesigner.upstream_topology";
+        pub const NODE_TEXT: &str = "ReactDesigner.node_text";
+        pub const DISPATCH_INSTRUCTION: &str = "ReactDesigner.dispatch_instruction";
     }
 
     /// Variables assembled by the platform (config, context, runtime state).

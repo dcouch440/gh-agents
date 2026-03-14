@@ -424,6 +424,13 @@ async fn run_react_designer(
         format!("designer:{}", ctx.step.id).as_bytes(),
     );
 
+    let upstream_topology = crate::server::services::dispatch::build_upstream_topology(
+        dag.state,
+        ctx.step.id,
+        ctx.step.workflow_id,
+    )
+    .await;
+
     let strategy = ReactDesignerStrategy::new(ReactDesignerConfig {
         state: dag.state.clone(),
         step_id: ctx.step.id,
@@ -433,6 +440,9 @@ async fn run_react_designer(
         plan,
         builder_action: format!("Configured {}-agent roster", ctx.roster.len()),
         agent_execution_id: designer_ae_id,
+        upstream_topology,
+        node_text: ctx.step.prompt_template.clone(),
+        dispatch_instruction: ctx.brief.task_description.clone(),
     });
 
     let filter_ctx = FilterContext::new(&designer_cfg.model_id, ctx.step.id);
