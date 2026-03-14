@@ -34,6 +34,15 @@ pub struct ReactDesignerConfig {
     pub plan: String,
     pub builder_action: String,
     pub agent_execution_id: Option<Uuid>,
+    /// Compact upstream/downstream topology description so the designer
+    /// understands what data flows into this step and what downstream expects.
+    pub upstream_topology: String,
+    /// The user's raw board text for this node — the source of truth for
+    /// what this node should do, independent of the builder's interpretation.
+    pub node_text: String,
+    /// The original dispatch instruction (changeset message) the builder received.
+    /// Lets the designer see the exact same trigger context as the builder.
+    pub dispatch_instruction: String,
 }
 
 /// Multi-turn ReAct designer strategy.
@@ -88,6 +97,18 @@ impl ReactDesignerStrategy {
         inst_vars.insert(
             vars::react_designer::BUILDER_ACTION.to_string(),
             config.builder_action,
+        );
+        inst_vars.insert(
+            vars::react_designer::UPSTREAM_TOPOLOGY.to_string(),
+            config.upstream_topology,
+        );
+        inst_vars.insert(
+            vars::react_designer::NODE_TEXT.to_string(),
+            config.node_text,
+        );
+        inst_vars.insert(
+            vars::react_designer::DISPATCH_INSTRUCTION.to_string(),
+            config.dispatch_instruction,
         );
         let instruction = resolve_template(roles::REACT_DESIGNER.prompt, &inst_vars);
 

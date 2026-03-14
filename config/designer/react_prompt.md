@@ -1,5 +1,17 @@
 {{.ReactDesigner.prior_design}}
 
+<dispatch_instruction>
+{{.ReactDesigner.dispatch_instruction}}
+</dispatch_instruction>
+
+<node_text>
+{{.ReactDesigner.node_text}}
+</node_text>
+
+<upstream_topology>
+{{.ReactDesigner.upstream_topology}}
+</upstream_topology>
+
 <plan>
 {{.ReactDesigner.plan}}
 </plan>
