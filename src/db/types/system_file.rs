@@ -14,6 +14,8 @@ pub struct SystemFileRow {
     pub produced_by_agent: Option<String>,
     pub version: i32,
     pub size_bytes: i64,
+    /// The workflow run that produced this file. NULL for design-time configs.
+    pub workflow_run_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

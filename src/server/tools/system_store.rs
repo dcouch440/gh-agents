@@ -91,6 +91,7 @@ pub async fn execute_store_write_file(
     workflow_id: Uuid,
     step_id: Uuid,
     agent_name: Option<&str>,
+    workflow_run_id: Option<Uuid>,
 ) -> Value {
     let path = match input["path"].as_str() {
         Some(p) => normalize_path(p),
@@ -114,6 +115,7 @@ pub async fn execute_store_write_file(
             tags: vec![],
             produced_by: Some(step_id),
             produced_by_agent: agent_name.map(|s| s.to_string()),
+            workflow_run_id,
         },
     )
     .await

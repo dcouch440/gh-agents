@@ -17,6 +17,8 @@ pub struct WriteFileInput {
     pub tags: Vec<String>,
     pub produced_by: Option<Uuid>,
     pub produced_by_agent: Option<String>,
+    /// The workflow run that produced this file. None for design-time configs.
+    pub workflow_run_id: Option<Uuid>,
 }
 
 /// Resolve the S3 object key for a workflow file.
@@ -65,6 +67,7 @@ pub async fn write_file(
             produced_by: input.produced_by,
             produced_by_agent: input.produced_by_agent,
             size_bytes: input.content.len() as i64,
+            workflow_run_id: input.workflow_run_id,
         })
         .await?;
 
@@ -127,6 +130,7 @@ pub async fn edit_file(
             produced_by: meta.produced_by,
             produced_by_agent: meta.produced_by_agent,
             size_bytes: new_content.len() as i64,
+            workflow_run_id: meta.workflow_run_id,
         })
         .await?;
 
@@ -166,13 +170,14 @@ pub async fn delete_prefix(
     repo.delete_by_prefix(workflow_id, prefix).await
 }
 
-/// List all files produced by a specific step.
+/// List files produced by a specific step, optionally scoped to a run.
 pub async fn artifacts_for_step(
     repo: &dyn SystemFileRepo,
     workflow_id: Uuid,
     step_id: Uuid,
+    run_id: Option<Uuid>,
 ) -> Result<Vec<SystemFileRow>> {
-    repo.list_by_producer(workflow_id, step_id).await
+    repo.list_by_producer(workflow_id, step_id, run_id).await
 }
 
 #[cfg(test)]
