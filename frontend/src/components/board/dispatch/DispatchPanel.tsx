@@ -4,8 +4,11 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
 import CloseIcon from '@mui/icons-material/Close'
+import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded'
+import CheckRounded from '@mui/icons-material/CheckRounded'
 import { DispatchTab } from './DispatchTab'
 import { RunTab } from './RunTab'
+import { buildDispatchExport } from './exportDispatch'
 
 type DispatchPanelProps = {
   readonly onClose: () => void
@@ -23,6 +26,7 @@ const MAX_WIDTH = 1200
 function DispatchPanel({ onClose }: DispatchPanelProps) {
   const [activeTab, setActiveTab] = useState<PanelTab>('dispatch')
   const [width, setWidth] = useState(DEFAULT_WIDTH)
+  const [copied, setCopied] = useState(false)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const startXRef = useRef(0)
@@ -127,9 +131,26 @@ function DispatchPanel({ onClose }: DispatchPanelProps) {
         <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
           Activity
         </Typography>
-        <IconButton size="small" onClick={onClose} aria-label="Close panel">
-          <CloseIcon sx={{ fontSize: 16 }} />
-        </IconButton>
+        <Box sx={{ display: 'flex', gap: 0.5 }}>
+          <IconButton
+            size="small"
+            aria-label="Copy dispatch JSON"
+            onClick={() => {
+              const data = buildDispatchExport()
+              void navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(() => {
+                setCopied(true)
+                setTimeout(() => { setCopied(false) }, 1500)
+              })
+            }}
+          >
+            {copied
+              ? <CheckRounded sx={{ fontSize: 16, color: 'success.main' }} />
+              : <ContentCopyRounded sx={{ fontSize: 16 }} />}
+          </IconButton>
+          <IconButton size="small" onClick={onClose} aria-label="Close panel">
+            <CloseIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Box>
       </Box>
 
       {/* Tab bar */}
