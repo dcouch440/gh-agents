@@ -310,6 +310,38 @@ describe('buildStepTree', () => {
     ])
   })
 
+  // Pattern 9b: Fork with direct edge to merge point (skip edge)
+  // A → B, A → C, A → D, B → D, C → D, D → E
+  // A forks to {B, C} and also has a direct edge to D (the merge point)
+  it('fork with direct skip edge to merge', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+      makeStep('e', 'E', 4),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+      makeEdge('e3', 'a', 'd'),  // direct skip to merge
+      makeEdge('e4', 'b', 'd'),
+      makeEdge('e5', 'c', 'd'),
+      makeEdge('e6', 'd', 'e'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    // D is the merge point — it should appear AFTER the fork, not inside it
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(gutters(result)).toEqual([
+      ['branch'],                // ├── A
+      ['pipe', 'fork_start'],   // │ ┌─ B
+      ['pipe', 'par_end'],      // │ └─ C
+      ['branch'],                // ├── D (merge point, after fork)
+      ['corner'],                // └── E
+    ])
+  })
+
   // Pattern 10: Sequential with parallel section in middle
   // A → {B, C, D} → E → F
   it('sequential with parallel middle', () => {
