@@ -383,7 +383,7 @@ async fn try_replay_pinned(
         return Ok(false);
     };
 
-    dag_state.record_step_output(step.id, output, envelope);
+    utils::record_and_snapshot_output(dag, dag_state, step.id, output, envelope).await;
     broadcast_workflow_event(
         dag.state,
         dag.ctx,

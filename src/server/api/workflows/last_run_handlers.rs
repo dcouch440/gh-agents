@@ -154,6 +154,34 @@ pub(super) async fn build_step_run_response(
             .collect();
 
         if step_phases.is_empty() {
+            // Pinned/replayed step: load the latest envelope from content_versions
+            if let Ok(Some(envelope_json)) = state
+                .repos()
+                .content_versions
+                .get_latest_envelope_for_step(step.id)
+                .await
+            {
+                if let Ok(envelope) = serde_json::from_str::<serde_json::Value>(&envelope_json) {
+                    let output_data = envelope.get("data").cloned();
+                    let output_str = output_data.as_ref().map(|d| serde_json::to_string(d).unwrap_or_default());
+                    return Ok(StepLastRunResponse {
+                        execution_id: execution_id.to_string(),
+                        workflow_execution_id: execution_id.to_string(),
+                        status: "completed".to_string(),
+                        started_at: None,
+                        completed_at: None,
+                        duration_ms: Some(0),
+                        output: output_str,
+                        structured_output: output_data,
+                        input_tokens: Some(0),
+                        output_tokens: Some(0),
+                        cost_usd: Some(0.0),
+                        error: None,
+                        phases: None,
+                    });
+                }
+            }
+
             // Fall through to agent_executions for older runs without protocol tracking
             let agent_execs = state
                 .repos()
@@ -234,6 +262,27 @@ pub(super) async fn build_step_run_response(
             })
             .collect();
 
+        // Compose workforce output from agent phases (mirrors runtime compose_workforce_output)
+        let mut agents_map = serde_json::Map::new();
+        for phase in &phases {
+            if phase.phase.starts_with("agent") {
+                if let (Some(name), Some(content)) = (&phase.agent_name, &phase.output_content) {
+                    let key = name.to_lowercase().replace(' ', "_");
+                    let value: serde_json::Value = serde_json::from_str(content)
+                        .unwrap_or_else(|_| serde_json::Value::String(content.clone()));
+                    agents_map.insert(key, value);
+                }
+            }
+        }
+        let (output, structured_output) = if agents_map.is_empty() {
+            (None, None)
+        } else {
+            let mut composite = serde_json::Map::new();
+            composite.insert("agents".to_string(), serde_json::Value::Object(agents_map));
+            let val = serde_json::Value::Object(composite);
+            (Some(serde_json::to_string(&val).unwrap_or_default()), Some(val))
+        };
+
         Ok(StepLastRunResponse {
             execution_id: execution_id.to_string(),
             workflow_execution_id: execution_id.to_string(),
@@ -241,8 +290,8 @@ pub(super) async fn build_step_run_response(
             started_at: earliest.map(|t| t.to_rfc3339()),
             completed_at: latest_completed.map(|t| t.to_rfc3339()),
             duration_ms,
-            output: None,
-            structured_output: None,
+            output,
+            structured_output,
             input_tokens: Some(total_tokens_in),
             output_tokens: Some(total_tokens_out),
             cost_usd: Some(total_cost),

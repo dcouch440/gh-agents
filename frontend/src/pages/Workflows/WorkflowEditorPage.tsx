@@ -15,18 +15,22 @@ function WorkflowEditorPage() {
       void navigate('/workflows')
       return
     }
-    void workflowStore.loadWorkflow(id).then(() => {
+    const loadWorkflowWithRosters = workflowStore.loadWorkflow(id).then(() => {
       // Fetch roster agents for all steps so the sidebar tree can display them
       const steps = workflowStore.selectSteps(workflowStore.store.getState())
-      for (const step of steps) {
-        void workflowStore.fetchRoster(step.id)
-      }
+      return Promise.all(steps.map((step) => workflowStore.fetchRoster(step.id)))
     })
     void agentStore.fetchAll()
     void outputSchemaStore.fetchIfStale()
     void protocolStore.fetchAll()
     // Sequential: workshop hydration runs after latest-run so it gets the final say
-    void workflowExecutionStore.hydrateLatestRun(id).then(() => workflowExecutionStore.hydrateWorkshop(id))
+    const hydrateRun = workflowExecutionStore.hydrateLatestRun(id)
+      .then(() => workflowExecutionStore.hydrateWorkshop(id))
+    // After both workflow+rosters and run data are loaded, hydrate agent sources
+    void Promise.all([loadWorkflowWithRosters, hydrateRun]).then(() => {
+      const rosterByStep = workflowStore.selectRosterByStep(workflowStore.store.getState())
+      workflowExecutionStore.hydrateAgentSources(rosterByStep)
+    })
     return () => {
       workflowStore.clearActive()
       workflowExecutionStore.reset()
