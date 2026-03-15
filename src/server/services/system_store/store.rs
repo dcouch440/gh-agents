@@ -48,6 +48,16 @@ pub async fn write_file(
     repo: &dyn SystemFileRepo,
     input: WriteFileInput,
 ) -> Result<SystemFileRow> {
+    // Reject writes to sealed files (produced by a pinned step)
+    if let Some(existing) = repo.get_file(input.workflow_id, &input.path).await? {
+        if existing.sealed {
+            return Err(anyhow!(
+                "cannot overwrite sealed file: {}. The producing step is pinned.",
+                input.path
+            ));
+        }
+    }
+
     let key = s3_key(input.workflow_id, &input.path);
     let media_type = if input.media_type.is_empty() {
         infer_media_type(&input.path).to_string()

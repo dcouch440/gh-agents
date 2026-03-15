@@ -24,7 +24,7 @@ impl SystemFileRepo for PgRepo {
                 workflow_run_id = EXCLUDED.workflow_run_id,
                 version = system_files.version + 1,
                 updated_at = NOW()
-            RETURNING id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, workflow_run_id, created_at, updated_at
+            RETURNING id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, workflow_run_id, sealed, created_at, updated_at
             "#,
         )
         .bind(input.workflow_id)
@@ -45,7 +45,7 @@ impl SystemFileRepo for PgRepo {
     async fn get_file(&self, workflow_id: Uuid, path: &str) -> Result<Option<SystemFileRow>> {
         let row: Option<SystemFileRow> = sqlx::query_as(
             r#"
-            SELECT id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, workflow_run_id, created_at, updated_at
+            SELECT id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, workflow_run_id, sealed, created_at, updated_at
             FROM system_files
             WHERE workflow_id = $1 AND path = $2
             "#,
@@ -62,7 +62,7 @@ impl SystemFileRepo for PgRepo {
         let like_pattern = format!("{}%", prefix);
         let rows: Vec<SystemFileRow> = sqlx::query_as(
             r#"
-            SELECT id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, workflow_run_id, created_at, updated_at
+            SELECT id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, workflow_run_id, sealed, created_at, updated_at
             FROM system_files
             WHERE workflow_id = $1 AND path LIKE $2
             ORDER BY path
@@ -107,7 +107,7 @@ impl SystemFileRepo for PgRepo {
         let rows: Vec<SystemFileRow> = if let Some(run_id) = run_id {
             sqlx::query_as(
                 r#"
-                SELECT id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, workflow_run_id, created_at, updated_at
+                SELECT id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, workflow_run_id, sealed, created_at, updated_at
                 FROM system_files
                 WHERE workflow_id = $1 AND produced_by = $2 AND workflow_run_id = $3
                 ORDER BY path
@@ -121,7 +121,7 @@ impl SystemFileRepo for PgRepo {
         } else {
             sqlx::query_as(
                 r#"
-                SELECT id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, workflow_run_id, created_at, updated_at
+                SELECT id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, workflow_run_id, sealed, created_at, updated_at
                 FROM system_files
                 WHERE workflow_id = $1 AND produced_by = $2
                 ORDER BY path
@@ -134,5 +134,14 @@ impl SystemFileRepo for PgRepo {
         };
 
         Ok(rows)
+    }
+
+    async fn seal_files_by_producer(&self, step_id: Uuid, sealed: bool) -> Result<u64> {
+        let result = sqlx::query("UPDATE system_files SET sealed = $1 WHERE produced_by = $2")
+            .bind(sealed)
+            .bind(step_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected())
     }
 }

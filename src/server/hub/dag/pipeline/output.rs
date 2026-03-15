@@ -213,8 +213,9 @@ fn format_artifact_section(step_name: &str, files: &[SystemFileRow]) -> String {
     let mut out = format!("  <step name=\"{step_name}\">\n");
     for file in &artifact_files {
         let by = file.produced_by_agent.as_deref().unwrap_or("unknown");
+        let editable = if file.sealed { " editable=\"false\"" } else { "" };
         out.push_str(&format!(
-            "    <file path=\".system/{}\" type=\"{}\" by=\"{}\">\n      {}\n    </file>\n",
+            "    <file path=\".system/{}\" type=\"{}\" by=\"{}\"{editable}>\n      {}\n    </file>\n",
             file.path, file.media_type, by, file.description
         ));
     }

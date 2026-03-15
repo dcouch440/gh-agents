@@ -48,4 +48,7 @@ pub trait SystemFileRepo: Send + Sync {
         step_id: Uuid,
         run_id: Option<Uuid>,
     ) -> Result<Vec<SystemFileRow>>;
+
+    /// Set the `sealed` flag on all files produced by a given step.
+    async fn seal_files_by_producer(&self, step_id: Uuid, sealed: bool) -> Result<u64>;
 }
