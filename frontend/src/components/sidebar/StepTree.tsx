@@ -112,6 +112,8 @@ function StepTree() {
             onToggleOutputExpand={() => { sidebarStore.toggleOutputExpand(entry.step.id) }}
             designStatus={designState?.status ?? null}
             designProgress={designState !== undefined && designState.totalCount > 0 ? `${String(designState.designedCount)}/${String(designState.totalCount)}` : null}
+            pinned={entry.step.pinned}
+            onTogglePin={() => { void workflowStore.togglePin(entry.step.id, !entry.step.pinned) }}
           />
         )
       })}

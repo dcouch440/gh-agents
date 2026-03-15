@@ -1,7 +1,7 @@
 import { nmGet, nmSet } from '../lib'
 import { api } from '@/api'
 import { WORKFLOW_EVENT } from '@/types/ws'
-import type { WsWireMessage, StepConfigUpdatedData, StepNameUpdatedData, RosterChangedData, RoomMembersChangedData, PlanUpdatedData } from '@/types/ws'
+import type { WsWireMessage, StepConfigUpdatedData, StepNameUpdatedData, RosterChangedData, RoomMembersChangedData, PlanUpdatedData, StepPinChangedData } from '@/types/ws'
 import { store, getActiveId } from './_store'
 import { fetchRoster, fetchRoomStepMembers } from './roster'
 
@@ -63,6 +63,16 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         store.setState((s) => ({
           planByStep: { ...s.planByStep, [d.step_id]: d.content },
         }))
+        break
+      }
+      case WORKFLOW_EVENT.STEP_PIN_CHANGED: {
+        const d = msg.data as StepPinChangedData
+        if (d.workflow_id !== activeId) break
+        store.setState((s) => {
+          const existing = nmGet(s.steps, d.step_id)
+          if (!existing) return {}
+          return { steps: nmSet(s.steps, d.step_id, { ...existing, pinned: d.pinned }) }
+        })
         break
       }
     }

@@ -148,4 +148,25 @@ const revertSteps = async (): Promise<void> => {
   await loadWorkflow(wid)
 }
 
-export { createStep, patchStepLocal, patchStepSilent, updateStep, deleteStep, removeStepLocal, saveAllDirtySteps, revertSteps }
+const togglePin = async (stepId: string, pinned: boolean): Promise<void> => {
+  const wid = getActiveId()
+  if (!wid) return
+  // Optimistic update
+  store.setState((s) => {
+    const existing = nmGet(s.steps, stepId)
+    if (!existing) return {}
+    return { steps: nmSet(s.steps, stepId, { ...existing, pinned }) }
+  })
+  try {
+    await api.workflows.togglePin(wid, stepId, pinned)
+  } catch {
+    // Revert on failure
+    store.setState((s) => {
+      const existing = nmGet(s.steps, stepId)
+      if (!existing) return {}
+      return { steps: nmSet(s.steps, stepId, { ...existing, pinned: !pinned }) }
+    })
+  }
+}
+
+export { createStep, patchStepLocal, patchStepSilent, updateStep, deleteStep, removeStepLocal, saveAllDirtySteps, revertSteps, togglePin }

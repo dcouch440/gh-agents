@@ -2,6 +2,8 @@ import { useRef, useState, useEffect } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import { useTheme } from '@mui/material/styles'
+import PushPinIcon from '@mui/icons-material/PushPin'
+import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined'
 import { TerminalBlock } from '@/components/primitives/terminal-renderer'
 import { StatusDot } from './StatusDot'
 import { SkeletonLines } from './SkeletonLines'
@@ -26,6 +28,8 @@ type StepTreeRowProps = {
   readonly onToggleOutputExpand: () => void
   readonly designStatus?: SourceStreamStatus | null
   readonly designProgress?: string | null
+  readonly pinned: boolean
+  readonly onTogglePin: () => void
 }
 
 // ── Output Preview ──────────────────────────────────────────────────────────
@@ -114,6 +118,8 @@ function StepTreeRow({
   onToggleOutputExpand,
   designStatus,
   designProgress,
+  pinned,
+  onTogglePin,
 }: StepTreeRowProps) {
   const theme = useTheme()
   const resolved = status ?? 'idle'
@@ -137,6 +143,7 @@ function StepTreeRow({
           py: '5px',
           cursor: 'pointer',
           '&:hover': { backgroundColor: theme.palette.custom.hoverOverlay },
+          '&:hover .pin-toggle': { opacity: 1 },
         }}
       >
         {/* Gutter */}
@@ -242,6 +249,27 @@ function StepTreeRow({
             {designProgress}
           </Typography>
         )}
+
+        {/* Pin toggle — visible on hover, always visible when pinned */}
+        <Box
+            component="span"
+            className="pin-toggle"
+            onClick={(e) => { e.stopPropagation(); onTogglePin() }}
+            sx={{
+              display: 'inline-flex',
+              flexShrink: 0,
+              ml: 0.5,
+              opacity: pinned ? 1 : 0,
+              color: pinned ? '#58a6ff' : 'text.disabled',
+              cursor: 'pointer',
+              transition: 'opacity 0.15s',
+              '&:hover': { color: '#58a6ff' },
+            }}
+          >
+            {pinned
+              ? <PushPinIcon sx={{ fontSize: 12 }} />
+              : <PushPinOutlinedIcon sx={{ fontSize: 12 }} />}
+        </Box>
 
         {/* Status dot */}
         <Box sx={{ ml: 1, flexShrink: 0 }}>
