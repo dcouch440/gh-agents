@@ -295,6 +295,9 @@ const workflows = freeze({
   deleteStep: (workflowId: string, stepId: string, config?: RequestConfig) =>
     baseApi.del<void>(API.WORKFLOW_STEP(workflowId, stepId), config),
 
+  togglePin: (workflowId: string, stepId: string, pinned: boolean, config?: RequestConfig) =>
+    baseApi.post<WorkflowStep>(API.STEP_PIN(workflowId, stepId), { pinned }, config),
+
   listEdges: (workflowId: string, config?: RequestConfig) => baseApi.get<WorkflowStepEdge[]>(API.WORKFLOW_EDGES(workflowId), config),
 
   createEdge: (workflowId: string, body: EdgeRequest, config?: RequestConfig) =>

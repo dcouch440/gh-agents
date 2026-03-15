@@ -263,17 +263,8 @@ pub async fn toggle_step_pin(
     // Verify ownership
     let step = steps::get_step(repo, auth.user_id.0, p.wid, p.sid).await?;
 
-    // Only single, context, and input modes are pin-eligible in v1
-    let pin_eligible = matches!(step.execution_mode.as_str(), "single" | "context" | "input");
-    if !pin_eligible {
-        return Err(AppError::BadRequest(format!(
-            "Execution mode '{}' is not eligible for pinning. Only single, context, and input steps can be pinned.",
-            step.execution_mode
-        )));
-    }
-
-    // For single steps: require a prior execution output before pinning
-    if req.pinned && step.execution_mode == "single" {
+    // Require a prior execution output before pinning (for any mode that runs an LLM)
+    if req.pinned && step.execution_mode != "context" && step.execution_mode != "input" {
         let has_envelope = state
             .repos()
             .content_versions
@@ -283,7 +274,7 @@ pub async fn toggle_step_pin(
             .is_some();
         if !has_envelope {
             return Err(AppError::BadRequest(
-                "Cannot pin a single step that has never been executed. Run the step first."
+                "Cannot pin a step that has never been executed. Run the step first."
                     .to_string(),
             ));
         }
@@ -291,6 +282,14 @@ pub async fn toggle_step_pin(
 
     // Toggle pin
     repo.set_step_pinned(p.sid, req.pinned)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    // Seal/unseal artifacts produced by this step
+    state
+        .repos()
+        .system_files
+        .seal_files_by_producer(p.sid, req.pinned)
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
