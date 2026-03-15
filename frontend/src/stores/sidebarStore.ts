@@ -124,6 +124,12 @@ const toggleAgent = (key: string): void => {
   })
 }
 
+const expandAgent = (key: string): void => {
+  const { expandedAgentKeys } = store.getState()
+  if (expandedAgentKeys[key]) return
+  store.setState({ expandedAgentKeys: { ...expandedAgentKeys, [key]: true } })
+}
+
 const reset = (): void => {
   store.setState({
     activeTab: 'tree',
@@ -156,6 +162,7 @@ export const sidebarStore = {
   collapseStep,
   toggleOutputExpand,
   toggleAgent,
+  expandAgent,
   setWidth,
   startDrag,
   stopDrag,
