@@ -5,7 +5,7 @@ import { useTheme } from '@mui/material/styles'
 import { TerminalBlock } from '@/components/primitives/terminal-renderer'
 import { StatusDot } from './StatusDot'
 import { SkeletonLines } from './SkeletonLines'
-import { CELL_WIDTH, computeLines, computeContinuationLines } from './gutterLines'
+import { CELL_WIDTH, LINE_X, STROKE, computeLines, computeContinuationLines } from './gutterLines'
 import type { GutterCell } from './buildStepTree'
 import type { StepExecutionStatus } from '@/stores/workflowExecutionStore/types'
 import type { SourceStreamStatus } from '@/stores/stepStreamStore'
@@ -163,10 +163,39 @@ function StepTreeRow({
               }}
             />
           ))}
+          {/* Corner bend for workforce steps — connects branch to agents below */}
+          {isWorkforce && (
+            <>
+              {/* Horizontal bridge: end of branch → corner vertical */}
+              <Box
+                sx={{
+                  position: 'absolute',
+                  left: gutterWidth,
+                  top: '50%',
+                  width: LINE_X + 1,
+                  height: STROKE,
+                  backgroundColor: lineColor,
+                }}
+              />
+              {/* Vertical: midpoint → bottom, connects to agent gutter */}
+              <Box
+                sx={{
+                  position: 'absolute',
+                  left: gutterWidth + LINE_X,
+                  top: '50%',
+                  bottom: 0,
+                  width: STROKE,
+                  backgroundColor: lineColor,
+                }}
+              />
+            </>
+          )}
         </Box>
 
-        {/* Expand chevron (hidden for workforce — agents always visible) */}
-        {!isWorkforce && (
+        {/* Expand chevron (spacer for workforce — agents always visible) */}
+        {isWorkforce ? (
+          <Box sx={{ width: 16, flexShrink: 0 }} />
+        ) : (
           <Typography
             sx={{
               fontSize: 10,
