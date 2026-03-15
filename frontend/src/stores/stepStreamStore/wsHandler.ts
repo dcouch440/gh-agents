@@ -11,6 +11,7 @@ import type {
 } from '@/types/ws'
 import type { SourceStreamState, SourceStreamStatus } from './types'
 import { store, initialState, makeDefaultSourceState, updateSource } from './_store'
+import { sidebarStore } from '../sidebarStore'
 
 const agentStatusToSourceStatus = (status: string): SourceStreamStatus => {
   switch (status) {
@@ -73,6 +74,9 @@ const handleWsEvent = (msg: WsWireMessage): void => {
       case WORKFLOW_EVENT.WORKFORCE_AGENT_PROGRESS: {
         const d = msg.data as WorkforceAgentProgressData
         const status = agentStatusToSourceStatus(d.status)
+        if (status === 'running') {
+          sidebarStore.expandAgent(`${d.step_id}:${d.roster_agent_id}`)
+        }
         store.setState((s) => {
           const existing = s.sources[d.roster_agent_id]
           if (existing) {
