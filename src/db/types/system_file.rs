@@ -16,6 +16,8 @@ pub struct SystemFileRow {
     pub size_bytes: i64,
     /// The workflow run that produced this file. NULL for design-time configs.
     pub workflow_run_id: Option<Uuid>,
+    /// Whether this file is sealed (immutable). Set when the producing step is pinned.
+    pub sealed: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
