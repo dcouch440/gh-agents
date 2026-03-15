@@ -116,12 +116,11 @@ function StepTreeRow({
   designProgress,
 }: StepTreeRowProps) {
   const theme = useTheme()
+  const resolved = status ?? 'idle'
+  const isWorkforce = executionMode === 'workforce'
   const lines = computeLines(gutter)
   const lineColor = theme.palette.text.disabled
   const gutterWidth = gutter.length * CELL_WIDTH
-
-  const resolved = status ?? 'idle'
-  const isWorkforce = executionMode === 'workforce'
   const hasBody = isExpanded && !isWorkforce && (resolved === 'running' || output !== null || error !== null)
 
   return (
@@ -166,19 +165,21 @@ function StepTreeRow({
           ))}
         </Box>
 
-        {/* Expand chevron */}
-        <Typography
-          sx={{
-            fontSize: 10,
-            width: 12,
-            flexShrink: 0,
-            color: 'text.disabled',
-            lineHeight: 1,
-            userSelect: 'none',
-          }}
-        >
-          {isExpanded ? '\u25BC' : '\u25B6'}
-        </Typography>
+        {/* Expand chevron (hidden for workforce — agents always visible) */}
+        {!isWorkforce && (
+          <Typography
+            sx={{
+              fontSize: 10,
+              width: 12,
+              flexShrink: 0,
+              color: 'text.disabled',
+              lineHeight: 1,
+              userSelect: 'none',
+            }}
+          >
+            {isExpanded ? '\u25BC' : '\u25B6'}
+          </Typography>
+        )}
 
         {/* Step name */}
         <Typography

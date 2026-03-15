@@ -700,4 +700,97 @@ describe('buildStepTree', () => {
     // Worker should be ['pipe', 'pipe', 'corner'] (single agent = last)
     expect(agents[0]!.gutter).toEqual(['pipe', 'pipe', 'corner'])
   })
+
+  // ── Agent topology tests ────────────────────────────────────────────────
+
+  const makeDepAgent = (name: string, order: number, dependsOn: string[]): RosterAgent => ({
+    ...makeRosterAgent(name, order),
+    depends_on: dependsOn,
+  })
+
+  // Note: solo workforce step gets gutter ['corner'], continuation = ['blank'].
+  // Agent gutters are prefixed with this continuation.
+
+  it('agent topology: sequential chain A → B → C', () => {
+    const steps = [makeWorkforceStep('wf', 'Team', 0)]
+    const roster: Record<string, RosterAgent[]> = {
+      wf: [
+        makeDepAgent('A', 0, []),
+        makeDepAgent('B', 1, ['roster-A']),
+        makeDepAgent('C', 2, ['roster-B']),
+      ],
+    }
+    const result = buildStepTree(steps, [], roster)
+    const agents = result.filter((e): e is AgentEntry => e.kind === 'agent')
+
+    expect(agents.map((a) => a.agentName)).toEqual(['A', 'B', 'C'])
+    expect(agents.map((a) => a.gutter)).toEqual([
+      ['blank', 'branch'],   //   ├── A
+      ['blank', 'branch'],   //   ├── B
+      ['blank', 'corner'],   //   └── C
+    ])
+  })
+
+  it('agent topology: parallel fork A → {B, C} → D', () => {
+    const steps = [makeWorkforceStep('wf', 'Team', 0)]
+    const roster: Record<string, RosterAgent[]> = {
+      wf: [
+        makeDepAgent('A', 0, []),
+        makeDepAgent('B', 1, ['roster-A']),
+        makeDepAgent('C', 2, ['roster-A']),
+        makeDepAgent('D', 3, ['roster-B', 'roster-C']),
+      ],
+    }
+    const result = buildStepTree(steps, [], roster)
+    const agents = result.filter((e): e is AgentEntry => e.kind === 'agent')
+
+    expect(agents.map((a) => a.agentName)).toEqual(['A', 'B', 'C', 'D'])
+    expect(agents.map((a) => a.gutter)).toEqual([
+      ['blank', 'branch'],                // ├── A (fork point)
+      ['blank', 'pipe', 'fork_start'],   // │ ┌─ B
+      ['blank', 'pipe', 'par_end'],      // │ └─ C
+      ['blank', 'corner'],                // └── D (merge)
+    ])
+  })
+
+  it('agent topology: all parallel roots (no depends_on)', () => {
+    const steps = [makeWorkforceStep('wf', 'Team', 0)]
+    const roster: Record<string, RosterAgent[]> = {
+      wf: [
+        makeDepAgent('X', 2, []),
+        makeDepAgent('Y', 0, []),
+        makeDepAgent('Z', 1, []),
+      ],
+    }
+    const result = buildStepTree(steps, [], roster)
+    const agents = result.filter((e): e is AgentEntry => e.kind === 'agent')
+
+    // No edges → flat list sorted by execution_order
+    expect(agents.map((a) => a.agentName)).toEqual(['Y', 'Z', 'X'])
+    expect(agents.map((a) => a.gutter)).toEqual([
+      ['blank', 'branch'],
+      ['blank', 'branch'],
+      ['blank', 'corner'],
+    ])
+  })
+
+  it('agent topology: fan-out without merge A → {B, C}', () => {
+    const steps = [makeWorkforceStep('wf', 'Team', 0)]
+    const roster: Record<string, RosterAgent[]> = {
+      wf: [
+        makeDepAgent('A', 0, []),
+        makeDepAgent('B', 1, ['roster-A']),
+        makeDepAgent('C', 2, ['roster-A']),
+      ],
+    }
+    const result = buildStepTree(steps, [], roster)
+    const agents = result.filter((e): e is AgentEntry => e.kind === 'agent')
+
+    expect(agents.map((a) => a.agentName)).toEqual(['A', 'B', 'C'])
+    expect(agents.map((a) => a.gutter)).toEqual([
+      ['blank', 'branch'],                // ├── A
+      ['blank', 'pipe', 'fork_start'],   // │ ┌─ B
+      ['blank', 'pipe', 'par_end'],      // │ └─ C
+    ])
+  })
 })
