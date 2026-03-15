@@ -668,19 +668,186 @@ const buildStepTree = (
     if (!agents || agents.length === 0) continue
 
     const continuation = toContinuationGutter(entry.gutter)
-    const sorted = Collections.sortedCopy(agents, (a, b) => a.execution_order - b.execution_order)
+    const agentEntries = linearizeAgents(agents, entry.step.id, continuation)
+    for (let j = 0; j < agentEntries.length; j++) {
+      result.push(agentEntries[j]!)
+    }
+  }
 
-    for (let j = 0; j < sorted.length; j++) {
-      const agent = sorted[j]!
-      const isLast = j === sorted.length - 1
-      const agentGutter: GutterCell[] = [...continuation, isLast ? 'corner' : 'branch']
-      result.push({
-        kind: 'agent',
-        stepId: entry.step.id,
-        agentId: agent.id,
-        agentName: agent.name,
-        gutter: agentGutter,
-      })
+  return result
+}
+
+// ── Agent Topology ─────────────────────────────────────────────────────────
+
+/**
+ * Build a Graph from roster agents using their `depends_on` relationships.
+ * Creates minimal stepMap entries so `topoSort` can use `display_order`.
+ */
+const buildAgentGraph = (agents: readonly RosterAgent[]): Graph => {
+  const agentIds = new Set(agents.map((a) => a.id))
+  const children = new Map<string, string[]>()
+  const parents = new Map<string, string[]>()
+  // stepMap needs display_order for topoSort tie-breaking — use execution_order
+  const stepMap = new Map<string, WorkflowStep>()
+
+  for (let i = 0; i < agents.length; i++) {
+    const agent = agents[i]!
+    // Minimal WorkflowStep-compatible entry (topoSort only reads display_order)
+    stepMap.set(agent.id, { id: agent.id, display_order: agent.execution_order } as WorkflowStep) // only display_order accessed by topoSort
+
+    for (let d = 0; d < agent.depends_on.length; d++) {
+      const parentId = agent.depends_on[d]!
+      if (!agentIds.has(parentId)) continue
+
+      const fwd = children.get(parentId)
+      if (fwd) fwd.push(agent.id)
+      else children.set(parentId, [agent.id])
+
+      const rev = parents.get(agent.id)
+      if (rev) rev.push(parentId)
+      else parents.set(agent.id, [parentId])
+    }
+  }
+
+  return { children, parents, stepMap }
+}
+
+/**
+ * Linearize roster agents into AgentEntry[] with topology-aware gutters.
+ * Handles sequential chains, fork/merge, and parallel groups using the
+ * same algorithms as step-level linearization.
+ */
+const linearizeAgents = (
+  agents: readonly RosterAgent[],
+  stepId: string,
+  prefix: readonly GutterCell[],
+): AgentEntry[] => {
+  if (agents.length === 0) return []
+
+  if (agents.length === 1) {
+    const a = agents[0]!
+    return [{ kind: 'agent', stepId, agentId: a.id, agentName: a.name, gutter: [...prefix, 'corner'] }]
+  }
+
+  // If no agent has dependencies, flat list sorted by execution_order
+  const hasEdges = agents.some((a) => a.depends_on.length > 0)
+  if (!hasEdges) {
+    const sorted = Collections.sortedCopy(agents, (a, b) => a.execution_order - b.execution_order)
+    return sorted.map((a, i): AgentEntry => ({
+      kind: 'agent',
+      stepId,
+      agentId: a.id,
+      agentName: a.name,
+      gutter: [...prefix, i === sorted.length - 1 ? 'corner' : 'branch'],
+    }))
+  }
+
+  // Build topology from depends_on
+  const graph = buildAgentGraph(agents)
+  const agentIds = agents.map((a) => a.id)
+  const scope = Collections.toSet(agentIds)
+  const order = topoSort(agentIds, graph)
+  const mergeOf = computeMergePoints(order, graph, scope)
+
+  const result: AgentEntry[] = []
+  const emitted = new Set<string>()
+  const agentMap = new Map(agents.map((a) => [a.id, a]))
+
+  const emit = (id: string, gutter: readonly GutterCell[]): void => {
+    if (emitted.has(id)) return
+    emitted.add(id)
+    const agent = agentMap.get(id)
+    if (!agent) return
+    result.push({ kind: 'agent', stepId, agentId: id, agentName: agent.name, gutter: [...gutter] })
+  }
+
+  /**
+   * Simplified linearizer for agent sub-DAGs.
+   * Handles sequential chains and one level of fork/merge.
+   */
+  const walk = (
+    nodeIds: readonly string[],
+    stopBefore: string | null,
+    gutterPrefix: readonly GutterCell[],
+    isLastSegment: boolean,
+  ): void => {
+    // Filter to topo order, not yet emitted
+    const ordered: string[] = []
+    for (let i = 0; i < order.length; i++) {
+      const id = order[i]!
+      if (id === stopBefore || emitted.has(id)) continue
+      if (scope.has(id) && nodeIds.includes(id)) ordered.push(id)
+    }
+
+    let idx = 0
+    while (idx < ordered.length) {
+      const id = ordered[idx]!
+      if (emitted.has(id)) { idx++; continue }
+
+      const merge = mergeOf.get(id) ?? null
+      const fwd = graph.children.get(id)
+      const scopedChildren: string[] = []
+      if (fwd) {
+        for (let j = 0; j < fwd.length; j++) {
+          const child = fwd[j]!
+          if (scope.has(child) && child !== stopBefore && child !== merge && !emitted.has(child)) {
+            scopedChildren.push(child)
+          }
+        }
+      }
+
+      // Count remaining after this node
+      let remaining = 0
+      for (let k = idx + 1; k < ordered.length; k++) {
+        if (!emitted.has(ordered[k]!)) remaining++
+      }
+      const isLast = isLastSegment && remaining === 0
+      const cell: GutterCell = isLast ? 'corner' : 'branch'
+
+      if (scopedChildren.length > 1) {
+        // Fork point
+        emit(id, [...gutterPrefix, cell])
+
+        // Emit parallel branches
+        for (let b = 0; b < scopedChildren.length; b++) {
+          const branchId = scopedChildren[b]!
+          const branchCell: GutterCell = b === 0 ? 'fork_start' : b === scopedChildren.length - 1 ? 'par_end' : 'par_mid'
+          const branchGutter: GutterCell[] = [...gutterPrefix, 'pipe', branchCell]
+          const innerPrefix: GutterCell[] = [...gutterPrefix, 'pipe', 'pipe']
+
+          emit(branchId, branchGutter)
+
+          // Process sub-DAG within this branch (before merge)
+          const branchNodes = reachableBefore(branchId, merge, graph, scope)
+          branchNodes.delete(branchId)
+          if (branchNodes.size > 0) {
+            walk([...branchNodes], merge, innerPrefix, b === scopedChildren.length - 1)
+          }
+        }
+
+        // Continue from merge point
+        if (merge !== null && !emitted.has(merge)) {
+          const remaining2: string[] = []
+          for (let k = 0; k < order.length; k++) {
+            if (!emitted.has(order[k]!)) remaining2.push(order[k]!)
+          }
+          walk(remaining2, stopBefore, gutterPrefix, isLastSegment)
+        }
+        return
+      }
+
+      // Sequential node
+      emit(id, [...gutterPrefix, cell])
+      idx++
+    }
+  }
+
+  walk(agentIds, null, prefix, true)
+
+  // Emit any remaining agents not reached (orphans)
+  for (let i = 0; i < agents.length; i++) {
+    if (!emitted.has(agents[i]!.id)) {
+      emit(agents[i]!.id, [...prefix, 'corner'])
     }
   }
 
