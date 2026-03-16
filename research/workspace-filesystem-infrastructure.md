@@ -371,6 +371,61 @@ The merge system exists as a safety net for the cases the builder couldn't predi
 
 ---
 
+## Part 6: Workspace File Organization
+
+Research into how AI agents, CI/CD systems, and sandboxed environments organize working files vs output files in shared workspaces.
+
+### Key Finding: Nobody Separates Working Files from Output
+
+**No production AI agent system creates a separate "output" directory.** The workspace IS the working directory. Agents modify files in-place. The output is the diff/branch/PR, not a special directory.
+
+- **Codex:** works directly in the repo clone. The diff IS the output.
+- **Cursor:** clones to isolated VM, works on branch. Output is the branch/PR.
+- **SWE-Agent:** works in cloned repo inside container. Metadata (trajectories) stored externally on host.
+- **OpenHands:** mounts workspace at `/opt/workspace_base`. No source/output split.
+- **Manus AI:** writes working notes and outputs to the same filesystem.
+
+### CI/CD: Artifacts Are Selection, Not Location
+
+CI/CD systems don't use separate output directories during execution. Artifact separation happens AFTER the build.
+
+- **GitHub Actions:** `actions/upload-artifact` selects which workspace files to preserve. No special output dir.
+- **Jenkins:** `archiveArtifacts` copies from workspace to build archive post-build.
+- **GitLab CI:** `artifacts: paths:` in YAML declares which files to keep. Relative to repo root.
+
+### Build Systems: The Exception
+
+Build systems DO separate source from output — but AI agents aren't build systems.
+
+- **Bazel:** source tree is never written to. All output to `~/.cache/bazel/`.
+- **Nix:** hermetic sandbox, all output to `/nix/store/<hash>-<name>/`.
+- **Gradle/Maven:** `build/` or `target/` subdirectories.
+
+### Emerging: folder.md Convention
+
+A `FOLDER.md` file in the workspace root declares directory purposes:
+- `drafts/` — scratch space
+- `final/` — locked until finalized
+- `prompt/` — read-only
+- `notes/` — append-only
+
+Closest thing to formal working/output separation for AI agents. Not yet widely adopted.
+
+### Decision: Don't Separate
+
+The workspace is the workspace. Agents create directories as they see fit. The handoff text (shaped by `expected_output`) tells the next step what's important and where to look. Everything else is noise the next agent can ignore. Fresh workspace per run means nothing accumulates across runs.
+
+Sources:
+- [OpenAI Codex CLI](https://developers.openai.com/codex/cli/reference/)
+- [Cursor Background Agents](https://docs.cursor.com/en/background-agent)
+- [SWE-Agent Trajectories](https://swe-agent.com/latest/usage/trajectories/)
+- [GitHub Actions Artifacts](https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts)
+- [Bazel Output Directory Layout](https://bazel.build/remote/output-directories)
+- [folder.md Convention](https://www.folder.md/docs)
+- [Anthropic Multi-Agent Research](https://www.anthropic.com/engineering/multi-agent-research-system)
+
+---
+
 ## Decision Matrix
 
 | Concern | Solution | Status |
