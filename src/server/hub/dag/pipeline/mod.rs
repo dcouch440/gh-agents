@@ -24,8 +24,8 @@ pub(crate) use output::compose_workforce_output;
 // Re-exports for test access (tests.rs imports via crate path)
 #[cfg(test)]
 pub(crate) use output::{
-    build_filtered_outputs_block, build_team_roster_string, compute_execution_levels,
-    filter_outputs_for_agent,
+    build_filtered_outputs_block, build_team_roster_string, build_upstream_outputs_block,
+    compute_execution_levels, filter_outputs_for_agent,
 };
 #[cfg(test)]
 pub(crate) use types::DesignedAgentPrompt;
@@ -44,7 +44,6 @@ use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
 
 use super::container::{create_optional_container, destroy_optional_container};
 use super::dag_state::DagExecutionState;
-use super::designer_input::build_upstream_outputs_block;
 use super::utils::collect_upstream_context_data;
 use super::{
     broadcast_workflow_event, compose_prompt, resolve_output_key, resolve_step_port_inputs,
@@ -52,9 +51,10 @@ use super::{
 };
 
 use agent_executor::execute_agent_levels;
+use designer::build_static_fallback_prompts;
 pub(crate) use designer::DesignerPhase;
-use designer::{build_static_fallback_prompts, build_user_notes_block};
 use lifecycle::{PhaseOutput, PhaseTokenUsage, PipelineExecutionContext, PipelinePhase};
+use output::build_user_notes_block;
 use types::WorkforceStepEnv;
 
 /// Composable pipeline executor with lifecycle phases.
@@ -178,7 +178,8 @@ impl Pipeline {
             .collect();
 
         // 7b. Build upstream outputs block for agent task prompts
-        let upstream_outputs_block = build_upstream_outputs_block(&upstream_envelopes, dag.steps);
+        let upstream_outputs_block =
+            output::build_upstream_outputs_block(&upstream_envelopes, dag.steps);
 
         let pipeline_ctx = PipelineExecutionContext {
             step: step.clone(),
