@@ -125,7 +125,7 @@ const buildDispatchExport = (): Record<string, PhaseExport> => {
 // ── Run export ──────────────────────────────────────────────────────────────
 
 import { agentTraceStore } from '@/stores/agentTraceStore'
-import type { AgentTrace, AgentTraceEvent } from '@/stores/agentTraceStore'
+import type { AgentTrace } from '@/stores/agentTraceStore'
 
 type AgentExport = {
   agent: string

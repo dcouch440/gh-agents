@@ -29,9 +29,13 @@ const makeEntry = (overrides: Partial<DispatchEntry> = {}): DispatchEntry => ({
 
 describe('DispatchTraceView', () => {
   it('renders text segments with TerminalBlock', () => {
+    // Text segments before the first tool call are hidden (builder preamble filter),
+    // so include a tool call first to make the text segment visible.
     const entry = makeEntry({
       trace: [
-        { type: 'token', content: 'Hello world', ts: '2025-01-01T00:00:00Z' },
+        { type: 'tool_start', toolName: 'think', toolId: 't0', input: {}, ts: '2025-01-01T00:00:00Z' },
+        { type: 'tool_end', toolName: 'think', toolId: 't0', result: {}, ts: '2025-01-01T00:00:01Z' },
+        { type: 'token', content: 'Hello world', ts: '2025-01-01T00:00:02Z' },
       ],
     })
     render(<DispatchTraceView entry={entry} />)
