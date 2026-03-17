@@ -144,7 +144,7 @@ Parallel steps:
 
 Each workflow run starts with a **fresh workspace**. No files carry over from previous runs. The workspace is created empty when the run begins and torn down when it ends.
 
-**Exception: pinned steps.** When a step is pinned, its workspace files are sealed and persisted. On the next run, pinned files are pre-loaded into the fresh workspace before execution begins. The pinned step replays instantly (zero tokens) and downstream steps see its files as if it just ran.
+**Exception: pinned steps.** When a step is pinned, its workspace files are sealed and persisted. On the next run, pinned files are pre-loaded into the fresh workspace before execution begins. The pinned step replays instantly (zero tokens) and later steps see its files as if it just ran.
 
 ```
 Run N:
@@ -271,7 +271,7 @@ Haiku returns the merged version. One call per conflict hunk, ~20 lines of conte
 
 ### Why Conflicts Are Rare
 
-If the builder designs the DAG well, parallel steps do genuinely different work:
+If the builder designs the workflow well, parallel steps do genuinely different work:
 - **Different files modified**: most common, auto-merge, zero cost
 - **Same file, different sections**: auto-merge, zero cost
 - **Same file, same lines**: rare, one Haiku call
@@ -378,9 +378,7 @@ workspace and the previous step's handoff directly.
 The designer runs in **step order** — same order as execution. Each step's designer sees the previous step's handoff and the next step's box text. The narrative threads naturally because each handoff feeds into the next step's design context.
 
 ```
-Builder creates all nodes (full context, detailed descriptions)
-                    ↓
-Designer runs in step order:
+For each step, builder then designer, in step order:
   Step 1: builder desc + next step's box text
         → designs agents + step handoff
   Step 2: builder desc + step 1's handoff + next step's box text
@@ -406,7 +404,7 @@ The designer's key tool is `expected_output` — it shapes the agent's text resp
 
 The `expected_output` is an instruction TO the agent about what its text response should contain. It's NOT the output itself — it's the template.
 
-Each `expected_output` is a contract. The next step's designer reads that contract and writes an assignment that references it. The narrative chains: step 1's expected_output → step 2's assignment → step 2's expected_output → step 3's assignment. No guessing. No gaps.
+Each `expected_output` is a promise. The next step's designer reads that promise and writes an assignment that references it. The narrative chains: step 1's expected_output → step 2's assignment → step 2's expected_output → step 3's assignment. No guessing. No gaps.
 
 If the user edits step 1's design, the system re-runs designers for steps after it — the chain rebuilds forward.
 
@@ -766,7 +764,7 @@ Step completes → overlay diff filtered (denylist removes junk)
               → next batch starts with expanded workspace
 ```
 
-## Detailed: Topological Design Pass
+## Detailed: Step-Order Design Pass
 
 This is the most significant change to the existing system. Today, the builder and designer both run **per-node independently** — each node's designer has no knowledge of what other nodes' designers wrote. In the file-first model, the design phase runs in **step order across the entire workflow**, threading context from step to step.
 
@@ -804,7 +802,7 @@ The designer currently sees upstream via `format_envelopes_as_upstream()` — wh
 
 The `expected_output` field is currently dual-format: "Store: [artifact]. Response: [lean summary]." It tells the agent what to save and what to say. But it's inward-focused — it describes what THIS agent produces, not what the NEXT step needs to know.
 
-### New System: Topological Design Pass
+### New System: Step-Order Design Pass
 
 **For each step, in order:**
 ```
@@ -929,7 +927,9 @@ step_handoff — what this step produces (in complete_design):
 ### Updated Designer Instruction Template (react_prompt.md)
 
 ```
-{{prior_design}}
+<current_design>
+{{current_design_handoff}}
+</current_design>
 
 <task>
 {{task}}
