@@ -159,6 +159,7 @@ impl AppStateBuilder {
             task_registry: crate::server::state::TaskRegistry::new(),
             run_results_tokens: crate::server::hub::run_results::new_run_results_tokens(),
             s3: None,
+            workspace: None,
         });
 
         Ok((state, orchestrator_rx))

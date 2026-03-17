@@ -23,6 +23,7 @@ use crate::types::{AppConfig, UserId};
 
 use super::hub::protocols::ProtocolEngine;
 use super::services::system_store::s3::S3Backend;
+use super::services::workspace::WorkspaceManager;
 use super::ws::events::{RoomEvent, ServerEvent, SessionEvent, WorkflowEvent};
 
 mod builder;
@@ -123,6 +124,8 @@ pub(crate) struct AppStateInner {
     pub(crate) run_results_tokens: super::hub::run_results::RunResultsTokens,
     /// S3-compatible storage backend (MinIO in dev, real S3 in prod).
     pub(crate) s3: Option<Arc<S3Backend>>,
+    /// JuiceFS workspace manager (None if JuiceFS is not mounted).
+    pub(crate) workspace: Option<WorkspaceManager>,
 }
 
 /// Application state shared across all HTTP handlers.
@@ -185,6 +188,14 @@ impl AppState {
         // Initialize S3 backend (panics if unavailable — required for system store)
         let s3 = Some(Self::init_s3(&env).await);
 
+        // Initialize workspace manager (optional — requires JuiceFS mount)
+        let workspace =
+            WorkspaceManager::from_env(crate::constants::ENV_WORKSPACE_MOUNT_POINT).or_else(|| {
+                // Fall back to default mount point
+                let default = crate::constants::WORKSPACE_DEFAULT_MOUNT_POINT;
+                WorkspaceManager::new(default).ok()
+            });
+
         let state = Self(Arc::new(AppStateInner {
             env,
             db: Some(db),
@@ -206,6 +217,7 @@ impl AppState {
             task_registry: TaskRegistry::new(),
             run_results_tokens: super::hub::run_results::new_run_results_tokens(),
             s3,
+            workspace,
         }));
 
         (state, orchestrator_rx)
@@ -251,6 +263,7 @@ impl AppState {
                 task_registry: TaskRegistry::new(),
                 run_results_tokens: super::hub::run_results::new_run_results_tokens(),
                 s3: None,
+                workspace: None,
             })),
             orchestrator_rx,
         )
@@ -575,6 +588,11 @@ impl AppState {
     /// Access the S3-compatible storage backend.
     pub fn s3(&self) -> Option<&Arc<S3Backend>> {
         self.0.s3.as_ref()
+    }
+
+    /// Access the JuiceFS workspace manager (None if not mounted).
+    pub fn workspace(&self) -> Option<&WorkspaceManager> {
+        self.0.workspace.as_ref()
     }
 
     /// Access the run results summarization tokens (cancel-and-replace map).
