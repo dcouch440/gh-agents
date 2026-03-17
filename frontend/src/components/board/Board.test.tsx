@@ -29,16 +29,16 @@ describe('Board', () => {
   it('renders toolbar with select, box, and arrow tools', () => {
     render(<Board workflowId="wf-1" />)
 
-    expect(screen.getByRole('button', { name: /select/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /box/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /arrow/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /select \(v\)/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /box \(b\)/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /arrow \(a\)/i })).toBeInTheDocument()
   })
 
   it('renders zoom controls', () => {
     render(<Board workflowId="wf-1" />)
 
-    expect(screen.getByRole('button', { name: /zoom in/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /zoom out/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^zoom in$/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^zoom out$/i })).toBeInTheDocument()
   })
 
   it('calls boardStore.resetBoard on unmount', () => {

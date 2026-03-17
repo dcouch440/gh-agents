@@ -14,7 +14,7 @@ function StatusDot({ status, designStatus }: StatusDotProps) {
 
   // When execution is running and design status exists, show design indicator
   // instead of generic yellow — workforce steps show design phase, agent dots handle execution
-  if (resolved === 'running' && designStatus != null) {
+  if (resolved === 'running' && designStatus !== null) {
     const color = designStatus === 'failed' ? '#f85149' : '#58a6ff'
     if (designStatus === 'running') {
       return (

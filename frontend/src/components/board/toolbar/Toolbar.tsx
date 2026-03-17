@@ -105,6 +105,7 @@ function ToolButton({ icon, tooltip, active = false, disabled = false, onClick }
           size="small"
           onClick={onClick}
           disabled={disabled}
+          aria-label={tooltip}
           sx={{
             color: active ? 'primary.main' : 'text.secondary',
             backgroundColor: active ? 'action.selected' : 'transparent',

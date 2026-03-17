@@ -26,7 +26,7 @@ let mockIsLoading = false
 let mockError: string | null = null
 
 vi.mock('@/stores', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/stores')>()
+  const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
     useStore: (_store: unknown, selector: (s: unknown) => unknown) => {
