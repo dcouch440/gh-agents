@@ -310,9 +310,15 @@ The builder's prompt includes this workspace context:
 ```
 Agents run in containers with a shared workspace at /workspace/.
 Every step sees files from all previous steps. Agents have full
-shell access — they can install, build, and run programs directly.
-Most tasks need zero explicit capabilities.
+shell access and web search — these are always available, never
+assign them.
+
+Additional capabilities (assign when the task requires them):
+  database_query — query the project database directly
+  [other integrations as they become available]
 ```
+
+The capabilities list only contains things the shell and model can't do — external integrations, APIs, domain-specific tools. It grows over time as integrations are added. The builder assigns from the list when relevant, assigns nothing when shell is enough.
 
 **Old mental model:**
 ```
@@ -336,7 +342,7 @@ The builder thinks about:
 The builder does NOT think about:
 - What data flows between steps (the workspace handles it)
 - What files step A produces for step B (the handoff handles it)
-- How to format output for downstream consumption (the designer handles it)
+- How to format output for the next step (the designer handles it)
 
 **Example: builder creates a 4-step workflow**
 
@@ -374,23 +380,23 @@ The designer runs in **step order** — same order as execution. Each step's des
 ```
 Builder creates all nodes (full context, detailed descriptions)
                     ↓
-Designer runs topologically:
-  Step 1: builder desc + downstream desc
-        → designs agents + expected_output
-  Step 2: builder desc + step 1's expected_output + downstream desc
-        → designs agents + expected_output
-  Step 3: builder desc + step 2's expected_output + downstream desc
-        → designs agents + expected_output
-  Step 4: builder desc + step 3's expected_output
-        → designs agents + expected_output
+Designer runs in step order:
+  Step 1: builder desc + next step's box text
+        → designs agents + step handoff
+  Step 2: builder desc + step 1's handoff + next step's box text
+        → designs agents + step handoff
+  Step 3: builder desc + step 2's handoff + next step's box text
+        → designs agents + step handoff
+  Step 4: builder desc + step 3's handoff
+        → designs agents + step handoff
 ```
 
 Each designer receives:
 - **Builder's node description** — detailed, specific (the builder had full context)
-- **Upstream expected_outputs** — what previous steps promised to hand off (already built + designed, has step name and contract)
-- **Downstream box text** — raw text from the user's canvas (not built or designed yet, just the user's words)
+- **Previous step's handoff** — what the step before promised to hand off (already built + designed, has step name and handoff description)
+- **Next step's box text** — raw text from the user's canvas (not built or designed yet, just the user's words)
 
-The designer's key tool is `expected_output` — it shapes the agent's text response into an orientation handoff targeted at the specific downstream step.
+The designer's key tool is `expected_output` — it shapes the agent's text response into an orientation handoff targeted at the next step.
 
 **How to write `expected_output`:**
 
@@ -402,7 +408,7 @@ The `expected_output` is an instruction TO the agent about what its text respons
 
 Each `expected_output` is a contract. The next step's designer reads that contract and writes an assignment that references it. The narrative chains: step 1's expected_output → step 2's assignment → step 2's expected_output → step 3's assignment. No guessing. No gaps.
 
-If the user edits step 1's design, the system re-runs the designer for downstream steps — the chain is invalidated and rebuilt. Same topological propagation as execution.
+If the user edits step 1's design, the system re-runs designers for steps after it — the chain rebuilds forward.
 
 ### Full Designer Example: 4-Step Scraper Workflow
 
@@ -494,7 +500,7 @@ had inconsistent tier naming). Full analysis at
 /workspace/analysis/report.md. Charts at /workspace/analysis/charts/.
 ```
 
-**Step 4: "Write Executive Report"** (final step, no downstream)
+**Step 4: "Write Executive Report"** (final step, nothing after it)
 
 ```json
 {
@@ -531,11 +537,11 @@ Every `expected_output` follows the same structure:
 3. What the next step needs to know (format, key details, how to use it)
 ```
 
-The designer tailors #3 to the specific downstream consumer:
+The designer tailors #3 to what the next step needs:
 - Next step **runs** the output → include run instructions
 - Next step **analyzes** the output → include data format and location
 - Next step **writes about** the output → include key findings and confidence
-- No downstream step → just confirm completion and location
+- No next step → just confirm completion and location
 
 ### What the Next Step Receives
 
@@ -584,7 +590,7 @@ Step 4 assignment:
    Write the report to the workspace."
 ```
 
-Each assignment gets richer as the workflow progresses. Step 1 has no history. Step 4 has the full arc. The designer builds this narrative because it sees the whole workflow topology — it knows what every step does and how they connect.
+Each assignment gets richer as the workflow progresses. Step 1 has no history. Step 4 has the full arc. The designer builds this narrative because it sees the previous step's handoff and the next step's box text — it knows where this step sits in the story.
 
 ### Agent Prompt Pattern
 
@@ -716,15 +722,15 @@ The agent doesn't need to know the team roster, the mission brief, or an XML man
 | Passdown data as primary transport | Workspace files are the data; text output is orientation |
 | Edge-based data propagation | Edges are scheduling; workspace is global |
 | `store_read_file` / `store_write_file` (text blobs) | Real POSIX filesystem (`cat`, `ls`, `python`) |
-| Response shaping for downstream consumption | Designer shapes `expected_output` as targeted briefing |
+| Response shaping for next step | Designer shapes `expected_output` as targeted briefing |
 | Step-bound namespaces | Agents create directories dynamically |
 
 ## What This Doesn't Replace
 
-- **DAG execution order** — edges still determine topological sort and parallelism
+- **Execution order** — edges still determine which steps run before others
 - **Designer per-agent prompts** — reframed from handoffs to workspace contributions
-- **Agent text output** — still flows to downstream steps as orientation; designer shapes it via `expected_output`
-- **`<previous_agent_outputs>` within workforce** — stays for within-step agent coordination
+- **Agent text output** — still flows to the next step as orientation; designer shapes it via `expected_output`
+- **`<previous_step>` within workforce** — same tag used for both cross-step and within-step agent handoffs
 - **Execution envelopes** — still track metadata (tokens, cost, status); text output carries orientation, not data
 - **Pin system** — pinned steps replay; their workspace files persist
 
@@ -738,15 +744,15 @@ Phase 0: Create nodes, wire edges (agentless, instant)
 Builder: Topology + node content (per-node, detailed descriptions)
          Thinks in scheduling, not data routing.
                         ↓
-Designer: Runs in topological order (same order as execution)
+Designer: Runs in step order (same order as execution)
           Each step's designer sees:
             - Builder's node description
-            - Upstream steps' expected_outputs (already designed)
-            - Downstream step descriptions
-          Writes per-agent prompts + expected_output.
-          expected_output feeds into the next step's design context.
+            - Previous step's handoff (already designed)
+            - Next step's box text
+          Writes per-agent prompts + step handoff.
+          Handoff feeds into the next step's design context.
                         ↓
-Execute: DAG runs topologically
+Execute: Steps run in order
          Each step gets a container:
            JuiceFS (read-only lower) + OverlayFS (writable upper)
          Agent sees merged /workspace/, writes freely.
@@ -762,7 +768,7 @@ Step completes → overlay diff filtered (denylist removes junk)
 
 ## Detailed: Topological Design Pass
 
-This is the most significant change to the existing system. Today, the builder and designer both run **per-node independently** — each node's designer has no knowledge of what other nodes' designers wrote. In the file-first model, the design phase runs in **topological order across the entire workflow**, threading context from step to step.
+This is the most significant change to the existing system. Today, the builder and designer both run **per-node independently** — each node's designer has no knowledge of what other nodes' designers wrote. In the file-first model, the design phase runs in **step order across the entire workflow**, threading context from step to step.
 
 ### What Changes
 
@@ -773,7 +779,7 @@ This is the most significant change to the existing system. Today, the builder a
 | Designer context | Node's roster + upstream runtime envelopes | Node's roster + previous step's handoff + next step's box text |
 | `expected_output` format | "Store: X. Response: Y." (dual, inward-focused) | Orientation handoff for the next step (outward-focused) |
 | Cross-step awareness | None — designer doesn't know other steps' designs | Each designer reads the previous step's designed handoff |
-| Re-design propagation | Independent — editing step 1's design doesn't affect step 2 | Sequential — editing step 1 re-runs downstream designers |
+| Re-design propagation | Independent — editing step 1's design doesn't affect step 2 | Sequential — editing step 1 re-runs later steps' designers |
 
 ### Current System: How the Designer Works Today
 
@@ -985,11 +991,11 @@ Designer writes:
 }
 ```
 
-The assignment references what the upstream handoff contract promised ("its handoff describes the entry point, how to install dependencies, and how to run it"). The expected_output is shaped for what the downstream step needs ("where the results data lives, the data format, fields per record").
+The assignment references what the previous step's handoff promised ("its handoff describes the entry point, how to install dependencies, and how to run it"). The expected_output is shaped for what the next step needs ("where the results data lives, the data format, fields per record").
 
 ### Step-Level Expected Output
 
-Each step's designer also writes a **step-level expected output summary** — a one-liner stored as metadata on the step. This is what downstream designers see in `<upstream_handoff_contracts>`.
+Each step's designer also writes a **step-level handoff description** — stored as metadata on the step. This is what the next step's designer sees in `<previous_step>`.
 
 For a workforce with 3 agents, the step-level summary represents what the STEP as a whole hands off, not what individual agents produce:
 
@@ -999,7 +1005,7 @@ Workforce agents:
   Analyzer expected_output: "Report prioritized findings..."
   Reporter expected_output: "Confirm report location..."
 
-Step-level expected_output (what downstream sees):
+Step-level handoff (what the next step's designer sees):
   "Describe the security audit results: total findings by severity,
    where the remediation report lives in the workspace, and key
    recommendations."
