@@ -233,47 +233,22 @@ async fn execute_single_agent(
 
     // Build task prompt: shared mission context + designer's assignment
     let filtered = filter_outputs_for_agent(prior_outputs, &designed.receives_from);
-    let mut task_prompt = format!(
-        "<context>\n{}\n</context>\n\n<assignment>\n{}\n</assignment>",
-        env.task_description, designed.assignment,
-    );
+    let previous_agent_outputs = if filtered.is_empty() {
+        String::new()
+    } else {
+        build_filtered_outputs_block(&filtered)
+    };
 
-    // Inject expected output shape (from designer)
-    if let Some(expected) = &designed.expected_output {
-        if !expected.is_empty() {
-            task_prompt.push_str(&format!(
-                "\n\n<expected_output>\n{}\n</expected_output>",
-                expected
-            ));
-        }
+    let task_prompt = TaskPromptBuilder {
+        context: env.task_description.clone(),
+        assignment: designed.assignment.clone(),
+        expected_output: designed.expected_output.clone(),
+        upstream_artifacts: env.upstream_artifacts_block.clone(),
+        previous_agent_outputs,
+        upstream_step_outputs: env.upstream_outputs_block.clone(),
+        user_notes: env.user_notes_block.clone(),
     }
-
-    // Inject upstream artifacts manifest (files from store)
-    if !env.upstream_artifacts_block.is_empty() {
-        task_prompt.push_str(&format!("\n\n{}", env.upstream_artifacts_block));
-    }
-
-    // Append upstream agent outputs
-    if !filtered.is_empty() {
-        let previous_outputs = build_filtered_outputs_block(&filtered);
-        task_prompt = format!(
-            "{}\n\n<previous_agent_outputs>\n{}\n</previous_agent_outputs>",
-            task_prompt, previous_outputs
-        );
-    }
-
-    // Inject upstream DAG step outputs (workforce, single — not context nodes)
-    if !env.upstream_outputs_block.is_empty() {
-        task_prompt.push_str(&format!(
-            "\n\n<upstream_step_outputs>\n{}\n</upstream_step_outputs>",
-            env.upstream_outputs_block
-        ));
-    }
-
-    // Inject user notes
-    if !env.user_notes_block.is_empty() {
-        task_prompt = format!("{}\n\n{task_prompt}", env.user_notes_block);
-    }
+    .build();
 
     // Create agent_execution row for message persistence
     let ae_repo = &*env.state.repos().agent_executions;
@@ -443,5 +418,66 @@ async fn execute_single_agent(
             );
             Err(e)
         }
+    }
+}
+
+/// Assembles the task prompt for a workforce agent from named blocks.
+///
+/// Blocks are assembled in a fixed order:
+/// 1. user_notes (prepended at top)
+/// 2. context + assignment (always present)
+/// 3. expected_output (optional, from designer)
+/// 4. upstream_artifacts (XML manifest)
+/// 5. previous_agent_outputs (filtered by receives_from)
+/// 6. upstream_step_outputs (DAG step outputs)
+struct TaskPromptBuilder {
+    context: String,
+    assignment: String,
+    expected_output: Option<String>,
+    upstream_artifacts: String,
+    previous_agent_outputs: String,
+    upstream_step_outputs: String,
+    user_notes: String,
+}
+
+impl TaskPromptBuilder {
+    fn build(self) -> String {
+        let mut prompt = format!(
+            "<context>\n{}\n</context>\n\n<assignment>\n{}\n</assignment>",
+            self.context, self.assignment,
+        );
+
+        if let Some(expected) = &self.expected_output {
+            if !expected.is_empty() {
+                prompt.push_str(&format!(
+                    "\n\n<expected_output>\n{}\n</expected_output>",
+                    expected
+                ));
+            }
+        }
+
+        if !self.upstream_artifacts.is_empty() {
+            prompt.push_str(&format!("\n\n{}", self.upstream_artifacts));
+        }
+
+        if !self.previous_agent_outputs.is_empty() {
+            prompt.push_str(&format!(
+                "\n\n<previous_agent_outputs>\n{}\n</previous_agent_outputs>",
+                self.previous_agent_outputs
+            ));
+        }
+
+        if !self.upstream_step_outputs.is_empty() {
+            prompt.push_str(&format!(
+                "\n\n<upstream_step_outputs>\n{}\n</upstream_step_outputs>",
+                self.upstream_step_outputs
+            ));
+        }
+
+        if !self.user_notes.is_empty() {
+            prompt = format!("{}\n\n{prompt}", self.user_notes);
+        }
+
+        prompt
     }
 }

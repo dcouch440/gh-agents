@@ -9,7 +9,6 @@ pub mod workforce;
 
 use std::collections::{HashMap, HashSet};
 
-use serde_json::Value as JsonValue;
 use uuid::Uuid;
 
 use crate::db::WorkflowStepRow;
@@ -127,86 +126,5 @@ pub fn truncate_for_context(content: &str, max_chars: usize) -> &str {
             end -= 1;
         }
         &content[..end]
-    }
-}
-
-/// Build a formatted block of upstream DAG step outputs for injection into
-/// workforce agent task prompts.
-///
-/// Filters out context-mode and input-mode steps (context nodes are already
-/// handled by `user_notes_block`). For workforce envelopes, extracts individual
-/// agent outputs from the `{"agents": {...}}` structure. For other step types,
-/// renders the data as a string.
-///
-/// Returns an empty string if no qualifying upstream outputs exist.
-pub fn build_upstream_outputs_block(
-    envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
-    steps: &[WorkflowStepRow],
-) -> String {
-    if envelopes.is_empty() {
-        return String::new();
-    }
-
-    let step_map: HashMap<Uuid, &WorkflowStepRow> = steps.iter().map(|s| (s.id, s)).collect();
-
-    let mut sections: Vec<String> = Vec::new();
-
-    for (step_id, env) in envelopes {
-        // Skip context and input steps — already handled by user_notes_block
-        if let Some(step) = step_map.get(step_id) {
-            if step.execution_mode == "context" || step.execution_mode == "input" {
-                continue;
-            }
-        }
-
-        let data = match &env.data {
-            Some(d) => d,
-            None => continue,
-        };
-
-        // Use human-readable step name, falling back to output_variable_name
-        let name = step_map
-            .get(step_id)
-            .and_then(|s| s.name.as_deref().or(s.output_variable_name.as_deref()))
-            .unwrap_or("Upstream Step");
-
-        let content = format_envelope_data(data);
-        if content.is_empty() {
-            continue;
-        }
-
-        let truncated = truncate_for_context(&content, 4000);
-        sections.push(format!("### {}\n{}", name, truncated));
-    }
-
-    if sections.is_empty() {
-        return String::new();
-    }
-
-    sections.join("\n\n")
-}
-
-/// Format envelope data for human-readable injection.
-///
-/// Workforce envelopes have `{"agents": {"name": "output"}}` — extract each
-/// agent's output as a labeled section. Other formats are rendered as strings.
-fn format_envelope_data(data: &JsonValue) -> String {
-    // Workforce envelope: extract individual agent outputs
-    if let Some(agents) = data.get("agents").and_then(|a| a.as_object()) {
-        let mut parts: Vec<String> = Vec::new();
-        for (name, value) in agents {
-            let content = match value {
-                JsonValue::String(s) => s.clone(),
-                other => serde_json::to_string_pretty(other).unwrap_or_default(),
-            };
-            parts.push(format!("**{}**:\n{}", name, content));
-        }
-        return parts.join("\n\n");
-    }
-
-    // Non-workforce: render as string
-    match data {
-        JsonValue::String(s) => s.clone(),
-        other => serde_json::to_string_pretty(other).unwrap_or_default(),
     }
 }

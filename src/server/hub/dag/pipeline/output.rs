@@ -1,12 +1,16 @@
 //! Pure helper functions for workforce output composition and agent scheduling.
 
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
 
 use crate::db::traits::SystemFileRepo;
 use crate::db::{SystemFileRow, WorkflowStepRow};
+use crate::server::hub::protocols::context::{build_context_block, ContextDocument};
+use crate::types::StepExecutionEnvelope;
 
 use super::super::agent_designer::normalize_agent_name;
 use super::types::DesignedAgentPrompt;
@@ -225,4 +229,110 @@ fn format_artifact_section(step_name: &str, files: &[SystemFileRow]) -> String {
     }
     out.push_str("  </step>");
     out
+}
+
+/// Build user notes block from upstream context node data.
+///
+/// Used by lifecycle phases to inject upstream context into agent task prompts.
+pub(crate) fn build_user_notes_block(upstream_context: &[(String, String)]) -> String {
+    if upstream_context.is_empty() {
+        return String::new();
+    }
+
+    let docs: Vec<ContextDocument> = upstream_context
+        .iter()
+        .map(|(title, content)| {
+            let mut hasher = DefaultHasher::new();
+            title.hash(&mut hasher);
+            let short_id = format!("{:08x}", hasher.finish() & 0xFFFF_FFFF);
+            ContextDocument {
+                short_id,
+                title: title.clone(),
+                content: content.clone(),
+            }
+        })
+        .collect();
+    let inner = build_context_block(&[], &docs);
+    format!("<user_notes>\n{inner}\n</user_notes>")
+}
+
+/// Build a formatted block of upstream DAG step outputs for injection into
+/// workforce agent task prompts.
+///
+/// Filters out context-mode and input-mode steps (context nodes are already
+/// handled by `user_notes_block`). For workforce envelopes, extracts individual
+/// agent outputs from the `{"agents": {...}}` structure. For other step types,
+/// renders the data as a string.
+///
+/// Returns an empty string if no qualifying upstream outputs exist.
+pub(crate) fn build_upstream_outputs_block(
+    envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
+    steps: &[WorkflowStepRow],
+) -> String {
+    if envelopes.is_empty() {
+        return String::new();
+    }
+
+    let step_map: HashMap<Uuid, &WorkflowStepRow> = steps.iter().map(|s| (s.id, s)).collect();
+
+    let mut sections: Vec<String> = Vec::new();
+
+    for (step_id, env) in envelopes {
+        // Skip context and input steps — already handled by user_notes_block
+        if let Some(step) = step_map.get(step_id) {
+            if step.execution_mode == "context" || step.execution_mode == "input" {
+                continue;
+            }
+        }
+
+        let data = match &env.data {
+            Some(d) => d,
+            None => continue,
+        };
+
+        // Use human-readable step name, falling back to output_variable_name
+        let name = step_map
+            .get(step_id)
+            .and_then(|s| s.name.as_deref().or(s.output_variable_name.as_deref()))
+            .unwrap_or("Upstream Step");
+
+        let content = format_envelope_data(data);
+        if content.is_empty() {
+            continue;
+        }
+
+        let truncated = super::super::designer_input::truncate_for_context(&content, 4000);
+        sections.push(format!("### {}\n{}", name, truncated));
+    }
+
+    if sections.is_empty() {
+        return String::new();
+    }
+
+    sections.join("\n\n")
+}
+
+/// Format envelope data for human-readable injection.
+///
+/// Workforce envelopes have `{"agents": {"name": "output"}}` — extract each
+/// agent's output as a labeled section. Other formats are rendered as strings.
+fn format_envelope_data(data: &JsonValue) -> String {
+    // Workforce envelope: extract individual agent outputs
+    if let Some(agents) = data.get("agents").and_then(|a| a.as_object()) {
+        let mut parts: Vec<String> = Vec::new();
+        for (name, value) in agents {
+            let content = match value {
+                JsonValue::String(s) => s.clone(),
+                other => serde_json::to_string_pretty(other).unwrap_or_default(),
+            };
+            parts.push(format!("**{}**:\n{}", name, content));
+        }
+        return parts.join("\n\n");
+    }
+
+    // Non-workforce: render as string
+    match data {
+        JsonValue::String(s) => s.clone(),
+        other => serde_json::to_string_pretty(other).unwrap_or_default(),
+    }
 }

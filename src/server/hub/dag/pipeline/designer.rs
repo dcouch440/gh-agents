@@ -4,9 +4,7 @@
 //! roster agent via the Agent Designer LLM call. Falls back to static
 //! prompts when the designer fails — never propagates a designer error.
 
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 
 use anyhow::anyhow;
 use tracing::{info, warn};
@@ -17,7 +15,6 @@ use crate::db::traits::CreateAgentExecutionInput;
 use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow, WorkflowStepEdgeRow};
 use crate::server::hub::engine::filters::FilterContext;
 use crate::server::hub::error::HubError;
-use crate::server::hub::protocols::context::{build_context_block, ContextDocument};
 use crate::server::hub::protocols::execution_recorder::{
     PhaseCompletion, ProtocolExecutionRecorder,
 };
@@ -150,7 +147,7 @@ impl PipelinePhase for DesignerPhase {
                     },
                 );
 
-                let user_notes_block = build_user_notes_block(&ctx.upstream_context);
+                let user_notes_block = super::output::build_user_notes_block(&ctx.upstream_context);
                 return Ok(PhaseOutput {
                     designed_prompts: prompts,
                     user_notes_block,
@@ -241,7 +238,7 @@ impl PipelinePhase for DesignerPhase {
             )
         };
 
-        let user_notes_block = build_user_notes_block(&ctx.upstream_context);
+        let user_notes_block = super::output::build_user_notes_block(&ctx.upstream_context);
 
         Ok(PhaseOutput {
             designed_prompts,
@@ -508,31 +505,6 @@ async fn parse_store_configs(
 }
 
 // ── Shared Helpers ──────────────────────────────────────────────────────────
-
-/// Build user notes block from upstream context node data.
-///
-/// Used by lifecycle phases to inject upstream context into agent task prompts.
-pub(super) fn build_user_notes_block(upstream_context: &[(String, String)]) -> String {
-    if upstream_context.is_empty() {
-        return String::new();
-    }
-
-    let docs: Vec<ContextDocument> = upstream_context
-        .iter()
-        .map(|(title, content)| {
-            let mut hasher = DefaultHasher::new();
-            title.hash(&mut hasher);
-            let short_id = format!("{:08x}", hasher.finish() & 0xFFFF_FFFF);
-            ContextDocument {
-                short_id,
-                title: title.clone(),
-                content: content.clone(),
-            }
-        })
-        .collect();
-    let inner = build_context_block(&[], &docs);
-    format!("<user_notes>\n{inner}\n</user_notes>")
-}
 
 /// Build static fallback prompts when no designer phase runs or when the
 /// designer fails. Maps roster agents directly to prompts using role templates.
