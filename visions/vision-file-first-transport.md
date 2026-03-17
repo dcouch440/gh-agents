@@ -305,6 +305,15 @@ For most agents, a shell and a brain is all they need.
 
 ### Builder — From Routing to Scheduling
 
+The builder's prompt includes this workspace context:
+
+```
+Agents run in containers with a shared workspace at /workspace/.
+Every step sees files from all previous steps. Agents have full
+shell access — they can install, build, and run programs directly.
+Most tasks need zero explicit capabilities.
+```
+
 **Old mental model:**
 ```
 "Step A receives data from upstream. Step B needs that data.
@@ -350,9 +359,17 @@ Step 4: "Write Executive Report"
 
 Edges express "needs to exist before I start." Nothing about data format, file paths, or output structure. The builder configured what each step does and when it runs. The designer takes it from here.
 
-### Designer — DAG-Styled Design Pass
+### Designer — Shaping the Handoff
 
-The designer runs in **topological order** — same order as execution. Each step's designer sees what's already been designed upstream and what's coming downstream. The narrative threads naturally because each `expected_output` feeds into the next step's design context.
+The designer's prompt includes this workspace context:
+
+```
+Agents have /workspace/ mounted with all previous steps' files.
+They have shell access. Write assignments that reference the
+workspace and the previous step's handoff directly.
+```
+
+The designer runs in **step order** — same order as execution. Each step's designer sees the previous step's handoff and the next step's box text. The narrative threads naturally because each handoff feeds into the next step's design context.
 
 ```
 Builder creates all nodes (full context, detailed descriptions)
@@ -609,6 +626,88 @@ Step 3 — Analyze Results:
 
 The user reads the workflow execution like a story — each step's handoff is a paragraph. Click into the workspace to see the actual files.
 
+## The Agent Prompt
+
+The agent's prompt collapses from 11 XML blocks to 3. The workspace replaces most of what used to be injected into the prompt.
+
+### Current Agent Prompt (7 blocks in user message)
+
+**System message:**
+```
+You are Scanner, a specialist agent executing as part of a workforce team.
+<role>Security scanner who greps for vulnerability patterns...</role>
+<mission>Scan codebase for security vulnerabilities...</mission>
+<team>Scanner → Analyzer → Reporter</team>
+<upstream_outputs>...prior step data...</upstream_outputs>
+<instructions>Execute your assigned role. Use your tools...</instructions>
+```
+
+**User message:**
+```
+<user_notes>...context node outputs...</user_notes>
+<context>...task description...</context>
+<assignment>...designer's assignment...</assignment>
+<expected_output>Store: X. Response: Y.</expected_output>
+<upstream_artifacts>...XML file manifest...</upstream_artifacts>
+<previous_agent_outputs>...prior agents' text...</previous_agent_outputs>
+<upstream_step_outputs>...DAG step outputs...</upstream_step_outputs>
+```
+
+### File-First Agent Prompt (3 blocks in user message)
+
+**System message:**
+```
+You are Scanner. [designer's system_prompt]
+```
+
+Short. Role and perspective. No mission block, no team roster, no upstream data dump.
+
+**User message:**
+```
+<previous_step>
+  Scanned 500 files, found 7 vulnerabilities. Findings written
+  to /workspace/findings/ with one file per vulnerability.
+  2 critical, 3 medium, 2 low.
+</previous_step>
+
+<assignment>
+  Review the vulnerability findings in the workspace. Verify each
+  finding in context, assess severity, filter false positives.
+  Write your triage to the workspace.
+</assignment>
+
+<expected_output>
+  Describe the triage results: how many confirmed vs false positives,
+  severity breakdown, and where the prioritized findings live in
+  the workspace.
+</expected_output>
+```
+
+Three blocks. That's it.
+
+### What Each Block Does
+
+**`<previous_step>`** — orientation from whoever ran before this agent. Could be a prior agent in the same workforce or the previous step in the workflow. Same tag, same concept. Tells the agent what was done and where to find it in the workspace.
+
+**`<assignment>`** — what to do. Written by the designer, references the handoff and the workspace. The agent's specific task.
+
+**`<expected_output>`** — what to say when done. Shapes the agent's text response as an orientation handoff for whoever comes next. Pattern: what you produced, where it lives, how to use it.
+
+### What the Workspace Replaces
+
+| Old prompt block | What it contained | File-first equivalent |
+|---|---|---|
+| `<upstream_artifacts>` | XML manifest of store files | Agent runs `ls /workspace/` |
+| `<upstream_step_outputs>` | Prior DAG step output data | `<previous_step>` handoff text |
+| `<previous_agent_outputs>` | Prior workforce agent output | `<previous_step>` handoff text |
+| `<upstream_outputs>` | Prior step data in system prompt | Gone — workspace has the files |
+| `<user_notes>` | Context node outputs | User's files in `/workspace/` |
+| `<context>` | Task description | Folded into `<assignment>` |
+| `<mission>` | Mission brief in system prompt | Gone — assignment has the task |
+| `<team>` | Roster listing in system prompt | Gone — agent doesn't need to know the roster |
+
+The agent doesn't need to know the team roster, the mission brief, or an XML manifest of files. It has an assignment, a handoff from the previous step, and a real filesystem. Everything else is noise the workspace handles.
+
 ## What This Replaces
 
 | Old | New |
@@ -669,12 +768,12 @@ This is the most significant change to the existing system. Today, the builder a
 
 | | Current | File-First |
 |--|---------|-----------|
-| Builder | Per-node, independent | Per-node, topological order, sees upstream contracts |
-| Designer trigger | After each node's builder completes | After ALL builders complete, run in topo order |
-| Designer context | Node's roster + upstream runtime envelopes | Node's roster + upstream `expected_output` contracts |
-| `expected_output` format | "Store: X. Response: Y." (dual, inward-focused) | Orientation handoff for the downstream step (outward-focused) |
-| Cross-step awareness | None — designer doesn't know other steps' designs | Each designer reads upstream steps' designed `expected_output` |
-| Re-design propagation | Independent — editing step 1's design doesn't affect step 2 | Topological — editing step 1 invalidates and re-runs downstream designers |
+| Builder | Per-node, independent | Per-node, step order, sees previous step's handoff |
+| Designer trigger | After each node's builder completes | Builder then designer per step, in step order |
+| Designer context | Node's roster + upstream runtime envelopes | Node's roster + previous step's handoff + next step's box text |
+| `expected_output` format | "Store: X. Response: Y." (dual, inward-focused) | Orientation handoff for the next step (outward-focused) |
+| Cross-step awareness | None — designer doesn't know other steps' designs | Each designer reads the previous step's designed handoff |
+| Re-design propagation | Independent — editing step 1's design doesn't affect step 2 | Sequential — editing step 1 re-runs downstream designers |
 
 ### Current System: How the Designer Works Today
 
@@ -701,40 +800,40 @@ The `expected_output` field is currently dual-format: "Store: [artifact]. Respon
 
 ### New System: Topological Design Pass
 
-**Phase 1 — Builders run** (enhanced: topological order, see upstream contracts):
+**For each step, in order:**
 ```
-For each step in topological order:
+Step 1:
+  Builder receives:
+    1. Task + board state (existing)
+    2. No previous step (first in chain)
+  Builder writes: roster, plan, task description
 
-  Builder for step N receives:
-    1. Dispatch instruction + board state (existing)
-    2. Upstream steps' expected_output contracts (NEW)
+  Designer receives:
+    1. Builder's roster + plan (existing)
+    2. No previous step handoff (first in chain)
+    3. Next step's box text: "Run the scraper against target URLs"
+  Designer writes: per-agent configs + step handoff
+  Step 1's handoff is now available.
 
-  Builder for step N writes:
-    1. Agent roster, plan, task description (existing)
+Step 2:
+  Builder receives:
+    1. Task + board state (existing)
+    2. Previous step's handoff (NEW): "Describe the app, entry point,
+       dependencies, arguments, return format"
+  Builder writes: roster (knows an app is coming in → single executor)
 
-  The upstream contracts help the builder make better team decisions:
-  - "Upstream hands off a Python CLI app" → single executor agent
-  - "Upstream hands off raw research data" → analyst + fact-checker pipeline
+  Designer receives:
+    1. Builder's roster + plan (existing)
+    2. Previous step's handoff (NEW): same as above
+    3. Next step's box text: "Analyze pricing data for trends"
+  Designer writes: per-agent configs + step handoff
+  Step 2's handoff is now available.
+
+Step 3:
+  ...and so on
 ```
 
-**Phase 2 — Designers run** (enhanced: topological order, threaded contracts):
-```
-For each step in topological order:
-
-  Designer for step N receives:
-    1. Builder's node description + roster + plan (existing)
-    2. Upstream steps' expected_output contracts (NEW)
-    3. Downstream step descriptions from builder (NEW)
-
-  Designer for step N writes:
-    1. Per-agent configs (existing: system_prompt, assignment, tools)
-    2. expected_output as orientation handoff (CHANGED: outward-focused)
-    3. Step-level expected_output summary (NEW: stored as step metadata)
-
-  Step N's expected_output feeds into step N+1's builder AND designer.
-```
-
-Both the builder and designer run in topological order. Both see upstream handoff contracts. The builder uses them to decide team composition. The designer uses them to write assignments and shape the next handoff.
+The previous step's handoff helps the builder decide team composition ("an app is coming in" → executor agent vs "raw data is coming in" → analyst pipeline). The designer uses it to write assignments that reference the handoff, and shapes expected_output for whatever comes next.
 
 ### What the Designer Receives: New Context Blocks
 
@@ -745,34 +844,41 @@ Currently the designer's instruction template (`react_prompt.md`) has:
 <upstream_topology>...</upstream_topology>
 ```
 
-Add two new blocks:
+Rename and add blocks using plain language:
 
-**`<upstream_handoff_contracts>`** — what upstream steps promised to hand off:
+**`<task>`** (was `dispatch_instruction`) — what this step needs to accomplish:
 ```xml
-<upstream_handoff_contracts>
-  <step name="Build Web Scraper" slug="build_web_scraper">
-    <expected_output>
-      Describe the application you built: where the entry point lives
-      in the workspace, how to install its dependencies, what CLI
-      arguments it accepts, and what format it returns.
-    </expected_output>
-  </step>
-</upstream_handoff_contracts>
+<task>
+  Execute the scraper against target URLs and save results.
+  Roster: [Executor] — single agent with shell access.
+</task>
 ```
 
-This tells the designer: "When this step runs, the previous step's agent will have said something matching this template. Write your assignment to reference that information."
-
-**`<downstream_steps>`** — what comes next (so the designer can tailor the handoff):
+**`<step_order>`** (was `upstream_topology`) — where this step sits:
 ```xml
-<downstream_steps>
-  <step>
-    Research competitor pricing across Q3 and Q4, compare
-    year-over-year trends, flag anomalies above 10%.
-  </step>
-</downstream_steps>
+<step_order>
+  Build Web Scraper → [THIS STEP] → Analyze Results
+</step_order>
 ```
 
-This is **raw box text from the user's canvas** — not a structured description, not a step name. The downstream step hasn't been built or designed yet. Phase 0 created the node from what the user drew, and that's all that exists. The designer reads the user's intent and infers what the next step needs — "pricing data with temporal structure, so include data location and format in the handoff."
+**`<previous_step>`** (new) — what the step before this one will tell your agents. This step has already been designed. The handoff description tells you what information will be available when your agents start:
+```xml
+<previous_step name="Build Web Scraper">
+  <handoff>
+    Describe the application you built: where the entry point lives
+    in the workspace, how to install its dependencies, what CLI
+    arguments it accepts, and what format it returns.
+  </handoff>
+</previous_step>
+```
+
+**`<next_step>`** (new) — raw text from the user's canvas. This step hasn't been designed yet — it's just what the user wrote in the box. Read it to understand what the next step needs, and shape your expected_output so your agents' handoff gives that step the right orientation:
+```xml
+<next_step>
+  Analyze competitor pricing across Q3 and Q4, compare
+  year-over-year trends, flag anomalies above 10%.
+</next_step>
+```
 
 ### How `expected_output` Changes
 
@@ -788,22 +894,21 @@ workspace, the data format, how many records, and any failures.
 The next step will analyze this data."
 ```
 
-The key shift: `expected_output` stops being about what the agent saves/responds. It becomes instructions for how the agent should orient the next step. The designer writes it knowing what the downstream step needs because it can see the downstream step descriptions.
+The key shift: `expected_output` stops being about what the agent saves/responds. It becomes instructions for how the agent should orient the next step. The designer writes it knowing what the next step needs because it can see the next step's box text.
 
 ### Updated Designer Prompt (react_system.md additions)
 
 Add to guidelines:
 ```
 expected_output — orient the next step:
-- The expected_output is an instruction to the agent about what its
-  text response should contain for the NEXT step's benefit.
-- Read <upstream_handoff_contracts> to understand what previous steps
-  promised. Write assignments that reference this information.
-- Read <downstream_steps> to understand what comes next. Write
-  expected_output that gives the next step what it needs to orient
-  in the workspace.
+- The expected_output tells the agent what its text response should
+  contain so the NEXT step's agents can find their way.
+- Read <previous_step> to understand what the step before this one
+  will say. Write assignments that reference that handoff.
+- Read <next_step> to understand what comes after. Shape
+  expected_output to give the next step what it needs.
 - Pattern: what you produced, where it lives, how to use it.
-- If no downstream step exists, just confirm completion and location.
+- If there is no next step, just confirm completion and location.
 ```
 
 ### Updated Designer Instruction Template (react_prompt.md)
@@ -811,56 +916,52 @@ expected_output — orient the next step:
 ```
 {{prior_design}}
 
-<dispatch_instruction>
-{{dispatch_instruction}}
-</dispatch_instruction>
+<task>
+{{task}}
+</task>
 
-<upstream_topology>
-{{upstream_topology}}
-</upstream_topology>
+<step_order>
+{{step_order}}
+</step_order>
 
-<upstream_handoff_contracts>
-{{upstream_handoff_contracts}}
-</upstream_handoff_contracts>
+<previous_step>
+{{previous_step}}
+</previous_step>
 
-<downstream_steps>
-{{downstream_steps}}
-</downstream_steps>
+<next_step>
+{{next_step}}
+</next_step>
 
 Review the board_state. For each agent:
 - If design_status="pending", write a new config.
 - If design_status="designed", read and verify consistency.
 
 When writing expected_output:
-- Read the upstream handoff contracts to understand what information
-  the previous step promised. Reference it in your assignments.
-- Read the downstream step descriptions to understand what the next
-  step needs. Shape expected_output to provide that orientation.
+- Read <previous_step> to understand what the agents will hear
+  from the step before. Reference it in your assignments.
+- Read <next_step> to understand what comes after. Shape
+  expected_output to orient the next step.
 Then call complete_design.
 ```
 
 ### Updated Designer Example
 
-**Designing step 2 ("Run Scraper")** with upstream and downstream context:
+**Designing step 2 ("Run Scraper")** with previous and next step context:
 
-```
-<upstream_handoff_contracts>
-  <step name="Build Web Scraper">
-    <expected_output>
-      Describe the application: entry point in workspace, dependency
-      installation, CLI arguments, return format.
-    </expected_output>
-  </step>
-</upstream_handoff_contracts>
+```xml
+<previous_step name="Build Web Scraper">
+  <handoff>
+    Describe the application: entry point in workspace, dependency
+    installation, CLI arguments, return format.
+  </handoff>
+</previous_step>
 
-<downstream_steps>
-  <step>
-    Analyze competitor pricing data for trends and anomalies.
-  </step>
-</downstream_steps>
+<next_step>
+  Analyze competitor pricing data for trends and anomalies.
+</next_step>
 ```
 
-Note: upstream has a step name and designed contract (already built + designed). Downstream is just raw box text from the canvas (not built or designed yet).
+Note: `<previous_step>` has a name and designed handoff (already built + designed). `<next_step>` is just raw box text from the canvas (not built or designed yet).
 
 Designer writes:
 ```json
@@ -916,51 +1017,53 @@ complete_design({
 
 ### Re-Design Propagation
 
-When the user edits step 1's design (changes roster, modifies node text):
-1. Step 1's designer re-runs
-2. Step 1's `expected_output` may change
-3. System detects downstream steps' `<upstream_handoff_contracts>` are stale
-4. Steps 2, 3, 4 designers re-run in topological order with updated contracts
-5. Each re-run checks existing configs (`design_status="designed"`) against new contracts
-6. Updates stale configs, skips still-valid ones
+When the user edits step 1 (changes roster, modifies node text):
+1. Step 1's builder + designer re-run
+2. Step 1's handoff may change
+3. Pass the new handoff to step 2's designer as `<previous_step>`
+4. Step 2's designer checks its existing configs against the new handoff
+5. If the handoff meaningfully changed → updates configs, writes new handoff
+6. If the handoff is still compatible → skips, keeps existing configs
+7. Continue to step 3 with step 2's (possibly updated) handoff
 
-Same invalidation pattern as topological execution — changes propagate downstream through the DAG.
+The designer's existing verify-and-skip pattern handles this naturally. No special comparison logic — the designer reads the new previous step handoff, looks at its existing assignments, and decides if they still make sense.
 
 ### Implementation Changes
 
 **Backend (`designer_input/`):**
-- Add `upstream_handoff_contracts: Vec<HandoffContract>` to `DesignerInput`
-- Add `downstream_descriptions: Vec<StepDescription>` to `DesignerInput`
-- New struct `HandoffContract { step_name, step_slug, expected_output }`
-- New struct `StepDescription { step_name, step_slug, description }`
-- Build these from step metadata + stored designer outputs
+- Add `previous_step_handoff: Option<PreviousStepHandoff>` to `DesignerInput`
+- Add `next_step_text: Option<String>` to `DesignerInput`
+- New struct `PreviousStepHandoff { step_name, handoff_description }`
+- Build from step metadata + stored designer outputs
 
 **Backend (builder dispatch):**
-- Change builder dispatch to topological order (board dispatcher already does this)
-- Add `<upstream_handoff_contracts>` to builder's instruction context
-- After each builder completes, step's expected_output is available for downstream builders
+- Change builder dispatch to run in step order (board dispatcher already does this)
+- Add `<previous_step>` to builder's instruction context
+- After each builder + designer completes, handoff is available for next step's builder
 
 **Backend (`pipeline/designer.rs`):**
-- Change designer trigger: wait for all builders, then run designers in topo order
-- After each designer completes, extract step-level `expected_output` from `complete_design`
-- Store as step metadata for downstream builders and designers to read
-- Add invalidation logic: if upstream `expected_output` changed, mark downstream as stale
+- Change designer trigger: builder then designer per step, in step order
+- After each designer completes, extract step-level handoff from `complete_design`
+- Store as step metadata for next step's builder and designer to read
+- Re-design: pass new handoff to next designer, let it verify-and-skip or update
 
 **Config (builder `system.md`):**
-- Add `<upstream_handoff_contracts>` to builder context
-- Add guidance: "Use upstream handoff contracts to understand what data is coming in and configure the team accordingly"
+- Add `<previous_step>` to builder context
+- Add guidance: "Read what the previous step will hand off to understand what's coming in"
 
 **Config (`designer/react_prompt.md`):**
-- Add `{{upstream_handoff_contracts}}` and `{{downstream_steps}}` template vars
-- Update instructions to reference these blocks
+- Rename `dispatch_instruction` → `task`
+- Rename `upstream_topology` → `step_order`
+- Add `{{previous_step}}` and `{{next_step}}` template vars
+- Update instructions to use plain language
 
 **Config (`designer/react_system.md`):**
 - Add guidelines for writing outward-focused `expected_output`
-- Add examples showing upstream contract reference in assignments
-- Update existing examples to include downstream awareness
+- Add examples showing previous step handoff reference in assignments
+- Update existing examples to include next step awareness
 
 **`complete_design` tool:**
-- Add `step_expected_output` field to completion payload
+- Add `step_handoff` field to completion payload
 - Persist as step metadata
 
 ## Scope: Creation Workflows
