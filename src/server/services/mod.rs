@@ -35,5 +35,6 @@ pub mod timeline;
 pub mod tools;
 pub mod validation;
 pub mod workflows;
+pub mod workspace;
 
 pub use error::ServiceError;

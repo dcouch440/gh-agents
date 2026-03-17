@@ -498,6 +498,15 @@ pub const CONTAINER_RETRY_INITIAL_BACKOFF_MS: u64 = 1000;
 /// Maximum retry backoff delay for container creation (seconds).
 pub const CONTAINER_RETRY_MAX_BACKOFF_SECS: u64 = 10;
 
+// ── Workspace / JuiceFS Defaults ─────────────────────────────────────────
+
+/// Environment variable for the JuiceFS mount point path.
+pub const ENV_WORKSPACE_MOUNT_POINT: &str = "WORKSPACE_MOUNT_POINT";
+/// Default mount point for JuiceFS in development.
+pub const WORKSPACE_DEFAULT_MOUNT_POINT: &str = "/tmp/nexor-jfs";
+/// Subdirectory prefix under the mount for workflow workspaces.
+pub const WORKSPACE_PREFIX: &str = "workflows";
+
 // ── VPN / WireGuard Defaults ──────────────────────────────────────────────
 
 /// Docker image for the WireGuard VPN sidecar container.
