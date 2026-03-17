@@ -16,12 +16,13 @@ async fn verify_ownership(
     user_id: Uuid,
     collection_id: Uuid,
 ) -> Result<WorkflowCollectionRow, ServiceError> {
-    let row = repo
-        .get_collection(collection_id)
-        .await?
-        .ok_or_else(|| ServiceError::not_found("Collection"))?;
-    super::ownership::check_direct_owner(row.user_id, user_id, "Collection")?;
-    Ok(row)
+    super::ownership::fetch_and_check_owner(
+        || repo.get_collection(collection_id),
+        user_id,
+        |r| r.user_id,
+        "Collection",
+    )
+    .await
 }
 
 /// Validate that an execution mode is either "sequential" or "parallel".

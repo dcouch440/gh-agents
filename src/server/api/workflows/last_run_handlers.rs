@@ -163,7 +163,9 @@ pub(super) async fn build_step_run_response(
             {
                 if let Ok(envelope) = serde_json::from_str::<serde_json::Value>(&envelope_json) {
                     let output_data = envelope.get("data").cloned();
-                    let output_str = output_data.as_ref().map(|d| serde_json::to_string(d).unwrap_or_default());
+                    let output_str = output_data
+                        .as_ref()
+                        .map(|d| serde_json::to_string(d).unwrap_or_default());
                     return Ok(StepLastRunResponse {
                         execution_id: execution_id.to_string(),
                         workflow_execution_id: execution_id.to_string(),
@@ -280,7 +282,10 @@ pub(super) async fn build_step_run_response(
             let mut composite = serde_json::Map::new();
             composite.insert("agents".to_string(), serde_json::Value::Object(agents_map));
             let val = serde_json::Value::Object(composite);
-            (Some(serde_json::to_string(&val).unwrap_or_default()), Some(val))
+            (
+                Some(serde_json::to_string(&val).unwrap_or_default()),
+                Some(val),
+            )
         };
 
         Ok(StepLastRunResponse {

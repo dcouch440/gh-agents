@@ -16,13 +16,15 @@ mod tests {
         let repo = MockWorkflowRepo::new();
         let result = create_workflow(
             &repo,
-            Uuid::new_v4(),
-            "   ".to_string(),
-            None,
-            None,
-            None,
-            None,
-            None,
+            CreateWorkflowInput {
+                user_id: Uuid::new_v4(),
+                name: "   ".to_string(),
+                description: String::new(),
+                container_enabled: false,
+                target_repo_url: None,
+                target_branch: None,
+                vpn_enabled: false,
+            },
         )
         .await;
         assert!(matches!(result, Err(ServiceError::Validation(_))));
@@ -52,13 +54,15 @@ mod tests {
 
         let result = create_workflow(
             &repo,
-            user_id,
-            "My Workflow".to_string(),
-            None,
-            None,
-            None,
-            None,
-            None,
+            CreateWorkflowInput {
+                user_id,
+                name: "My Workflow".to_string(),
+                description: String::new(),
+                container_enabled: false,
+                target_repo_url: None,
+                target_branch: None,
+                vpn_enabled: false,
+            },
         )
         .await;
         let wf = result.unwrap();
@@ -126,12 +130,15 @@ mod tests {
             &repo,
             owner,
             wf_id,
-            Some("Renamed".to_string()),
-            None,
-            None,
-            None,
-            None,
-            None,
+            UpdateWorkflowInput {
+                id: wf_id,
+                name: Some("Renamed".to_string()),
+                description: None,
+                container_enabled: None,
+                target_repo_url: None,
+                target_branch: None,
+                vpn_enabled: None,
+            },
         )
         .await;
         let updated = result.unwrap();

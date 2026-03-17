@@ -23,12 +23,13 @@ async fn verify_ownership(
     user_id: Uuid,
     session_id: Uuid,
 ) -> Result<SessionRow, ServiceError> {
-    let session = repo
-        .get_session(session_id)
-        .await?
-        .ok_or_else(|| ServiceError::not_found("Session"))?;
-    super::ownership::check_direct_owner(session.user_id, user_id, "Session")?;
-    Ok(session)
+    super::ownership::fetch_and_check_owner(
+        || repo.get_session(session_id),
+        user_id,
+        |s| s.user_id,
+        "Session",
+    )
+    .await
 }
 
 /// Create a new session. Validates the agent exists if provided, applies

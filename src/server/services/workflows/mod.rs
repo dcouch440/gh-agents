@@ -14,39 +14,22 @@ pub(crate) async fn verify_workflow_ownership(
     user_id: Uuid,
     workflow_id: Uuid,
 ) -> Result<WorkflowRow, ServiceError> {
-    let wf = repo
-        .get_workflow(workflow_id)
-        .await?
-        .ok_or_else(|| ServiceError::not_found("Workflow"))?;
-    super::ownership::check_direct_owner(wf.user_id, user_id, "Workflow")?;
-    Ok(wf)
+    super::ownership::fetch_and_check_owner(
+        || repo.get_workflow(workflow_id),
+        user_id,
+        |w| w.user_id,
+        "Workflow",
+    )
+    .await
 }
 
 /// Create a new workflow.
-#[allow(clippy::too_many_arguments)] // params map directly to HTTP request body fields
 pub async fn create_workflow(
     repo: &dyn WorkflowRepo,
-    user_id: Uuid,
-    name: String,
-    description: Option<String>,
-    container_enabled: Option<bool>,
-    target_repo_url: Option<String>,
-    target_branch: Option<String>,
-    vpn_enabled: Option<bool>,
+    input: CreateWorkflowInput,
 ) -> Result<WorkflowRow, ServiceError> {
-    validation::validate_name(&name, "Workflow name")?;
-
-    let row = repo
-        .create_workflow(CreateWorkflowInput {
-            user_id,
-            name,
-            description: description.unwrap_or_default(),
-            container_enabled: container_enabled.unwrap_or(false),
-            target_repo_url,
-            target_branch,
-            vpn_enabled: vpn_enabled.unwrap_or(false),
-        })
-        .await?;
+    validation::validate_name(&input.name, "Workflow name")?;
+    let row = repo.create_workflow(input).await?;
     Ok(row)
 }
 
@@ -69,35 +52,19 @@ pub async fn list_workflows(
 }
 
 /// Update a workflow (partial update), verifying ownership.
-#[allow(clippy::too_many_arguments)] // params map directly to HTTP request body fields
 pub async fn update_workflow(
     repo: &dyn WorkflowRepo,
     user_id: Uuid,
     workflow_id: Uuid,
-    name: Option<String>,
-    description: Option<String>,
-    container_enabled: Option<bool>,
-    target_repo_url: Option<Option<String>>,
-    target_branch: Option<Option<String>>,
-    vpn_enabled: Option<bool>,
+    input: UpdateWorkflowInput,
 ) -> Result<WorkflowRow, ServiceError> {
     verify_workflow_ownership(repo, user_id, workflow_id).await?;
 
-    if let Some(ref n) = name {
+    if let Some(ref n) = input.name {
         validation::validate_name(n, "Workflow name")?;
     }
 
-    let row = repo
-        .update_workflow(UpdateWorkflowInput {
-            id: workflow_id,
-            name,
-            description,
-            container_enabled,
-            target_repo_url,
-            target_branch,
-            vpn_enabled,
-        })
-        .await?;
+    let row = repo.update_workflow(input).await?;
     Ok(row)
 }
 
