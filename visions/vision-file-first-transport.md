@@ -370,8 +370,8 @@ Designer runs topologically:
 
 Each designer receives:
 - **Builder's node description** — detailed, specific (the builder had full context)
-- **Upstream expected_outputs** — what previous steps promised to hand off (already designed)
-- **Downstream step descriptions** — what comes next (so it can tailor the handoff)
+- **Upstream expected_outputs** — what previous steps promised to hand off (already built + designed, has step name and contract)
+- **Downstream box text** — raw text from the user's canvas (not built or designed yet, just the user's words)
 
 The designer's key tool is `expected_output` — it shapes the agent's text response into an orientation handoff targeted at the specific downstream step.
 
@@ -765,14 +765,14 @@ This tells the designer: "When this step runs, the previous step's agent will ha
 **`<downstream_steps>`** — what comes next (so the designer can tailor the handoff):
 ```xml
 <downstream_steps>
-  <step name="Analyze Results" slug="analyze_results">
-    Performs statistical analysis of scraped data. Needs to know
-    where the data lives and what format it's in.
+  <step>
+    Research competitor pricing across Q3 and Q4, compare
+    year-over-year trends, flag anomalies above 10%.
   </step>
 </downstream_steps>
 ```
 
-This tells the designer: "The next step needs data location and format. Write your expected_output to include those details."
+This is **raw box text from the user's canvas** — not a structured description, not a step name. The downstream step hasn't been built or designed yet. Phase 0 created the node from what the user drew, and that's all that exists. The designer reads the user's intent and infers what the next step needs — "pricing data with temporal structure, so include data location and format in the handoff."
 
 ### How `expected_output` Changes
 
@@ -854,12 +854,13 @@ Then call complete_design.
 </upstream_handoff_contracts>
 
 <downstream_steps>
-  <step name="Analyze Results">
-    Statistical analysis of scraped data. Needs data location,
-    format, and record count.
+  <step>
+    Analyze competitor pricing data for trends and anomalies.
   </step>
 </downstream_steps>
 ```
+
+Note: upstream has a step name and designed contract (already built + designed). Downstream is just raw box text from the canvas (not built or designed yet).
 
 Designer writes:
 ```json
