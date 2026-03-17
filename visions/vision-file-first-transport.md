@@ -915,6 +915,15 @@ expected_output — orient the next step:
   expected_output to give the next step what it needs.
 - Pattern: what you produced, where it lives, how to use it.
 - If there is no next step, just confirm completion and location.
+
+step_handoff — what this step produces (in complete_design):
+- The step_handoff describes what this step produces for the next
+  step's designer. Only update it if the step's output meaningfully
+  changed — new agents, different output structure, changed purpose.
+  Do not rewrite it for style.
+- If the existing handoff still accurately describes what this step
+  produces, keep it by calling complete_design with no step_handoff.
+- Updating the handoff triggers re-design for all steps after this one.
 ```
 
 ### Updated Designer Instruction Template (react_prompt.md)
@@ -1000,24 +1009,21 @@ Each step's designer also writes a **step-level handoff description** — stored
 For a workforce with 3 agents, the step-level summary represents what the STEP as a whole hands off, not what individual agents produce:
 
 ```
-Workforce agents:
-  Scanner expected_output: "List findings with severity..."
-  Analyzer expected_output: "Report prioritized findings..."
-  Reporter expected_output: "Confirm report location..."
+Workforce agents (instructions TO agents):
+  Scanner expected_output: "List what you found: count, severity breakdown, where findings are."
+  Analyzer expected_output: "Report your triage: confirmed vs false positives, severity, location."
+  Reporter expected_output: "Confirm the report is written, its location, key sections."
 
-Step-level handoff (what the next step's designer sees):
-  "Describe the security audit results: total findings by severity,
-   where the remediation report lives in the workspace, and key
-   recommendations."
+Step-level handoff (description OF what this step produces, for the next designer):
+  "Security audit results: finding count by severity, remediation report
+   location in workspace, key recommendations."
 ```
 
-The designer writes this as part of `complete_design()`:
+The per-agent expected_outputs are instructions. The step-level handoff is a description. The designer writes the step-level handoff as part of `complete_design()`:
 ```json
 complete_design({
-  "summary": "3-agent pipeline: Scanner → Analyzer → Reporter...",
-  "step_expected_output": "Describe the security audit results:
-    total findings by severity, where the remediation report lives
-    in the workspace, and key recommendations."
+  "step_handoff": "Security audit results: finding count by severity,
+    remediation report location in workspace, key recommendations."
 })
 ```
 
@@ -1025,14 +1031,17 @@ complete_design({
 
 When the user edits step 1 (changes roster, modifies node text):
 1. Step 1's builder + designer re-run
-2. Step 1's handoff may change
-3. Pass the new handoff to step 2's designer as `<previous_step>`
-4. Step 2's designer checks its existing configs against the new handoff
-5. If the handoff meaningfully changed → updates configs, writes new handoff
-6. If the handoff is still compatible → skips, keeps existing configs
-7. Continue to step 3 with step 2's (possibly updated) handoff
+2. Step 1's designer decides whether to update the `step_handoff`
+3. If handoff unchanged → propagation stops. Steps 2, 3, 4 are still valid.
+4. If handoff changed → pass the new handoff to step 2's designer as `<previous_step>`
+5. Step 2's designer checks its existing configs against the new handoff
+6. Step 2's designer decides whether to update ITS handoff
+7. If step 2's handoff unchanged → propagation stops at step 2
+8. If changed → continue to step 3
 
-The designer's existing verify-and-skip pattern handles this naturally. No special comparison logic — the designer reads the new previous step handoff, looks at its existing assignments, and decides if they still make sense.
+Propagation only continues as far as handoffs actually change. A small edit to step 1 that doesn't change what it produces stops immediately. A structural change (new agents, different output) ripples through until a step absorbs the change without updating its own handoff.
+
+The designer's existing verify-and-skip pattern handles this naturally. The designer reads the new previous step handoff, reads its existing configs from the store, and decides: are my assignments still consistent? If yes, call `complete_design({})` — no handoff update, propagation stops. If no, update configs and handoff, propagation continues.
 
 ### Implementation Changes
 
