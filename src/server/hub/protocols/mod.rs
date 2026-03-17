@@ -39,13 +39,11 @@ pub struct ProtocolEngine {
 }
 
 impl ProtocolEngine {
-    /// Create a new engine with all built-in compilers registered.
+    /// Create a new engine.
     pub fn new() -> Self {
-        let mut engine = Self {
+        Self {
             compilers: HashMap::new(),
-        };
-        engine.register_builtins();
-        engine
+        }
     }
 
     /// Register a custom compiler.
@@ -112,12 +110,6 @@ impl ProtocolEngine {
     /// for clarity in the API layer).
     pub fn preview(&self, config: &ProtocolConfig) -> Result<ProtocolExpansion, ProtocolError> {
         self.expand(config)
-    }
-
-    /// Register all built-in protocol compilers.
-    fn register_builtins(&mut self) {
-        // No built-in compilers — workforce uses direct execution, not protocol compilation.
-        // Future protocol types will register their compilers here.
     }
 }
 

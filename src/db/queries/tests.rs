@@ -187,13 +187,8 @@ mod tests {
 
         let tool = &tools[0];
 
-        // Get capabilities for tool
-        let caps = repo.get_capabilities_by_tool(tool.id).await.unwrap();
-        // Should have at least some capabilities assigned
-        assert!(
-            !caps.is_empty() || true,
-            "Tool may or may not have capabilities initially"
-        );
+        // Verify get_capabilities_by_tool returns without error
+        let _caps = repo.get_capabilities_by_tool(tool.id).await.unwrap();
 
         db.cleanup().await;
     }

@@ -36,10 +36,14 @@ pub(crate) fn require_array<'a>(input: &'a Value, field: &str) -> Result<&'a Vec
 /// Extract a required string parameter and parse it as a UUID.
 ///
 /// Returns the UUID on success, or a JSON error value on failure.
-#[allow(dead_code)] // tested utility; will be used by future tool modules
 pub(crate) fn require_uuid(input: &Value, field: &str) -> Result<Uuid, Value> {
     let s = require_str(input, field)?;
     Uuid::parse_str(s).map_err(|_| json!({ "error": format!("Invalid UUID: {}", s) }))
+}
+
+/// Build a standard error JSON object for tool responses.
+pub(crate) fn error_json(message: impl Into<String>) -> Value {
+    json!({ "error": message.into() })
 }
 
 /// Load a workflow step by ID, returning a JSON error if not found.

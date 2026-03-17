@@ -51,12 +51,10 @@ pub struct DesignerResult {
 /// One designed output for one agent — system prompt + short assignment.
 #[derive(Debug, Clone)]
 pub struct DesignedAgentPrompt {
-    pub agent_id: String,
     pub agent_name: String,
     pub tools: Vec<String>,
     pub system_prompt: String,
     pub assignment: String,
-    pub expected_output: Option<String>,
     pub reasoning: String,
     pub execution_order: i32,
 }
@@ -97,6 +95,7 @@ pub(crate) struct DesignerAgentEntry {
     #[serde(alias = "task_prompt")]
     assignment: String,
     #[serde(default)]
+    #[allow(dead_code)] // present in LLM JSON output; must exist for deserialization
     expected_output: Option<String>,
     reasoning: String,
 }
@@ -347,12 +346,10 @@ pub(crate) async fn run_agent_designer(
             .await;
 
         designed_prompts.push(DesignedAgentPrompt {
-            agent_id: entry.agent_id.clone(),
             agent_name: entry.agent_name.clone(),
             tools: valid_tools,
             system_prompt: entry.system_prompt.clone(),
             assignment: entry.assignment.clone(),
-            expected_output: entry.expected_output.clone(),
             reasoning: entry.reasoning.clone(),
             execution_order: idx as i32,
         });

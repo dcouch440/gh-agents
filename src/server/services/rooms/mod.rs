@@ -20,12 +20,13 @@ async fn verify_ownership(
     user_id: Uuid,
     room_id: Uuid,
 ) -> Result<RoomRow, ServiceError> {
-    let room = repo
-        .get_room(room_id)
-        .await?
-        .ok_or_else(|| ServiceError::not_found("Room"))?;
-    super::ownership::check_direct_owner(room.user_id, user_id, "Room")?;
-    Ok(room)
+    super::ownership::fetch_and_check_owner(
+        || repo.get_room(room_id),
+        user_id,
+        |r| r.user_id,
+        "Room",
+    )
+    .await
 }
 
 /// Create a new room.

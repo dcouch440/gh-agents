@@ -6,6 +6,8 @@
 //! - [`check_system_passthrough`] — `None` means system resource (visible to all)
 //! - [`check_strict_owner`] — `None` means system resource (read-only, not mutable)
 
+use std::future::Future;
+
 use uuid::Uuid;
 
 use super::ServiceError;
@@ -54,6 +56,27 @@ pub fn check_strict_owner(
         Some(o) if o == caller => Ok(()),
         _ => Err(ServiceError::not_found(entity)),
     }
+}
+
+/// Fetch an entity and verify direct ownership in one step.
+///
+/// Combines the common pattern: fetch row → not_found if missing → check owner.
+/// Used by services that guard resources via `check_direct_owner`.
+pub(crate) async fn fetch_and_check_owner<T, F, Fut>(
+    fetch: F,
+    caller: Uuid,
+    get_owner: impl FnOnce(&T) -> Uuid,
+    entity_name: &str,
+) -> Result<T, ServiceError>
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = Result<Option<T>, anyhow::Error>>,
+{
+    let entity = fetch()
+        .await?
+        .ok_or_else(|| ServiceError::not_found(entity_name))?;
+    check_direct_owner(get_owner(&entity), caller, entity_name)?;
+    Ok(entity)
 }
 
 #[cfg(test)]

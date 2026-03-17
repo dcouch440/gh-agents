@@ -4,13 +4,10 @@
 //! in pipeline execution. Each phase runs like a DAG element — traceable,
 //! with execution records — but is not a physical workflow step.
 
-use std::collections::HashMap;
-
 use uuid::Uuid;
 
 use crate::db::{TaskAgentRosterRow, TaskMissionBriefRow, WorkflowStepRow};
 use crate::server::hub::error::HubError;
-use crate::types::StepExecutionEnvelope;
 
 use super::super::DagContext;
 use super::types::DesignedAgentPrompt;
@@ -31,8 +28,6 @@ pub(crate) struct PipelineExecutionContext {
     pub base_prompt: String,
     /// Upstream context data from context nodes: `(title, content)` pairs.
     pub upstream_context: Vec<(String, String)>,
-    /// Completed envelopes from upstream steps (for port resolution + designer input).
-    pub completed_envelopes: HashMap<Uuid, StepExecutionEnvelope>,
 }
 
 /// Output from a before-phase, consumed by agent execution.

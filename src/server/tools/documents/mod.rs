@@ -10,6 +10,7 @@ use crate::db::traits::{CreateDocumentInput, DocumentRepo};
 use crate::types::UserId;
 
 use super::haiku::haiku_summarize;
+use super::shared::{error_json, require_str, require_uuid};
 use crate::server::state::AppState;
 
 mod tests;
@@ -40,11 +41,13 @@ fn spawn_summary_task(doc_repo: Arc<dyn DocumentRepo>, doc_id: uuid::Uuid, conte
 pub(crate) async fn execute_create_doc(input: &Value, state: &AppState, user_id: UserId) -> Value {
     let doc_repo = Arc::clone(&state.repos().documents);
 
-    let Some(title) = input["title"].as_str() else {
-        return json!({ "error": "title is required" });
+    let title = match require_str(input, "title") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
-    let Some(content) = input["content"].as_str() else {
-        return json!({ "error": "content is required" });
+    let content = match require_str(input, "content") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     let tags: Vec<String> = input["tags"]
@@ -80,18 +83,16 @@ pub(crate) async fn execute_create_doc(input: &Value, state: &AppState, user_id:
                 "title": title
             })
         }
-        Err(e) => json!({ "error": e.to_string() }),
+        Err(e) => error_json(e.to_string()),
     }
 }
 
 pub(crate) async fn execute_update_doc(input: &Value, state: &AppState) -> Value {
     let doc_repo = Arc::clone(&state.repos().documents);
 
-    let Some(id_str) = input["doc_id"].as_str() else {
-        return json!({ "error": "doc_id is required" });
-    };
-    let Ok(doc_id) = uuid::Uuid::parse_str(id_str) else {
-        return json!({ "error": format!("Invalid UUID: {}", id_str) });
+    let doc_id = match require_uuid(input, "doc_id") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     let content = input["content"].as_str().map(String::from);
@@ -117,15 +118,16 @@ pub(crate) async fn execute_update_doc(input: &Value, state: &AppState) -> Value
                 "title": row.title
             })
         }
-        Err(e) => json!({ "error": e.to_string() }),
+        Err(e) => error_json(e.to_string()),
     }
 }
 
 pub(crate) async fn execute_search_docs(input: &Value, state: &AppState, user_id: UserId) -> Value {
     let doc_repo = &*state.repos().documents;
 
-    let Some(query) = input["query"].as_str() else {
-        return json!({ "error": "query is required" });
+    let query = match require_str(input, "query") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     match doc_repo.search_documents(user_id.0, query).await {
@@ -144,19 +146,16 @@ pub(crate) async fn execute_search_docs(input: &Value, state: &AppState, user_id
                 .collect();
             json!({ "results": items, "count": items.len() })
         }
-        Err(e) => json!({ "error": e.to_string() }),
+        Err(e) => error_json(e.to_string()),
     }
 }
 
 pub(crate) async fn execute_read_document(input: &Value, state: &AppState) -> Value {
     let doc_repo = &*state.repos().documents;
 
-    let Some(id_str) = input["document_id"].as_str() else {
-        return json!({ "error": "document_id is required" });
-    };
-
-    let Ok(doc_id) = uuid::Uuid::parse_str(id_str) else {
-        return json!({ "error": format!("Invalid UUID: {}", id_str) });
+    let doc_id = match require_uuid(input, "document_id") {
+        Ok(v) => v,
+        Err(e) => return e,
     };
 
     match doc_repo.get_document(doc_id).await {
@@ -169,7 +168,7 @@ pub(crate) async fn execute_read_document(input: &Value, state: &AppState) -> Va
             "tags": doc.tags,
             "summary": doc.summary,
         }),
-        Ok(None) => json!({ "error": format!("Document not found: {}", id_str) }),
-        Err(e) => json!({ "error": e.to_string() }),
+        Ok(None) => error_json(format!("Document not found: {}", doc_id)),
+        Err(e) => error_json(e.to_string()),
     }
 }

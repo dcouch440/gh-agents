@@ -274,8 +274,7 @@ pub async fn toggle_step_pin(
             .is_some();
         if !has_envelope {
             return Err(AppError::BadRequest(
-                "Cannot pin a step that has never been executed. Run the step first."
-                    .to_string(),
+                "Cannot pin a step that has never been executed. Run the step first.".to_string(),
             ));
         }
     }

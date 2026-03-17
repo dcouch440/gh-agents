@@ -186,7 +186,6 @@ impl Pipeline {
             roster: roster.clone(),
             base_prompt: prompt.clone(),
             upstream_context: upstream_context.clone(),
-            completed_envelopes: upstream_envelopes,
         };
 
         // 8. Run before phases (or static fallback if none registered)

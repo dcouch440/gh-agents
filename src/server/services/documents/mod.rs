@@ -31,12 +31,13 @@ async fn verify_ownership(
     user_id: Uuid,
     doc_id: Uuid,
 ) -> Result<DocumentRow, ServiceError> {
-    let doc = repo
-        .get_document(doc_id)
-        .await?
-        .ok_or_else(|| ServiceError::not_found("Document"))?;
-    super::ownership::check_direct_owner(doc.user_id, user_id, "Document")?;
-    Ok(doc)
+    super::ownership::fetch_and_check_owner(
+        || repo.get_document(doc_id),
+        user_id,
+        |d| d.user_id,
+        "Document",
+    )
+    .await
 }
 
 /// Create a new document.
