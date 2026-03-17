@@ -66,63 +66,78 @@ Every agent runs in a Docker container with the workspace mounted as a real file
 ### Filesystem Layout
 
 ```
-Container filesystem:
-  /workspace/              ← JuiceFS mount (shared, persists across steps)
-    my_app/                ← whatever agents created
-    results/
-    ...
+What the agent sees (merged view):
+  /workspace/              ← looks like one filesystem
+    my_app/                ← from JuiceFS (previous steps)
+    results/               ← from JuiceFS (previous steps)
+    new_output/            ← written this step (lives in overlay)
+    node_modules/          ← installed this step (lives in overlay, will be filtered)
 
-  /tmp/                    ← local to container (disposable)
-    venv/                  ← pip install goes here
-    node_modules/          ← npm install goes here
-    __pycache__/           ← bytecode cache
+What's actually happening:
+  JuiceFS (read-only lower) ← shared workspace, previous steps' files
+  OverlayFS upper (writable) ← all writes from this step go here
 ```
 
-**Workspace** (`/workspace/`): shared across steps via JuiceFS. Source code, data, outputs — anything that should persist and be visible to other steps.
+The agent sees one filesystem and writes freely — `pip install`, `git clone`, build artifacts, whatever. All writes go to the local OverlayFS upper layer at native filesystem speed. The agent has no idea anything special is happening.
 
-**Local** (`/tmp/`): disposable, local to the container. Installation artifacts (`venv/`, `node_modules/`), build caches, bytecode. Never touches the shared filesystem. Torn down with the container.
+**When the step completes**, the system diffs the overlay against the base and filters out junk before persisting clean output back to JuiceFS:
 
-Container environment variables ensure all package managers default to `/tmp/`. The agent never has to think about it:
+```
+Overlay diff → filter → persist to JuiceFS
+
+Filtered out (denylist, same patterns as .gitignore):
+  .git/
+  __pycache__/, .pytest_cache/
+  node_modules/, .npm/
+  target/, dist/, build/
+  .venv/, venv/
+  .cache/
+  *.pyc, *.o, *.so
+```
+
+The denylist is a static config. Anything not denied gets persisted. Only clean output files make it to the shared workspace.
+
+This solves three problems at once:
+- **Workspace pollution**: junk files (caches, installed packages, build artifacts) never reach JuiceFS
+- **Metadata pressure**: the small-file storm from `pip install` hits the local overlay (native speed), never touches Postgres metadata
+- **Agent freedom**: agents write wherever they want — the system handles cleanup
+
+Environment variables still steer common package managers to `/tmp/` as a first line of defense:
 
 ```dockerfile
-# Python — venv and caches go to /tmp/
 ENV VIRTUAL_ENV=/tmp/venv
 ENV PATH="/tmp/venv/bin:$PATH"
 ENV PIP_CACHE_DIR=/tmp/pip-cache
 ENV PYTHONDONTWRITEBYTECODE=1
-
-# Node — packages and caches go to /tmp/
 ENV npm_config_prefix=/tmp/npm
 ENV npm_config_cache=/tmp/npm-cache
-ENV NODE_PATH=/tmp/node_modules
-
-# Rust — cargo home goes to /tmp/
 ENV CARGO_HOME=/tmp/cargo
-
-# General — XDG cache goes to /tmp/
 ENV XDG_CACHE_HOME=/tmp/cache
 ```
 
-Agent runs `pip install -r requirements.txt` — goes to `/tmp/venv/`. Agent runs `npm install` — goes to `/tmp/node_modules/`. No agent instructions needed, no `.gitignore` equivalent. The tools just write to the right place by default.
-
-This separation means the metadata-heavy small-file storm from `pip install` (thousands of files, symlinks, `.pyc` files) never hits JuiceFS. The workspace only sees code files, data, and outputs — larger, fewer, less metadata pressure.
+But even if an agent bypasses these (installs to the workspace directly, clones a repo, runs a build), the OverlayFS filter catches it. Belt and suspenders.
 
 ### Container Lifecycle
 
 ```
 Sequential step:
-  → Container launches with JuiceFS mounted at /workspace/
-  → Previous steps' files are visible (close-to-open consistency)
-  → Agent installs dependencies locally (/tmp/venv/)
-  → Agent reads workspace files, executes programs, writes output
-  → Step completes, container torn down
-  → Next step's container sees all files
+  → Container launches
+  → JuiceFS mounted read-only at /workspace/ (lower layer)
+  → OverlayFS writable upper layer on top
+  → Agent sees merged view, writes freely
+  → Step completes
+  → Overlay diff filtered (denylist removes junk)
+  → Clean output persisted to JuiceFS
+  → Container torn down
+  → Next step sees clean workspace
 
 Parallel steps:
-  → Multiple containers mount same JuiceFS simultaneously
-  → Each sees the same workspace snapshot
-  → Each writes output (see Merge Strategy below)
-  → All complete, merge if needed, next batch starts
+  → Multiple containers, each with own overlay on same JuiceFS base
+  → Each writes to its own overlay (no cross-container conflicts)
+  → All complete
+  → Each overlay filtered and diffed
+  → Clean diffs merged (see Merge Strategy below)
+  → Next batch sees merged workspace
 ```
 
 ### Run Isolation
@@ -178,25 +193,33 @@ JuiceFS with Redis metadata is 2-4x faster for small file operations. But instal
 ### Architecture
 
 ```
-┌─────────────────┐     ┌─────────────────┐
-│  Container A    │     │  Container B    │
-│  /workspace/ ←──┼─────┼──→ /workspace/  │
-│  (FUSE mount)   │     │  (FUSE mount)   │
-└────────┬────────┘     └────────┬────────┘
-         │                       │
-         └───────────┬───────────┘
-                     │
-              ┌──────┴──────┐
-              │   JuiceFS   │
-              │  Metadata   │
-              │ (Postgres)  │
-              └──────┬──────┘
-                     │
-              ┌──────┴──────┐
-              │   JuiceFS   │
-              │    Data     │
-              │  (S3/MinIO) │
-              └─────────────┘
+┌──────────────────────────────┐
+│         Container            │
+│                              │
+│  /workspace/ (merged view)   │
+│    ┌───────────────────┐     │
+│    │  OverlayFS upper  │ ← agent writes here (local, fast)
+│    ├───────────────────┤     │
+│    │  JuiceFS lower    │ ← previous steps' files (read-only)
+│    └────────┬──────────┘     │
+│             │                │
+│  /tmp/ (local, disposable)   │
+└─────────────┼────────────────┘
+              │
+       ┌──────┴──────┐
+       │   JuiceFS   │
+       │  Metadata   │
+       │ (Postgres)  │
+       └──────┬──────┘
+              │
+       ┌──────┴──────┐
+       │   JuiceFS   │
+       │    Data     │
+       │  (S3/MinIO) │
+       └─────────────┘
+
+Step completes:
+  overlay diff → denylist filter → persist clean files → JuiceFS
 ```
 
 ## Merge Strategy for Parallel Steps
@@ -205,16 +228,14 @@ When parallel steps write to different files — no conflict, auto-merge. When t
 
 ### The Flow
 
-**1. Snapshot before parallel batch.** Record file checksums from workspace.
+**1. Parallel steps execute.** Each container gets its own OverlayFS upper on the same JuiceFS base. No snapshot needed — the overlay IS the diff.
 
-**2. Parallel steps execute.** Each container mounts the same JuiceFS.
-
-**3. After all parallel steps complete.** Diff each step's changes against the snapshot:
+**2. After all parallel steps complete.** Filter each overlay (denylist), then compare the clean diffs:
 - **New files from one step**: accept (no conflict)
 - **Modified by one step only**: accept (no conflict)
 - **Modified by multiple steps**: run three-way merge
 
-**4. Three-way merge** (`diff3`, standard Unix tool):
+**3. Three-way merge** (`diff3`, standard Unix tool):
 ```
 Lines unchanged by both     → keep base           (automatic)
 Lines changed by A only     → take A's version    (automatic)
@@ -224,7 +245,7 @@ Lines changed by both       → CONFLICT            (LLM resolves)
 
 90%+ of the file merges automatically. Only conflict hunks go to the LLM.
 
-**5. Conflict resolution.** Send just the conflicting lines (plus surrounding context) to Haiku:
+**4. Conflict resolution.** Send just the conflicting lines (plus surrounding context) to Haiku:
 
 ```
 File: /workspace/my_app/main.py, lines 36-42 conflict.
@@ -246,7 +267,7 @@ Combine both changes.
 
 Haiku returns the merged version. One call per conflict hunk, ~20 lines of context, fractions of a cent.
 
-**6. Binary file conflicts.** Can't line-merge images or data. Policy: last-write-wins, keep-both (rename), or flag for user. Rare in practice — parallel steps producing binary files usually produce different files.
+**5. Binary file conflicts.** Can't line-merge images or data. Policy: last-write-wins, keep-both (rename), or flag for user. Rare in practice — parallel steps producing binary files usually produce different files.
 
 ### Why Conflicts Are Rare
 
@@ -255,6 +276,30 @@ If the builder designs the DAG well, parallel steps do genuinely different work:
 - **Same file, different sections**: auto-merge, zero cost
 - **Same file, same lines**: rare, one Haiku call
 - The merge system is a safety net, not the primary path
+
+## Tool Model
+
+Every agent runs in a container with a shell. Most tools are implicit — always available, never listed by the designer.
+
+### Implicit (always available, designer never assigns these)
+
+- **Shell access** — `ls`, `cat`, `grep`, `python`, `pip`, `npm`, `curl`, any CLI tool. The agent has a real terminal in a sandboxed container. Blast radius is the container — can only affect `/workspace/` (shared) and `/tmp/` (disposable).
+- **Web search / X search** — model-native. The agent searches the web and social media naturally. No tool definition needed — just natural language in the assignment: "Search the web for..."
+- **Store tools** — `store_read_file`, `store_write_file` remain available alongside raw filesystem access for backward compatibility and metadata tracking.
+- **Think** — reason without acting.
+
+Shell access subsumes most traditional agent tools:
+- `ls` / `find` replaces `store_list_files`
+- `cat` replaces `store_read_file`
+- File writes via shell/python replaces `store_write_file`
+- `pip install` / `npm install` / `python main.py` just work
+- `grep` / `rg` replaces `content_search`
+
+### Designer-Assigned Tools (rare)
+
+The designer's `tools` list is almost always empty. It only adds capabilities that neither the shell nor the model provide — domain-specific integrations, API access to internal systems, specialized tooling.
+
+For most agents, a shell and a brain is all they need.
 
 ## How the Builder and Designer Change
 
@@ -305,11 +350,30 @@ Step 4: "Write Executive Report"
 
 Edges express "needs to exist before I start." Nothing about data format, file paths, or output structure. The builder configured what each step does and when it runs. The designer takes it from here.
 
-### Designer — Shaping the Handoff
+### Designer — DAG-Styled Design Pass
 
-The designer writes per-agent prompts for each step's workforce. In the file-first model, the designer's key tool is `expected_output` — it shapes the agent's text response into an orientation handoff targeted at the specific downstream step.
+The designer runs in **topological order** — same order as execution. Each step's designer sees what's already been designed upstream and what's coming downstream. The narrative threads naturally because each `expected_output` feeds into the next step's design context.
 
-**The designer knows both sides.** It designed step 2's agents AND knows what step 3 needs. So it writes step 2's `expected_output` to contain exactly what step 3's agents need to orient themselves in the workspace.
+```
+Builder creates all nodes (full context, detailed descriptions)
+                    ↓
+Designer runs topologically:
+  Step 1: builder desc + downstream desc
+        → designs agents + expected_output
+  Step 2: builder desc + step 1's expected_output + downstream desc
+        → designs agents + expected_output
+  Step 3: builder desc + step 2's expected_output + downstream desc
+        → designs agents + expected_output
+  Step 4: builder desc + step 3's expected_output
+        → designs agents + expected_output
+```
+
+Each designer receives:
+- **Builder's node description** — detailed, specific (the builder had full context)
+- **Upstream expected_outputs** — what previous steps promised to hand off (already designed)
+- **Downstream step descriptions** — what comes next (so it can tailor the handoff)
+
+The designer's key tool is `expected_output` — it shapes the agent's text response into an orientation handoff targeted at the specific downstream step.
 
 **How to write `expected_output`:**
 
@@ -318,6 +382,10 @@ The designer writes per-agent prompts for each step's workforce. In the file-fir
 3. **How does the next step use it?** — run instructions, data format, key files
 
 The `expected_output` is an instruction TO the agent about what its text response should contain. It's NOT the output itself — it's the template.
+
+Each `expected_output` is a contract. The next step's designer reads that contract and writes an assignment that references it. The narrative chains: step 1's expected_output → step 2's assignment → step 2's expected_output → step 3's assignment. No guessing. No gaps.
+
+If the user edits step 1's design, the system re-runs the designer for downstream steps — the chain is invalidated and rebuilt. Same topological propagation as execution.
 
 ### Full Designer Example: 4-Step Scraper Workflow
 
@@ -336,7 +404,7 @@ The `expected_output` is an instruction TO the agent about what its text respons
     entry point lives in the workspace, how to install its dependencies,
     what CLI arguments it accepts, and what format it returns.",
 
-  "tools": ["run_command"]
+  "tools": []
 }
 ```
 
@@ -365,7 +433,7 @@ files, tested with 3 unit tests.
     any failures, and where the results data lives in the workspace.
     Describe the data format so the analysis step can read it.",
 
-  "tools": ["run_command"]
+  "tools": []
 }
 ```
 
@@ -395,7 +463,7 @@ and scraped_at fields. Timeout error logged to
     Note where the full analysis and supporting charts live in the
     workspace.",
 
-  "tools": ["run_command"]
+  "tools": []
 }
 ```
 
@@ -462,20 +530,58 @@ When step 3 starts, its agents see:
 
 The previous step output orients the agent to the right files. The workspace has the actual data. The assignment tells the agent what to do. The `expected_output` shapes what this agent will say to step 4.
 
+### The Narrative Principle
+
+The designer writes the workflow like a book. Each step's assignment reads like the next chapter — it references what came before and sets up what comes next. The agent never has to guess or explore blindly.
+
+Three layers of context, each more specific:
+1. **Assignment** — tells the agent what exists and what to do (designer writes this)
+2. **Previous step handoff** — tells the agent where to find things (previous agent wrote this)
+3. **Workspace** — has the actual files (previous agents produced these)
+
+The assignment carries the narrative arc. Step 4 knows the full story — research, scrape, analyze — even though it only has an edge from step 3. The designer wrote that context in because it knows the whole workflow.
+
+```
+Step 1 assignment:
+  "Build a Python CLI web scraper that crawls URLs and extracts
+   article content into structured JSON. Write all source files
+   to the workspace."
+
+Step 2 assignment:
+  "A previous step built a web scraper. Read the previous step's
+   handoff to find where it lives and how to run it. Install its
+   dependencies and execute it against the target URLs. Save
+   results to the workspace."
+
+Step 3 assignment:
+  "Previous steps built a web scraper and ran it against target
+   URLs. Read the previous step's handoff to find the results
+   data. Analyze for pricing trends, anomalies, and market
+   positioning. Write your analysis to the workspace."
+
+Step 4 assignment:
+  "Previous steps researched competitor pricing, executed a
+   scraper, and analyzed the results. Read the previous step's
+   handoff to find the analysis. Write an executive report for
+   stakeholders that covers trends, anomalies, and recommendations.
+   Write the report to the workspace."
+```
+
+Each assignment gets richer as the workflow progresses. Step 1 has no history. Step 4 has the full arc. The designer builds this narrative because it sees the whole workflow topology — it knows what every step does and how they connect.
+
 ### Agent Prompt Pattern
 
 The system prompt always grounds the agent in the workspace:
 
 ```
 You are a [role]. Your working directory is /workspace/ where other
-steps have contributed and will contribute after you. Explore what
-exists and do your job.
+steps have contributed and will contribute after you.
 ```
 
-The assignment always references the workspace and the previous handoff:
+The assignment carries the narrative and references the handoff:
 
 ```
-[Context from builder about what this step does]. Read the previous
+[Narrative context — what previous steps did]. Read the previous
 step's handoff to find [what you need]. [Your specific task].
 Write your output to the workspace.
 ```
@@ -530,25 +636,331 @@ User draws workflow → Board Submit
                         ↓
 Phase 0: Create nodes, wire edges (agentless, instant)
                         ↓
-Builder: Topology + node content (per-node)
+Builder: Topology + node content (per-node, detailed descriptions)
          Thinks in scheduling, not data routing.
                         ↓
-Designer: Per-agent prompts (per-node, writes expected_files)
-          Frames agents as workspace contributors.
-          "Your working directory is /workspace/."
+Designer: Runs in topological order (same order as execution)
+          Each step's designer sees:
+            - Builder's node description
+            - Upstream steps' expected_outputs (already designed)
+            - Downstream step descriptions
+          Writes per-agent prompts + expected_output.
+          expected_output feeds into the next step's design context.
                         ↓
 Execute: DAG runs topologically
-         Each step gets a container with /workspace/ mounted.
+         Each step gets a container:
+           JuiceFS (read-only lower) + OverlayFS (writable upper)
+         Agent sees merged /workspace/, writes freely.
          Previous steps' files are there on disk.
-         Agent installs deps locally, reads/writes workspace.
          Programs are executable. Data is real.
-         Agents create directories as they see fit.
                         ↓
-Step completes → container torn down
-              → workspace persists (JuiceFS)
-              → parallel steps: merge if needed (diff3 + Haiku)
+Step completes → overlay diff filtered (denylist removes junk)
+              → clean output persisted to JuiceFS
+              → container torn down
+              → parallel steps: clean diffs merged (diff3 + Haiku)
               → next batch starts with expanded workspace
 ```
+
+## Detailed: Topological Design Pass
+
+This is the most significant change to the existing system. Today, the builder and designer both run **per-node independently** — each node's designer has no knowledge of what other nodes' designers wrote. In the file-first model, the design phase runs in **topological order across the entire workflow**, threading context from step to step.
+
+### What Changes
+
+| | Current | File-First |
+|--|---------|-----------|
+| Builder | Per-node, independent | Per-node, topological order, sees upstream contracts |
+| Designer trigger | After each node's builder completes | After ALL builders complete, run in topo order |
+| Designer context | Node's roster + upstream runtime envelopes | Node's roster + upstream `expected_output` contracts |
+| `expected_output` format | "Store: X. Response: Y." (dual, inward-focused) | Orientation handoff for the downstream step (outward-focused) |
+| Cross-step awareness | None — designer doesn't know other steps' designs | Each designer reads upstream steps' designed `expected_output` |
+| Re-design propagation | Independent — editing step 1's design doesn't affect step 2 | Topological — editing step 1 invalidates and re-runs downstream designers |
+
+### Current System: How the Designer Works Today
+
+**Builder** (per-node, unchanged):
+```
+Receives: dispatch instruction + board state + upstream topology
+Produces: agent roster (names, roles, capabilities, dependencies)
+          task description, failure mode, plan
+Writes:   roster to DB via configure_team()
+```
+
+**Designer** (per-node, current):
+```
+Receives: roster + mission brief + upstream runtime envelopes + plan
+          (from build_workforce_designer_input())
+Produces: per-agent JSON configs
+          { tools, system_prompt, assignment, expected_output }
+Writes:   design/{step_id}/agents/{slug}.json to store
+```
+
+The designer currently sees upstream via `format_envelopes_as_upstream()` — which reads `completed_envelopes` (runtime step output data). This is fine for execution-time redesign, but at initial design time there are no runtime envelopes. The designer designs blind to what upstream steps will produce.
+
+The `expected_output` field is currently dual-format: "Store: [artifact]. Response: [lean summary]." It tells the agent what to save and what to say. But it's inward-focused — it describes what THIS agent produces, not what the NEXT step needs to know.
+
+### New System: Topological Design Pass
+
+**Phase 1 — Builders run** (enhanced: topological order, see upstream contracts):
+```
+For each step in topological order:
+
+  Builder for step N receives:
+    1. Dispatch instruction + board state (existing)
+    2. Upstream steps' expected_output contracts (NEW)
+
+  Builder for step N writes:
+    1. Agent roster, plan, task description (existing)
+
+  The upstream contracts help the builder make better team decisions:
+  - "Upstream hands off a Python CLI app" → single executor agent
+  - "Upstream hands off raw research data" → analyst + fact-checker pipeline
+```
+
+**Phase 2 — Designers run** (enhanced: topological order, threaded contracts):
+```
+For each step in topological order:
+
+  Designer for step N receives:
+    1. Builder's node description + roster + plan (existing)
+    2. Upstream steps' expected_output contracts (NEW)
+    3. Downstream step descriptions from builder (NEW)
+
+  Designer for step N writes:
+    1. Per-agent configs (existing: system_prompt, assignment, tools)
+    2. expected_output as orientation handoff (CHANGED: outward-focused)
+    3. Step-level expected_output summary (NEW: stored as step metadata)
+
+  Step N's expected_output feeds into step N+1's builder AND designer.
+```
+
+Both the builder and designer run in topological order. Both see upstream handoff contracts. The builder uses them to decide team composition. The designer uses them to write assignments and shape the next handoff.
+
+### What the Designer Receives: New Context Blocks
+
+Currently the designer's instruction template (`react_prompt.md`) has:
+```
+{{prior_design}}
+<dispatch_instruction>...</dispatch_instruction>
+<upstream_topology>...</upstream_topology>
+```
+
+Add two new blocks:
+
+**`<upstream_handoff_contracts>`** — what upstream steps promised to hand off:
+```xml
+<upstream_handoff_contracts>
+  <step name="Build Web Scraper" slug="build_web_scraper">
+    <expected_output>
+      Describe the application you built: where the entry point lives
+      in the workspace, how to install its dependencies, what CLI
+      arguments it accepts, and what format it returns.
+    </expected_output>
+  </step>
+</upstream_handoff_contracts>
+```
+
+This tells the designer: "When this step runs, the previous step's agent will have said something matching this template. Write your assignment to reference that information."
+
+**`<downstream_steps>`** — what comes next (so the designer can tailor the handoff):
+```xml
+<downstream_steps>
+  <step name="Analyze Results" slug="analyze_results">
+    Performs statistical analysis of scraped data. Needs to know
+    where the data lives and what format it's in.
+  </step>
+</downstream_steps>
+```
+
+This tells the designer: "The next step needs data location and format. Write your expected_output to include those details."
+
+### How `expected_output` Changes
+
+**Current format** (inward-focused, dual):
+```
+"Store: JSON array of findings (file path, line, type). Response: finding count and top 3."
+```
+
+**New format** (outward-focused, orientation handoff):
+```
+"Describe what you produced: where the results data lives in the
+workspace, the data format, how many records, and any failures.
+The next step will analyze this data."
+```
+
+The key shift: `expected_output` stops being about what the agent saves/responds. It becomes instructions for how the agent should orient the next step. The designer writes it knowing what the downstream step needs because it can see the downstream step descriptions.
+
+### Updated Designer Prompt (react_system.md additions)
+
+Add to guidelines:
+```
+expected_output — orient the next step:
+- The expected_output is an instruction to the agent about what its
+  text response should contain for the NEXT step's benefit.
+- Read <upstream_handoff_contracts> to understand what previous steps
+  promised. Write assignments that reference this information.
+- Read <downstream_steps> to understand what comes next. Write
+  expected_output that gives the next step what it needs to orient
+  in the workspace.
+- Pattern: what you produced, where it lives, how to use it.
+- If no downstream step exists, just confirm completion and location.
+```
+
+### Updated Designer Instruction Template (react_prompt.md)
+
+```
+{{prior_design}}
+
+<dispatch_instruction>
+{{dispatch_instruction}}
+</dispatch_instruction>
+
+<upstream_topology>
+{{upstream_topology}}
+</upstream_topology>
+
+<upstream_handoff_contracts>
+{{upstream_handoff_contracts}}
+</upstream_handoff_contracts>
+
+<downstream_steps>
+{{downstream_steps}}
+</downstream_steps>
+
+Review the board_state. For each agent:
+- If design_status="pending", write a new config.
+- If design_status="designed", read and verify consistency.
+
+When writing expected_output:
+- Read the upstream handoff contracts to understand what information
+  the previous step promised. Reference it in your assignments.
+- Read the downstream step descriptions to understand what the next
+  step needs. Shape expected_output to provide that orientation.
+Then call complete_design.
+```
+
+### Updated Designer Example
+
+**Designing step 2 ("Run Scraper")** with upstream and downstream context:
+
+```
+<upstream_handoff_contracts>
+  <step name="Build Web Scraper">
+    <expected_output>
+      Describe the application: entry point in workspace, dependency
+      installation, CLI arguments, return format.
+    </expected_output>
+  </step>
+</upstream_handoff_contracts>
+
+<downstream_steps>
+  <step name="Analyze Results">
+    Statistical analysis of scraped data. Needs data location,
+    format, and record count.
+  </step>
+</downstream_steps>
+```
+
+Designer writes:
+```json
+{
+  "system_prompt": "You are a test executor. Your working directory
+    is /workspace/ where a previous step built an application.",
+
+  "assignment": "A previous step built a web scraper. Its handoff
+    describes the entry point, how to install dependencies, and
+    how to run it. Follow those instructions to install and execute
+    the scraper against these target URLs: [url1, url2, ...].
+    Save all results to the workspace.",
+
+  "expected_output": "Report the execution results: how many URLs
+    scraped successfully, any failures and why, where the results
+    data lives in the workspace, and the data format (fields per
+    record). The next step will perform statistical analysis on
+    this data.",
+
+  "tools": []
+}
+```
+
+The assignment references what the upstream handoff contract promised ("its handoff describes the entry point, how to install dependencies, and how to run it"). The expected_output is shaped for what the downstream step needs ("where the results data lives, the data format, fields per record").
+
+### Step-Level Expected Output
+
+Each step's designer also writes a **step-level expected output summary** — a one-liner stored as metadata on the step. This is what downstream designers see in `<upstream_handoff_contracts>`.
+
+For a workforce with 3 agents, the step-level summary represents what the STEP as a whole hands off, not what individual agents produce:
+
+```
+Workforce agents:
+  Scanner expected_output: "List findings with severity..."
+  Analyzer expected_output: "Report prioritized findings..."
+  Reporter expected_output: "Confirm report location..."
+
+Step-level expected_output (what downstream sees):
+  "Describe the security audit results: total findings by severity,
+   where the remediation report lives in the workspace, and key
+   recommendations."
+```
+
+The designer writes this as part of `complete_design()`:
+```json
+complete_design({
+  "summary": "3-agent pipeline: Scanner → Analyzer → Reporter...",
+  "step_expected_output": "Describe the security audit results:
+    total findings by severity, where the remediation report lives
+    in the workspace, and key recommendations."
+})
+```
+
+### Re-Design Propagation
+
+When the user edits step 1's design (changes roster, modifies node text):
+1. Step 1's designer re-runs
+2. Step 1's `expected_output` may change
+3. System detects downstream steps' `<upstream_handoff_contracts>` are stale
+4. Steps 2, 3, 4 designers re-run in topological order with updated contracts
+5. Each re-run checks existing configs (`design_status="designed"`) against new contracts
+6. Updates stale configs, skips still-valid ones
+
+Same invalidation pattern as topological execution — changes propagate downstream through the DAG.
+
+### Implementation Changes
+
+**Backend (`designer_input/`):**
+- Add `upstream_handoff_contracts: Vec<HandoffContract>` to `DesignerInput`
+- Add `downstream_descriptions: Vec<StepDescription>` to `DesignerInput`
+- New struct `HandoffContract { step_name, step_slug, expected_output }`
+- New struct `StepDescription { step_name, step_slug, description }`
+- Build these from step metadata + stored designer outputs
+
+**Backend (builder dispatch):**
+- Change builder dispatch to topological order (board dispatcher already does this)
+- Add `<upstream_handoff_contracts>` to builder's instruction context
+- After each builder completes, step's expected_output is available for downstream builders
+
+**Backend (`pipeline/designer.rs`):**
+- Change designer trigger: wait for all builders, then run designers in topo order
+- After each designer completes, extract step-level `expected_output` from `complete_design`
+- Store as step metadata for downstream builders and designers to read
+- Add invalidation logic: if upstream `expected_output` changed, mark downstream as stale
+
+**Config (builder `system.md`):**
+- Add `<upstream_handoff_contracts>` to builder context
+- Add guidance: "Use upstream handoff contracts to understand what data is coming in and configure the team accordingly"
+
+**Config (`designer/react_prompt.md`):**
+- Add `{{upstream_handoff_contracts}}` and `{{downstream_steps}}` template vars
+- Update instructions to reference these blocks
+
+**Config (`designer/react_system.md`):**
+- Add guidelines for writing outward-focused `expected_output`
+- Add examples showing upstream contract reference in assignments
+- Update existing examples to include downstream awareness
+
+**`complete_design` tool:**
+- Add `step_expected_output` field to completion payload
+- Persist as step metadata
 
 ## Scope: Creation Workflows
 
