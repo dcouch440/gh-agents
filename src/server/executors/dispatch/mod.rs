@@ -18,7 +18,7 @@ use crate::server::ws::events::{SessionEvent, SessionEventKind};
 use crate::types::ExecutionType;
 use crate::types::UserId;
 
-mod designer_handoff;
+pub(crate) mod designer_handoff;
 
 mod tests;
 

@@ -96,36 +96,37 @@ pub(crate) async fn create_optional_container(
     };
 
     // Resolve workspace volume if JuiceFS is available
-    let workspace_volume =
-        if let (Some(wf_id), Some(run_id), Some(mgr)) = (cc.workflow_id, cc.run_id, workspace_manager) {
-            match mgr.create_run_workspace(wf_id, run_id) {
-                Ok(path) => {
-                    let subpath = format!(
-                        "{}/{}/runs/{}",
-                        crate::constants::WORKSPACE_PREFIX,
-                        wf_id,
-                        run_id
-                    );
-                    info!(
-                        workflow_id = %wf_id,
-                        run_id = %run_id,
-                        path = %path.display(),
-                        subpath = %subpath,
-                        "Resolved workspace volume subpath"
-                    );
-                    Some(crate::execution::container::WorkspaceVolume {
-                        volume_name: crate::constants::WORKSPACE_VOLUME_NAME.to_string(),
-                        subpath,
-                    })
-                }
-                Err(e) => {
-                    warn!(error = %e, "Failed to create workspace directory, falling back to git clone");
-                    None
-                }
+    let workspace_volume = if let (Some(wf_id), Some(run_id), Some(mgr)) =
+        (cc.workflow_id, cc.run_id, workspace_manager)
+    {
+        match mgr.create_run_workspace(wf_id, run_id) {
+            Ok(path) => {
+                let subpath = format!(
+                    "{}/{}/runs/{}",
+                    crate::constants::WORKSPACE_PREFIX,
+                    wf_id,
+                    run_id
+                );
+                info!(
+                    workflow_id = %wf_id,
+                    run_id = %run_id,
+                    path = %path.display(),
+                    subpath = %subpath,
+                    "Resolved workspace volume subpath"
+                );
+                Some(crate::execution::container::WorkspaceVolume {
+                    volume_name: crate::constants::WORKSPACE_VOLUME_NAME.to_string(),
+                    subpath,
+                })
             }
-        } else {
-            None
-        };
+            Err(e) => {
+                warn!(error = %e, "Failed to create workspace directory, falling back to git clone");
+                None
+            }
+        }
+    } else {
+        None
+    };
 
     // Build container config, optionally sharing VPN sidecar's network
     let container_config = ContainerConfig {
