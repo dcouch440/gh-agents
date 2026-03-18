@@ -218,6 +218,7 @@ impl Pipeline {
             dag.ctx.container_config.as_ref(),
             dag.ctx.wg_client.as_deref(),
             "pipeline",
+            dag.state.workspace(),
         )
         .await?;
 

@@ -87,6 +87,11 @@ pub struct ContainerExecutionConfig {
     pub cpu_limit: Option<String>,
     /// When true, each container is paired with a WireGuard VPN sidecar.
     pub vpn_enabled: bool,
+    /// Workflow ID for workspace path resolution. When set with `run_id`, the container
+    /// gets a JuiceFS workspace bind-mounted at /workspace/ instead of a git clone.
+    pub workflow_id: Option<Uuid>,
+    /// Run ID for workspace path resolution.
+    pub run_id: Option<Uuid>,
 }
 
 /// Context passed into the DAG executor for one workflow run.

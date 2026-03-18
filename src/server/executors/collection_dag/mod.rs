@@ -423,6 +423,8 @@ where
                         memory_limit: None,
                         cpu_limit: None,
                         vpn_enabled: wf_row.vpn_enabled,
+                        workflow_id: None,
+                        run_id: None,
                     })
                 } else {
                     tracing::warn!(

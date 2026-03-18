@@ -22,6 +22,7 @@ mod tests {
         assert!(config.github_token.is_empty());
         assert!(config.branch.is_none());
         assert!(config.env_vars.is_empty());
+        assert!(config.workspace_mount.is_none());
     }
 
     // ── ContainerExecResult ───────────────────────────────────────────────
@@ -1029,6 +1030,111 @@ mod tests {
         assert!(
             !has_checkout,
             "Should not have issued a git checkout when branch is None"
+        );
+    }
+
+    // ── workspace mount: build_create_args ─────────────────────────────
+
+    #[test]
+    fn build_create_args_with_workspace_mount_includes_volume() {
+        let config = ContainerConfig {
+            workspace_mount: Some("/tmp/nexor-jfs/workflows/abc/runs/def".to_string()),
+            ..ContainerConfig::default()
+        };
+        let args = build_create_args("test-container", &config);
+        assert!(args.contains(&"-v".to_string()));
+        assert!(args.contains(
+            &"/tmp/nexor-jfs/workflows/abc/runs/def:/workspace".to_string()
+        ));
+    }
+
+    #[test]
+    fn build_create_args_with_workspace_mount_injects_env_vars() {
+        let config = ContainerConfig {
+            workspace_mount: Some("/tmp/workspace".to_string()),
+            ..ContainerConfig::default()
+        };
+        let args = build_create_args("test-container", &config);
+        assert!(
+            args.contains(&"--env=VIRTUAL_ENV=/tmp/venv".to_string()),
+            "Should inject VIRTUAL_ENV"
+        );
+        assert!(
+            args.contains(&"--env=PIP_CACHE_DIR=/tmp/pip-cache".to_string()),
+            "Should inject PIP_CACHE_DIR"
+        );
+        assert!(
+            args.contains(&"--env=PYTHONDONTWRITEBYTECODE=1".to_string()),
+            "Should inject PYTHONDONTWRITEBYTECODE"
+        );
+        assert!(
+            args.contains(&"--env=npm_config_cache=/tmp/npm-cache".to_string()),
+            "Should inject npm_config_cache"
+        );
+        assert!(
+            args.contains(&"--env=CARGO_HOME=/tmp/cargo".to_string()),
+            "Should inject CARGO_HOME"
+        );
+        assert!(
+            args.contains(&"--env=XDG_CACHE_HOME=/tmp/cache".to_string()),
+            "Should inject XDG_CACHE_HOME"
+        );
+    }
+
+    #[test]
+    fn build_create_args_without_workspace_mount_no_volume() {
+        let config = ContainerConfig::default();
+        let args = build_create_args("test-container", &config);
+        assert!(
+            !args.contains(&"-v".to_string()),
+            "Should not have -v when workspace_mount is None"
+        );
+        assert!(
+            !args.iter().any(|a| a.contains("VIRTUAL_ENV")),
+            "Should not inject workspace env vars when no mount"
+        );
+    }
+
+    // ── workspace mount: create_container (skips git clone) ──────────
+
+    #[tokio::test]
+    async fn create_with_workspace_mount_skips_git_clone() {
+        let mut mock = MockDockerCli::new();
+        let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let calls_clone = calls.clone();
+        mock.expect_run().returning(move |args| {
+            calls_clone.lock().unwrap().push(args.clone());
+            let is_create = args.iter().any(|a| a == "create");
+            if is_create {
+                Ok(success_output("container-id\n"))
+            } else {
+                Ok(success_output(""))
+            }
+        });
+
+        let config = ContainerConfig {
+            workspace_mount: Some("/tmp/workspace".to_string()),
+            ..ContainerConfig::default()
+        };
+        let mgr = ContainerManager::new(Arc::new(mock));
+        let handle = mgr.create_container(&config).await.unwrap();
+        assert!(handle.container_name().starts_with("nexor-step-"));
+
+        // Should only have create + start (no clone, no config, no disconnect)
+        let calls = calls.lock().unwrap();
+        assert_eq!(
+            calls.len(),
+            2,
+            "Workspace mode should only have create + start, got {} calls",
+            calls.len()
+        );
+        assert!(
+            calls[0].iter().any(|a| a == "create"),
+            "First call should be create"
+        );
+        assert!(
+            calls[1].iter().any(|a| a == "start"),
+            "Second call should be start"
         );
     }
 
