@@ -506,6 +506,8 @@ pub const ENV_WORKSPACE_MOUNT_POINT: &str = "WORKSPACE_MOUNT_POINT";
 pub const WORKSPACE_DEFAULT_MOUNT_POINT: &str = "/tmp/nexor-jfs";
 /// Subdirectory prefix under the mount for workflow workspaces.
 pub const WORKSPACE_PREFIX: &str = "workflows";
+/// Docker named volume for JuiceFS workspace (must match docker-compose.yml volume name).
+pub const WORKSPACE_VOLUME_NAME: &str = "nexor-jfs-workspace";
 
 // ── VPN / WireGuard Defaults ──────────────────────────────────────────────
 

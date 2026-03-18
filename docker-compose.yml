@@ -1,3 +1,5 @@
+name: nexor
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -122,6 +124,12 @@ services:
 
 volumes:
   pgdata:
+    name: gh-agents_pgdata
+    external: true
   minio-data:
+    name: gh-agents_minio-data
+    external: true
   wg-easy-data:
+    name: nexor-wg-easy-data
   jfs-workspace:
+    name: nexor-jfs-workspace
