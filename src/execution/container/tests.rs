@@ -1112,6 +1112,103 @@ mod tests {
         );
     }
 
+    // ── workspace volume + overlay: build_create_args ───────────────────
+
+    #[test]
+    fn build_create_args_overlay_mode_mounts_at_workspace_base() {
+        let config = ContainerConfig {
+            workspace_volume: Some(test_workspace_volume()),
+            overlay_enabled: true,
+            ..ContainerConfig::default()
+        };
+        let args = build_create_args("test-container", &config);
+        let mount_arg = args.iter().find(|a| a.contains("type=volume")).unwrap();
+        assert!(
+            mount_arg.contains("target=/workspace-base"),
+            "Overlay mode should mount at /workspace-base, got: {}",
+            mount_arg
+        );
+        assert!(
+            mount_arg.contains(",readonly"),
+            "Overlay mode should mount read-only, got: {}",
+            mount_arg
+        );
+    }
+
+    #[test]
+    fn build_create_args_overlay_mode_adds_sys_admin() {
+        let config = ContainerConfig {
+            workspace_volume: Some(test_workspace_volume()),
+            overlay_enabled: true,
+            ..ContainerConfig::default()
+        };
+        let args = build_create_args("test-container", &config);
+        assert!(
+            args.contains(&"--cap-add=SYS_ADMIN".to_string()),
+            "Overlay mode should add SYS_ADMIN capability"
+        );
+        // cap-drop=ALL should still be present (applied earlier in args)
+        assert!(
+            args.contains(&"--cap-drop=ALL".to_string()),
+            "Should still have --cap-drop=ALL"
+        );
+    }
+
+    #[test]
+    fn build_create_args_non_overlay_no_sys_admin() {
+        let config = ContainerConfig {
+            workspace_volume: Some(test_workspace_volume()),
+            overlay_enabled: false,
+            ..ContainerConfig::default()
+        };
+        let args = build_create_args("test-container", &config);
+        assert!(
+            !args.contains(&"--cap-add=SYS_ADMIN".to_string()),
+            "Non-overlay mode should not add SYS_ADMIN"
+        );
+        let mount_arg = args.iter().find(|a| a.contains("type=volume")).unwrap();
+        assert!(
+            mount_arg.contains("target=/workspace"),
+            "Non-overlay mode should mount at /workspace"
+        );
+        assert!(
+            !mount_arg.contains("readonly"),
+            "Non-overlay mode should not be read-only"
+        );
+    }
+
+    #[test]
+    fn build_create_args_overlay_without_workspace_volume_no_effect() {
+        let config = ContainerConfig {
+            overlay_enabled: true,
+            workspace_volume: None,
+            ..ContainerConfig::default()
+        };
+        let args = build_create_args("test-container", &config);
+        assert!(
+            !args.contains(&"--cap-add=SYS_ADMIN".to_string()),
+            "Overlay without workspace_volume should have no effect"
+        );
+        assert!(
+            !args.contains(&"--mount".to_string()),
+            "Should not have --mount without workspace_volume"
+        );
+    }
+
+    #[test]
+    fn build_create_args_overlay_still_injects_env_vars() {
+        let config = ContainerConfig {
+            workspace_volume: Some(test_workspace_volume()),
+            overlay_enabled: true,
+            ..ContainerConfig::default()
+        };
+        let args = build_create_args("test-container", &config);
+        assert!(
+            args.contains(&"--env=VIRTUAL_ENV=/tmp/venv".to_string()),
+            "Overlay mode should still inject workspace env vars"
+        );
+    }
+
     // ── workspace volume: create_container (skips git clone) ──────────
 
     #[tokio::test]

@@ -149,6 +149,7 @@ pub(crate) async fn create_optional_container(
             .as_ref()
             .map(|s| format!("container:{}", s.container_id)),
         workspace_volume,
+        overlay_enabled: cc.overlay_enabled,
         ..ContainerConfig::default()
     };
 
@@ -198,6 +199,49 @@ pub(crate) async fn destroy_optional_container(
             if let Err(e) = vpn_with_retry(|| wg.delete_peer(&peer_id)).await {
                 warn!(peer_id = %sidecar.peer_id, error = %e, "Failed to delete VPN peer");
             }
+        }
+    }
+}
+
+/// Extract overlay diff from a container before teardown.
+///
+/// Returns `None` if overlay is not enabled, no container exists, or
+/// extraction fails (logged as warning). The returned `StepOverlay`
+/// feeds into the merge pipeline (B5).
+pub(crate) async fn extract_step_overlay(
+    managed: &Option<ManagedContainer>,
+    step_id: Uuid,
+    step_name: String,
+    step_description: String,
+    display_order: i32,
+    base_file_paths: &std::collections::HashSet<std::path::PathBuf>,
+    overlay_enabled: bool,
+) -> Option<super::merge::types::StepOverlay> {
+    if !overlay_enabled {
+        return None;
+    }
+    let Some(ref mc) = managed else {
+        return None;
+    };
+
+    match crate::execution::container::overlay::extract_overlay_diff(
+        &mc.agent_handle,
+        step_id,
+        step_name,
+        step_description,
+        display_order,
+        base_file_paths,
+    )
+    .await
+    {
+        Ok(overlay) => Some(overlay),
+        Err(e) => {
+            warn!(
+                step_id = %step_id,
+                error = %e,
+                "Failed to extract overlay diff"
+            );
+            None
         }
     }
 }

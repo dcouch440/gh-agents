@@ -425,6 +425,7 @@ where
                         vpn_enabled: wf_row.vpn_enabled,
                         workflow_id: None,
                         run_id: None,
+                        overlay_enabled: false,
                     })
                 } else {
                     tracing::warn!(

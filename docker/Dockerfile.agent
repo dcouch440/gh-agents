@@ -11,7 +11,7 @@ RUN apt-get update && \
         python3-venv && \
     rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p /workspace
+RUN mkdir -p /workspace /workspace-base /tmp/overlay/upper /tmp/overlay/work
 WORKDIR /workspace
 
 CMD ["sleep", "infinity"]
