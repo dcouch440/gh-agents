@@ -3,6 +3,7 @@
        cli-install cli-dev cli-build \
        dev build-all lint-all test-all ci \
        test-ascii compose \
+       server server-up server-down server-build server-logs server-format-jfs \
        report-last-run report-token-usage report-tool-calls report-sessions report-all
 
 # Default target
@@ -35,6 +36,14 @@ help:
 	@echo "    make cli-install - Install CLI npm dependencies"
 	@echo "    make cli-dev     - Launch the terminal CLI"
 	@echo "    make cli-build   - Compile CLI TypeScript"
+	@echo ""
+	@echo "  Docker Server:"
+	@echo "    make server      - Build + start the full dockerized stack"
+	@echo "    make server-up   - Start the dockerized stack (assumes binary built)"
+	@echo "    make server-down - Stop the dockerized stack"
+	@echo "    make server-build- Rebuild the dev server Docker image"
+	@echo "    make server-logs - Tail server container logs"
+	@echo "    make server-format-jfs - One-time JuiceFS volume format"
 	@echo ""
 	@echo "  Combined:"
 	@echo "    make dev         - Run backend and frontend dev servers"
@@ -127,6 +136,30 @@ cli-build:
 
 compose:
 	docker compose up -d
+
+# Build and start the dockerized stack (binary compiles inside Docker)
+server: server-build server-up
+
+# Start the dockerized stack (postgres, minio, juicefs, nexor-server)
+server-up:
+	docker compose --profile server up -d
+
+# Stop the dockerized stack
+server-down:
+	docker compose --profile server down
+
+# Rebuild the dev server Docker image
+server-build:
+	docker compose --profile server build
+
+# Tail server logs
+server-logs:
+	docker compose --profile server logs -f nexor-server
+
+# One-time JuiceFS volume format (run after first `compose` or `server-up`)
+server-format-jfs:
+	docker compose up -d postgres minio
+	./scripts/juicefs-format.sh --docker
 
 # --- Combined ---
 
