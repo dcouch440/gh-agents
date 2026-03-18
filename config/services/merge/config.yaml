@@ -1,0 +1,13 @@
+agents:
+  resolver:
+    model_id: "tier:3"
+    max_tokens: 4096
+    temperature: 0.0
+    max_rounds: 1
+    context_budget: 480000
+  complex_resolver:
+    model_id: "tier:2"
+    max_tokens: 4096
+    temperature: 0.0
+    max_rounds: 1
+    context_budget: 480000
