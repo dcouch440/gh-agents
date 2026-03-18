@@ -21,7 +21,7 @@ npx eslint .                                # Lint — zero warnings
 npx vitest run                              # All tests
 
 # Database
-docker exec gh-agents-postgres-1 psql -U nexor -d nexor -c "SQL"
+docker exec nexor-postgres-1 psql -U nexor -d nexor -c "SQL"
 ```
 
 ## Pre-commit Checklist
