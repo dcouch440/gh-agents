@@ -172,8 +172,9 @@ pub mod vars {
     pub mod react_designer {
         pub const NODE_NAME: &str = "ReactDesigner.node_name";
         pub const PRIOR_DESIGN: &str = "ReactDesigner.prior_design";
-        pub const UPSTREAM_TOPOLOGY: &str = "ReactDesigner.upstream_topology";
-        pub const DISPATCH_INSTRUCTION: &str = "ReactDesigner.dispatch_instruction";
+        pub const STEP_ORDER: &str = "ReactDesigner.step_order";
+        pub const TASK: &str = "ReactDesigner.task";
+        pub const CURRENT_DESIGN_HANDOFF: &str = "ReactDesigner.current_design_handoff";
         pub const PREVIOUS_STEP: &str = "ReactDesigner.previous_step";
         pub const NEXT_STEP: &str = "ReactDesigner.next_step";
     }
@@ -570,6 +571,13 @@ mod tests {
             vars::designer::UPSTREAM_CONTEXT,
             vars::designer::AVAILABLE_TOOLS,
             vars::designer::ARCHETYPE_GUIDANCE,
+            vars::react_designer::NODE_NAME,
+            vars::react_designer::PRIOR_DESIGN,
+            vars::react_designer::STEP_ORDER,
+            vars::react_designer::TASK,
+            vars::react_designer::CURRENT_DESIGN_HANDOFF,
+            vars::react_designer::PREVIOUS_STEP,
+            vars::react_designer::NEXT_STEP,
         ]);
 
         let all_roles: &[(&str, &RoleDefinition)] = &[
@@ -578,6 +586,7 @@ mod tests {
             ("belief_extractor", &roles::BELIEF_EXTRACTOR),
             ("designer", &roles::DESIGNER),
             ("manager_assistant", &roles::MANAGER_ASSISTANT_BASE),
+            ("react_designer", &roles::REACT_DESIGNER),
         ];
 
         let re = regex::Regex::new(r"\{\{\.([^}]+)\}\}").unwrap();

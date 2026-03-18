@@ -35,16 +35,18 @@ pub struct ReactDesignerConfig {
     pub agent_execution_id: Option<Uuid>,
     /// Pre-rendered `<board_state>` XML enriched with design status.
     pub board_state_xml: String,
-    /// Compact upstream/downstream topology description.
-    pub upstream_topology: String,
-    /// The original dispatch instruction (changeset message) the builder received.
-    pub dispatch_instruction: String,
+    /// Compact step ordering / topology description.
+    pub step_order: String,
+    /// The task instruction (what the builder was asked to do).
+    pub task: String,
     /// Agent names changed by the builder (for `rebuild_system_prompt` enrichment).
     pub changed_agents: Vec<String>,
     /// Handoff from the previous step's designer (None for first step in workflow).
     pub previous_step_handoff: Option<PreviousStepHandoff>,
     /// Raw box text of the next step in the workflow (None for last step).
     pub next_step_text: Option<String>,
+    /// This step's own current designer handoff (for re-design awareness).
+    pub current_design_handoff: String,
 }
 
 /// Multi-turn ReAct designer strategy.
@@ -61,7 +63,6 @@ pub struct ReactDesignerStrategy {
     session_id: Option<Uuid>,
     agent_execution_id: Option<Uuid>,
     completed: Mutex<bool>,
-    design_summary: Mutex<Option<String>>,
     designed_count: Mutex<usize>,
     /// Agent names changed by the builder (for rebuild_system_prompt enrichment).
     changed_agents: Vec<String>,
@@ -98,12 +99,16 @@ impl ReactDesignerStrategy {
             String::new(), // Filled in build_messages from session history
         );
         inst_vars.insert(
-            vars::react_designer::UPSTREAM_TOPOLOGY.to_string(),
-            config.upstream_topology,
+            vars::react_designer::STEP_ORDER.to_string(),
+            config.step_order,
         );
         inst_vars.insert(
-            vars::react_designer::DISPATCH_INSTRUCTION.to_string(),
-            config.dispatch_instruction,
+            vars::react_designer::TASK.to_string(),
+            config.task,
+        );
+        inst_vars.insert(
+            vars::react_designer::CURRENT_DESIGN_HANDOFF.to_string(),
+            config.current_design_handoff,
         );
         inst_vars.insert(
             vars::react_designer::PREVIOUS_STEP.to_string(),
@@ -134,7 +139,6 @@ impl ReactDesignerStrategy {
             session_id: config.session_id,
             agent_execution_id: config.agent_execution_id,
             completed: Mutex::new(false),
-            design_summary: Mutex::new(None),
             designed_count: Mutex::new(0),
             changed_agents: config.changed_agents,
             step_handoff: Mutex::new(None),
@@ -143,11 +147,6 @@ impl ReactDesignerStrategy {
             cached_context_budget: agent_cfg.context_budget,
             cached_temperature: agent_cfg.temperature,
         }
-    }
-
-    /// Take the design summary captured by `complete_design`.
-    pub fn take_design_summary(&self) -> Option<String> {
-        self.design_summary.lock().ok().and_then(|mut s| s.take())
     }
 
     /// Take the step-level handoff captured by `complete_design`.
@@ -224,16 +223,11 @@ impl ExecutionStrategy for ReactDesignerStrategy {
                 input_schema: serde_json::json!({
                     "type": "object",
                     "properties": {
-                        "summary": {
-                            "type": "string",
-                            "description": "Summary: topology shape, format chain, key decisions (1-5 sentences)"
-                        },
                         "step_handoff": {
                             "type": "string",
-                            "description": "What this step produces for the next step's designer. 1-3 sentences: key outputs, their location, and how the next step should use them."
+                            "description": "What this step produces for the next step's designer. Only update if output meaningfully changed."
                         }
-                    },
-                    "required": ["summary"]
+                    }
                 }),
             },
         ]
@@ -426,12 +420,8 @@ impl ExecutionStrategy for ReactDesignerStrategy {
                 }
             }
             "complete_design" => {
-                let summary = input["summary"].as_str().unwrap_or("").to_string();
                 let step_handoff = input["step_handoff"].as_str().map(String::from);
 
-                if let Ok(mut guard) = self.design_summary.lock() {
-                    *guard = Some(summary.clone());
-                }
                 if let Ok(mut guard) = self.step_handoff.lock() {
                     *guard = step_handoff.clone();
                 }
@@ -455,10 +445,7 @@ impl ExecutionStrategy for ReactDesignerStrategy {
                 if let Ok(mut guard) = self.completed.lock() {
                     *guard = true;
                 }
-                serde_json::json!({
-                    "status": "design_complete",
-                    "summary": summary,
-                })
+                serde_json::json!({"status": "design_complete"})
             }
             _ => serde_json::json!({"error": format!("unknown tool: {name}")}),
         }
