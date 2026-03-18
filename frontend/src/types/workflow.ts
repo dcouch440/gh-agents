@@ -35,6 +35,7 @@ type WorkflowStep = {
   description: string
   pinned: boolean
   run_results_summary: string
+  designer_handoff: string
 }
 
 type WorkflowStepEdge = {

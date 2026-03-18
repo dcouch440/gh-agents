@@ -32,6 +32,7 @@ const makeStep = (overrides: Partial<WorkflowStep> & { id: string }): WorkflowSt
 
   pinned: false,
   run_results_summary: '',
+  designer_handoff: '',
   ...overrides,
 })
 

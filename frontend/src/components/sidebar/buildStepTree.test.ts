@@ -32,6 +32,7 @@ const makeStep = (id: string, name: string, order: number): WorkflowStep => ({
 
   pinned: false,
   run_results_summary: '',
+  designer_handoff: '',
 })
 
 const makeEdge = (id: string, from: string, to: string): WorkflowStepEdge => ({

@@ -445,6 +445,11 @@ pub trait WorkflowRepo: Send + Sync {
     /// Update the board overview summary for a workflow.
     async fn update_board_overview_summary(&self, workflow_id: Uuid, summary: &str) -> Result<()>;
 
+    // --- Designer Handoff ---
+
+    /// Update the designer handoff description for a step.
+    async fn update_designer_handoff(&self, step_id: Uuid, handoff: &str) -> Result<()>;
+
     // --- Step Question State ---
 
     /// Get compressed status + pending question for a step.

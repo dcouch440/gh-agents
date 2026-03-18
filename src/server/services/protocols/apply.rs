@@ -177,6 +177,7 @@ pub async fn apply_protocol(
             ref_id: None,
             pinned: false,
             run_results_summary: String::new(),
+            designer_handoff: String::new(),
         };
 
         let created = wf_repo.create_step(new_step).await?;

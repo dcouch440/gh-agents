@@ -85,6 +85,7 @@ pub async fn add_step(
         ref_id: Some(ref_id),
         pinned: false,
         run_results_summary: String::new(),
+        designer_handoff: String::new(),
     };
 
     let created = repo

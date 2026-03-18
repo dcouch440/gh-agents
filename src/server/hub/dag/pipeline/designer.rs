@@ -335,6 +335,56 @@ async fn run_react_designer(
         }
     };
 
+    // Read previous step's handoff and next step's box text for design context (step 15)
+    let (previous_step_handoff, next_step_text) = {
+        let edges = dag
+            .state
+            .repos()
+            .workflows
+            .list_edges(ctx.step.workflow_id)
+            .await
+            .unwrap_or_default();
+        let parent_ids =
+            crate::server::hub::dag::get_parent_steps(ctx.step.id, &edges);
+        let child_ids =
+            crate::server::hub::dag::get_child_steps(ctx.step.id, &edges);
+
+        let prev = if let Some(parent_id) = parent_ids.first() {
+            dag.state
+                .repos()
+                .workflows
+                .get_step(*parent_id)
+                .await
+                .ok()
+                .flatten()
+                .filter(|s| !s.designer_handoff.is_empty())
+                .map(|s| {
+                    crate::server::services::dispatch::PreviousStepHandoff {
+                        step_name: s.name.unwrap_or_default(),
+                        handoff_description: s.designer_handoff,
+                    }
+                })
+        } else {
+            None
+        };
+
+        let next = if let Some(child_id) = child_ids.first() {
+            dag.state
+                .repos()
+                .workflows
+                .get_step(*child_id)
+                .await
+                .ok()
+                .flatten()
+                .map(|s| s.description.clone())
+                .filter(|d| !d.is_empty())
+        } else {
+            None
+        };
+
+        (prev, next)
+    };
+
     let strategy = ReactDesignerStrategy::new(ReactDesignerConfig {
         state: dag.state.clone(),
         step_id: ctx.step.id,
@@ -346,6 +396,8 @@ async fn run_react_designer(
         upstream_topology,
         dispatch_instruction: ctx.brief.task_description.clone(),
         changed_agents: vec![], // no builder changeset in pipeline path
+        previous_step_handoff,
+        next_step_text,
     });
 
     let filter_ctx = FilterContext::new(&designer_cfg.model_id, ctx.step.id);

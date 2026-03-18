@@ -141,6 +141,7 @@ pub async fn create_step(
         ref_id: Some(ref_id),
         pinned: false,
         run_results_summary: String::new(),
+        designer_handoff: String::new(),
     };
     let row = repo.create_step(step).await?;
     Ok(row)
@@ -256,6 +257,7 @@ pub async fn update_step(
         ref_id: existing.ref_id.clone(),
         pinned: existing.pinned,
         run_results_summary: existing.run_results_summary.clone(),
+        designer_handoff: existing.designer_handoff.clone(),
     };
     let row = repo.update_step(step).await?;
     Ok(row)

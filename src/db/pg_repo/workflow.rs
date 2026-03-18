@@ -1281,6 +1281,17 @@ impl WorkflowRepo for PgRepo {
         Ok(())
     }
 
+    // --- Designer Handoff ---
+
+    async fn update_designer_handoff(&self, step_id: Uuid, handoff: &str) -> Result<()> {
+        sqlx::query("UPDATE workflow_steps SET designer_handoff = $1 WHERE id = $2")
+            .bind(handoff)
+            .bind(step_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     // --- Step Question State ---
 
     async fn get_step_question_state(&self, step_id: Uuid) -> Result<Option<StepQuestionStateRow>> {

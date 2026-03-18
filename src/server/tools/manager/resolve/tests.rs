@@ -43,6 +43,7 @@ mod tests {
             ref_id: ref_id.map(|s| s.to_string()),
             pinned: false,
             run_results_summary: String::new(),
+            designer_handoff: String::new(),
         }
     }
 
