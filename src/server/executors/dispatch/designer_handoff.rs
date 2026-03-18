@@ -38,8 +38,8 @@ pub async fn run_designer_after_builder(
     execution_id: Uuid,
     dispatch_instruction: &str,
     changed_agents: Vec<String>,
-    previous_step_handoff: Option<crate::server::services::dispatch::PreviousStepHandoff>,
-    next_step_text: Option<String>,
+    previous_step_handoff: Vec<crate::server::services::dispatch::PreviousStepHandoff>,
+    next_step_text: Vec<crate::server::services::dispatch::NextStepText>,
 ) {
     // Gate: S3 must be available
     let Some(_s3) = state.s3() else {

@@ -40,6 +40,16 @@ pub struct PreviousStepHandoff {
     pub handoff_description: String,
 }
 
+/// Box text from a downstream step, used to shape `expected_output` so the
+/// current step's handoff orients the next step correctly.
+#[derive(Debug, Clone)]
+pub struct NextStepText {
+    /// Name of the next step.
+    pub step_name: String,
+    /// Raw description text from the step (user's box text).
+    pub description: String,
+}
+
 // ── Input / Output types ──────────────────────────────────────────────────
 
 /// Everything needed to dispatch an instruction to a builder agent.
@@ -118,8 +128,8 @@ pub async fn dispatch_to_builder(state: &AppState, input: DispatchInput) -> Disp
                 runner_instruction,
                 session_id,
                 user_id,
-                None, // no handoff threading in chat dispatch path
-                None,
+                vec![], // no handoff threading in chat dispatch path
+                vec![],
             )
             .await;
         });

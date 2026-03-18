@@ -39,8 +39,8 @@ pub async fn run_dispatch_task(
     instruction: String,
     session_id: Uuid,
     user_id: UserId,
-    previous_step_handoff: Option<crate::server::services::dispatch::PreviousStepHandoff>,
-    next_step_text: Option<String>,
+    previous_step_handoff: Vec<crate::server::services::dispatch::PreviousStepHandoff>,
+    next_step_text: Vec<crate::server::services::dispatch::NextStepText>,
 ) {
     // Get the cancel token from the registry
     let cancel_token = match state.task_registry().get_task(execution_id) {

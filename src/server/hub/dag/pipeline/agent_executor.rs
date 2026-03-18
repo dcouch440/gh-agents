@@ -219,17 +219,10 @@ async fn execute_single_agent(
         .await?;
 
     // Resolve capabilities + inject implicit store tools
-    let (mut tools, mut tool_names) = env
+    let (tools, tool_names) = env
         .state
         .capability_registry()
         .resolve_tools(&designed.tools);
-
-    if env.state.s3().is_some() {
-        tools.push(crate::server::tools::system_store::store_read_file_tool());
-        tools.push(crate::server::tools::system_store::store_write_file_tool());
-        tool_names.push("store_read_file".to_string());
-        tool_names.push("store_write_file".to_string());
-    }
 
     // Build task prompt: <previous_step> + <assignment> + <expected_output>
     let filtered = filter_outputs_for_agent(prior_outputs, &designed.receives_from);

@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::server::services::board::instruction::NodeDispatchInstruction;
-use crate::server::services::dispatch::PreviousStepHandoff;
+use crate::server::services::dispatch::{NextStepText, PreviousStepHandoff};
 use crate::server::state::AppState;
 use crate::server::ws::events::{SessionEvent, SessionEventKind};
 use crate::types::UserId;
@@ -137,35 +137,44 @@ pub async fn run_sequential_design_pipeline(
 
 // ── Helpers ──────────────────────────────────────────────────────────────
 
-/// Look up the previous step's handoff from the parent edges.
+/// Look up handoffs from ALL parent steps (fan-in support).
 fn lookup_previous_handoff(
     parent_ids: &[Uuid],
     step_map: &HashMap<Uuid, WorkflowStepRow>,
-) -> Option<PreviousStepHandoff> {
-    parent_ids.first().and_then(|pid| {
-        let parent = step_map.get(pid)?;
-        if parent.designer_handoff.is_empty() {
-            return None;
-        }
-        Some(PreviousStepHandoff {
-            step_name: parent.name.clone().unwrap_or_default(),
-            handoff_description: parent.designer_handoff.clone(),
+) -> Vec<PreviousStepHandoff> {
+    parent_ids
+        .iter()
+        .filter_map(|pid| {
+            let parent = step_map.get(pid)?;
+            if parent.designer_handoff.is_empty() {
+                return None;
+            }
+            Some(PreviousStepHandoff {
+                step_name: parent.name.clone().unwrap_or_default(),
+                handoff_description: parent.designer_handoff.clone(),
+            })
         })
-    })
+        .collect()
 }
 
-/// Look up the next step's box text from the child edges.
+/// Look up box text from ALL child steps (fan-out support).
 fn lookup_next_step_text(
     child_ids: &[Uuid],
     step_map: &HashMap<Uuid, WorkflowStepRow>,
-) -> Option<String> {
-    child_ids.first().and_then(|cid| {
-        let child = step_map.get(cid)?;
-        if child.description.is_empty() {
-            return None;
-        }
-        Some(child.description.clone())
-    })
+) -> Vec<NextStepText> {
+    child_ids
+        .iter()
+        .filter_map(|cid| {
+            let child = step_map.get(cid)?;
+            if child.description.is_empty() {
+                return None;
+            }
+            Some(NextStepText {
+                step_name: child.name.clone().unwrap_or_default(),
+                description: child.description.clone(),
+            })
+        })
+        .collect()
 }
 
 /// Run the full builder + designer dispatch for a step with an instruction.
@@ -175,16 +184,23 @@ async fn run_builder_and_designer(
     workflow_id: Uuid,
     user_id: UserId,
     instruction: &NodeDispatchInstruction,
-    previous_step_handoff: Option<PreviousStepHandoff>,
-    next_step_text: Option<String>,
+    previous_step_handoff: Vec<PreviousStepHandoff>,
+    next_step_text: Vec<NextStepText>,
 ) {
     // Enrich instruction with previous step context for the builder
-    let enriched_instruction = match &previous_step_handoff {
-        Some(h) => format!(
-            "{}\n\n<previous_step name=\"{}\">\n<handoff>\n{}\n</handoff>\n</previous_step>",
-            instruction.instruction, h.step_name, h.handoff_description
-        ),
-        None => instruction.instruction.clone(),
+    let enriched_instruction = if previous_step_handoff.is_empty() {
+        instruction.instruction.clone()
+    } else {
+        let blocks: Vec<String> = previous_step_handoff
+            .iter()
+            .map(|h| {
+                format!(
+                    "<previous_step name=\"{}\">\n<handoff>\n{}\n</handoff>\n</previous_step>",
+                    h.step_name, h.handoff_description
+                )
+            })
+            .collect();
+        format!("{}\n\n{}", instruction.instruction, blocks.join("\n\n"))
     };
 
     let session_id = super::find_or_create_builder_session(
@@ -238,8 +254,8 @@ async fn run_propagation_redesign(
     step_id: Uuid,
     workflow_id: Uuid,
     user_id: UserId,
-    previous_step_handoff: Option<PreviousStepHandoff>,
-    next_step_text: Option<String>,
+    previous_step_handoff: Vec<PreviousStepHandoff>,
+    next_step_text: Vec<NextStepText>,
 ) {
     // Use the step's task description as the dispatch instruction context
     let task_desc = state

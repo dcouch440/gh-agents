@@ -185,19 +185,78 @@ When parallel steps both modify the workspace, merge their clean diffs. Auto-mer
 
 ---
 
+## Design Decisions (Pre-Converge)
+
+Three architectural decisions resolved before writing convergence tickets.
+
+### Fan-In Handoff Threading
+
+**Problem:** Four `.first()` calls in the design pipeline silently drop all but the first parent/child. For a diamond DAG `A→B, A→C, B→D, C→D`, step D's designer only sees B's handoff — C's handoff is invisible. Same issue for `<next_step>`: if A fans out to B and C, the designer only sees B's box text when shaping `expected_output`.
+
+| Location | What it drops |
+|----------|--------------|
+| `designer.rs:344` | All parent handoffs except first |
+| `designer.rs:361` | All child box texts except first |
+| `sequential.rs:145` | Same — `lookup_previous_handoff()` |
+| `sequential.rs:162` | Same — `lookup_next_step_text()` |
+
+Runtime already handles fan-in correctly — `build_upstream_outputs_block()` iterates ALL upstream envelopes.
+
+**Decision:** Show all parents and all children. Change container types from `Option` to `Vec`. Render multiple `<previous_step>` and `<next_step>` XML blocks. No DB migration — each step still produces one `designer_handoff`; the fan-in is about *reading* multiple upstream handoffs, not *writing* multiple. The designer shapes one `expected_output` that works for all downstream steps.
+
+```xml
+<!-- Multiple parents → multiple blocks -->
+<previous_step name="Web Search">
+<handoff>Found 12 articles about competitor pricing...</handoff>
+</previous_step>
+<previous_step name="Paper Review">
+<handoff>Analyzed 3 quarterly reports...</handoff>
+</previous_step>
+
+<!-- Multiple children → multiple blocks -->
+<next_step name="Final Report">Write an executive summary...</next_step>
+<next_step name="Dashboard">Build a visualization of key metrics...</next_step>
+```
+
+No template file changes — `react_prompt.md` injects `{{previous_step}}` and `{{next_step}}` as raw text. Multiple XML blocks flow through naturally.
+
+**Design pass parallelism (deferred optimization):** Steps in the same topological level are independent. `sequential.rs` currently uses `topological_sort()` (flat order) but could use `topological_sort_levels()` to parallelize within levels via `JoinSet`. This addresses open question #1 — wall-clock time is the DAG depth, not the step count.
+
+**Files:** `dispatch/mod.rs`, `dispatch/sequential.rs`, `pipeline/designer.rs`, `react_designer/mod.rs`
+
+### Store Tools Removal
+
+**Problem:** `store_read_file` and `store_write_file` are auto-injected for all workforce agents (`agent_executor.rs:227-232`). In the file-first model, agents use the workspace filesystem — store tools are dead weight.
+
+**Decision:** Remove store tool injection from workforce agents entirely. Delete the injection block in `agent_executor.rs` and the corresponding dispatch code in `workforce_agent/mod.rs`.
+
+The designer's own tools (`write_file`, `read_file`, `complete_design` in `ReactDesignerStrategy`) are a completely separate system — they write design configs to S3 before any containers exist. These are unaffected.
+
+Old designs that reference `store_write_file` in the `tools` array: `capability_registry().resolve_tools()` won't find it (it was always injected separately, never in the registry). Re-running the designer produces empty tool lists — no programmatic migration needed.
+
+**Files:** `pipeline/agent_executor.rs`, `strategies/workforce_agent/mod.rs`
+
+### Port Resolution — Leave As-Is
+
+**Problem:** The vision says "edges become scheduling only." The codebase has a full port resolution system (`resolve_port_inputs()`) for edge-bound data flow.
+
+**Decision:** Leave in place. Port resolution is already dead for workforce execution — `TaskPromptBuilder` (the 3-block prompt) does not use port inputs. Port resolution feeds `compose_prompt()` which builds `base_prompt` for the designer's `task` field and static fallback prompts. For workspace-mode workflows with no port configs, `resolve_step_port_inputs()` returns `None` — zero overhead. Removal would require DB schema migration and cleanup of 11 tested unit tests for zero user benefit. Natural sunset: as workspace carries data, port inputs are empty and the code path becomes a no-op.
+
+---
+
 ## Convergence
 
 Once both streams are ready, wire them together.
 
 ### C1 — Tool Model Transition
 
-Rework how agents get tools. Shell access becomes implicit. Store tools transition to backward compat. The designer's `tools` list becomes almost always empty.
+Rework how agents get tools. Shell access becomes implicit. Store tools removed. The designer's `tools` list becomes almost always empty.
 
 **What changes:**
 - Shell access (ls, cat, grep, python, pip, npm, curl) is always available in containers — never listed by designer
 - Web search / X search remain model-native — never listed by designer
-- Store tools (`store_read_file`, `store_write_file`) remain available alongside filesystem for backward compat
-- Capability registry narrows: only contains things the shell and model can't do (external integrations, APIs, domain-specific tools)
+- Store tools (`store_read_file`, `store_write_file`) removed from workforce agents (see "Store Tools Removal" above)
+- Capability registry survives for rare integrations (external APIs, domain-specific tools) — the registry is the `tools` field the designer can assign from when the shell and model can't do the job
 - Designer `tools` field is almost always `[]` — see vision §"Tool Model"
 
 **Depends on:** B2 (needs containers with shell access)
@@ -206,11 +265,14 @@ Rework how agents get tools. Shell access becomes implicit. Store tools transiti
 
 Connect the simplified agent prompts (Stream A) to the real filesystem (Stream B). Agents execute in containers with `/workspace/` mounted, prompts reference the filesystem, handoffs thread through.
 
+**Pre-requisite:** Fan-in handoff threading (see above) must be fixed first — the design-time path must match the runtime fan-in behavior already in `build_upstream_outputs_block()`.
+
 **What changes:**
 - Agent execution strategy uses container with workspace mount
 - System prompt includes workspace grounding: "Your working directory is /workspace/ where other steps have contributed and will contribute after you." — see vision §"Agent Prompt Pattern"
 - Execution envelopes carry metadata only; workspace carries data
 - DAG edges become scheduling only; workspace handles data propagation
+- Port resolution is untouched — naturally unused for workspace-mode workflows (see "Port Resolution" above)
 
 **Depends on:** A5, B4, C1
 
@@ -252,12 +314,16 @@ The handoff text becomes the per-step observability layer. The UI shows each ste
 
 ### C6 — Migration + Backward Compat
 
-Existing workflows transition to file-first. Decide on feature flag vs. hard cutover.
+Existing workflows transition to file-first.
+
+**What changes:**
+- Re-running the designer (with A2's updated prompts) migrates agent configs automatically — new `expected_output` format, empty `tools` lists, workspace-oriented assignments
+- No programmatic migration needed for store tool references — store tools were never in the capability registry, just auto-injected (now removed)
+- Port configs on existing edges are harmless — port resolution returns empty when no port configs exist, and the `TaskPromptBuilder` path doesn't use ports regardless
+- Hard cutover, not feature flag — Stream A improvements are strictly better even without containers, and container execution is gated by `WorkspaceManager` presence
 
 **What to figure out:**
-- Do existing workflows need to keep working during transition?
-- Can store tools coexist with filesystem access? (Vision says yes — backward compat)
-- Migration path for existing designer configs (old `expected_output` format → new)
+- Do existing workflows need a bulk re-design pass, or is on-demand re-design (triggered by user edit) sufficient?
 
 **Depends on:** C2
 
@@ -265,16 +331,16 @@ Existing workflows transition to file-first. Decide on feature flag vs. hard cut
 
 ## Open Questions
 
-1. **Sequential designer latency** — Running designers in step order adds wall-clock time. For a 10-step workflow, that's 10 sequential designer calls. Acceptable? Or does the design pass need a "parallel where possible, sequential where handoff matters" hybrid?
+1. ~~**Sequential designer latency**~~ **Resolved.** Steps in the same topological level are independent — their designs don't depend on each other's handoffs. The design pass can parallelize within levels via `JoinSet` (same pattern as `execute_level_parallel`). Wall-clock time is DAG depth, not step count. Deferred as optimization — sequential works correctly first.
 
 2. **JuiceFS deployment target** — Kubernetes CSI driver vs Docker Compose FUSE? Shapes B1-B3 significantly.
 
-3. **OverlayFS in containers** — Does the container runtime allow OverlayFS-in-OverlayFS? May need host-level setup or privileged containers.
+3. ~~**OverlayFS in containers**~~ **Resolved.** Already implemented — containers use `SYS_ADMIN` capability for mount syscall. Working in `src/execution/container/overlay/mod.rs`.
 
 4. **Workspace size limits** — Agents can write unbounded data. Need a per-run or per-step quota?
 
 5. **Parallel step ordering within merge** — When merging parallel diffs, does the order matter? If step A and B both create `README.md`, which is "base" for diff3?
 
-6. **Store tools end-of-life** — Vision says store tools remain for backward compat. When do they get removed? Or do they become a thin wrapper over workspace files?
+6. ~~**Store tools end-of-life**~~ **Resolved.** Store tools removed from workforce agents entirely (see "Store Tools Removal" in Design Decisions). Designer's own S3 tools (`ReactDesignerStrategy`) are a separate system and continue unchanged.
 
-7. **Capability registry scope (C1)** — How much of the current capability registry survives? The vision says tools list is almost always empty. Do we keep the registry for the rare integrations, or replace it entirely?
+7. ~~**Capability registry scope (C1)**~~ **Resolved.** Registry survives for rare integrations (external APIs, domain-specific tools). Shell + web search are implicit. Store tools removed. Designer `tools` field is almost always `[]`.
