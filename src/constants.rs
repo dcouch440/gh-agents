@@ -542,19 +542,15 @@ pub const OVERLAY_MAX_TOTAL_BYTES: usize = 100 * 1024 * 1024;
 /// Denylist patterns for overlay diff filtering (B4).
 /// Patterns ending with `/` match directory prefixes (.gitignore semantics).
 /// Patterns starting with `*.` match file extensions.
+///
+/// Only truly disposable cache/temp files go here. Installed packages
+/// (node_modules, dist-packages, /usr/local/bin) are agent work product
+/// and should persist across steps via JuiceFS.
 pub const OVERLAY_DENYLIST_PATTERNS: &[&str] = &[
     ".git/",
     "__pycache__/",
     ".pytest_cache/",
-    "node_modules/",
-    ".npm/",
-    "target/",
-    "dist/",
-    "build/",
-    ".venv/",
-    "venv/",
     ".cache/",
-    ".egg-info/",
     "*.pyc",
     "*.pyo",
     "*.o",

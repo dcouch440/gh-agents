@@ -1129,8 +1129,8 @@ mod tests {
             mount_arg
         );
         assert!(
-            mount_arg.contains(",readonly"),
-            "Overlay mode should mount read-only, got: {}",
+            !mount_arg.contains(",readonly"),
+            "Overlay mode should NOT mount read-only (breaks overlay mount), got: {}",
             mount_arg
         );
     }
