@@ -34,6 +34,10 @@ Data flow — the workspace is the primary transport:
 - Downstream agents read from the workspace
 - Agents use standard filesystem commands — no special tools needed
   for reading and writing files
+- Each step runs in a fresh container. Only /workspace/ files persist
+  between steps. Installed packages and system changes do not carry
+  over — if a step needs an installed tool, include install instructions
+  in the assignment
 
 In the assignment, tell agents what to save and what to read:
 - Producer: "Save your [output] to the workspace."
