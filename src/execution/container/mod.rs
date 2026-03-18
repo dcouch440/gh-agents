@@ -668,10 +668,13 @@ fn build_create_args(container_name: &str, config: &ContainerConfig) -> Vec<Stri
     // Workspace volume: mount named volume subpath + inject package manager env vars
     if let Some(ref vol) = config.workspace_volume {
         if config.overlay_enabled {
-            // Overlay mode: JuiceFS at /workspace-base (read-only), overlay at /workspace
+            // Overlay mode: JuiceFS at /workspace-base, overlay at /workspace.
+            // No Docker readonly flag — OverlayFS naturally redirects all writes
+            // to the upper layer. The Docker readonly flag blocks the overlay mount
+            // syscall on some kernels ("cannot mount overlay read-only").
             args.push("--mount".to_string());
             args.push(format!(
-                "type=volume,source={},target={},volume-subpath={},readonly",
+                "type=volume,source={},target={},volume-subpath={}",
                 vol.volume_name,
                 crate::constants::OVERLAY_LOWER_DIR,
                 vol.subpath
