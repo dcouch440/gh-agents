@@ -238,10 +238,12 @@ async fn execute_single_agent(
         }
     }
 
-    // C2: Workspace grounding — tell containerized agents about /workspace/
+    // C2: Workspace grounding + tool guidance for containerized agents
     let system_prompt = if env.container_handle.is_some() {
         format!(
-            "{}\nYour working directory is /workspace/ where other steps have contributed and will contribute after you.",
+            "{}\n\
+             Your working directory is /workspace/ where other steps have contributed and will contribute after you.\n\
+             When your task is complete, stop calling tools and respond with text.",
             designed.system_prompt
         )
     } else {
