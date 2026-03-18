@@ -49,6 +49,53 @@ pub(crate) async fn run_dag_loop(
         return Ok(()); // Empty DAG — nothing to execute.
     };
 
+    // C3: Fresh workspace per run + pre-load pinned step files
+    if let Some(ws) = dag.state.workspace() {
+        if let Some(cc) = dag.ctx.container_config.as_ref() {
+            if let (Some(wf_id), Some(run_id)) = (cc.workflow_id, cc.run_id) {
+                // Clear stale workspace from previous runs
+                let ws_init = ws.clone();
+                let _ = tokio::task::spawn_blocking(move || {
+                    if ws_init.workspace_exists(wf_id, run_id) {
+                        let _ = ws_init.destroy_run_workspace(wf_id, run_id);
+                    }
+                    ws_init.create_run_workspace(wf_id, run_id)
+                })
+                .await;
+
+                // Pre-load pinned step files (topo order)
+                for step in dag.steps.iter().filter(|s| s.pinned) {
+                    let pinned_dir = ws.pinned_step_path(wf_id, step.id);
+                    if pinned_dir.exists() {
+                        let ws_pin = ws.clone();
+                        let sid = step.id;
+                        match tokio::task::spawn_blocking(move || {
+                            ws_pin.preload_pinned_files(wf_id, run_id, sid)
+                        })
+                        .await
+                        {
+                            Ok(Ok(n)) if n > 0 => {
+                                info!(
+                                    step_id = %step.id,
+                                    files = n,
+                                    "Pre-loaded pinned step files into workspace"
+                                );
+                            }
+                            Ok(Err(e)) => {
+                                warn!(
+                                    step_id = %step.id,
+                                    error = %e,
+                                    "Failed to pre-load pinned step files"
+                                );
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let dead_path_steps = compute_dead_path_steps(dag.steps, dag.edges);
     if !dead_path_steps.is_empty() {
         info!(
@@ -82,6 +129,11 @@ pub(crate) async fn run_dag_loop(
 
             // Persist overlay for sequential step
             persist_step_overlay_if_present(dag, dag_state).await;
+
+            // Capture pinned step files after overlay persistence
+            if step.pinned {
+                capture_pinned_step_files(dag, step.id).await;
+            }
 
             spawn_summarizer_if_completed(dag.state, step.id, dag_state);
         } else {
@@ -270,6 +322,33 @@ async fn persist_step_overlay_if_present(dag: &DagContext<'_>, dag_state: &mut D
         Err(e) => {
             warn!(step_id = %step_id, error = %e, "Overlay persist task panicked");
         }
+    }
+}
+
+/// Capture a pinned step's workspace files to the durable pinned location.
+///
+/// Called after overlay persistence so the manifest and files are available.
+async fn capture_pinned_step_files(dag: &DagContext<'_>, step_id: Uuid) {
+    let Some(workspace) = dag.state.workspace() else {
+        return;
+    };
+    let Some(cc) = dag.ctx.container_config.as_ref() else {
+        return;
+    };
+    let (Some(wf_id), Some(run_id)) = (cc.workflow_id, cc.run_id) else {
+        return;
+    };
+
+    let ws = workspace.clone();
+    match tokio::task::spawn_blocking(move || ws.capture_pinned_files(wf_id, run_id, step_id)).await
+    {
+        Ok(Ok(n)) if n > 0 => {
+            info!(step_id = %step_id, files = n, "Captured pinned step files");
+        }
+        Ok(Err(e)) => {
+            warn!(step_id = %step_id, error = %e, "Failed to capture pinned step files");
+        }
+        _ => {}
     }
 }
 
