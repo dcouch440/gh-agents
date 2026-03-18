@@ -6,6 +6,7 @@
 //! This service does not manage containers or mounts — it only handles
 //! directory CRUD on an already-mounted filesystem.
 
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use thiserror::Error;
@@ -153,6 +154,90 @@ impl WorkspaceManager {
         collect_files_recursive(&search_dir, &base, &mut files)?;
         files.sort();
         Ok(files)
+    }
+
+    // ── Read / Write / Delete ────────────────────────────────────────
+
+    /// Write a file to the run workspace. Creates parent directories as needed.
+    pub fn write_file(
+        &self,
+        workflow_id: Uuid,
+        run_id: Uuid,
+        relative_path: &Path,
+        content: &[u8],
+    ) -> Result<(), WorkspaceError> {
+        let full_path = self
+            .run_workspace_path(workflow_id, run_id)
+            .join(relative_path);
+        if let Some(parent) = full_path.parent() {
+            std::fs::create_dir_all(parent).map_err(|source| WorkspaceError::Io {
+                path: parent.to_path_buf(),
+                source,
+            })?;
+        }
+        std::fs::write(&full_path, content).map_err(|source| WorkspaceError::Io {
+            path: full_path,
+            source,
+        })
+    }
+
+    /// Delete a file from the run workspace. Returns `Ok(false)` if the file didn't exist.
+    pub fn delete_file(
+        &self,
+        workflow_id: Uuid,
+        run_id: Uuid,
+        relative_path: &Path,
+    ) -> Result<bool, WorkspaceError> {
+        let full_path = self
+            .run_workspace_path(workflow_id, run_id)
+            .join(relative_path);
+        if !full_path.exists() {
+            return Ok(false);
+        }
+        std::fs::remove_file(&full_path).map_err(|source| WorkspaceError::Io {
+            path: full_path,
+            source,
+        })?;
+        Ok(true)
+    }
+
+    /// Read a file's content from the run workspace. Returns `None` if the file doesn't exist.
+    pub fn read_file(
+        &self,
+        workflow_id: Uuid,
+        run_id: Uuid,
+        relative_path: &Path,
+    ) -> Result<Option<Vec<u8>>, WorkspaceError> {
+        let full_path = self
+            .run_workspace_path(workflow_id, run_id)
+            .join(relative_path);
+        if !full_path.exists() {
+            return Ok(None);
+        }
+        let bytes = std::fs::read(&full_path).map_err(|source| WorkspaceError::Io {
+            path: full_path,
+            source,
+        })?;
+        Ok(Some(bytes))
+    }
+
+    /// Read base file contents for specific paths (used for three-way merge).
+    ///
+    /// Only reads files in `paths_needed` — not the entire workspace.
+    /// Skips files that don't exist (they may have been deleted).
+    pub fn read_base_files(
+        &self,
+        workflow_id: Uuid,
+        run_id: Uuid,
+        paths_needed: &HashSet<PathBuf>,
+    ) -> Result<HashMap<PathBuf, Vec<u8>>, WorkspaceError> {
+        let mut result = HashMap::with_capacity(paths_needed.len());
+        for path in paths_needed {
+            if let Some(content) = self.read_file(workflow_id, run_id, path)? {
+                result.insert(path.clone(), content);
+            }
+        }
+        Ok(result)
     }
 }
 

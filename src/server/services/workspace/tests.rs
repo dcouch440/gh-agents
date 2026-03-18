@@ -127,6 +127,118 @@ mod tests {
         assert!(files.is_empty());
     }
 
+    // ── Write / Read / Delete ─────────────────────────────────────────
+
+    #[test]
+    fn write_file_creates_parents() {
+        let (mgr, _tmp) = test_manager();
+        let wf = Uuid::new_v4();
+        let run = Uuid::new_v4();
+        mgr.create_run_workspace(wf, run).expect("create");
+
+        mgr.write_file(wf, run, "src/deep/file.txt".as_ref(), b"hello")
+            .expect("write");
+        let content = mgr
+            .read_file(wf, run, "src/deep/file.txt".as_ref())
+            .expect("read");
+        assert_eq!(content, Some(b"hello".to_vec()));
+    }
+
+    #[test]
+    fn write_file_overwrites() {
+        let (mgr, _tmp) = test_manager();
+        let wf = Uuid::new_v4();
+        let run = Uuid::new_v4();
+        mgr.create_run_workspace(wf, run).expect("create");
+
+        mgr.write_file(wf, run, "out.txt".as_ref(), b"first")
+            .expect("write1");
+        mgr.write_file(wf, run, "out.txt".as_ref(), b"second")
+            .expect("write2");
+        let content = mgr.read_file(wf, run, "out.txt".as_ref()).expect("read");
+        assert_eq!(content, Some(b"second".to_vec()));
+    }
+
+    #[test]
+    fn delete_file_removes() {
+        let (mgr, _tmp) = test_manager();
+        let wf = Uuid::new_v4();
+        let run = Uuid::new_v4();
+        mgr.create_run_workspace(wf, run).expect("create");
+
+        mgr.write_file(wf, run, "gone.txt".as_ref(), b"bye")
+            .expect("write");
+        let removed = mgr
+            .delete_file(wf, run, "gone.txt".as_ref())
+            .expect("delete");
+        assert!(removed);
+        let content = mgr.read_file(wf, run, "gone.txt".as_ref()).expect("read");
+        assert!(content.is_none());
+    }
+
+    #[test]
+    fn delete_file_nonexistent_returns_false() {
+        let (mgr, _tmp) = test_manager();
+        let wf = Uuid::new_v4();
+        let run = Uuid::new_v4();
+        mgr.create_run_workspace(wf, run).expect("create");
+
+        let removed = mgr
+            .delete_file(wf, run, "nope.txt".as_ref())
+            .expect("delete");
+        assert!(!removed);
+    }
+
+    #[test]
+    fn read_file_nonexistent_returns_none() {
+        let (mgr, _tmp) = test_manager();
+        let wf = Uuid::new_v4();
+        let run = Uuid::new_v4();
+        mgr.create_run_workspace(wf, run).expect("create");
+
+        let content = mgr
+            .read_file(wf, run, "missing.txt".as_ref())
+            .expect("read");
+        assert!(content.is_none());
+    }
+
+    #[test]
+    fn read_base_files_selective() {
+        let (mgr, _tmp) = test_manager();
+        let wf = Uuid::new_v4();
+        let run = Uuid::new_v4();
+        mgr.create_run_workspace(wf, run).expect("create");
+
+        // Write 5 files
+        for i in 0..5 {
+            mgr.write_file(
+                wf,
+                run,
+                format!("file{i}.txt").as_ref(),
+                format!("content{i}").as_bytes(),
+            )
+            .expect("write");
+        }
+
+        // Request only 2
+        let mut needed = std::collections::HashSet::new();
+        needed.insert(std::path::PathBuf::from("file1.txt"));
+        needed.insert(std::path::PathBuf::from("file3.txt"));
+
+        let result = mgr.read_base_files(wf, run, &needed).expect("read_base");
+        assert_eq!(result.len(), 2);
+        assert_eq!(
+            result.get(&std::path::PathBuf::from("file1.txt")).unwrap(),
+            b"content1"
+        );
+        assert_eq!(
+            result.get(&std::path::PathBuf::from("file3.txt")).unwrap(),
+            b"content3"
+        );
+    }
+
+    // ── Isolation ───────────────────────────────────────────────────────
+
     #[test]
     fn multiple_runs_are_isolated() {
         let (mgr, _tmp) = test_manager();

@@ -423,9 +423,9 @@ where
                         memory_limit: None,
                         cpu_limit: None,
                         vpn_enabled: wf_row.vpn_enabled,
-                        workflow_id: None,
-                        run_id: None,
-                        overlay_enabled: false,
+                        workflow_id: Some(workflow_id),
+                        run_id: Some(collection_run_id),
+                        overlay_enabled: self.state.workspace().is_some(),
                     })
                 } else {
                     tracing::warn!(

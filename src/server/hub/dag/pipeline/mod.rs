@@ -243,7 +243,32 @@ impl Pipeline {
         )
         .await?;
 
-        // 10. Destroy optional container
+        // 10. Extract overlay diff before destroying container
+        if let (Some(workspace), Some(cc)) =
+            (dag.state.workspace(), dag.ctx.container_config.as_ref())
+        {
+            if cc.overlay_enabled {
+                if let (Some(wf_id), Some(run_id)) = (cc.workflow_id, cc.run_id) {
+                    let base_paths: std::collections::HashSet<std::path::PathBuf> = workspace
+                        .list_files(wf_id, run_id, None)
+                        .unwrap_or_default()
+                        .into_iter()
+                        .collect();
+                    dag_state.step_overlay = super::container::extract_step_overlay(
+                        &managed_container,
+                        step.id,
+                        super::step_display_name(step),
+                        step.prompt_template.clone(),
+                        step.display_order,
+                        &base_paths,
+                        true,
+                    )
+                    .await;
+                }
+            }
+        }
+
+        // 11. Destroy optional container
         destroy_optional_container(&managed_container, dag.ctx.wg_client.as_deref()).await;
 
         // 11. Compose combined output + store results

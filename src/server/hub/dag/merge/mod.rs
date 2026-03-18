@@ -14,7 +14,9 @@ use crate::constants;
 
 pub(crate) mod classify;
 pub(crate) mod context;
+pub(crate) mod denylist;
 pub(crate) mod diff3;
+pub(crate) mod persist;
 pub(crate) mod resolve;
 pub mod types;
 pub(crate) mod verify;
