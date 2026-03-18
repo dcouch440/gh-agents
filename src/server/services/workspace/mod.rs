@@ -221,6 +221,116 @@ impl WorkspaceManager {
         Ok(Some(bytes))
     }
 
+    // ── Pinning ────────────────────────────────────────────────────────
+
+    /// Path for pinned step files: `{mount}/workflows/{wf_id}/pinned/{step_id}/`.
+    ///
+    /// Lives outside `runs/` so it survives run cleanup.
+    pub fn pinned_step_path(&self, workflow_id: Uuid, step_id: Uuid) -> PathBuf {
+        self.workflow_path(workflow_id)
+            .join("pinned")
+            .join(step_id.to_string())
+    }
+
+    /// Capture a pinned step's workspace files from a run.
+    ///
+    /// Reads the overlay manifest (`.nexor/step-manifests/{step_id}.json`) to
+    /// identify which files this step produced, then copies them to the pinned
+    /// location. Returns the count of files captured.
+    pub fn capture_pinned_files(
+        &self,
+        workflow_id: Uuid,
+        run_id: Uuid,
+        step_id: Uuid,
+    ) -> Result<usize, WorkspaceError> {
+        let manifest_path = PathBuf::from(format!(".nexor/step-manifests/{}.json", step_id));
+        let manifest_bytes = match self.read_file(workflow_id, run_id, &manifest_path)? {
+            Some(b) => b,
+            None => return Ok(0), // No manifest — step produced no files
+        };
+        let file_paths: Vec<String> = serde_json::from_slice(&manifest_bytes).unwrap_or_default();
+
+        let pinned_dir = self.pinned_step_path(workflow_id, step_id);
+        // Clear previous pinned files if any
+        if pinned_dir.exists() {
+            std::fs::remove_dir_all(&pinned_dir).map_err(|source| WorkspaceError::Io {
+                path: pinned_dir.clone(),
+                source,
+            })?;
+        }
+
+        let run_root = self.run_workspace_path(workflow_id, run_id);
+        let mut count = 0;
+        for rel in &file_paths {
+            let src = run_root.join(rel);
+            if !src.exists() {
+                continue;
+            }
+            let dst = pinned_dir.join(rel);
+            if let Some(parent) = dst.parent() {
+                std::fs::create_dir_all(parent).map_err(|source| WorkspaceError::Io {
+                    path: parent.to_path_buf(),
+                    source,
+                })?;
+            }
+            std::fs::copy(&src, &dst).map_err(|source| WorkspaceError::Io {
+                path: src.clone(),
+                source,
+            })?;
+            count += 1;
+        }
+        Ok(count)
+    }
+
+    /// Pre-load pinned step files into a run workspace.
+    ///
+    /// Copies all files from `pinned/{step_id}/` to `runs/{run_id}/`.
+    /// Returns the count of files pre-loaded.
+    pub fn preload_pinned_files(
+        &self,
+        workflow_id: Uuid,
+        run_id: Uuid,
+        step_id: Uuid,
+    ) -> Result<usize, WorkspaceError> {
+        let pinned_dir = self.pinned_step_path(workflow_id, step_id);
+        if !pinned_dir.exists() {
+            return Ok(0);
+        }
+
+        let mut files = Vec::new();
+        collect_files_recursive(&pinned_dir, &pinned_dir, &mut files)?;
+
+        let mut count = 0;
+        for rel in &files {
+            let src = pinned_dir.join(rel);
+            let content = std::fs::read(&src).map_err(|source| WorkspaceError::Io {
+                path: src.clone(),
+                source,
+            })?;
+            self.write_file(workflow_id, run_id, rel, &content)?;
+            count += 1;
+        }
+        Ok(count)
+    }
+
+    /// Remove pinned step files (on unpin).
+    pub fn remove_pinned_files(
+        &self,
+        workflow_id: Uuid,
+        step_id: Uuid,
+    ) -> Result<(), WorkspaceError> {
+        let pinned_dir = self.pinned_step_path(workflow_id, step_id);
+        if pinned_dir.exists() {
+            std::fs::remove_dir_all(&pinned_dir).map_err(|source| WorkspaceError::Io {
+                path: pinned_dir,
+                source,
+            })?;
+        }
+        Ok(())
+    }
+
+    // ── Merge support ────────────────────────────────────────────────
+
     /// Read base file contents for specific paths (used for three-way merge).
     ///
     /// Only reads files in `paths_needed` — not the entire workspace.

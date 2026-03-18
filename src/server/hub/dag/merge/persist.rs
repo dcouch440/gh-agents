@@ -50,6 +50,19 @@ pub(crate) fn persist_step_overlay(
         }
     }
 
+    // Write overlay manifest — tracks which files this step produced.
+    // Used by the pin system to capture/preload step files across runs.
+    let manifest_path =
+        std::path::PathBuf::from(format!(".nexor/step-manifests/{}.json", overlay.step_id));
+    let file_paths: Vec<String> = overlay
+        .diff
+        .keys()
+        .map(|p| p.display().to_string())
+        .collect();
+    if let Ok(json) = serde_json::to_vec(&file_paths) {
+        let _ = workspace.write_file(workflow_id, run_id, &manifest_path, &json);
+    }
+
     info!(
         step_id = %overlay.step_id,
         files = count,
