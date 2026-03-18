@@ -11,6 +11,12 @@ RUN apt-get update && \
         python3-venv && \
     rm -rf /var/lib/apt/lists/*
 
+# Allow pip install without --break-system-packages (Debian 12 PEP 668)
+RUN mkdir -p /etc/pip && echo "[global]\nbreak-system-packages = true" > /etc/pip/pip.conf
+
+# Symlink python -> python3 so agents don't have to guess
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
 RUN mkdir -p /workspace /workspace-base /tmp/overlay/upper /tmp/overlay/work
 WORKDIR /workspace
 

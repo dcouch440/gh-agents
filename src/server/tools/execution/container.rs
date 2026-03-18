@@ -214,7 +214,14 @@ async fn container_run_command(input: &Value, handle: &ContainerHandle) -> Value
         Some(c) => c,
         None => return json!({ "error": "Missing required parameter: command" }),
     };
-    match handle.exec_shell(command).await {
+    // Some models (xAI/Grok) emit HTML-encoded shell operators in tool inputs.
+    // Unescape common entities so `&&`, `>`, `<`, `"` work correctly.
+    let command = command
+        .replace("&amp;", "&")
+        .replace("&gt;", ">")
+        .replace("&lt;", "<")
+        .replace("&quot;", "\"");
+    match handle.exec_shell(&command).await {
         Ok(result) => json!({
             "exit_code": result.exit_code,
             "stdout": result.stdout,
