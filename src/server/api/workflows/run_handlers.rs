@@ -130,30 +130,27 @@ pub async fn run_workflow(
         );
     }
 
-    // Build container config from workflow settings (if container_enabled)
+    // Build container config — every workforce run gets a container.
+    // If the workflow has a repo URL, agents get a git clone. Otherwise,
+    // agents get an empty workspace (JuiceFS mount if available).
     let wf_row = workflow_repo
         .get_workflow(id)
         .await?
         .ok_or(AppError::not_found("Workflow"))?;
-    let container_config = if wf_row.container_enabled {
-        let github_token = crate::execution::RedactedString::new(
-            state.env().github_token.clone().unwrap_or_default(),
-        );
-        Some(crate::server::hub::dag::ContainerExecutionConfig {
-            clone_url: wf_row.target_repo_url.clone().unwrap_or_default(),
-            branch: wf_row.target_branch.clone(),
-            github_token,
-            image: None,
-            memory_limit: None,
-            cpu_limit: None,
-            vpn_enabled: wf_row.vpn_enabled,
-            workflow_id: Some(id),
-            run_id: Some(execution_id),
-            overlay_enabled: state.workspace().is_some(),
-        })
-    } else {
-        None
-    };
+    let github_token =
+        crate::execution::RedactedString::new(state.env().github_token.clone().unwrap_or_default());
+    let container_config = Some(crate::server::hub::dag::ContainerExecutionConfig {
+        clone_url: wf_row.target_repo_url.clone().unwrap_or_default(),
+        branch: wf_row.target_branch.clone(),
+        github_token,
+        image: None,
+        memory_limit: None,
+        cpu_limit: None,
+        vpn_enabled: wf_row.vpn_enabled,
+        workflow_id: Some(id),
+        run_id: Some(execution_id),
+        overlay_enabled: state.workspace().is_some(),
+    });
 
     let wg_client = if container_config.as_ref().is_some_and(|c| c.vpn_enabled) {
         crate::execution::WgEasyConfig::from_env()
