@@ -679,8 +679,12 @@ fn build_create_args(container_name: &str, config: &ContainerConfig) -> Vec<Stri
                 crate::constants::OVERLAY_LOWER_DIR,
                 vol.subpath
             ));
-            // SYS_ADMIN needed for mount syscall inside container
+            // Capabilities needed for overlay mount after cap-drop=ALL:
+            // SYS_ADMIN: mount syscall
+            // DAC_OVERRIDE + DAC_READ_SEARCH: traverse and read lower dir
             args.push("--cap-add=SYS_ADMIN".to_string());
+            args.push("--cap-add=DAC_OVERRIDE".to_string());
+            args.push("--cap-add=DAC_READ_SEARCH".to_string());
         } else {
             // Direct mode: JuiceFS at /workspace (existing behavior)
             args.push("--mount".to_string());
@@ -787,6 +791,7 @@ impl ContainerManager {
 
         // 1. docker create
         let create_args = build_create_args(&container_name, config);
+        debug!(container = %container_name, args = ?create_args, "Docker create args");
 
         let create_output = self
             .cli

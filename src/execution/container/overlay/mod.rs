@@ -47,8 +47,17 @@ pub async fn setup_overlay(handle: &ContainerHandle) -> Result<(), ContainerErro
         constants::OVERLAY_MERGED_DIR,
     );
 
+    tracing::info!(script = %script, "Running overlay setup script");
+
     let result = handle.exec_shell(&script).await?;
     if !result.success {
+        tracing::error!(
+            exit_code = result.exit_code,
+            stderr = %result.stderr,
+            stdout = %result.stdout,
+            script = %script,
+            "OverlayFS setup script failed"
+        );
         return Err(ContainerError::CreationFailed(format!(
             "OverlayFS mount failed (exit {}): {}",
             result.exit_code, result.stderr
