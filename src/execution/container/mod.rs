@@ -211,6 +211,11 @@ pub struct ContainerConfig {
     /// Whether to disconnect the container from all networks after the initial
     /// git clone. Defaults to `true`. Ignored when `network_mode` is `Some`.
     pub network_isolated: bool,
+    /// Host path to bind-mount at /workspace/ (JuiceFS workspace directory).
+    /// When set: adds `-v {host_path}:/workspace` to docker create, skips git clone,
+    /// injects package manager env vars, and keeps network connected.
+    /// When None: existing git-clone behavior (backward compatible).
+    pub workspace_mount: Option<String>,
 }
 
 impl Default for ContainerConfig {
@@ -227,6 +232,7 @@ impl Default for ContainerConfig {
             workdir: "/workspace".to_string(),
             network_mode: None,
             network_isolated: true,
+            workspace_mount: None,
         }
     }
 }
@@ -568,6 +574,22 @@ static CONTAINER_CREATE_SEMAPHORE: Lazy<Arc<Semaphore>> = Lazy::new(|| {
     ))
 });
 
+/// Environment variables injected when a workspace mount is active.
+/// Steers pip/npm/cargo to /tmp/ so install artifacts don't pollute the shared workspace.
+const WORKSPACE_ENV_VARS: &[(&str, &str)] = &[
+    ("VIRTUAL_ENV", "/tmp/venv"),
+    (
+        "PATH",
+        "/tmp/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    ),
+    ("PIP_CACHE_DIR", "/tmp/pip-cache"),
+    ("PYTHONDONTWRITEBYTECODE", "1"),
+    ("npm_config_prefix", "/tmp/npm"),
+    ("npm_config_cache", "/tmp/npm-cache"),
+    ("CARGO_HOME", "/tmp/cargo"),
+    ("XDG_CACHE_HOME", "/tmp/cache"),
+];
+
 /// Build the `docker create` arguments for a container.
 ///
 /// Separated for testability — security and resource flags are validated by unit tests.
@@ -586,6 +608,14 @@ fn build_create_args(container_name: &str, config: &ContainerConfig) -> Vec<Stri
     ];
     for (k, v) in &config.env_vars {
         args.push(format!("--env={}={}", k, v));
+    }
+    // Workspace mount: bind-mount host workspace dir + inject package manager env vars
+    if let Some(ref host_path) = config.workspace_mount {
+        args.push("-v".to_string());
+        args.push(format!("{}:/workspace", host_path));
+        for (k, v) in WORKSPACE_ENV_VARS {
+            args.push(format!("--env={}={}", k, v));
+        }
     }
     if let Some(ref network) = config.network_mode {
         args.push(format!("--network={}", network));
@@ -731,6 +761,19 @@ impl ContainerManager {
             command_timeout_secs: config.command_timeout_secs,
             cli: self.cli.clone(),
         };
+
+        // Workspace mode: mount provides content, no repo to clone.
+        // Agent keeps network access for pip install, curl, etc.
+        if config.workspace_mount.is_some() {
+            let create_duration_ms = create_start.elapsed().as_millis() as u64;
+            info!(
+                container = %container_name,
+                workspace = config.workspace_mount.as_deref().unwrap_or(""),
+                duration_ms = create_duration_ms,
+                "Container ready with workspace mount"
+            );
+            return Ok(handle);
+        }
 
         // 3. Clone repository
         let clone_url = format!(

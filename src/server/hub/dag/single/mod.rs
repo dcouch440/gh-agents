@@ -109,6 +109,7 @@ pub(super) async fn execute_single_step(
         dag.ctx.container_config.as_ref(),
         dag.ctx.wg_client.as_deref(),
         "step",
+        dag.state.workspace(),
     )
     .await?;
 

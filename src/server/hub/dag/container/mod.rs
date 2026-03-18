@@ -27,12 +27,17 @@ pub(crate) struct ManagedContainer {
 
 /// Create a container if config is present, with optional VPN sidecar.
 ///
+/// When `workspace_manager` is provided and the config has `workflow_id` + `run_id`,
+/// the container gets a JuiceFS workspace bind-mounted at `/workspace/` instead of
+/// a git clone.
+///
 /// Returns `Ok(None)` if config is `None` (local execution).
 /// Returns `Ok(Some(managed))` on success, `Err` on failure.
 pub(crate) async fn create_optional_container(
     config: Option<&ContainerExecutionConfig>,
     wg_client: Option<&WgEasyClient>,
     label: &str,
+    workspace_manager: Option<&crate::server::services::workspace::WorkspaceManager>,
 ) -> Result<Option<ManagedContainer>, HubError> {
     let Some(cc) = config else {
         return Ok(None);
@@ -90,6 +95,28 @@ pub(crate) async fn create_optional_container(
         None
     };
 
+    // Resolve workspace mount path if JuiceFS is available
+    let workspace_mount =
+        if let (Some(wf_id), Some(run_id), Some(mgr)) = (cc.workflow_id, cc.run_id, workspace_manager) {
+            match mgr.create_run_workspace(wf_id, run_id) {
+                Ok(path) => {
+                    info!(
+                        workflow_id = %wf_id,
+                        run_id = %run_id,
+                        path = %path.display(),
+                        "Resolved workspace mount path"
+                    );
+                    Some(path.to_string_lossy().to_string())
+                }
+                Err(e) => {
+                    warn!(error = %e, "Failed to create workspace directory, falling back to git clone");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
     // Build container config, optionally sharing VPN sidecar's network
     let container_config = ContainerConfig {
         clone_url: cc.clone_url.clone(),
@@ -110,6 +137,7 @@ pub(crate) async fn create_optional_container(
         network_mode: vpn_sidecar
             .as_ref()
             .map(|s| format!("container:{}", s.container_id)),
+        workspace_mount,
         ..ContainerConfig::default()
     };
 
