@@ -211,11 +211,23 @@ pub struct ContainerConfig {
     /// Whether to disconnect the container from all networks after the initial
     /// git clone. Defaults to `true`. Ignored when `network_mode` is `Some`.
     pub network_isolated: bool,
-    /// Host path to bind-mount at /workspace/ (JuiceFS workspace directory).
-    /// When set: adds `-v {host_path}:/workspace` to docker create, skips git clone,
+    /// Named Docker volume + subpath for workspace mount.
+    /// When set: mounts the volume subpath at /workspace/, skips git clone,
     /// injects package manager env vars, and keeps network connected.
     /// When None: existing git-clone behavior (backward compatible).
-    pub workspace_mount: Option<String>,
+    pub workspace_volume: Option<WorkspaceVolume>,
+}
+
+/// Docker named volume + subpath for agent workspace mounts.
+///
+/// Used to mount a specific run directory from a shared JuiceFS volume
+/// into the agent container at `/workspace/`.
+#[derive(Debug, Clone)]
+pub struct WorkspaceVolume {
+    /// Docker volume name (e.g. "gh-agents_jfs-workspace").
+    pub volume_name: String,
+    /// Subpath within the volume (e.g. "workflows/{wf_id}/runs/{run_id}").
+    pub subpath: String,
 }
 
 impl Default for ContainerConfig {
@@ -232,7 +244,7 @@ impl Default for ContainerConfig {
             workdir: "/workspace".to_string(),
             network_mode: None,
             network_isolated: true,
-            workspace_mount: None,
+            workspace_volume: None,
         }
     }
 }
@@ -609,10 +621,13 @@ fn build_create_args(container_name: &str, config: &ContainerConfig) -> Vec<Stri
     for (k, v) in &config.env_vars {
         args.push(format!("--env={}={}", k, v));
     }
-    // Workspace mount: bind-mount host workspace dir + inject package manager env vars
-    if let Some(ref host_path) = config.workspace_mount {
-        args.push("-v".to_string());
-        args.push(format!("{}:/workspace", host_path));
+    // Workspace volume: mount named volume subpath + inject package manager env vars
+    if let Some(ref vol) = config.workspace_volume {
+        args.push("--mount".to_string());
+        args.push(format!(
+            "type=volume,source={},target=/workspace,volume-subpath={}",
+            vol.volume_name, vol.subpath
+        ));
         for (k, v) in WORKSPACE_ENV_VARS {
             args.push(format!("--env={}={}", k, v));
         }
@@ -764,11 +779,12 @@ impl ContainerManager {
 
         // Workspace mode: mount provides content, no repo to clone.
         // Agent keeps network access for pip install, curl, etc.
-        if config.workspace_mount.is_some() {
+        if let Some(ref vol) = config.workspace_volume {
             let create_duration_ms = create_start.elapsed().as_millis() as u64;
             info!(
                 container = %container_name,
-                workspace = config.workspace_mount.as_deref().unwrap_or(""),
+                volume = %vol.volume_name,
+                subpath = %vol.subpath,
                 duration_ms = create_duration_ms,
                 "Container ready with workspace mount"
             );

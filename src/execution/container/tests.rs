@@ -22,7 +22,7 @@ mod tests {
         assert!(config.github_token.is_empty());
         assert!(config.branch.is_none());
         assert!(config.env_vars.is_empty());
-        assert!(config.workspace_mount.is_none());
+        assert!(config.workspace_volume.is_none());
     }
 
     // ── ContainerExecResult ───────────────────────────────────────────────
@@ -1033,25 +1033,42 @@ mod tests {
         );
     }
 
-    // ── workspace mount: build_create_args ─────────────────────────────
+    // ── workspace volume: build_create_args ─────────────────────────────
 
-    #[test]
-    fn build_create_args_with_workspace_mount_includes_volume() {
-        let config = ContainerConfig {
-            workspace_mount: Some("/tmp/nexor-jfs/workflows/abc/runs/def".to_string()),
-            ..ContainerConfig::default()
-        };
-        let args = build_create_args("test-container", &config);
-        assert!(args.contains(&"-v".to_string()));
-        assert!(args.contains(
-            &"/tmp/nexor-jfs/workflows/abc/runs/def:/workspace".to_string()
-        ));
+    fn test_workspace_volume() -> WorkspaceVolume {
+        WorkspaceVolume {
+            volume_name: "nexor-jfs-workspace".to_string(),
+            subpath: "workflows/abc/runs/def".to_string(),
+        }
     }
 
     #[test]
-    fn build_create_args_with_workspace_mount_injects_env_vars() {
+    fn build_create_args_with_workspace_volume_includes_mount() {
         let config = ContainerConfig {
-            workspace_mount: Some("/tmp/workspace".to_string()),
+            workspace_volume: Some(test_workspace_volume()),
+            ..ContainerConfig::default()
+        };
+        let args = build_create_args("test-container", &config);
+        assert!(args.contains(&"--mount".to_string()));
+        let mount_arg = args.iter().find(|a| a.contains("type=volume")).unwrap();
+        assert!(
+            mount_arg.contains("source=nexor-jfs-workspace"),
+            "Should reference the named volume"
+        );
+        assert!(
+            mount_arg.contains("target=/workspace"),
+            "Should mount at /workspace"
+        );
+        assert!(
+            mount_arg.contains("volume-subpath=workflows/abc/runs/def"),
+            "Should include the subpath"
+        );
+    }
+
+    #[test]
+    fn build_create_args_with_workspace_volume_injects_env_vars() {
+        let config = ContainerConfig {
+            workspace_volume: Some(test_workspace_volume()),
             ..ContainerConfig::default()
         };
         let args = build_create_args("test-container", &config);
@@ -1082,23 +1099,23 @@ mod tests {
     }
 
     #[test]
-    fn build_create_args_without_workspace_mount_no_volume() {
+    fn build_create_args_without_workspace_volume_no_mount() {
         let config = ContainerConfig::default();
         let args = build_create_args("test-container", &config);
         assert!(
-            !args.contains(&"-v".to_string()),
-            "Should not have -v when workspace_mount is None"
+            !args.contains(&"--mount".to_string()),
+            "Should not have --mount when workspace_volume is None"
         );
         assert!(
             !args.iter().any(|a| a.contains("VIRTUAL_ENV")),
-            "Should not inject workspace env vars when no mount"
+            "Should not inject workspace env vars when no volume"
         );
     }
 
-    // ── workspace mount: create_container (skips git clone) ──────────
+    // ── workspace volume: create_container (skips git clone) ──────────
 
     #[tokio::test]
-    async fn create_with_workspace_mount_skips_git_clone() {
+    async fn create_with_workspace_volume_skips_git_clone() {
         let mut mock = MockDockerCli::new();
         let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let calls_clone = calls.clone();
@@ -1113,7 +1130,7 @@ mod tests {
         });
 
         let config = ContainerConfig {
-            workspace_mount: Some("/tmp/workspace".to_string()),
+            workspace_volume: Some(test_workspace_volume()),
             ..ContainerConfig::default()
         };
         let mgr = ContainerManager::new(Arc::new(mock));
