@@ -29,6 +29,7 @@ use crate::types::{ExecutionType, UserId};
 /// Designer tool calls stream through the same dispatch trace via
 /// `DispatchStreamSink`, giving the frontend a continuous builder → designer
 /// trace in the dispatch panel.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_designer_after_builder(
     state: &AppState,
     step_id: Uuid,
@@ -37,6 +38,8 @@ pub async fn run_designer_after_builder(
     execution_id: Uuid,
     dispatch_instruction: &str,
     changed_agents: Vec<String>,
+    previous_step_handoff: Option<crate::server::services::dispatch::PreviousStepHandoff>,
+    next_step_text: Option<String>,
 ) {
     // Gate: S3 must be available
     let Some(_s3) = state.s3() else {
@@ -156,6 +159,8 @@ pub async fn run_designer_after_builder(
         upstream_topology,
         dispatch_instruction: dispatch_instruction.to_string(),
         changed_agents,
+        previous_step_handoff,
+        next_step_text,
     });
 
     let designer_cfg = DESIGNER.agent("react_designer");

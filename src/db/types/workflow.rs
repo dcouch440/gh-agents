@@ -61,6 +61,8 @@ pub struct WorkflowStepRow {
     pub pinned: bool,
     /// Haiku-generated summary of this step's last execution output.
     pub run_results_summary: String,
+    /// Step-level handoff description written by the designer for the next step's designer.
+    pub designer_handoff: String,
 }
 
 /// Row type for a workflow step edge (DAG edge).
@@ -199,6 +201,7 @@ impl Default for WorkflowStepRow {
             ref_id: None,
             pinned: false,
             run_results_summary: String::new(),
+            designer_handoff: String::new(),
         }
     }
 }

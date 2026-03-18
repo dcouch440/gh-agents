@@ -30,6 +30,7 @@ mod tests;
 ///
 /// `session_id` is the persistent L4 builder session — the instruction and
 /// outcome are persisted as messages so subsequent dispatches see history.
+#[allow(clippy::too_many_arguments)]
 pub async fn run_dispatch_task(
     state: AppState,
     execution_id: Uuid,
@@ -38,6 +39,8 @@ pub async fn run_dispatch_task(
     instruction: String,
     session_id: Uuid,
     user_id: UserId,
+    previous_step_handoff: Option<crate::server::services::dispatch::PreviousStepHandoff>,
+    next_step_text: Option<String>,
 ) {
     // Get the cancel token from the registry
     let cancel_token = match state.task_registry().get_task(execution_id) {
@@ -224,6 +227,8 @@ pub async fn run_dispatch_task(
                     execution_id,
                     &instruction,
                     changed_agents,
+                    previous_step_handoff,
+                    next_step_text,
                 )
                 .await;
             }

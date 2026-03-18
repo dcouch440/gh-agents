@@ -72,6 +72,7 @@ pub struct WorkflowStepResponse {
     pub description: String,
     pub pinned: bool,
     pub run_results_summary: String,
+    pub designer_handoff: String,
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -365,5 +366,6 @@ pub fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
         description: r.description,
         pinned: r.pinned,
         run_results_summary: r.run_results_summary,
+        designer_handoff: r.designer_handoff,
     }
 }

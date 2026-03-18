@@ -34,6 +34,7 @@ const makeStep = (id: string, name: string): WorkflowStep => ({
 
   pinned: false,
   run_results_summary: '',
+  designer_handoff: '',
 })
 
 describe('RunTab', () => {

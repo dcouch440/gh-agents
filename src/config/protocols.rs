@@ -174,6 +174,8 @@ pub mod vars {
         pub const PRIOR_DESIGN: &str = "ReactDesigner.prior_design";
         pub const UPSTREAM_TOPOLOGY: &str = "ReactDesigner.upstream_topology";
         pub const DISPATCH_INSTRUCTION: &str = "ReactDesigner.dispatch_instruction";
+        pub const PREVIOUS_STEP: &str = "ReactDesigner.previous_step";
+        pub const NEXT_STEP: &str = "ReactDesigner.next_step";
     }
 
     /// Variables assembled by the platform (config, context, runtime state).

@@ -553,6 +553,9 @@ mod tests {
             async fn update_board_overview_summary(&self, _: Uuid, _: &str) -> Result<()> {
                 unimplemented!()
             }
+            async fn update_designer_handoff(&self, _: Uuid, _: &str) -> Result<()> {
+                unimplemented!()
+            }
             // Step question state stubs
             async fn get_step_question_state(
                 &self,

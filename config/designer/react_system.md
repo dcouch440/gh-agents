@@ -16,9 +16,10 @@ read_file(path)
   Read a config from the store. Use this to verify existing
   configs are still consistent with the current board state.
 
-complete_design(summary)
+complete_design(summary, step_handoff?)
   Signal completion. Summary: what was written, what was verified,
-  key decisions. No tools after this.
+  key decisions. step_handoff: what this step produces for the next
+  step's designer. No tools after this.
 </tools>
 
 <guidelines>
@@ -56,6 +57,12 @@ Each config has four fields:
   to the store. Tell consumers what to read from the store.
 - expected_output: dual format —
   "Store: [artifact description]. Response: [lean summary]."
+
+step_handoff — what this step produces (in complete_design):
+- The step_handoff describes what this step produces for the next
+  step's designer. 1-3 sentences: key outputs, their location,
+  and how the next step should use them.
+- If no next step, omit step_handoff or leave it brief.
 
 Prompt proportionality — match size to task complexity:
 - Pass-through (save, forward, rename): 30-60 tokens.

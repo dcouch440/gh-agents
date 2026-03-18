@@ -19,6 +19,7 @@ use crate::llm::{Message, TokenUsage, Tool};
 use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::template_resolve::resolve_template;
 use crate::server::hub::strategy::ExecutionStrategy;
+use crate::server::services::dispatch::PreviousStepHandoff;
 use crate::server::services::system_store::{s3::S3Backend, store as system_store};
 use crate::server::state::AppState;
 
@@ -40,6 +41,10 @@ pub struct ReactDesignerConfig {
     pub dispatch_instruction: String,
     /// Agent names changed by the builder (for `rebuild_system_prompt` enrichment).
     pub changed_agents: Vec<String>,
+    /// Handoff from the previous step's designer (None for first step in workflow).
+    pub previous_step_handoff: Option<PreviousStepHandoff>,
+    /// Raw box text of the next step in the workflow (None for last step).
+    pub next_step_text: Option<String>,
 }
 
 /// Multi-turn ReAct designer strategy.
@@ -60,6 +65,8 @@ pub struct ReactDesignerStrategy {
     designed_count: Mutex<usize>,
     /// Agent names changed by the builder (for rebuild_system_prompt enrichment).
     changed_agents: Vec<String>,
+    /// Step-level handoff captured from `complete_design` tool call.
+    step_handoff: Mutex<Option<String>>,
     /// Cached config values to avoid returning references to temporaries.
     cached_model_id: String,
     cached_max_rounds: u32,
@@ -98,6 +105,23 @@ impl ReactDesignerStrategy {
             vars::react_designer::DISPATCH_INSTRUCTION.to_string(),
             config.dispatch_instruction,
         );
+        inst_vars.insert(
+            vars::react_designer::PREVIOUS_STEP.to_string(),
+            match &config.previous_step_handoff {
+                Some(h) => format!(
+                    "<previous_step name=\"{}\">\n<handoff>\n{}\n</handoff>\n</previous_step>",
+                    h.step_name, h.handoff_description
+                ),
+                None => String::new(),
+            },
+        );
+        inst_vars.insert(
+            vars::react_designer::NEXT_STEP.to_string(),
+            match &config.next_step_text {
+                Some(text) => format!("<next_step>\n{}\n</next_step>", text),
+                None => String::new(),
+            },
+        );
         let instruction = resolve_template(roles::REACT_DESIGNER.prompt, &inst_vars);
 
         Self {
@@ -113,6 +137,7 @@ impl ReactDesignerStrategy {
             design_summary: Mutex::new(None),
             designed_count: Mutex::new(0),
             changed_agents: config.changed_agents,
+            step_handoff: Mutex::new(None),
             cached_model_id: agent_cfg.model_id.clone(),
             cached_max_rounds: agent_cfg.max_rounds,
             cached_context_budget: agent_cfg.context_budget,
@@ -123,6 +148,11 @@ impl ReactDesignerStrategy {
     /// Take the design summary captured by `complete_design`.
     pub fn take_design_summary(&self) -> Option<String> {
         self.design_summary.lock().ok().and_then(|mut s| s.take())
+    }
+
+    /// Take the step-level handoff captured by `complete_design`.
+    pub fn take_step_handoff(&self) -> Option<String> {
+        self.step_handoff.lock().ok().and_then(|mut s| s.take())
     }
 
     /// Get the resolved instruction (user message) for debug output.
@@ -197,6 +227,10 @@ impl ExecutionStrategy for ReactDesignerStrategy {
                         "summary": {
                             "type": "string",
                             "description": "Summary: topology shape, format chain, key decisions (1-5 sentences)"
+                        },
+                        "step_handoff": {
+                            "type": "string",
+                            "description": "What this step produces for the next step's designer. 1-3 sentences: key outputs, their location, and how the next step should use them."
                         }
                     },
                     "required": ["summary"]
@@ -393,9 +427,31 @@ impl ExecutionStrategy for ReactDesignerStrategy {
             }
             "complete_design" => {
                 let summary = input["summary"].as_str().unwrap_or("").to_string();
+                let step_handoff = input["step_handoff"].as_str().map(String::from);
+
                 if let Ok(mut guard) = self.design_summary.lock() {
                     *guard = Some(summary.clone());
                 }
+                if let Ok(mut guard) = self.step_handoff.lock() {
+                    *guard = step_handoff.clone();
+                }
+
+                // Persist step handoff to DB for the next step's builder/designer
+                if let Some(ref handoff) = step_handoff {
+                    let repos = self.state.repos();
+                    if let Err(e) = repos
+                        .workflows
+                        .update_designer_handoff(self.step_id, handoff)
+                        .await
+                    {
+                        tracing::warn!(
+                            step_id = %self.step_id,
+                            error = %e,
+                            "Failed to persist designer handoff"
+                        );
+                    }
+                }
+
                 if let Ok(mut guard) = self.completed.lock() {
                     *guard = true;
                 }

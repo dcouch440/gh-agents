@@ -12,6 +12,7 @@ use crate::server::state::AppState;
 use crate::server::ws::events::{SessionEvent, SessionEventKind};
 use crate::types::UserId;
 
+pub mod sequential;
 mod tests;
 
 // ── Passdown type ─────────────────────────────────────────────────────────
@@ -25,6 +26,18 @@ pub struct Passdown {
     pub summary: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub question: Option<String>,
+}
+
+// ── Previous Step Handoff ─────────────────────────────────────────────────
+
+/// Handoff context from a previous step's designer, threaded to the next
+/// step's builder and designer during the sequential design pass.
+#[derive(Debug, Clone)]
+pub struct PreviousStepHandoff {
+    /// Name of the previous step.
+    pub step_name: String,
+    /// What the previous step produces — written by its designer via `complete_design`.
+    pub handoff_description: String,
 }
 
 // ── Input / Output types ──────────────────────────────────────────────────
@@ -105,6 +118,8 @@ pub async fn dispatch_to_builder(state: &AppState, input: DispatchInput) -> Disp
                 runner_instruction,
                 session_id,
                 user_id,
+                None, // no handoff threading in chat dispatch path
+                None,
             )
             .await;
         });
@@ -260,7 +275,7 @@ pub async fn resolve_dispatch_user_id(state: &AppState, workflow_id: Uuid) -> Us
 /// L4 (node mode): Looks up by `step_id` + `role = builder`.
 ///
 /// Creates the session if it doesn't exist.
-async fn find_or_create_builder_session(
+pub(crate) async fn find_or_create_builder_session(
     state: &AppState,
     step_id: Uuid,
     workflow_id: Uuid,

@@ -9,7 +9,7 @@ use crate::server::api::AppError;
 use crate::server::auth::AuthUser;
 use crate::server::hub::board_serializer::{CanvasSnapshot, ExcalidrawElement, FilteredChangeset};
 use crate::server::services::board;
-use crate::server::services::dispatch::{self, DispatchInput};
+use crate::server::services::dispatch;
 use crate::server::state::AppState;
 use crate::types::UserId;
 
@@ -171,13 +171,12 @@ pub async fn submit_board(
     Ok(Json(response_body))
 }
 
-/// Dispatch meaningful changes directly to per-node dispatch builders (agentless fan-out).
+/// Dispatch meaningful changes to per-node builders via the sequential design pipeline.
 ///
 /// Phase 0 has already created the topology — nodes, edges, positions are in the DB.
-/// This function builds per-node instructions from the changeset and dispatches each
-/// one directly to the node's workforce builder. No LLM intermediary.
-///
-/// Best-effort: individual dispatch failures are logged and skipped.
+/// This function builds per-node instructions from the changeset, returns dispatch info
+/// immediately for the HTTP response, and spawns a background task that runs each
+/// builder + designer in topological order — threading handoff context between steps.
 async fn dispatch_board_changes(
     state: &AppState,
     workflow_id: Uuid,
@@ -189,28 +188,56 @@ async fn dispatch_board_changes(
     let instructions =
         board::instruction::build_per_node_instructions(changeset, phase_zero, snapshot);
 
-    let mut dispatches = Vec::with_capacity(instructions.len());
+    if instructions.is_empty() {
+        return vec![];
+    }
 
-    for node_instruction in instructions {
-        let output = dispatch::dispatch_to_builder(
-            state,
-            DispatchInput {
-                step_id: node_instruction.step_id,
-                workflow_id,
-                user_id,
-                instruction: node_instruction.instruction.clone(),
-                execution_mode: node_instruction.execution_mode,
-            },
+    // Build dispatch info for the HTTP response (returned immediately)
+    let dispatches: Vec<BoardDispatchInfo> = instructions
+        .iter()
+        .map(|i| {
+            // Generate deterministic execution IDs so the frontend can track them
+            let execution_id = Uuid::new_v4();
+            let session_id = Uuid::new_v5(
+                &Uuid::NAMESPACE_OID,
+                format!("builder:{}:{}", workflow_id, i.step_id).as_bytes(),
+            );
+            BoardDispatchInfo {
+                execution_id,
+                session_id,
+                step_id: i.step_id,
+                instruction: i.instruction.clone(),
+            }
+        })
+        .collect();
+
+    // Load steps and edges for the sequential pipeline
+    let steps = state
+        .repos()
+        .workflows
+        .list_steps(workflow_id)
+        .await
+        .unwrap_or_default();
+    let edges = state
+        .repos()
+        .workflows
+        .list_edges(workflow_id)
+        .await
+        .unwrap_or_default();
+
+    // Spawn the sequential pipeline in the background
+    let bg_state = state.clone();
+    tokio::spawn(async move {
+        dispatch::sequential::run_sequential_design_pipeline(
+            bg_state,
+            workflow_id,
+            user_id,
+            instructions,
+            steps,
+            edges,
         )
         .await;
-
-        dispatches.push(BoardDispatchInfo {
-            execution_id: output.execution_id,
-            session_id: output.session_id,
-            step_id: node_instruction.step_id,
-            instruction: node_instruction.instruction,
-        });
-    }
+    });
 
     dispatches
 }

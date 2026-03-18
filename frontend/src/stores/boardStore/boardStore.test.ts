@@ -48,6 +48,7 @@ const makeStep = (id: string, elementId: string): WorkflowStep & { element_id: s
 
   pinned: false,
   run_results_summary: '',
+  designer_handoff: '',
 })
 
 const emptyPhaseZero: PhaseZeroResponse = {
