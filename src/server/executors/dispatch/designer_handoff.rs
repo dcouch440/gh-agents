@@ -118,6 +118,16 @@ pub async fn run_designer_after_builder(
         crate::server::services::dispatch::build_upstream_topology(state, step_id, workflow_id)
             .await;
 
+    // Load step's current designer handoff for re-design awareness
+    let current_design_handoff = repos
+        .workflows
+        .get_step(step_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|s| s.designer_handoff)
+        .unwrap_or_default();
+
     // Build enriched board_state with design status
     let board_state_xml = match crate::server::hub::board_state::build_snapshot(
         repos.workflows.as_ref(),
@@ -156,11 +166,12 @@ pub async fn run_designer_after_builder(
         session_id: Some(designer_session_id),
         agent_execution_id: designer_ae_id,
         board_state_xml,
-        upstream_topology,
-        dispatch_instruction: dispatch_instruction.to_string(),
+        step_order: upstream_topology,
+        task: dispatch_instruction.to_string(),
         changed_agents,
         previous_step_handoff,
         next_step_text,
+        current_design_handoff,
     });
 
     let designer_cfg = DESIGNER.agent("react_designer");
@@ -201,8 +212,8 @@ pub async fn run_designer_after_builder(
                 "Designer handoff completed"
             );
 
-            // Persist design summary to session
-            if let Some(summary) = strategy.take_design_summary() {
+            // Persist step handoff to session for prior_design context on re-runs
+            if let Some(handoff) = strategy.take_step_handoff() {
                 let _ = repos
                     .sessions
                     .insert_session_message(
@@ -210,7 +221,7 @@ pub async fn run_designer_after_builder(
                         designer_session_id,
                         Uuid::new_v4(),
                         "assistant".to_string(),
-                        summary,
+                        handoff,
                     )
                     .await;
             }

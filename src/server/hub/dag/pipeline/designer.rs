@@ -393,11 +393,12 @@ async fn run_react_designer(
         session_id: Some(designer_session_id),
         agent_execution_id: designer_ae_id,
         board_state_xml,
-        upstream_topology,
-        dispatch_instruction: ctx.brief.task_description.clone(),
+        step_order: upstream_topology,
+        task: ctx.brief.task_description.clone(),
         changed_agents: vec![], // no builder changeset in pipeline path
         previous_step_handoff,
         next_step_text,
+        current_design_handoff: ctx.step.designer_handoff.clone(),
     });
 
     let filter_ctx = FilterContext::new(&designer_cfg.model_id, ctx.step.id);
@@ -451,8 +452,8 @@ async fn run_react_designer(
         run_id: Some(run_row.id),
     };
 
-    // Persist design summary to session for next re-trigger
-    if let Some(summary) = strategy.take_design_summary() {
+    // Persist step handoff to session for prior_design context on re-runs
+    if let Some(handoff) = strategy.take_step_handoff() {
         let _ = dag
             .state
             .repos()
@@ -462,7 +463,7 @@ async fn run_react_designer(
                 designer_session_id,
                 Uuid::new_v4(),
                 "assistant".to_string(),
-                summary,
+                handoff,
             )
             .await;
     }
