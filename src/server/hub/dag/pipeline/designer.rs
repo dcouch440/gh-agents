@@ -29,7 +29,6 @@ use crate::server::hub::streaming::NullSink;
 use super::super::agent_designer;
 use super::super::{broadcast_workflow_event, DagContext};
 use super::lifecycle::{PhaseOutput, PhaseTokenUsage, PipelineExecutionContext, PipelinePhase};
-use super::output::build_team_roster_string;
 use super::types::DesignedAgentPrompt;
 
 /// Designer lifecycle phase — generates optimized prompts for workforce agents.
@@ -147,10 +146,8 @@ impl PipelinePhase for DesignerPhase {
                     },
                 );
 
-                let user_notes_block = super::output::build_user_notes_block(&ctx.upstream_context);
                 return Ok(PhaseOutput {
                     designed_prompts: prompts,
-                    user_notes_block,
                     token_usage: PhaseTokenUsage {
                         input_tokens: 0,
                         output_tokens: 0,
@@ -238,11 +235,8 @@ impl PipelinePhase for DesignerPhase {
             )
         };
 
-        let user_notes_block = super::output::build_user_notes_block(&ctx.upstream_context);
-
         Ok(PhaseOutput {
             designed_prompts,
-            user_notes_block,
             token_usage,
         })
     }
@@ -562,15 +556,7 @@ pub(crate) fn build_static_fallback_prompts(
     roster: &[TaskAgentRosterRow],
     base_prompt: &str,
 ) -> Vec<DesignedAgentPrompt> {
-    let team_roster = build_team_roster_string(roster);
-
-    let mut base_vars = HashMap::with_capacity(6);
-    base_vars.insert(
-        vars::workforce::TASK_DESCRIPTION.into(),
-        brief.task_description.clone(),
-    );
-    base_vars.insert(vars::workforce::TEAM_ROSTER.into(), team_roster);
-    base_vars.insert(vars::workforce::PREVIOUS_OUTPUTS.into(), String::new());
+    let mut base_vars = HashMap::with_capacity(3);
     base_vars.insert(vars::user::PROMPT.into(), base_prompt.to_string());
 
     roster
@@ -598,7 +584,7 @@ pub(crate) fn build_static_fallback_prompts(
                 agent_name: entry.name.clone(),
                 tools: entry.capabilities.clone(),
                 system_prompt: role_ctx.system_prompt,
-                assignment: entry.role_description.clone(),
+                assignment: format!("{}\n\n{}", brief.task_description, entry.role_description),
                 expected_output: None,
                 execution_order: entry.execution_order,
                 receives_from,

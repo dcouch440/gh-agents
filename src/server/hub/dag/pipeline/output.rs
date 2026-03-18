@@ -1,15 +1,11 @@
 //! Pure helper functions for workforce output composition and agent scheduling.
 
-use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
 
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
 
-use crate::db::traits::SystemFileRepo;
-use crate::db::{SystemFileRow, WorkflowStepRow};
-use crate::server::hub::protocols::context::{build_context_block, ContextDocument};
+use crate::db::WorkflowStepRow;
 use crate::types::StepExecutionEnvelope;
 
 use super::super::agent_designer::normalize_agent_name;
@@ -61,26 +57,6 @@ pub(crate) fn build_filtered_outputs_block(outputs: &[&(String, String)]) -> Str
             .collect::<Vec<_>>()
             .join("\n\n")
     }
-}
-
-/// Build a team roster string for fallback prompts.
-pub(crate) fn build_team_roster_string(roster: &[crate::db::TaskAgentRosterRow]) -> String {
-    roster
-        .iter()
-        .map(|a| {
-            let caps = if a.capabilities.is_empty() {
-                String::new()
-            } else {
-                format!(" [{}]", a.capabilities.join(", "))
-            };
-
-            format!(
-                "- **{}** (order {}): {}{}",
-                a.name, a.execution_order, a.role_description, caps
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
 }
 
 /// Group designed prompts into execution levels based on `receives_from`.
@@ -136,124 +112,6 @@ pub(crate) fn compute_execution_levels(prompts: &[DesignedAgentPrompt]) -> Vec<V
     }
 
     levels
-}
-
-/// Build `<upstream_artifacts>` XML manifest from store metadata.
-///
-/// Lists files scoped to the current run:
-/// - Workforce-local: files from agents in the same step (this run only)
-/// - Upstream DAG: files from upstream connected steps (this run only)
-///
-/// When `run_id` is `None`, returns all files (no run scoping).
-/// Returns an empty string if no artifacts exist.
-pub(crate) async fn build_upstream_artifacts_block(
-    repo: &dyn SystemFileRepo,
-    workflow_id: Uuid,
-    step_id: Uuid,
-    upstream_step_ids: &[Uuid],
-    steps: &[WorkflowStepRow],
-    run_id: Option<Uuid>,
-) -> String {
-    let step_name_map: HashMap<Uuid, &str> = steps
-        .iter()
-        .map(|s| (s.id, s.name.as_deref().unwrap_or("Unnamed")))
-        .collect();
-
-    let mut sections: Vec<String> = Vec::new();
-
-    // Workforce-local files (agents in this step, this run only)
-    if let Ok(local_files) = repo.list_by_producer(workflow_id, step_id, run_id).await {
-        let local_xml = format_artifact_section(
-            step_name_map
-                .get(&step_id)
-                .copied()
-                .unwrap_or("Current Step"),
-            &local_files,
-        );
-        if !local_xml.is_empty() {
-            sections.push(local_xml);
-        }
-    }
-
-    // Upstream DAG step files (direct edges, this run only)
-    for &upstream_id in upstream_step_ids {
-        if let Ok(files) = repo
-            .list_by_producer(workflow_id, upstream_id, run_id)
-            .await
-        {
-            let name = step_name_map
-                .get(&upstream_id)
-                .copied()
-                .unwrap_or("Upstream Step");
-            let section = format_artifact_section(name, &files);
-            if !section.is_empty() {
-                sections.push(section);
-            }
-        }
-    }
-
-    if sections.is_empty() {
-        return String::new();
-    }
-
-    format!(
-        "<upstream_artifacts>\n{}\n</upstream_artifacts>",
-        sections.join("\n")
-    )
-}
-
-/// Format a single step's artifacts as XML entries.
-fn format_artifact_section(step_name: &str, files: &[SystemFileRow]) -> String {
-    // Filter out design/ files — those are internal to the designer, not artifacts
-    let artifact_files: Vec<&SystemFileRow> = files
-        .iter()
-        .filter(|f| !f.path.starts_with("design/"))
-        .collect();
-
-    if artifact_files.is_empty() {
-        return String::new();
-    }
-
-    let mut out = format!("  <step name=\"{step_name}\">\n");
-    for file in &artifact_files {
-        let by = file.produced_by_agent.as_deref().unwrap_or("unknown");
-        let editable = if file.sealed {
-            " editable=\"false\""
-        } else {
-            ""
-        };
-        out.push_str(&format!(
-            "    <file path=\".system/{}\" type=\"{}\" by=\"{}\"{editable}>\n      {}\n    </file>\n",
-            file.path, file.media_type, by, file.description
-        ));
-    }
-    out.push_str("  </step>");
-    out
-}
-
-/// Build user notes block from upstream context node data.
-///
-/// Used by lifecycle phases to inject upstream context into agent task prompts.
-pub(crate) fn build_user_notes_block(upstream_context: &[(String, String)]) -> String {
-    if upstream_context.is_empty() {
-        return String::new();
-    }
-
-    let docs: Vec<ContextDocument> = upstream_context
-        .iter()
-        .map(|(title, content)| {
-            let mut hasher = DefaultHasher::new();
-            title.hash(&mut hasher);
-            let short_id = format!("{:08x}", hasher.finish() & 0xFFFF_FFFF);
-            ContextDocument {
-                short_id,
-                title: title.clone(),
-                content: content.clone(),
-            }
-        })
-        .collect();
-    let inner = build_context_block(&[], &docs);
-    format!("<user_notes>\n{inner}\n</user_notes>")
 }
 
 /// Build a formatted block of upstream DAG step outputs for injection into

@@ -24,8 +24,8 @@ pub(crate) use output::compose_workforce_output;
 // Re-exports for test access (tests.rs imports via crate path)
 #[cfg(test)]
 pub(crate) use output::{
-    build_filtered_outputs_block, build_team_roster_string, build_upstream_outputs_block,
-    compute_execution_levels, filter_outputs_for_agent,
+    build_filtered_outputs_block, build_upstream_outputs_block, compute_execution_levels,
+    filter_outputs_for_agent,
 };
 #[cfg(test)]
 pub(crate) use types::DesignedAgentPrompt;
@@ -44,7 +44,6 @@ use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
 
 use super::container::{create_optional_container, destroy_optional_container};
 use super::dag_state::DagExecutionState;
-use super::utils::collect_upstream_context_data;
 use super::{
     broadcast_workflow_event, compose_prompt, resolve_output_key, resolve_step_port_inputs,
     step_display_name, DagContext, PromptRepos, StepOutput,
@@ -54,7 +53,6 @@ use agent_executor::execute_agent_levels;
 use designer::build_static_fallback_prompts;
 pub(crate) use designer::DesignerPhase;
 use lifecycle::{PhaseOutput, PhaseTokenUsage, PipelineExecutionContext, PipelinePhase};
-use output::build_user_notes_block;
 use types::WorkforceStepEnv;
 
 /// Composable pipeline executor with lifecycle phases.
@@ -140,17 +138,7 @@ impl Pipeline {
         let port_inputs =
             resolve_step_port_inputs(step, dag.port_meta, &dag_state.completed_envelopes);
 
-        // 5. Collect upstream context from context nodes
-        let incoming = dag
-            .port_meta
-            .incoming_edges
-            .get(&step.id)
-            .map(|v| v.as_slice())
-            .unwrap_or(&[]);
-        let upstream_context =
-            collect_upstream_context_data(incoming, dag.steps, &dag_state.completed_envelopes);
-
-        // 6. Compose base prompt
+        // 5. Compose base prompt
         let repos = PromptRepos {
             prompt_template_repo: Some(&*dag.state.repos().prompt_templates),
             doc_repo: Some(&*dag.state.repos().documents),
@@ -166,9 +154,15 @@ impl Pipeline {
         )
         .await;
 
-        // 7. Build pipeline execution context
+        // 6. Build pipeline execution context
         // Only include envelopes from actual upstream steps (those with edges into this step),
         // not the full DAG state which may include this step's own prior output from workshop reruns.
+        let incoming = dag
+            .port_meta
+            .incoming_edges
+            .get(&step.id)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[]);
         let upstream_step_ids: HashSet<Uuid> = incoming.iter().map(|e| e.from_step_id).collect();
         let upstream_envelopes: HashMap<Uuid, StepExecutionEnvelope> = dag_state
             .completed_envelopes
@@ -177,8 +171,8 @@ impl Pipeline {
             .map(|(id, env)| (*id, env.clone()))
             .collect();
 
-        // 7b. Build upstream outputs block for agent task prompts
-        let upstream_outputs_block =
+        // 6b. Build upstream step output for <previous_step> on first agents
+        let upstream_step_output =
             output::build_upstream_outputs_block(&upstream_envelopes, dag.steps);
 
         let pipeline_ctx = PipelineExecutionContext {
@@ -186,16 +180,13 @@ impl Pipeline {
             brief: brief.clone(),
             roster: roster.clone(),
             base_prompt: prompt.clone(),
-            upstream_context: upstream_context.clone(),
         };
 
-        // 8. Run before phases (or static fallback if none registered)
+        // 7. Run before phases (or static fallback if none registered)
         let phase_output = if self.before_phases.is_empty() {
             let prompts = build_static_fallback_prompts(&brief, &roster, &prompt);
-            let user_notes_block = build_user_notes_block(&upstream_context);
             PhaseOutput {
                 designed_prompts: prompts,
-                user_notes_block,
                 token_usage: PhaseTokenUsage {
                     input_tokens: 0,
                     output_tokens: 0,
@@ -213,7 +204,7 @@ impl Pipeline {
             output.unwrap()
         };
 
-        // 9. Create optional container
+        // 8. Create optional container
         let managed_container = create_optional_container(
             dag.ctx.container_config.as_ref(),
             dag.ctx.wg_client.as_deref(),
@@ -222,23 +213,10 @@ impl Pipeline {
         )
         .await?;
 
-        // 10. Build upstream artifacts manifest from store metadata
-        let upstream_ids: Vec<uuid::Uuid> = upstream_step_ids.iter().copied().collect();
-        let upstream_artifacts_block = output::build_upstream_artifacts_block(
-            dag.state.repos().system_files.as_ref(),
-            step.workflow_id,
-            step.id,
-            &upstream_ids,
-            dag.steps,
-            Some(dag.ctx.run_id),
-        )
-        .await;
-
-        // 11. Build env + execute agent levels
+        // 9. Build env + execute agent levels
         let env = WorkforceStepEnv {
             state: dag.state.clone(),
             ctx: dag.ctx.clone(),
-            user_notes_block: phase_output.user_notes_block,
             original_prompt: prompt.clone(),
             step_id: step.id,
             workflow_id: step.workflow_id,
@@ -246,7 +224,6 @@ impl Pipeline {
             total_agents: phase_output.designed_prompts.len(),
             container_handle: managed_container.as_ref().map(|mc| mc.agent_handle.clone()),
             cancel: dag.cancel.cloned(),
-            task_description: brief.task_description.clone(),
             stroke_image: dag
                 .state
                 .repos()
@@ -254,8 +231,7 @@ impl Pipeline {
                 .get_step_stroke_image(step.id)
                 .await
                 .unwrap_or(None),
-            upstream_outputs_block,
-            upstream_artifacts_block,
+            upstream_step_output,
         };
 
         let level_result = execute_agent_levels(
@@ -267,10 +243,10 @@ impl Pipeline {
         )
         .await?;
 
-        // 11. Destroy optional container
+        // 10. Destroy optional container
         destroy_optional_container(&managed_container, dag.ctx.wg_client.as_deref()).await;
 
-        // 12. Compose combined output + store results
+        // 11. Compose combined output + store results
         let step_in_tokens = phase_output.token_usage.input_tokens + level_result.input_tokens;
         let step_out_tokens = phase_output.token_usage.output_tokens + level_result.output_tokens;
         let step_cost = phase_output.token_usage.cost_usd + level_result.cost_usd;
@@ -303,7 +279,7 @@ impl Pipeline {
         let output_text = output.raw_output.clone();
         super::utils::record_and_snapshot_output(dag, dag_state, step.id, output, envelope).await;
 
-        // 13. Broadcast step completed
+        // 12. Broadcast step completed
         broadcast_workflow_event(
             dag.state,
             dag.ctx,

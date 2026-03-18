@@ -231,22 +231,20 @@ async fn execute_single_agent(
         tool_names.push("store_write_file".to_string());
     }
 
-    // Build task prompt: shared mission context + designer's assignment
+    // Build task prompt: <previous_step> + <assignment> + <expected_output>
     let filtered = filter_outputs_for_agent(prior_outputs, &designed.receives_from);
-    let previous_agent_outputs = if filtered.is_empty() {
-        String::new()
+    let previous_step = if filtered.is_empty() {
+        // First agent (or no receives_from) — use upstream DAG step output
+        env.upstream_step_output.clone()
     } else {
+        // Has prior agent outputs — use those as previous_step
         build_filtered_outputs_block(&filtered)
     };
 
     let task_prompt = TaskPromptBuilder {
-        context: env.task_description.clone(),
+        previous_step,
         assignment: designed.assignment.clone(),
         expected_output: designed.expected_output.clone(),
-        upstream_artifacts: env.upstream_artifacts_block.clone(),
-        previous_agent_outputs,
-        upstream_step_outputs: env.upstream_outputs_block.clone(),
-        user_notes: env.user_notes_block.clone(),
     }
     .build();
 
@@ -421,31 +419,30 @@ async fn execute_single_agent(
     }
 }
 
-/// Assembles the task prompt for a workforce agent from named blocks.
+/// Assembles the task prompt for a workforce agent from 3 blocks.
 ///
-/// Blocks are assembled in a fixed order:
-/// 1. user_notes (prepended at top)
-/// 2. context + assignment (always present)
-/// 3. expected_output (optional, from designer)
-/// 4. upstream_artifacts (XML manifest)
-/// 5. previous_agent_outputs (filtered by receives_from)
-/// 6. upstream_step_outputs (DAG step outputs)
-struct TaskPromptBuilder {
-    context: String,
-    assignment: String,
-    expected_output: Option<String>,
-    upstream_artifacts: String,
-    previous_agent_outputs: String,
-    upstream_step_outputs: String,
-    user_notes: String,
+/// Block order:
+/// 1. `<previous_step>` — orientation from whoever ran before (omitted if empty)
+/// 2. `<assignment>` — what to do (always present)
+/// 3. `<expected_output>` — what to say when done (optional, from designer)
+pub(super) struct TaskPromptBuilder {
+    pub(super) previous_step: String,
+    pub(super) assignment: String,
+    pub(super) expected_output: Option<String>,
 }
 
 impl TaskPromptBuilder {
-    fn build(self) -> String {
-        let mut prompt = format!(
-            "<context>\n{}\n</context>\n\n<assignment>\n{}\n</assignment>",
-            self.context, self.assignment,
-        );
+    pub(super) fn build(self) -> String {
+        let mut prompt = String::new();
+
+        if !self.previous_step.is_empty() {
+            prompt.push_str(&format!(
+                "<previous_step>\n{}\n</previous_step>\n\n",
+                self.previous_step
+            ));
+        }
+
+        prompt.push_str(&format!("<assignment>\n{}\n</assignment>", self.assignment,));
 
         if let Some(expected) = &self.expected_output {
             if !expected.is_empty() {
@@ -454,28 +451,6 @@ impl TaskPromptBuilder {
                     expected
                 ));
             }
-        }
-
-        if !self.upstream_artifacts.is_empty() {
-            prompt.push_str(&format!("\n\n{}", self.upstream_artifacts));
-        }
-
-        if !self.previous_agent_outputs.is_empty() {
-            prompt.push_str(&format!(
-                "\n\n<previous_agent_outputs>\n{}\n</previous_agent_outputs>",
-                self.previous_agent_outputs
-            ));
-        }
-
-        if !self.upstream_step_outputs.is_empty() {
-            prompt.push_str(&format!(
-                "\n\n<upstream_step_outputs>\n{}\n</upstream_step_outputs>",
-                self.upstream_step_outputs
-            ));
-        }
-
-        if !self.user_notes.is_empty() {
-            prompt = format!("{}\n\n{prompt}", self.user_notes);
         }
 
         prompt

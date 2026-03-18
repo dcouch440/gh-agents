@@ -7,19 +7,11 @@ mod tests {
     use crate::db::fixtures::fixtures::*;
     use crate::db::TaskAgentRosterRow;
     use crate::server::hub::dag::pipeline::{
-        build_filtered_outputs_block, build_team_roster_string, build_upstream_outputs_block,
-        compose_workforce_output, compute_execution_levels, filter_outputs_for_agent,
-        DesignedAgentPrompt,
+        build_filtered_outputs_block, build_upstream_outputs_block, compose_workforce_output,
+        compute_execution_levels, filter_outputs_for_agent, DesignedAgentPrompt,
     };
 
     // ── Output Composition ────────────────────────────────────────────────────
-
-    fn make_roster_agent(name: &str, order: i32) -> TaskAgentRosterRow {
-        TaskAgentRosterRow {
-            capabilities: vec!["file_read".to_string()],
-            ..roster_agent(Uuid::new_v4(), name, order)
-        }
-    }
 
     fn make_designed_prompt(name: &str, receives_from: &[&str]) -> DesignedAgentPrompt {
         DesignedAgentPrompt {
@@ -67,16 +59,6 @@ mod tests {
         let filtered = filter_outputs_for_agent(&outputs, &["Scanner".to_string()]);
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].0, "Scanner");
-    }
-
-    #[test]
-    fn team_roster_string_includes_agents() {
-        let agent = make_roster_agent("Scanner", 0);
-        let roster = vec![agent.clone()];
-
-        let result = build_team_roster_string(&roster);
-        assert!(result.contains("Scanner"));
-        assert!(result.contains("file_read"));
     }
 
     #[test]
@@ -249,6 +231,15 @@ mod tests {
         assert_eq!(prompts[1].receives_from, vec!["Scanner"]);
         // Third receives from second
         assert_eq!(prompts[2].receives_from, vec!["Analyzer"]);
+
+        // System prompt is simple: "You are {name}. {role}"
+        assert!(prompts[0].system_prompt.starts_with("You are Scanner."));
+        assert!(!prompts[0].system_prompt.contains("<role>"));
+        assert!(!prompts[0].system_prompt.contains("<mission>"));
+        assert!(!prompts[0].system_prompt.contains("<team>"));
+
+        // Assignment includes task description
+        assert!(prompts[0].assignment.contains("Test task"));
     }
 
     // ── Edge Routing Enforcement ──────────────────────────────────────────────
@@ -506,5 +497,133 @@ mod tests {
         assert!(result.contains("### Big Step"));
         // Header + truncated content should be well under the raw 5000 chars
         assert!(result.len() < 4200);
+    }
+
+    // ── TaskPromptBuilder (A5 — 3-block format) ──────────────────────────────
+
+    #[test]
+    fn task_prompt_builder_three_blocks() {
+        use super::super::agent_executor::TaskPromptBuilder;
+
+        let prompt = TaskPromptBuilder {
+            previous_step: "Prior output text".to_string(),
+            assignment: "Do the thing".to_string(),
+            expected_output: Some("Describe what you did".to_string()),
+        }
+        .build();
+
+        assert!(prompt.contains("<previous_step>\nPrior output text\n</previous_step>"));
+        assert!(prompt.contains("<assignment>\nDo the thing\n</assignment>"));
+        assert!(prompt.contains("<expected_output>\nDescribe what you did\n</expected_output>"));
+    }
+
+    #[test]
+    fn task_prompt_builder_omits_empty_previous_step() {
+        use super::super::agent_executor::TaskPromptBuilder;
+
+        let prompt = TaskPromptBuilder {
+            previous_step: String::new(),
+            assignment: "Do the thing".to_string(),
+            expected_output: None,
+        }
+        .build();
+
+        assert!(!prompt.contains("<previous_step>"));
+        assert!(prompt.starts_with("<assignment>"));
+    }
+
+    #[test]
+    fn task_prompt_builder_omits_empty_expected_output() {
+        use super::super::agent_executor::TaskPromptBuilder;
+
+        let prompt = TaskPromptBuilder {
+            previous_step: String::new(),
+            assignment: "Do the thing".to_string(),
+            expected_output: Some(String::new()),
+        }
+        .build();
+
+        assert!(!prompt.contains("<expected_output>"));
+    }
+
+    #[test]
+    fn task_prompt_builder_no_old_blocks() {
+        use super::super::agent_executor::TaskPromptBuilder;
+
+        let prompt = TaskPromptBuilder {
+            previous_step: "output".to_string(),
+            assignment: "task".to_string(),
+            expected_output: Some("result".to_string()),
+        }
+        .build();
+
+        // None of the old block tags should appear
+        assert!(!prompt.contains("<context>"));
+        assert!(!prompt.contains("<upstream_artifacts>"));
+        assert!(!prompt.contains("<previous_agent_outputs>"));
+        assert!(!prompt.contains("<upstream_step_outputs>"));
+        assert!(!prompt.contains("<user_notes>"));
+    }
+
+    #[test]
+    fn task_prompt_builder_block_order() {
+        use super::super::agent_executor::TaskPromptBuilder;
+
+        let prompt = TaskPromptBuilder {
+            previous_step: "prev".to_string(),
+            assignment: "assign".to_string(),
+            expected_output: Some("expect".to_string()),
+        }
+        .build();
+
+        let prev_pos = prompt.find("<previous_step>").unwrap();
+        let assign_pos = prompt.find("<assignment>").unwrap();
+        let expect_pos = prompt.find("<expected_output>").unwrap();
+        assert!(prev_pos < assign_pos);
+        assert!(assign_pos < expect_pos);
+    }
+
+    #[test]
+    fn static_fallback_simple_system_prompt() {
+        use super::super::designer::build_static_fallback_prompts;
+        use crate::db::TaskMissionBriefRow;
+
+        let brief_id = Uuid::new_v4();
+        let brief = TaskMissionBriefRow {
+            id: brief_id,
+            task_description: "Scan for vulnerabilities".into(),
+            ..Default::default()
+        };
+        let roster = vec![roster_agent(brief_id, "Scanner", 0)];
+
+        let prompts = build_static_fallback_prompts(&brief, &roster, "base prompt");
+
+        // System prompt is short: "You are {name}. {role}"
+        assert!(prompts[0].system_prompt.starts_with("You are Scanner."));
+        assert!(!prompts[0].system_prompt.contains("<role>"));
+        assert!(!prompts[0].system_prompt.contains("<mission>"));
+        assert!(!prompts[0].system_prompt.contains("<team>"));
+        assert!(!prompts[0].system_prompt.contains("<upstream_outputs>"));
+        assert!(!prompts[0].system_prompt.contains("<instructions>"));
+    }
+
+    #[test]
+    fn static_fallback_assignment_includes_task_description() {
+        use super::super::designer::build_static_fallback_prompts;
+        use crate::db::TaskMissionBriefRow;
+
+        let brief_id = Uuid::new_v4();
+        let brief = TaskMissionBriefRow {
+            id: brief_id,
+            task_description: "Scan for vulnerabilities".into(),
+            ..Default::default()
+        };
+        let roster = vec![roster_agent(brief_id, "Scanner", 0)];
+
+        let prompts = build_static_fallback_prompts(&brief, &roster, "base prompt");
+
+        // Assignment should contain both task_description and role_description
+        assert!(prompts[0].assignment.contains("Scan for vulnerabilities"));
+        assert!(prompts[0].assignment.contains(&roster[0].role_description));
     }
 }
