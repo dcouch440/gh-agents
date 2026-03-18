@@ -463,15 +463,9 @@ pub const DISTILLER_MAX_MESSAGES: usize = 15;
 pub const DISTILLER_TEMPERATURE: f32 = 0.2;
 
 // ── Workspace Merge ─────────────────────────────────────────────────────────
+// Model config (model_id, temperature, max_tokens) lives in
+// config/services/merge/config.yaml — not here.
 
-/// Model for standard conflict hunk resolution (fast, mechanical).
-pub const MERGE_MODEL: &str = MODEL_TIER3;
-/// Model for complex merges: delete-modify, new-new conflicts (needs judgment).
-pub const MERGE_MODEL_COMPLEX: &str = MODEL_TIER2;
-/// Max output tokens for merge resolution.
-pub const MERGE_MAX_TOKENS: u32 = 4096;
-/// Temperature for merge resolution (deterministic).
-pub const MERGE_TEMPERATURE: f32 = 0.0;
 /// Skip diff3 for files larger than this (bytes). Falls back to last-write-wins.
 pub const MERGE_MAX_FILE_SIZE: usize = 100_000;
 /// Lines of surrounding context for code file conflicts.

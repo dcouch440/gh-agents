@@ -179,6 +179,24 @@ pub mod vars {
         pub const NEXT_STEP: &str = "ReactDesigner.next_step";
     }
 
+    /// Variables for workspace merge conflict resolution prompts.
+    pub mod merge {
+        pub const FILE_PATH: &str = "Merge.file_path";
+        pub const FILE_TYPE: &str = "Merge.file_type";
+        pub const LINE_RANGE: &str = "Merge.line_range";
+        pub const CONTEXT_BLOCK: &str = "Merge.context_block";
+        pub const BASE_HUNK: &str = "Merge.base_hunk";
+        pub const VERSION_A_HUNK: &str = "Merge.version_a_hunk";
+        pub const VERSION_B_HUNK: &str = "Merge.version_b_hunk";
+        pub const STEP_A_NAME: &str = "Merge.step_a_name";
+        pub const STEP_A_DESCRIPTION: &str = "Merge.step_a_description";
+        pub const STEP_B_NAME: &str = "Merge.step_b_name";
+        pub const STEP_B_DESCRIPTION: &str = "Merge.step_b_description";
+        pub const DIFF_SUMMARY: &str = "Merge.diff_summary";
+        pub const CONTENT_A: &str = "Merge.content_a";
+        pub const CONTENT_B: &str = "Merge.content_b";
+    }
+
     /// Variables assembled by the platform (config, context, runtime state).
     pub mod system {
         pub const DOC_NAME: &str = "System.doc_name";
@@ -257,6 +275,14 @@ pub static MANAGER_BUILDER: Lazy<ProtocolConfig> = Lazy::new(|| {
     )
 });
 
+/// Workspace merge conflict resolution config.
+pub static MERGE: Lazy<ProtocolConfig> = Lazy::new(|| {
+    load_protocol_config(
+        include_str!("../../config/services/merge/config.yaml"),
+        "config/services/merge/config.yaml",
+    )
+});
+
 // ---------------------------------------------------------------------------
 // Role statics — compile-time embedded content
 // ---------------------------------------------------------------------------
@@ -331,6 +357,27 @@ pub mod roles {
     pub static QUESTION_EXTRACTOR: RoleDefinition = RoleDefinition {
         system: include_str!("../../config/services/question_extraction/system.md"),
         prompt: include_str!("../../config/services/question_extraction/prompt.md"),
+        response: None,
+    };
+
+    /// Workspace merge: standard conflict hunk resolution.
+    pub static MERGE_HUNK: RoleDefinition = RoleDefinition {
+        system: include_str!("../../config/services/merge/system.md"),
+        prompt: include_str!("../../config/services/merge/hunk_prompt.md"),
+        response: None,
+    };
+
+    /// Workspace merge: delete-modify conflict resolution.
+    pub static MERGE_DELETE_MODIFY: RoleDefinition = RoleDefinition {
+        system: include_str!("../../config/services/merge/system.md"),
+        prompt: include_str!("../../config/services/merge/delete_modify_prompt.md"),
+        response: None,
+    };
+
+    /// Workspace merge: new-new conflict resolution (both agents created same file).
+    pub static MERGE_NEW_NEW: RoleDefinition = RoleDefinition {
+        system: include_str!("../../config/services/merge/system.md"),
+        prompt: include_str!("../../config/services/merge/new_new_prompt.md"),
         response: None,
     };
 }
@@ -443,6 +490,16 @@ mod tests {
         assert!(roles::MANAGER_ASSISTANT_BASE.response.is_none());
 
         assert!(!roles::MANAGER_BUILDER_SYSTEM.is_empty());
+
+        assert!(!roles::MERGE_HUNK.system.is_empty());
+        assert!(!roles::MERGE_HUNK.prompt.is_empty());
+        assert!(roles::MERGE_HUNK.response.is_none());
+
+        assert!(!roles::MERGE_DELETE_MODIFY.system.is_empty());
+        assert!(!roles::MERGE_DELETE_MODIFY.prompt.is_empty());
+
+        assert!(!roles::MERGE_NEW_NEW.system.is_empty());
+        assert!(!roles::MERGE_NEW_NEW.prompt.is_empty());
     }
 
     #[test]
@@ -493,6 +550,21 @@ mod tests {
         assert_eq!(assistant.temperature, 0.4);
         assert_eq!(assistant.max_rounds, 15);
         assert_eq!(assistant.context_budget, 480_000);
+    }
+
+    #[test]
+    fn merge_config_parses() {
+        let cfg = &*MERGE;
+        let resolver = cfg.agent("resolver");
+        assert_eq!(resolver.model_id, crate::constants::MODEL_TIER3);
+        assert_eq!(resolver.temperature, 0.0);
+        assert_eq!(resolver.max_tokens, 4096);
+        assert_eq!(resolver.max_rounds, 1);
+
+        let complex = cfg.agent("complex_resolver");
+        assert_eq!(complex.model_id, crate::constants::MODEL_TIER2);
+        assert_eq!(complex.temperature, 0.0);
+        assert_eq!(complex.max_tokens, 4096);
     }
 
     #[test]
@@ -578,6 +650,20 @@ mod tests {
             vars::react_designer::CURRENT_DESIGN_HANDOFF,
             vars::react_designer::PREVIOUS_STEP,
             vars::react_designer::NEXT_STEP,
+            vars::merge::FILE_PATH,
+            vars::merge::FILE_TYPE,
+            vars::merge::LINE_RANGE,
+            vars::merge::CONTEXT_BLOCK,
+            vars::merge::BASE_HUNK,
+            vars::merge::VERSION_A_HUNK,
+            vars::merge::VERSION_B_HUNK,
+            vars::merge::STEP_A_NAME,
+            vars::merge::STEP_A_DESCRIPTION,
+            vars::merge::STEP_B_NAME,
+            vars::merge::STEP_B_DESCRIPTION,
+            vars::merge::DIFF_SUMMARY,
+            vars::merge::CONTENT_A,
+            vars::merge::CONTENT_B,
         ]);
 
         let all_roles: &[(&str, &RoleDefinition)] = &[
@@ -587,6 +673,9 @@ mod tests {
             ("designer", &roles::DESIGNER),
             ("manager_assistant", &roles::MANAGER_ASSISTANT_BASE),
             ("react_designer", &roles::REACT_DESIGNER),
+            ("merge_hunk", &roles::MERGE_HUNK),
+            ("merge_delete_modify", &roles::MERGE_DELETE_MODIFY),
+            ("merge_new_new", &roles::MERGE_NEW_NEW),
         ];
 
         let re = regex::Regex::new(r"\{\{\.([^}]+)\}\}").unwrap();

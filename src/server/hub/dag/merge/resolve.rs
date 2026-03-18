@@ -1,33 +1,20 @@
-//! Grok one-shot LLM conflict resolution.
+//! LLM conflict resolution via the config prompt system.
 //!
-//! Sends conflict hunks with file-type-aware context to Grok for resolution.
-//! Uses the `create_utility_client()` pattern from the distiller module.
+//! Uses `RoleDefinition` templates from `config/services/merge/` with
+//! `{{.Merge.*}}` injection sites. Model config from `config.yaml`.
+
+use std::collections::HashMap;
 
 use tracing::warn;
 
+use crate::config::protocols::{roles, vars, AgentConfig, MERGE};
 use crate::constants;
 use crate::llm::{ContentBlock, LLMRequest, Message};
 
 use super::types::{ConflictContext, ConflictHunk, FileType, StepInfo};
 use super::verify::{verify_resolution, VerifyOutcome};
 
-/// System prompt for the merge resolver.
-const MERGE_SYSTEM_PROMPT: &str = "\
-You are a code merge resolver. Two parallel agents independently modified \
-the same file. Both agents' changes are intentional and must be preserved.
-
-Rules:
-1. PRESERVE both agents' changes. Never drop one agent's work.
-2. For imports: include ALL imports from both versions.
-3. For function bodies: integrate both changes into one coherent function. \
-   If both add processing steps, chain them. If both add branches, keep both.
-4. For config files: merge additively. Both agents' entries should appear.
-5. For documentation: combine both perspectives into coherent prose.
-6. Match the surrounding code style exactly (indentation, quotes, semicolons).
-7. Output ONLY the merged content for the conflicting region. \
-   No explanation. No markdown fences. No commentary.";
-
-/// Resolve a single conflict hunk via Grok one-shot call.
+/// Resolve a single conflict hunk via one-shot LLM call.
 ///
 /// Returns `(resolved_content, tokens_used)`.
 /// Retries once on verification failure.
@@ -37,11 +24,52 @@ pub async fn resolve_hunk(
     step_a: &StepInfo,
     step_b: &StepInfo,
 ) -> Result<(String, u64), String> {
-    let prompt = build_hunk_prompt(hunk, context, step_a, step_b);
+    let context_block = build_context_block(context);
+    let cfg = MERGE.agent("resolver");
+
+    let mut vars = HashMap::new();
+    vars.insert(
+        vars::merge::FILE_PATH.to_string(),
+        context.file_path.clone(),
+    );
+    vars.insert(
+        vars::merge::LINE_RANGE.to_string(),
+        format!(
+            "{}-{}",
+            hunk.base_line_range.start + 1,
+            hunk.base_line_range.end
+        ),
+    );
+    vars.insert(
+        vars::merge::FILE_TYPE.to_string(),
+        file_type_label(&context.file_type),
+    );
+    vars.insert(vars::merge::CONTEXT_BLOCK.to_string(), context_block);
+    vars.insert(vars::merge::BASE_HUNK.to_string(), hunk.base_lines.clone());
+    vars.insert(
+        vars::merge::VERSION_A_HUNK.to_string(),
+        hunk.version_a_lines.clone(),
+    );
+    vars.insert(
+        vars::merge::VERSION_B_HUNK.to_string(),
+        hunk.version_b_lines.clone(),
+    );
+    vars.insert(vars::merge::STEP_A_NAME.to_string(), step_a.name.clone());
+    vars.insert(
+        vars::merge::STEP_A_DESCRIPTION.to_string(),
+        step_a.description.clone(),
+    );
+    vars.insert(vars::merge::STEP_B_NAME.to_string(), step_b.name.clone());
+    vars.insert(
+        vars::merge::STEP_B_DESCRIPTION.to_string(),
+        step_b.description.clone(),
+    );
+
+    let resolved = roles::MERGE_HUNK.resolve(&vars);
 
     // First attempt
     let (result, mut tokens) =
-        call_grok(&prompt, constants::MERGE_MODEL, constants::MERGE_MAX_TOKENS).await?;
+        call_merge_llm(&resolved.system_prompt, &resolved.user_prompt, cfg).await?;
 
     // Verify
     match verify_resolution(
@@ -58,17 +86,13 @@ pub async fn resolve_hunk(
                 "Merge resolution failed verification — retrying"
             );
 
-            // Retry with error context
+            // Retry with error context appended to the user prompt
             let retry_prompt = format!(
                 "{}\n\nYour previous merge was invalid: {}. Try again, ensuring the output is valid.",
-                prompt, reason
+                resolved.user_prompt, reason
             );
-            let (retry_result, retry_tokens) = call_grok(
-                &retry_prompt,
-                constants::MERGE_MODEL,
-                constants::MERGE_MAX_TOKENS,
-            )
-            .await?;
+            let (retry_result, retry_tokens) =
+                call_merge_llm(&resolved.system_prompt, &retry_prompt, cfg).await?;
             tokens += retry_tokens;
 
             match verify_resolution(
@@ -79,7 +103,6 @@ pub async fn resolve_hunk(
             ) {
                 VerifyOutcome::Ok | VerifyOutcome::Warning(_) => Ok((retry_result, tokens)),
                 VerifyOutcome::Failed(reason) => {
-                    // Give up — return both versions with conflict markers
                     warn!(
                         file = %context.file_path,
                         reason = %reason,
@@ -98,7 +121,7 @@ pub async fn resolve_hunk(
     }
 }
 
-/// Resolve a delete-modify conflict via Grok.
+/// Resolve a delete-modify conflict.
 ///
 /// Returns `(keep_file, tokens_used)`.
 pub async fn resolve_delete_modify(
@@ -107,28 +130,35 @@ pub async fn resolve_delete_modify(
     modifier: &StepInfo,
     diff_summary: &str,
 ) -> (bool, u64) {
-    let prompt = format!(
-        "File: {file_path}\n\n\
-         Agent A ({name_a}: \"{desc_a}\") DELETED this file.\n\n\
-         Agent B ({name_b}: \"{desc_b}\") MODIFIED this file:\n\
-         --- Changes ---\n\
-         {diff_summary}\n\n\
-         Should this file be kept (with Agent B's modifications) or deleted?\n\
-         Respond with exactly one word: KEEP or DELETE.",
-        name_a = deleter.name,
-        desc_a = deleter.description,
-        name_b = modifier.name,
-        desc_b = modifier.description,
+    let cfg = MERGE.agent("complex_resolver");
+
+    let mut vars = HashMap::new();
+    vars.insert(vars::merge::FILE_PATH.to_string(), file_path.to_string());
+    vars.insert(vars::merge::STEP_A_NAME.to_string(), deleter.name.clone());
+    vars.insert(
+        vars::merge::STEP_A_DESCRIPTION.to_string(),
+        deleter.description.clone(),
+    );
+    vars.insert(vars::merge::STEP_B_NAME.to_string(), modifier.name.clone());
+    vars.insert(
+        vars::merge::STEP_B_DESCRIPTION.to_string(),
+        modifier.description.clone(),
+    );
+    vars.insert(
+        vars::merge::DIFF_SUMMARY.to_string(),
+        diff_summary.to_string(),
     );
 
-    match call_grok(&prompt, constants::MERGE_MODEL_COMPLEX, 16).await {
+    let resolved = roles::MERGE_DELETE_MODIFY.resolve(&vars);
+
+    match call_merge_llm(&resolved.system_prompt, &resolved.user_prompt, cfg).await {
         Ok((response, tokens)) => {
             let trimmed = response.trim().to_uppercase();
             (!trimmed.contains("DELETE"), tokens)
         }
         Err(e) => {
             warn!(file = %file_path, error = %e, "Delete-modify LLM call failed — keeping file");
-            (true, 0) // Default: keep the file
+            (true, 0)
         }
     }
 }
@@ -144,66 +174,39 @@ pub async fn resolve_new_new(
     step_b: &StepInfo,
     content_b: &str,
 ) -> Result<(String, u64), String> {
-    let type_label = file_type_label(file_type);
-    let prompt = format!(
-        "File: {file_path}\nType: {type_label}\n\n\
-         Two agents independently created this file. Merge them into one coherent file.\n\n\
-         --- AGENT A ({name_a}: \"{desc_a}\") ---\n\
-         {content_a}\n\n\
-         --- AGENT B ({name_b}: \"{desc_b}\") ---\n\
-         {content_b}\n\n\
-         Produce the complete merged file.",
-        name_a = step_a.name,
-        desc_a = step_a.description,
-        name_b = step_b.name,
-        desc_b = step_b.description,
+    let cfg = MERGE.agent("complex_resolver");
+
+    let mut vars = HashMap::new();
+    vars.insert(vars::merge::FILE_PATH.to_string(), file_path.to_string());
+    vars.insert(
+        vars::merge::FILE_TYPE.to_string(),
+        file_type_label(file_type),
     );
+    vars.insert(vars::merge::STEP_A_NAME.to_string(), step_a.name.clone());
+    vars.insert(
+        vars::merge::STEP_A_DESCRIPTION.to_string(),
+        step_a.description.clone(),
+    );
+    vars.insert(vars::merge::STEP_B_NAME.to_string(), step_b.name.clone());
+    vars.insert(
+        vars::merge::STEP_B_DESCRIPTION.to_string(),
+        step_b.description.clone(),
+    );
+    vars.insert(vars::merge::CONTENT_A.to_string(), content_a.to_string());
+    vars.insert(vars::merge::CONTENT_B.to_string(), content_b.to_string());
 
-    call_grok(
-        &prompt,
-        constants::MERGE_MODEL_COMPLEX,
-        constants::MERGE_MAX_TOKENS,
-    )
-    .await
+    let resolved = roles::MERGE_NEW_NEW.resolve(&vars);
+
+    call_merge_llm(&resolved.system_prompt, &resolved.user_prompt, cfg).await
 }
 
-// ── Prompt Building ──────────────────────────────────────────────────────────
+// ── Context Assembly ─────────────────────────────────────────────────────────
 
-fn build_hunk_prompt(
-    hunk: &ConflictHunk,
-    context: &ConflictContext,
-    step_a: &StepInfo,
-    step_b: &StepInfo,
-) -> String {
-    let type_label = file_type_label(&context.file_type);
-    let context_block = build_context_block(context);
-
-    format!(
-        "File: {} (lines {}-{})\nType: {}\n\n\
-         {}\n\n\
-         --- BASE (before either agent) ---\n\
-         {}\n\n\
-         --- AGENT A ({}: \"{}\") ---\n\
-         {}\n\n\
-         --- AGENT B ({}: \"{}\") ---\n\
-         {}\n\n\
-         Merge both agents' changes for this region.",
-        context.file_path,
-        hunk.base_line_range.start + 1,
-        hunk.base_line_range.end,
-        type_label,
-        context_block,
-        hunk.base_lines,
-        step_a.name,
-        step_a.description,
-        hunk.version_a_lines,
-        step_b.name,
-        step_b.description,
-        hunk.version_b_lines,
-    )
-}
-
-fn build_context_block(context: &ConflictContext) -> String {
+/// Build the context block from a `ConflictContext` struct.
+///
+/// This assembles the value for `{{.Merge.context_block}}`. Stays in code
+/// because it's algorithmic (priority-based truncation), not a template.
+pub(crate) fn build_context_block(context: &ConflictContext) -> String {
     let budget = constants::MERGE_MAX_CONTEXT_CHARS;
     let mut parts = Vec::new();
 
@@ -214,7 +217,6 @@ fn build_context_block(context: &ConflictContext) -> String {
     }
 
     // Priority order for truncation: imports > outline > scope > surrounding
-    // We add in priority order and truncate from the bottom up if over budget.
     if let Some(ref imports) = context.import_block {
         parts.push(format!(
             "Imports (combined from all versions):\n{}",
@@ -278,17 +280,23 @@ fn file_type_label(file_type: &FileType) -> String {
 
 // ── LLM Call ─────────────────────────────────────────────────────────────────
 
+/// Send a one-shot merge resolution request to the configured LLM provider.
+///
 /// Returns `(text_content, total_tokens)`.
-async fn call_grok(prompt: &str, model: &str, max_tokens: u32) -> Result<(String, u64), String> {
+async fn call_merge_llm(
+    system_prompt: &str,
+    user_prompt: &str,
+    cfg: &AgentConfig,
+) -> Result<(String, u64), String> {
     let client = crate::llm::create_utility_client()
         .map_err(|e| format!("Failed to create LLM client: {e}"))?;
 
     let request = LLMRequest {
-        model: model.to_string(),
-        system: Some(MERGE_SYSTEM_PROMPT.to_string()),
-        messages: vec![Message::user(prompt)],
-        max_tokens,
-        temperature: constants::MERGE_TEMPERATURE,
+        model: cfg.model_id.clone(),
+        system: Some(system_prompt.to_string()),
+        messages: vec![Message::user(user_prompt)],
+        max_tokens: cfg.max_tokens,
+        temperature: cfg.temperature,
         ..Default::default()
     };
 
