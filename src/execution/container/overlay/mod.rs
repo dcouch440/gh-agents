@@ -28,8 +28,13 @@ use super::ContainerHandle;
 /// The `volatile` option skips fsync for performance (safe since containers
 /// are ephemeral).
 pub async fn setup_overlay(handle: &ContainerHandle) -> Result<(), ContainerError> {
+    // The upper and work dirs must live on a real filesystem, not on Docker's
+    // own OverlayFS root (nested overlay-on-overlay is not supported). Mount a
+    // tmpfs at /tmp/overlay first, then create upper + work inside it.
     let script = format!(
-        "mkdir -p {} {} && \
+        "mkdir -p /tmp/overlay && \
+         mount -t tmpfs tmpfs /tmp/overlay && \
+         mkdir -p {} {} && \
          mount -t overlay overlay \
          -o lowerdir={},upperdir={},workdir={},volatile \
          {}",
