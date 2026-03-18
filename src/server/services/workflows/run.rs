@@ -118,6 +118,38 @@ pub async fn run_workflow(
         );
     }
 
+    // Build container config from workflow settings (if container_enabled)
+    let wf_row = workflow_repo
+        .get_workflow(workflow_id)
+        .await?
+        .ok_or_else(|| ServiceError::not_found("Workflow"))?;
+    let container_config = if wf_row.container_enabled {
+        let github_token = crate::execution::RedactedString::new(
+            state.env().github_token.clone().unwrap_or_default(),
+        );
+        Some(crate::server::hub::dag::ContainerExecutionConfig {
+            clone_url: wf_row.target_repo_url.clone().unwrap_or_default(),
+            branch: wf_row.target_branch.clone(),
+            github_token,
+            image: None,
+            memory_limit: None,
+            cpu_limit: None,
+            vpn_enabled: wf_row.vpn_enabled,
+            workflow_id: Some(workflow_id),
+            run_id: Some(execution_id),
+            overlay_enabled: state.workspace().is_some(),
+        })
+    } else {
+        None
+    };
+
+    let wg_client = if container_config.as_ref().is_some_and(|c| c.vpn_enabled) {
+        crate::execution::WgEasyConfig::from_env()
+            .map(|cfg| std::sync::Arc::new(crate::execution::WgEasyClient::new(cfg)))
+    } else {
+        None
+    };
+
     let ctx = WorkflowExecutionContext {
         stage_execution_id: execution_id,
         run_id: execution_id,
@@ -125,8 +157,8 @@ pub async fn run_workflow(
         initial_input,
         prior_outputs,
         execution_context: None,
-        container_config: None,
-        wg_client: None,
+        container_config,
+        wg_client,
         snapshot,
     };
 
