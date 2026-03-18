@@ -44,6 +44,8 @@ In the assignment, tell agents what to save and what to read:
 - Consumer: "Read the [description] from the workspace. [Process].
   Save your output to the workspace."
 Do NOT prescribe specific file paths — agents decide paths at runtime.
+Tell agents to create a project directory (e.g., /workspace/my-app/)
+rather than saving files at the workspace root.
 The expected_output asks agents to report where things ended up.
 
 Do NOT reference runtime block names (<previous_agent_outputs>,

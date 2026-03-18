@@ -55,14 +55,6 @@ mod tests {
     }
 
     #[test]
-    fn node_modules_denied() {
-        assert!(is_denylisted(Path::new("node_modules/express/index.js")));
-        assert!(is_denylisted(Path::new(
-            "frontend/node_modules/react/index.js"
-        )));
-    }
-
-    #[test]
     fn python_cache_denied() {
         assert!(is_denylisted(Path::new(
             "__pycache__/module.cpython-311.pyc"
@@ -82,15 +74,17 @@ mod tests {
     }
 
     #[test]
-    fn target_dir_denied() {
-        assert!(is_denylisted(Path::new("target/debug/binary")));
-        assert!(is_denylisted(Path::new("my_app/target/release/lib.so")));
-    }
-
-    #[test]
-    fn venv_denied() {
-        assert!(is_denylisted(Path::new(".venv/lib/python3.11/site.py")));
-        assert!(is_denylisted(Path::new("venv/bin/activate")));
+    fn installed_packages_allowed() {
+        // Installed packages are agent work product — they persist across steps
+        assert!(!is_denylisted(Path::new("node_modules/express/index.js")));
+        assert!(!is_denylisted(Path::new(
+            "frontend/node_modules/react/index.js"
+        )));
+        assert!(!is_denylisted(Path::new("target/debug/binary")));
+        assert!(!is_denylisted(Path::new(".venv/lib/python3.11/site.py")));
+        assert!(!is_denylisted(Path::new("venv/bin/activate")));
+        assert!(!is_denylisted(Path::new("dist/bundle.js")));
+        assert!(!is_denylisted(Path::new("build/output/app")));
     }
 
     #[test]
@@ -102,13 +96,7 @@ mod tests {
     }
 
     #[test]
-    fn build_tools_not_denied() {
-        // "build/" pattern should match the directory "build", not a prefix "build-"
-        assert!(!is_denylisted(Path::new("build-tools/run.sh")));
-    }
-
-    #[test]
-    fn filter_overlay_removes_junk() {
+    fn filter_overlay_removes_cache_keeps_packages() {
         use crate::server::hub::dag::merge::types::{OverlayChange, OverlayDiff};
 
         let mut diff = OverlayDiff::new();
@@ -118,11 +106,11 @@ mod tests {
         );
         diff.insert(
             PathBuf::from("__pycache__/main.cpython-311.pyc"),
-            OverlayChange::Created(b"junk".to_vec()),
+            OverlayChange::Created(b"cache".to_vec()),
         );
         diff.insert(
             PathBuf::from("node_modules/pkg/index.js"),
-            OverlayChange::Created(b"junk".to_vec()),
+            OverlayChange::Created(b"installed".to_vec()),
         );
         diff.insert(
             PathBuf::from("results/data.json"),
@@ -138,9 +126,12 @@ mod tests {
         };
 
         let removed = filter_overlay(&mut overlay);
-        assert_eq!(removed, 2);
-        assert_eq!(overlay.diff.len(), 2);
+        assert_eq!(removed, 1); // only __pycache__ removed
+        assert_eq!(overlay.diff.len(), 3);
         assert!(overlay.diff.contains_key(&PathBuf::from("src/main.py")));
+        assert!(overlay
+            .diff
+            .contains_key(&PathBuf::from("node_modules/pkg/index.js")));
         assert!(overlay
             .diff
             .contains_key(&PathBuf::from("results/data.json")));
