@@ -16,6 +16,7 @@ use tokio::sync::Semaphore;
 use tracing::{debug, info, warn};
 use uuid::Uuid;
 
+pub mod overlay;
 pub mod retry;
 #[cfg(test)]
 mod tests;
@@ -216,6 +217,11 @@ pub struct ContainerConfig {
     /// injects package manager env vars, and keeps network connected.
     /// When None: existing git-clone behavior (backward compatible).
     pub workspace_volume: Option<WorkspaceVolume>,
+    /// Enable OverlayFS isolation for workspace writes.
+    /// When true AND workspace_volume is set: JuiceFS is mounted read-only at
+    /// /workspace-base, with an OverlayFS writable upper layer at /workspace.
+    /// When false: existing direct mount behavior (backward compatible).
+    pub overlay_enabled: bool,
 }
 
 /// Docker named volume + subpath for agent workspace mounts.
@@ -245,6 +251,7 @@ impl Default for ContainerConfig {
             network_mode: None,
             network_isolated: true,
             workspace_volume: None,
+            overlay_enabled: false,
         }
     }
 }
@@ -623,11 +630,25 @@ fn build_create_args(container_name: &str, config: &ContainerConfig) -> Vec<Stri
     }
     // Workspace volume: mount named volume subpath + inject package manager env vars
     if let Some(ref vol) = config.workspace_volume {
-        args.push("--mount".to_string());
-        args.push(format!(
-            "type=volume,source={},target=/workspace,volume-subpath={}",
-            vol.volume_name, vol.subpath
-        ));
+        if config.overlay_enabled {
+            // Overlay mode: JuiceFS at /workspace-base (read-only), overlay at /workspace
+            args.push("--mount".to_string());
+            args.push(format!(
+                "type=volume,source={},target={},volume-subpath={},readonly",
+                vol.volume_name,
+                crate::constants::OVERLAY_LOWER_DIR,
+                vol.subpath
+            ));
+            // SYS_ADMIN needed for mount syscall inside container
+            args.push("--cap-add=SYS_ADMIN".to_string());
+        } else {
+            // Direct mode: JuiceFS at /workspace (existing behavior)
+            args.push("--mount".to_string());
+            args.push(format!(
+                "type=volume,source={},target=/workspace,volume-subpath={}",
+                vol.volume_name, vol.subpath
+            ));
+        }
         for (k, v) in WORKSPACE_ENV_VARS {
             args.push(format!("--env={}={}", k, v));
         }
@@ -780,11 +801,29 @@ impl ContainerManager {
         // Workspace mode: mount provides content, no repo to clone.
         // Agent keeps network access for pip install, curl, etc.
         if let Some(ref vol) = config.workspace_volume {
+            // Overlay mode: set up OverlayFS inside the container
+            if config.overlay_enabled {
+                if let Err(e) = overlay::setup_overlay(&handle).await {
+                    Self::destroy_container_quiet(&handle).await;
+                    return Err(ContainerError::CreationFailed(format!(
+                        "OverlayFS setup failed: {}",
+                        e
+                    )));
+                }
+                info!(
+                    container = %container_name,
+                    "OverlayFS mounted: {} (lower) → {} (merged)",
+                    crate::constants::OVERLAY_LOWER_DIR,
+                    crate::constants::OVERLAY_MERGED_DIR,
+                );
+            }
+
             let create_duration_ms = create_start.elapsed().as_millis() as u64;
             info!(
                 container = %container_name,
                 volume = %vol.volume_name,
                 subpath = %vol.subpath,
+                overlay = config.overlay_enabled,
                 duration_ms = create_duration_ms,
                 "Container ready with workspace mount"
             );

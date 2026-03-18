@@ -92,6 +92,9 @@ pub struct ContainerExecutionConfig {
     pub workflow_id: Option<Uuid>,
     /// Run ID for workspace path resolution.
     pub run_id: Option<Uuid>,
+    /// Enable OverlayFS isolation for workspace writes.
+    /// When true: JuiceFS at /workspace-base (read-only), overlay at /workspace.
+    pub overlay_enabled: bool,
 }
 
 /// Context passed into the DAG executor for one workflow run.

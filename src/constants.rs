@@ -524,6 +524,21 @@ pub const WORKSPACE_PREFIX: &str = "workflows";
 /// Docker named volume for JuiceFS workspace (must match docker-compose.yml volume name).
 pub const WORKSPACE_VOLUME_NAME: &str = "nexor-jfs-workspace";
 
+// ── OverlayFS ─────────────────────────────────────────────────────────────
+
+/// Mount point for JuiceFS inside agent containers (read-only lower layer).
+pub const OVERLAY_LOWER_DIR: &str = "/workspace-base";
+/// Writable upper directory for OverlayFS inside agent containers.
+pub const OVERLAY_UPPER_DIR: &str = "/tmp/overlay/upper";
+/// Work directory required by OverlayFS kernel module.
+pub const OVERLAY_WORK_DIR: &str = "/tmp/overlay/work";
+/// Merged mount point (what the agent sees as `/workspace`).
+pub const OVERLAY_MERGED_DIR: &str = "/workspace";
+/// Maximum number of files to extract from overlay upper (safety limit).
+pub const OVERLAY_MAX_FILES: usize = 10_000;
+/// Maximum total bytes to extract from overlay (100 MB safety limit).
+pub const OVERLAY_MAX_TOTAL_BYTES: usize = 100 * 1024 * 1024;
+
 // ── VPN / WireGuard Defaults ──────────────────────────────────────────────
 
 /// Docker image for the WireGuard VPN sidecar container.
