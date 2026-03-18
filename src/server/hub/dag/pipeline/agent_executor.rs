@@ -218,11 +218,35 @@ async fn execute_single_agent(
         )
         .await?;
 
-    // Resolve capabilities + inject implicit store tools
-    let (tools, tool_names) = env
+    // Resolve capabilities from designer's tools list
+    let (mut tools, mut tool_names) = env
         .state
         .capability_registry()
         .resolve_tools(&designed.tools);
+
+    // C1: Inject baseline workspace tools when running in a container.
+    // Shell access is implicit — the designer never assigns it.
+    if env.container_handle.is_some() {
+        let baseline = ["run_command"];
+        for name in baseline {
+            if !tool_names.contains(&name.to_string()) {
+                if let Some(tool) = crate::tools::registry::get_tool_definition(name) {
+                    tools.push(tool);
+                    tool_names.push(name.to_string());
+                }
+            }
+        }
+    }
+
+    // C2: Workspace grounding — tell containerized agents about /workspace/
+    let system_prompt = if env.container_handle.is_some() {
+        format!(
+            "{}\nYour working directory is /workspace/ where other steps have contributed and will contribute after you.",
+            designed.system_prompt
+        )
+    } else {
+        designed.system_prompt.clone()
+    };
 
     // Build task prompt: <previous_step> + <assignment> + <expected_output>
     let filtered = filter_outputs_for_agent(prior_outputs, &designed.receives_from);
@@ -249,7 +273,7 @@ async fn execute_single_agent(
             agent_id: None,
             workflow_step_id: Some(env.step_id),
             parent_agent_execution_id: None,
-            system_prompt_rendered: designed.system_prompt.clone(),
+            system_prompt_rendered: system_prompt.clone(),
             input: task_prompt.clone(),
             room_session_id: None,
             speaker_order: None,
@@ -259,7 +283,7 @@ async fn execute_single_agent(
     {
         Ok(row) => {
             let _ = ae_repo
-                .create_execution_message(row.id, "system", &designed.system_prompt, None, 0, 0)
+                .create_execution_message(row.id, "system", &system_prompt, None, 0, 0)
                 .await;
             let _ = ae_repo
                 .create_execution_message(row.id, "user", &task_prompt, None, 0, 0)
@@ -274,7 +298,7 @@ async fn execute_single_agent(
 
     // Build strategy
     let strategy = WorkforceAgentStrategy::new(WorkforceAgentConfig {
-        system_prompt: designed.system_prompt.clone(),
+        system_prompt,
         model_id: agent_cfg.model_id.clone(),
         temperature: agent_cfg.temperature,
         max_rounds: agent_cfg.max_rounds,
