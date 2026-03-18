@@ -243,7 +243,7 @@ async fn execute_single_agent(
         format!(
             "{}\n\
              Your working directory is /workspace/ where other steps have contributed and will contribute after you.\n\
-             Only workspace files persist between steps — install any tools you need before using them.\n\
+             Files and installed packages from previous steps are available.\n\
              When your task is complete, stop calling tools and respond with text.",
             designed.system_prompt
         )
