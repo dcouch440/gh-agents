@@ -41,10 +41,10 @@ pub struct ReactDesignerConfig {
     pub task: String,
     /// Agent names changed by the builder (for `rebuild_system_prompt` enrichment).
     pub changed_agents: Vec<String>,
-    /// Handoff from the previous step's designer (None for first step in workflow).
-    pub previous_step_handoff: Option<PreviousStepHandoff>,
-    /// Raw box text of the next step in the workflow (None for last step).
-    pub next_step_text: Option<String>,
+    /// Handoffs from upstream steps' designers (empty for first step in workflow).
+    pub previous_step_handoff: Vec<PreviousStepHandoff>,
+    /// Raw box text of downstream steps in the workflow (empty for last step).
+    pub next_step_text: Vec<crate::server::services::dispatch::NextStepText>,
     /// This step's own current designer handoff (for re-design awareness).
     pub current_design_handoff: String,
 }
@@ -109,20 +109,31 @@ impl ReactDesignerStrategy {
         );
         inst_vars.insert(
             vars::react_designer::PREVIOUS_STEP.to_string(),
-            match &config.previous_step_handoff {
-                Some(h) => format!(
-                    "<previous_step name=\"{}\">\n<handoff>\n{}\n</handoff>\n</previous_step>",
-                    h.step_name, h.handoff_description
-                ),
-                None => String::new(),
-            },
+            config
+                .previous_step_handoff
+                .iter()
+                .map(|h| {
+                    format!(
+                        "<previous_step name=\"{}\">\n<handoff>\n{}\n</handoff>\n</previous_step>",
+                        h.step_name, h.handoff_description
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n\n"),
         );
         inst_vars.insert(
             vars::react_designer::NEXT_STEP.to_string(),
-            match &config.next_step_text {
-                Some(text) => format!("<next_step>\n{}\n</next_step>", text),
-                None => String::new(),
-            },
+            config
+                .next_step_text
+                .iter()
+                .map(|n| {
+                    format!(
+                        "<next_step name=\"{}\">\n{}\n</next_step>",
+                        n.step_name, n.description
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("\n\n"),
         );
         let instruction = resolve_template(roles::REACT_DESIGNER.prompt, &inst_vars);
 

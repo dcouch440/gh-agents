@@ -341,36 +341,29 @@ async fn run_react_designer(
         let parent_ids = crate::server::hub::dag::get_parent_steps(ctx.step.id, &edges);
         let child_ids = crate::server::hub::dag::get_child_steps(ctx.step.id, &edges);
 
-        let prev = if let Some(parent_id) = parent_ids.first() {
-            dag.state
-                .repos()
-                .workflows
-                .get_step(*parent_id)
-                .await
-                .ok()
-                .flatten()
-                .filter(|s| !s.designer_handoff.is_empty())
-                .map(|s| crate::server::services::dispatch::PreviousStepHandoff {
-                    step_name: s.name.unwrap_or_default(),
-                    handoff_description: s.designer_handoff,
-                })
-        } else {
-            None
-        };
+        let mut prev = Vec::new();
+        for parent_id in &parent_ids {
+            if let Ok(Some(s)) = dag.state.repos().workflows.get_step(*parent_id).await {
+                if !s.designer_handoff.is_empty() {
+                    prev.push(crate::server::services::dispatch::PreviousStepHandoff {
+                        step_name: s.name.unwrap_or_default(),
+                        handoff_description: s.designer_handoff,
+                    });
+                }
+            }
+        }
 
-        let next = if let Some(child_id) = child_ids.first() {
-            dag.state
-                .repos()
-                .workflows
-                .get_step(*child_id)
-                .await
-                .ok()
-                .flatten()
-                .map(|s| s.description.clone())
-                .filter(|d| !d.is_empty())
-        } else {
-            None
-        };
+        let mut next = Vec::new();
+        for child_id in &child_ids {
+            if let Ok(Some(s)) = dag.state.repos().workflows.get_step(*child_id).await {
+                if !s.description.is_empty() {
+                    next.push(crate::server::services::dispatch::NextStepText {
+                        step_name: s.name.unwrap_or_default(),
+                        description: s.description.clone(),
+                    });
+                }
+            }
+        }
 
         (prev, next)
     };

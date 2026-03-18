@@ -18,7 +18,6 @@ use crate::server::hub::strategies;
 use crate::server::hub::strategy::ExecutionStrategy;
 use crate::server::state::AppState;
 use crate::server::tools::execution as execution_tools;
-use crate::server::tools::system_store;
 use crate::types::UserId;
 
 /// Configuration for a single workforce agent execution.
@@ -119,36 +118,6 @@ impl ExecutionStrategy for WorkforceAgentStrategy {
 
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
         info!(tool = %name, "Workforce agent tool call");
-
-        // Intercept store tools before the cascade (need workflow context)
-        if matches!(name, "store_read_file" | "store_write_file") {
-            if let (Some(state), Some(wf_id)) =
-                (self.config.state.as_ref(), self.config.workflow_id)
-            {
-                if let Some(s3) = state.s3() {
-                    let repo = state.repos().system_files.as_ref();
-                    return match name {
-                        "store_read_file" => {
-                            system_store::execute_store_read_file(input, s3, repo, wf_id).await
-                        }
-                        "store_write_file" => {
-                            system_store::execute_store_write_file(
-                                input,
-                                s3,
-                                repo,
-                                wf_id,
-                                self.config.step_id.unwrap_or_default(),
-                                self.config.agent_name.as_deref(),
-                                self.config.workflow_run_id,
-                            )
-                            .await
-                        }
-                        _ => unreachable!(),
-                    };
-                }
-            }
-            return serde_json::json!({"error": "store not available"});
-        }
 
         execution_tools::dispatch_tool_cascade(
             name,
