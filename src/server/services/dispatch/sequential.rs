@@ -2,7 +2,13 @@
 //!
 //! Runs builder + designer for each step in topological order, threading
 //! the previous step's handoff to the next step's builder and designer.
+//! After each step, if the designer updated the handoff, downstream steps
+//! are re-designed (designer-only, no builder) — propagating until a step
+//! absorbs the change without updating its own handoff.
+//!
 //! Spawned as a single background task from the board submit handler.
+
+use std::collections::{HashMap, HashSet};
 
 use uuid::Uuid;
 
@@ -10,16 +16,18 @@ use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::server::services::board::instruction::NodeDispatchInstruction;
 use crate::server::services::dispatch::PreviousStepHandoff;
 use crate::server::state::AppState;
+use crate::server::ws::events::{SessionEvent, SessionEventKind};
 use crate::types::UserId;
 
 /// Run the design pipeline sequentially in topological order.
 ///
-/// For each step with a dispatch instruction:
-/// 1. Look up the previous step's `designer_handoff` (written by its designer)
-/// 2. Look up the next step's `description` (box text for forward awareness)
-/// 3. Run the builder + designer with that context
-/// 4. After completion, the designer's `complete_design` has written the handoff to DB
-/// 5. Move to the next step
+/// For each step in the workflow (topo order):
+/// - If it has a dispatch instruction → run builder + designer
+/// - If a parent's handoff changed → run designer-only (propagation re-design)
+/// - Otherwise → skip
+///
+/// After each step, compare old vs new handoff. If changed, downstream
+/// steps will be re-designed when they're reached in the topo order.
 pub async fn run_sequential_design_pipeline(
     state: AppState,
     workflow_id: Uuid,
@@ -28,9 +36,8 @@ pub async fn run_sequential_design_pipeline(
     steps: Vec<WorkflowStepRow>,
     edges: Vec<WorkflowStepEdgeRow>,
 ) {
-    // Build topo-sorted step order
-    let topo_order = match crate::server::hub::dag::topological_sort(&steps, &edges)
-    {
+    // Build topo-sorted order over ALL steps in the workflow
+    let topo_order = match crate::server::hub::dag::topological_sort(&steps, &edges) {
         Ok(order) => order,
         Err(e) => {
             tracing::warn!(
@@ -38,117 +45,273 @@ pub async fn run_sequential_design_pipeline(
                 error = %e,
                 "Failed to topological sort for sequential design — falling back to instruction order"
             );
-            // Fall back to instruction order (already topo-sorted by the board serializer)
             instructions.iter().map(|i| i.step_id).collect()
         }
     };
 
-    // Build step_id → topo position for sorting
-    let topo_position: std::collections::HashMap<Uuid, usize> = topo_order
-        .iter()
-        .enumerate()
-        .map(|(i, id)| (*id, i))
-        .collect();
-
-    // Sort instructions by topological position
-    let mut sorted_instructions = instructions;
-    sorted_instructions.sort_by_key(|i| topo_position.get(&i.step_id).copied().unwrap_or(usize::MAX));
+    // Build instruction lookup by step_id
+    let instruction_map: HashMap<Uuid, &NodeDispatchInstruction> =
+        instructions.iter().map(|i| (i.step_id, i)).collect();
 
     // Build step lookup (refreshed after each iteration)
-    let mut step_map: std::collections::HashMap<Uuid, WorkflowStepRow> =
+    let mut step_map: HashMap<Uuid, WorkflowStepRow> =
         steps.into_iter().map(|s| (s.id, s)).collect();
 
-    for instruction in &sorted_instructions {
-        // Find previous step's handoff via edges
-        let parent_ids =
-            crate::server::hub::dag::get_parent_steps(instruction.step_id, &edges);
-        let previous_step_handoff = parent_ids.first().and_then(|pid| {
-            let parent = step_map.get(pid)?;
-            if parent.designer_handoff.is_empty() {
-                return None;
-            }
-            Some(PreviousStepHandoff {
-                step_name: parent.name.clone().unwrap_or_default(),
-                handoff_description: parent.designer_handoff.clone(),
-            })
-        });
+    // Track which steps had their handoff changed (for propagation)
+    let mut handoff_changed: HashSet<Uuid> = HashSet::new();
+    let mut dispatched_count: usize = 0;
+    let mut propagated_count: usize = 0;
 
-        // Find next step's box text via edges
-        let child_ids =
-            crate::server::hub::dag::get_child_steps(instruction.step_id, &edges);
-        let next_step_text = child_ids.first().and_then(|cid| {
-            let child = step_map.get(cid)?;
-            if child.description.is_empty() {
-                return None;
-            }
-            Some(child.description.clone())
-        });
+    for step_id in &topo_order {
+        let has_instruction = instruction_map.contains_key(step_id);
 
-        // Append previous step context to the builder instruction
-        let enriched_instruction = match &previous_step_handoff {
-            Some(h) => format!(
-                "{}\n\n<previous_step name=\"{}\">\n<handoff>\n{}\n</handoff>\n</previous_step>",
-                instruction.instruction, h.step_name, h.handoff_description
-            ),
-            None => instruction.instruction.clone(),
-        };
+        // Check if any parent's handoff changed (propagation trigger)
+        let parent_ids = crate::server::hub::dag::get_parent_steps(*step_id, &edges);
+        let parent_changed = parent_ids.iter().any(|pid| handoff_changed.contains(pid));
 
-        // Find or create session + register task (reuse dispatch_to_builder logic)
-        let session_id = super::find_or_create_builder_session(
-            &state,
-            instruction.step_id,
-            workflow_id,
-            user_id,
-            &instruction.execution_mode,
-        )
-        .await;
+        if !has_instruction && !parent_changed {
+            continue;
+        }
 
-        let (execution_id, _cancel_token) = state.task_registry().spawn_task(
-            instruction.step_id,
-            workflow_id,
-            session_id,
-            enriched_instruction.clone(),
-        );
+        // Save old handoff for comparison after design
+        let old_handoff = step_map
+            .get(step_id)
+            .map(|s| s.designer_handoff.clone())
+            .unwrap_or_default();
 
-        // Broadcast started event
-        state.broadcast_session(crate::server::ws::events::SessionEvent {
-            session_id: Uuid::nil(),
-            user_id: None,
-            kind: crate::server::ws::events::SessionEventKind::DispatchStarted {
-                execution_id,
-                step_id: instruction.step_id,
-                instruction: enriched_instruction.clone(),
-            },
-        });
+        // Build context for this step
+        let previous_step_handoff = lookup_previous_handoff(&parent_ids, &step_map);
+        let child_ids = crate::server::hub::dag::get_child_steps(*step_id, &edges);
+        let next_step_text = lookup_next_step_text(&child_ids, &step_map);
 
-        // Run synchronously (awaited, not spawned)
-        crate::server::executors::dispatch::run_dispatch_task(
-            state.clone(),
-            execution_id,
-            instruction.step_id,
-            workflow_id,
-            enriched_instruction,
-            session_id,
-            user_id,
-            previous_step_handoff,
-            next_step_text,
-        )
-        .await;
+        if has_instruction {
+            // Run builder + designer (existing path)
+            let instruction = instruction_map[step_id];
+            run_builder_and_designer(
+                &state,
+                *step_id,
+                workflow_id,
+                user_id,
+                instruction,
+                previous_step_handoff,
+                next_step_text,
+            )
+            .await;
+            dispatched_count += 1;
+        } else {
+            // Propagation: run designer-only (no builder)
+            tracing::info!(
+                step_id = %step_id,
+                "Propagating re-design: upstream handoff changed"
+            );
+            run_propagation_redesign(
+                &state,
+                *step_id,
+                workflow_id,
+                user_id,
+                previous_step_handoff,
+                next_step_text,
+            )
+            .await;
+            propagated_count += 1;
+        }
 
         // Re-read step from DB to pick up the designer_handoff written by complete_design
-        if let Ok(Some(updated_step)) = state
-            .repos()
-            .workflows
-            .get_step(instruction.step_id)
-            .await
-        {
-            step_map.insert(instruction.step_id, updated_step);
+        if let Ok(Some(updated_step)) = state.repos().workflows.get_step(*step_id).await {
+            let new_handoff = updated_step.designer_handoff.clone();
+            step_map.insert(*step_id, updated_step);
+
+            if old_handoff != new_handoff {
+                handoff_changed.insert(*step_id);
+            }
         }
     }
 
     tracing::info!(
         workflow_id = %workflow_id,
-        steps = sorted_instructions.len(),
+        dispatched = dispatched_count,
+        propagated = propagated_count,
         "Sequential design pipeline completed"
     );
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────
+
+/// Look up the previous step's handoff from the parent edges.
+fn lookup_previous_handoff(
+    parent_ids: &[Uuid],
+    step_map: &HashMap<Uuid, WorkflowStepRow>,
+) -> Option<PreviousStepHandoff> {
+    parent_ids.first().and_then(|pid| {
+        let parent = step_map.get(pid)?;
+        if parent.designer_handoff.is_empty() {
+            return None;
+        }
+        Some(PreviousStepHandoff {
+            step_name: parent.name.clone().unwrap_or_default(),
+            handoff_description: parent.designer_handoff.clone(),
+        })
+    })
+}
+
+/// Look up the next step's box text from the child edges.
+fn lookup_next_step_text(
+    child_ids: &[Uuid],
+    step_map: &HashMap<Uuid, WorkflowStepRow>,
+) -> Option<String> {
+    child_ids.first().and_then(|cid| {
+        let child = step_map.get(cid)?;
+        if child.description.is_empty() {
+            return None;
+        }
+        Some(child.description.clone())
+    })
+}
+
+/// Run the full builder + designer dispatch for a step with an instruction.
+async fn run_builder_and_designer(
+    state: &AppState,
+    step_id: Uuid,
+    workflow_id: Uuid,
+    user_id: UserId,
+    instruction: &NodeDispatchInstruction,
+    previous_step_handoff: Option<PreviousStepHandoff>,
+    next_step_text: Option<String>,
+) {
+    // Enrich instruction with previous step context for the builder
+    let enriched_instruction = match &previous_step_handoff {
+        Some(h) => format!(
+            "{}\n\n<previous_step name=\"{}\">\n<handoff>\n{}\n</handoff>\n</previous_step>",
+            instruction.instruction, h.step_name, h.handoff_description
+        ),
+        None => instruction.instruction.clone(),
+    };
+
+    let session_id = super::find_or_create_builder_session(
+        state,
+        step_id,
+        workflow_id,
+        user_id,
+        &instruction.execution_mode,
+    )
+    .await;
+
+    let (execution_id, _cancel_token) = state.task_registry().spawn_task(
+        step_id,
+        workflow_id,
+        session_id,
+        enriched_instruction.clone(),
+    );
+
+    state.broadcast_session(SessionEvent {
+        session_id: Uuid::nil(),
+        user_id: None,
+        kind: SessionEventKind::DispatchStarted {
+            execution_id,
+            step_id,
+            instruction: enriched_instruction.clone(),
+        },
+    });
+
+    crate::server::executors::dispatch::run_dispatch_task(
+        state.clone(),
+        execution_id,
+        step_id,
+        workflow_id,
+        enriched_instruction,
+        session_id,
+        user_id,
+        previous_step_handoff,
+        next_step_text,
+    )
+    .await;
+}
+
+/// Run designer-only re-design for a step whose parent's handoff changed.
+///
+/// Skips the builder entirely — the roster and plan are already set.
+/// The designer sees all agents as "designed" and uses verify-and-skip:
+/// reads existing configs, checks against new `<previous_step>`, updates
+/// if stale.
+async fn run_propagation_redesign(
+    state: &AppState,
+    step_id: Uuid,
+    workflow_id: Uuid,
+    user_id: UserId,
+    previous_step_handoff: Option<PreviousStepHandoff>,
+    next_step_text: Option<String>,
+) {
+    // Use the step's task description as the dispatch instruction context
+    let task_desc = state
+        .repos()
+        .workflows
+        .get_mission_brief(step_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|b| b.task_description)
+        .unwrap_or_default();
+
+    if task_desc.is_empty() {
+        tracing::debug!(
+            step_id = %step_id,
+            "Skipping propagation re-design — no mission brief"
+        );
+        return;
+    }
+
+    // Create a session for the designer (reuses the workforce execution_mode)
+    let session_id =
+        super::find_or_create_builder_session(state, step_id, workflow_id, user_id, "workforce")
+            .await;
+
+    let instruction_text = format!("Re-design: upstream handoff changed. Task: {}", task_desc);
+
+    let (execution_id, _cancel_token) = state.task_registry().spawn_task(
+        step_id,
+        workflow_id,
+        session_id,
+        instruction_text.clone(),
+    );
+
+    state.broadcast_session(SessionEvent {
+        session_id: Uuid::nil(),
+        user_id: None,
+        kind: SessionEventKind::DispatchStarted {
+            execution_id,
+            step_id,
+            instruction: instruction_text.clone(),
+        },
+    });
+
+    // Run designer directly — no builder needed
+    crate::server::executors::dispatch::designer_handoff::run_designer_after_builder(
+        state,
+        step_id,
+        workflow_id,
+        user_id,
+        execution_id,
+        &instruction_text,
+        vec![], // no changed_agents — all agents show as "designed"
+        previous_step_handoff,
+        next_step_text,
+    )
+    .await;
+
+    // Mark task as completed in the registry
+    state.task_registry().mark_completed(
+        execution_id,
+        Some("Propagation re-design completed".to_string()),
+    );
+
+    state.broadcast_session(SessionEvent {
+        session_id: Uuid::nil(),
+        user_id: None,
+        kind: SessionEventKind::DispatchCompleted {
+            execution_id,
+            step_id,
+            summary: "Propagation re-design completed".to_string(),
+            question: None,
+        },
+    });
 }

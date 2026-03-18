@@ -189,8 +189,8 @@ impl AppState {
         let s3 = Some(Self::init_s3(&env).await);
 
         // Initialize workspace manager (optional — requires JuiceFS mount)
-        let workspace =
-            WorkspaceManager::from_env(crate::constants::ENV_WORKSPACE_MOUNT_POINT).or_else(|| {
+        let workspace = WorkspaceManager::from_env(crate::constants::ENV_WORKSPACE_MOUNT_POINT)
+            .or_else(|| {
                 // Fall back to default mount point
                 let default = crate::constants::WORKSPACE_DEFAULT_MOUNT_POINT;
                 WorkspaceManager::new(default).ok()

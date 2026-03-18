@@ -102,10 +102,7 @@ impl ReactDesignerStrategy {
             vars::react_designer::STEP_ORDER.to_string(),
             config.step_order,
         );
-        inst_vars.insert(
-            vars::react_designer::TASK.to_string(),
-            config.task,
-        );
+        inst_vars.insert(vars::react_designer::TASK.to_string(), config.task);
         inst_vars.insert(
             vars::react_designer::CURRENT_DESIGN_HANDOFF.to_string(),
             config.current_design_handoff,

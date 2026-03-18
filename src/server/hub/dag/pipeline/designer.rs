@@ -344,10 +344,8 @@ async fn run_react_designer(
             .list_edges(ctx.step.workflow_id)
             .await
             .unwrap_or_default();
-        let parent_ids =
-            crate::server::hub::dag::get_parent_steps(ctx.step.id, &edges);
-        let child_ids =
-            crate::server::hub::dag::get_child_steps(ctx.step.id, &edges);
+        let parent_ids = crate::server::hub::dag::get_parent_steps(ctx.step.id, &edges);
+        let child_ids = crate::server::hub::dag::get_child_steps(ctx.step.id, &edges);
 
         let prev = if let Some(parent_id) = parent_ids.first() {
             dag.state
@@ -358,11 +356,9 @@ async fn run_react_designer(
                 .ok()
                 .flatten()
                 .filter(|s| !s.designer_handoff.is_empty())
-                .map(|s| {
-                    crate::server::services::dispatch::PreviousStepHandoff {
-                        step_name: s.name.unwrap_or_default(),
-                        handoff_description: s.designer_handoff,
-                    }
+                .map(|s| crate::server::services::dispatch::PreviousStepHandoff {
+                    step_name: s.name.unwrap_or_default(),
+                    handoff_description: s.designer_handoff,
                 })
         } else {
             None
