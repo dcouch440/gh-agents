@@ -34,12 +34,13 @@ pub async fn setup_overlay(handle: &ContainerHandle) -> Result<(), ContainerErro
     let script = format!(
         "mkdir -p /tmp/overlay && \
          mount -t tmpfs tmpfs /tmp/overlay && \
-         mkdir -p {} {} && \
+         mkdir -p {} {} {} && \
          mount -t overlay overlay \
-         -o lowerdir={},upperdir={},workdir={},volatile \
+         -o lowerdir={},upperdir={},workdir={} \
          {}",
         constants::OVERLAY_UPPER_DIR,
         constants::OVERLAY_WORK_DIR,
+        constants::OVERLAY_MERGED_DIR,
         constants::OVERLAY_LOWER_DIR,
         constants::OVERLAY_UPPER_DIR,
         constants::OVERLAY_WORK_DIR,
