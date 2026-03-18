@@ -216,6 +216,10 @@ impl AppConfig {
 mod tests {
     use super::*;
 
+    /// Mutex to serialize tests that read/write `ENV_DATABASE_URL`.
+    /// `std::env::set_var` is process-global, so concurrent tests race.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn autonomy_default_is_approval_gates() {
         assert_eq!(AutonomyLevel::default(), AutonomyLevel::ApprovalGates);
@@ -283,6 +287,7 @@ mod tests {
 
     #[test]
     fn config_merge_reads_database_url_env() {
+        let _guard = ENV_LOCK.lock().unwrap();
         std::env::set_var(ENV_DATABASE_URL, "postgres://test:test@db:5432/testdb");
         let global = GlobalConfig::default();
         let merged = AppConfig::merge(global, None);
@@ -292,6 +297,7 @@ mod tests {
 
     #[test]
     fn config_merge_falls_back_to_default_database_url() {
+        let _guard = ENV_LOCK.lock().unwrap();
         std::env::remove_var(ENV_DATABASE_URL);
         let global = GlobalConfig::default();
         let merged = AppConfig::merge(global, None);
@@ -300,6 +306,7 @@ mod tests {
 
     #[test]
     fn config_merge_database_url_with_project_config() {
+        let _guard = ENV_LOCK.lock().unwrap();
         std::env::remove_var(ENV_DATABASE_URL);
         let global = GlobalConfig::default();
         let project = ProjectConfig {
@@ -312,6 +319,7 @@ mod tests {
 
     #[test]
     fn config_merge_database_url_env_overrides_with_project() {
+        let _guard = ENV_LOCK.lock().unwrap();
         std::env::set_var(ENV_DATABASE_URL, "postgres://custom:pw@host:5433/mydb");
         let global = GlobalConfig::default();
         let project = ProjectConfig::default();
