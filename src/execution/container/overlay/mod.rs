@@ -140,12 +140,11 @@ pub async fn extract_overlay_diff(
                     continue;
                 }
 
-                // Read file content
+                // Read file content (raw bytes to preserve binary data)
                 let abs_path = format!("{}/{}", constants::OVERLAY_UPPER_DIR, entry.path.display());
-                let content_result = handle.exec(&["cat", &abs_path]).await;
+                let content_result = handle.exec_raw(&["cat", &abs_path]).await;
                 match content_result {
-                    Ok(r) if r.success => {
-                        let bytes = r.stdout.into_bytes();
+                    Ok((bytes, true, _)) => {
                         total_bytes += bytes.len();
 
                         let change = if base_file_paths.contains(&entry.path) {
@@ -156,10 +155,10 @@ pub async fn extract_overlay_diff(
                         diff.insert(entry.path, change);
                         file_count += 1;
                     }
-                    Ok(r) => {
+                    Ok((_, false, exit_code)) => {
                         warn!(
                             path = %entry.path.display(),
-                            exit_code = r.exit_code,
+                            exit_code,
                             "Failed to read overlay file, skipping"
                         );
                     }

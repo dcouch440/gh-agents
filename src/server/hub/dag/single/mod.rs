@@ -130,11 +130,16 @@ pub(super) async fn execute_single_step(
     {
         if cc.overlay_enabled {
             if let (Some(wf_id), Some(run_id)) = (cc.workflow_id, cc.run_id) {
-                let base_paths: std::collections::HashSet<std::path::PathBuf> = workspace
-                    .list_files(wf_id, run_id, None)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .collect();
+                let ws = workspace.clone();
+                let base_paths: std::collections::HashSet<std::path::PathBuf> =
+                    tokio::task::spawn_blocking(move || {
+                        ws.list_files(wf_id, run_id, None)
+                            .unwrap_or_default()
+                            .into_iter()
+                            .collect()
+                    })
+                    .await
+                    .unwrap_or_default();
                 dag_state.step_overlay = super::container::extract_step_overlay(
                     &managed_container,
                     step.id,

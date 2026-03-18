@@ -476,6 +476,43 @@ impl ContainerHandle {
         self.exec(&["sh", "-c", shell_cmd]).await
     }
 
+    /// Execute a command and return raw stdout bytes (no UTF-8 conversion).
+    ///
+    /// Used for reading binary file content (e.g., overlay diff extraction)
+    /// where lossy UTF-8 conversion would corrupt the data.
+    /// Returns `(stdout_bytes, success, exit_code)`.
+    pub async fn exec_raw(&self, command: &[&str]) -> Result<(Vec<u8>, bool, i32), ContainerError> {
+        let mut docker_args: Vec<String> = vec![
+            "exec".to_string(),
+            "-w".to_string(),
+            self.workdir.clone(),
+            self.container_id.clone(),
+        ];
+        docker_args.extend(command.iter().map(|s| s.to_string()));
+
+        let output = tokio::time::timeout(
+            std::time::Duration::from_secs(self.command_timeout_secs),
+            self.cli.run(docker_args),
+        )
+        .await;
+
+        match output {
+            Ok(Ok(cmd_output)) => Ok((
+                cmd_output.stdout,
+                cmd_output.exit_code == 0,
+                cmd_output.exit_code,
+            )),
+            Ok(Err(e)) => Err(ContainerError::DockerSpawnFailed {
+                operation: "exec",
+                source: e,
+            }),
+            Err(_) => Err(ContainerError::Timeout {
+                container: self.container_name.clone(),
+                timeout_secs: self.command_timeout_secs,
+            }),
+        }
+    }
+
     /// Read a file from the container.
     pub async fn read_file(&self, path: &str) -> Result<String, ContainerError> {
         let result = self.exec(&["cat", path]).await?;
