@@ -33,6 +33,68 @@ services:
       timeout: 5s
       retries: 5
 
+  juicefs:
+    image: juicedata/mount:latest
+    platform: linux/amd64
+    container_name: nexor-juicefs
+    volumes:
+      - jfs-workspace:/mnt/jfs
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - /dev/fuse
+    security_opt:
+      - apparmor:unconfined
+    command: >
+      juicefs mount
+      --cache-dir /tmp/jfs-cache
+      --cache-size 1024
+      "postgres://nexor:nexor@postgres:5432/juicefs?sslmode=disable"
+      /mnt/jfs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "ls /mnt/jfs/.accesschk 2>/dev/null || touch /mnt/jfs/.accesschk"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    profiles:
+      - server
+
+  nexor-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    container_name: nexor-server
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://nexor:nexor@postgres:5432/nexor
+      S3_ENDPOINT: http://minio:9000
+      S3_BUCKET: nexor-system-store
+      RUST_ENV: development
+      NEXOR_STATIC_DIR: /app/frontend/dist
+      WORKSPACE_MOUNT_POINT: /mnt/jfs
+    env_file:
+      - .env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - jfs-workspace:/mnt/jfs
+    cap_add:
+      - SYS_ADMIN
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      juicefs:
+        condition: service_healthy
+    profiles:
+      - server
+
   wg-easy:
     image: ghcr.io/wg-easy/wg-easy:latest
     container_name: nexor-wg-easy
@@ -62,3 +124,4 @@ volumes:
   pgdata:
   minio-data:
   wg-easy-data:
+  jfs-workspace:

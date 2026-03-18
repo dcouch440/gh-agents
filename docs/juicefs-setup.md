@@ -2,83 +2,85 @@
 
 JuiceFS provides the POSIX filesystem backing for agent workspaces. It stores metadata in Postgres and file data in MinIO (S3-compatible).
 
-## Prerequisites
+## Dockerized Dev (Recommended)
+
+The server runs inside Docker with JuiceFS mounted by a dedicated container. No macFUSE or JuiceFS binary needed on the host.
+
+### 1. Build the server binary
 
 ```bash
-# JuiceFS binary
-brew install juicedata/tap/juicefs
-
-# macFUSE (required for FUSE mounts on macOS)
-brew install --cask macfuse
-
-# MinIO client (for bucket creation)
-brew install minio/stable/mc
+~/.cargo/bin/cargo build
 ```
 
-After installing macFUSE, you may need to reboot and allow the kernel extension in System Settings > Privacy & Security.
-
-## Setup
-
-### 1. Start infrastructure
+### 2. Build the frontend
 
 ```bash
-docker-compose up -d
+cd frontend && npm run build && cd ..
 ```
 
-This creates the `juicefs` database automatically on first Postgres startup (via `docker/init-juicefs-db.sql`).
+### 3. Create the JuiceFS database (first time only)
 
-**Existing dev environments** (Postgres volume already initialized):
+If your Postgres volume already exists (database was created before `init-juicefs-db.sql` was added):
 
 ```bash
 docker exec gh-agents-postgres-1 psql -U nexor -c "CREATE DATABASE juicefs"
 ```
 
-### 2. Format the volume (one-time)
+New environments get this automatically from the init script.
+
+### 4. Format the JuiceFS volume (first time only)
 
 ```bash
-./scripts/juicefs-format.sh
+docker compose up -d postgres minio
+./scripts/juicefs-format.sh --docker
 ```
 
-Creates the `juicefs-data` MinIO bucket and formats the JuiceFS volume `nexor-workspace`.
-
-### 3. Mount
+### 5. Start everything
 
 ```bash
-./scripts/juicefs-mount.sh
+docker compose --profile server up
 ```
 
-Mounts JuiceFS at `/tmp/nexor-jfs` (configurable via `MOUNT_POINT` env var).
+This starts: postgres, minio, juicefs (FUSE mount), and nexor-server.
 
-### 4. Validate
+The JuiceFS container mounts the filesystem at `/mnt/jfs` with `rshared` propagation. The server container and agent containers access it as a normal directory.
+
+### 6. Verify
+
+The server is at `http://localhost:3000`. JuiceFS workspace files appear in `./jfs/` on the host (via mount propagation).
+
+## Host-Based Dev (Alternative)
+
+Run the server directly on macOS. Requires macFUSE and JuiceFS binary on the host.
+
+### Prerequisites
 
 ```bash
-./scripts/juicefs-validate.sh
+brew install juicedata/tap/juicefs
+brew install --cask macfuse       # reboot + allow kernel extension
+brew install minio/stable/mc
 ```
 
-Runs 5 checks: mount status, file ops, container bind-mount access, write performance, and concurrent writes.
-
-### 5. Unmount (when done)
+### Setup
 
 ```bash
-./scripts/juicefs-umount.sh
+docker-compose up -d                  # postgres + minio
+./scripts/juicefs-format.sh           # one-time
+./scripts/juicefs-mount.sh            # mount at /tmp/nexor-jfs
+./scripts/juicefs-validate.sh         # verify
+cargo run -- serve                    # start server on host
 ```
 
 ## Configuration
 
 | Env Var | Default | Description |
 |---------|---------|-------------|
-| `WORKSPACE_MOUNT_POINT` | `/tmp/nexor-jfs` | JuiceFS mount path on host |
-| `PG_HOST` | `localhost` | Postgres host (scripts only) |
-| `PG_PORT` | `5432` | Postgres port (scripts only) |
-| `PG_USER` | `nexor` | Postgres user (scripts only) |
-| `PG_PASS` | `nexor` | Postgres password (scripts only) |
-| `PG_DB` | `juicefs` | JuiceFS metadata database (scripts only) |
-| `MINIO_ENDPOINT` | `http://localhost:9000` | MinIO endpoint (scripts only) |
+| `WORKSPACE_MOUNT_POINT` | `/tmp/nexor-jfs` (host) or `/mnt/jfs` (docker) | JuiceFS mount path |
 
 ## Directory Layout
 
 ```
-/tmp/nexor-jfs/                          <- mount point
+{mount_point}/
   workflows/
     {workflow_id}/
       runs/
@@ -89,13 +91,13 @@ Runs 5 checks: mount status, file ops, container bind-mount access, write perfor
 
 ## Troubleshooting
 
-**"mount point does not exist"**: Run `mkdir -p /tmp/nexor-jfs` or check that the mount script ran.
-
-**"database juicefs does not exist"**: The init SQL only runs on first Postgres startup. Create it manually:
+**"database juicefs does not exist"**: The init SQL only runs on first Postgres startup. Create manually:
 ```bash
 docker exec gh-agents-postgres-1 psql -U nexor -c "CREATE DATABASE juicefs"
 ```
 
-**macFUSE not loading**: Reboot after install, then allow the kernel extension in System Settings > Privacy & Security.
+**JuiceFS container won't start**: Check that the `juicefs` database exists and that the format step completed. Run `./scripts/juicefs-format.sh --docker` if needed.
 
-**Permission denied on mount**: macFUSE requires the current user to have access. Check `ls -la /tmp/nexor-jfs`.
+**Agent containers can't see workspace files**: The `rshared` mount propagation must be working. Check `ls ./jfs/` on the host — if empty, the propagation isn't working. Try restarting Docker Desktop.
+
+**macFUSE not loading (host mode)**: Reboot after install, then allow the kernel extension in System Settings > Privacy & Security.

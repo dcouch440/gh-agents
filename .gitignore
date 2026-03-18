@@ -26,6 +26,10 @@ Thumbs.db
 .nexor/state.db-*
 .nexor/logs/
 
+# JuiceFS mount point (populated by Docker)
+jfs/
+!jfs/.gitkeep
+
 # Node
 node_modules/
 
