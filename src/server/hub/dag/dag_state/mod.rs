@@ -59,6 +59,9 @@ pub(crate) struct DagExecutionState {
     pub total_input_tokens: i64,
     pub total_output_tokens: i64,
     pub total_cost_usd: f32,
+    /// Overlay diff extracted from the step's container (if overlay enabled).
+    /// Set by single/pipeline executors. Consumed by orchestration layer.
+    pub step_overlay: Option<super::merge::types::StepOverlay>,
 }
 
 impl DagExecutionState {
@@ -71,6 +74,7 @@ impl DagExecutionState {
             total_input_tokens: 0,
             total_output_tokens: 0,
             total_cost_usd: 0.0,
+            step_overlay: None,
         }
     }
 
@@ -87,6 +91,7 @@ impl DagExecutionState {
             total_input_tokens: 0,
             total_output_tokens: 0,
             total_cost_usd: 0.0,
+            step_overlay: None,
         }
     }
 
@@ -105,6 +110,7 @@ impl DagExecutionState {
             total_input_tokens: 0,
             total_output_tokens: 0,
             total_cost_usd: 0.0,
+            step_overlay: None,
         }
     }
 
@@ -127,6 +133,7 @@ impl DagExecutionState {
             total_input_tokens: 0,
             total_output_tokens: 0,
             total_cost_usd: 0.0,
+            step_overlay: None,
         }
     }
 

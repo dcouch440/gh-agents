@@ -80,6 +80,9 @@ pub(crate) async fn run_dag_loop(
             }
             step_result?;
 
+            // Persist overlay for sequential step
+            persist_step_overlay_if_present(dag, dag_state).await;
+
             spawn_summarizer_if_completed(dag.state, step.id, dag_state);
         } else {
             // Multiple steps — execute in parallel via JoinSet
@@ -157,6 +160,7 @@ async fn apply_level_guards(
 
 /// Execute multiple steps in parallel using `JoinSet`. Each task gets its own
 /// `DagExecutionState` snapshot; results are merged back after all tasks complete.
+/// Overlay diffs are collected from each task and merged before persisting.
 async fn execute_level_parallel(
     dag: &DagContext<'_>,
     dag_state: &mut DagExecutionState,
@@ -191,18 +195,24 @@ async fn execute_level_parallel(
                 cancel: cancel_ref,
             };
             let result = dispatch_step(&task_dag, &mut task_state, &step).await;
-            (step_id, step, result, task_state)
+            let overlay = task_state.step_overlay.take();
+            (step_id, step, result, task_state, overlay)
         });
     }
 
-    // Collect results — fail-fast on first error
+    // Collect results and overlay diffs
+    let mut overlays: Vec<super::merge::types::StepOverlay> = Vec::new();
+
     while let Some(join_result) = join_set.join_next().await {
         match join_result {
-            Ok((step_id, _step, Ok(()), task_state)) => {
+            Ok((step_id, _step, Ok(()), task_state, overlay)) => {
                 dag_state.merge_parallel_result(task_state);
+                if let Some(ov) = overlay {
+                    overlays.push(ov);
+                }
                 spawn_summarizer_if_completed(dag.state, step_id, dag_state);
             }
-            Ok((_step_id, step, Err(e), _task_state)) => {
+            Ok((_step_id, step, Err(e), _task_state, _overlay)) => {
                 broadcast_step_failure_if_real(dag.state, dag.ctx, workflow_id, &step, &e);
                 join_set.abort_all();
                 return Err(e);
@@ -218,7 +228,147 @@ async fn execute_level_parallel(
         }
     }
 
+    // Merge and persist parallel overlays
+    if !overlays.is_empty() {
+        merge_and_persist_overlays(dag, &mut overlays).await;
+    }
+
     Ok(())
+}
+
+// ── Overlay Persistence Helpers ─────────────────────────────────────────────
+
+/// Persist a sequential step's overlay to JuiceFS via `spawn_blocking`.
+async fn persist_step_overlay_if_present(dag: &DagContext<'_>, dag_state: &mut DagExecutionState) {
+    let Some(mut overlay) = dag_state.step_overlay.take() else {
+        return;
+    };
+    let Some(workspace) = dag.state.workspace() else {
+        return;
+    };
+    let Some(cc) = dag.ctx.container_config.as_ref() else {
+        return;
+    };
+    let (Some(wf_id), Some(run_id)) = (cc.workflow_id, cc.run_id) else {
+        return;
+    };
+
+    let ws = workspace.clone();
+    let step_id = overlay.step_id;
+    let result = tokio::task::spawn_blocking(move || {
+        super::merge::persist::persist_step_overlay(&ws, wf_id, run_id, &mut overlay)
+    })
+    .await;
+
+    match result {
+        Ok(Ok(count)) => {
+            info!(step_id = %step_id, files = count, "Sequential overlay persisted");
+        }
+        Ok(Err(e)) => {
+            warn!(step_id = %step_id, error = %e, "Failed to persist overlay");
+        }
+        Err(e) => {
+            warn!(step_id = %step_id, error = %e, "Overlay persist task panicked");
+        }
+    }
+}
+
+/// Merge parallel overlays and persist results to JuiceFS.
+///
+/// For a single overlay: auto-accept and persist directly.
+/// For 2+ overlays: apply denylist, lazy-load base files for three-way merge,
+/// call `merge_parallel_overlays`, persist outcomes.
+async fn merge_and_persist_overlays(
+    dag: &DagContext<'_>,
+    overlays: &mut Vec<super::merge::types::StepOverlay>,
+) {
+    use super::merge::types::OverlayChange;
+
+    let Some(workspace) = dag.state.workspace() else {
+        return;
+    };
+    let Some(cc) = dag.ctx.container_config.as_ref() else {
+        return;
+    };
+    let (Some(wf_id), Some(run_id)) = (cc.workflow_id, cc.run_id) else {
+        return;
+    };
+
+    // Apply denylist to all overlays
+    for ov in overlays.iter_mut() {
+        super::merge::denylist::filter_overlay(ov);
+    }
+
+    if overlays.len() == 1 {
+        // Single parallel step — auto-accept, persist directly
+        let ws = workspace.clone();
+        let mut ov = overlays.remove(0);
+        let _ = tokio::task::spawn_blocking(move || {
+            super::merge::persist::persist_step_overlay(&ws, wf_id, run_id, &mut ov)
+        })
+        .await;
+        return;
+    }
+
+    // Multi-step: find files modified by 2+ steps, read their base content
+    let paths_needing_base = find_multi_modified_paths(overlays);
+    let base_files = if paths_needing_base.is_empty() {
+        std::collections::HashMap::new()
+    } else {
+        let ws = workspace.clone();
+        let paths = paths_needing_base;
+        tokio::task::spawn_blocking(move || {
+            ws.read_base_files(wf_id, run_id, &paths)
+                .unwrap_or_default()
+        })
+        .await
+        .unwrap_or_default()
+    };
+
+    // Merge
+    match super::merge::merge_parallel_overlays(overlays, &base_files).await {
+        Ok((outcomes, report)) => {
+            info!(
+                auto = report.auto_merged,
+                llm = report.llm_resolved,
+                "Parallel overlay merge completed"
+            );
+            let ws = workspace.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+                super::merge::persist::persist_merge_outcomes(&ws, wf_id, run_id, &outcomes)
+            })
+            .await;
+        }
+        Err(e) => {
+            warn!(error = %e, "Overlay merge failed, using last-write-wins");
+            let outcomes = super::merge::fallback_last_write_wins(overlays);
+            let ws = workspace.clone();
+            let _ = tokio::task::spawn_blocking(move || {
+                super::merge::persist::persist_merge_outcomes(&ws, wf_id, run_id, &outcomes)
+            })
+            .await;
+        }
+    }
+}
+
+/// Find paths modified by 2+ overlays (need base content for three-way merge).
+fn find_multi_modified_paths(
+    overlays: &[super::merge::types::StepOverlay],
+) -> std::collections::HashSet<std::path::PathBuf> {
+    use super::merge::types::OverlayChange;
+    let mut seen: std::collections::HashMap<std::path::PathBuf, usize> =
+        std::collections::HashMap::new();
+    for ov in overlays {
+        for (path, change) in &ov.diff {
+            if matches!(change, OverlayChange::Modified(_)) {
+                *seen.entry(path.clone()).or_default() += 1;
+            }
+        }
+    }
+    seen.into_iter()
+        .filter(|(_, count)| *count >= 2)
+        .map(|(path, _)| path)
+        .collect()
 }
 
 // ── Step Dispatch ───────────────────────────────────────────────────────────
