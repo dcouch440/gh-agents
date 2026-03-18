@@ -54,6 +54,9 @@ pub enum HubError {
         agent_name: String,
     },
 
+    #[error("workspace merge failed: {reason}")]
+    MergeFailed { reason: String },
+
     #[error("execution cancelled")]
     Cancelled,
 
