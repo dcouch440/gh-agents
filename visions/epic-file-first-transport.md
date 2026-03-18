@@ -333,7 +333,7 @@ Existing workflows transition to file-first.
 
 1. ~~**Sequential designer latency**~~ **Resolved.** Steps in the same topological level are independent — their designs don't depend on each other's handoffs. The design pass can parallelize within levels via `JoinSet` (same pattern as `execute_level_parallel`). Wall-clock time is DAG depth, not step count. Deferred as optimization — sequential works correctly first.
 
-2. **JuiceFS deployment target** — Kubernetes CSI driver vs Docker Compose FUSE? Shapes B1-B3 significantly.
+2. ~~**JuiceFS deployment target**~~ **Resolved.** Docker Compose with FUSE mounts (B1 done). Kubernetes migration is a separate ticket (`tickets/kubernetes-migration.md`).
 
 3. ~~**OverlayFS in containers**~~ **Resolved.** Already implemented — containers use `SYS_ADMIN` capability for mount syscall. Working in `src/execution/container/overlay/mod.rs`.
 
