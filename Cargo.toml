@@ -34,6 +34,7 @@ toml = "0.8"
 # Text similarity & diffing
 strsim = "0.11"
 similar = "2"
+diffy = "0.4"
 
 # Image rasterization (stroke → vision LLM pipeline)
 image = { version = "0.25", default-features = false, features = ["png"] }

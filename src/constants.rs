@@ -462,6 +462,27 @@ pub const DISTILLER_MAX_MESSAGES: usize = 15;
 /// Temperature for distiller (low — factual summarization).
 pub const DISTILLER_TEMPERATURE: f32 = 0.2;
 
+// ── Workspace Merge ─────────────────────────────────────────────────────────
+
+/// Model for standard conflict hunk resolution (fast, mechanical).
+pub const MERGE_MODEL: &str = MODEL_TIER3;
+/// Model for complex merges: delete-modify, new-new conflicts (needs judgment).
+pub const MERGE_MODEL_COMPLEX: &str = MODEL_TIER2;
+/// Max output tokens for merge resolution.
+pub const MERGE_MAX_TOKENS: u32 = 4096;
+/// Temperature for merge resolution (deterministic).
+pub const MERGE_TEMPERATURE: f32 = 0.0;
+/// Skip diff3 for files larger than this (bytes). Falls back to last-write-wins.
+pub const MERGE_MAX_FILE_SIZE: usize = 100_000;
+/// Lines of surrounding context for code file conflicts.
+pub const MERGE_CONTEXT_LINES: usize = 30;
+/// Lines of surrounding context for markdown conflicts.
+pub const MERGE_CONTEXT_LINES_MARKDOWN: usize = 50;
+/// Timeout for each merge LLM call (seconds).
+pub const MERGE_LLM_TIMEOUT_SECS: u64 = 30;
+/// Max chars in the context block sent to the LLM (prevents exceeding context window).
+pub const MERGE_MAX_CONTEXT_CHARS: usize = 16_000;
+
 // ── Sandbox Defaults ────────────────────────────────────────────────────────
 
 pub const SANDBOX_DEFAULT_IMAGE: &str = "alpine:latest";
