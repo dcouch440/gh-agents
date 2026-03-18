@@ -23,8 +23,6 @@ A5  Agent prompt simplification    B5  Parallel merge (diff3 + Haiku)
  │                                  │
 A6  Builder prompt rewrite          │
  │                                  │
-A7  Re-design trigger (user edit)   │
- │                                  │
  └──────────┬───────────────────────┘
             │
          Converge
@@ -119,19 +117,6 @@ Update the builder's mental model from "data routing" to "scheduling." The build
 - See vision §"Builder — From Routing to Scheduling" for the exact mental model shift
 
 **Depends on:** A1 (needs handoff threading in place)
-
-### A7 — Re-Design Trigger (User Edit)
-
-When a user edits a step's design in the config panel (changes roster, modifies node text, rewrites system prompt), detect the change and trigger re-design for that step + propagation forward.
-
-**What changes:**
-- Frontend: config panel edit submits changes to API
-- Backend: API endpoint detects meaningful edit (roster change, node text change) vs. cosmetic edit
-- On meaningful edit: re-trigger builder + designer for the edited step
-- After designer completes: A4's propagation logic cascades forward if handoff changed
-- See vision §"Re-Design Propagation" for the trigger description
-
-**Depends on:** A4 (needs propagation mechanism)
 
 ---
 
@@ -292,6 +277,4 @@ Existing workflows transition to file-first. Decide on feature flag vs. hard cut
 
 6. **Store tools end-of-life** — Vision says store tools remain for backward compat. When do they get removed? Or do they become a thin wrapper over workspace files?
 
-7. **Re-design trigger granularity (A7)** — What counts as a "meaningful edit" that triggers re-design? Roster changes and node text changes clearly qualify. What about system prompt tweaks? Capability additions? Need to define the boundary between "user polish" and "structural change."
-
-8. **Capability registry scope (C1)** — How much of the current capability registry survives? The vision says tools list is almost always empty. Do we keep the registry for the rare integrations, or replace it entirely?
+7. **Capability registry scope (C1)** — How much of the current capability registry survives? The vision says tools list is almost always empty. Do we keep the registry for the rare integrations, or replace it entirely?
