@@ -36,7 +36,6 @@ pub(crate) struct AgentExecutionResult {
 pub(super) struct WorkforceStepEnv {
     pub state: AppState,
     pub ctx: super::super::utils::types::WorkflowExecutionContext,
-    pub user_notes_block: String,
     pub original_prompt: String,
     pub step_id: Uuid,
     pub workflow_id: Uuid,
@@ -44,15 +43,11 @@ pub(super) struct WorkforceStepEnv {
     pub total_agents: usize,
     pub container_handle: Option<ContainerHandle>,
     pub cancel: Option<tokio_util::sync::CancellationToken>,
-    pub task_description: String,
     /// Base64-encoded PNG rasterized at runtime from stroke coordinates in board_context.
     pub stroke_image: Option<String>,
-    /// Pre-formatted block of upstream DAG step outputs (workforce, single).
-    /// Excludes context-mode steps (handled by user_notes_block).
-    pub upstream_outputs_block: String,
-    /// Pre-formatted `<upstream_artifacts>` XML manifest listing files in the store.
-    /// Built from SystemFileRow metadata — paths and descriptions only, not content.
-    pub upstream_artifacts_block: String,
+    /// Pre-formatted upstream DAG step output text. Used as `<previous_step>`
+    /// for the first agent in the workforce (cross-step handoff).
+    pub upstream_step_output: String,
 }
 
 /// Aggregated results from executing all agent levels.

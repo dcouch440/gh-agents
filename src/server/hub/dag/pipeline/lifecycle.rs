@@ -26,19 +26,15 @@ pub(crate) struct PipelineExecutionContext {
     pub roster: Vec<TaskAgentRosterRow>,
     /// Composed base prompt from step template + variable resolution.
     pub base_prompt: String,
-    /// Upstream context data from context nodes: `(title, content)` pairs.
-    pub upstream_context: Vec<(String, String)>,
 }
 
 /// Output from a before-phase, consumed by agent execution.
 ///
-/// Contains the designed prompts for each roster agent, a user notes block
-/// to inject into agent task prompts, and token usage for cost tracking.
+/// Contains the designed prompts for each roster agent and token usage
+/// for cost tracking.
 pub(crate) struct PhaseOutput {
     /// Designed prompts for each roster agent (one per agent).
     pub designed_prompts: Vec<DesignedAgentPrompt>,
-    /// User notes block built from upstream context nodes.
-    pub user_notes_block: String,
     /// Token usage from this phase.
     pub token_usage: PhaseTokenUsage,
 }

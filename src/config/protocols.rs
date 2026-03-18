@@ -139,9 +139,6 @@ pub mod vars {
     pub mod workforce {
         pub const AGENT_NAME: &str = "Workforce.agent_name";
         pub const ROLE_DESCRIPTION: &str = "Workforce.role_description";
-        pub const TASK_DESCRIPTION: &str = "Workforce.task_description";
-        pub const TEAM_ROSTER: &str = "Workforce.team_roster";
-        pub const PREVIOUS_OUTPUTS: &str = "Workforce.previous_outputs";
     }
 
     /// Variables for chat belief extraction prompts.
@@ -630,9 +627,6 @@ mod tests {
             vars::system::RUN_CONTEXT,
             vars::workforce::AGENT_NAME,
             vars::workforce::ROLE_DESCRIPTION,
-            vars::workforce::TASK_DESCRIPTION,
-            vars::workforce::TEAM_ROSTER,
-            vars::workforce::PREVIOUS_OUTPUTS,
             vars::chat_belief::NODE_NAME,
             vars::chat_belief::NODE_ARCHETYPE,
             vars::chat_belief::CONVERSATION,
