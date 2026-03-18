@@ -212,7 +212,9 @@ pub async fn run_designer_after_builder(
                 "Designer handoff completed"
             );
 
-            // Persist step handoff to session for prior_design context on re-runs
+            // Persist step handoff to session for prior_design context on re-runs,
+            // and ensure the step row's designer_handoff is updated (backup for
+            // the complete_design tool handler, which may have written it already).
             if let Some(handoff) = strategy.take_step_handoff() {
                 let _ = repos
                     .sessions
@@ -221,8 +223,12 @@ pub async fn run_designer_after_builder(
                         designer_session_id,
                         Uuid::new_v4(),
                         "assistant".to_string(),
-                        handoff,
+                        handoff.clone(),
                     )
+                    .await;
+                let _ = repos
+                    .workflows
+                    .update_designer_handoff(step_id, &handoff)
                     .await;
             }
 

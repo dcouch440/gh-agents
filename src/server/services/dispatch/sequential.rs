@@ -122,7 +122,19 @@ pub async fn run_sequential_design_pipeline(
             step_map.insert(*step_id, updated_step);
 
             if old_handoff != new_handoff {
+                tracing::info!(
+                    step_id = %step_id,
+                    old_len = old_handoff.len(),
+                    new_len = new_handoff.len(),
+                    "Handoff changed — downstream steps will be re-designed"
+                );
                 handoff_changed.insert(*step_id);
+            } else {
+                tracing::debug!(
+                    step_id = %step_id,
+                    handoff_len = new_handoff.len(),
+                    "Handoff unchanged — no propagation"
+                );
             }
         }
     }
