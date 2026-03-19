@@ -75,6 +75,9 @@ const selectTokenBuffer =
   (s: DispatchState): string =>
     s.byStep[stepId]?.tokenBuffer ?? ''
 
+const selectAllStepIds = (s: DispatchState): readonly string[] =>
+  Object.keys(s.byStep)
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 const updateEntry = (
@@ -286,6 +289,7 @@ export const dispatchStore = {
   selectTrace,
   selectToolEvents,
   selectTokenBuffer,
+  selectAllStepIds,
   handleWsEvent,
   hydrateFromApi,
 }

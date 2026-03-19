@@ -117,23 +117,39 @@ pub async fn run_sequential_design_pipeline(
         }
 
         // Re-read step from DB to pick up the designer_handoff written by complete_design
-        if let Ok(Some(updated_step)) = state.repos().workflows.get_step(*step_id).await {
-            let new_handoff = updated_step.designer_handoff.clone();
-            step_map.insert(*step_id, updated_step);
+        match state.repos().workflows.get_step(*step_id).await {
+            Ok(Some(updated_step)) => {
+                let new_handoff = updated_step.designer_handoff.clone();
+                step_map.insert(*step_id, updated_step);
 
-            if old_handoff != new_handoff {
-                tracing::info!(
+                if old_handoff != new_handoff {
+                    tracing::info!(
+                        step_id = %step_id,
+                        old_len = old_handoff.len(),
+                        new_len = new_handoff.len(),
+                        "Handoff changed — downstream steps will be re-designed"
+                    );
+                    handoff_changed.insert(*step_id);
+                } else {
+                    tracing::info!(
+                        step_id = %step_id,
+                        handoff_len = new_handoff.len(),
+                        had_instruction = has_instruction,
+                        "Handoff unchanged after design — no downstream propagation"
+                    );
+                }
+            }
+            Ok(None) => {
+                tracing::warn!(
                     step_id = %step_id,
-                    old_len = old_handoff.len(),
-                    new_len = new_handoff.len(),
-                    "Handoff changed — downstream steps will be re-designed"
+                    "Step not found after design — cannot check handoff propagation"
                 );
-                handoff_changed.insert(*step_id);
-            } else {
-                tracing::debug!(
+            }
+            Err(e) => {
+                tracing::warn!(
                     step_id = %step_id,
-                    handoff_len = new_handoff.len(),
-                    "Handoff unchanged — no propagation"
+                    error = %e,
+                    "Failed to re-read step after design — cannot check handoff propagation"
                 );
             }
         }
