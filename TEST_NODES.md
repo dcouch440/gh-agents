@@ -1,59 +1,107 @@
-# Test: Multi-Agent Parallel Nodes with Fan-In
+# Test: Word Frequency Analyzer (File-First Transport)
 
-Draw three boxes. Arrow from Node 1 → Node 3, arrow from Node 2 → Node 3.
+Three nodes. Copy each description into a board node, wire edges 1→2→3.
 
-## Node 1
-```
-Research Tesla's latest quarterly earnings and financial performance
-```
+## Node 1: Research & PRD
 
-## Node 2
-```
-Research Rivian's latest quarterly earnings and financial performance
-```
+Research and write a PRD for a Python word frequency analyzer CLI. The tool should accept a text file path, count word frequencies, and output a sorted table of the top N words. Research best practices for CLI argument parsing, text processing, and output formatting. Produce a PRD document covering: requirements, technical approach, libraries to use, CLI interface design, and example usage.
 
-## Node 3 (receives from both)
-```
-Compare the two companies side by side and produce an investment analysis report with a recommendation
-```
+## Node 2: Implement
+
+Implement the word frequency analyzer CLI from the PRD in the previous step. Follow the PRD's technical approach. Include: main script, requirements.txt, unit tests, and a sample text file for testing. Install dependencies, run the tests, and verify the CLI works against the sample file.
+
+## Node 3: Run & Compare
+
+Install and run the word frequency analyzer from the previous step against its sample text file. Then create a second, larger text file with a paragraph about artificial intelligence. Run the analyzer against both files and compare results. Report the top 10 words from each.
 
 ## What to verify
 
-- Node 1 & 2: multi-agent teams (researcher + analyst or similar) with dependencies
-- Intra-node agents pass data through the store (not response text)
-- Node 3: fan-in consumer reads both upstream stores
-- All configs use dual expected_output: "Store: [artifact]. Response: [summary]."
-- No runtime block names referenced in any agent config
-- Proportional prompts — complex tasks get 120-250 tokens, not more
-- Store chain: intra-node (agent→agent) AND cross-node (node→node) all via files
+- Node 1: workforce (researcher + writer) produces PRD
+- Node 2: workforce (developer + tester) reads PRD, builds app, runs tests
+- Node 3: single agent runs app against real files, captures CLI output
+- Files and installed packages persist across all 3 containers via JuiceFS overlay
+- Handoff chain threads naturally: PRD → implementation → execution
+- Agents use relative paths (no /workspace/ prefix)
+- Agents chain commands with && and use heredocs for file creation
 
 ---
 
-# Test: Run-Scoped Artifacts (Re-execution Isolation)
+# Test: Data Pipeline with SQLite
 
-Draw two boxes. Arrow from Node 1 → Node 2.
+Three nodes, wire 1→2→3. Tests data processing, sqlite3, jq, and cross-step file persistence.
 
-## Node 1
-```
-Scrape the top 5 stories from Hacker News right now and save a summary of each
-```
+## Node 1: Generate Data
 
-## Node 2 (receives from Node 1)
-```
-Take the HN stories and rank them by potential business impact, produce a brief investment memo
-```
+Write a Python script that generates a CSV file of 100 fake sales transactions with columns: date, product, quantity, price, region. Use random data. Run the script and save the CSV.
 
-## Test procedure
+## Node 2: Load & Query
 
-1. Submit the board — let designer phase complete
-2. **Run 1** — execute the workflow. Node 1 produces store artifacts, Node 2 reads them.
-3. **Run 2** — execute the workflow again WITHOUT resubmitting the board.
-4. Check Node 2's `<upstream_artifacts>` block in Run 2 — it should ONLY contain files from Run 2, not Run 1's stale artifacts.
+Create a SQLite database from the CSV. Write SQL queries to find: total revenue by product, top 5 products by quantity sold, and average price by region. Save query results as a JSON report.
+
+## Node 3: Summarize
+
+Read the JSON report from the previous step. Write an executive summary in Markdown with key findings, a recommendation for which region to expand in, and include the raw numbers. Save as final_report.md.
 
 ## What to verify
 
-- Run 2's root node (Node 1) has NO `<upstream_artifacts>` section (no upstream + no stale files)
-- Run 2's Node 2 sees ONLY files written by Node 1 during Run 2
-- Design configs (`.system/design/`) persist across runs (workflow_run_id = NULL)
-- Runtime artifacts have workflow_run_id set to the current run's ID
-- No duplicate or stale file paths from Run 1 appear in Run 2's manifests
+- sqlite3 used for real queries (not Python fakery)
+- jq or python for CSV→JSON conversion
+- Files persist: CSV → SQLite DB → JSON → Markdown
+- Agents use && chaining and heredocs efficiently
+- No unnecessary ls or verification calls
+
+---
+
+# Test: Full-Stack Micro App
+
+Four nodes, wire 1→2→3→4. Tests Node.js, multi-file projects, and complex builds.
+
+## Node 1: Design API
+
+Design a REST API for a todo list app. Document endpoints (GET /todos, POST /todos, DELETE /todos/:id), request/response schemas, and error handling. Save as api_spec.md.
+
+## Node 2: Implement Backend
+
+Implement the API from the spec using Node.js and Express. Include package.json, the server file, and in-memory storage. Install dependencies and verify the server starts.
+
+## Node 3: Write Tests
+
+Write integration tests for the API using the test framework of your choice. Run all tests against the server. Save a test results report.
+
+## Node 4: Demo
+
+Start the server, use curl to create 3 todos, list them, delete one, list again. Capture all curl commands and responses in a demo_log.md.
+
+## What to verify
+
+- Node.js + npm used (not Python)
+- npm install persists to next steps
+- Server starts and responds to real HTTP requests
+- curl commands show actual API responses
+- 4-step chain with real cross-step dependencies
+
+---
+
+# Test: Parallel Fan-In Research
+
+Three nodes. Wire Node 1→Node 3, Node 2→Node 3. Tests parallel execution and fan-in handoff.
+
+## Node 1: Research Python
+
+Research the current state of Python in 2026 — new features, performance improvements, ecosystem changes. Save findings as python_report.md.
+
+## Node 2: Research Rust
+
+Research the current state of Rust in 2026 — adoption trends, new features, major projects using it. Save findings as rust_report.md.
+
+## Node 3: Compare
+
+Read both reports from the previous steps. Write a comparison analysis: when to choose Python vs Rust, performance tradeoffs, ecosystem maturity, learning curve. Include a recommendation matrix. Save as comparison.md.
+
+## What to verify
+
+- Nodes 1 and 2 execute in parallel (same topological level)
+- Node 3 sees both reports via fan-in handoff (multiple <previous_step> blocks)
+- Web search used for current 2026 data
+- Parallel overlay merge works (both steps write to same workspace)
+- Node 3's comparison references specific findings from both reports
