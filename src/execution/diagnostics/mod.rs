@@ -72,6 +72,7 @@ impl DiagnosticsEngine {
 
         // Phase 2: Snapshot → Execute → Diff
         let before = capture_snapshot(handle).await;
+        self.workspace.initialize(&before); // baseline on first command
         let result = handle.exec_shell(command).await?;
         let after = capture_snapshot(handle).await;
         let file_changes = WorkspaceTracker::diff(&before, &after);
@@ -121,12 +122,49 @@ impl DiagnosticsEngine {
     }
 }
 
-/// Unescape HTML entities that some models (xAI/Grok) emit in tool inputs.
+/// Sanitize model tool inputs: unescape HTML entities and strip
+/// model-specific XML artifacts (e.g. Grok citation tags).
 pub fn html_unescape(s: &str) -> String {
-    s.replace("&amp;", "&")
+    let s = s
+        .replace("&amp;", "&")
         .replace("&gt;", ">")
         .replace("&lt;", "<")
         .replace("&quot;", "\"")
         .replace("&#39;", "'")
-        .replace("&#x27;", "'")
+        .replace("&#x27;", "'");
+
+    strip_grok_tags(&s)
+}
+
+/// Strip `<grok:render ...>...</grok:render>` citation blocks that Grok
+/// embeds in tool call inputs. These are multi-line XML that pollute
+/// file content and waste tokens on read-back.
+fn strip_grok_tags(s: &str) -> String {
+    const OPEN: &str = "<grok:render";
+    const CLOSE: &str = "</grok:render>";
+
+    let mut result = String::with_capacity(s.len());
+    let mut remaining = s;
+
+    while let Some(start) = remaining.find(OPEN) {
+        // Keep everything before the tag
+        result.push_str(&remaining[..start]);
+
+        // Find the closing tag
+        let after_open = &remaining[start..];
+        if let Some(end_offset) = after_open.find(CLOSE) {
+            // Skip past the closing tag
+            remaining = &after_open[end_offset + CLOSE.len()..];
+        } else {
+            // No closing tag found — strip to end of line to avoid breaking content
+            if let Some(nl) = after_open.find('\n') {
+                remaining = &after_open[nl..];
+            } else {
+                remaining = "";
+            }
+        }
+    }
+
+    result.push_str(remaining);
+    result
 }

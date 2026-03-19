@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use crate::constants::OVERLAY_UPPER_DIR;
+use crate::constants::OVERLAY_MERGED_DIR;
 use crate::execution::ContainerHandle;
 
 /// Metadata-only snapshot of the overlay upper directory.
@@ -57,11 +57,15 @@ impl UpperDirSnapshot {
 /// Capture a metadata-only snapshot of the overlay upper directory.
 ///
 /// Graceful: returns an empty snapshot on failure (never blocks the agent).
-/// Typical cost: ~50ms for 100 files.
+/// Typical cost: ~50ms for 100 files, ~200ms for 1000.
+///
+/// Walks the merged view (`/workspace`) so it sees both inherited files
+/// from prior steps (lower layer) and new files (upper layer).
+/// Depth-limited to 4 levels to keep it fast.
 pub async fn capture_snapshot(handle: &ContainerHandle) -> UpperDirSnapshot {
     let cmd = format!(
-        "find {} -mindepth 1 -printf '%P\\t%y\\t%s\\t%T@\\n' 2>/dev/null || true",
-        OVERLAY_UPPER_DIR
+        "find {} -maxdepth 4 -mindepth 1 -printf '%P\\t%y\\t%s\\t%T@\\n' 2>/dev/null || true",
+        OVERLAY_MERGED_DIR
     );
     match handle.exec_shell(&cmd).await {
         Ok(result) => parse_snapshot(&result.stdout),
