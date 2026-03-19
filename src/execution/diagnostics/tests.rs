@@ -1,0 +1,148 @@
+#[cfg(test)]
+mod tests {
+    use crate::execution::diagnostics::envelope::{
+        CommandEnvelope, Diagnostic, DiagnosticCategory, Severity,
+    };
+    use crate::execution::diagnostics::html_unescape;
+    use crate::execution::diagnostics::loop_detector::LoopStatus;
+
+    #[test]
+    fn render_failed_command() {
+        let envelope = CommandEnvelope {
+            command: "jq . file.json".to_string(),
+            exit_code: 1,
+            stdout: String::new(),
+            stderr: "command not found: jq\n".to_string(),
+            duration_ms: 5,
+            severity: Severity::Error,
+            pre_warnings: vec![],
+            post_diagnostics: vec![],
+            file_changes: vec![],
+            workspace_digest: None,
+            loop_status: LoopStatus::Clean,
+        };
+        let rendered = envelope.render();
+        assert!(rendered.starts_with("result: failed\n"));
+        assert!(rendered.contains("stderr summary:"));
+        assert!(rendered.contains("[ERROR]"));
+    }
+
+    #[test]
+    fn render_with_post_diagnostics() {
+        let envelope = CommandEnvelope {
+            command: "sed -i 's/old/new/' file.py".to_string(),
+            exit_code: 0,
+            stdout: String::new(),
+            stderr: String::new(),
+            duration_ms: 10,
+            severity: Severity::NoOp,
+            pre_warnings: vec![],
+            post_diagnostics: vec![Diagnostic {
+                severity: Severity::NoOp,
+                category: DiagnosticCategory::NoOp,
+                message: "sed made 0 replacements.".to_string(),
+                suggestion: Some("Check the pattern.".to_string()),
+            }],
+            file_changes: vec![],
+            workspace_digest: None,
+            loop_status: LoopStatus::Clean,
+        };
+        let rendered = envelope.render();
+        assert!(rendered.contains("result: success (no-op)"));
+        assert!(rendered.contains("sed made 0 replacements"));
+        assert!(rendered.contains("suggestion: Check the pattern"));
+    }
+
+    #[test]
+    fn render_with_file_changes() {
+        use crate::execution::diagnostics::types::{ChangeType, FileChange};
+        use std::path::PathBuf;
+
+        let envelope = CommandEnvelope {
+            command: "python build.py".to_string(),
+            exit_code: 0,
+            stdout: "done\n".to_string(),
+            stderr: String::new(),
+            duration_ms: 100,
+            severity: Severity::Ok,
+            pre_warnings: vec![],
+            post_diagnostics: vec![],
+            file_changes: vec![
+                FileChange {
+                    path: PathBuf::from("src/main.py"),
+                    change_type: ChangeType::Created,
+                    size: 420,
+                },
+                FileChange {
+                    path: PathBuf::from("config.json"),
+                    change_type: ChangeType::Modified,
+                    size: 150,
+                },
+            ],
+            workspace_digest: None,
+            loop_status: LoopStatus::Clean,
+        };
+        let rendered = envelope.render();
+        assert!(rendered.contains("changes:"));
+        assert!(rendered.contains("created: src/main.py"));
+        assert!(rendered.contains("modified: config.json"));
+    }
+
+    #[test]
+    fn html_unescape_entities() {
+        assert_eq!(
+            html_unescape("cat &gt; file.py &lt;&lt; &#39;EOF&#39;"),
+            "cat > file.py << 'EOF'"
+        );
+        assert_eq!(
+            html_unescape("echo &quot;hello&quot; &amp;&amp; exit"),
+            "echo \"hello\" && exit"
+        );
+        assert_eq!(html_unescape("echo &#x27;world&#x27;"), "echo 'world'");
+    }
+
+    #[test]
+    fn html_unescape_no_entities() {
+        assert_eq!(html_unescape("ls -la"), "ls -la");
+    }
+
+    #[test]
+    fn render_full_envelope() {
+        use crate::execution::diagnostics::types::{ChangeType, FileChange};
+        use crate::execution::diagnostics::workspace::digest::WorkspaceDigest;
+        use std::path::PathBuf;
+
+        let envelope = CommandEnvelope {
+            command: "python build.py".to_string(),
+            exit_code: 0,
+            stdout: "Building...\nDone.\n".to_string(),
+            stderr: "warning: unused import\n".to_string(),
+            duration_ms: 200,
+            severity: Severity::Ok,
+            pre_warnings: vec![],
+            post_diagnostics: vec![],
+            file_changes: vec![FileChange {
+                path: PathBuf::from("dist/app.js"),
+                change_type: ChangeType::Created,
+                size: 5000,
+            }],
+            workspace_digest: Some(WorkspaceDigest {
+                file_count: 10,
+                file_delta: 1,
+                dir_count: 3,
+                total_size: 50_000,
+                last_modified: Some(PathBuf::from("dist/app.js")),
+            }),
+            loop_status: LoopStatus::Clean,
+        };
+        let rendered = envelope.render();
+        // Should contain all sections
+        assert!(rendered.contains("result: success"));
+        assert!(rendered.contains("stdout"));
+        assert!(rendered.contains("stderr summary:"));
+        assert!(rendered.contains("changes:"));
+        assert!(rendered.contains("created: dist/app.js"));
+        assert!(rendered.contains("10 files (+1)"));
+        assert!(rendered.contains("last: dist/app.js"));
+    }
+}

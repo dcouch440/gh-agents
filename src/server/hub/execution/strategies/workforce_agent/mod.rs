@@ -6,11 +6,14 @@
 
 mod tests;
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use serde_json::Value;
+use serde_json::{json, Value};
 use tracing::info;
 use uuid::Uuid;
 
+use crate::execution::diagnostics::DiagnosticsEngine;
 use crate::execution::{ContainerHandle, ExecutionContext};
 use crate::llm::{ContentBlock, Message, TokenUsage, Tool};
 use crate::server::hub::error::HubError;
@@ -56,6 +59,8 @@ pub struct WorkforceAgentConfig {
     pub agent_name: Option<String>,
     /// Workflow run ID for scoping store artifacts to the current execution.
     pub workflow_run_id: Option<Uuid>,
+    /// Diagnostics engine for enriched run_command feedback (per-agent, stateful).
+    pub diagnostics: Option<Arc<tokio::sync::Mutex<DiagnosticsEngine>>>,
 }
 
 /// Strategy for executing a single agent within a workforce roster.
@@ -118,6 +123,26 @@ impl ExecutionStrategy for WorkforceAgentStrategy {
 
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
         info!(tool = %name, "Workforce agent tool call");
+
+        // Diagnostics intercept: enrich run_command with pre-checks,
+        // filesystem observation, and structured feedback.
+        if name == "run_command" {
+            if let (Some(diag), Some(handle)) =
+                (&self.config.diagnostics, &self.config.container_handle)
+            {
+                let command = match input["command"].as_str() {
+                    Some(c) => crate::execution::diagnostics::html_unescape(c),
+                    None => {
+                        return json!({ "error": "Missing required parameter: command" });
+                    }
+                };
+                let mut engine = diag.lock().await;
+                return match engine.execute(&command, handle).await {
+                    Ok(rendered) => json!({ "output": rendered }),
+                    Err(e) => json!({ "error": e.to_string() }),
+                };
+            }
+        }
 
         execution_tools::dispatch_tool_cascade(
             name,
