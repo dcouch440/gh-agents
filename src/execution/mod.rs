@@ -2,6 +2,7 @@
 
 mod approval;
 pub mod container;
+pub mod diagnostics;
 mod files;
 mod git;
 mod sandbox;

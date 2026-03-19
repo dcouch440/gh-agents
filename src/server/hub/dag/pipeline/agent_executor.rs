@@ -3,11 +3,14 @@
 //! Handles both single-agent sequential execution and parallel level-based
 //! dispatch via `tokio::task::JoinSet`.
 
+use std::sync::Arc;
+
 use anyhow::anyhow;
 use tracing::{error, info, warn};
 
 use crate::config::protocols::WORKFORCE;
 use crate::db::traits::CreateAgentExecutionInput;
+use crate::execution::diagnostics::DiagnosticsEngine;
 use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::execution_recorder::{
     PhaseCompletion, ProtocolExecutionRecorder,
@@ -298,6 +301,13 @@ async fn execute_single_agent(
         }
     };
 
+    // Build diagnostics engine (per-agent, stateful across run_command calls)
+    let diagnostics = if env.container_handle.is_some() {
+        Some(Arc::new(tokio::sync::Mutex::new(DiagnosticsEngine::new())))
+    } else {
+        None
+    };
+
     // Build strategy
     let strategy = WorkforceAgentStrategy::new(WorkforceAgentConfig {
         system_prompt,
@@ -317,6 +327,7 @@ async fn execute_single_agent(
         step_id: Some(env.step_id),
         agent_name: Some(designed.agent_name.clone()),
         workflow_run_id: Some(env.ctx.run_id),
+        diagnostics,
     });
 
     // Execute with live streaming sink
