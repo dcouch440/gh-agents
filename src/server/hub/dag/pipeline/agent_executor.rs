@@ -242,8 +242,7 @@ async fn execute_single_agent(
     let system_prompt = if env.container_handle.is_some() {
         format!(
             "{}\n\
-             Your working directory is /workspace/ where other steps have contributed and will contribute after you.\n\
-             Files and installed packages from previous steps are available.\n\
+             You are in a shared workspace. Files and installed packages from previous steps are available.\n\
              When your task is complete, stop calling tools and respond with text.",
             designed.system_prompt
         )
