@@ -289,7 +289,7 @@ fn run_command_tool() -> Tool {
             - Edit: sed -i 's/old/new/g' file.py\n\
             - Search: grep -rn 'pattern' . | head -20\n\
             - Browse: find . -type f -name '*.py' | head -20\n\n\
-            Available tools: python, pip, node, npm, git, curl, wget, jq, grep, sed, awk, find, xargs, sort, uniq, wc, head, tail, tee, tr, cut, zip, unzip, sqlite3, make, gcc.\n\
+            Available tools for all agents: python, pip, node, npm, git, curl, wget, jq, grep, sed, awk, find, xargs, sort, uniq, wc, head, tail, tee, tr, cut, zip, unzip, sqlite3, make, gcc.\n\
             Installed packages persist to the next step."
                 .into(),
         input_schema: json!({
