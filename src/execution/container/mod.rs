@@ -631,18 +631,19 @@ static CONTAINER_CREATE_SEMAPHORE: Lazy<Arc<Semaphore>> = Lazy::new(|| {
 });
 
 /// Environment variables injected when a workspace mount is active.
-/// Steers pip/npm/cargo to /tmp/ so install artifacts don't pollute the shared workspace.
+/// Steers pip/npm/cargo into /workspace/ so installed packages persist
+/// across steps via the JuiceFS overlay. Download caches still go to /tmp/.
 const WORKSPACE_ENV_VARS: &[(&str, &str)] = &[
-    ("VIRTUAL_ENV", "/tmp/venv"),
+    ("VIRTUAL_ENV", "/workspace/.venv"),
     (
         "PATH",
-        "/tmp/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "/workspace/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
     ),
     ("PIP_CACHE_DIR", "/tmp/pip-cache"),
     ("PYTHONDONTWRITEBYTECODE", "1"),
-    ("npm_config_prefix", "/tmp/npm"),
+    ("npm_config_prefix", "/workspace/.npm"),
     ("npm_config_cache", "/tmp/npm-cache"),
-    ("CARGO_HOME", "/tmp/cargo"),
+    ("CARGO_HOME", "/workspace/.cargo"),
     ("XDG_CACHE_HOME", "/tmp/cache"),
 ];
 

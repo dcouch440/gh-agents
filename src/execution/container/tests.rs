@@ -1073,12 +1073,12 @@ mod tests {
         };
         let args = build_create_args("test-container", &config);
         assert!(
-            args.contains(&"--env=VIRTUAL_ENV=/tmp/venv".to_string()),
-            "Should inject VIRTUAL_ENV"
+            args.contains(&"--env=VIRTUAL_ENV=/workspace/.venv".to_string()),
+            "Should inject VIRTUAL_ENV into workspace"
         );
         assert!(
             args.contains(&"--env=PIP_CACHE_DIR=/tmp/pip-cache".to_string()),
-            "Should inject PIP_CACHE_DIR"
+            "Should inject PIP_CACHE_DIR (stays in /tmp)"
         );
         assert!(
             args.contains(&"--env=PYTHONDONTWRITEBYTECODE=1".to_string()),
@@ -1086,15 +1086,15 @@ mod tests {
         );
         assert!(
             args.contains(&"--env=npm_config_cache=/tmp/npm-cache".to_string()),
-            "Should inject npm_config_cache"
+            "Should inject npm_config_cache (stays in /tmp)"
         );
         assert!(
-            args.contains(&"--env=CARGO_HOME=/tmp/cargo".to_string()),
-            "Should inject CARGO_HOME"
+            args.contains(&"--env=CARGO_HOME=/workspace/.cargo".to_string()),
+            "Should inject CARGO_HOME into workspace"
         );
         assert!(
             args.contains(&"--env=XDG_CACHE_HOME=/tmp/cache".to_string()),
-            "Should inject XDG_CACHE_HOME"
+            "Should inject XDG_CACHE_HOME (stays in /tmp)"
         );
     }
 
@@ -1204,7 +1204,7 @@ mod tests {
         };
         let args = build_create_args("test-container", &config);
         assert!(
-            args.contains(&"--env=VIRTUAL_ENV=/tmp/venv".to_string()),
+            args.contains(&"--env=VIRTUAL_ENV=/workspace/.venv".to_string()),
             "Overlay mode should still inject workspace env vars"
         );
     }
