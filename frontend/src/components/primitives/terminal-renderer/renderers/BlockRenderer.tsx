@@ -50,7 +50,7 @@ function BlockRenderer({ node }: BlockRendererProps) {
             m: 0,
             my: '0.4em',
             color: theme.textDisabled,
-            fontFamily: 'inherit',
+            fontFamily: '"JetBrains Mono", monospace',
             fontSize: 'inherit',
             whiteSpace: 'pre-wrap',
           }}

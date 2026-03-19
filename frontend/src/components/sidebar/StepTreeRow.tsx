@@ -313,7 +313,6 @@ function StepTreeRow({
                 variant="body2"
                 sx={{
                   color: '#f85149',
-                  fontFamily: '"JetBrains Mono", monospace',
                   fontSize: '0.75rem',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',

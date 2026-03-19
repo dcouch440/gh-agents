@@ -9,7 +9,7 @@ import { createStore, lsGet, lsSet } from './lib'
 const LS_SIDEBAR_WIDTH = 'nexor_sidebar_width'
 const DEFAULT_WIDTH = 320
 const MIN_WIDTH = 240
-const MAX_WIDTH = 480
+const MAX_WIDTH = 800
 
 // ── Types ───────────────────────────────────────────────────────────────────
 

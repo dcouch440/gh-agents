@@ -53,7 +53,7 @@ function DispatchAccordionRow({ stepName, instruction, entry }: DispatchAccordio
 
         <Typography
           sx={{
-            fontFamily: 'monospace',
+
             fontSize: 12,
             fontWeight: 600,
             color: 'text.primary',
@@ -80,7 +80,7 @@ function DispatchAccordionRow({ stepName, instruction, entry }: DispatchAccordio
             sx={{
               fontSize: 10,
               color: 'text.disabled',
-              fontFamily: 'monospace',
+  
               flexShrink: 0,
               '@keyframes pulse': {
                 '0%, 100%': { opacity: 1 },
@@ -102,7 +102,7 @@ function DispatchAccordionRow({ stepName, instruction, entry }: DispatchAccordio
               fontSize: 10,
               color: 'text.disabled',
               fontStyle: 'italic',
-              fontFamily: 'monospace',
+  
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -149,7 +149,7 @@ function DispatchAccordionRow({ stepName, instruction, entry }: DispatchAccordio
         <Box sx={{ px: 1.5, py: 1.5, borderTop: 1, borderColor: 'divider' }}>
           <Typography
             sx={{
-              fontFamily: 'monospace',
+  
               fontSize: 11,
               color: 'text.disabled',
               '@keyframes pulse': {

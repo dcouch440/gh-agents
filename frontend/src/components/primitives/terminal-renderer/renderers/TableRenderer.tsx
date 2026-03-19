@@ -148,7 +148,7 @@ function TableRenderer({ node }: TableRendererProps) {
         m: 0,
         my: '0.4em',
         color: theme.tableBorder,
-        fontFamily: 'inherit',
+        fontFamily: '"JetBrains Mono", monospace',
         fontSize: 'inherit',
         lineHeight: 1.4,
         overflowX: 'auto',
