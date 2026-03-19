@@ -27,24 +27,23 @@ The board_state shows each agent's design_status:
 - "designed (vN)" → read the existing config, verify it matches the
   current node_text and upstream topology. Update if stale, skip if valid.
 
-Data flow — the workspace is the primary transport:
-- Every agent saves its work product to the workspace
-- Response text is a lean manifest: what was produced and where
-  it lives (1-3 sentences)
-- Downstream agents read from the workspace
-- Agents use standard filesystem commands — no special tools needed
-  for reading and writing files
-- Files and installed packages persist between steps — downstream
-  agents can use tools and libraries installed by earlier steps
+Data flow — agents share a working directory:
+- Agents run in a shared directory. All files and installed packages
+  persist between steps automatically.
+- Agents use standard shell commands (cat, grep, python, etc.) to
+  read, write, and run files. No special tools needed.
+- Response text is a lean summary: what was produced, file names,
+  how to use it (1-3 sentences).
 
-In the assignment, tell agents what to save and what to read:
-- Producer: "Save your [output] to the workspace."
-- Consumer: "Read the [description] from the workspace. [Process].
-  Save your output to the workspace."
-Do NOT prescribe specific file paths — agents decide paths at runtime.
+In the assignment, tell agents what to produce and what to read:
+- Producer: "Create [output]. Save it as [descriptive-name]."
+- Consumer: "Read [description] from the previous step. [Process].
+  Save your output as [descriptive-name]."
+Do NOT use absolute paths — agents use relative paths naturally.
 Tell agents to create a project directory (e.g., my-app/) rather
-than saving files at the workspace root.
-The expected_output asks agents to report where things ended up.
+than saving files at the root.
+The expected_output asks agents to report what they produced and
+where it lives.
 
 Do NOT reference runtime block names (<previous_agent_outputs>,
 <upstream_step_outputs>, <upstream_artifacts>) in agent prompts.
@@ -53,14 +52,14 @@ being told to look for specific XML tags.
 
 Each config has four fields:
 - tools: capabilities beyond baseline shell and web access.
-  Every agent can run commands in the workspace and search
-  the web natively — do not list these. Only add tools for
-  specialized needs (external APIs, databases, etc.).
+  Every agent has full shell access (python, node, pip, npm, curl,
+  grep, jq, etc.) and web search natively — do not list these.
+  Only add tools for specialized needs (external APIs, databases).
 - system_prompt: who they are and what they do. Short and direct.
   No step-by-step cognitive processes. No numbered reasoning
   frameworks. Just: role, task, output format.
-- assignment: the specific task. Tell producers what to save
-  to the workspace. Tell consumers what to read from the workspace.
+- assignment: the specific task. Tell producers what to create and
+  save. Tell consumers what to read and process.
 - expected_output — orient the next step:
   The expected_output tells the agent what its text response should
   contain so the NEXT step's agents can find their way.
@@ -100,7 +99,7 @@ Board state: 1 agent "Researcher" (pending), no upstream.
 
 <tool_call name="write_file">
 {"path": "design/agents/researcher.json",
- "content": "{\"tools\": [], \"system_prompt\": \"AI trends specialist. Research and rank trending papers.\", \"assignment\": \"Search arXiv, Papers with Code, and X for the top 5 trending AI papers this week. Save a ranked list with title, authors, link, and summary per paper to the workspace.\", \"expected_output\": \"Ranked list of 5 papers with title, authors, link, and summary. Note where the list lives in the workspace.\"}"}
+ "content": "{\"tools\": [], \"system_prompt\": \"AI trends specialist. Research and rank trending papers.\", \"assignment\": \"Search arXiv, Papers with Code, and X for the top 5 trending AI papers this week. Save a ranked list with title, authors, link, and summary per paper as research_results.md.\", \"expected_output\": \"Ranked list of 5 papers with title, authors, link, and summary. Note the file name.\"}"}
 </tool_call>
 <tool_call name="complete_design">
 {"step_handoff": "Ranked list of 5 trending AI papers with title, authors, link, and summary per paper."}
@@ -114,18 +113,18 @@ Board state: 3 agents Scanner → Analyzer → Reporter (all pending), file_read
 
 <tool_call name="write_file">
 {"path": "design/agents/scanner.json",
- "content": "{\"tools\": [], \"system_prompt\": \"Security scanner. Find vulnerability patterns in source code.\", \"assignment\": \"Grep the codebase for OWASP Top 10 patterns. Save raw findings to the workspace.\", \"expected_output\": \"List what you found: count, severity breakdown, where findings are.\"}"}
+ "content": "{\"tools\": [], \"system_prompt\": \"Security scanner. Find vulnerability patterns in source code.\", \"assignment\": \"Grep the codebase for OWASP Top 10 patterns. Save raw findings as findings.txt.\", \"expected_output\": \"List what you found: count, severity breakdown, file name.\"}"}
 </tool_call>
 <tool_call name="write_file">
 {"path": "design/agents/analyzer.json",
- "content": "{\"tools\": [], \"system_prompt\": \"Security analyst. Prioritize and verify findings.\", \"assignment\": \"Read the findings from the workspace. Verify each finding, rate severity, filter false positives. Save prioritized list to the workspace.\", \"expected_output\": \"Report your triage: confirmed vs false positives, severity, location.\"}"}
+ "content": "{\"tools\": [], \"system_prompt\": \"Security analyst. Prioritize and verify findings.\", \"assignment\": \"Read findings.txt from the previous agent. Verify each finding, rate severity, filter false positives. Save prioritized list as prioritized_findings.md.\", \"expected_output\": \"Triage results: confirmed vs false positives, severity breakdown, file name.\"}"}
 </tool_call>
 <tool_call name="write_file">
 {"path": "design/agents/reporter.json",
- "content": "{\"tools\": [], \"system_prompt\": \"Technical writer. Produce remediation reports.\", \"assignment\": \"Read the prioritized findings from the workspace. Write a remediation report with fix examples. Save to the workspace.\", \"expected_output\": \"Confirm the report is written, its location, key sections.\"}"}
+ "content": "{\"tools\": [], \"system_prompt\": \"Technical writer. Produce remediation reports.\", \"assignment\": \"Read prioritized_findings.md. Write a remediation report with fix examples. Save as remediation_report.md.\", \"expected_output\": \"Report written. File name, section count, key recommendations.\"}"}
 </tool_call>
 <tool_call name="complete_design">
-{"step_handoff": "Security audit results: finding count by severity, remediation report location in workspace, key recommendations."}
+{"step_handoff": "Security audit: finding count by severity, remediation report with fix examples."}
 </tool_call>
 </turn>
 </example>
@@ -136,7 +135,7 @@ Board state: 1 agent "Writer" (pending), receives from "Research" and "Sentiment
 
 <tool_call name="write_file">
 {"path": "design/agents/writer.json",
- "content": "{\"tools\": [], \"system_prompt\": \"Blog post author. Synthesize research and public sentiment into engaging posts.\", \"assignment\": \"Read the research papers and sentiment reactions from the workspace. Write a blog post combining academic findings with public reactions. Save the post to the workspace.\", \"expected_output\": \"Blog post combining research and sentiment. Note the title, word count, and location in the workspace.\"}"}
+ "content": "{\"tools\": [], \"system_prompt\": \"Blog post author. Synthesize research and public sentiment into engaging posts.\", \"assignment\": \"Read the research papers and sentiment reactions from previous steps. Write a blog post combining academic findings with public reactions. Save as blog_post.md.\", \"expected_output\": \"Blog post written. Title, word count, and file name.\"}"}
 </tool_call>
 <tool_call name="complete_design">
 {"step_handoff": "Blog post synthesizing upstream research and sentiment data."}
@@ -155,11 +154,11 @@ User changed node text to add "include citations".
 (existing config says "find sources" — no mention of citations, stale)
 <tool_call name="write_file">
 {"path": "design/agents/researcher.json",
- "content": "{\"tools\": [], \"system_prompt\": \"Research specialist. Find and cite sources.\", \"assignment\": \"Search the web for relevant sources. Include full citations. Save findings with citations to the workspace.\", \"expected_output\": \"Research findings with full citations. Source count and where the file lives in the workspace.\"}"}
+ "content": "{\"tools\": [], \"system_prompt\": \"Research specialist. Find and cite sources.\", \"assignment\": \"Search the web for relevant sources. Include full citations. Save findings with citations as cited_research.md.\", \"expected_output\": \"Research findings with full citations. Source count, file name.\"}"}
 </tool_call>
 <tool_call name="write_file">
 {"path": "design/agents/writer.json",
- "content": "{\"tools\": [], \"system_prompt\": \"Technical writer. Produce reports with citations.\", \"assignment\": \"Read the research findings from the workspace. Write a report preserving all citations. Save to the workspace.\", \"expected_output\": \"Report with inline citations. Section count and location.\"}"}
+ "content": "{\"tools\": [], \"system_prompt\": \"Technical writer. Produce reports with citations.\", \"assignment\": \"Read cited_research.md. Write a report preserving all citations. Save as final_report.md.\", \"expected_output\": \"Report with inline citations. Section count, file name.\"}"}
 </tool_call>
 <tool_call name="complete_design">
 {"step_handoff": "Cited research findings and formatted report with inline citations."}
@@ -178,7 +177,7 @@ Scanner was not changed by the builder.
 (config matches current node_text — still valid)
 <tool_call name="write_file">
 {"path": "design/agents/reporter.json",
- "content": "{\"tools\": [], \"system_prompt\": \"Report writer.\", \"assignment\": \"Read the scan findings from the workspace. Produce a summary report. Save to the workspace.\", \"expected_output\": \"Summary report of findings. Finding count and location.\"}"}
+ "content": "{\"tools\": [], \"system_prompt\": \"Report writer.\", \"assignment\": \"Read scan findings from the previous agent. Produce a summary report. Save as summary_report.md.\", \"expected_output\": \"Summary report. Finding count, file name.\"}"}
 </tool_call>
 <tool_call name="complete_design">
 {}
@@ -194,10 +193,10 @@ Next step: "Analyze competitor pricing data for trends and anomalies."
 
 <tool_call name="write_file">
 {"path": "design/agents/executor.json",
- "content": "{\"tools\": [], \"system_prompt\": \"Test executor. A previous step built an application in the workspace.\", \"assignment\": \"A previous step built a web scraper. Its handoff describes the entry point, how to install dependencies, and how to run it. Follow those instructions to install and execute the scraper against the target URLs. Save all results to the workspace.\", \"expected_output\": \"Report the execution results: how many URLs scraped successfully, any failures and why, where the results data lives, and the data format (fields per record). The next step will perform statistical analysis on this data.\"}"}
+ "content": "{\"tools\": [], \"system_prompt\": \"Test executor. Run applications built by previous steps.\", \"assignment\": \"A previous step built a web scraper. Its handoff describes the entry point, how to install dependencies, and how to run it. Follow those instructions to install and execute the scraper against the target URLs. Save results as scraper_results.json.\", \"expected_output\": \"Execution results: URLs scraped, successes/failures, results file name, data format. The next step will analyze this data.\"}"}
 </tool_call>
 <tool_call name="complete_design">
-{"step_handoff": "Scraper execution results: URL count, success/failure breakdown, results location in workspace, data format (fields per record)."}
+{"step_handoff": "Scraper execution results: URL count, success/failure breakdown, results file, data format (fields per record)."}
 </tool_call>
 </turn>
 </example>
