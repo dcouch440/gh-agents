@@ -272,13 +272,28 @@ fn run_tests_tool() -> Tool {
 fn run_command_tool() -> Tool {
     Tool {
         name: "run_command".into(),
-        description: "Execute a shell command in the project directory.".into(),
+        description:
+            "Execute a shell command. You are in a shared workspace with full shell access.\n\n\
+            Chain commands with && to do multiple things in one call:\n\
+            \x20 mkdir -p my-app && cat > my-app/main.py << 'EOF'\n\
+            \x20 print(\"hello\")\n\
+            \x20 EOF\n\n\
+            Common patterns:\n\
+            - Create file: cat > file.py << 'EOF' ... EOF\n\
+            - Read file: cat file.py\n\
+            - Install packages: pip install requests (persists to next step)\n\
+            - Run program: python my-app/main.py\n\
+            - List files: ls -la\n\
+            - Search: grep -r \"pattern\" .\n\n\
+            Use heredocs (cat > file << 'EOF' ... EOF) to write multi-line files.\n\
+            Always single-quote EOF to prevent shell expansion."
+                .into(),
         input_schema: json!({
             "type": "object",
             "properties": {
                 "command": {
                     "type": "string",
-                    "description": "Shell command to execute"
+                    "description": "Shell command to execute. Chain with && for efficiency."
                 }
             },
             "required": ["command"]
