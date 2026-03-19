@@ -146,12 +146,28 @@ mod tests {
     }
 
     #[test]
-    fn digest_first_command() {
-        let tracker = WorkspaceTracker::new();
-        let after = parse_snapshot("a.py\tf\t100\t1.0\n");
+    fn digest_first_command_with_initialize() {
+        let mut tracker = WorkspaceTracker::new();
+        // Simulate: workspace already has 10 files from prior steps
+        let before = parse_snapshot("a.py\tf\t100\t1.0\nb.py\tf\t200\t2.0\nc.py\tf\t300\t3.0\n");
+        tracker.initialize(&before);
+
+        // After command, one new file created
+        let after = parse_snapshot(
+            "a.py\tf\t100\t1.0\nb.py\tf\t200\t2.0\nc.py\tf\t300\t3.0\nd.py\tf\t400\t4.0\n",
+        );
         let digest = tracker.digest(&after);
-        assert_eq!(digest.file_count, 1);
-        assert_eq!(digest.file_delta, 1); // 1 - 0 = 1
+        assert_eq!(digest.file_count, 4);
+        assert_eq!(digest.file_delta, 1); // 4 - 3 = 1, not 4 - 0 = 4
+    }
+
+    #[test]
+    fn digest_first_command_no_changes() {
+        let mut tracker = WorkspaceTracker::new();
+        let snapshot = parse_snapshot("a.py\tf\t100\t1.0\n");
+        tracker.initialize(&snapshot);
+        let digest = tracker.digest(&snapshot);
+        assert_eq!(digest.file_delta, 0); // no change
     }
 
     #[test]

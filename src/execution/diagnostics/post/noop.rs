@@ -38,9 +38,7 @@ impl PostCheck for NoOpCheck {
             }
             // Only report search no-ops when no files were created/modified either.
             // `cat > file << 'EOF'` has empty stdout but creates a file — not a no-op.
-            CommandType::Search
-                if result.stdout.trim().is_empty() && changes.is_empty() =>
-            {
+            CommandType::Search if result.stdout.trim().is_empty() && changes.is_empty() => {
                 vec![Diagnostic {
                     severity: Severity::NoOp,
                     category: DiagnosticCategory::NoOp,

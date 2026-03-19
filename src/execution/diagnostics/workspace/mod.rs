@@ -16,6 +16,7 @@ use super::types::{ChangeType, FileChange};
 pub struct WorkspaceTracker {
     prev_file_count: usize,
     prev_dir_count: usize,
+    initialized: bool,
 }
 
 impl WorkspaceTracker {
@@ -23,6 +24,18 @@ impl WorkspaceTracker {
         Self {
             prev_file_count: 0,
             prev_dir_count: 0,
+            initialized: false,
+        }
+    }
+
+    /// Initialize baseline counts from the first pre-command snapshot.
+    /// Prevents the first digest from showing `+1486` when the workspace
+    /// already has files from prior steps.
+    pub fn initialize(&mut self, before: &UpperDirSnapshot) {
+        if !self.initialized {
+            self.prev_file_count = before.file_count();
+            self.prev_dir_count = before.dir_count();
+            self.initialized = true;
         }
     }
 

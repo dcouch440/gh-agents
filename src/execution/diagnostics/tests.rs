@@ -107,6 +107,34 @@ mod tests {
     }
 
     #[test]
+    fn strip_grok_citation_tags() {
+        let input = "Hello<grok:render type=\"render_inline_citation\">\n<argument name=\"citation_id\">42</argument>\n</grok:render> world";
+        assert_eq!(html_unescape(input), "Hello world");
+    }
+
+    #[test]
+    fn strip_multiple_grok_tags() {
+        let input = "A<grok:render type=\"x\">\n<argument name=\"citation_id\">1</argument>\n</grok:render> B<grok:render type=\"y\">\n<argument name=\"citation_id\">2</argument>\n</grok:render> C";
+        assert_eq!(html_unescape(input), "A B C");
+    }
+
+    #[test]
+    fn strip_grok_tags_in_heredoc() {
+        let input = "cat > f.md << 'EOF'\n# Title<grok:render type=\"render_inline_citation\">\n<argument name=\"citation_id\">5</argument>\n</grok:render>\nContent here.\nEOF";
+        let result = html_unescape(input);
+        assert!(!result.contains("grok:render"));
+        assert!(result.contains("# Title"));
+        assert!(result.contains("Content here."));
+        assert!(result.contains("EOF"));
+    }
+
+    #[test]
+    fn no_grok_tags_unchanged() {
+        let input = "cat > file.py << 'EOF'\nprint('hello')\nEOF";
+        assert_eq!(html_unescape(input), input);
+    }
+
+    #[test]
     fn render_full_envelope() {
         use crate::execution::diagnostics::types::{ChangeType, FileChange};
         use crate::execution::diagnostics::workspace::digest::WorkspaceDigest;
