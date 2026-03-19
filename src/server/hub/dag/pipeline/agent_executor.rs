@@ -243,8 +243,7 @@ async fn execute_single_agent(
         format!(
             "{}\n\
              You are in a shared workspace. Files and installed packages from previous steps are available.\n\
-             Always use run_command to save files — do not put file content in your response.\n\
-             After saving your work, respond with a brief summary.",
+             Save files with run_command — do not put file content in your response.",
             designed.system_prompt
         )
     } else {
