@@ -163,7 +163,6 @@ function TabButton({ label, active, onClick }: TabButtonProps) {
         textAlign: 'center',
         py: 0.75,
         cursor: 'pointer',
-        fontFamily: 'monospace',
         fontSize: 12,
         fontWeight: active ? 600 : 400,
         color: active ? 'text.primary' : 'text.secondary',

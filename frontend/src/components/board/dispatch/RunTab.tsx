@@ -105,7 +105,6 @@ function StepTraceGroup({ stepName, traces }: StepTraceGroupProps) {
           py: 0.5,
           fontSize: 11,
           fontWeight: 600,
-          fontFamily: 'monospace',
           color: 'text.secondary',
           bgcolor: 'action.hover',
         }}

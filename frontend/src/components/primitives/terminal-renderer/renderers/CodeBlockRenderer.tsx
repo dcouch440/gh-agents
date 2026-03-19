@@ -35,10 +35,11 @@ function CodeBlockRenderer({ node }: CodeBlockRendererProps) {
           pl: '1em',
           borderLeft: `2px solid ${theme.codeBorder}`,
           bgcolor: theme.codeBg,
+          fontFamily: '"JetBrains Mono", monospace',
           overflowX: 'auto',
         }}
       >
-        <Box component="code" sx={{ fontSize: 'inherit', fontFamily: 'inherit', whiteSpace: 'pre' }}>
+        <Box component="code" sx={{ fontSize: 'inherit', fontFamily: '"JetBrains Mono", monospace', whiteSpace: 'pre' }}>
           {content}
         </Box>
       </Box>

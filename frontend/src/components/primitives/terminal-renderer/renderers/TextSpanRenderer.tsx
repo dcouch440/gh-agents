@@ -49,6 +49,7 @@ function TextSpanRenderer({ nodes }: TextSpanRendererProps) {
                 sx={{
                   color: theme.codeText,
                   bgcolor: theme.codeBg,
+                  fontFamily: '"JetBrains Mono", monospace',
                   px: '0.3em',
                   py: '0.1em',
                   borderRadius: '2px',

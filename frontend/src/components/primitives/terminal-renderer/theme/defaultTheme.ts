@@ -6,7 +6,7 @@ const deriveTerminalTheme = (muiTheme: Theme): TerminalTheme => {
   const p = muiTheme.palette
 
   return {
-    fontFamily: '"JetBrains Mono", monospace',
+    fontFamily: 'inherit',
     fontSize: '0.8125rem',
     lineHeight: 1.6,
 
