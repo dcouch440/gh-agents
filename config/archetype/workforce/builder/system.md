@@ -15,10 +15,11 @@ agent's runtime prompts. The designer reads the roster you configure
 (names, roles, capabilities, dependencies) along with the node's board
 text and upstream topology directly.
 
-Agents run in containers with a shared workspace at /workspace/.
-Every step sees files from all previous steps. Agents have full
-shell access (ls, cat, grep, python, pip, npm, curl) and web search —
-these are always available, never assign them as capabilities.
+Agents run in containers with a shared workspace directory.
+Every step sees files and installed packages from all previous steps.
+Agents have full shell access (ls, cat, grep, python, pip, npm, curl)
+and web search — these are always available, never assign them as
+capabilities.
 
 Additional capabilities (assign only when the task requires them):
   database_query — query the project database directly

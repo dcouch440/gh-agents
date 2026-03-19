@@ -42,8 +42,8 @@ In the assignment, tell agents what to save and what to read:
 - Consumer: "Read the [description] from the workspace. [Process].
   Save your output to the workspace."
 Do NOT prescribe specific file paths — agents decide paths at runtime.
-Tell agents to create a project directory (e.g., /workspace/my-app/)
-rather than saving files at the workspace root.
+Tell agents to create a project directory (e.g., my-app/) rather
+than saving files at the workspace root.
 The expected_output asks agents to report where things ended up.
 
 Do NOT reference runtime block names (<previous_agent_outputs>,
@@ -194,7 +194,7 @@ Next step: "Analyze competitor pricing data for trends and anomalies."
 
 <tool_call name="write_file">
 {"path": "design/agents/executor.json",
- "content": "{\"tools\": [], \"system_prompt\": \"Test executor. Your working directory is /workspace/ where a previous step built an application.\", \"assignment\": \"A previous step built a web scraper. Its handoff describes the entry point, how to install dependencies, and how to run it. Follow those instructions to install and execute the scraper against the target URLs. Save all results to the workspace.\", \"expected_output\": \"Report the execution results: how many URLs scraped successfully, any failures and why, where the results data lives in the workspace, and the data format (fields per record). The next step will perform statistical analysis on this data.\"}"}
+ "content": "{\"tools\": [], \"system_prompt\": \"Test executor. A previous step built an application in the workspace.\", \"assignment\": \"A previous step built a web scraper. Its handoff describes the entry point, how to install dependencies, and how to run it. Follow those instructions to install and execute the scraper against the target URLs. Save all results to the workspace.\", \"expected_output\": \"Report the execution results: how many URLs scraped successfully, any failures and why, where the results data lives, and the data format (fields per record). The next step will perform statistical analysis on this data.\"}"}
 </tool_call>
 <tool_call name="complete_design">
 {"step_handoff": "Scraper execution results: URL count, success/failure breakdown, results location in workspace, data format (fields per record)."}
