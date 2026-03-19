@@ -273,20 +273,24 @@ fn run_command_tool() -> Tool {
     Tool {
         name: "run_command".into(),
         description:
-            "Execute a shell command. You are in a shared workspace with full shell access.\n\n\
-            Chain commands with && to do multiple things in one call:\n\
+            "Execute a shell command. Chain with && to do multiple things in one call.\n\n\
+            Examples:\n\
             \x20 mkdir -p my-app && cat > my-app/main.py << 'EOF'\n\
-            \x20 print(\"hello\")\n\
+            \x20 import sys\n\
+            \x20 print(f\"Hello {sys.argv[1]}\")\n\
             \x20 EOF\n\n\
-            Common patterns:\n\
-            - Create file: cat > file.py << 'EOF' ... EOF\n\
-            - Read file: cat file.py\n\
-            - Install packages: pip install requests (persists to next step)\n\
-            - Run program: python my-app/main.py\n\
-            - List files: ls -la\n\
-            - Search: grep -r \"pattern\" .\n\n\
-            Use heredocs (cat > file << 'EOF' ... EOF) to write multi-line files.\n\
-            Always single-quote EOF to prevent shell expansion."
+            \x20 pip install requests && python scraper.py | jq '.results[]'\n\n\
+            \x20 grep -rn 'TODO' src/ | head -20\n\n\
+            \x20 find . -name '*.py' | xargs wc -l | sort -n | tail -5\n\n\
+            \x20 curl -s https://api.example.com/data | jq '.items[] | {name, count}' > results.json\n\n\
+            File operations:\n\
+            - Write: cat > file << 'EOF' ... EOF (always single-quote EOF)\n\
+            - Read: cat file | head -50\n\
+            - Edit: sed -i 's/old/new/g' file.py\n\
+            - Search: grep -rn 'pattern' . | head -20\n\
+            - Browse: find . -type f -name '*.py' | head -20\n\n\
+            Available tools: python, pip, git, curl, wget, jq, grep, sed, awk, find, xargs, sort, uniq, wc, head, tail, tee, tr, cut.\n\
+            Installed packages persist to the next step."
                 .into(),
         input_schema: json!({
             "type": "object",
