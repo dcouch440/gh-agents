@@ -20,7 +20,7 @@ type LoggerConfig = {
 
 const DEFAULT_CONFIG: Required<LoggerConfig> = {
   enabled: import.meta.env.DEV && !import.meta.env.VITEST,
-  collapsed: false,
+  collapsed: true,
   diff: true,
   timestamp: true,
   colors: {

@@ -46,7 +46,13 @@ function StepTree() {
   const sources = useStore(stepStreamStore.store, stepStreamStore.selectAllSources)
   const expandedAgentKeys = useStore(sidebarStore.store, sidebarStore.selectExpandedAgentKeys)
 
-  const entries = useMemo(() => buildStepTree(steps, edges, rosterByStep), [steps, edges, rosterByStep])
+  const entries = useMemo(() => {
+    const result = buildStepTree(steps, edges, rosterByStep)
+    if (import.meta.env.DEV) {
+      console.warn('[StepTree] steps=%d edges=%d entries=%d', steps.length, edges.length, result.length)
+    }
+    return result
+  }, [steps, edges, rosterByStep])
 
   if (entries.length === 0) {
     return (

@@ -197,6 +197,7 @@ pub async fn execute_phase_zero(
         step.position_y = Some(node_move.new_bounds.y);
         step.width = Some(node_move.new_bounds.width);
         step.height = Some(node_move.new_bounds.height);
+        step.display_order = ((node_move.new_bounds.y * 10_000.0) + node_move.new_bounds.x) as i32;
 
         repo.update_step(step).await?;
         result.moved_steps.push(node_move.element_id.clone());
@@ -231,6 +232,9 @@ async fn create_node(
                 position_y: Some(node.bounds.y),
                 width: Some(node.bounds.width),
                 height: Some(node.bounds.height),
+                // Derive display_order from canvas position: top-to-bottom,
+                // left-to-right so sidebar ordering matches visual layout.
+                display_order: Some(((node.bounds.y * 10_000.0) + node.bounds.x) as i32),
                 ..StepPayload::default()
             },
         },

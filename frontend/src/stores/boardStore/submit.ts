@@ -175,6 +175,18 @@ const submitBoard = async (workflowId: string, elements: ReadonlyArray<unknown>)
 
     syncPhaseZero(response.phase_zero)
 
+    if (import.meta.env.DEV) {
+      const hasArrows = (elements as ReadonlyArray<Record<string, unknown>>).some(
+        (el) => el.type === 'arrow',
+      )
+      const edgeCount = response.phase_zero.created_edges.length + response.phase_zero.rewired_edges.length
+      if (hasArrows && edgeCount === 0) {
+        console.warn(
+          '[boardStore] board has arrows but Phase 0 created 0 edges — arrows may not be bound to nodes',
+        )
+      }
+    }
+
     const prev = store.getState()
     store.setState({
       status: 'success',

@@ -17,7 +17,6 @@ type GutterCell =
   | 'fork_start'
   | 'par_mid'
   | 'par_end'
-  | 'root_fork'
 
 type StepEntry = {
   readonly kind: 'step'
@@ -59,7 +58,15 @@ const buildGraph = (
   for (let i = 0; i < n; i++) {
     const e = edges[i]!
     // Only include edges where both endpoints exist
-    if (!stepMap.has(e.from_step_id) || !stepMap.has(e.to_step_id)) continue
+    if (!stepMap.has(e.from_step_id) || !stepMap.has(e.to_step_id)) {
+      if (import.meta.env.DEV) {
+        console.warn(
+          '[buildStepTree] dropping edge %s: from=%s(%s) to=%s(%s)',
+          e.id, e.from_step_id, stepMap.has(e.from_step_id), e.to_step_id, stepMap.has(e.to_step_id),
+        )
+      }
+      continue
+    }
 
     const fwd = children.get(e.from_step_id)
     if (fwd) fwd.push(e.to_step_id)
@@ -544,25 +551,28 @@ const linearizeComponent = (
     }
 
     if (convergence !== null) {
-      // Emit roots as parallel siblings using root_fork pattern
+      // Emit roots as indented parallel branches — inputs are indented,
+      // convergence point sits at base level (mirrors fork/merge pattern).
       for (let i = 0; i < roots.length; i++) {
         const rootId = roots[i]!
         const isFirst = i === 0
         const isLastRoot = i === roots.length - 1
 
-        const cell: GutterCell = isFirst ? 'root_fork' : isLastRoot ? 'par_end' : 'par_mid'
-        emit(rootId, [cell])
+        const cell: GutterCell = isFirst ? 'fork_start' : isLastRoot ? 'par_end' : 'par_mid'
+        emit(rootId, ['pipe', cell])
 
         // Collect sub-DAG for this root branch before convergence
         const branchNodes = reachableBefore(rootId, convergence, graph, scope)
         branchNodes.delete(rootId)
 
         if (branchNodes.size > 0) {
-          linearize([...branchNodes], convergence, ['pipe'], isLastRoot)
+          // Each root branch is a self-contained segment — the last node
+          // should always get 'corner' regardless of which root this is.
+          linearize([...branchNodes], convergence, ['pipe', 'pipe'], true)
         }
       }
 
-      // Continue from convergence
+      // Continue from convergence — at base level (no prefix)
       const remaining: string[] = []
       for (let i = 0; i < order.length; i++) {
         const id = order[i]!

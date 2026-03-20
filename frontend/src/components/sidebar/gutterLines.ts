@@ -36,7 +36,7 @@ const computeLines = (gutter: readonly GutterCell[]): LineDef[] => {
 
     const fullVert = cell === 'pipe' || cell === 'branch' || cell === 'par_mid'
     const halfUp = cell === 'corner' || cell === 'par_end'
-    const halfDown = cell === 'root_fork' || cell === 'fork_start'
+    const halfDown = cell === 'fork_start'
 
     if (fullVert) {
       lines.push({ left: cx, top: 0, width: STROKE, height: '100%' })
