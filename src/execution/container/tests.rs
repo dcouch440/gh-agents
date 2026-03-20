@@ -703,38 +703,13 @@ mod tests {
     // ── destroy_container ───────────────────────────────────────────────
 
     #[tokio::test]
-    async fn destroy_stop_and_rm_succeed() {
+    async fn destroy_rm_succeeds() {
         let mut mock = MockDockerCli::new();
-        // stop
-        mock.expect_run().times(1).returning(|args| {
-            assert!(args.iter().any(|a| a == "stop"));
-            Ok(success_output(""))
-        });
-        // rm
         mock.expect_run().times(1).returning(|args| {
             assert!(args.iter().any(|a| a == "rm"));
+            assert!(args.iter().any(|a| a == "-f"));
             Ok(success_output(""))
         });
-
-        let handle = make_handle(Arc::new(mock));
-        let result = ContainerManager::destroy_container(&handle).await;
-        assert!(result.is_ok());
-    }
-
-    #[tokio::test]
-    async fn destroy_stop_fails_rm_succeeds() {
-        let mut mock = MockDockerCli::new();
-        // stop fails (io error) — but destroy_container ignores it via `let _ =`
-        mock.expect_run().times(1).returning(|_| {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "stop failed",
-            ))
-        });
-        // rm succeeds
-        mock.expect_run()
-            .times(1)
-            .returning(|_| Ok(success_output("")));
 
         let handle = make_handle(Arc::new(mock));
         let result = ContainerManager::destroy_container(&handle).await;
@@ -744,11 +719,6 @@ mod tests {
     #[tokio::test]
     async fn destroy_rm_spawn_fails() {
         let mut mock = MockDockerCli::new();
-        // stop succeeds
-        mock.expect_run()
-            .times(1)
-            .returning(|_| Ok(success_output("")));
-        // rm fails with io error
         mock.expect_run().times(1).returning(|_| {
             Err(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
@@ -1073,8 +1043,8 @@ mod tests {
         };
         let args = build_create_args("test-container", &config);
         assert!(
-            args.contains(&"--env=VIRTUAL_ENV=/workspace/.venv".to_string()),
-            "Should inject VIRTUAL_ENV into workspace"
+            !args.iter().any(|a| a.contains("VIRTUAL_ENV")),
+            "Should not inject VIRTUAL_ENV (no venv in workspace)"
         );
         assert!(
             args.contains(&"--env=PIP_CACHE_DIR=/tmp/pip-cache".to_string()),
@@ -1204,7 +1174,11 @@ mod tests {
         };
         let args = build_create_args("test-container", &config);
         assert!(
-            args.contains(&"--env=VIRTUAL_ENV=/workspace/.venv".to_string()),
+            !args.iter().any(|a| a.contains("VIRTUAL_ENV")),
+            "Should not inject VIRTUAL_ENV (no venv in workspace)"
+        );
+        assert!(
+            args.contains(&"--env=PIP_CACHE_DIR=/tmp/pip-cache".to_string()),
             "Overlay mode should still inject workspace env vars"
         );
     }

@@ -631,14 +631,8 @@ static CONTAINER_CREATE_SEMAPHORE: Lazy<Arc<Semaphore>> = Lazy::new(|| {
 });
 
 /// Environment variables injected when a workspace mount is active.
-/// Steers pip/npm/cargo into /workspace/ so installed packages persist
-/// across steps via the JuiceFS overlay. Download caches still go to /tmp/.
+/// Download caches go to /tmp/ to avoid polluting the overlay.
 const WORKSPACE_ENV_VARS: &[(&str, &str)] = &[
-    ("VIRTUAL_ENV", "/workspace/.venv"),
-    (
-        "PATH",
-        "/workspace/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-    ),
     ("PIP_CACHE_DIR", "/tmp/pip-cache"),
     ("PYTHONDONTWRITEBYTECODE", "1"),
     ("npm_config_prefix", "/workspace/.npm"),
@@ -954,15 +948,6 @@ impl ContainerManager {
     /// Stop and remove a container.
     pub async fn destroy_container(handle: &ContainerHandle) -> Result<(), ContainerError> {
         let destroy_start = std::time::Instant::now();
-
-        let _ = handle
-            .cli
-            .run(vec![
-                "stop".to_string(),
-                "--time=10".to_string(),
-                handle.container_id.clone(),
-            ])
-            .await;
 
         let rm_output = handle
             .cli
