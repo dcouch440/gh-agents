@@ -13,7 +13,7 @@ use once_cell::sync::Lazy;
 use thiserror::Error;
 use tokio::process::Command;
 use tokio::sync::Semaphore;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 use uuid::Uuid;
 
 pub mod overlay;
@@ -445,7 +445,7 @@ impl ContainerHandle {
                     duration_ms,
                     truncated,
                 };
-                debug!(
+                trace!(
                     container = %self.container_name,
                     exit_code = result.exit_code,
                     duration_ms,
