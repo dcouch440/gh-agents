@@ -216,9 +216,9 @@ describe('buildStepTree', () => {
 
     expect(stepIds(result)).toEqual(['a', 'b', 'c'])
     expect(gutters(result)).toEqual([
-      ['root_fork'],  // ┬─ A
-      ['par_end'],     // └─ B
-      ['corner'],      // └── C
+      ['pipe', 'fork_start'],  // │ ┌─ A (indented input)
+      ['pipe', 'par_end'],     // │ └─ B (indented input)
+      ['corner'],              // └── C  (base level convergence)
     ])
   })
 
@@ -240,10 +240,10 @@ describe('buildStepTree', () => {
 
     expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd'])
     expect(gutters(result)).toEqual([
-      ['root_fork'],  // ┬─ A
-      ['par_end'],     // └─ B
-      ['branch'],      // ├── C
-      ['corner'],      // └── D
+      ['pipe', 'fork_start'],  // │ ┌─ A (indented input)
+      ['pipe', 'par_end'],     // │ └─ B (indented input)
+      ['branch'],              // ├── C  (base level convergence)
+      ['corner'],              // └── D
     ])
   })
 
@@ -792,6 +792,434 @@ describe('buildStepTree', () => {
       ['blank', 'branch'],                // ├── A
       ['blank', 'pipe', 'fork_start'],   // │ ┌─ B
       ['blank', 'pipe', 'par_end'],      // │ └─ C
+    ])
+  })
+
+  // ── Topology + workforce integration tests ──────────────────────────────
+
+  // Pattern: Fan-in with workforce steps (the exact scenario from the bug report)
+  // A(wf) → C, B(wf) → C — two workforce roots converging
+  it('fan-in with workforce roots and agents', () => {
+    const steps = [
+      makeWorkforceStep('a', 'Python Research', 0),
+      makeWorkforceStep('b', 'Rust Research', 1),
+      makeWorkforceStep('c', 'Comparison', 2),
+    ]
+    const edges = [makeEdge('e1', 'a', 'c'), makeEdge('e2', 'b', 'c')]
+    const roster: Record<string, RosterAgent[]> = {
+      a: [makeRosterAgent('Researcher', 0)],
+      b: [makeRosterAgent('RustResearcher', 0)],
+      c: [makeRosterAgent('Comparator', 0)],
+    }
+    const result = buildStepTree(steps, edges, roster)
+
+    // Steps should be connected: root_fork → par_end → corner
+    expect(stepIds(result)).toEqual(['a', 'b', 'c'])
+    const stepEntries = result.filter((e) => e.kind === 'step')
+    expect(stepEntries.map((e) => e.gutter)).toEqual([
+      ['pipe', 'fork_start'],  // │ ┌─ A (indented input)
+      ['pipe', 'par_end'],     // │ └─ B (indented input)
+      ['corner'],              // └── C  (base level convergence)
+    ])
+
+    // Agents should nest under their respective steps
+    const agents = result.filter((e): e is AgentEntry => e.kind === 'agent')
+    expect(agents).toHaveLength(3)
+    expect(agents[0]!.stepId).toBe('a')
+    expect(agents[1]!.stepId).toBe('b')
+    expect(agents[2]!.stepId).toBe('c')
+  })
+
+  // Pattern: Diamond with mixed workforce / non-workforce
+  // A(wf) → {B, C(wf)} → D
+  it('diamond with mixed workforce and non-workforce', () => {
+    const steps = [
+      makeWorkforceStep('a', 'Leader', 0),
+      makeStep('b', 'Fast Track', 1),
+      makeWorkforceStep('c', 'Deep Dive', 2),
+      makeStep('d', 'Merge', 3),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+      makeEdge('e3', 'b', 'd'),
+      makeEdge('e4', 'c', 'd'),
+    ]
+    const roster: Record<string, RosterAgent[]> = {
+      a: [makeRosterAgent('Manager', 0)],
+      c: [makeRosterAgent('Analyst', 0), makeRosterAgent('Writer', 1)],
+    }
+    const result = buildStepTree(steps, edges, roster)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd'])
+    const stepEntries = result.filter((e) => e.kind === 'step')
+    expect(stepEntries.map((e) => e.gutter)).toEqual([
+      ['branch'],                // ├── A (fork)
+      ['pipe', 'fork_start'],    // │ ┌─ B
+      ['pipe', 'par_end'],       // │ └─ C
+      ['corner'],                // └── D (merge)
+    ])
+
+    // Manager agent under A (step gutter = branch → continuation = pipe)
+    const managerAgent = result.filter((e): e is AgentEntry => e.kind === 'agent' && e.stepId === 'a')
+    expect(managerAgent).toHaveLength(1)
+    expect(managerAgent[0]!.gutter).toEqual(['pipe', 'corner'])
+
+    // C's agents (step gutter = ['pipe', 'par_end'] → continuation = ['pipe', 'blank'])
+    const cAgents = result.filter((e): e is AgentEntry => e.kind === 'agent' && e.stepId === 'c')
+    expect(cAgents).toHaveLength(2)
+  })
+
+  // Pattern: Triple fan-in (3 roots → 1 target)
+  // A → D, B → D, C → D
+  it('triple fan-in from independent roots', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'd'),
+      makeEdge('e2', 'b', 'd'),
+      makeEdge('e3', 'c', 'd'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd'])
+    expect(gutters(result)).toEqual([
+      ['pipe', 'fork_start'],  // │ ┌─ A (indented input)
+      ['pipe', 'par_mid'],     // │ ├─ B (indented input)
+      ['pipe', 'par_end'],     // │ └─ C (indented input)
+      ['corner'],              // └── D  (base level convergence)
+    ])
+  })
+
+  // Pattern: Fan-in where one root has a sub-chain before converging
+  // A → B → D, C → D
+  it('fan-in with sub-chain in root branch', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'b', 'd'),
+      makeEdge('e3', 'c', 'd'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    // A and C are roots, D is convergence, B is inside A's branch
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd'])
+    expect(gutters(result)).toEqual([
+      ['pipe', 'fork_start'],            // │ ┌─ A (indented input)
+      ['pipe', 'pipe', 'corner'],        // │ │  └── B
+      ['pipe', 'par_end'],               // │ └─ C (indented input)
+      ['corner'],                         // └── D  (base level convergence)
+    ])
+  })
+
+  // Pattern: Sequential workforce chain A → B → C (all workforce with agents)
+  it('sequential workforce chain with agents at each level', () => {
+    const steps = [
+      makeWorkforceStep('a', 'Phase 1', 0),
+      makeWorkforceStep('b', 'Phase 2', 1),
+      makeWorkforceStep('c', 'Phase 3', 2),
+    ]
+    const edges = [makeEdge('e1', 'a', 'b'), makeEdge('e2', 'b', 'c')]
+    const roster: Record<string, RosterAgent[]> = {
+      a: [makeRosterAgent('Scout', 0)],
+      b: [makeRosterAgent('Builder', 0)],
+      c: [makeRosterAgent('Reviewer', 0)],
+    }
+    const result = buildStepTree(steps, edges, roster)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c'])
+    const stepEntries = result.filter((e) => e.kind === 'step')
+    expect(stepEntries.map((e) => e.gutter)).toEqual([
+      ['branch'],   // ├── A
+      ['branch'],   // ├── B
+      ['corner'],   // └── C
+    ])
+
+    // Each step should have exactly 1 agent
+    const agents = result.filter((e): e is AgentEntry => e.kind === 'agent')
+    expect(agents).toHaveLength(3)
+    expect(agents[0]!.stepId).toBe('a')
+    expect(agents[0]!.gutter).toEqual(['pipe', 'corner'])    // A continuation=pipe
+    expect(agents[1]!.stepId).toBe('b')
+    expect(agents[1]!.gutter).toEqual(['pipe', 'corner'])    // B continuation=pipe
+    expect(agents[2]!.stepId).toBe('c')
+    expect(agents[2]!.gutter).toEqual(['blank', 'corner'])   // C continuation=blank (last step)
+  })
+
+  // Pattern: Workforce in parallel branch A → {B(wf), C} → D
+  it('workforce step in parallel fork branch', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeWorkforceStep('b', 'B Team', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+      makeEdge('e3', 'b', 'd'),
+      makeEdge('e4', 'c', 'd'),
+    ]
+    const roster: Record<string, RosterAgent[]> = {
+      b: [makeRosterAgent('Alpha', 0), makeRosterAgent('Beta', 1)],
+    }
+    const result = buildStepTree(steps, edges, roster)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd'])
+
+    // B's gutter is ['pipe', 'fork_start'], continuation = ['pipe', 'pipe']
+    const agents = result.filter((e): e is AgentEntry => e.kind === 'agent')
+    expect(agents).toHaveLength(2)
+    expect(agents[0]!.gutter).toEqual(['pipe', 'pipe', 'branch'])
+    expect(agents[1]!.gutter).toEqual(['pipe', 'pipe', 'corner'])
+  })
+
+  // Pattern: All display_order=0 (the real-world default for canvas-created steps)
+  it('topology correct when all display_order=0', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 0),
+      makeStep('c', 'C', 0),
+    ]
+    const edges = [makeEdge('e1', 'a', 'c'), makeEdge('e2', 'b', 'c')]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    // Topology should still be correct — all 3 in one component
+    expect(stepIds(result)).toHaveLength(3)
+    // C should be last (it's the convergence point)
+    const ids = stepIds(result)
+    expect(ids[ids.length - 1]).toBe('c')
+    // Should have root_fork pattern (multi-root convergence)
+    const stepGutters = result.filter((e) => e.kind === 'step').map((e) => e.gutter)
+    expect(stepGutters[0]).toEqual(['pipe', 'fork_start'])
+    expect(stepGutters[stepGutters.length - 1]).toEqual(['corner'])
+  })
+
+  // Pattern: Deeply nested forks (4 levels)
+  // A → {B, C}, B → {D, E}, D → {F, G}
+  it('deeply nested forks (3 levels of nesting)', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+      makeStep('e', 'E', 4),
+      makeStep('f', 'F', 5),
+      makeStep('g', 'G', 6),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+      makeEdge('e3', 'b', 'd'),
+      makeEdge('e4', 'b', 'e'),
+      makeEdge('e5', 'd', 'f'),
+      makeEdge('e6', 'd', 'g'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    // All 7 steps should be in the tree
+    expect(stepIds(result)).toHaveLength(7)
+    // A should be first, and the nesting should create progressively deeper gutters
+    expect(stepIds(result)[0]).toBe('a')
+    // Verify gutter depth increases with nesting
+    const maxGutterDepth = Math.max(
+      ...result.filter((e) => e.kind === 'step').map((e) => e.gutter.length),
+    )
+    expect(maxGutterDepth).toBeGreaterThanOrEqual(7) // deeply nested
+  })
+
+  // Pattern: Cross-edge within fork: A → B, A → C, B → C
+  // B→C means C is reachable from B, so this isn't a true fork — it's sequential A → B → C
+  it('cross-edge within fork collapses to sequential', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+      makeEdge('e3', 'b', 'c'),  // cross-edge: B → C
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    // A forks to {B, C}, but B→C means C is the merge point
+    // So: A (branch), B (fork branch), then C (merge/corner)
+    expect(stepIds(result)).toEqual(['a', 'b', 'c'])
+  })
+
+  // Pattern: Fan-in then fan-out — convergence gathers inputs then forks
+  // A → C, B → C, C → {D, E}
+  it('fan-in then fan-out', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+      makeStep('e', 'E', 4),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'c'),
+      makeEdge('e2', 'b', 'c'),
+      makeEdge('e3', 'c', 'd'),
+      makeEdge('e4', 'c', 'e'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(gutters(result)).toEqual([
+      ['pipe', 'fork_start'],        // │ ┌─ A (indented input)
+      ['pipe', 'par_end'],           // │ └─ B (indented input)
+      ['branch'],                     // ├── C  (base level convergence, then forks)
+      ['pipe', 'fork_start'],        // │ ┌─ D
+      ['pipe', 'par_end'],           // │ └─ E
+    ])
+  })
+
+  // Pattern: Wide fan-in then continuation
+  // A → D, B → D, C → D, D → E
+  it('wide fan-in then continuation', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+      makeStep('e', 'E', 4),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'd'),
+      makeEdge('e2', 'b', 'd'),
+      makeEdge('e3', 'c', 'd'),
+      makeEdge('e4', 'd', 'e'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(gutters(result)).toEqual([
+      ['pipe', 'fork_start'],        // │ ┌─ A
+      ['pipe', 'par_mid'],           // │ ├─ B
+      ['pipe', 'par_end'],           // │ └─ C
+      ['branch'],                     // ├── D (convergence)
+      ['corner'],                     // └── E
+    ])
+  })
+
+  // Pattern: Fan-in where both roots have sub-chains
+  // A → B → E, C → D → E
+  it('fan-in where both roots have sub-chains', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+      makeStep('e', 'E', 4),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'b', 'e'),
+      makeEdge('e3', 'c', 'd'),
+      makeEdge('e4', 'd', 'e'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(gutters(result)).toEqual([
+      ['pipe', 'fork_start'],            // │ ┌─ A
+      ['pipe', 'pipe', 'corner'],        // │ │  └── B
+      ['pipe', 'par_end'],               // │ └─ C
+      ['pipe', 'pipe', 'corner'],        // │    └── D
+      ['corner'],                         // └── E (convergence)
+    ])
+  })
+
+  // Pattern: Fan-in where one root fans out before converging
+  // A → {B, C} → E, D → E
+  it('fan-in where one root fans out before converging', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+      makeStep('e', 'E', 4),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'b'),
+      makeEdge('e2', 'a', 'c'),
+      makeEdge('e3', 'b', 'e'),
+      makeEdge('e4', 'c', 'e'),
+      makeEdge('e5', 'd', 'e'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    // A and D are roots. A fans out to B,C which merge at E. D also feeds E.
+    expect(stepIds(result)).toHaveLength(5)
+    // E should be last (convergence)
+    const ids = stepIds(result)
+    expect(ids[ids.length - 1]).toBe('e')
+  })
+
+  // Pattern: Two independent fan-in components
+  // Component 1: A → C, B → C
+  // Component 2: D → F, E → F
+  it('parallel independent fan-in components', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      makeStep('b', 'B', 1),
+      makeStep('c', 'C', 2),
+      makeStep('d', 'D', 3),
+      makeStep('e', 'E', 4),
+      makeStep('f', 'F', 5),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'c'),
+      makeEdge('e2', 'b', 'c'),
+      makeEdge('e3', 'd', 'f'),
+      makeEdge('e4', 'e', 'f'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    expect(stepIds(result)).toEqual(['a', 'b', 'c', 'd', 'e', 'f'])
+    expect(gutters(result)).toEqual([
+      ['pipe', 'fork_start'],  // │ ┌─ A
+      ['pipe', 'par_end'],     // │ └─ B
+      ['corner'],              // └── C
+      'gap',
+      ['pipe', 'fork_start'],  // │ ┌─ D
+      ['pipe', 'par_end'],     // │ └─ E
+      ['corner'],              // └── F
+    ])
+  })
+
+  // Pattern: Edge referencing hidden-mode step
+  // A → ctx(context) → B — context step filtered, A and B become separate
+  it('edges through hidden-mode steps are dropped', () => {
+    const steps = [
+      makeStep('a', 'A', 0),
+      { ...makeStep('ctx', 'Context', 1), execution_mode: 'context' },
+      makeStep('b', 'B', 2),
+    ]
+    const edges = [
+      makeEdge('e1', 'a', 'ctx'),
+      makeEdge('e2', 'ctx', 'b'),
+    ]
+    const result = buildStepTree(steps, edges, NO_ROSTER)
+
+    // Context step is hidden, edges to/from it are dropped
+    // A and B should be separate components with a gap
+    expect(stepIds(result)).toEqual(['a', 'b'])
+    expect(gutters(result)).toEqual([
+      ['corner'],
+      'gap',
+      ['corner'],
     ])
   })
 })
