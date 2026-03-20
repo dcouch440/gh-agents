@@ -37,8 +37,7 @@ pub async fn setup_overlay(handle: &ContainerHandle) -> Result<(), ContainerErro
          mkdir -p {} {} {} && \
          mount -t overlay overlay \
          -o lowerdir={},upperdir={},workdir={} \
-         {} && \
-         if [ ! -d /workspace/.venv ]; then python3 -m venv /workspace/.venv 2>/dev/null || true; fi",
+         {}",
         constants::OVERLAY_UPPER_DIR,
         constants::OVERLAY_WORK_DIR,
         constants::OVERLAY_MERGED_DIR,
