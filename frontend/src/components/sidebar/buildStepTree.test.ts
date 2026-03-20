@@ -1199,6 +1199,129 @@ describe('buildStepTree', () => {
     ])
   })
 
+  // ── Production workflow topology tests ────────────────────────────────────
+  // Based on real workflow bb74cc5b — the "final boss" of topology.
+
+  // Full production workflow: fork with skip edge + 7-agent workforce + continuation
+  //
+  // Step topology:
+  //   AdvancedAIFact ─┬→ CreateComplexTeam ──────┐
+  //                   ├→ FactEvaluator ──────────┤→ IdeaProbabilityEval → CoolnessEval
+  //                   └→ [skip edge to merge] ───┘
+  //
+  // Agent topology within CreateComplexTeam (7 agents):
+  //   FactParser ─┬→ TermExplainer → AnalogyCreator ──┐
+  //               ├→ Visualizer ───────────────────────┤→ CoolSummarizer
+  //               └→ ImplicationExplorer → Critic ─────┘
+  it('production workflow: fork+skip+merge with 7-agent workforce', () => {
+    const steps = [
+      makeWorkforceStep('aif', 'Advanced AI Fact', 0),
+      makeWorkforceStep('cct', 'Create Complex Team', 1),
+      makeWorkforceStep('fe', 'Fact Evaluator', 2),
+      makeWorkforceStep('ipe', 'Idea Probability Evaluator', 3),
+      makeWorkforceStep('ce', 'Coolness Evaluator', 4),
+    ]
+    const edges = [
+      makeEdge('e1', 'aif', 'cct'),  // root → fork branch 1
+      makeEdge('e2', 'aif', 'fe'),   // root → fork branch 2
+      makeEdge('e3', 'aif', 'ipe'),  // root → skip edge to merge
+      makeEdge('e4', 'cct', 'ipe'),  // fork branch 1 → merge
+      makeEdge('e5', 'fe', 'ipe'),   // fork branch 2 → merge
+      makeEdge('e6', 'ipe', 'ce'),   // merge → continuation
+    ]
+    const roster: Record<string, RosterAgent[]> = {
+      aif: [makeRosterAgent('DeepAIExpert', 0)],
+      cct: [
+        makeDepAgent('FactParser', 0, []),
+        makeDepAgent('TermExplainer', 1, ['roster-FactParser']),
+        makeDepAgent('AnalogyCreator', 2, ['roster-TermExplainer']),
+        makeDepAgent('Visualizer', 3, ['roster-FactParser']),
+        makeDepAgent('ImplicationExplorer', 4, ['roster-FactParser']),
+        makeDepAgent('Critic', 5, ['roster-ImplicationExplorer']),
+        makeDepAgent('CoolSummarizer', 6, ['roster-Visualizer', 'roster-AnalogyCreator', 'roster-Critic']),
+      ],
+      fe: [makeRosterAgent('FactChecker', 0)],
+      ipe: [makeRosterAgent('Evaluator', 0)],
+      ce: [makeRosterAgent('CoolnessEvaluator', 0)],
+    }
+    const result = buildStepTree(steps, edges, roster)
+
+    // ── Step verification ──
+    expect(stepIds(result)).toEqual(['aif', 'cct', 'fe', 'ipe', 'ce'])
+    const stepEntries = result.filter((e) => e.kind === 'step')
+    expect(stepEntries.map((e) => e.gutter)).toEqual([
+      ['branch'],                // ├── AdvancedAIFact (fork point)
+      ['pipe', 'fork_start'],    // │ ┌─ CreateComplexTeam (branch 1)
+      ['pipe', 'par_end'],       // │ └─ FactEvaluator (branch 2)
+      ['branch'],                // ├── IdeaProbabilityEval (merge point)
+      ['corner'],                // └── CoolnessEval (tail)
+    ])
+
+    // ── Agent count verification ──
+    const agents = result.filter((e): e is AgentEntry => e.kind === 'agent')
+    expect(agents).toHaveLength(11) // 1 + 7 + 1 + 1 + 1
+
+    // ── Agent parent verification ──
+    expect(agents.filter((a) => a.stepId === 'aif').map((a) => a.agentName)).toEqual(['DeepAIExpert'])
+    expect(agents.filter((a) => a.stepId === 'cct').map((a) => a.agentName)).toEqual([
+      'FactParser', 'TermExplainer', 'AnalogyCreator', 'Visualizer', 'ImplicationExplorer', 'Critic', 'CoolSummarizer',
+    ])
+    expect(agents.filter((a) => a.stepId === 'fe').map((a) => a.agentName)).toEqual(['FactChecker'])
+    expect(agents.filter((a) => a.stepId === 'ipe').map((a) => a.agentName)).toEqual(['Evaluator'])
+    expect(agents.filter((a) => a.stepId === 'ce').map((a) => a.agentName)).toEqual(['CoolnessEvaluator'])
+
+    // ── Single-agent step gutter verification ──
+    // DeepAIExpert under fork-point (branch → continuation=pipe)
+    expect(agents.find((a) => a.agentName === 'DeepAIExpert')!.gutter).toEqual(['pipe', 'corner'])
+    // FactChecker under par_end (continuation=['pipe','blank'])
+    expect(agents.find((a) => a.agentName === 'FactChecker')!.gutter).toEqual(['pipe', 'blank', 'corner'])
+    // Evaluator under merge point (branch → continuation=pipe)
+    expect(agents.find((a) => a.agentName === 'Evaluator')!.gutter).toEqual(['pipe', 'corner'])
+    // CoolnessEvaluator under tail (corner → continuation=blank)
+    expect(agents.find((a) => a.agentName === 'CoolnessEvaluator')!.gutter).toEqual(['blank', 'corner'])
+
+    // ── 7-agent topology gutter verification ──
+    // CreateComplexTeam gutter is ['pipe', 'fork_start'], continuation = ['pipe', 'pipe']
+    const cctAgents = agents.filter((a) => a.stepId === 'cct')
+    // FactParser is the root agent → gets branch (more follow)
+    expect(cctAgents[0]!.gutter).toEqual(['pipe', 'pipe', 'branch'])
+    // CoolSummarizer is the merge/last agent → gets corner
+    expect(cctAgents[6]!.gutter).toEqual(['pipe', 'pipe', 'corner'])
+  })
+
+  // Agent topology: 3-branch fork with sub-chains merging into one
+  // FactParser → {TermExplainer→AnalogyCreator, Visualizer, ImplicationExplorer→Critic} → CoolSummarizer
+  it('agent topology: 3-branch fork with sub-chains and merge', () => {
+    const steps = [makeWorkforceStep('wf', 'Team', 0)]
+    const roster: Record<string, RosterAgent[]> = {
+      wf: [
+        makeDepAgent('FactParser', 0, []),
+        makeDepAgent('TermExplainer', 1, ['roster-FactParser']),
+        makeDepAgent('AnalogyCreator', 2, ['roster-TermExplainer']),
+        makeDepAgent('Visualizer', 3, ['roster-FactParser']),
+        makeDepAgent('ImplicationExplorer', 4, ['roster-FactParser']),
+        makeDepAgent('Critic', 5, ['roster-ImplicationExplorer']),
+        makeDepAgent('CoolSummarizer', 6, ['roster-Visualizer', 'roster-AnalogyCreator', 'roster-Critic']),
+      ],
+    }
+    const result = buildStepTree(steps, [], roster)
+    const agents = result.filter((e): e is AgentEntry => e.kind === 'agent')
+
+    // All 7 agents should be present
+    expect(agents).toHaveLength(7)
+    expect(agents.map((a) => a.agentName)).toEqual([
+      'FactParser', 'TermExplainer', 'AnalogyCreator', 'Visualizer', 'ImplicationExplorer', 'Critic', 'CoolSummarizer',
+    ])
+
+    // FactParser is root/fork → branch
+    expect(agents[0]!.gutter).toEqual(['blank', 'branch'])
+    // CoolSummarizer is merge/last → corner
+    expect(agents[6]!.gutter).toEqual(['blank', 'corner'])
+    // Middle agents should be indented (fork branches)
+    // TermExplainer starts first branch
+    expect(agents[1]!.gutter).toEqual(['blank', 'pipe', 'fork_start'])
+  })
+
   // Pattern: Edge referencing hidden-mode step
   // A → ctx(context) → B — context step filtered, A and B become separate
   it('edges through hidden-mode steps are dropped', () => {
