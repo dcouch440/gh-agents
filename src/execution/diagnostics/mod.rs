@@ -74,6 +74,12 @@ impl DiagnosticsEngine {
         let before = capture_snapshot(handle).await;
         self.workspace.initialize(&before); // baseline on first command
         let result = handle.exec_shell(command).await?;
+        tracing::debug!(
+            container = %handle.container_name(),
+            exit_code = result.exit_code,
+            duration_ms = result.duration_ms,
+            "Container exec completed"
+        );
         let after = capture_snapshot(handle).await;
         let file_changes = WorkspaceTracker::diff(&before, &after);
 
