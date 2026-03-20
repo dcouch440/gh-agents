@@ -10,6 +10,10 @@ use std::path::PathBuf;
 
 use super::types::{ChangeType, FileChange};
 
+/// Maximum number of distinct files to track. Evicts the entry with the
+/// fewest edits when exceeded, preventing unbounded memory growth.
+const MAX_TRACKED_FILES: usize = 100;
+
 /// Tracks per-file edit history within an agent's execution.
 pub struct LoopDetector {
     /// Map from file path to list of edit records.
@@ -73,6 +77,20 @@ impl LoopDetector {
         for change in changes {
             if change.change_type != ChangeType::Modified {
                 continue;
+            }
+
+            // Evict least-edited file if at capacity and this is a new entry
+            if self.file_edits.len() >= MAX_TRACKED_FILES
+                && !self.file_edits.contains_key(&change.path)
+            {
+                if let Some(evict_key) = self
+                    .file_edits
+                    .iter()
+                    .min_by_key(|(_, v)| v.len())
+                    .map(|(k, _)| k.clone())
+                {
+                    self.file_edits.remove(&evict_key);
+                }
             }
 
             let edits = self.file_edits.entry(change.path.clone()).or_default();

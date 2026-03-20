@@ -13,11 +13,11 @@ pub struct InteractiveCheck;
 impl PreCheck for InteractiveCheck {
     fn check(&self, command: &str) -> Option<Diagnostic> {
         let trimmed = command.trim();
-        let first_token = first_command_token(trimmed);
+        let (first_token, rest) = first_command_token(trimmed);
 
         match first_token {
             "python" | "python3" => {
-                if is_bare_repl(trimmed, first_token) {
+                if is_bare_repl(rest) {
                     return Some(repl_warning(
                         first_token,
                         "Use 'python script.py' or 'python -c \"code\"'",
@@ -25,7 +25,7 @@ impl PreCheck for InteractiveCheck {
                 }
             }
             "node" => {
-                if is_bare_repl(trimmed, first_token) {
+                if is_bare_repl(rest) {
                     return Some(repl_warning(
                         "node",
                         "Use 'node script.js' or 'node -e \"code\"'",
@@ -33,7 +33,7 @@ impl PreCheck for InteractiveCheck {
                 }
             }
             "irb" => {
-                if is_bare_repl(trimmed, first_token) {
+                if is_bare_repl(rest) {
                     return Some(repl_warning(
                         "irb",
                         "Use 'ruby script.rb' or 'ruby -e \"code\"'",
@@ -41,7 +41,7 @@ impl PreCheck for InteractiveCheck {
                 }
             }
             "ghci" => {
-                if is_bare_repl(trimmed, first_token) {
+                if is_bare_repl(rest) {
                     return Some(repl_warning("ghci", "Use 'runghc script.hs' instead"));
                 }
             }
@@ -96,32 +96,60 @@ impl PreCheck for InteractiveCheck {
     }
 }
 
-/// Extract the first command token (handles pipes, env var prefixes).
-fn first_command_token(cmd: &str) -> &str {
-    // Skip env var assignments like FOO=bar
+/// Known command wrappers that take arguments before the real command.
+const WRAPPER_COMMANDS: &[&str] = &["timeout", "env", "nice", "nohup", "sudo", "strace", "time"];
+
+/// Extract the first command token and the remaining arguments after it.
+///
+/// Skips env var assignments (`FOO=bar`) and known wrapper commands
+/// (`timeout`, `sudo`, etc.) to find the real command.
+/// Returns `(command_token, rest_of_args)`.
+fn first_command_token(cmd: &str) -> (&str, &str) {
     let mut parts = cmd.split_whitespace();
-    for part in &mut parts {
+    while let Some(part) = parts.next() {
+        // Skip env var assignments like FOO=bar
         if part.contains('=') && !part.starts_with('-') {
             continue;
         }
-        return part;
+        // Skip wrapper commands and their flags, numeric args, and env assignments
+        if WRAPPER_COMMANDS.contains(&part) {
+            for arg in parts.by_ref() {
+                if arg.starts_with('-')
+                    || arg.parse::<f64>().is_ok()
+                    || (arg.contains('=') && !arg.starts_with('-'))
+                {
+                    continue;
+                }
+                // Found the real command — rest is everything after it
+                let arg_end = arg.as_ptr() as usize - cmd.as_ptr() as usize + arg.len();
+                return (arg, cmd[arg_end..].trim());
+            }
+            return ("", "");
+        }
+        // Found the real command — rest is everything after it
+        let part_end = part.as_ptr() as usize - cmd.as_ptr() as usize + part.len();
+        return (part, cmd[part_end..].trim());
     }
-    ""
+    ("", "")
 }
 
-/// Check if a command is a bare REPL invocation (no script file or -c/-e arg).
-fn is_bare_repl(cmd: &str, token: &str) -> bool {
-    let rest = cmd[token.len()..].trim();
-    // Allow version flags
-    if rest.is_empty() || rest == "-V" || rest == "--version" {
-        return true;
-    }
-    false
+/// Check if a command has no meaningful arguments after the token (bare REPL).
+fn is_bare_repl(rest: &str) -> bool {
+    rest.is_empty() || rest == "-V" || rest == "--version"
 }
 
 /// Check if the command contains any of the given flags.
+///
+/// Handles both space-separated (`-e "SQL"`) and compact (`-e'SQL'`, `-e"SQL"`)
+/// flag styles that agents commonly produce.
 fn has_flag(cmd: &str, flags: &[&str]) -> bool {
-    cmd.split_whitespace().any(|w| flags.contains(&w))
+    cmd.split_whitespace().any(|token| {
+        flags.iter().any(|flag| {
+            token == *flag
+                || token.starts_with(&format!("{flag}'"))
+                || token.starts_with(&format!("{flag}\""))
+        })
+    })
 }
 
 fn repl_warning(name: &str, suggestion: &str) -> Diagnostic {

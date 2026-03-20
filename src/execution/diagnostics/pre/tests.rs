@@ -181,6 +181,46 @@ mod tests {
         assert!(check.check("pip install requests").is_none());
     }
 
+    #[test]
+    fn mysql_with_compact_e_flag_is_fine() {
+        let check = InteractiveCheck;
+        assert!(check.check("mysql -e'SELECT 1'").is_none());
+        assert!(check.check("mysql -u root -e\"SELECT 1\"").is_none());
+    }
+
+    #[test]
+    fn psql_with_compact_c_flag_is_fine() {
+        let check = InteractiveCheck;
+        assert!(check.check("psql -c'SELECT 1'").is_none());
+        assert!(check.check("psql -c\"SELECT 1\"").is_none());
+    }
+
+    #[test]
+    fn timeout_wrapping_bare_python_warns() {
+        let check = InteractiveCheck;
+        let d = check.check("timeout 30 python").unwrap();
+        assert_eq!(d.category, DiagnosticCategory::InteractiveCommand);
+    }
+
+    #[test]
+    fn sudo_wrapping_bare_node_warns() {
+        let check = InteractiveCheck;
+        let d = check.check("sudo node").unwrap();
+        assert_eq!(d.category, DiagnosticCategory::InteractiveCommand);
+    }
+
+    #[test]
+    fn timeout_wrapping_python_script_is_fine() {
+        let check = InteractiveCheck;
+        assert!(check.check("timeout 30 python main.py").is_none());
+    }
+
+    #[test]
+    fn env_wrapping_mysql_without_e_warns() {
+        let check = InteractiveCheck;
+        assert!(check.check("env MYSQL_PWD=secret mysql -u root").is_some());
+    }
+
     // ── Shell Compatibility ───────────────────────────────────────────────
 
     use crate::execution::diagnostics::pre::shell_compat::ShellCompatCheck;
@@ -203,10 +243,10 @@ mod tests {
     }
 
     #[test]
-    fn source_command_warns() {
+    fn source_handled_by_persistence_not_compat() {
+        // source is now handled by StatePersistenceCheck only, to avoid duplicates
         let check = ShellCompatCheck;
-        let d = check.check("source ~/.bashrc").unwrap();
-        assert_eq!(d.category, DiagnosticCategory::ShellCompat);
+        assert!(check.check("source ~/.bashrc").is_none());
     }
 
     #[test]
@@ -255,5 +295,21 @@ mod tests {
         assert!(check.check("grep -r 'pattern' .").is_none());
         assert!(check.check("find . -name '*.py'").is_none());
         assert!(check.check("make build && ./test.sh").is_none());
+    }
+
+    #[test]
+    fn double_bracket_in_quotes_not_flagged() {
+        let check = ShellCompatCheck;
+        assert!(check.check("echo '[[ not real ]]'").is_none());
+        assert!(check.check("echo \"[[ not real ]]\"").is_none());
+    }
+
+    #[test]
+    fn escaped_quotes_handled() {
+        let check = StatePersistenceCheck;
+        // The && is real (not inside quotes), so this is chained, not standalone
+        assert!(check
+            .check(r#"cd "/path with \"quotes\"" && make"#)
+            .is_none());
     }
 }

@@ -105,10 +105,16 @@ fn contains_chain_operator(cmd: &str) -> bool {
     let mut in_double_quote = false;
     let chars: Vec<char> = cmd.chars().collect();
     let len = chars.len();
+    let mut i = 0;
 
-    for i in 0..len {
+    while i < len {
         let c = chars[i];
         match c {
+            // Backslash escaping (only outside single quotes)
+            '\\' if !in_single_quote && i + 1 < len => {
+                i += 2; // skip escaped char
+                continue;
+            }
             '\'' if !in_double_quote => in_single_quote = !in_single_quote,
             '"' if !in_single_quote => in_double_quote = !in_double_quote,
             '&' if !in_single_quote && !in_double_quote => {
@@ -119,6 +125,7 @@ fn contains_chain_operator(cmd: &str) -> bool {
             ';' if !in_single_quote && !in_double_quote => return true,
             _ => {}
         }
+        i += 1;
     }
     false
 }

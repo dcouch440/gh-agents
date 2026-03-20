@@ -107,23 +107,27 @@ impl WorkspaceTracker {
     }
 
     /// Build a workspace digest from the current snapshot and recent changes.
-    pub fn digest(&self, after: &UpperDirSnapshot) -> WorkspaceDigest {
+    ///
+    /// `last_modified` is derived from `changes` (files changed this command),
+    /// not from the full workspace — so agents see which file *this command*
+    /// touched most recently, not an arbitrary pre-existing file.
+    pub fn digest(&self, after: &UpperDirSnapshot, changes: &[FileChange]) -> WorkspaceDigest {
         let file_count = after.file_count();
         let dir_count = after.dir_count();
         let total_size = after.total_size();
         let file_delta = file_count as i32 - self.prev_file_count as i32;
 
-        // Find the most recently modified file by mtime
-        let last_modified = after
-            .entries
-            .iter()
-            .filter(|(_, m)| m.file_type == 'f')
-            .max_by(|(_, a), (_, b)| {
-                a.mtime
-                    .partial_cmp(&b.mtime)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-            .map(|(p, _)| p.clone());
+        // Pick last_modified from changed files only (skip deletions)
+        let last_modified = if changes.is_empty() {
+            None
+        } else {
+            changes
+                .iter()
+                .filter(|c| c.change_type != ChangeType::Deleted)
+                .filter_map(|c| after.entries.get(&c.path).map(|m| (&c.path, m.mtime)))
+                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|(p, _)| p.clone())
+        };
 
         WorkspaceDigest {
             file_count,

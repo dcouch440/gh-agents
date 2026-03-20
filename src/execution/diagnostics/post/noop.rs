@@ -75,12 +75,15 @@ enum CommandType {
 }
 
 /// Classify a command by its expected side effects.
+///
+/// Scans all segments (split on `&&`, `;`, `|`) and returns the strongest
+/// classification: Mutation > PackageInstall > Search > Other.
+/// This ensures `grep pattern | tee file` is classified as Mutation (from tee),
+/// not Search (from grep).
 fn classify_command(cmd: &str) -> CommandType {
     let trimmed = cmd.trim();
+    let mut best = CommandType::Other;
 
-    // Handle chained commands — classify based on the first command
-    // that could be a mutation/search. For `cd /app && sed -i ...`,
-    // skip the `cd` and classify `sed`.
     for segment in split_chain_segments(trimmed) {
         let segment = segment.trim();
         if segment.is_empty() {
@@ -88,47 +91,47 @@ fn classify_command(cmd: &str) -> CommandType {
         }
 
         let first_token = segment.split_whitespace().next().unwrap_or("");
-        match first_token {
+        let classified = match first_token {
             // Mutation commands
-            "sed" if segment.contains(" -i") => return CommandType::Mutation,
-            "cp" | "mv" | "mkdir" | "chmod" | "chown" | "tee" | "touch" => {
-                return CommandType::Mutation;
-            }
+            "sed" if segment.contains(" -i") => CommandType::Mutation,
+            "cp" | "mv" | "mkdir" | "chmod" | "chown" | "tee" | "touch" => CommandType::Mutation,
 
             // cat with redirect or heredoc is a file write (mutation)
-            "cat" if segment.contains('>') || segment.contains("<<") => {
-                return CommandType::Mutation;
-            }
+            "cat" if segment.contains('>') || segment.contains("<<") => CommandType::Mutation,
 
             // Search commands
-            "grep" | "find" | "awk" | "cat" | "head" | "tail" | "wc" => {
-                return CommandType::Search;
-            }
+            "grep" | "find" | "awk" | "cat" | "head" | "tail" | "wc" => CommandType::Search,
             // sed without -i is a search/transform (prints to stdout)
-            "sed" => return CommandType::Search,
+            "sed" => CommandType::Search,
 
             // Package install commands
-            "pip" | "pip3" if segment.contains("install") => {
-                return CommandType::PackageInstall;
-            }
+            "pip" | "pip3" if segment.contains("install") => CommandType::PackageInstall,
             "npm" | "yarn" if segment.contains("install") || segment.contains("add") => {
-                return CommandType::PackageInstall;
+                CommandType::PackageInstall
             }
-            "apt-get" | "apt" if segment.contains("install") => {
-                return CommandType::PackageInstall;
-            }
+            "apt-get" | "apt" if segment.contains("install") => CommandType::PackageInstall,
 
             // Skip cd, export, etc. — continue to next segment
             "cd" | "export" | "source" => continue,
 
-            _ => {}
+            _ => continue,
+        };
+
+        // Mutation is strongest — return immediately
+        if classified == CommandType::Mutation {
+            return CommandType::Mutation;
+        }
+        if classified == CommandType::PackageInstall
+            || (classified == CommandType::Search && best == CommandType::Other)
+        {
+            best = classified;
         }
     }
 
-    CommandType::Other
+    best
 }
 
-/// Split a command string on `&&` (outside quotes) into segments.
+/// Split a command string on `&&`, `;`, and `|` (outside quotes) into segments.
 fn split_chain_segments(cmd: &str) -> Vec<&str> {
     let mut segments = Vec::new();
     let mut start = 0;
@@ -136,17 +139,41 @@ fn split_chain_segments(cmd: &str) -> Vec<&str> {
     let len = chars.len();
     let mut in_single = false;
     let mut in_double = false;
+    let mut i = 0;
 
-    for i in 0..len {
+    while i < len {
         match chars[i] {
+            '\\' if !in_single && i + 1 < len => {
+                i += 2; // skip escaped char
+                continue;
+            }
             '\'' if !in_double => in_single = !in_single,
             '"' if !in_single => in_double = !in_double,
             '&' if !in_single && !in_double && i + 1 < len && chars[i + 1] == '&' => {
                 segments.push(&cmd[start..i]);
-                start = i + 2; // skip both &
+                start = i + 2;
+                i += 2;
+                continue;
+            }
+            ';' if !in_single && !in_double => {
+                segments.push(&cmd[start..i]);
+                start = i + 1;
+            }
+            '|' if !in_single && !in_double => {
+                // Skip || (OR operator) — treat as two-char separator
+                let skip = if i + 1 < len && chars[i + 1] == '|' {
+                    2
+                } else {
+                    1
+                };
+                segments.push(&cmd[start..i]);
+                start = i + skip;
+                i += skip;
+                continue;
             }
             _ => {}
         }
+        i += 1;
     }
     segments.push(&cmd[start..]);
     segments

@@ -69,7 +69,14 @@ pub async fn capture_snapshot(handle: &ContainerHandle) -> UpperDirSnapshot {
     );
     match handle.exec_shell(&cmd).await {
         Ok(result) => parse_snapshot(&result.stdout),
-        Err(_) => UpperDirSnapshot::empty(),
+        Err(e) => {
+            tracing::warn!(
+                container = %handle.container_name(),
+                error = %e,
+                "Snapshot capture failed — returning empty snapshot"
+            );
+            UpperDirSnapshot::empty()
+        }
     }
 }
 

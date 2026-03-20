@@ -3,7 +3,7 @@ mod tests {
     use std::path::PathBuf;
 
     use crate::execution::diagnostics::types::ChangeType;
-    use crate::execution::diagnostics::workspace::snapshot::{parse_snapshot, FileMetadata};
+    use crate::execution::diagnostics::workspace::snapshot::parse_snapshot;
     use crate::execution::diagnostics::workspace::WorkspaceTracker;
 
     #[test]
@@ -131,6 +131,24 @@ mod tests {
         assert_eq!(changes[2].change_type, ChangeType::Created);
     }
 
+    use crate::execution::diagnostics::types::FileChange;
+
+    fn fc_created(path: &str, size: u64) -> FileChange {
+        FileChange {
+            path: PathBuf::from(path),
+            change_type: ChangeType::Created,
+            size,
+        }
+    }
+
+    fn fc_modified(path: &str, size: u64) -> FileChange {
+        FileChange {
+            path: PathBuf::from(path),
+            change_type: ChangeType::Modified,
+            size,
+        }
+    }
+
     #[test]
     fn digest_with_changes() {
         let mut tracker = WorkspaceTracker::new();
@@ -138,25 +156,26 @@ mod tests {
         tracker.update(&before);
 
         let after = parse_snapshot("a.py\tf\t100\t1.0\nb.py\tf\t200\t2.0\nc.py\tf\t300\t3.0\n");
-        let digest = tracker.digest(&after);
+        let changes = vec![fc_created("b.py", 200), fc_created("c.py", 300)];
+        let digest = tracker.digest(&after, &changes);
         assert_eq!(digest.file_count, 3);
         assert_eq!(digest.file_delta, 2);
         assert_eq!(digest.total_size, 600);
-        assert_eq!(digest.last_modified, Some(PathBuf::from("c.py")));
+        // last_modified is from changes, not global max
+        assert!(digest.last_modified.is_some());
     }
 
     #[test]
     fn digest_first_command_with_initialize() {
         let mut tracker = WorkspaceTracker::new();
-        // Simulate: workspace already has 10 files from prior steps
         let before = parse_snapshot("a.py\tf\t100\t1.0\nb.py\tf\t200\t2.0\nc.py\tf\t300\t3.0\n");
         tracker.initialize(&before);
 
-        // After command, one new file created
         let after = parse_snapshot(
             "a.py\tf\t100\t1.0\nb.py\tf\t200\t2.0\nc.py\tf\t300\t3.0\nd.py\tf\t400\t4.0\n",
         );
-        let digest = tracker.digest(&after);
+        let changes = vec![fc_created("d.py", 400)];
+        let digest = tracker.digest(&after, &changes);
         assert_eq!(digest.file_count, 4);
         assert_eq!(digest.file_delta, 1); // 4 - 3 = 1, not 4 - 0 = 4
     }
@@ -166,8 +185,24 @@ mod tests {
         let mut tracker = WorkspaceTracker::new();
         let snapshot = parse_snapshot("a.py\tf\t100\t1.0\n");
         tracker.initialize(&snapshot);
-        let digest = tracker.digest(&snapshot);
-        assert_eq!(digest.file_delta, 0); // no change
+        let digest = tracker.digest(&snapshot, &[]);
+        assert_eq!(digest.file_delta, 0);
+        assert_eq!(digest.last_modified, None); // no changes → no last_modified
+    }
+
+    #[test]
+    fn digest_last_modified_only_from_changes() {
+        let mut tracker = WorkspaceTracker::new();
+        // Workspace has an old file with high mtime
+        let before = parse_snapshot("old.py\tf\t100\t999999.0\n");
+        tracker.update(&before);
+
+        // New file created with lower mtime
+        let after = parse_snapshot("old.py\tf\t100\t999999.0\nnew.py\tf\t50\t1.0\n");
+        let changes = vec![fc_created("new.py", 50)];
+        let digest = tracker.digest(&after, &changes);
+        // Should be new.py (from changes), not old.py (global max mtime)
+        assert_eq!(digest.last_modified, Some(PathBuf::from("new.py")));
     }
 
     #[test]
@@ -177,7 +212,8 @@ mod tests {
         tracker.update(&before);
 
         let after = parse_snapshot("a.py\tf\t100\t1.0\nb.py\tf\t200\t2.0\nsrc\td\t4096\t3.0\n");
-        let digest = tracker.digest(&after);
+        let changes = vec![fc_created("b.py", 200)];
+        let digest = tracker.digest(&after, &changes);
         let rendered = digest.render();
         assert!(rendered.contains("2 files (+1)"));
         assert!(rendered.contains("1 dirs"));

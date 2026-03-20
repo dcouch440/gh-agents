@@ -35,9 +35,17 @@ static RULES: LazyLock<Vec<SuggestionRule>> = LazyLock::new(|| {
             suggest: |caps| format!("Install with: apt-get install -y {}", &caps[1]),
         },
         SuggestionRule {
-            pattern: Regex::new(r#"(?i)No such file or directory:\s*['"]*([^'":\n]+)"#).unwrap(),
+            pattern: Regex::new(
+                r#"(?i)No such file or directory:\s*(?:'([^']+)'|"([^"]+)"|(\S+))"#,
+            )
+            .unwrap(),
             suggest: |caps| {
-                let path = caps[1].trim();
+                let path = caps
+                    .get(1)
+                    .or(caps.get(2))
+                    .or(caps.get(3))
+                    .map(|m| m.as_str().trim())
+                    .unwrap_or("");
                 if let Some(parent) = std::path::Path::new(path).parent() {
                     if parent.as_os_str().is_empty() {
                         "File doesn't exist. Check the path.".to_string()
@@ -50,8 +58,17 @@ static RULES: LazyLock<Vec<SuggestionRule>> = LazyLock::new(|| {
             },
         },
         SuggestionRule {
-            pattern: Regex::new(r#"(?i)Permission denied:\s*['"]*([^'":\n]+)"#).unwrap(),
-            suggest: |caps| format!("Try: chmod +x {}", caps[1].trim()),
+            pattern: Regex::new(r#"(?i)Permission denied:\s*(?:'([^']+)'|"([^"]+)"|(\S+))"#)
+                .unwrap(),
+            suggest: |caps| {
+                let path = caps
+                    .get(1)
+                    .or(caps.get(2))
+                    .or(caps.get(3))
+                    .map(|m| m.as_str().trim())
+                    .unwrap_or("");
+                format!("Try: chmod +x {}", path)
+            },
         },
         SuggestionRule {
             pattern: Regex::new(r"(?i)ModuleNotFoundError: No module named '(\w+)'").unwrap(),
