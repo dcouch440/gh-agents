@@ -1,24 +1,27 @@
-import { toArray, nmGet } from '../lib'
+import { toArray, nmGet, memoFactory } from '../lib'
 import type { Room, RoomMember, RoomSession, RoomTranscriptEntry, RoomOutput } from '@/types/room'
 import type { RoomState } from './types'
 import { EMPTY_MEMBERS, EMPTY_SESSIONS } from './_store'
 
 const selectAll = (s: RoomState): Room[] => toArray(s.rooms)
 
-const selectById =
+const selectById = memoFactory(
   (id: string) =>
   (s: RoomState): Room | undefined =>
-    nmGet(s.rooms, id)
+    nmGet(s.rooms, id),
+)
 
-const selectMembers =
+const selectMembers = memoFactory(
   (roomId: string) =>
   (s: RoomState): RoomMember[] =>
-    s.membersByRoom[roomId] ?? EMPTY_MEMBERS
+    s.membersByRoom[roomId] ?? EMPTY_MEMBERS,
+)
 
-const selectSessions =
+const selectSessions = memoFactory(
   (roomId: string) =>
   (s: RoomState): RoomSession[] =>
-    s.sessionsByRoom[roomId] ?? EMPTY_SESSIONS
+    s.sessionsByRoom[roomId] ?? EMPTY_SESSIONS,
+)
 
 const selectActiveSessionId = (s: RoomState): string | null => s.activeSessionId
 

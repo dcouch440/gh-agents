@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { Collections } from '@/utils/collections'
-import { createStore } from './lib'
+import { createStore, memoFactory } from './lib'
 import { SESSION_EVENT } from '@/types/ws'
 import type { WsWireMessage } from '@/types/ws'
 import type { ApiTraceEvent, DispatchTraceResponse } from '@/types/dispatch'
@@ -46,34 +46,39 @@ const store = createStore<DispatchState>(() => ({
 
 // ── Selectors ───────────────────────────────────────────────────────────────
 
-const selectByStepId =
+const selectByStepId = memoFactory(
   (stepId: string) =>
   (s: DispatchState): DispatchEntry | null =>
-    s.byStep[stepId] ?? null
+    s.byStep[stepId] ?? null,
+)
 
-const selectActiveForStep =
+const selectActiveForStep = memoFactory(
   (stepId: string) =>
   (s: DispatchState): DispatchEntry | null => {
     const entry = s.byStep[stepId]
     return entry?.status === 'running' ? entry : null
-  }
+  },
+)
 
-const selectTrace =
+const selectTrace = memoFactory(
   (stepId: string) =>
   (s: DispatchState): DispatchTraceEvent[] =>
-    s.byStep[stepId]?.trace ?? []
+    s.byStep[stepId]?.trace ?? [],
+)
 
-const selectToolEvents =
+const selectToolEvents = memoFactory(
   (stepId: string) =>
   (s: DispatchState): DispatchTraceEvent[] =>
     (s.byStep[stepId]?.trace ?? []).filter(
       (e) => e.type === 'tool_start' || e.type === 'tool_end'
-    )
+    ),
+)
 
-const selectTokenBuffer =
+const selectTokenBuffer = memoFactory(
   (stepId: string) =>
   (s: DispatchState): string =>
-    s.byStep[stepId]?.tokenBuffer ?? ''
+    s.byStep[stepId]?.tokenBuffer ?? '',
+)
 
 const selectAllStepIds = (s: DispatchState): readonly string[] =>
   Object.keys(s.byStep)
