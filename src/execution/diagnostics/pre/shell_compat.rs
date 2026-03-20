@@ -22,15 +22,8 @@ impl PreCheck for ShellCompatCheck {
             });
         }
 
-        // source file (bash builtin, not POSIX)
-        if trimmed.starts_with("source ") {
-            return Some(Diagnostic {
-                severity: Severity::Warning,
-                category: DiagnosticCategory::ShellCompat,
-                message: "'source' is a bash builtin, not available in sh.".to_string(),
-                suggestion: Some("Use '. file' (dot-space) instead.".to_string()),
-            });
-        }
+        // `source` is handled by StatePersistenceCheck with more actionable
+        // guidance (chain with &&). Skip here to avoid duplicate diagnostics.
 
         // Process substitution <(...) or >(...)
         if contains_unquoted(trimmed, "<(") || contains_unquoted(trimmed, ">(") {
@@ -86,10 +79,15 @@ fn contains_unquoted(cmd: &str, pattern: &str) -> bool {
 
     let mut in_single = false;
     let mut in_double = false;
+    let mut i = 0;
 
-    for i in 0..cmd_len {
+    while i < cmd_len {
         let c = cmd_chars[i];
         match c {
+            '\\' if !in_single && i + 1 < cmd_len => {
+                i += 2;
+                continue;
+            }
             '\'' if !in_double => in_single = !in_single,
             '"' if !in_single => in_double = !in_double,
             _ if !in_single && !in_double => {
@@ -99,21 +97,31 @@ fn contains_unquoted(cmd: &str, pattern: &str) -> bool {
             }
             _ => {}
         }
+        i += 1;
     }
     false
 }
 
 /// Detect bash-style array assignment: `var=(...)`.
 /// Avoids false positives from subshells `$(...)` and `$((..))`.
+///
+/// The key insight: for `var=(...)`, the char after `=` is `(`.
+/// For `var=$(...)`, the char after `=` is `$`, so the `chars[i+1] == '('`
+/// guard never fires and we never reach the `$` check.
 fn has_bash_array_assignment(cmd: &str) -> bool {
     let chars: Vec<char> = cmd.chars().collect();
     let len = chars.len();
     let mut in_single = false;
     let mut in_double = false;
+    let mut i = 0;
 
-    for i in 0..len {
+    while i < len {
         let c = chars[i];
         match c {
+            '\\' if !in_single && i + 1 < len => {
+                i += 2;
+                continue;
+            }
             '\'' if !in_double => in_single = !in_single,
             '"' if !in_single => in_double = !in_double,
             '=' if !in_single && !in_double => {
@@ -123,14 +131,12 @@ fn has_bash_array_assignment(cmd: &str) -> bool {
                     && i + 1 < len
                     && chars[i + 1] == '('
                 {
-                    // Make sure it's not preceded by $
-                    if i < 2 || chars[i - 1] != '$' {
-                        return true;
-                    }
+                    return true;
                 }
             }
             _ => {}
         }
+        i += 1;
     }
     false
 }

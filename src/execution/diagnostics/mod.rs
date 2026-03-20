@@ -95,7 +95,7 @@ impl DiagnosticsEngine {
         let loop_status = self.loop_detector.record(self.command_index, &file_changes);
 
         // Build workspace digest
-        let workspace_digest = Some(self.workspace.digest(&after));
+        let workspace_digest = Some(self.workspace.digest(&after, &file_changes));
 
         // Update workspace state for next command
         self.workspace.update(&after);

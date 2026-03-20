@@ -100,6 +100,24 @@ fn is_error_line(line: &str) -> bool {
         return true;
     }
 
+    // Linker errors
+    if lower.contains("undefined reference")
+        || lower.contains("symbol lookup error")
+        || lower.contains("ld returned")
+    {
+        return true;
+    }
+
+    // Additional Python exceptions
+    if lower.contains("runtimeerror:")
+        || lower.contains("recursionerror:")
+        || lower.contains("zerodivisionerror:")
+        || lower.contains("overflowerror:")
+        || lower.contains("ioerror:")
+    {
+        return true;
+    }
+
     false
 }
 

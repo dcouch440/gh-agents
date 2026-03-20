@@ -305,4 +305,54 @@ mod tests {
         let diags = suggest_fix("All tests passed.\n");
         assert!(diags.is_empty());
     }
+
+    #[test]
+    fn suggest_path_from_quoted_error() {
+        let diags = suggest_fix("No such file or directory: '/app/main.py'");
+        assert_eq!(diags.len(), 1);
+        assert!(diags[0].message.contains("ls /app"));
+    }
+
+    #[test]
+    fn suggest_path_from_unquoted_error_no_trailing_garbage() {
+        let diags = suggest_fix("No such file or directory: /app/main.py");
+        assert_eq!(diags.len(), 1);
+        // Should capture just the path, not trailing text
+        assert!(diags[0].message.contains("ls /app"));
+        assert!(!diags[0].message.contains("(os error"));
+    }
+
+    // ── Noop Pipeline ────────────────────────────────────────────────
+
+    #[test]
+    fn pipe_to_tee_classified_as_mutation() {
+        let check = NoOpCheck;
+        let result = success_result("");
+        // tee is a mutation — no changes → no-op
+        let diags = check.check("grep pattern file | tee results.txt", &result, &[]);
+        assert_eq!(diags.len(), 1);
+        assert!(diags[0].message.contains("no files were changed"));
+    }
+
+    #[test]
+    fn semicolon_chain_classified() {
+        let check = NoOpCheck;
+        let result = success_result("");
+        let diags = check.check("cd /app; sed -i 's/old/new/' file.py", &result, &[]);
+        assert_eq!(diags.len(), 1);
+    }
+
+    // ── Stderr Classifier ────────────────────────────────────────────
+
+    #[test]
+    fn linker_error_classified() {
+        let classified = classify_stderr("undefined reference to `main'\n");
+        assert_eq!(classified.errors.len(), 1);
+    }
+
+    #[test]
+    fn runtime_error_classified() {
+        let classified = classify_stderr("RuntimeError: maximum recursion depth exceeded\n");
+        assert_eq!(classified.errors.len(), 1);
+    }
 }
