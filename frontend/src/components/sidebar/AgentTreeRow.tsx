@@ -3,7 +3,7 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import { useTheme } from '@mui/material/styles'
 import { TerminalBlock } from '@/components/primitives/terminal-renderer'
-import { CELL_WIDTH, computeLines, computeContinuationLines } from './gutterLines'
+import { CELL_WIDTH, computeLines } from './gutterLines'
 import { StatusDot } from './StatusDot'
 import { SkeletonLines } from './SkeletonLines'
 import type { GutterCell } from './buildStepTree'
@@ -119,115 +119,94 @@ function AgentTreeRow({
   const hasBody = isExpanded && (isRunning || output !== null)
 
   return (
-    <Box>
-      {/* Header row */}
+    <Box
+      sx={{
+        display: 'flex',
+        pl: '8px',
+        '&:hover': { backgroundColor: theme.palette.custom.hoverOverlay },
+      }}
+    >
+      {/* Single gutter — spans full row height (header + body) */}
       <Box
-        role="treeitem"
-        onClick={onToggle}
         sx={{
-          display: 'flex',
-          alignItems: 'center',
-          pl: '8px',
-          pr: 1,
-          py: '5px',
-          cursor: 'pointer',
-          '&:hover': { backgroundColor: theme.palette.custom.hoverOverlay },
+          width: gutterWidth,
+          flexShrink: 0,
+          alignSelf: 'stretch',
+          position: 'relative',
+          overflow: 'visible',
         }}
       >
-        {/* Gutter */}
-        <Box
-          sx={{
-            width: gutterWidth,
-            flexShrink: 0,
-            alignSelf: 'stretch',
-            position: 'relative',
-            overflow: 'visible',
-            my: '-5px',
-          }}
-        >
-          {lines.map((line, i) => (
-            <Box
-              key={i}
-              sx={{
-                position: 'absolute',
-                left: line.left,
-                top: line.top,
-                width: line.width,
-                height: line.height,
-                backgroundColor: lineColor,
-              }}
-            />
-          ))}
-        </Box>
-
-        {/* Expand chevron */}
-        <Typography
-          sx={{
-            fontSize: 10,
-            width: 12,
-            flexShrink: 0,
-            color: 'text.disabled',
-            lineHeight: 1,
-            userSelect: 'none',
-          }}
-        >
-          {isExpanded ? '\u25BC' : '\u25B6'}
-        </Typography>
-
-        {/* Agent name */}
-        <Typography
-          variant="body2"
-          sx={{
-            fontSize: 12,
-            fontWeight: 400,
-            color: 'text.disabled',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            minWidth: 0,
-            flex: 1,
-            ml: 0.5,
-            fontStyle: 'italic',
-          }}
-        >
-          {agentName}
-        </Typography>
-
-        {/* Status dot */}
-        <Box sx={{ ml: 1, flexShrink: 0 }}>
-          <StatusDot status={toExecStatus(executionStatus)} designStatus={designStatus} />
-        </Box>
+        {lines.map((line, i) => (
+          <Box
+            key={i}
+            sx={{
+              position: 'absolute',
+              left: line.left,
+              top: line.top,
+              width: line.width,
+              height: line.height,
+              backgroundColor: lineColor,
+            }}
+          />
+        ))}
       </Box>
 
-      {/* Output body */}
-      {hasBody && (
-        <Box sx={{ display: 'flex', pl: '8px', mt: '-5px' }}>
-          {/* Continuation gutter */}
-          <Box
+      {/* Content column — header + optional body stacked vertically */}
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        {/* Header row */}
+        <Box
+          role="treeitem"
+          onClick={onToggle}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            pr: 1,
+            py: '5px',
+            cursor: 'pointer',
+          }}
+        >
+          {/* Expand chevron */}
+          <Typography
             sx={{
-              width: gutterWidth,
+              fontSize: 10,
+              width: 12,
               flexShrink: 0,
-              position: 'relative',
-              overflow: 'visible',
+              color: 'text.disabled',
+              lineHeight: 1,
+              userSelect: 'none',
             }}
           >
-            {computeContinuationLines(gutter).map((line, i) => (
-              <Box
-                key={i}
-                sx={{
-                  position: 'absolute',
-                  left: line.left,
-                  top: line.top,
-                  width: line.width,
-                  height: line.height,
-                  backgroundColor: lineColor,
-                }}
-              />
-            ))}
-          </Box>
+            {isExpanded ? '\u25BC' : '\u25B6'}
+          </Typography>
 
-          {/* Content */}
-          <Box sx={{ flex: 1, minWidth: 0, pr: 1, pb: 1, ml: 1.5 }}>
+          {/* Agent name */}
+          <Typography
+            variant="body2"
+            sx={{
+              fontSize: 12,
+              fontWeight: 400,
+              color: 'text.disabled',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              minWidth: 0,
+              flex: 1,
+              ml: 0.5,
+              fontStyle: 'italic',
+            }}
+          >
+            {agentName}
+          </Typography>
+
+          {/* Status dot */}
+          <Box sx={{ ml: 1, flexShrink: 0 }}>
+            <StatusDot status={toExecStatus(executionStatus)} designStatus={designStatus} />
+          </Box>
+        </Box>
+
+        {/* Output body */}
+        {hasBody && (
+          <Box sx={{ pr: 1, pb: 1, ml: 1.5 }}>
             {isRunning ? (
               <SkeletonLines />
             ) : output !== null ? (
@@ -237,8 +216,8 @@ function AgentTreeRow({
               />
             ) : null}
           </Box>
-        </Box>
-      )}
+        )}
+      </Box>
     </Box>
   )
 }

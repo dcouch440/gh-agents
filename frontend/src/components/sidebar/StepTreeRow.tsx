@@ -7,7 +7,7 @@ import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined'
 import { TerminalBlock } from '@/components/primitives/terminal-renderer'
 import { StatusDot } from './StatusDot'
 import { SkeletonLines } from './SkeletonLines'
-import { CELL_WIDTH, LINE_X, STROKE, computeLines, computeContinuationLines } from './gutterLines'
+import { CELL_WIDTH, LINE_X, STROKE, HEADER_CENTER, computeLines } from './gutterLines'
 import type { GutterCell } from './buildStepTree'
 import type { StepExecutionStatus } from '@/stores/workflowExecutionStore/types'
 import type { SourceStreamStatus } from '@/stores/stepStreamStore'
@@ -130,128 +130,133 @@ function StepTreeRow({
   const hasBody = isExpanded && !isWorkforce && (resolved === 'running' || output !== null || error !== null)
 
   return (
-    <Box>
-      {/* Header row */}
+    <Box
+      sx={{
+        display: 'flex',
+        pl: '8px',
+        '&:hover': { backgroundColor: theme.palette.custom.hoverOverlay },
+        '&:hover .pin-toggle': { opacity: 1 },
+      }}
+    >
+      {/* Single gutter — spans full row height (header + body) */}
       <Box
-        role="treeitem"
-        onClick={onToggle}
         sx={{
-          display: 'flex',
-          alignItems: 'center',
-          pl: '8px',
-          pr: 1,
-          py: '5px',
-          cursor: 'pointer',
-          '&:hover': { backgroundColor: theme.palette.custom.hoverOverlay },
-          '&:hover .pin-toggle': { opacity: 1 },
+          width: gutterWidth,
+          flexShrink: 0,
+          alignSelf: 'stretch',
+          position: 'relative',
+          overflow: 'visible',
         }}
       >
-        {/* Gutter */}
-        <Box
-          sx={{
-            width: gutterWidth,
-            flexShrink: 0,
-            alignSelf: 'stretch',
-            position: 'relative',
-            overflow: 'visible',
-            my: '-5px',
-          }}
-        >
-          {lines.map((line, i) => (
+        {lines.map((line, i) => (
+          <Box
+            key={i}
+            sx={{
+              position: 'absolute',
+              left: line.left,
+              top: line.top,
+              width: line.width,
+              height: line.height,
+              backgroundColor: lineColor,
+            }}
+          />
+        ))}
+        {/* Corner bend for workforce steps — connects branch to agents below */}
+        {isWorkforce && (
+          <>
+            {/* Horizontal bridge: end of branch → corner vertical */}
             <Box
-              key={i}
               sx={{
                 position: 'absolute',
-                left: line.left,
-                top: line.top,
-                width: line.width,
-                height: line.height,
+                left: gutterWidth,
+                top: HEADER_CENTER,
+                width: LINE_X + 1,
+                height: STROKE,
                 backgroundColor: lineColor,
               }}
             />
-          ))}
-          {/* Corner bend for workforce steps — connects branch to agents below */}
-          {isWorkforce && (
-            <>
-              {/* Horizontal bridge: end of branch → corner vertical */}
-              <Box
-                sx={{
-                  position: 'absolute',
-                  left: gutterWidth,
-                  top: '50%',
-                  width: LINE_X + 1,
-                  height: STROKE,
-                  backgroundColor: lineColor,
-                }}
-              />
-              {/* Vertical: midpoint → bottom, connects to agent gutter */}
-              <Box
-                sx={{
-                  position: 'absolute',
-                  left: gutterWidth + LINE_X,
-                  top: '50%',
-                  bottom: 0,
-                  width: STROKE,
-                  backgroundColor: lineColor,
-                }}
-              />
-            </>
-          )}
-        </Box>
-
-        {/* Expand chevron (spacer for workforce — agents always visible) */}
-        {isWorkforce ? (
-          <Box sx={{ width: 16, flexShrink: 0 }} />
-        ) : (
-          <Typography
-            sx={{
-              fontSize: 10,
-              width: 12,
-              flexShrink: 0,
-              color: 'text.disabled',
-              lineHeight: 1,
-              userSelect: 'none',
-            }}
-          >
-            {isExpanded ? '\u25BC' : '\u25B6'}
-          </Typography>
+            {/* Vertical: midpoint → bottom, connects to agent gutter */}
+            <Box
+              sx={{
+                position: 'absolute',
+                left: gutterWidth + LINE_X,
+                top: HEADER_CENTER,
+                bottom: 0,
+                width: STROKE,
+                backgroundColor: lineColor,
+              }}
+            />
+          </>
         )}
+      </Box>
 
-        {/* Step name */}
-        <Typography
-          variant="body2"
+      {/* Content column — header + optional body stacked vertically */}
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        {/* Header row */}
+        <Box
+          role="treeitem"
+          onClick={onToggle}
           sx={{
-            fontSize: 12,
-            fontWeight: 400,
-            color: 'text.secondary',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            minWidth: 0,
-            flex: 1,
-            ml: 0.5,
+            display: 'flex',
+            alignItems: 'center',
+            pr: 1,
+            py: '5px',
+            cursor: 'pointer',
           }}
         >
-          {name || 'Untitled'}
-        </Typography>
+          {/* Expand chevron (spacer for workforce — agents always visible) */}
+          {isWorkforce ? (
+            <Box sx={{ width: 16, flexShrink: 0 }} />
+          ) : (
+            <Typography
+              sx={{
+                fontSize: 10,
+                width: 12,
+                flexShrink: 0,
+                color: 'text.disabled',
+                lineHeight: 1,
+                userSelect: 'none',
+              }}
+            >
+              {isExpanded ? '\u25BC' : '\u25B6'}
+            </Typography>
+          )}
 
-        {/* Design progress label */}
-        {designStatus === 'running' && designProgress !== null && (
+          {/* Step name */}
           <Typography
+            variant="body2"
             sx={{
-              fontSize: 10,
-              color: '#58a6ff',
-              fontFamily: 'monospace',
-              flexShrink: 0,
+              fontSize: 12,
+              fontWeight: 400,
+              color: 'text.secondary',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              minWidth: 0,
+              flex: 1,
               ml: 0.5,
             }}
           >
-            {designProgress}
+            {name || 'Untitled'}
           </Typography>
-        )}
 
-        {/* Pin toggle — visible on hover, always visible when pinned */}
-        <Box
+          {/* Design progress label */}
+          {designStatus === 'running' && designProgress !== null && (
+            <Typography
+              sx={{
+                fontSize: 10,
+                color: '#58a6ff',
+                fontFamily: 'monospace',
+                flexShrink: 0,
+                ml: 0.5,
+              }}
+            >
+              {designProgress}
+            </Typography>
+          )}
+
+          {/* Pin toggle — visible on hover, always visible when pinned */}
+          <Box
             component="span"
             className="pin-toggle"
             onClick={(e) => { e.stopPropagation(); onTogglePin() }}
@@ -269,43 +274,17 @@ function StepTreeRow({
             {pinned
               ? <PushPinIcon sx={{ fontSize: 12 }} />
               : <PushPinOutlinedIcon sx={{ fontSize: 12 }} />}
-        </Box>
-
-        {/* Status dot */}
-        <Box sx={{ ml: 1, flexShrink: 0 }}>
-          <StatusDot status={status} designStatus={designStatus} />
-        </Box>
-      </Box>
-
-      {/* Output body */}
-      {hasBody && (
-        <Box sx={{ display: 'flex', pl: '8px', mt: '-5px' }}>
-          {/* Continuation gutter — mt: -5px closes the gap left by the header's py padding */}
-          <Box
-            sx={{
-              width: gutterWidth,
-              flexShrink: 0,
-              position: 'relative',
-              overflow: 'visible',
-            }}
-          >
-            {computeContinuationLines(gutter).map((line, i) => (
-              <Box
-                key={i}
-                sx={{
-                  position: 'absolute',
-                  left: line.left,
-                  top: line.top,
-                  width: line.width,
-                  height: line.height,
-                  backgroundColor: lineColor,
-                }}
-              />
-            ))}
           </Box>
 
-          {/* Content */}
-          <Box sx={{ flex: 1, minWidth: 0, pr: 1, pb: 1, ml: 1.5 }}>
+          {/* Status dot */}
+          <Box sx={{ ml: 1, flexShrink: 0 }}>
+            <StatusDot status={status} designStatus={designStatus} />
+          </Box>
+        </Box>
+
+        {/* Output body */}
+        {hasBody && (
+          <Box sx={{ pr: 1, pb: 1, ml: 1.5 }}>
             {resolved === 'running' ? (
               <SkeletonLines />
             ) : error ? (
@@ -330,8 +309,8 @@ function StepTreeRow({
               />
             ) : null}
           </Box>
-        </Box>
-      )}
+        )}
+      </Box>
     </Box>
   )
 }
