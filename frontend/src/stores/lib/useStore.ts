@@ -6,18 +6,27 @@ import { useSyncExternalStore, useCallback, useRef } from 'react'
 import type { StoreApi } from './types'
 
 const useStore = <T, S>(store: StoreApi<T>, selector: (state: T) => S, equalityFn: (a: S, b: S) => boolean = Object.is): S => {
-  const selectedRef = useRef<S>(selector(store.getState()))
+  const cacheRef = useRef({ state: store.getState(), selected: selector(store.getState()) })
 
-  // getSnapshot captures selector directly in its closure, so it always uses
-  // the latest selector — fixing stale-selector bugs with dynamic selectors
-  // like selectStepById(id). For static selectors the deps are stable and
-  // getSnapshot identity doesn't change.
+  // getSnapshot must return a cached result when the store state hasn't changed.
+  // React 19 calls getSnapshot multiple times during render to verify stability;
+  // selectors that return new references (e.g. .filter(), ?? []) would otherwise
+  // produce different objects on each call, triggering an infinite loop.
   const getSnapshot = useCallback(() => {
-    const next = selector(store.getState())
-    if (equalityFn(selectedRef.current, next)) {
-      return selectedRef.current
+    const state = store.getState()
+
+    // Store state unchanged — return exact same reference (React verification safe)
+    if (state === cacheRef.current.state) {
+      return cacheRef.current.selected
     }
-    selectedRef.current = next
+
+    // Store state changed — re-run selector
+    const next = selector(state)
+    if (equalityFn(cacheRef.current.selected, next)) {
+      cacheRef.current.state = state
+      return cacheRef.current.selected
+    }
+    cacheRef.current = { state, selected: next }
     return next
   }, [store, selector, equalityFn])
 

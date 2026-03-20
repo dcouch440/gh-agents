@@ -1,4 +1,5 @@
 import type { WorkflowExecutionSummary } from '@/types'
+import { memoFactory } from '../lib'
 import type { WorkflowExecutionState, StepExecutionState, StepTimelineEvent, ViewMode } from './types'
 
 const selectIsRunning = (s: WorkflowExecutionState): boolean => s.isRunning
@@ -11,10 +12,11 @@ const selectTotalSteps = (s: WorkflowExecutionState): number => s.totalSteps
 
 const selectError = (s: WorkflowExecutionState): string | null => s.error
 
-const selectStepState =
+const selectStepState = memoFactory(
   (stepId: string) =>
   (s: WorkflowExecutionState): StepExecutionState | undefined =>
-    s.stepStates[stepId]
+    s.stepStates[stepId],
+)
 
 const selectCompletedStepCount = (s: WorkflowExecutionState): number => s.completedStepCount
 

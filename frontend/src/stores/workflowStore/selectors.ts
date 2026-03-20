@@ -8,12 +8,15 @@ const EMPTY_DOCS: Document[] = []
 const EMPTY_ROSTER: RosterAgent[] = []
 const EMPTY_ROOM_MEMBERS: RoomStepMember[] = []
 
+import { memoFactory } from '../lib'
+
 const selectAll = (s: WorkflowState): Workflow[] => toArray(s.items)
 
-const selectById =
+const selectById = memoFactory(
   (id: string) =>
   (s: WorkflowState): Workflow | undefined =>
-    nmGet(s.items, id)
+    nmGet(s.items, id),
+)
 
 const selectActiveWorkflowId = (s: WorkflowState): string | null => s.activeWorkflowId
 
@@ -21,33 +24,38 @@ const selectSteps = (s: WorkflowState): WorkflowStep[] => toArray(s.steps)
 
 const selectEdges = (s: WorkflowState): WorkflowStepEdge[] => toArray(s.edges)
 
-const selectStepById =
+const selectStepById = memoFactory(
   (id: string | null) =>
   (s: WorkflowState): WorkflowStep | null =>
-    id !== null ? (nmGet(s.steps, id) ?? null) : null
+    id !== null ? (nmGet(s.steps, id) ?? null) : null,
+)
 
-const selectEdgeById =
+const selectEdgeById = memoFactory(
   (id: string | null) =>
   (s: WorkflowState): WorkflowStepEdge | null =>
-    id !== null ? (nmGet(s.edges, id) ?? null) : null
+    id !== null ? (nmGet(s.edges, id) ?? null) : null,
+)
 
-const selectStepDocuments =
+const selectStepDocuments = memoFactory(
   (stepId: string) =>
   (s: WorkflowState): Document[] =>
-    s.documentsByStep[stepId] ?? EMPTY_DOCS
+    s.documentsByStep[stepId] ?? EMPTY_DOCS,
+)
 
-const selectStepRoster =
+const selectStepRoster = memoFactory(
   (stepId: string) =>
   (s: WorkflowState): RosterAgent[] =>
-    s.rosterByStep[stepId] ?? EMPTY_ROSTER
+    s.rosterByStep[stepId] ?? EMPTY_ROSTER,
+)
 
 const selectRosterByStep = (s: WorkflowState): Record<string, RosterAgent[]> =>
   s.rosterByStep
 
-const selectRoomStepMembers =
+const selectRoomStepMembers = memoFactory(
   (stepId: string) =>
   (s: WorkflowState): RoomStepMember[] =>
-    s.roomMembersByStep[stepId] ?? EMPTY_ROOM_MEMBERS
+    s.roomMembersByStep[stepId] ?? EMPTY_ROOM_MEMBERS,
+)
 
 const selectRoomMembersByStep = (s: WorkflowState): Record<string, RoomStepMember[]> =>
   s.roomMembersByStep
@@ -63,7 +71,7 @@ const selectDirty = (s: WorkflowState): boolean => s.dirty
 
 const selectDirtyStepIds = (s: WorkflowState): Set<string> => s.dirtyStepIds
 
-const selectRosterAgentById =
+const selectRosterAgentById = memoFactory(
   (id: string) =>
   (s: WorkflowState): RosterAgent | null => {
     for (const roster of Object.values(s.rosterByStep)) {
@@ -71,9 +79,10 @@ const selectRosterAgentById =
       if (found) return found
     }
     return null
-  }
+  },
+)
 
-const selectRoomMemberById =
+const selectRoomMemberById = memoFactory(
   (id: string) =>
   (s: WorkflowState): RoomStepMember | null => {
     for (const members of Object.values(s.roomMembersByStep)) {
@@ -81,12 +90,14 @@ const selectRoomMemberById =
       if (found) return found
     }
     return null
-  }
+  },
+)
 
-const selectStepQuestionState =
+const selectStepQuestionState = memoFactory(
   (stepId: string) =>
   (s: WorkflowState): StepQuestionState | null =>
-    s.questionStateByStep[stepId] ?? null
+    s.questionStateByStep[stepId] ?? null,
+)
 
 const selectIsStale = (s: WorkflowState): boolean => s.lastFetched === null || Date.now() - s.lastFetched > STALE_THRESHOLD_MS
 
