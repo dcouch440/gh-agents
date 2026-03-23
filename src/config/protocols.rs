@@ -272,6 +272,14 @@ pub static MANAGER_BUILDER: Lazy<ProtocolConfig> = Lazy::new(|| {
     )
 });
 
+/// System node agent config (replaces builder + designer).
+pub static SYSTEM_NODE_AGENT: Lazy<ProtocolConfig> = Lazy::new(|| {
+    load_protocol_config(
+        include_str!("../../config/archetype/workforce/system_agent/config.yaml"),
+        "config/archetype/workforce/system_agent/config.yaml",
+    )
+});
+
 /// Workspace merge conflict resolution config.
 pub static MERGE: Lazy<ProtocolConfig> = Lazy::new(|| {
     load_protocol_config(
@@ -301,6 +309,10 @@ pub mod roles {
     /// Workforce builder system prompt (background configuration agent).
     pub const WORKFORCE_BUILDER_SYSTEM: &str =
         include_str!("../../config/archetype/workforce/builder/system.md");
+
+    /// System node agent system prompt (designs runtime agent teams).
+    pub const SYSTEM_NODE_AGENT_SYSTEM: &str =
+        include_str!("../../config/archetype/workforce/system_agent/system.md");
 
     /// Workforce runtime agent prompt template.
     pub static WORKFORCE_AGENT: RoleDefinition = RoleDefinition {
@@ -469,6 +481,7 @@ mod tests {
 
         assert!(!roles::WORKFORCE_ARCHETYPE.is_empty());
         assert!(!roles::WORKFORCE_BUILDER_SYSTEM.is_empty());
+        assert!(!roles::SYSTEM_NODE_AGENT_SYSTEM.is_empty());
 
         assert!(!roles::WORKFORCE_AGENT.system.is_empty());
         assert!(!roles::WORKFORCE_AGENT.prompt.is_empty());
@@ -537,6 +550,17 @@ mod tests {
         assert_eq!(dispatcher.max_tokens, 8192);
         assert!(dispatcher.max_rounds > 0);
         assert_eq!(dispatcher.context_budget, 200_000);
+    }
+
+    #[test]
+    fn system_node_agent_config_parses() {
+        let cfg = &*SYSTEM_NODE_AGENT;
+        let system = cfg.agent("system");
+        assert_eq!(system.model_id, crate::constants::MODEL_TIER2);
+        assert_eq!(system.temperature, 0.3);
+        assert_eq!(system.max_tokens, 8192);
+        assert_eq!(system.max_rounds, 10);
+        assert_eq!(system.context_budget, 480_000);
     }
 
     #[test]
