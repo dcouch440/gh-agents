@@ -263,52 +263,7 @@ Do not exceed 250 tokens for any system prompt.
 </guide>
 
 <examples>
-<example name="single_agent">
-<turn>
-instruction: "Configure this new step.
-
-<task>
-Read the handwriting from the image.
-</task>"
-current_state: empty
-
-<tool_call name="run_command">
-cat > topology.json << 'EOF'
-{
-  "task": "Read handwriting from the image and transcribe it.",
-  "agents": {
-    "reader": { "depends_on": [] }
-  }
-}
-EOF
-</tool_call>
-<tool_call name="run_command">
-mkdir -p agents && cat > agents/reader.json << 'EOF'
-{
-  "name": "Reader",
-  "system_prompt": "OCR specialist. Read handwritten text from images and produce clean transcriptions.",
-  "assignment": "Read the handwritten text from the image and transcribe it.",
-  "expected_output": "What you transcribed, where you saved it.",
-  "capabilities": []
-}
-EOF
-</tool_call>
-<tool_call name="run_command">
-cat > config.json << 'EOF'
-{
-  "name": "Handwriting Transcription",
-  "description": "Reads handwritten text from an uploaded image and produces a clean text transcription."
-}
-EOF
-</tool_call>
-<tool_call name="complete_system">
-{"summary": "Single reader agent for handwriting OCR.",
- "verify": {"topology_complete": true, "agents_complete": true, "config_accurate": true}}
-</tool_call>
-</turn>
-</example>
-
-<example name="single_agent_with_upstream">
+<example name="first_run_simple">
 <turn>
 instruction: "Configure this new step.
 
@@ -322,31 +277,27 @@ Ranked list of 5 trending AI papers with title, authors, link, and summary.
 current_state: empty
 
 <tool_call name="run_command">
+mkdir -p agents
+cat > config.json << 'EOF'
+{
+  "name": "Research Blog Post",
+  "description": "An engaging blog post summarizing trending AI research papers, covering key findings, significance, and future directions."
+}
+EOF
 cat > topology.json << 'EOF'
 {
-  "task": "Summarize the research papers into an engaging blog post.",
   "agents": {
     "writer": { "depends_on": [] }
   }
 }
 EOF
-</tool_call>
-<tool_call name="run_command">
-mkdir -p agents && cat > agents/writer.json << 'EOF'
+cat > agents/writer.json << 'EOF'
 {
   "name": "Writer",
   "system_prompt": "Tech blogger. Turn academic research into accessible, engaging posts.",
   "assignment": "Read the ranked research papers from the previous step. Write a blog post covering the top findings, why they matter, and what comes next.",
   "expected_output": "Blog post title, word count, and where you saved it.",
   "capabilities": []
-}
-EOF
-</tool_call>
-<tool_call name="run_command">
-cat > config.json << 'EOF'
-{
-  "name": "Research Blog Post",
-  "description": "An engaging blog post summarizing trending AI research papers, covering key findings, significance, and future directions."
 }
 EOF
 </tool_call>
@@ -357,7 +308,7 @@ EOF
 </turn>
 </example>
 
-<example name="pipeline">
+<example name="first_run_pipeline">
 <turn>
 instruction: "Configure this new step.
 
@@ -367,9 +318,15 @@ Scan codebase for security vulnerabilities and produce a remediation report with
 current_state: empty
 
 <tool_call name="run_command">
+mkdir -p agents
+cat > config.json << 'EOF'
+{
+  "name": "Security Audit",
+  "description": "Scans a codebase for security vulnerabilities, prioritizes findings by severity, and produces a remediation report with code examples."
+}
+EOF
 cat > topology.json << 'EOF'
 {
-  "task": "Scan codebase for security vulnerabilities, prioritize findings by severity, and produce a remediation report with fix recommendations.",
   "agents": {
     "scanner": { "depends_on": [] },
     "analyzer": { "depends_on": ["scanner"] },
@@ -377,9 +334,7 @@ cat > topology.json << 'EOF'
   }
 }
 EOF
-</tool_call>
-<tool_call name="run_command">
-mkdir -p agents && cat > agents/scanner.json << 'EOF'
+cat > agents/scanner.json << 'EOF'
 {
   "name": "Scanner",
   "system_prompt": "Security scanner. Find vulnerability patterns in source code.",
@@ -388,8 +343,6 @@ mkdir -p agents && cat > agents/scanner.json << 'EOF'
   "capabilities": []
 }
 EOF
-</tool_call>
-<tool_call name="run_command">
 cat > agents/analyzer.json << 'EOF'
 {
   "name": "Analyzer",
@@ -399,8 +352,6 @@ cat > agents/analyzer.json << 'EOF'
   "capabilities": []
 }
 EOF
-</tool_call>
-<tool_call name="run_command">
 cat > agents/reporter.json << 'EOF'
 {
   "name": "Reporter",
@@ -408,14 +359,6 @@ cat > agents/reporter.json << 'EOF'
   "assignment": "Read the prioritized findings from the previous agent. Write a remediation report with fix examples.",
   "expected_output": "Report written. Where you saved it, section count, key recommendations.",
   "capabilities": []
-}
-EOF
-</tool_call>
-<tool_call name="run_command">
-cat > config.json << 'EOF'
-{
-  "name": "Security Audit",
-  "description": "Scans a codebase for security vulnerabilities, prioritizes findings by severity, and produces a remediation report with code examples."
 }
 EOF
 </tool_call>
@@ -449,42 +392,7 @@ current_state: topology has 1 agent "researcher" (configured), config present
 </turn>
 </example>
 
-<example name="update_existing">
-<turn>
-instruction: "<prior_work>
-1. 3-agent pipeline: Scanner → Analyzer → Reporter.
-</prior_work>
-
-The user updated this step.
-
-<change>
-Before: \"Scan codebase for security vulnerabilities\"
-After: \"Scan codebase for security vulnerabilities. Focus on OWASP Top 10. Include remediation steps with code examples.\"
-</change>"
-current_state: topology has scanner (configured), analyzer (configured), reporter (configured), config present
-
-(Scanner and Analyzer configs still match the updated task — OWASP focus
-was already implicit. Reporter needs updated assignment for code examples.)
-
-<tool_call name="run_command">
-cat > agents/reporter.json << 'EOF'
-{
-  "name": "Reporter",
-  "system_prompt": "Technical writer. Produce remediation reports with working code fixes.",
-  "assignment": "Read the prioritized findings from the previous agent. Write a remediation report. For each finding, include a concrete code example showing the fix.",
-  "expected_output": "Report written. Where you saved it, finding count, code examples per finding.",
-  "capabilities": []
-}
-EOF
-</tool_call>
-<tool_call name="complete_system">
-{"summary": "Updated Reporter to include code fix examples per finding. Scanner and Analyzer unchanged.",
- "verify": {"topology_complete": true, "agents_complete": true, "config_accurate": true}}
-</tool_call>
-</turn>
-</example>
-
-<example name="rerun_verify_and_update">
+<example name="rerun_update">
 <turn>
 instruction: "<prior_work>
 1. Configured 2-agent pipeline: Researcher → Writer.
@@ -503,22 +411,17 @@ Clone repository containing the target company's public docs.
 current_state: topology has researcher (configured), writer (configured), config present
 
 <tool_call name="run_command">
-cat agents/researcher.json
+cat agents/researcher.json && cat agents/writer.json
 </tool_call>
-(reads: assignment says "Search the web for competitor data. Save as research_notes.md." — still valid, research step unchanged)
+(Researcher assignment: "Search the web for competitor data" — still valid.
+ Writer assignment: "Write a summary report" — stale, no fact-checking.)
 
-<tool_call name="run_command">
-cat agents/writer.json
-</tool_call>
-(reads: assignment says "Read research_notes.md. Write a summary report." — stale, no fact-checking step)
-
-Need to add a FactChecker between Researcher and Writer. Update topology,
-add the new agent, update Writer to consume verified data.
+Add FactChecker between Researcher and Writer. Update topology,
+add new agent, update Writer to consume verified data.
 
 <tool_call name="run_command">
 cat > topology.json << 'EOF'
 {
-  "task": "Research competitors, verify claims, and write a summary report.",
   "agents": {
     "researcher": { "depends_on": [] },
     "fact_checker": { "depends_on": ["researcher"] },
@@ -526,8 +429,6 @@ cat > topology.json << 'EOF'
   }
 }
 EOF
-</tool_call>
-<tool_call name="run_command">
 cat > agents/fact_checker.json << 'EOF'
 {
   "name": "FactChecker",
@@ -537,8 +438,6 @@ cat > agents/fact_checker.json << 'EOF'
   "capabilities": []
 }
 EOF
-</tool_call>
-<tool_call name="run_command">
 cat > agents/writer.json << 'EOF'
 {
   "name": "Writer",
@@ -548,8 +447,6 @@ cat > agents/writer.json << 'EOF'
   "capabilities": []
 }
 EOF
-</tool_call>
-<tool_call name="run_command">
 cat > config.json << 'EOF'
 {
   "name": "Competitor Research",
@@ -558,43 +455,7 @@ cat > config.json << 'EOF'
 EOF
 </tool_call>
 <tool_call name="complete_system">
-{"summary": "Added FactChecker between Researcher and Writer. Updated Writer to consume verified data. Updated config description — output now includes claim verification.",
- "verify": {"topology_complete": true, "agents_complete": true, "config_accurate": true}}
-</tool_call>
-</turn>
-</example>
-
-<example name="rerun_no_description_change">
-<turn>
-instruction: "<prior_work>
-1. Configured 2-agent pipeline: Researcher → Writer.
-2. Added FactChecker between Researcher and Writer. Updated config description.
-</prior_work>
-
-The user updated this step.
-
-<change>
-Before: \"Research competitors, verify claims, and write a summary report.\"
-After: \"Research competitors, verify claims, and write a summary report. Use Reuters and Bloomberg as primary sources for verification.\"
-</change>"
-current_state: topology has researcher (configured), fact_checker (configured), writer (configured), config present
-
-User added source guidance. Team structure unchanged — just refine
-the FactChecker's assignment to mention the preferred sources.
-
-<tool_call name="run_command">
-cat > agents/fact_checker.json << 'EOF'
-{
-  "name": "FactChecker",
-  "system_prompt": "Fact verification specialist. Check claims against authoritative sources.",
-  "assignment": "Read the research notes from the previous agent. Verify each claim, prioritizing Reuters and Bloomberg as primary sources. Annotate findings with verification status and source.",
-  "expected_output": "Verification results: claims checked, confirmed vs unverified, sources used, where you saved the results.",
-  "capabilities": []
-}
-EOF
-</tool_call>
-<tool_call name="complete_system">
-{"summary": "Updated FactChecker to prioritize Reuters and Bloomberg. Team and config unchanged.",
+{"summary": "Added FactChecker between Researcher and Writer. Updated Writer and config description.",
  "verify": {"topology_complete": true, "agents_complete": true, "config_accurate": true}}
 </tool_call>
 </turn>
