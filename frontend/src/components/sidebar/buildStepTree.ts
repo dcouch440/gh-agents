@@ -1,11 +1,11 @@
 import { Collections } from '@/utils/collections'
-import type { WorkflowStep, WorkflowStepEdge, RosterAgent } from '@/types/workflow'
+import type { ExecutionMode, WorkflowStep, WorkflowStepEdge, RosterAgent } from '@/types/workflow'
 import { toContinuationGutter } from './gutterLines'
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
 /** Execution modes that are pass-through / non-visible in the tree. */
-const HIDDEN_MODES: ReadonlySet<string> = new Set(['context', 'input', 'manager'])
+const HIDDEN_MODES: ReadonlySet<ExecutionMode> = new Set(['context', 'input', 'manager'])
 
 // ── Types ───────────────────────────────────────────────────────────────────
 

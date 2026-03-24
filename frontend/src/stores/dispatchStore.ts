@@ -38,6 +38,8 @@ type DispatchState = {
   byStep: Record<string, DispatchEntry>
 }
 
+const MAX_TRACE_EVENTS = 2000
+
 // ── Store ───────────────────────────────────────────────────────────────────
 
 const store = createStore<DispatchState>(() => ({
@@ -96,6 +98,12 @@ const updateEntry = (
   })
 }
 
+/** Append a trace event, dropping the oldest events if the cap is exceeded. */
+const appendTrace = (trace: DispatchTraceEvent[], event: DispatchTraceEvent): DispatchTraceEvent[] => {
+  const next = [...trace, event]
+  return next.length > MAX_TRACE_EVENTS ? next.slice(-MAX_TRACE_EVENTS) : next
+}
+
 // ── WS Handler ──────────────────────────────────────────────────────────────
 
 const handleWsEvent = (msg: WsWireMessage): void => {
@@ -126,7 +134,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         ...e,
         message,
         trace: message !== null
-          ? [...e.trace, { type: 'phase_marker' as const, label: message, ts: msg.ts }]
+          ? appendTrace(e.trace, { type: 'phase_marker' as const, label: message, ts: msg.ts })
           : e.trace,
       }))
       break
@@ -160,79 +168,64 @@ const handleWsEvent = (msg: WsWireMessage): void => {
       updateEntry(stepId, (e) => ({
         ...e,
         tokenBuffer: e.tokenBuffer + content,
-        trace: [...e.trace, { type: 'token', content, ts: msg.ts }],
+        trace: appendTrace(e.trace, { type: 'token', content, ts: msg.ts }),
       }))
       break
     }
     case SESSION_EVENT.DISPATCH_STREAM_TOOL_START: {
       updateEntry(stepId, (e) => ({
         ...e,
-        trace: [
-          ...e.trace,
-          {
-            type: 'tool_start' as const,
-            toolName: data.tool_name as string,
-            toolId: data.tool_id as string,
-            input: data.input as Record<string, unknown>,
-            ts: msg.ts,
-          },
-        ],
+        trace: appendTrace(e.trace, {
+          type: 'tool_start' as const,
+          toolName: data.tool_name as string,
+          toolId: data.tool_id as string,
+          input: data.input as Record<string, unknown>,
+          ts: msg.ts,
+        }),
       }))
       break
     }
     case SESSION_EVENT.DISPATCH_STREAM_TOOL_END: {
       updateEntry(stepId, (e) => ({
         ...e,
-        trace: [
-          ...e.trace,
-          {
-            type: 'tool_end' as const,
-            toolName: data.tool_name as string,
-            toolId: data.tool_id as string,
-            result: data.result,
-            ts: msg.ts,
-          },
-        ],
+        trace: appendTrace(e.trace, {
+          type: 'tool_end' as const,
+          toolName: data.tool_name as string,
+          toolId: data.tool_id as string,
+          result: data.result,
+          ts: msg.ts,
+        }),
       }))
       break
     }
     case SESSION_EVENT.DISPATCH_STREAM_ERROR: {
       updateEntry(stepId, (e) => ({
         ...e,
-        trace: [
-          ...e.trace,
-          { type: 'error' as const, error: data.error as string, ts: msg.ts },
-        ],
+        trace: appendTrace(e.trace, { type: 'error' as const, error: data.error as string, ts: msg.ts }),
       }))
       break
     }
     case SESSION_EVENT.DISPATCH_STREAM_SYSTEM_PROMPT: {
       updateEntry(stepId, (e) => ({
         ...e,
-        trace: [
-          ...e.trace,
-          {
-            type: 'system_prompt' as const,
-            content: data.content as string,
-            agentName: (data.agent_name as string | null) ?? null,
-            ts: msg.ts,
-          },
-        ],
+        trace: appendTrace(e.trace, {
+          type: 'system_prompt' as const,
+          content: data.content as string,
+          agentName: (data.agent_name as string | null) ?? null,
+          ts: msg.ts,
+        }),
       }))
       break
     }
     case SESSION_EVENT.DISPATCH_STREAM_USER_MESSAGE: {
       updateEntry(stepId, (e) => ({
         ...e,
-        trace: [
-          ...e.trace,
-          {
-            type: 'user_message' as const,
-            content: data.content as string,
-            agentName: (data.agent_name as string | null) ?? null,
-            ts: msg.ts,
-          },
-        ],
+        trace: appendTrace(e.trace, {
+          type: 'user_message' as const,
+          content: data.content as string,
+          agentName: (data.agent_name as string | null) ?? null,
+          ts: msg.ts,
+        }),
       }))
       break
     }
@@ -264,7 +257,8 @@ const hydrateFromApi = (resp: DispatchTraceResponse): void => {
   const existing = store.getState().byStep[stepId]
   if (existing?.status === 'running') return
 
-  const trace = Collections.mapBy(resp.trace, mapApiTraceEvent)
+  const allTrace = Collections.mapBy(resp.trace, mapApiTraceEvent)
+  const trace = allTrace.length > MAX_TRACE_EVENTS ? allTrace.slice(-MAX_TRACE_EVENTS) : allTrace
   const tokenBuffer = Collections.filterMap(trace, (e) =>
     e.type === 'token' ? e.content : null,
   ).join('')
@@ -299,4 +293,5 @@ export const dispatchStore = {
   hydrateFromApi,
 }
 
+export { MAX_TRACE_EVENTS }
 export type { DispatchEntry, DispatchState, DispatchStatus, DispatchTraceEvent }
