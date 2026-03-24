@@ -21,14 +21,15 @@ mod types;
 // Re-export used by the orchestrator and workshop dispatch
 pub(crate) use output::compose_workforce_output;
 
+// Re-exports for crate-wide access
+pub(crate) use types::DesignedAgentPrompt;
+
 // Re-exports for test access (tests.rs imports via crate path)
 #[cfg(test)]
 pub(crate) use output::{
     build_filtered_outputs_block, build_upstream_outputs_block, compute_execution_levels,
     filter_outputs_for_agent,
 };
-#[cfg(test)]
-pub(crate) use types::DesignedAgentPrompt;
 
 use std::collections::{HashMap, HashSet};
 

@@ -19,6 +19,7 @@ use crate::server::hub::strategy::ExecutionStrategy;
 use crate::server::state::AppState;
 use crate::tools::registry::get_tool_definition;
 
+pub(crate) mod file_reader;
 mod tests;
 pub(crate) mod validate;
 
