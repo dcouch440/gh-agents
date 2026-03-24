@@ -27,7 +27,7 @@ const testStep: WorkflowStep = {
   id: 'step-001',
   workflow_id: 'wf-001',
   agent_id: '',
-  execution_mode: 'llm',
+  execution_mode: 'single',
   for_each_ref: null,
   prompt_template_id: null,
   prompt_template: '',

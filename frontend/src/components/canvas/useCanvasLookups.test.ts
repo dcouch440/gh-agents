@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { useCanvasLookups } from './useCanvasLookups'
-import type { WorkflowStep, WorkflowStepEdge, DocumentDef, RosterAgent } from '@/types/workflow'
+import type { ExecutionMode, WorkflowStep, WorkflowStepEdge, DocumentDef, RosterAgent } from '@/types/workflow'
 import type { Agent, Tool } from '@/types'
 import type { OutputSchema } from '@/types'
 import type { StepProtocolLink } from '@/stores'
@@ -10,7 +10,7 @@ vi.mock('./mappers', () => ({
   computeProtocolGroups: vi.fn(() => new Map()),
 }))
 
-const makeStep = (id: string, mode = 'single', name: string | null = null): WorkflowStep => ({
+const makeStep = (id: string, mode: ExecutionMode = 'single', name: string | null = null): WorkflowStep => ({
   id,
   workflow_id: 'wf-1',
   agent_id: 'agent-1',
@@ -87,14 +87,14 @@ describe('useCanvasLookups', () => {
   })
 
   it('builds step name lookup from steps', () => {
-    const steps = [makeStep('step-1', 'single', 'My Step'), makeStep('step-2', 'for_each')]
+    const steps = [makeStep('step-1', 'single', 'My Step'), makeStep('step-2', 'workforce')]
     const { result } = renderHook(() =>
       useCanvasLookups(steps, [], [], [], {}, emptyProtocols, emptyDocDefs, emptyRoster),
     )
 
     expect(result.current.lookups.stepNames.get('step-1')).toBe('My Step')
     // Falls back to execution_mode when name is null
-    expect(result.current.lookups.stepNames.get('step-2')).toBe('for_each')
+    expect(result.current.lookups.stepNames.get('step-2')).toBe('workforce')
   })
 
   it('builds tools-by-agent lookup', () => {

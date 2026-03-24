@@ -19,6 +19,8 @@ const makeRun = (overrides: Partial<WorkflowExecutionSummary> = {}): WorkflowExe
   completed_at: '2025-01-01T00:00:10Z',
   outputs: null,
   error: null,
+  execution_mode: 'single',
+  template_id: null,
   ...overrides,
 })
 

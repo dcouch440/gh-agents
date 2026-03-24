@@ -199,21 +199,6 @@ describe('CanvasContextMenu', () => {
     })
   })
 
-  it('creates room step on Room click', async () => {
-    const user = userEvent.setup()
-    render(<CanvasContextMenu position={defaultPosition} onClose={vi.fn()} />)
-
-    await user.click(screen.getByText('Room'))
-
-    expect(mockCreateStep).toHaveBeenCalledWith({
-      name: 'New Room',
-      execution_mode: 'room',
-      prompt_template: '',
-      position_x: 151,
-      position_y: 251,
-    })
-  })
-
   describe('node context menu', () => {
     const nodePosition = { ...defaultPosition, nodeId: 'step-123' }
 

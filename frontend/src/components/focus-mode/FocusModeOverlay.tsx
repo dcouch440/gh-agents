@@ -64,7 +64,6 @@ function FocusModeOverlay() {
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
   const edges = useStore(workflowStore.store, workflowStore.selectEdges)
   const rosterByStep = useStore(workflowStore.store, workflowStore.selectRosterByStep)
-  const roomMembersByStep = useStore(workflowStore.store, workflowStore.selectRoomMembersByStep)
   const protocolsByStep = useStore(canvasStore.store, canvasStore.selectStepProtocols)
 
   // Build a Map<string, ProtocolStepInfo> from the canvas store's Record format
@@ -156,18 +155,6 @@ function FocusModeOverlay() {
           }
           break
         }
-        case 'room': {
-          const members = roomMembersByStep[id] ?? []
-          if (members.length > 0) {
-            for (let j = 0; j < members.length; j++) {
-              const m = members[j]!
-              cards.push({ id: m.id, name: m.name, subtitle: m.role, accentOverride: null, artifactKind: 'room-member' })
-            }
-          } else {
-            cards.push({ id, name: stepName, subtitle: 'No members', accentOverride: null, artifactKind: 'room' })
-          }
-          break
-        }
         default:
           cards.push({ id, name: stepName, subtitle: null, accentOverride: null, artifactKind: 'document' })
           break
@@ -176,7 +163,7 @@ function FocusModeOverlay() {
       sections.push({ stepId: id, stepName, sectionLabel: executionModeLabel(step.execution_mode), accentColor: color, cards })
     }
     return sections
-  }, [orderedStepIds, steps, stepsById, edgesByFromId, accentColors, rosterByStep, roomMembersByStep, nodePalette])
+  }, [orderedStepIds, steps, stepsById, edgesByFromId, accentColors, rosterByStep, nodePalette])
 
   const handleCardClick = useCallback((stepId: string, cardId: string, kind: ArtifactKind) => {
     const idx = orderedStepIds.indexOf(stepId)

@@ -31,7 +31,7 @@ const makeSummary = (overrides: Partial<WorkflowExecutionSummary> = {}): Workflo
   completed_at: '2025-01-01T00:01:00Z',
   outputs: null,
   error: null,
-  execution_mode: 'standalone',
+  execution_mode: 'single',
   template_id: null,
   ...overrides,
 })

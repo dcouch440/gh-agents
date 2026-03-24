@@ -14,12 +14,8 @@ type ExecutionMode =
   | 'context'
   | 'input'
   | 'manager'
-  | 'room'
   | 'single'
-  | 'for_each'
-  | 'agent'
-  | 'llm'
-  | 'standalone'
+  | 'container'
 
 type WorkflowStep = {
   id: string

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { toRFNodes, toRFEdges, toAgentEdges, nodeDataEqual, computeProtocolGroups } from '.'
 import type { StepNodeLookups, ProtocolStepInfo } from '.'
-import type { WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
+import type { ExecutionMode, WorkflowStep, WorkflowStepEdge } from '@/types/workflow'
 import type { NodePalette } from '@/theme'
 
 /** Test palette — uses Midnight values for backward-compat with existing assertions. */
@@ -41,7 +41,7 @@ const step2: WorkflowStep = {
   ...step1,
   id: 'step-002',
   name: 'Second Step',
-  execution_mode: 'for_each',
+  execution_mode: 'single',
   agent_id: 'agent-001',
   position_x: 400,
   position_y: 100,
@@ -218,10 +218,10 @@ describe('toRFEdges', () => {
   })
 
   it('resolves sourceColor from step type for non-protocol edges', () => {
-    const forEachStep: WorkflowStep = { ...step1, id: 'fe-1', execution_mode: 'for_each' }
+    const singleStep: WorkflowStep = { ...step1, id: 'fe-1', execution_mode: 'single' }
     const edge: WorkflowStepEdge = { id: 'edge-fe', from_step_id: 'fe-1', to_step_id: 'step-002' }
-    const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [forEachStep, step2], testPalette)
-    // for_each → variant 'step' → grey
+    const edges = toRFEdges([edge], emptyGroups, emptyProtocols, [singleStep, step2], testPalette)
+    // single → variant 'step' → grey
     expect(edges[0]?.data?.sourceColor).toBe('#7d8590')
     expect(edges[0]?.data?.isProtocolEdge).toBe(false)
   })
@@ -315,7 +315,7 @@ describe('nodeDataEqual', () => {
 })
 
 describe('computeProtocolGroups', () => {
-  const makeStep = (id: string, mode = 'single'): WorkflowStep => ({
+  const makeStep = (id: string, mode: ExecutionMode = 'single'): WorkflowStep => ({
     ...step1,
     id,
     execution_mode: mode,
