@@ -16,7 +16,6 @@ use crate::server::state::AppState;
 use super::super::dag_state::{
     resolve_output_key, wrap_in_agentless_envelope, DagContext, DagExecutionState, PortMetadata,
 };
-use super::super::pipeline::{DesignerPhase, Pipeline};
 use super::super::single::execute_single_step;
 use super::super::utils::{StepOutput, WorkflowExecutionContext};
 use super::super::versioning;
@@ -127,7 +126,7 @@ async fn execute_passthrough(
     })
 }
 
-/// Workforce (pipeline) step execution — agentless, designer + agent loop.
+/// Workforce step execution — file-based agent execution (reads system node agent's config files).
 async fn execute_workforce(
     dag: &DagContext<'_>,
     step: &WorkflowStepRow,
@@ -138,10 +137,12 @@ async fn execute_workforce(
     let pre_tokens_out = dag_state.total_output_tokens;
     let pre_cost = dag_state.total_cost_usd;
 
-    Pipeline::new()
-        .before(DesignerPhase)
-        .execute(dag, step, dag_state)
-        .await?;
+    let base_dir = crate::server::services::system_node::resolve_base_dir(
+        dag.state,
+        step.workflow_id,
+        step.id,
+    );
+    super::super::file_executor::execute_from_files(dag, step, dag_state, &base_dir).await?;
 
     let output = dag_state
         .completed

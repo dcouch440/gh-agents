@@ -141,26 +141,6 @@ pub(super) async fn dispatch_step_tool(
         return Some(result);
     }
 
-    // Archetype-specific dispatch
-    match ctx.execution_mode.as_str() {
-        "workforce" => {
-            const WORKFORCE_TOOLS: &[&str] = &["configure_team"];
-            if WORKFORCE_TOOLS.contains(&name) {
-                let tool_ctx = crate::server::tools::workforce::WorkforceToolContext {
-                    workflow_id: ctx.workflow_id,
-                    step_id: ctx.step_id,
-                };
-                let result = crate::server::tools::workforce::execute_workforce_tool(
-                    name,
-                    input,
-                    state.repos().workflows.as_ref(),
-                    &tool_ctx,
-                )
-                .await;
-                return Some(result);
-            }
-            None
-        }
-        _ => None,
-    }
+    // No archetype-specific dispatch remaining
+    None
 }

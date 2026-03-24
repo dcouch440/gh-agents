@@ -5,7 +5,6 @@ mod tests {
     use uuid::Uuid;
 
     use crate::db::fixtures::fixtures::*;
-    use crate::db::TaskAgentRosterRow;
     use crate::server::hub::dag::pipeline::{
         build_filtered_outputs_block, build_upstream_outputs_block, compose_workforce_output,
         compute_execution_levels, filter_outputs_for_agent, DesignedAgentPrompt,
@@ -201,126 +200,6 @@ mod tests {
         assert_eq!(levels.len(), 1);
         // Sorted by execution_order: A(idx=1, order=0), B(idx=2, order=1), C(idx=0, order=2)
         assert_eq!(levels[0], vec![1, 2, 0]);
-    }
-
-    // ── Static Fallback ───────────────────────────────────────────────────────
-
-    #[test]
-    fn static_fallback_creates_sequential_receives_from() {
-        use super::super::designer::build_static_fallback_prompts;
-        use crate::db::TaskMissionBriefRow;
-
-        let brief_id = Uuid::new_v4();
-        let brief = TaskMissionBriefRow {
-            id: brief_id,
-            task_description: "Test task".into(),
-            ..Default::default()
-        };
-        let roster = vec![
-            roster_agent(brief_id, "Scanner", 0),
-            roster_agent(brief_id, "Analyzer", 1),
-            roster_agent(brief_id, "Reporter", 2),
-        ];
-
-        let prompts = build_static_fallback_prompts(&brief, &roster, "base prompt");
-
-        assert_eq!(prompts.len(), 3);
-        // First agent has no receives_from (root)
-        assert!(prompts[0].receives_from.is_empty());
-        // Second receives from first
-        assert_eq!(prompts[1].receives_from, vec!["Scanner"]);
-        // Third receives from second
-        assert_eq!(prompts[2].receives_from, vec!["Analyzer"]);
-
-        // System prompt is simple: "You are {name}. {role}"
-        assert!(prompts[0].system_prompt.starts_with("You are Scanner."));
-        assert!(!prompts[0].system_prompt.contains("<role>"));
-        assert!(!prompts[0].system_prompt.contains("<mission>"));
-        assert!(!prompts[0].system_prompt.contains("<team>"));
-
-        // Assignment includes task description
-        assert!(prompts[0].assignment.contains("Test task"));
-    }
-
-    // ── Edge Routing Enforcement ──────────────────────────────────────────────
-
-    #[test]
-    fn enforce_edge_routing_overrides_designer_receives_from() {
-        use super::super::designer::enforce_edge_routing;
-        use crate::db::{TaskAgentRosterRow, WorkflowStepEdgeRow};
-
-        let step_a = Uuid::new_v4();
-        let step_b = Uuid::new_v4();
-        let step_c = Uuid::new_v4();
-
-        let roster = vec![
-            TaskAgentRosterRow {
-                name: "A".into(),
-                child_step_id: Some(step_a),
-                execution_order: 0,
-                ..Default::default()
-            },
-            TaskAgentRosterRow {
-                name: "B".into(),
-                child_step_id: Some(step_b),
-                execution_order: 1,
-                ..Default::default()
-            },
-            TaskAgentRosterRow {
-                name: "C".into(),
-                child_step_id: Some(step_c),
-                execution_order: 2,
-                ..Default::default()
-            },
-        ];
-
-        // Edges: A → B → C
-        let edges = vec![
-            WorkflowStepEdgeRow {
-                from_step_id: step_a,
-                to_step_id: step_b,
-                ..Default::default()
-            },
-            WorkflowStepEdgeRow {
-                from_step_id: step_b,
-                to_step_id: step_c,
-                ..Default::default()
-            },
-        ];
-
-        // Designer gave wrong receives_from (all parallel)
-        let mut prompts = vec![
-            make_designed_prompt("A", &[]),
-            make_designed_prompt("B", &[]),
-            make_designed_prompt("C", &[]),
-        ];
-
-        enforce_edge_routing(&mut prompts, &roster, &edges);
-
-        // A has no incoming edges → root
-        assert!(prompts[0].receives_from.is_empty());
-        // B receives from A
-        assert_eq!(prompts[1].receives_from, vec!["A"]);
-        // C receives from B
-        assert_eq!(prompts[2].receives_from, vec!["B"]);
-    }
-
-    #[test]
-    fn enforce_edge_routing_noop_when_no_edges() {
-        use super::super::designer::enforce_edge_routing;
-        use crate::db::TaskAgentRosterRow;
-
-        let roster = vec![TaskAgentRosterRow {
-            name: "A".into(),
-            ..Default::default()
-        }];
-
-        // Designer set receives_from — should be preserved when no edges
-        let mut prompts = vec![make_designed_prompt("A", &["SomeAgent"])];
-
-        enforce_edge_routing(&mut prompts, &roster, &[]);
-
-        assert_eq!(prompts[0].receives_from, vec!["SomeAgent"]);
     }
 
     // ── Upstream Outputs Block ────────────────────────────────────────────────
@@ -581,49 +460,5 @@ mod tests {
         let expect_pos = prompt.find("<expected_output>").unwrap();
         assert!(prev_pos < assign_pos);
         assert!(assign_pos < expect_pos);
-    }
-
-    #[test]
-    fn static_fallback_simple_system_prompt() {
-        use super::super::designer::build_static_fallback_prompts;
-        use crate::db::TaskMissionBriefRow;
-
-        let brief_id = Uuid::new_v4();
-        let brief = TaskMissionBriefRow {
-            id: brief_id,
-            task_description: "Scan for vulnerabilities".into(),
-            ..Default::default()
-        };
-        let roster = vec![roster_agent(brief_id, "Scanner", 0)];
-
-        let prompts = build_static_fallback_prompts(&brief, &roster, "base prompt");
-
-        // System prompt is short: "You are {name}. {role}"
-        assert!(prompts[0].system_prompt.starts_with("You are Scanner."));
-        assert!(!prompts[0].system_prompt.contains("<role>"));
-        assert!(!prompts[0].system_prompt.contains("<mission>"));
-        assert!(!prompts[0].system_prompt.contains("<team>"));
-        assert!(!prompts[0].system_prompt.contains("<upstream_outputs>"));
-        assert!(!prompts[0].system_prompt.contains("<instructions>"));
-    }
-
-    #[test]
-    fn static_fallback_assignment_includes_task_description() {
-        use super::super::designer::build_static_fallback_prompts;
-        use crate::db::TaskMissionBriefRow;
-
-        let brief_id = Uuid::new_v4();
-        let brief = TaskMissionBriefRow {
-            id: brief_id,
-            task_description: "Scan for vulnerabilities".into(),
-            ..Default::default()
-        };
-        let roster = vec![roster_agent(brief_id, "Scanner", 0)];
-
-        let prompts = build_static_fallback_prompts(&brief, &roster, "base prompt");
-
-        // Assignment should contain both task_description and role_description
-        assert!(prompts[0].assignment.contains("Scan for vulnerabilities"));
-        assert!(prompts[0].assignment.contains(&roster[0].role_description));
     }
 }

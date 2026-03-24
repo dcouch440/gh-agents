@@ -14,9 +14,9 @@ use std::path::Path;
 use tracing::{info, warn};
 use uuid::Uuid;
 
+use super::normalize_agent_name;
 use crate::db::traits::WorkflowRepo;
 use crate::db::TaskAgentRosterRow;
-use crate::server::hub::dag::agent_designer::normalize_agent_name;
 use crate::server::services::pipeline::{self, AddStepInput, PipelineContext};
 use crate::server::services::ServiceError;
 

@@ -19,7 +19,6 @@ use crate::server::ws::events::WorkflowEventKind;
 use crate::types::StepExecutionEnvelope;
 
 use super::broadcast::broadcast_workflow_event;
-use super::pipeline::{DesignerPhase, Pipeline};
 use super::single::execute_single_step;
 use super::utils;
 use super::{
@@ -455,7 +454,8 @@ fn find_multi_modified_paths(
 /// Route a step to the correct executor based on its execution mode.
 ///
 /// - `context` / `input` → pass-through (no LLM call)
-/// - `workforce` → pipeline execution (designer pre-phase + agent loop)
+/// - `workforce` → file-based agent execution (reads system node agent's files)
+///   Falls back to Pipeline with DesignerPhase for legacy steps without files.
 /// - Everything else → single agent execution with provider resolution
 async fn dispatch_step(
     dag: &DagContext<'_>,
@@ -464,22 +464,14 @@ async fn dispatch_step(
 ) -> Result<(), HubError> {
     match step.execution_mode.as_str() {
         "context" | "input" => execute_passthrough(dag, dag_state, step).await,
-        "workforce" => {
-            Pipeline::new()
-                .before(DesignerPhase)
-                .execute(dag, step, dag_state)
-                .await
-        }
-        _ if step.child_workflow_id.is_some() => {
-            warn!(
-                step_id = %step.id,
-                mode = %step.execution_mode,
-                "Step has child_workflow_id but non-workforce mode — routing as workforce"
+        "workforce" | _ if step.child_workflow_id.is_some() => {
+            // File-based execution: read system node agent's config files
+            let base_dir = crate::server::services::system_node::resolve_base_dir(
+                dag.state,
+                step.workflow_id,
+                step.id,
             );
-            Pipeline::new()
-                .before(DesignerPhase)
-                .execute(dag, step, dag_state)
-                .await
+            super::file_executor::execute_from_files(dag, step, dag_state, &base_dir).await
         }
         _ => execute_with_agent(dag, dag_state, step).await,
     }
