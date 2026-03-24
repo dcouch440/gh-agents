@@ -332,24 +332,34 @@ pub(crate) async fn find_or_create_builder_session(
 
         session_id
     } else {
-        // L4: node builder session, keyed by step_id
-        match sessions.find_builder_session_by_step_id(step_id).await {
+        // L4: node dispatch session, keyed by step_id + role.
+        // Role determines session isolation: "builder" (legacy), "system_agent" (new).
+        match sessions
+            .find_session_by_step_id_and_role(step_id, execution_mode)
+            .await
+        {
             Ok(Some(session)) => return session.id,
             Ok(None) => {}
             Err(e) => {
                 tracing::warn!(
                     step_id = %step_id,
+                    role = %execution_mode,
                     error = %e,
-                    "Failed to find builder session, creating new"
+                    "Failed to find dispatch session, creating new"
                 );
             }
         }
+
+        let title = match execution_mode {
+            "system_agent" => "System Node Agent",
+            _ => "Node Builder",
+        };
 
         let session_id = Uuid::new_v4();
         let draft_config = json!({
             "step_id": step_id.to_string(),
             "workflow_id": workflow_id.to_string(),
-            "role": "builder",
+            "role": execution_mode,
         });
 
         if let Err(e) = sessions
@@ -357,7 +367,7 @@ pub(crate) async fn find_or_create_builder_session(
                 user_id,
                 session_id,
                 "dispatch",
-                "Node Builder",
+                title,
                 None,
                 Some(draft_config),
             )
@@ -365,8 +375,9 @@ pub(crate) async fn find_or_create_builder_session(
         {
             tracing::error!(
                 step_id = %step_id,
+                role = %execution_mode,
                 error = %e,
-                "Failed to create builder session"
+                "Failed to create dispatch session"
             );
         }
 

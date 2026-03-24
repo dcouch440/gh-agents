@@ -87,6 +87,13 @@ pub trait SessionRepo: Send + Sync {
     /// Find the L4 builder session for a workflow step.
     async fn find_builder_session_by_step_id(&self, step_id: Uuid) -> Result<Option<SessionRow>>;
 
+    /// Find a dispatch session for a step by role (e.g., "builder", "system_agent").
+    async fn find_session_by_step_id_and_role(
+        &self,
+        step_id: Uuid,
+        role: &str,
+    ) -> Result<Option<SessionRow>>;
+
     /// Find the L2 manager builder session for a workflow.
     async fn find_manager_builder_session(&self, workflow_id: Uuid) -> Result<Option<SessionRow>>;
 

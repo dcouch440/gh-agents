@@ -163,16 +163,29 @@ pub async fn find_builder_session_by_step_id(
     pool: &PgPool,
     step_id: Uuid,
 ) -> Result<Option<SessionRow>> {
+    find_session_by_step_id_and_role(pool, step_id, "builder").await
+}
+
+/// Find a dispatch session for a step by role.
+///
+/// Generalizes `find_builder_session_by_step_id` to support multiple roles
+/// (e.g., `"builder"`, `"system_agent"`).
+pub async fn find_session_by_step_id_and_role(
+    pool: &PgPool,
+    step_id: Uuid,
+    role: &str,
+) -> Result<Option<SessionRow>> {
     let row: Option<SessionRow> = sqlx::query_as(
         "SELECT id, user_id, mode_id, title, summary, agent_id, draft_config, created_at, updated_at \
          FROM chat_sessions \
          WHERE draft_config->>'step_id' = $1 \
-           AND draft_config->>'role' = 'builder'"
+           AND draft_config->>'role' = $2"
     )
         .bind(step_id.to_string())
+        .bind(role)
         .fetch_optional(pool)
         .await
-        .context("Failed to find builder session by step_id")?;
+        .context("Failed to find session by step_id and role")?;
     Ok(row)
 }
 

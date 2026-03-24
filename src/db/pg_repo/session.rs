@@ -126,6 +126,14 @@ impl SessionRepo for PgRepo {
         crate::db::find_builder_session_by_step_id(&self.pool, step_id).await
     }
 
+    async fn find_session_by_step_id_and_role(
+        &self,
+        step_id: Uuid,
+        role: &str,
+    ) -> Result<Option<SessionRow>> {
+        crate::db::find_session_by_step_id_and_role(&self.pool, step_id, role).await
+    }
+
     async fn find_manager_builder_session(&self, workflow_id: Uuid) -> Result<Option<SessionRow>> {
         crate::db::find_manager_builder_session(&self.pool, workflow_id).await
     }

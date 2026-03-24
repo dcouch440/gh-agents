@@ -197,14 +197,9 @@ async fn run_system_node_dispatch(
     let enriched_instruction =
         enrich_with_previous_step(&instruction.instruction, &previous_step_handoff);
 
-    let session_id = super::find_or_create_builder_session(
-        state,
-        step_id,
-        workflow_id,
-        user_id,
-        &instruction.execution_mode,
-    )
-    .await;
+    let session_id =
+        super::find_or_create_builder_session(state, step_id, workflow_id, user_id, "system_agent")
+            .await;
 
     let (execution_id, _cancel_token) = state.task_registry().spawn_task(
         step_id,
@@ -282,7 +277,7 @@ async fn run_system_node_propagation(
     let instruction_text = enrich_with_previous_step(&base_instruction, &previous_step_handoff);
 
     let session_id =
-        super::find_or_create_builder_session(state, step_id, workflow_id, user_id, "workforce")
+        super::find_or_create_builder_session(state, step_id, workflow_id, user_id, "system_agent")
             .await;
 
     let (execution_id, _cancel_token) = state.task_registry().spawn_task(
