@@ -19,6 +19,7 @@ use crate::types::ExecutionType;
 use crate::types::UserId;
 
 pub(crate) mod designer_handoff;
+pub(crate) mod system_node;
 
 mod tests;
 
@@ -308,7 +309,12 @@ pub async fn run_dispatch_task(
 }
 
 /// Persist the dispatch outcome as an assistant message in the builder session.
-async fn persist_outcome(state: &AppState, session_id: Uuid, user_id: UserId, content: &str) {
+pub(super) async fn persist_outcome(
+    state: &AppState,
+    session_id: Uuid,
+    user_id: UserId,
+    content: &str,
+) {
     if let Err(e) = state
         .repos()
         .sessions
@@ -330,7 +336,7 @@ async fn persist_outcome(state: &AppState, session_id: Uuid, user_id: UserId, co
 }
 
 /// Persist the dispatch trace and update agent_execution status.
-async fn persist_trace(
+pub(super) async fn persist_trace(
     state: &AppState,
     execution_id: Uuid,
     ae_id: Option<Uuid>,
@@ -365,7 +371,7 @@ async fn persist_trace(
 }
 
 /// Broadcast a dispatch event on the session topic.
-fn broadcast_dispatch_event(state: &AppState, kind: SessionEventKind) {
+pub(super) fn broadcast_dispatch_event(state: &AppState, kind: SessionEventKind) {
     state.broadcast_session(SessionEvent {
         session_id: Uuid::nil(),
         user_id: None,
