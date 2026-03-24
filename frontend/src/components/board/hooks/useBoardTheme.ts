@@ -1,14 +1,5 @@
 import { useTheme } from '@mui/material/styles'
-
-type BoardTheme = {
-  readonly canvasBg: string
-  readonly gridDotColor: string
-  readonly connectorColor: string
-  readonly strokeColor: string
-  readonly surfaceBg: string
-  readonly accent: string
-  readonly textPrimary: string
-}
+import type { DrawTheme } from '../canvas/renderer'
 
 /**
  * Extract canvas theme tokens from the MUI theme.
@@ -17,7 +8,7 @@ type BoardTheme = {
  * (Grid, EditableBox, ArrowLayer) so they don't need to import useTheme
  * themselves.
  */
-const useBoardTheme = (): BoardTheme => {
+const useBoardTheme = (): DrawTheme => {
   const theme = useTheme()
   return {
     canvasBg: theme.palette.custom.canvasBg,
@@ -25,10 +16,9 @@ const useBoardTheme = (): BoardTheme => {
     connectorColor: theme.palette.custom.connectorColor,
     strokeColor: theme.palette.custom.strokeColor,
     surfaceBg: theme.palette.custom.surfaceBg,
-    accent: theme.palette.custom.accent,
-    textPrimary: theme.palette.text.primary,
+    accentColor: theme.palette.custom.accent,
+    textColor: theme.palette.text.primary,
   }
 }
 
 export { useBoardTheme }
-export type { BoardTheme }

@@ -82,7 +82,6 @@ type InteractionMode =
   | { readonly type: 'idle' }
   | { readonly type: 'dragging'; readonly elementId: string; readonly offsetX: number; readonly offsetY: number }
   | { readonly type: 'drawing-arrow'; readonly sourceBoxId: string; readonly sourceFocus: FocusPoint; readonly cursorX: number; readonly cursorY: number }
-  | { readonly type: 'selecting'; readonly startX: number; readonly startY: number }
   | { readonly type: 'panning'; readonly startX: number; readonly startY: number; readonly startPanX: number; readonly startPanY: number }
   | { readonly type: 'editing'; readonly boxId: string }
   | { readonly type: 'resizing'; readonly boxId: string; readonly handle: ResizeHandle; readonly startX: number; readonly startY: number; readonly startBox: { x: number; y: number; width: number; height: number } }

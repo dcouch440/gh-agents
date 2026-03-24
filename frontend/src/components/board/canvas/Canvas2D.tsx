@@ -6,7 +6,7 @@
 // <canvas> element. Text editing uses a temporary <textarea> overlay
 // positioned over the box being edited — the same approach as Excalidraw.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { BOARD } from '../constants'
 import type { ActiveTool, AnchorPoint, BoardElements, DrawingArrow, DrawingBox, DrawingPen, EdgeHover, InteractionMode, ResizeHandle, SelectionState, ViewportState } from '../elements'
 import { detectEdgeHover, eventToCanvas, hitTestArrow, hitTestBox, hitTestPen, hitTestResizeHandles, RESIZE_CURSORS } from '../elements'
@@ -16,6 +16,12 @@ import { computeTextareaStyle } from './textareaStyle'
 
 // ── Props ─────────────────────────────────────────────────────────────────
 
+type DrawingPreviews = {
+  readonly arrow: DrawingArrow
+  readonly box: DrawingBox
+  readonly pen: DrawingPen
+}
+
 type Canvas2DProps = {
   readonly ref: React.Ref<HTMLDivElement>
   readonly elements: BoardElements
@@ -24,16 +30,8 @@ type Canvas2DProps = {
   readonly activeTool: ActiveTool
   readonly interaction: InteractionMode
   readonly viewport: ViewportState
-  readonly drawingArrow: DrawingArrow
-  readonly drawingBox: DrawingBox
-  readonly drawingPen: DrawingPen
-  readonly canvasBg: string
-  readonly gridDotColor: string
-  readonly connectorColor: string
-  readonly strokeColor: string
-  readonly accentColor: string
-  readonly surfaceBg: string
-  readonly textColor: string
+  readonly theme: DrawTheme
+  readonly previews: DrawingPreviews
   readonly onPointerDown: (e: React.PointerEvent) => void
   readonly onPointerMove: (e: React.PointerEvent) => void
   readonly onPointerUp: (e: React.PointerEvent) => void
@@ -58,16 +56,8 @@ function Canvas2D({
   activeTool,
   interaction,
   viewport,
-  drawingArrow,
-  drawingBox,
-  drawingPen,
-  canvasBg,
-  gridDotColor,
-  connectorColor,
-  strokeColor,
-  accentColor,
-  surfaceBg,
-  textColor,
+  theme,
+  previews,
   onPointerDown,
   onPointerMove,
   onPointerUp,
@@ -89,10 +79,6 @@ function Canvas2D({
   const [fontGeneration, setFontGeneration] = useState(0)
   const renderRef = useRef<() => void>(() => {})
 
-  const theme: DrawTheme = useMemo(() => (
-    { canvasBg, gridDotColor, connectorColor, strokeColor, accentColor, surfaceBg, textColor }
-  ), [canvasBg, gridDotColor, connectorColor, strokeColor, accentColor, surfaceBg, textColor])
-
   // Keep renderRef pointing at the latest render closure so the
   // ResizeObserver can repaint synchronously with current state.
   useEffect(() => {
@@ -100,7 +86,7 @@ function Canvas2D({
       const cvs = canvasRef.current
       if (cvs === null) return
       const { width, height } = sizeRef.current
-      renderBoard(cvs, width, height, elements, selection, editingBoxId, viewport, drawingArrow, drawingBox, drawingPen, edgeHover, theme)
+      renderBoard(cvs, width, height, elements, selection, editingBoxId, viewport, previews.arrow, previews.box, previews.pen, edgeHover, theme)
     }
   })
 
@@ -143,7 +129,7 @@ function Canvas2D({
   // ── Canvas Render Pipeline ────────────────────────────────────────────
   useEffect(() => {
     renderRef.current()
-  }, [elements, selection, editingBoxId, viewport, drawingArrow, drawingBox, drawingPen, edgeHover, theme, fontGeneration])
+  }, [elements, selection, editingBoxId, viewport, previews, edgeHover, theme, fontGeneration])
 
   // ── Focus textarea when editing starts ────────────────────────────────
   useEffect(() => {
@@ -355,7 +341,7 @@ function Canvas2D({
         width: '100%',
         height: '100%',
         overflow: 'hidden',
-        backgroundColor: canvasBg,
+        backgroundColor: theme.canvasBg,
         cursor,
       }}
     >
@@ -374,7 +360,7 @@ function Canvas2D({
           onInput={handleTextareaInput}
           onKeyDown={handleTextareaKeyDown}
           onBlur={handleTextareaBlur}
-          style={computeTextareaStyle(editingBox, viewport, textColor)}
+          style={computeTextareaStyle(editingBox, viewport, theme.textColor)}
         />
       )}
     </div>
@@ -382,3 +368,4 @@ function Canvas2D({
 }
 
 export { Canvas2D }
+export type { DrawingPreviews }

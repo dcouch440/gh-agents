@@ -1,4 +1,6 @@
 export { useArrowDraw } from './useArrowDraw'
+export { useBoardInteractions } from './useBoardInteractions'
+export type { BoardInteractions, CanvasHandlers } from './useBoardInteractions'
 export { useDrag } from './useDrag'
 export { useKeyboard } from './useKeyboard'
 export { usePanZoom } from './usePanZoom'
