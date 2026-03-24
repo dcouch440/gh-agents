@@ -79,10 +79,23 @@ pub async fn run_system_node_task(
         );
     }
 
-    // Build container config from workflow settings
-    let container_config = build_container_config(&state, workflow_id, execution_id).await;
+    // Resolve base_dir FIRST — it's keyed by step_id so files persist across
+    // dispatches. The agent sees its previous config.json, topology.json, and
+    // agents/*.json on re-runs.
+    let base_dir = resolve_base_dir(&state, workflow_id, step_id);
+    if let Err(e) = std::fs::create_dir_all(&base_dir) {
+        tracing::warn!(
+            base_dir = %base_dir.display(),
+            error = %e,
+            "Failed to create system node base_dir"
+        );
+    }
 
-    // Create container
+    // Build container config. Uses step_id (not execution_id) for workspace
+    // volume path alignment — the container sees the same pinned directory.
+    let container_config = build_container_config(&state, workflow_id, step_id).await;
+
+    // Create container with the pinned workspace volume
     let managed_container = match create_optional_container(
         container_config.as_ref(),
         None, // no VPN for system node agents
@@ -113,18 +126,6 @@ pub async fn run_system_node_task(
             return;
         }
     };
-
-    // Resolve base_dir for the system node agent's file repository
-    let base_dir = resolve_base_dir(&state, workflow_id, execution_id);
-
-    // Ensure base_dir exists (for local/non-container fallback)
-    if let Err(e) = std::fs::create_dir_all(&base_dir) {
-        tracing::warn!(
-            base_dir = %base_dir.display(),
-            error = %e,
-            "Failed to create system node base_dir"
-        );
-    }
 
     // Extract container handle for the strategy
     let container_handle = managed_container.as_ref().map(|mc| mc.agent_handle.clone());
@@ -329,15 +330,19 @@ pub async fn run_system_node_task(
 // Private helpers
 // ---------------------------------------------------------------------------
 
-/// Build container config from workflow settings.
+/// Build container config for a system node agent.
 ///
-/// Follows the same pattern as `services/workflows/run.rs` for DAG execution.
-/// Returns `None` if the workflow is missing (container creation will be skipped
-/// and run_command will fall back to local execution).
+/// Uses `step_id` as the `run_id` for workspace volume path alignment:
+/// `create_optional_container` resolves workspace path as
+/// `{WORKSPACE_PREFIX}/{wf_id}/runs/{run_id}/`. By setting `run_id = step_id`,
+/// the container mounts a deterministic path keyed by step, so files
+/// persist across dispatches.
+///
+/// Returns `None` if the workflow is missing.
 async fn build_container_config(
     state: &AppState,
     workflow_id: Uuid,
-    execution_id: Uuid,
+    step_id: Uuid,
 ) -> Option<ContainerExecutionConfig> {
     let wf_row = match state.repos().workflows.get_workflow(workflow_id).await {
         Ok(Some(wf)) => wf,
@@ -354,31 +359,36 @@ async fn build_container_config(
         image: None,
         memory_limit: None,
         cpu_limit: None,
-        vpn_enabled: false, // system node agents don't need VPN
+        vpn_enabled: false,
         workflow_id: Some(workflow_id),
-        run_id: Some(execution_id),
-        overlay_enabled: state.workspace().is_some(),
+        // Use step_id as run_id so the workspace volume path is deterministic
+        // per step (not per dispatch). Files persist across dispatches.
+        run_id: Some(step_id),
+        overlay_enabled: false, // no overlay for system node — direct writes to shared volume
     })
 }
 
 /// Resolve the base_dir for the system node agent's file repository.
 ///
-/// With JuiceFS: uses the workspace run path (mounted into the container).
-/// Without JuiceFS: uses a temp directory keyed by step_id.
-fn resolve_base_dir(state: &AppState, workflow_id: Uuid, execution_id: Uuid) -> PathBuf {
-    // Try workspace path first (JuiceFS mounted in container)
+/// Must align with the workspace volume mounted into the container.
+/// `build_container_config` sets `run_id = step_id`, so the container
+/// workspace path is `{WORKSPACE_PREFIX}/{wf_id}/runs/{step_id}/`.
+/// This function resolves the same path on the host.
+///
+/// With JuiceFS: `{mount}/{WORKSPACE_PREFIX}/{wf_id}/runs/{step_id}/`
+/// Without JuiceFS: `{tmp}/nexor_system_node/{step_id}/`
+fn resolve_base_dir(state: &AppState, workflow_id: Uuid, step_id: Uuid) -> PathBuf {
+    // Use run workspace with step_id as the "run_id" — matches the container config
     if let Some(workspace) = state.workspace() {
-        if let Ok(path) = workspace.create_run_workspace(workflow_id, execution_id) {
+        if let Ok(path) = workspace.create_run_workspace(workflow_id, step_id) {
             return path;
         }
     }
 
-    // Fallback: temp directory. The container might not have a mounted volume,
-    // but run_command still writes to the container's filesystem. We'll need to
-    // read files out before destroying.
+    // Fallback: temp directory keyed by step_id (persists within server instance)
     std::env::temp_dir()
         .join("nexor_system_node")
-        .join(execution_id.to_string())
+        .join(step_id.to_string())
 }
 
 /// Clean up container after execution.
