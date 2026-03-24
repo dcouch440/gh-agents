@@ -81,36 +81,32 @@ pub async fn run_sequential_design_pipeline(
 
         // Build context for this step
         let previous_step_handoff = lookup_previous_handoff(&parent_ids, &step_map);
-        let child_ids = crate::server::hub::dag::get_child_steps(*step_id, &edges);
-        let next_step_text = lookup_next_step_text(&child_ids, &step_map);
 
         if has_instruction {
-            // Run builder + designer (existing path)
+            // Run system node agent (replaces builder + designer)
             let instruction = instruction_map[step_id];
-            run_builder_and_designer(
+            run_system_node_dispatch(
                 &state,
                 *step_id,
                 workflow_id,
                 user_id,
                 instruction,
                 previous_step_handoff,
-                next_step_text,
             )
             .await;
             dispatched_count += 1;
         } else {
-            // Propagation: run designer-only (no builder)
+            // Propagation: re-run system node agent with upstream context
             tracing::info!(
                 step_id = %step_id,
                 "Propagating re-design: upstream handoff changed"
             );
-            run_propagation_redesign(
+            run_system_node_propagation(
                 &state,
                 *step_id,
                 workflow_id,
                 user_id,
                 previous_step_handoff,
-                next_step_text,
             )
             .await;
             propagated_count += 1;
@@ -186,6 +182,9 @@ fn lookup_previous_handoff(
 }
 
 /// Look up box text from ALL child steps (fan-out support).
+///
+/// Retained for fallback (used by run_builder_and_designer).
+#[allow(dead_code)]
 fn lookup_next_step_text(
     child_ids: &[Uuid],
     step_map: &HashMap<Uuid, WorkflowStepRow>,
@@ -206,6 +205,10 @@ fn lookup_next_step_text(
 }
 
 /// Run the full builder + designer dispatch for a step with an instruction.
+///
+/// Retained for fallback — the system node agent path replaces this.
+/// Will be removed in slice 6 (cleanup).
+#[allow(dead_code)]
 async fn run_builder_and_designer(
     state: &AppState,
     step_id: Uuid,
@@ -271,12 +274,156 @@ async fn run_builder_and_designer(
     .await;
 }
 
+/// Run the system node agent for a step with an instruction.
+///
+/// Replaces `run_builder_and_designer` — the system node agent handles both
+/// configuration (builder) and prompt design (designer) in a single pass.
+async fn run_system_node_dispatch(
+    state: &AppState,
+    step_id: Uuid,
+    workflow_id: Uuid,
+    user_id: UserId,
+    instruction: &NodeDispatchInstruction,
+    previous_step_handoff: Vec<PreviousStepHandoff>,
+) {
+    // Enrich instruction with previous step context
+    let enriched_instruction =
+        enrich_with_previous_step(&instruction.instruction, &previous_step_handoff);
+
+    let session_id = super::find_or_create_builder_session(
+        state,
+        step_id,
+        workflow_id,
+        user_id,
+        &instruction.execution_mode,
+    )
+    .await;
+
+    let (execution_id, _cancel_token) = state.task_registry().spawn_task(
+        step_id,
+        workflow_id,
+        session_id,
+        enriched_instruction.clone(),
+    );
+
+    state.broadcast_session(SessionEvent {
+        session_id: Uuid::nil(),
+        user_id: None,
+        kind: SessionEventKind::DispatchStarted {
+            execution_id,
+            step_id,
+            instruction: enriched_instruction.clone(),
+        },
+    });
+
+    crate::server::executors::dispatch::system_node::run_system_node_task(
+        state.clone(),
+        execution_id,
+        step_id,
+        workflow_id,
+        enriched_instruction,
+        session_id,
+        user_id,
+    )
+    .await;
+}
+
+/// Re-run the system node agent when an upstream step's description changed.
+///
+/// Replaces `run_propagation_redesign` — formats an instruction with the
+/// updated upstream context and re-runs the system node agent.
+async fn run_system_node_propagation(
+    state: &AppState,
+    step_id: Uuid,
+    workflow_id: Uuid,
+    user_id: UserId,
+    previous_step_handoff: Vec<PreviousStepHandoff>,
+) {
+    // Use the step's current description as context for the re-run
+    let step_desc = state
+        .repos()
+        .workflows
+        .get_step(step_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|s| s.description.clone())
+        .unwrap_or_default();
+
+    if step_desc.is_empty() && previous_step_handoff.is_empty() {
+        tracing::debug!(
+            step_id = %step_id,
+            "Skipping system node propagation — no description or upstream context"
+        );
+        return;
+    }
+
+    let base_instruction = format!(
+        "The upstream step changed what it produces.\n\n<task>\n{}\n</task>",
+        step_desc
+    );
+    let instruction_text = enrich_with_previous_step(&base_instruction, &previous_step_handoff);
+
+    let session_id =
+        super::find_or_create_builder_session(state, step_id, workflow_id, user_id, "workforce")
+            .await;
+
+    let (execution_id, _cancel_token) = state.task_registry().spawn_task(
+        step_id,
+        workflow_id,
+        session_id,
+        instruction_text.clone(),
+    );
+
+    state.broadcast_session(SessionEvent {
+        session_id: Uuid::nil(),
+        user_id: None,
+        kind: SessionEventKind::DispatchStarted {
+            execution_id,
+            step_id,
+            instruction: instruction_text.clone(),
+        },
+    });
+
+    crate::server::executors::dispatch::system_node::run_system_node_task(
+        state.clone(),
+        execution_id,
+        step_id,
+        workflow_id,
+        instruction_text,
+        session_id,
+        user_id,
+    )
+    .await;
+}
+
+/// Enrich an instruction with `<previous_step>` context blocks.
+fn enrich_with_previous_step(
+    instruction: &str,
+    previous_step_handoff: &[PreviousStepHandoff],
+) -> String {
+    if previous_step_handoff.is_empty() {
+        return instruction.to_string();
+    }
+
+    let blocks: Vec<String> = previous_step_handoff
+        .iter()
+        .map(|h| {
+            format!(
+                "<previous_step name=\"{}\">\n{}\n</previous_step>",
+                h.step_name, h.handoff_description
+            )
+        })
+        .collect();
+
+    format!("{}\n\n{}", instruction, blocks.join("\n\n"))
+}
+
 /// Run designer-only re-design for a step whose parent's handoff changed.
 ///
-/// Skips the builder entirely — the roster and plan are already set.
-/// The designer sees all agents as "designed" and uses verify-and-skip:
-/// reads existing configs, checks against new `<previous_step>`, updates
-/// if stale.
+/// Retained for fallback — the system node propagation path replaces this.
+/// Will be removed in slice 6 (cleanup).
+#[allow(dead_code)]
 async fn run_propagation_redesign(
     state: &AppState,
     step_id: Uuid,
