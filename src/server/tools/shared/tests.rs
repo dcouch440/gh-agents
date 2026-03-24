@@ -6,9 +6,7 @@ mod tests {
     use crate::db::fixtures::fixtures::*;
     use crate::db::WorkflowStepRow;
 
-    use crate::server::tools::shared::{
-        classify_content_status, require_array, require_str, require_uuid,
-    };
+    use crate::server::tools::shared::{classify_content_status, require_str, require_uuid};
 
     fn make_step(mode: &str) -> WorkflowStepRow {
         WorkflowStepRow {
@@ -88,20 +86,6 @@ mod tests {
         let input = json!({ "name": 42 });
         let err = require_str(&input, "name").unwrap_err();
         assert_eq!(err["error"], "Missing required parameter: name");
-    }
-
-    #[test]
-    fn require_array_returns_value_when_present() {
-        let input = json!({ "tags": ["a", "b"] });
-        let arr = require_array(&input, "tags").unwrap();
-        assert_eq!(arr.len(), 2);
-    }
-
-    #[test]
-    fn require_array_returns_error_when_missing() {
-        let input = json!({});
-        let err = require_array(&input, "tags").unwrap_err();
-        assert_eq!(err["error"], "Missing required parameter: tags (array)");
     }
 
     #[test]

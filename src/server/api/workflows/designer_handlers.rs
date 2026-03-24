@@ -51,32 +51,13 @@ pub struct DesignResponse {
     )
 )]
 pub async fn design_step(
-    State(state): State<AppState>,
-    auth: auth_utils::AuthUser,
-    Path((wid, sid)): Path<(Uuid, Uuid)>,
+    State(_state): State<AppState>,
+    _auth: auth_utils::AuthUser,
+    Path((_wid, _sid)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<DesignResponse>, AppError> {
-    let result = designer::run_standalone_design(&state, wid, sid, auth.user_id.0).await?;
-
-    Ok(Json(DesignResponse {
-        execution_id: result.execution_id.to_string(),
-        is_preview: result.is_preview,
-        run_id: result.run_id.to_string(),
-        agents: result
-            .agents
-            .into_iter()
-            .map(|a| DesignerAgentOutput {
-                agent_name: a.agent_name,
-                system_prompt: a.system_prompt,
-                assignment: a.assignment,
-                assigned_tools: a.assigned_tools,
-                reasoning: a.reasoning,
-                execution_order: a.execution_order,
-            })
-            .collect(),
-        input_tokens: result.input_tokens,
-        output_tokens: result.output_tokens,
-        cost_usd: result.cost_usd,
-    }))
+    Err(AppError::not_found(
+        "Standalone designer is not available — agent design is now handled by system node agents",
+    ))
 }
 
 /// GET /api/workflows/:wid/steps/:sid/design/latest — fetch the most recent

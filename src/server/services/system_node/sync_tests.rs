@@ -4,12 +4,11 @@ mod tests {
 
     use crate::db::TaskAgentRosterRow;
     use crate::server::services::system_node::sync::{
-        description_changed, diff_agents, diff_edges, DesiredAgent, EdgeDiff,
+        diff_agents, diff_edges, DesiredAgent, EdgeDiff,
     };
 
     fn desired(name: &str, role: &str, caps: &[&str], deps: &[&str]) -> DesiredAgent {
         DesiredAgent {
-            slug: name.to_lowercase().replace(' ', "_"),
             name: name.to_string(),
             role_description: role.to_string(),
             capabilities: caps.iter().map(|s| s.to_string()).collect(),
@@ -251,27 +250,5 @@ mod tests {
 
         assert!(diff.to_add.is_empty());
         assert!(diff.to_remove.is_empty());
-    }
-
-    // ── Description change tests ─────────────────────────────────────────
-
-    #[test]
-    fn description_changed_detects_difference() {
-        assert!(description_changed("Old description", "New description"));
-    }
-
-    #[test]
-    fn description_unchanged_when_equal() {
-        assert!(!description_changed("Same description", "Same description"));
-    }
-
-    #[test]
-    fn description_changed_when_no_previous() {
-        assert!(description_changed("", "New description"));
-    }
-
-    #[test]
-    fn description_unchanged_both_empty() {
-        assert!(!description_changed("", ""));
     }
 }

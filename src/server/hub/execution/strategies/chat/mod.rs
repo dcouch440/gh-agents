@@ -31,7 +31,7 @@ pub(crate) mod tools;
 pub use config::{ChatConfig, StepChatContext};
 // Re-export for test compatibility
 #[cfg(test)]
-pub(crate) use tools::{resolve_chat_step_tools, resolve_step_tools};
+pub(crate) use tools::resolve_chat_step_tools;
 
 /// Strategy for interactive chat sessions.
 ///

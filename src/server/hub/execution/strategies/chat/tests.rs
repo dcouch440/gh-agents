@@ -116,26 +116,6 @@ mod tests {
         assert!(rx.try_recv().is_err());
     }
 
-    // ========================================================================
-    // resolve_step_tools
-    // ========================================================================
-
-    #[test]
-    fn resolve_step_tools_blank_returns_universal_only() {
-        let tools = super::super::resolve_step_tools("");
-        let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
-
-        assert!(names.contains(&"set_node_name"));
-        assert!(names.contains(&"set_node_description"));
-        assert!(names.contains(&"think"));
-        // update_plan is excluded from dispatch — builder uses complete_task
-        assert!(!names.contains(&"update_plan"));
-        assert!(names.contains(&"complete_task"));
-
-        // No archetype-specific tools
-        assert!(!names.contains(&"update_config"));
-    }
-
     #[test]
     fn broadcast_step_event_emits_plan_updated() {
         let state = make_state();
@@ -210,52 +190,6 @@ mod tests {
         assert!(!names.contains(&"set_dependency"));
         assert!(!names.contains(&"remove_dependency"));
         assert!(!names.contains(&"set_capabilities"));
-    }
-
-    #[test]
-    fn resolve_step_tools_workforce_has_configure_team() {
-        // DispatchStrategy uses resolve_step_tools, not resolve_chat_step_tools
-        let tools = super::super::resolve_step_tools("workforce");
-        let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
-
-        assert!(names.contains(&"configure_team"));
-        // Granular tools removed — configure_team handles everything
-        assert!(!names.contains(&"set_task"));
-        assert!(!names.contains(&"add_agent"));
-    }
-
-    #[test]
-    fn resolve_step_tools_includes_node_mutations_for_dispatch() {
-        // DispatchStrategy uses resolve_step_tools — must include mutation tools
-        for mode in &["workforce", "single", ""] {
-            let tools = super::super::resolve_step_tools(mode);
-            let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
-            assert!(
-                names.contains(&"set_node_name"),
-                "set_node_name missing for dispatch execution_mode={mode}"
-            );
-            assert!(
-                names.contains(&"set_node_description"),
-                "set_node_description missing for dispatch execution_mode={mode}"
-            );
-        }
-    }
-
-    #[test]
-    fn resolve_step_tools_excludes_update_plan_from_dispatch() {
-        // Builder uses complete_task instead of update_plan
-        for mode in &["workforce", "single", ""] {
-            let tools = super::super::resolve_step_tools(mode);
-            let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
-            assert!(
-                !names.contains(&"update_plan"),
-                "update_plan should not be in dispatch tools for execution_mode={mode}"
-            );
-            assert!(
-                names.contains(&"complete_task"),
-                "complete_task missing for dispatch execution_mode={mode}"
-            );
-        }
     }
 
     // ========================================================================

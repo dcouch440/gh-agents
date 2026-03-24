@@ -44,7 +44,6 @@ pub(crate) struct SyncResult {
 /// Agent definition read from the filesystem for diffing against DB state.
 #[derive(Debug, Clone)]
 pub(crate) struct DesiredAgent {
-    pub slug: String,
     pub name: String,
     pub role_description: String,
     pub capabilities: Vec<String>,
@@ -407,11 +406,6 @@ pub(crate) fn diff_edges(
     EdgeDiff { to_add, to_remove }
 }
 
-/// Detect whether config.json description changed vs the stored value.
-pub(crate) fn description_changed(previous: &str, current: &str) -> bool {
-    previous != current
-}
-
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
@@ -435,7 +429,6 @@ fn read_desired_agents(
         })?;
 
         agents.push(DesiredAgent {
-            slug: slug.clone(),
             name: config.name,
             role_description: config.system_prompt,
             capabilities: config.capabilities,
