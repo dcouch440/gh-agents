@@ -16,7 +16,7 @@ use crate::execution::ContainerHandle;
 use crate::llm::{Message, Tool};
 use crate::server::hub::error::HubError;
 use crate::server::hub::strategy::ExecutionStrategy;
-use crate::server::services::system_node::{state, validate};
+use crate::server::services::system_node::{file_reader, state, validate};
 use crate::server::state::AppState;
 use crate::server::tools::system_node::complete_system_tool;
 use crate::tools::registry::get_tool_definition;
@@ -177,9 +177,17 @@ impl ExecutionStrategy for SystemNodeStrategy {
                 let verify = &input["verify"];
                 match validate::validate_verify(&self.base_dir, verify) {
                     Ok(mut success) => {
-                        // Check if config.json description changed vs previous
-                        // TODO: Compare against previous description (slice 3)
-                        success["description_changed"] = json!(false);
+                        // Compare config.json description against previous designer_handoff
+                        let description_changed = match file_reader::read_config(&self.base_dir) {
+                            Ok((_name, description)) => {
+                                match self.state.repos().workflows.get_step(self.step_id).await {
+                                    Ok(Some(step)) => step.designer_handoff != description,
+                                    _ => true,
+                                }
+                            }
+                            Err(_) => false,
+                        };
+                        success["description_changed"] = json!(description_changed);
 
                         if let Ok(mut guard) = self.summary.lock() {
                             *guard = Some(summary);

@@ -8,4 +8,5 @@
 
 pub mod file_reader;
 pub mod state;
+pub mod sync;
 pub mod validate;
