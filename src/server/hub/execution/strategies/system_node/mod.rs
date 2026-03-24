@@ -201,7 +201,7 @@ impl ExecutionStrategy for SystemNodeStrategy {
                 }
             }
             "run_command" => {
-                crate::server::tools::execution::dispatch_tool_cascade(
+                let result = crate::server::tools::execution::dispatch_tool_cascade(
                     name,
                     input,
                     self.container_handle.as_ref(),
@@ -210,10 +210,82 @@ impl ExecutionStrategy for SystemNodeStrategy {
                     Some(&self.state),
                     None, // no user_id for doc tools
                 )
-                .await
+                .await;
+
+                // Post-execution write validation: check any system node JSON files
+                // that exist on disk. If a heredoc write produced truncated/invalid JSON,
+                // append errors to the tool response so the agent can fix immediately.
+                let validation_errors = validate_written_files(&self.base_dir);
+                if validation_errors.is_empty() {
+                    result
+                } else {
+                    // Append validation errors to the run_command output
+                    let mut patched = result.clone();
+                    let warnings = validation_errors.join("\n");
+                    if let Some(output) = patched.get_mut("output") {
+                        let existing = output.as_str().unwrap_or("");
+                        *output = json!(format!(
+                            "{}\n\n⚠ Write validation errors:\n{}",
+                            existing, warnings
+                        ));
+                    } else {
+                        patched["write_validation_errors"] = json!(validation_errors);
+                    }
+                    patched
+                }
             }
             "think" => json!({ "status": "ok" }),
             _ => json!({ "error": format!("Unknown tool: {}", name) }),
         }
     }
+}
+
+/// Validate JSON files in the system node agent's repository after a write.
+///
+/// Checks config.json, topology.json, and agents/*.json for structural validity.
+/// Returns a vec of human-readable error strings (empty if all valid).
+/// Only validates files that exist — missing files are not errors here
+/// (the agent may write them in a subsequent command).
+fn validate_written_files(base_dir: &std::path::Path) -> Vec<String> {
+    let mut errors = Vec::new();
+
+    // Validate config.json
+    let config_path = base_dir.join("config.json");
+    if config_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&config_path) {
+            if let Err(e) = validate::validate_config(&content) {
+                errors.push(format!("config.json: {e}"));
+            }
+        }
+    }
+
+    // Validate topology.json
+    let topology_path = base_dir.join("topology.json");
+    if topology_path.exists() {
+        if let Ok(content) = std::fs::read_to_string(&topology_path) {
+            if let Err(e) = validate::validate_topology(&content) {
+                errors.push(format!("topology.json: {e}"));
+            }
+        }
+    }
+
+    // Validate agents/*.json
+    let agents_dir = base_dir.join("agents");
+    if agents_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(&agents_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().is_some_and(|ext| ext == "json") {
+                    let filename = path.file_name().unwrap_or_default().to_string_lossy();
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        if let Err(e) = validate::validate_agent(&content) {
+                            errors.push(format!("agents/{filename}: {e}"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    errors
 }
