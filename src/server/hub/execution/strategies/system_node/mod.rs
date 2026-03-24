@@ -20,6 +20,7 @@ use crate::server::state::AppState;
 use crate::tools::registry::get_tool_definition;
 
 mod tests;
+pub(crate) mod validate;
 
 /// Strategy for the system node agent.
 ///
@@ -185,13 +186,23 @@ impl ExecutionStrategy for SystemNodeStrategy {
                     .unwrap_or("")
                     .to_string();
 
-                // TODO: Validate verify claims against filesystem (slice 1.3)
-                // For now, always accept.
+                let verify = &input["verify"];
+                match validate::validate_verify(&self.base_dir, verify) {
+                    Ok(mut success) => {
+                        // Check if config.json description changed vs previous
+                        // TODO: Compare against previous description (slice 3)
+                        success["description_changed"] = json!(false);
 
-                if let Ok(mut guard) = self.summary.lock() {
-                    *guard = Some(summary);
+                        if let Ok(mut guard) = self.summary.lock() {
+                            *guard = Some(summary);
+                        }
+                        success
+                    }
+                    Err(error_response) => {
+                        // Don't capture summary — agent needs to fix and retry
+                        error_response
+                    }
                 }
-                json!({ "status": "ok", "description_changed": false })
             }
             "run_command" => {
                 // TODO: Add write-time JSON validation (slice 1.4)
@@ -266,10 +277,11 @@ pub(crate) fn complete_system_tool() -> Tool {
 /// Reads topology.json, agents/*.json, and config.json to produce a summary
 /// of what exists, what's valid, and what's missing.
 pub(crate) fn build_current_state(base_dir: &std::path::Path) -> String {
-    // Check if topology.json exists
     let topology_path = base_dir.join("topology.json");
     let config_path = base_dir.join("config.json");
+    let agents_dir = base_dir.join("agents");
 
+    // Empty state — nothing exists yet
     if !topology_path.exists() && !config_path.exists() {
         return "<current_state refresh=\"every turn — always reflects the current filesystem\">\n  \
                 <topology status=\"empty\" />\n  \
@@ -278,24 +290,67 @@ pub(crate) fn build_current_state(base_dir: &std::path::Path) -> String {
             .to_string();
     }
 
-    // TODO: Full implementation reads and parses files (slice 1.5)
-    // For now, return a minimal state indicating files exist.
-    let topology_status = if topology_path.exists() {
-        "present"
-    } else {
-        "empty"
-    };
-    let config_status = if config_path.exists() {
-        "configured"
-    } else {
-        "missing"
-    };
+    let mut lines = Vec::new();
+    lines.push(
+        "<current_state refresh=\"every turn — always reflects the current filesystem\">".into(),
+    );
 
-    format!(
-        "<current_state refresh=\"every turn — always reflects the current filesystem\">\n  \
-         <topology status=\"{}\" />\n  \
-         <config status=\"{}\" />\n\
-         </current_state>",
-        topology_status, config_status
-    )
+    // Parse topology and render agent statuses
+    if let Ok(content) = std::fs::read_to_string(&topology_path) {
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+            if let Some(agents) = val.get("agents").and_then(|v| v.as_object()) {
+                lines.push("  <topology>".into());
+
+                for (slug, entry) in agents {
+                    let deps: Vec<&str> = entry
+                        .get("depends_on")
+                        .and_then(|v| v.as_array())
+                        .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+                        .unwrap_or_default();
+                    let depends_on = deps.join(", ");
+
+                    let agent_path = agents_dir.join(format!("{slug}.json"));
+                    let status = if agent_path.exists() {
+                        "configured"
+                    } else {
+                        "missing"
+                    };
+
+                    lines.push(format!(
+                        "    <agent slug=\"{slug}\" depends_on=\"{depends_on}\" status=\"{status}\" />"
+                    ));
+                }
+
+                lines.push("  </topology>".into());
+            } else {
+                lines.push("  <topology status=\"invalid\" />".into());
+            }
+        } else {
+            lines.push("  <topology status=\"invalid\" />".into());
+        }
+    } else {
+        lines.push("  <topology status=\"empty\" />".into());
+    }
+
+    // Config status
+    if let Ok(content) = std::fs::read_to_string(&config_path) {
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
+            let name = val
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if name.is_empty() {
+                lines.push("  <config status=\"configured\" />".into());
+            } else {
+                lines.push(format!("  <config name=\"{name}\" status=\"configured\" />"));
+            }
+        } else {
+            lines.push("  <config status=\"invalid\" />".into());
+        }
+    } else {
+        lines.push("  <config status=\"missing\" />".into());
+    }
+
+    lines.push("</current_state>".into());
+    lines.join("\n")
 }
