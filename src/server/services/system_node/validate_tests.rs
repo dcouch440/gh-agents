@@ -2,7 +2,7 @@
 mod tests {
     use serde_json::{json, Value};
 
-    use crate::server::hub::execution::strategies::system_node::validate::{
+    use crate::server::services::system_node::validate::{
         cross_reference, validate_agent, validate_config, validate_topology, validate_verify,
     };
 

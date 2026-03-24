@@ -10,6 +10,7 @@ pub mod haiku;
 pub mod manager;
 pub mod node_assistant;
 pub mod shared;
+pub mod system_node;
 pub mod system_store;
 pub mod workforce;
 
