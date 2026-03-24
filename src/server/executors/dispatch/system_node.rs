@@ -8,8 +8,6 @@
 //! - Old: DispatchStrategy → complete_task → run_designer_after_builder
 //! - New: SystemNodeStrategy → complete_system → sync_to_db
 
-use std::path::PathBuf;
-
 use uuid::Uuid;
 
 use crate::db::traits::CreateAgentExecutionInput;
@@ -82,7 +80,8 @@ pub async fn run_system_node_task(
     // Resolve base_dir FIRST — it's keyed by step_id so files persist across
     // dispatches. The agent sees its previous config.json, topology.json, and
     // agents/*.json on re-runs.
-    let base_dir = resolve_base_dir(&state, workflow_id, step_id);
+    let base_dir =
+        crate::server::services::system_node::resolve_base_dir(&state, workflow_id, step_id);
     if let Err(e) = std::fs::create_dir_all(&base_dir) {
         tracing::warn!(
             base_dir = %base_dir.display(),
@@ -366,29 +365,6 @@ async fn build_container_config(
         run_id: Some(step_id),
         overlay_enabled: false, // no overlay for system node — direct writes to shared volume
     })
-}
-
-/// Resolve the base_dir for the system node agent's file repository.
-///
-/// Must align with the workspace volume mounted into the container.
-/// `build_container_config` sets `run_id = step_id`, so the container
-/// workspace path is `{WORKSPACE_PREFIX}/{wf_id}/runs/{step_id}/`.
-/// This function resolves the same path on the host.
-///
-/// With JuiceFS: `{mount}/{WORKSPACE_PREFIX}/{wf_id}/runs/{step_id}/`
-/// Without JuiceFS: `{tmp}/nexor_system_node/{step_id}/`
-fn resolve_base_dir(state: &AppState, workflow_id: Uuid, step_id: Uuid) -> PathBuf {
-    // Use run workspace with step_id as the "run_id" — matches the container config
-    if let Some(workspace) = state.workspace() {
-        if let Ok(path) = workspace.create_run_workspace(workflow_id, step_id) {
-            return path;
-        }
-    }
-
-    // Fallback: temp directory keyed by step_id (persists within server instance)
-    std::env::temp_dir()
-        .join("nexor_system_node")
-        .join(step_id.to_string())
 }
 
 /// Clean up container after execution.

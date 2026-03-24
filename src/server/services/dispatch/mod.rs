@@ -120,7 +120,7 @@ pub async fn dispatch_to_builder(state: &AppState, input: DispatchInput) -> Disp
         });
     } else {
         tokio::spawn(async move {
-            crate::server::executors::dispatch::run_dispatch_task(
+            crate::server::executors::dispatch::system_node::run_system_node_task(
                 runner_state,
                 runner_execution_id,
                 runner_step_id,
@@ -128,8 +128,6 @@ pub async fn dispatch_to_builder(state: &AppState, input: DispatchInput) -> Disp
                 runner_instruction,
                 session_id,
                 user_id,
-                vec![], // no handoff threading in chat dispatch path
-                vec![],
             )
             .await;
         });

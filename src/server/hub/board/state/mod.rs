@@ -30,14 +30,12 @@ use uuid::Uuid;
 use crate::db::traits::{SessionRepo, WorkflowRepo};
 
 mod agent;
-pub mod enrich;
 mod fetch;
 mod node;
 mod port;
 mod render;
 pub mod types;
 
-pub use enrich::enrich_design_status;
 pub use render::render;
 pub use types::{
     AgentDesignStatus, AgentSnapshot, BoardSnapshot, BoardStateVariant, IncomingContextSnapshot,

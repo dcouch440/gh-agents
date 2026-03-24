@@ -1095,19 +1095,20 @@ mod tests {
 
         let result = execute_workflow_via_engine(&engine, &state, &ctx, &steps, &edges, None).await;
 
-        // The pipeline path produces "no mission brief" error — proving
-        // the routing guard activated (single-step path would have succeeded
-        // since the agent exists and provider returns valid output).
+        // The file executor path produces an error (no topology.json at
+        // the resolved base_dir) — proving the routing guard activated
+        // (single-step path would have succeeded since the agent exists
+        // and provider returns valid output).
         match result {
             Err(err) => {
                 let err_msg = format!("{}", err);
                 assert!(
-                    err_msg.contains("mission brief"),
-                    "Expected pipeline 'mission brief' error, got: {}",
+                    err_msg.contains("agent configs") || err_msg.contains("topology"),
+                    "Expected file executor error, got: {}",
                     err_msg
                 );
             }
-            Ok(_) => panic!("Expected error from pipeline path, but execution succeeded"),
+            Ok(_) => panic!("Expected error from file executor path, but execution succeeded"),
         }
     }
 }

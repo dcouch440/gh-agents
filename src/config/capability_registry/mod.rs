@@ -15,8 +15,14 @@ use anyhow::{Context, Result};
 
 use crate::config::sync::{CapabilitiesYaml, ToolAssignmentsYaml};
 use crate::llm::Tool;
-use crate::server::hub::dag::designer_input::ToolDescription;
 use crate::tools::registry;
+
+/// A tool's name and human-readable description, used for capability summaries.
+#[derive(Debug, Clone)]
+pub struct ToolDescription {
+    pub name: String,
+    pub description: String,
+}
 
 #[cfg(test)]
 mod tests;

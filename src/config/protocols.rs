@@ -155,27 +155,6 @@ pub mod vars {
         pub const CONVERSATION: &str = "QuestionExtraction.conversation";
     }
 
-    /// Variables for the Agent Designer pre-lifecycle prompt generation.
-    pub mod designer {
-        pub const ARCHETYPE: &str = "Designer.archetype";
-        pub const CONTEXT_DESCRIPTION: &str = "Designer.context_description";
-        pub const AGENT_DEFINITIONS: &str = "Designer.agent_definitions";
-        pub const UPSTREAM_CONTEXT: &str = "Designer.upstream_context";
-        pub const AVAILABLE_TOOLS: &str = "Designer.available_tools";
-        pub const ARCHETYPE_GUIDANCE: &str = "Designer.archetype_guidance";
-    }
-
-    /// Template variables for the ReAct designer prompts.
-    pub mod react_designer {
-        pub const NODE_NAME: &str = "ReactDesigner.node_name";
-        pub const PRIOR_DESIGN: &str = "ReactDesigner.prior_design";
-        pub const STEP_ORDER: &str = "ReactDesigner.step_order";
-        pub const TASK: &str = "ReactDesigner.task";
-        pub const CURRENT_DESIGN_HANDOFF: &str = "ReactDesigner.current_design_handoff";
-        pub const PREVIOUS_STEP: &str = "ReactDesigner.previous_step";
-        pub const NEXT_STEP: &str = "ReactDesigner.next_step";
-    }
-
     /// Variables for workspace merge conflict resolution prompts.
     pub mod merge {
         pub const FILE_PATH: &str = "Merge.file_path";
@@ -240,22 +219,6 @@ pub static WORKFORCE: Lazy<ProtocolConfig> = Lazy::new(|| {
     )
 });
 
-/// Shared Agent Designer config (pre-lifecycle prompt generation).
-pub static DESIGNER: Lazy<ProtocolConfig> = Lazy::new(|| {
-    load_protocol_config(
-        include_str!("../../config/designer/config.yaml"),
-        "config/designer/config.yaml",
-    )
-});
-
-/// Workforce builder config (background configuration agent).
-pub static WORKFORCE_BUILDER: Lazy<ProtocolConfig> = Lazy::new(|| {
-    load_protocol_config(
-        include_str!("../../config/archetype/workforce/builder/config.yaml"),
-        "config/archetype/workforce/builder/config.yaml",
-    )
-});
-
 /// Manager assistant config (L1 — conversational layer for the manager node).
 pub static MANAGER_ASSISTANT: Lazy<ProtocolConfig> = Lazy::new(|| {
     load_protocol_config(
@@ -306,10 +269,6 @@ pub mod roles {
     pub const WORKFORCE_ARCHETYPE: &str =
         include_str!("../../config/archetype/workforce/archetype.md");
 
-    /// Workforce builder system prompt (background configuration agent).
-    pub const WORKFORCE_BUILDER_SYSTEM: &str =
-        include_str!("../../config/archetype/workforce/builder/system.md");
-
     /// System node agent system prompt (designs runtime agent teams).
     pub const SYSTEM_NODE_AGENT_SYSTEM: &str =
         include_str!("../../config/archetype/workforce/system_agent/system.md");
@@ -328,20 +287,6 @@ pub mod roles {
         response: Some(include_str!(
             "../../config/services/belief_extraction/response.json"
         )),
-    };
-
-    /// Agent Designer: generates optimized prompt pairs for agents (one-shot).
-    pub static DESIGNER: RoleDefinition = RoleDefinition {
-        system: include_str!("../../config/designer/system.md"),
-        prompt: include_str!("../../config/designer/prompt.md"),
-        response: None,
-    };
-
-    /// ReAct Agent Designer: multi-turn designer that writes configs to the store.
-    pub static REACT_DESIGNER: RoleDefinition = RoleDefinition {
-        system: include_str!("../../config/designer/react_system.md"),
-        prompt: include_str!("../../config/designer/react_prompt.md"),
-        response: None,
     };
 
     /// Run results summarizer: distills step output into a 2-4 sentence summary.
@@ -480,7 +425,6 @@ mod tests {
         assert!(roles::ASSISTANT_BASE.response.is_none());
 
         assert!(!roles::WORKFORCE_ARCHETYPE.is_empty());
-        assert!(!roles::WORKFORCE_BUILDER_SYSTEM.is_empty());
         assert!(!roles::SYSTEM_NODE_AGENT_SYSTEM.is_empty());
 
         assert!(!roles::WORKFORCE_AGENT.system.is_empty());
@@ -490,10 +434,6 @@ mod tests {
         assert!(!roles::BELIEF_EXTRACTOR.system.is_empty());
         assert!(!roles::BELIEF_EXTRACTOR.prompt.is_empty());
         assert!(roles::BELIEF_EXTRACTOR.response.is_some());
-
-        assert!(!roles::DESIGNER.system.is_empty());
-        assert!(!roles::DESIGNER.prompt.is_empty());
-        assert!(roles::DESIGNER.response.is_none());
 
         assert!(!roles::MANAGER_ASSISTANT_BASE.system.is_empty());
         assert!(!roles::MANAGER_ASSISTANT_BASE.prompt.is_empty());
@@ -528,28 +468,6 @@ mod tests {
         assert_eq!(agent.temperature, 0.3);
         assert_eq!(agent.max_rounds, 30);
         assert_eq!(agent.context_budget, 480_000);
-    }
-
-    #[test]
-    fn designer_config_parses() {
-        let cfg = &*DESIGNER;
-        let designer = cfg.agent("designer");
-        assert_eq!(designer.model_id, crate::constants::MODEL_TIER2);
-        assert_eq!(designer.temperature, 0.4);
-        assert_eq!(designer.max_tokens, 16384);
-        assert_eq!(designer.max_rounds, 1);
-        assert_eq!(designer.context_budget, 480_000);
-    }
-
-    #[test]
-    fn workforce_builder_config_parses() {
-        let cfg = &*WORKFORCE_BUILDER;
-        let dispatcher = cfg.agent("dispatcher");
-        assert_eq!(dispatcher.model_id, crate::constants::MODEL_TIER2);
-        assert_eq!(dispatcher.temperature, 0.3);
-        assert_eq!(dispatcher.max_tokens, 8192);
-        assert!(dispatcher.max_rounds > 0);
-        assert_eq!(dispatcher.context_budget, 200_000);
     }
 
     #[test]
@@ -655,19 +573,6 @@ mod tests {
             vars::chat_belief::NODE_ARCHETYPE,
             vars::chat_belief::CONVERSATION,
             vars::chat_belief::BOARD_BELIEFS,
-            vars::designer::ARCHETYPE,
-            vars::designer::CONTEXT_DESCRIPTION,
-            vars::designer::AGENT_DEFINITIONS,
-            vars::designer::UPSTREAM_CONTEXT,
-            vars::designer::AVAILABLE_TOOLS,
-            vars::designer::ARCHETYPE_GUIDANCE,
-            vars::react_designer::NODE_NAME,
-            vars::react_designer::PRIOR_DESIGN,
-            vars::react_designer::STEP_ORDER,
-            vars::react_designer::TASK,
-            vars::react_designer::CURRENT_DESIGN_HANDOFF,
-            vars::react_designer::PREVIOUS_STEP,
-            vars::react_designer::NEXT_STEP,
             vars::merge::FILE_PATH,
             vars::merge::FILE_TYPE,
             vars::merge::LINE_RANGE,
@@ -688,9 +593,7 @@ mod tests {
             ("assistant", &roles::ASSISTANT_BASE),
             ("workforce_agent", &roles::WORKFORCE_AGENT),
             ("belief_extractor", &roles::BELIEF_EXTRACTOR),
-            ("designer", &roles::DESIGNER),
             ("manager_assistant", &roles::MANAGER_ASSISTANT_BASE),
-            ("react_designer", &roles::REACT_DESIGNER),
             ("merge_hunk", &roles::MERGE_HUNK),
             ("merge_delete_modify", &roles::MERGE_DELETE_MODIFY),
             ("merge_new_new", &roles::MERGE_NEW_NEW),

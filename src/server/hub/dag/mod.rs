@@ -20,11 +20,9 @@ use super::error::HubError;
 
 // ── Submodules ──────────────────────────────────────────────────────────────
 
-pub(crate) mod agent_designer;
 pub(crate) mod broadcast;
 pub(crate) mod container;
 pub(crate) mod dag_state;
-pub(crate) mod designer_input;
 pub(crate) mod file_executor;
 pub(crate) mod merge;
 mod orchestration;

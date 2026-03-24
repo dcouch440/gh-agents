@@ -8,9 +8,9 @@ use uuid::Uuid;
 use crate::db::WorkflowStepRow;
 use crate::types::StepExecutionEnvelope;
 
-use super::super::agent_designer::normalize_agent_name;
 use super::super::DagContext;
 use super::types::DesignedAgentPrompt;
+use crate::server::services::system_node::normalize_agent_name;
 
 /// Compose workforce output: agent results keyed by normalized name.
 pub(crate) fn compose_workforce_output(agent_outputs: &[(String, String)]) -> JsonValue {
@@ -160,7 +160,11 @@ pub(crate) fn build_upstream_outputs_block(
             continue;
         }
 
-        let truncated = super::super::designer_input::truncate_for_context(&content, 4000);
+        let truncated = if content.len() > 4000 {
+            format!("{}... [truncated]", &content[..4000])
+        } else {
+            content.clone()
+        };
         sections.push(format!("### {}\n{}", name, truncated));
     }
 
