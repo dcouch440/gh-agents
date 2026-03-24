@@ -339,28 +339,38 @@ async fn run_system_node_propagation(
     user_id: UserId,
     previous_step_handoff: Vec<PreviousStepHandoff>,
 ) {
-    // Use the step's current description as context for the re-run
-    let step_desc = state
+    // Use the step's box text (prompt_template) as context for the re-run.
+    // prompt_template is the user's raw canvas text; description may be empty.
+    let step = state
         .repos()
         .workflows
         .get_step(step_id)
         .await
         .ok()
-        .flatten()
-        .map(|s| s.description.clone())
+        .flatten();
+
+    let task_text = step
+        .as_ref()
+        .map(|s| {
+            if !s.prompt_template.is_empty() {
+                s.prompt_template.clone()
+            } else {
+                s.description.clone()
+            }
+        })
         .unwrap_or_default();
 
-    if step_desc.is_empty() && previous_step_handoff.is_empty() {
+    if task_text.is_empty() && previous_step_handoff.is_empty() {
         tracing::debug!(
             step_id = %step_id,
-            "Skipping system node propagation — no description or upstream context"
+            "Skipping system node propagation — no task text or upstream context"
         );
         return;
     }
 
     let base_instruction = format!(
         "The upstream step changed what it produces.\n\n<task>\n{}\n</task>",
-        step_desc
+        task_text
     );
     let instruction_text = enrich_with_previous_step(&base_instruction, &previous_step_handoff);
 
