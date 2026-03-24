@@ -5,7 +5,6 @@
 //! and the file executor.
 
 mod agent_executor;
-pub(crate) mod lifecycle;
 mod output;
 mod runner;
 mod tests;

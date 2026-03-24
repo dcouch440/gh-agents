@@ -1,66 +1,20 @@
-//! Standalone Designer service — run the Agent Designer outside the workforce
-//! pipeline so users can preview and debug generated agent prompts.
+//! Standalone Designer service — query endpoint for Designer output.
 //!
-//! Note: `run_standalone_design` is currently disabled — the underlying
-//! agent_designer and designer_input modules have been removed. The
-//! `get_latest_design` query endpoint remains functional.
+//! The `get_latest_design` query endpoint remains functional for viewing
+//! past design runs.
 
-use anyhow::anyhow;
 use uuid::Uuid;
 
 use crate::db::traits::WorkflowRepo;
 use crate::db::{AgentDesignerOutputRow, AgentDesignerRunRow};
-use crate::server::state::AppState;
 
 use super::ServiceError;
-
-// ── Result types ────────────────────────────────────────────────────────────
-
-/// Result of a standalone design run.
-#[derive(Debug, Clone)]
-pub struct StandaloneDesignResult {
-    pub execution_id: Uuid,
-    pub is_preview: bool,
-    pub run_id: Uuid,
-    pub agents: Vec<DesignedAgent>,
-    pub input_tokens: i64,
-    pub output_tokens: i64,
-    pub cost_usd: f32,
-}
-
-/// One designed agent output (API-friendly shape).
-#[derive(Debug, Clone)]
-pub struct DesignedAgent {
-    pub agent_name: String,
-    pub system_prompt: String,
-    pub assignment: String,
-    pub assigned_tools: Vec<String>,
-    pub reasoning: String,
-    pub execution_order: i32,
-}
 
 /// Latest design for a step (if any).
 #[derive(Debug, Clone)]
 pub struct LatestDesign {
     pub run: AgentDesignerRunRow,
     pub outputs: Vec<AgentDesignerOutputRow>,
-}
-
-// ── run_standalone_design ───────────────────────────────────────────────────
-
-/// Run the Designer for a workforce step outside the pipeline.
-///
-/// Currently disabled — the agent_designer and designer_input modules have been
-/// removed as part of the system-node-agent migration. Returns a service error.
-pub async fn run_standalone_design(
-    _state: &AppState,
-    _workflow_id: Uuid,
-    _step_id: Uuid,
-    _user_id: Uuid,
-) -> Result<StandaloneDesignResult, ServiceError> {
-    Err(ServiceError::Internal(anyhow!(
-        "Standalone designer is not available — agent design is now handled by system node agents"
-    )))
 }
 
 // ── get_latest_design ───────────────────────────────────────────────────────

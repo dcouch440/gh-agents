@@ -11,8 +11,6 @@ mod tests {
     #[test]
     fn load_from_yaml() {
         let registry = CapabilityRegistry::load(config_dir()).unwrap();
-        // Should have loaded capabilities from capabilities.yaml
-        assert!(!registry.descriptions.is_empty());
         // Should have built reverse index from tool_assignments.yaml
         assert!(!registry.capability_to_tools.is_empty());
     }
@@ -69,28 +67,6 @@ mod tests {
 
         assert!(tools.is_empty());
         assert!(names.is_empty());
-    }
-
-    #[test]
-    fn tool_descriptions_from_yaml() {
-        let registry = CapabilityRegistry::load(config_dir()).unwrap();
-        let descriptions = registry.tool_descriptions(&["file_read".to_string()]);
-
-        assert_eq!(descriptions.len(), 1);
-        assert_eq!(descriptions[0].name, "file_read");
-        // Description should come from capabilities.yaml, not fallback
-        assert!(descriptions[0].description.contains("Read file contents"));
-    }
-
-    #[test]
-    fn tool_descriptions_unknown_uses_fallback() {
-        let registry = CapabilityRegistry::load(config_dir()).unwrap();
-        let descriptions = registry.tool_descriptions(&["unknown_cap".to_string()]);
-
-        assert_eq!(descriptions.len(), 1);
-        assert_eq!(descriptions[0].name, "unknown_cap");
-        // Falls back to key itself
-        assert_eq!(descriptions[0].description, "unknown_cap");
     }
 
     #[test]

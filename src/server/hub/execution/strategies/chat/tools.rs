@@ -11,7 +11,6 @@ use super::config::StepChatContext;
 ///
 /// `set_node_description` is intentionally excluded — the assistant must
 /// dispatch that to a background agent rather than calling it directly.
-/// It remains available to the dispatch strategy via `resolve_step_tools()`.
 const UNIVERSAL_TOOLS: &[&str] = &[
     "render_panel",
     "think",
@@ -20,9 +19,6 @@ const UNIVERSAL_TOOLS: &[&str] = &[
     "cancel_dispatch",
     "set_node_name",
 ];
-
-/// Node mutation tools — dispatch-only, not available to the conversational assistant.
-const NODE_MUTATION_TOOLS: &[&str] = &["set_node_description"];
 
 /// Universal tool names handled by node_assistant (includes mutations for dispatch routing).
 const NODE_ASSISTANT_TOOLS: &[&str] = &["set_node_name", "set_node_description", "render_panel"];
@@ -50,38 +46,6 @@ pub(crate) fn resolve_chat_step_tools(execution_mode: &str) -> Vec<Tool> {
 
     UNIVERSAL_TOOLS
         .iter()
-        .filter_map(|name| crate::tools::registry::get_tool_definition(name))
-        .collect()
-}
-
-/// Tools excluded from the dispatch (background) agent.
-/// These are interactive/orchestration tools that only the conversational
-/// assistant should use — dispatch agents just do their job silently.
-const DISPATCH_EXCLUDED: &[&str] = &["render_panel", "dispatch", "cancel_dispatch", "update_plan"];
-
-/// Dispatch-only tools — not in UNIVERSAL_TOOLS, only available to background builders.
-const DISPATCH_ONLY_TOOLS: &[&str] = &["complete_task"];
-
-/// Resolve tool definitions by step execution mode.
-///
-/// Includes universal tools, node mutation tools, dispatch-only tools,
-/// and archetype-specific ones. Used by DispatchStrategy (background agent)
-/// which needs the full tool set including mutations that the conversational
-/// assistant cannot call directly.
-///
-/// Excludes interactive tools (`render_panel`) and orchestration tools
-/// (`dispatch`, `cancel_dispatch`) — dispatch agents are workers, not managers.
-pub(crate) fn resolve_step_tools(execution_mode: &str) -> Vec<Tool> {
-    let archetype_specific: &[&str] = match execution_mode {
-        "workforce" => &["configure_team"],
-        _ => &[],
-    };
-    UNIVERSAL_TOOLS
-        .iter()
-        .filter(|name| !DISPATCH_EXCLUDED.contains(name))
-        .chain(NODE_MUTATION_TOOLS.iter())
-        .chain(DISPATCH_ONLY_TOOLS.iter())
-        .chain(archetype_specific.iter())
         .filter_map(|name| crate::tools::registry::get_tool_definition(name))
         .collect()
 }

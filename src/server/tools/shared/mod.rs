@@ -24,15 +24,6 @@ pub(crate) fn require_str<'a>(input: &'a Value, field: &str) -> Result<&'a str, 
         .ok_or_else(|| json!({ "error": format!("Missing required parameter: {}", field) }))
 }
 
-/// Extract a required array parameter from tool input.
-///
-/// Returns the array reference on success, or a JSON error value on failure.
-pub(crate) fn require_array<'a>(input: &'a Value, field: &str) -> Result<&'a Vec<Value>, Value> {
-    input[field]
-        .as_array()
-        .ok_or_else(|| json!({ "error": format!("Missing required parameter: {} (array)", field) }))
-}
-
 /// Extract a required string parameter and parse it as a UUID.
 ///
 /// Returns the UUID on success, or a JSON error value on failure.
