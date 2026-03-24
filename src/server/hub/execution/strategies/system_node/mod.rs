@@ -61,11 +61,7 @@ impl SystemNodeStrategy {
         base_dir: PathBuf,
     ) -> Self {
         let current_state = state::build_current_state(&base_dir);
-        let system_prompt = format!(
-            "{}\n\n{}",
-            roles::SYSTEM_NODE_AGENT_SYSTEM,
-            current_state
-        );
+        let system_prompt = format!("{}\n\n{}", roles::SYSTEM_NODE_AGENT_SYSTEM, current_state);
 
         Self {
             system_prompt,
@@ -88,10 +84,7 @@ impl SystemNodeStrategy {
 
     /// Take the captured summary from `complete_system`, if any.
     pub fn take_summary(&self) -> Option<String> {
-        self.summary
-            .lock()
-            .ok()
-            .and_then(|mut s| s.take())
+        self.summary.lock().ok().and_then(|mut s| s.take())
     }
 }
 
@@ -142,10 +135,7 @@ impl ExecutionStrategy for SystemNodeStrategy {
     }
 
     fn should_stop(&self) -> bool {
-        self.summary
-            .lock()
-            .map(|s| s.is_some())
-            .unwrap_or(false)
+        self.summary.lock().map(|s| s.is_some()).unwrap_or(false)
     }
 
     async fn rebuild_system_prompt(&self) -> Result<Option<String>, HubError> {
@@ -182,10 +172,7 @@ impl ExecutionStrategy for SystemNodeStrategy {
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
         match name {
             "complete_system" => {
-                let summary = input["summary"]
-                    .as_str()
-                    .unwrap_or("")
-                    .to_string();
+                let summary = input["summary"].as_str().unwrap_or("").to_string();
 
                 let verify = &input["verify"];
                 match validate::validate_verify(&self.base_dir, verify) {

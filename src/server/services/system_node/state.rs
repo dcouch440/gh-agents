@@ -71,14 +71,13 @@ pub(crate) fn build_current_state(base_dir: &Path) -> String {
     // Config status
     if let Ok(content) = std::fs::read_to_string(&config_path) {
         if let Ok(val) = serde_json::from_str::<serde_json::Value>(&content) {
-            let name = val
-                .get("name")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let name = val.get("name").and_then(|v| v.as_str()).unwrap_or("");
             if name.is_empty() {
                 lines.push("  <config status=\"configured\" />".into());
             } else {
-                lines.push(format!("  <config name=\"{name}\" status=\"configured\" />"));
+                lines.push(format!(
+                    "  <config name=\"{name}\" status=\"configured\" />"
+                ));
             }
         } else {
             lines.push("  <config status=\"invalid\" />".into());

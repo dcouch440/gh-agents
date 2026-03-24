@@ -1,6 +1,6 @@
 //! Pure helper functions for workforce output composition and agent scheduling.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
@@ -9,6 +9,7 @@ use crate::db::WorkflowStepRow;
 use crate::types::StepExecutionEnvelope;
 
 use super::super::agent_designer::normalize_agent_name;
+use super::super::DagContext;
 use super::types::DesignedAgentPrompt;
 
 /// Compose workforce output: agent results keyed by normalized name.
@@ -168,6 +169,33 @@ pub(crate) fn build_upstream_outputs_block(
     }
 
     sections.join("\n\n")
+}
+
+/// Compute upstream step output text for workforce agent `<previous_step>` injection.
+///
+/// Filters completed envelopes to only include steps with edges into the
+/// target step (not the full DAG state), then formats them via
+/// `build_upstream_outputs_block`. This ensures workshop reruns don't
+/// accidentally include this step's own prior output.
+pub(crate) fn build_upstream_step_output(
+    dag: &DagContext<'_>,
+    step: &WorkflowStepRow,
+    completed_envelopes: &HashMap<Uuid, StepExecutionEnvelope>,
+) -> String {
+    let incoming = dag
+        .port_meta
+        .incoming_edges
+        .get(&step.id)
+        .map(|v| v.as_slice())
+        .unwrap_or(&[]);
+    let upstream_step_ids: HashSet<Uuid> = incoming.iter().map(|e| e.from_step_id).collect();
+    let upstream_envelopes: HashMap<Uuid, StepExecutionEnvelope> = completed_envelopes
+        .iter()
+        .filter(|(id, _)| upstream_step_ids.contains(id))
+        .map(|(id, env)| (*id, env.clone()))
+        .collect();
+
+    build_upstream_outputs_block(&upstream_envelopes, dag.steps)
 }
 
 /// Format envelope data for human-readable injection.

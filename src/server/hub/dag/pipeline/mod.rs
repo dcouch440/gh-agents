@@ -15,46 +15,40 @@ mod agent_executor;
 mod designer;
 pub(crate) mod lifecycle;
 mod output;
+mod runner;
 mod tests;
 mod types;
-
-// Re-export used by the orchestrator and workshop dispatch
-pub(crate) use output::compose_workforce_output;
 
 // Re-exports for crate-wide access
 pub(crate) use types::DesignedAgentPrompt;
 
+// Re-exports for the file executor (file-based execution bridge)
+pub(crate) use output::build_upstream_step_output;
+pub(crate) use runner::{run_agent_execution, AgentExecutionInput};
+
 // Re-exports for test access (tests.rs imports via crate path)
 #[cfg(test)]
 pub(crate) use output::{
-    build_filtered_outputs_block, build_upstream_outputs_block, compute_execution_levels,
-    filter_outputs_for_agent,
+    build_filtered_outputs_block, build_upstream_outputs_block, compose_workforce_output,
+    compute_execution_levels, filter_outputs_for_agent,
 };
-
-use std::collections::{HashMap, HashSet};
 
 use anyhow::anyhow;
 use tracing::info;
-use uuid::Uuid;
 
-use crate::config::protocols::WORKFORCE;
 use crate::db::WorkflowStepRow;
 use crate::server::hub::error::HubError;
 use crate::server::ws::events::WorkflowEventKind;
-use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
 
-use super::container::{create_optional_container, destroy_optional_container};
 use super::dag_state::DagExecutionState;
 use super::{
-    broadcast_workflow_event, compose_prompt, resolve_output_key, resolve_step_port_inputs,
-    step_display_name, DagContext, PromptRepos, StepOutput,
+    broadcast_workflow_event, compose_prompt, resolve_step_port_inputs, step_display_name,
+    DagContext, PromptRepos,
 };
 
-use agent_executor::execute_agent_levels;
 use designer::build_static_fallback_prompts;
 pub(crate) use designer::DesignerPhase;
 use lifecycle::{PhaseOutput, PhaseTokenUsage, PipelineExecutionContext, PipelinePhase};
-use types::WorkforceStepEnv;
 
 /// Composable pipeline executor with lifecycle phases.
 ///
@@ -156,26 +150,6 @@ impl Pipeline {
         .await;
 
         // 6. Build pipeline execution context
-        // Only include envelopes from actual upstream steps (those with edges into this step),
-        // not the full DAG state which may include this step's own prior output from workshop reruns.
-        let incoming = dag
-            .port_meta
-            .incoming_edges
-            .get(&step.id)
-            .map(|v| v.as_slice())
-            .unwrap_or(&[]);
-        let upstream_step_ids: HashSet<Uuid> = incoming.iter().map(|e| e.from_step_id).collect();
-        let upstream_envelopes: HashMap<Uuid, StepExecutionEnvelope> = dag_state
-            .completed_envelopes
-            .iter()
-            .filter(|(id, _)| upstream_step_ids.contains(id))
-            .map(|(id, env)| (*id, env.clone()))
-            .collect();
-
-        // 6b. Build upstream step output for <previous_step> on first agents
-        let upstream_step_output =
-            output::build_upstream_outputs_block(&upstream_envelopes, dag.steps);
-
         let pipeline_ctx = PipelineExecutionContext {
             step: step.clone(),
             brief: brief.clone(),
@@ -205,136 +179,21 @@ impl Pipeline {
             output.unwrap()
         };
 
-        // 8. Create optional container
-        let managed_container = create_optional_container(
-            dag.ctx.container_config.as_ref(),
-            dag.ctx.wg_client.as_deref(),
-            "pipeline",
-            dag.state.workspace(),
-        )
-        .await?;
+        // 8–12. Delegate agent execution, output composition, and recording to the runner
+        let upstream_step_output =
+            output::build_upstream_step_output(dag, step, &dag_state.completed_envelopes);
 
-        // 9. Build env + execute agent levels
-        let env = WorkforceStepEnv {
-            state: dag.state.clone(),
-            ctx: dag.ctx.clone(),
-            original_prompt: prompt.clone(),
-            step_id: step.id,
-            workflow_id: step.workflow_id,
-            designer_run_id: phase_output.token_usage.run_id,
-            total_agents: phase_output.designed_prompts.len(),
-            container_handle: managed_container.as_ref().map(|mc| mc.agent_handle.clone()),
-            cancel: dag.cancel.cloned(),
-            stroke_image: dag
-                .state
-                .repos()
-                .workflows
-                .get_step_stroke_image(step.id)
-                .await
-                .unwrap_or(None),
+        let input = runner::AgentExecutionInput {
+            designed_prompts: phase_output.designed_prompts,
+            failure_mode: brief.failure_mode.clone(),
             upstream_step_output,
+            original_prompt: prompt,
+            designer_run_id: phase_output.token_usage.run_id,
+            phase_tokens_in: phase_output.token_usage.input_tokens,
+            phase_tokens_out: phase_output.token_usage.output_tokens,
+            phase_cost: phase_output.token_usage.cost_usd,
         };
 
-        let level_result = execute_agent_levels(
-            &env,
-            dag,
-            &phase_output.designed_prompts,
-            &brief.failure_mode,
-            &managed_container,
-        )
-        .await?;
-
-        // 10. Extract overlay diff before destroying container
-        if let (Some(workspace), Some(cc)) =
-            (dag.state.workspace(), dag.ctx.container_config.as_ref())
-        {
-            if cc.overlay_enabled {
-                if let (Some(wf_id), Some(run_id)) = (cc.workflow_id, cc.run_id) {
-                    let ws = workspace.clone();
-                    let base_paths: std::collections::HashSet<std::path::PathBuf> =
-                        tokio::task::spawn_blocking(move || {
-                            ws.list_files(wf_id, run_id, None)
-                                .unwrap_or_default()
-                                .into_iter()
-                                .collect()
-                        })
-                        .await
-                        .unwrap_or_default();
-                    dag_state.step_overlay = super::container::extract_step_overlay(
-                        &managed_container,
-                        step.id,
-                        super::step_display_name(step),
-                        step.prompt_template.clone(),
-                        step.display_order,
-                        &base_paths,
-                        true,
-                    )
-                    .await;
-                }
-            }
-        }
-
-        // 11. Destroy optional container
-        destroy_optional_container(&managed_container, dag.ctx.wg_client.as_deref()).await;
-
-        // 11. Compose combined output + store results
-        let step_in_tokens = phase_output.token_usage.input_tokens + level_result.input_tokens;
-        let step_out_tokens = phase_output.token_usage.output_tokens + level_result.output_tokens;
-        let step_cost = phase_output.token_usage.cost_usd + level_result.cost_usd;
-
-        let combined_data = compose_workforce_output(&level_result.agent_outputs);
-        let output_key = resolve_output_key(step, &dag.port_meta.step_outputs);
-
-        dag_state.accumulate_tokens(step_in_tokens, step_out_tokens, step_cost);
-
-        let output = StepOutput {
-            variable_name: output_key,
-            raw_output: serde_json::to_string(&combined_data).unwrap_or_default(),
-            structured_output: Some(combined_data.clone()),
-        };
-
-        let envelope = StepExecutionEnvelope {
-            status: ExecutionStatus::Success,
-            data: Some(combined_data),
-            metadata: ExecutionMetadata {
-                execution_time_ms: step_start.elapsed().as_millis() as u64,
-                tokens_in: Some(step_in_tokens as i32),
-                tokens_out: Some(step_out_tokens as i32),
-                cost_usd: Some(step_cost as f64),
-                model: Some(WORKFORCE.agent("agent").model_id.clone()),
-                ..ExecutionMetadata::new(step.id)
-            },
-            error: None,
-        };
-
-        let output_text = output.raw_output.clone();
-        super::utils::record_and_snapshot_output(dag, dag_state, step.id, output, envelope).await;
-
-        // 12. Broadcast step completed
-        broadcast_workflow_event(
-            dag.state,
-            dag.ctx,
-            step.workflow_id,
-            WorkflowEventKind::StepCompleted {
-                step_id: step.id,
-                step_name: step_display_name(step),
-                agent_id: None,
-                output: Some(output_text),
-                input_tokens: Some(step_in_tokens as u64),
-                output_tokens: Some(step_out_tokens as u64),
-                duration_ms: Some(step_start.elapsed().as_millis() as u64),
-            },
-        );
-
-        info!(
-            step_id = %step.id,
-            agents = env.total_agents,
-            tokens_in = step_in_tokens,
-            tokens_out = step_out_tokens,
-            duration_ms = step_start.elapsed().as_millis(),
-            "Pipeline execution completed"
-        );
-
-        Ok(())
+        runner::run_agent_execution(dag, step, dag_state, input, step_start).await
     }
 }

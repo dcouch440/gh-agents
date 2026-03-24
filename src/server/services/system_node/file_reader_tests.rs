@@ -28,7 +28,10 @@ mod tests {
         write_repo(
             dir.path(),
             r#"{"agents": {"reader": {"depends_on": []}}}"#,
-            &[("reader", &agent_json("Reader", "OCR specialist.", "Read the image."))],
+            &[(
+                "reader",
+                &agent_json("Reader", "OCR specialist.", "Read the image."),
+            )],
             r#"{"name": "Test", "description": "test"}"#,
         );
 
@@ -49,9 +52,18 @@ mod tests {
             dir.path(),
             r#"{"agents": {"scanner": {"depends_on": []}, "analyzer": {"depends_on": ["scanner"]}, "reporter": {"depends_on": ["analyzer"]}}}"#,
             &[
-                ("scanner", &agent_json("Scanner", "Security scanner.", "Scan.")),
-                ("analyzer", &agent_json("Analyzer", "Security analyst.", "Analyze.")),
-                ("reporter", &agent_json("Reporter", "Technical writer.", "Report.")),
+                (
+                    "scanner",
+                    &agent_json("Scanner", "Security scanner.", "Scan."),
+                ),
+                (
+                    "analyzer",
+                    &agent_json("Analyzer", "Security analyst.", "Analyze."),
+                ),
+                (
+                    "reporter",
+                    &agent_json("Reporter", "Technical writer.", "Report."),
+                ),
             ],
             r#"{"name": "Audit", "description": "test"}"#,
         );
@@ -77,7 +89,10 @@ mod tests {
             dir.path(),
             r#"{"agents": {"researcher": {"depends_on": []}, "writer": {"depends_on": ["researcher"]}, "reviewer": {"depends_on": ["researcher"]}}}"#,
             &[
-                ("researcher", &agent_json("Researcher", "Research.", "Research.")),
+                (
+                    "researcher",
+                    &agent_json("Researcher", "Research.", "Research."),
+                ),
                 ("writer", &agent_json("Writer", "Write.", "Write.")),
                 ("reviewer", &agent_json("Reviewer", "Review.", "Review.")),
             ],
@@ -105,7 +120,10 @@ mod tests {
         .unwrap();
 
         let err = read_agent_configs(dir.path()).unwrap_err();
-        assert!(err.contains("missing.json"), "error should mention file: {err}");
+        assert!(
+            err.contains("missing.json"),
+            "error should mention file: {err}"
+        );
     }
 
     #[test]
@@ -121,7 +139,10 @@ mod tests {
         std::fs::write(agents_dir.join("bad.json"), "not json").unwrap();
 
         let err = read_agent_configs(dir.path()).unwrap_err();
-        assert!(err.contains("invalid JSON"), "error should mention JSON: {err}");
+        assert!(
+            err.contains("invalid JSON"),
+            "error should mention JSON: {err}"
+        );
     }
 
     #[test]
@@ -154,7 +175,10 @@ mod tests {
     fn read_config_missing() {
         let dir = tempfile::tempdir().unwrap();
         let err = read_config(dir.path()).unwrap_err();
-        assert!(err.contains("config.json"), "error should mention file: {err}");
+        assert!(
+            err.contains("config.json"),
+            "error should mention file: {err}"
+        );
     }
 
     // ── read_topology ────────────────────────────────────────────────────
