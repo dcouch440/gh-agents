@@ -162,9 +162,7 @@ function RunDetailPage() {
                 color={STATUS_COLORS[detail.execution.status] ?? 'default'}
                 sx={{ fontWeight: 600 }}
               />
-              {detail.execution.execution_mode && (
-                <Chip label={detail.execution.execution_mode} size="small" variant="outlined" />
-              )}
+              <Chip label={detail.execution.execution_mode} size="small" variant="outlined" />
               {detail.template_name && (
                 <Chip label={detail.template_name} size="small" variant="outlined" color="info" />
               )}

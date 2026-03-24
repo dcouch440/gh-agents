@@ -9,11 +9,23 @@ type Workflow = {
   vpn_enabled: boolean
 }
 
+type ExecutionMode =
+  | 'workforce'
+  | 'context'
+  | 'input'
+  | 'manager'
+  | 'room'
+  | 'single'
+  | 'for_each'
+  | 'agent'
+  | 'llm'
+  | 'standalone'
+
 type WorkflowStep = {
   id: string
   workflow_id: string
   agent_id: string
-  execution_mode: string
+  execution_mode: ExecutionMode
   for_each_ref: string | null
   prompt_template_id: string | null
   prompt_template: string
@@ -62,7 +74,7 @@ type UpdateWorkflowRequest = Partial<CreateWorkflowRequest>
 
 type CreateStepRequest = {
   agent_id?: string
-  execution_mode?: string
+  execution_mode?: ExecutionMode
   position_x?: number
   position_y?: number
   width?: number
@@ -108,7 +120,7 @@ type WorkflowExecutionSummary = {
   completed_at: string | null
   outputs: Record<string, unknown> | null
   error: string | null
-  execution_mode: string
+  execution_mode: ExecutionMode
   template_id: string | null
 }
 
@@ -184,7 +196,7 @@ type StepQuestionState = {
 type RunStepResult = {
   step_id: string
   step_name: string | null
-  execution_mode: string
+  execution_mode: ExecutionMode
   execution_id: string | null
   status: string
   started_at: string | null
@@ -259,6 +271,7 @@ type WorkshopStatusResponse = {
 }
 
 export type {
+  ExecutionMode,
   Workflow,
   WorkflowStep,
   WorkflowStepEdge,
