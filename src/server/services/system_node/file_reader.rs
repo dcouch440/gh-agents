@@ -107,8 +107,8 @@ pub(crate) fn read_config(base_dir: &Path) -> Result<(String, String), String> {
     let content = std::fs::read_to_string(&config_path)
         .map_err(|e| format!("cannot read config.json: {e}"))?;
 
-    let val: Value = serde_json::from_str(&content)
-        .map_err(|e| format!("invalid JSON in config.json: {e}"))?;
+    let val: Value =
+        serde_json::from_str(&content).map_err(|e| format!("invalid JSON in config.json: {e}"))?;
 
     let name = val
         .get("name")

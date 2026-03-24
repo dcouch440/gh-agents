@@ -59,10 +59,7 @@ mod tests {
     fn validate_topology_missing_agents() {
         let content = r#"{}"#;
         let err = validate_topology(content).unwrap_err();
-        assert!(
-            err.contains("agents"),
-            "expected 'agents' in error: {err}"
-        );
+        assert!(err.contains("agents"), "expected 'agents' in error: {err}");
     }
 
     #[test]
@@ -211,11 +208,7 @@ mod tests {
         let agents_dir = dir.path().join("agents");
         std::fs::create_dir(&agents_dir).unwrap();
 
-        std::fs::write(
-            dir.path().join("topology.json"),
-            r#"{"agents": {}}"#,
-        )
-        .unwrap();
+        std::fs::write(dir.path().join("topology.json"), r#"{"agents": {}}"#).unwrap();
         std::fs::write(agents_dir.join("orphan.json"), "{}").unwrap();
         std::fs::write(
             dir.path().join("config.json"),
@@ -233,11 +226,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir(dir.path().join("agents")).unwrap();
 
-        std::fs::write(
-            dir.path().join("topology.json"),
-            r#"{"agents": {}}"#,
-        )
-        .unwrap();
+        std::fs::write(dir.path().join("topology.json"), r#"{"agents": {}}"#).unwrap();
 
         let errors = cross_reference(dir.path());
         assert_eq!(errors.len(), 1);
@@ -330,11 +319,7 @@ mod tests {
         )
         .unwrap();
         // Agent file missing required fields
-        std::fs::write(
-            agents_dir.join("bad.json"),
-            r#"{"name": "Bad"}"#,
-        )
-        .unwrap();
+        std::fs::write(agents_dir.join("bad.json"), r#"{"name": "Bad"}"#).unwrap();
 
         let verify = json!({
             "topology_complete": true,
@@ -357,17 +342,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir(dir.path().join("agents")).unwrap();
 
-        std::fs::write(
-            dir.path().join("topology.json"),
-            r#"{"agents": {}}"#,
-        )
-        .unwrap();
+        std::fs::write(dir.path().join("topology.json"), r#"{"agents": {}}"#).unwrap();
         // config missing description
-        std::fs::write(
-            dir.path().join("config.json"),
-            r#"{"name": "Test"}"#,
-        )
-        .unwrap();
+        std::fs::write(dir.path().join("config.json"), r#"{"name": "Test"}"#).unwrap();
 
         let verify = json!({
             "topology_complete": true,

@@ -18,12 +18,9 @@ mod tests;
 
 /// Validate `config.json` content. Returns Ok or an error message.
 pub(crate) fn validate_config(content: &str) -> Result<(), String> {
-    let val: Value =
-        serde_json::from_str(content).map_err(|e| format!("invalid JSON: {e}"))?;
+    let val: Value = serde_json::from_str(content).map_err(|e| format!("invalid JSON: {e}"))?;
 
-    let obj = val
-        .as_object()
-        .ok_or("expected a JSON object")?;
+    let obj = val.as_object().ok_or("expected a JSON object")?;
 
     require_non_empty_string(obj, "name")?;
     require_non_empty_string(obj, "description")?;
@@ -32,8 +29,7 @@ pub(crate) fn validate_config(content: &str) -> Result<(), String> {
 
 /// Validate `topology.json` content. Returns Ok or an error message.
 pub(crate) fn validate_topology(content: &str) -> Result<(), String> {
-    let val: Value =
-        serde_json::from_str(content).map_err(|e| format!("invalid JSON: {e}"))?;
+    let val: Value = serde_json::from_str(content).map_err(|e| format!("invalid JSON: {e}"))?;
 
     let obj = val.as_object().ok_or("expected a JSON object")?;
 
@@ -62,8 +58,7 @@ pub(crate) fn validate_topology(content: &str) -> Result<(), String> {
 
 /// Validate an `agents/{slug}.json` config. Returns Ok or an error message.
 pub(crate) fn validate_agent(content: &str) -> Result<(), String> {
-    let val: Value =
-        serde_json::from_str(content).map_err(|e| format!("invalid JSON: {e}"))?;
+    let val: Value = serde_json::from_str(content).map_err(|e| format!("invalid JSON: {e}"))?;
 
     let obj = val.as_object().ok_or("expected a JSON object")?;
 
@@ -190,10 +185,7 @@ pub(crate) fn cross_reference(base_dir: &Path) -> Vec<CrossRefError> {
 ///
 /// Returns `Ok(success_json)` if all claims hold, or `Err(error_json)` with
 /// structured errors the agent can act on.
-pub(crate) fn validate_verify(
-    base_dir: &Path,
-    verify: &Value,
-) -> Result<Value, Value> {
+pub(crate) fn validate_verify(base_dir: &Path, verify: &Value) -> Result<Value, Value> {
     let mut errors: Vec<Value> = Vec::new();
 
     // topology_complete
