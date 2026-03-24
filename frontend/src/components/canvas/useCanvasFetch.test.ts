@@ -2,12 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import { useCanvasFetch } from './useCanvasFetch'
 import type { Agent } from '@/types/agent'
-import type { WorkflowStep } from '@/types/workflow'
+import type { ExecutionMode, WorkflowStep } from '@/types/workflow'
 
 const mocks = vi.hoisted(() => ({
   fetchTools: vi.fn<(id: string) => void>(),
   fetchRoster: vi.fn<(id: string) => void>(),
-  fetchRoomStepMembers: vi.fn<(id: string) => void>(),
   fetchAllProtocols: vi.fn<() => void>(),
   fetchProtocolTypes: vi.fn<() => void>(),
 }))
@@ -16,7 +15,6 @@ vi.mock('@/stores', () => ({
   agentStore: { fetchTools: mocks.fetchTools },
   workflowStore: {
     fetchRoster: mocks.fetchRoster,
-    fetchRoomStepMembers: mocks.fetchRoomStepMembers,
   },
   protocolStore: {
     fetchAll: mocks.fetchAllProtocols,
@@ -37,7 +35,7 @@ const makeAgent = (id: string): Agent => ({
   version: 1,
 })
 
-const makeStep = (id: string, mode: string): WorkflowStep => ({
+const makeStep = (id: string, mode: ExecutionMode): WorkflowStep => ({
   id,
   workflow_id: 'wf-1',
   agent_id: 'agent-1',
@@ -90,20 +88,11 @@ describe('useCanvasFetch', () => {
     expect(mocks.fetchRoster).toHaveBeenCalledWith('s1')
   })
 
-  it('fetches room members for room steps once', () => {
-    const steps = [makeStep('s1', 'room')]
-    renderHook(() => useCanvasFetch([], steps))
-
-    expect(mocks.fetchRoomStepMembers).toHaveBeenCalledTimes(1)
-    expect(mocks.fetchRoomStepMembers).toHaveBeenCalledWith('s1')
-  })
-
   it('does not fetch for non-special step types', () => {
     const steps = [makeStep('s1', 'single')]
     renderHook(() => useCanvasFetch([], steps))
 
     expect(mocks.fetchRoster).not.toHaveBeenCalled()
-    expect(mocks.fetchRoomStepMembers).not.toHaveBeenCalled()
   })
 
   it('fetches protocol catalog on mount', () => {

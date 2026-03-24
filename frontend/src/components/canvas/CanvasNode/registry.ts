@@ -10,6 +10,7 @@ import type { ResizeSizeConstraints } from '../CanvasFormNode'
 import type { ProtocolStepInfo } from '../mappers/types'
 import { CanvasNodeKind } from '../canvasKinds'
 import type { NodeVariant, LayoutMode } from './types'
+import type { ExecutionMode } from '@/types/workflow'
 
 // ---------------------------------------------------------------------------
 // Archetype — backward-compat alias (tabbed variants only)
@@ -28,7 +29,7 @@ type Archetype = (typeof Archetype)[keyof typeof Archetype]
 type ArchetypeConfig = {
   label: string
   color: string
-  executionMode: string
+  executionMode: ExecutionMode
   icon: SvgIconComponent
   archetypeTabLabel: string
   chatEmptyMessage: string
@@ -54,7 +55,7 @@ const ARCHETYPE_CONFIGS: Record<Archetype, ArchetypeConfig> = {
   [Archetype.ROOM]: {
     label: 'Room',
     color: '#a78bfa',
-    executionMode: 'room',
+    executionMode: 'workforce',
     icon: ForumOutlined,
     archetypeTabLabel: 'Members',
     chatEmptyMessage: 'Tell me about the meeting you want to set up.',
@@ -70,7 +71,7 @@ const ARCHETYPE_CONFIGS: Record<Archetype, ArchetypeConfig> = {
   [Archetype.AGENT]: {
     label: 'Agent',
     color: '#06b6d4',
-    executionMode: 'agent',
+    executionMode: 'single',
     icon: SmartToyOutlined,
     archetypeTabLabel: 'Info',
     chatEmptyMessage: '',

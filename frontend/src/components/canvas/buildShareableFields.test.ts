@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildShareableFields } from './buildShareableFields'
-import type { WorkflowStep, RosterAgent, RoomStepMember } from '@/types/workflow'
+import type { WorkflowStep, RosterAgent } from '@/types/workflow'
 
 const makeStep = (overrides: Partial<WorkflowStep> = {}): WorkflowStep => ({
   id: 'step-1',
@@ -31,13 +31,7 @@ const makeAgent = (id: string, name: string, role: string): RosterAgent => ({
   depends_on: [],
 })
 
-const makeMember = (id: string, name: string, role: string, perspective: string): RoomStepMember => ({
-  id,
-  name,
-  role,
-  perspective,
-  display_order: 0,
-})
+
 
 describe('buildShareableFields', () => {
   describe('general fields (all archetypes)', () => {
@@ -145,28 +139,6 @@ describe('buildShareableFields', () => {
       expect(agentFields[0]!.label).toBe('CodeBot')
       expect(agentFields[0]!.kind).toBe('agent')
       expect(agentFields[0]!.chipKey).toBe('agent')
-    })
-  })
-
-  describe('ROOM archetype', () => {
-    it('includes room members', () => {
-      const fields = buildShareableFields({
-        stepId: 'step-1',
-        step: makeStep({ execution_mode: 'room' }),
-        archetype: 'room',
-        rosterAgents: [],
-        roomMembers: [
-          makeMember('m1', 'Alice', 'Facilitator', 'UX focus'),
-          makeMember('m2', 'Bob', 'Reviewer', 'Backend focus'),
-        ],
-      })
-
-      const memberFields = fields.filter((f) => f.category === 'Members')
-      expect(memberFields).toHaveLength(2)
-      expect(memberFields[0]!.key).toBe('member::m1')
-      expect(memberFields[0]!.label).toBe('Alice')
-      expect(memberFields[0]!.kind).toBe('shared-field')
-      expect(memberFields[0]!.chipKey).toBe('member')
     })
   })
 

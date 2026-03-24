@@ -210,7 +210,7 @@ export const mockWorkflowStep2: WorkflowStep = {
   ...mockWorkflowStep,
   id: 'step-002',
   name: 'Second Step',
-  execution_mode: 'for_each',
+  execution_mode: 'single',
   agent_id: 'agent-001',
   for_each_label_field: 'label',
   position_x: 400,

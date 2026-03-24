@@ -558,9 +558,9 @@ describe('buildStepTree', () => {
   it('filters out context and input steps', () => {
     const steps = [
       makeStep('a', 'A', 0),
-      { ...makeStep('ctx', 'Context', 1), execution_mode: 'context' },
+      { ...makeStep('ctx', 'Context', 1), execution_mode: 'context' as const },
       makeStep('b', 'B', 2),
-      { ...makeStep('inp', 'Input', 3), execution_mode: 'input' },
+      { ...makeStep('inp', 'Input', 3), execution_mode: 'input' as const },
       makeStep('c', 'C', 4),
     ]
     const edges = [
@@ -1327,7 +1327,7 @@ describe('buildStepTree', () => {
   it('edges through hidden-mode steps are dropped', () => {
     const steps = [
       makeStep('a', 'A', 0),
-      { ...makeStep('ctx', 'Context', 1), execution_mode: 'context' },
+      { ...makeStep('ctx', 'Context', 1), execution_mode: 'context' as const },
       makeStep('b', 'B', 2),
     ]
     const edges = [

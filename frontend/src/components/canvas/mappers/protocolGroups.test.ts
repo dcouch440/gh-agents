@@ -27,7 +27,7 @@ const baseStep: WorkflowStep = {
 
 describe('isWorkforceStep', () => {
   it('returns true when execution_mode is workforce', () => {
-    const step = { id: 'step-1', execution_mode: 'workforce' }
+    const step = { id: 'step-1', execution_mode: 'workforce' as const }
     expect(isWorkforceStep(step, new Map())).toBe(true)
   })
 
@@ -66,7 +66,7 @@ describe('computeProtocolGroups', () => {
 
   it('assigns connected non-protocol nodes to the protocol group', () => {
     const steps = [
-      { ...baseStep, id: 'proto', execution_mode: 'workforce' },
+      { ...baseStep, id: 'proto', execution_mode: 'workforce' as const },
       { ...baseStep, id: 'worker-1' },
       { ...baseStep, id: 'worker-2' },
     ]
@@ -84,7 +84,7 @@ describe('computeProtocolGroups', () => {
 
   it('does not include protocol steps themselves in the result', () => {
     const steps = [
-      { ...baseStep, id: 'proto', execution_mode: 'workforce' },
+      { ...baseStep, id: 'proto', execution_mode: 'workforce' as const },
       { ...baseStep, id: 'worker' },
     ]
     const edges = [{ from_step_id: 'proto', to_step_id: 'worker' }]
@@ -96,7 +96,7 @@ describe('computeProtocolGroups', () => {
 
   it('handles isolated protocol steps with no edges', () => {
     const steps = [
-      { ...baseStep, id: 'proto', execution_mode: 'workforce' },
+      { ...baseStep, id: 'proto', execution_mode: 'workforce' as const },
     ]
     const result = computeProtocolGroups(steps, [], new Map())
     expect(result.size).toBe(0)
@@ -104,7 +104,7 @@ describe('computeProtocolGroups', () => {
 
   it('uses protocol color from PROTOCOL_TYPE_COLORS', () => {
     const steps = [
-      { ...baseStep, id: 'proto', execution_mode: 'workforce' },
+      { ...baseStep, id: 'proto', execution_mode: 'workforce' as const },
       { ...baseStep, id: 'worker' },
     ]
     const edges = [{ from_step_id: 'proto', to_step_id: 'worker' }]
@@ -131,9 +131,9 @@ describe('computeProtocolGroups', () => {
 
   it('assigns each group independently when protocols are disconnected', () => {
     const steps = [
-      { ...baseStep, id: 'proto-a', execution_mode: 'workforce' },
+      { ...baseStep, id: 'proto-a', execution_mode: 'workforce' as const },
       { ...baseStep, id: 'worker-a' },
-      { ...baseStep, id: 'proto-b', execution_mode: 'workforce' },
+      { ...baseStep, id: 'proto-b', execution_mode: 'workforce' as const },
       { ...baseStep, id: 'worker-b' },
     ]
     const edges = [
