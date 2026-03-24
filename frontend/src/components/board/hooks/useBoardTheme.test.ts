@@ -33,11 +33,11 @@ describe('useBoardTheme', () => {
     const { result } = renderHook(() => useBoardTheme())
     expect(result.current.canvasBg).toBe('#0d1117')
     expect(result.current.connectorColor).toBe('#30363d')
-    expect(result.current.accent).toBe('#3b82f6')
+    expect(result.current.accentColor).toBe('#3b82f6')
   })
 
   it('returns text color from palette', () => {
     const { result } = renderHook(() => useBoardTheme())
-    expect(result.current.textPrimary).toBe('#ffffff')
+    expect(result.current.textColor).toBe('#ffffff')
   })
 })
