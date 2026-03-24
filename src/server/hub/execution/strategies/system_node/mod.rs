@@ -4,7 +4,7 @@
 //! state building, and file reading. Uses `run_command` for shell access
 //! and `complete_system` to signal completion.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use async_trait::async_trait;
@@ -36,21 +36,16 @@ pub struct SystemNodeStrategy {
     workflow_id: Uuid,
     session_id: Option<Uuid>,
     agent_execution_id: Option<Uuid>,
-    /// Container handle for run_command execution.
     container_handle: Option<ContainerHandle>,
-    /// Captured summary from complete_system tool call.
     summary: Mutex<Option<String>>,
-    /// Base directory for the system node agent's repository.
     base_dir: PathBuf,
 }
 
 impl SystemNodeStrategy {
-    /// Protocol config for the system node agent role.
     fn config(&self) -> &crate::config::protocols::AgentConfig {
         SYSTEM_NODE_AGENT.agent("system")
     }
 
-    /// Build a new system node strategy.
     pub fn new(
         state: AppState,
         step_id: Uuid,
@@ -77,12 +72,10 @@ impl SystemNodeStrategy {
         }
     }
 
-    /// Set the agent execution ID (created after strategy construction).
     pub fn set_agent_execution_id(&mut self, id: Option<Uuid>) {
         self.agent_execution_id = id;
     }
 
-    /// Take the captured summary from `complete_system`, if any.
     pub fn take_summary(&self) -> Option<String> {
         self.summary.lock().ok().and_then(|mut s| s.take())
     }
@@ -148,22 +141,23 @@ impl ExecutionStrategy for SystemNodeStrategy {
     }
 
     async fn build_messages(&self, _input: &str) -> Result<Vec<Message>, HubError> {
-        let text_instruction = if let Some(session_id) = self.session_id {
-            let history = self
-                .state
-                .repos()
-                .sessions
-                .get_session_history(session_id, 20)
-                .await
-                .unwrap_or_default();
+        let text_instruction = match self.session_id {
+            Some(session_id) => {
+                let history = self
+                    .state
+                    .repos()
+                    .sessions
+                    .get_session_history(session_id, 20)
+                    .await
+                    .unwrap_or_default();
 
-            if !history.is_empty() {
-                super::build_pruned_instruction(&history, &self.instruction, 3)
-            } else {
-                self.instruction.clone()
+                if history.is_empty() {
+                    self.instruction.clone()
+                } else {
+                    super::build_pruned_instruction(&history, &self.instruction, 3)
+                }
             }
-        } else {
-            self.instruction.clone()
+            None => self.instruction.clone(),
         };
 
         Ok(vec![Message::user(&text_instruction)])
@@ -171,121 +165,128 @@ impl ExecutionStrategy for SystemNodeStrategy {
 
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
         match name {
-            "complete_system" => {
-                let summary = input["summary"].as_str().unwrap_or("").to_string();
-
-                let verify = &input["verify"];
-                match validate::validate_verify(&self.base_dir, verify) {
-                    Ok(mut success) => {
-                        // Compare config.json description against previous designer_handoff
-                        let description_changed = match file_reader::read_config(&self.base_dir) {
-                            Ok((_name, description)) => {
-                                match self.state.repos().workflows.get_step(self.step_id).await {
-                                    Ok(Some(step)) => step.designer_handoff != description,
-                                    _ => true,
-                                }
-                            }
-                            Err(_) => false,
-                        };
-                        success["description_changed"] = json!(description_changed);
-
-                        if let Ok(mut guard) = self.summary.lock() {
-                            *guard = Some(summary);
-                        }
-                        success
-                    }
-                    Err(error_response) => {
-                        // Don't capture summary — agent needs to fix and retry
-                        error_response
-                    }
-                }
-            }
-            "run_command" => {
-                let result = crate::server::tools::execution::dispatch_tool_cascade(
-                    name,
-                    input,
-                    self.container_handle.as_ref(),
-                    None, // no local execution context
-                    None, // no tool allow-list filter
-                    Some(&self.state),
-                    None, // no user_id for doc tools
-                )
-                .await;
-
-                // Post-execution write validation: check any system node JSON files
-                // that exist on disk. If a heredoc write produced truncated/invalid JSON,
-                // append errors to the tool response so the agent can fix immediately.
-                let validation_errors = validate_written_files(&self.base_dir);
-                if validation_errors.is_empty() {
-                    result
-                } else {
-                    // Append validation errors to the run_command output
-                    let mut patched = result.clone();
-                    let warnings = validation_errors.join("\n");
-                    if let Some(output) = patched.get_mut("output") {
-                        let existing = output.as_str().unwrap_or("");
-                        *output = json!(format!(
-                            "{}\n\n⚠ Write validation errors:\n{}",
-                            existing, warnings
-                        ));
-                    } else {
-                        patched["write_validation_errors"] = json!(validation_errors);
-                    }
-                    patched
-                }
-            }
+            "complete_system" => self.handle_complete_system(input).await,
+            "run_command" => self.handle_run_command(input).await,
             "think" => json!({ "status": "ok" }),
             _ => json!({ "error": format!("Unknown tool: {}", name) }),
         }
     }
 }
 
+// ── Tool handlers ────────────────────────────────────────────────────────
+
+impl SystemNodeStrategy {
+    async fn handle_complete_system(&self, input: &Value) -> Value {
+        let summary = input["summary"].as_str().unwrap_or("").to_string();
+        let verify = &input["verify"];
+
+        let mut success = match validate::validate_verify(&self.base_dir, verify) {
+            Ok(v) => v,
+            Err(error_response) => return error_response,
+        };
+
+        success["description_changed"] = json!(self.has_description_changed().await);
+
+        if let Ok(mut guard) = self.summary.lock() {
+            *guard = Some(summary);
+        }
+
+        success
+    }
+
+    async fn handle_run_command(&self, input: &Value) -> Value {
+        let mut result = crate::server::tools::execution::dispatch_tool_cascade(
+            "run_command",
+            input,
+            self.container_handle.as_ref(),
+            None,
+            None,
+            Some(&self.state),
+            None,
+        )
+        .await;
+
+        let errors = validate_written_files(&self.base_dir);
+        if !errors.is_empty() {
+            result["write_validation_errors"] = json!(errors);
+        }
+
+        result
+    }
+
+    /// Compare config.json description against the stored designer_handoff.
+    async fn has_description_changed(&self) -> bool {
+        let description = match file_reader::read_config(&self.base_dir) {
+            Ok((_name, desc)) => desc,
+            Err(_) => return false,
+        };
+
+        match self.state.repos().workflows.get_step(self.step_id).await {
+            Ok(Some(step)) => step.designer_handoff != description,
+            _ => true,
+        }
+    }
+}
+
+// ── Write-time validation ────────────────────────────────────────────────
+
 /// Validate JSON files in the system node agent's repository after a write.
 ///
-/// Checks config.json, topology.json, and agents/*.json for structural validity.
-/// Returns a vec of human-readable error strings (empty if all valid).
-/// Only validates files that exist — missing files are not errors here
-/// (the agent may write them in a subsequent command).
-fn validate_written_files(base_dir: &std::path::Path) -> Vec<String> {
+/// Returns a vec of error strings (empty if all valid). Only validates
+/// files that exist — missing files are fine (written in a later command).
+fn validate_written_files(base_dir: &Path) -> Vec<String> {
     let mut errors = Vec::new();
 
-    // Validate config.json
-    let config_path = base_dir.join("config.json");
-    if config_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&config_path) {
-            if let Err(e) = validate::validate_config(&content) {
-                errors.push(format!("config.json: {e}"));
-            }
-        }
-    }
+    validate_file(
+        &mut errors,
+        base_dir,
+        "config.json",
+        validate::validate_config,
+    );
+    validate_file(
+        &mut errors,
+        base_dir,
+        "topology.json",
+        validate::validate_topology,
+    );
 
-    // Validate topology.json
-    let topology_path = base_dir.join("topology.json");
-    if topology_path.exists() {
-        if let Ok(content) = std::fs::read_to_string(&topology_path) {
-            if let Err(e) = validate::validate_topology(&content) {
-                errors.push(format!("topology.json: {e}"));
-            }
-        }
-    }
-
-    // Validate agents/*.json
     let agents_dir = base_dir.join("agents");
-    if agents_dir.exists() {
-        if let Ok(entries) = std::fs::read_dir(&agents_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().is_some_and(|ext| ext == "json") {
-                    let filename = path.file_name().unwrap_or_default().to_string_lossy();
-                    if let Ok(content) = std::fs::read_to_string(&path) {
-                        if let Err(e) = validate::validate_agent(&content) {
-                            errors.push(format!("agents/{filename}: {e}"));
-                        }
-                    }
-                }
+    for path in json_files_in(&agents_dir) {
+        let filename = path.file_name().unwrap_or_default().to_string_lossy();
+        if let Ok(content) = std::fs::read_to_string(&path) {
+            if let Err(e) = validate::validate_agent(&content) {
+                errors.push(format!("agents/{filename}: {e}"));
             }
         }
     }
 
     errors
+}
+
+/// Validate a single file if it exists, pushing any error to the vec.
+fn validate_file(
+    errors: &mut Vec<String>,
+    base_dir: &Path,
+    filename: &str,
+    validator: fn(&str) -> Result<(), String>,
+) {
+    let path = base_dir.join(filename);
+    let content = match std::fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return, // file doesn't exist yet — not an error
+    };
+    if let Err(e) = validator(&content) {
+        errors.push(format!("{filename}: {e}"));
+    }
+}
+
+/// List .json files in a directory (empty vec if dir doesn't exist).
+fn json_files_in(dir: &Path) -> Vec<PathBuf> {
+    std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|ext| ext == "json"))
+        .collect()
 }
