@@ -346,9 +346,9 @@ pub async fn run_system_node_task(
 
 /// Build container config for a system node agent.
 ///
-/// Uses `workspace_subpath_override` to mount the pinned step directory
-/// (`workflows/{wf_id}/pinned/{step_id}`) instead of a run directory.
-/// Pinned paths survive run garbage collection by design.
+/// Uses `workspace_subpath_override` to mount the system node directory
+/// (`workflows/{wf_id}/system_node/{step_id}`) instead of a run directory.
+/// This path survives run garbage collection by design.
 ///
 /// Returns `None` if the workflow is missing.
 async fn build_container_config(
@@ -376,7 +376,7 @@ async fn build_container_config(
         run_id: None, // not used — workspace_subpath_override provides the path
         overlay_enabled: false,
         workspace_subpath_override: Some(format!(
-            "{}/{}/pinned/{}",
+            "{}/{}/system_node/{}",
             crate::constants::WORKSPACE_PREFIX,
             workflow_id,
             step_id,

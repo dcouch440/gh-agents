@@ -91,6 +91,17 @@ impl WorkspaceManager {
             .join(run_id.to_string())
     }
 
+    /// Path for a system node agent's config repository:
+    /// `{mount}/workflows/{wf_id}/system_node/{step_id}`.
+    ///
+    /// Lives outside `runs/` so it survives run cleanup. Persists across
+    /// dispatches — the agent sees its previous config on re-runs.
+    pub fn system_node_path(&self, workflow_id: Uuid, step_id: Uuid) -> PathBuf {
+        self.workflow_path(workflow_id)
+            .join("system_node")
+            .join(step_id.to_string())
+    }
+
     // ── CRUD ────────────────────────────────────────────────────────────
 
     /// Create the run workspace directory (and parents). Returns the path.
