@@ -95,8 +95,17 @@ pub(crate) async fn create_optional_container(
         None
     };
 
-    // Resolve workspace volume if JuiceFS is available
-    let workspace_volume = if let (Some(wf_id), Some(run_id), Some(mgr)) =
+    // Resolve workspace volume if JuiceFS is available.
+    // If workspace_subpath_override is set, use it directly (e.g., for pinned step paths).
+    // Otherwise, compute the default run path from workflow_id + run_id.
+    let workspace_volume = if let Some(ref subpath) = cc.workspace_subpath_override {
+        // Custom subpath (e.g., system node agent's pinned directory)
+        info!(subpath = %subpath, "Using workspace subpath override");
+        Some(crate::execution::container::WorkspaceVolume {
+            volume_name: crate::constants::WORKSPACE_VOLUME_NAME.to_string(),
+            subpath: subpath.clone(),
+        })
+    } else if let (Some(wf_id), Some(run_id), Some(mgr)) =
         (cc.workflow_id, cc.run_id, workspace_manager)
     {
         match mgr.create_run_workspace(wf_id, run_id) {

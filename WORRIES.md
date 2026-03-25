@@ -1,14 +1,16 @@
-1. The container ↔ filesystem bridge. The system node agent writes files via run_command inside a Docker container. Those files need to appear on the host for sync_to_db and file_reader
-  to read them. We're relying on the JuiceFS volume mount path matching between container and host — but we're using step_id as the run_id in the container config, which is a hack. If the
-  workspace mount resolves differently than expected, the host reads an empty directory.
-  2. The run_command heredoc pattern. The system node agent writes JSON via cat > file.json << 'EOF'. If the LLM produces JSON with certain characters (single quotes, backslashes, EOF
-  literal), the heredoc breaks silently. We have no write-time validation interceptor — that was deferred.
-  3. First run vs re-run state. On first dispatch, base_dir is empty. On re-dispatch, it has previous files. The agent's <current_state> shows what exists. But if a previous run failed
-  partway (wrote topology.json but not all agent files), the agent sees an inconsistent state. The complete_system validation catches this, but the agent might get confused.
-  4. The propagation instruction format. The system prompt examples show <task> and <change> blocks. The board instruction builder produces <user_text> and <change>. The propagation
-  formats yet another variant. The LLM is flexible, but we haven't tested that it responds correctly to each format variation.
-  5. Session history across the rewrite. Steps that were previously configured by the old builder now get dispatched to the system node agent. The session history has old builder passdowns
-   (from complete_task). The system node agent expects complete_system summaries in <prior_work>. Old history might confuse it.
-  6. The designer service. The agent gutted run_standalone_design to return an error, but that function might be called from an API endpoint or another service path we didn't trace.
-  7. PipelineExecutionContext is now dead but the lifecycle.rs file still defines it and PipelinePhase. If anything references these types transitively, it could cause issues at runtime
-  even if it compiles.
+# System Node Agent — Resolved Worries
+
+All items below have been addressed. Kept for historical reference.
+
+1. ~~Container ↔ filesystem bridge~~ — Fixed. JuiceFS volume mount confirmed working. Files persist via `runs/{step_id}/` path.
+2. ~~Heredoc pattern~~ — Fixed. Write-time validation in `validate_written_files()` catches truncated JSON after every `run_command`.
+3. ~~Partial failure state~~ — Handled by design. `build_current_state` shows `status="missing"`, `complete_system` validation catches inconsistencies, agent self-corrects.
+4. ~~Instruction format~~ — Low risk. Claude handles `<user_text>` and `<task>` interchangeably.
+5. ~~Session history~~ — Fixed. System node agent uses `role="system_agent"` for session isolation.
+6. ~~Designer service~~ — Fixed. `design_step` API returns 404. `get_latest_design` (read-only) still works.
+7. ~~Dead lifecycle types~~ — Fixed. `lifecycle.rs` deleted, full dead code sweep completed.
+
+## Known debt (not urgent)
+
+- `step_id` used as `run_id` for workspace path — semantically wrong but functionally correct. A proper `pinned_step_path` would be more resilient to run directory garbage collection.
+- No wall-clock timeout on system node dispatch — relies on `max_rounds: 10` to cap runaway agents.

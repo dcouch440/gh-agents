@@ -150,6 +150,7 @@ pub async fn run_workflow(
         workflow_id: Some(id),
         run_id: Some(execution_id),
         overlay_enabled: state.workspace().is_some(),
+        workspace_subpath_override: None,
     });
 
     let wg_client = if container_config.as_ref().is_some_and(|c| c.vpn_enabled) {
