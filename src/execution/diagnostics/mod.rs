@@ -101,8 +101,13 @@ impl DiagnosticsEngine {
         self.workspace.update(&after);
 
         // Compute severity
-        let severity =
-            CommandEnvelope::compute_severity(result.exit_code, &pre_warnings, &post_diagnostics);
+        let has_file_changes = !file_changes.is_empty();
+        let severity = CommandEnvelope::compute_severity(
+            result.exit_code,
+            &pre_warnings,
+            &post_diagnostics,
+            has_file_changes,
+        );
 
         // Assemble envelope
         let envelope = CommandEnvelope {
