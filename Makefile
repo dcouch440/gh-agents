@@ -138,7 +138,7 @@ compose:
 	docker compose up -d
 
 # Build and start the dockerized stack (binary compiles inside Docker)
-server: server-build server-up
+server: server-build server-up server-logs
 
 # Start the dockerized stack (postgres, minio, juicefs, nexor-server)
 server-up:
