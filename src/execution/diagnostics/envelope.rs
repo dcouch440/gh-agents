@@ -73,15 +73,20 @@ pub struct CommandEnvelope {
 
 impl CommandEnvelope {
     /// Compute the maximum severity from all diagnostics.
+    ///
+    /// When `exit_code != 0` but files were created or modified, downgrades
+    /// from Error to Warning — the command had an effect even if the shell
+    /// returned non-zero (common with heredoc + chained commands).
     pub fn compute_severity(
         exit_code: i32,
         pre_warnings: &[Diagnostic],
         post_diagnostics: &[Diagnostic],
+        has_file_changes: bool,
     ) -> Severity {
-        let mut max = if exit_code == 0 {
-            Severity::Ok
-        } else {
-            Severity::Error
+        let mut max = match (exit_code, has_file_changes) {
+            (0, _) => Severity::Ok,
+            (_, true) => Severity::Warning,
+            (_, false) => Severity::Error,
         };
         for d in pre_warnings.iter().chain(post_diagnostics.iter()) {
             if d.severity > max {
@@ -318,10 +323,27 @@ mod tests {
     #[test]
     fn compute_severity_uses_exit_code() {
         assert_eq!(
-            CommandEnvelope::compute_severity(1, &[], &[]),
+            CommandEnvelope::compute_severity(1, &[], &[], false),
             Severity::Error
         );
-        assert_eq!(CommandEnvelope::compute_severity(0, &[], &[]), Severity::Ok);
+        assert_eq!(
+            CommandEnvelope::compute_severity(0, &[], &[], false),
+            Severity::Ok
+        );
+    }
+
+    #[test]
+    fn compute_severity_downgrades_with_file_changes() {
+        // Non-zero exit but files changed → Warning, not Error
+        assert_eq!(
+            CommandEnvelope::compute_severity(1, &[], &[], true),
+            Severity::Warning
+        );
+        // Zero exit with file changes → still Ok
+        assert_eq!(
+            CommandEnvelope::compute_severity(0, &[], &[], true),
+            Severity::Ok
+        );
     }
 
     #[test]
@@ -333,7 +355,7 @@ mod tests {
             suggestion: None,
         };
         assert_eq!(
-            CommandEnvelope::compute_severity(0, &[diag], &[]),
+            CommandEnvelope::compute_severity(0, &[diag], &[], false),
             Severity::Warning
         );
     }
