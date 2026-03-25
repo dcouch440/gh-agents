@@ -43,16 +43,16 @@ use crate::server::state::AppState;
 
 /// Resolve the base_dir for a system node agent's file repository.
 ///
-/// Uses `create_run_workspace(workflow_id, step_id)` so the workspace volume
-/// path is deterministic per step (files persist across dispatches).
+/// Uses the pinned step path (`workflows/{wf_id}/pinned/{step_id}/`) which
+/// survives run garbage collection. Files persist across dispatches.
 ///
-/// With JuiceFS: `{mount}/{WORKSPACE_PREFIX}/{wf_id}/runs/{step_id}/`
+/// With JuiceFS: `{mount}/workflows/{wf_id}/pinned/{step_id}/`
 /// Without JuiceFS: `{tmp}/nexor_system_node/{step_id}/`
 pub fn resolve_base_dir(state: &AppState, workflow_id: Uuid, step_id: Uuid) -> PathBuf {
     if let Some(workspace) = state.workspace() {
-        if let Ok(path) = workspace.create_run_workspace(workflow_id, step_id) {
-            return path;
-        }
+        let path = workspace.pinned_step_path(workflow_id, step_id);
+        let _ = std::fs::create_dir_all(&path);
+        return path;
     }
 
     std::env::temp_dir()

@@ -10,6 +10,10 @@
 
 use uuid::Uuid;
 
+/// Wall-clock timeout for the system node agent. Prevents runaway LLM loops
+/// that exhaust max_rounds slowly (~10s per round x 10 rounds = 100s).
+const SYSTEM_NODE_TIMEOUT_SECS: u64 = 120;
+
 use crate::db::traits::CreateAgentExecutionInput;
 use crate::server::hub::dag::container::{
     create_optional_container, destroy_optional_container, ManagedContainer,
@@ -203,15 +207,26 @@ pub async fn run_system_node_task(
     );
     let sink = DispatchStreamSink::new(state.clone(), execution_id, step_id);
 
-    let result = engine
-        .execute(
+    let result = match tokio::time::timeout(
+        std::time::Duration::from_secs(SYSTEM_NODE_TIMEOUT_SECS),
+        engine.execute(
             &strategy,
             &instruction,
             &sink,
             &recorder,
             Some(&cancel_token),
-        )
-        .await;
+        ),
+    )
+    .await
+    {
+        Ok(inner) => inner,
+        Err(_) => Err(crate::server::hub::error::HubError::Internal(
+            anyhow::anyhow!(
+                "System node agent timed out after {}s",
+                SYSTEM_NODE_TIMEOUT_SECS
+            ),
+        )),
+    };
 
     match result {
         Ok(_exec_result) => {
@@ -331,11 +346,9 @@ pub async fn run_system_node_task(
 
 /// Build container config for a system node agent.
 ///
-/// Uses `step_id` as the `run_id` for workspace volume path alignment:
-/// `create_optional_container` resolves workspace path as
-/// `{WORKSPACE_PREFIX}/{wf_id}/runs/{run_id}/`. By setting `run_id = step_id`,
-/// the container mounts a deterministic path keyed by step, so files
-/// persist across dispatches.
+/// Uses `workspace_subpath_override` to mount the pinned step directory
+/// (`workflows/{wf_id}/pinned/{step_id}`) instead of a run directory.
+/// Pinned paths survive run garbage collection by design.
 ///
 /// Returns `None` if the workflow is missing.
 async fn build_container_config(
@@ -360,10 +373,14 @@ async fn build_container_config(
         cpu_limit: None,
         vpn_enabled: false,
         workflow_id: Some(workflow_id),
-        // Use step_id as run_id so the workspace volume path is deterministic
-        // per step (not per dispatch). Files persist across dispatches.
-        run_id: Some(step_id),
-        overlay_enabled: false, // no overlay for system node — direct writes to shared volume
+        run_id: None, // not used — workspace_subpath_override provides the path
+        overlay_enabled: false,
+        workspace_subpath_override: Some(format!(
+            "{}/{}/pinned/{}",
+            crate::constants::WORKSPACE_PREFIX,
+            workflow_id,
+            step_id,
+        )),
     })
 }
 

@@ -95,6 +95,10 @@ pub struct ContainerExecutionConfig {
     /// Enable OverlayFS isolation for workspace writes.
     /// When true: JuiceFS at /workspace-base (read-only), overlay at /workspace.
     pub overlay_enabled: bool,
+    /// Override the workspace volume subpath. When set, uses this instead of
+    /// the default `{PREFIX}/{wf_id}/runs/{run_id}` path.
+    /// Used by system node agents to mount the pinned step directory.
+    pub workspace_subpath_override: Option<String>,
 }
 
 /// Context passed into the DAG executor for one workflow run.

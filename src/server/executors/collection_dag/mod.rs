@@ -426,6 +426,7 @@ where
                         workflow_id: Some(workflow_id),
                         run_id: Some(collection_run_id),
                         overlay_enabled: self.state.workspace().is_some(),
+                        workspace_subpath_override: None,
                     })
                 } else {
                     tracing::warn!(
