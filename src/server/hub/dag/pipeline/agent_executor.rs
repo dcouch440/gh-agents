@@ -246,7 +246,8 @@ async fn execute_single_agent(
         format!(
             "{}\n\
              You are in a shared workspace. Files and installed packages from previous steps are available.\n\
-             Save files with run_command — do not put file content in your response.",
+             Save files with run_command — do not put file content in your response.\n\
+             When saving non-code output files (reports, data, text), use specific descriptive names — never generic names like output.txt or result.json. If transforming an upstream file, save to a new name that reflects your contribution.",
             designed.system_prompt
         )
     } else {
