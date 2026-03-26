@@ -19,6 +19,8 @@ use crate::db::traits::WorkflowRepo;
 use crate::db::TaskAgentRosterRow;
 use crate::server::services::pipeline::{self, AddStepInput, PipelineContext};
 use crate::server::services::ServiceError;
+use crate::server::state::AppState;
+use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
 
 use super::file_reader;
 
@@ -67,6 +69,7 @@ pub(crate) async fn sync_to_db(
     workflow_id: Uuid,
     repo: &dyn WorkflowRepo,
     user_id: Uuid,
+    state: &AppState,
 ) -> Result<SyncResult, ServiceError> {
     let mut result = SyncResult::default();
 
@@ -217,6 +220,19 @@ pub(crate) async fn sync_to_db(
         result.agents_removed.push(name.clone());
     }
 
+    // Broadcast roster change if any agent mutations occurred
+    if !result.agents_created.is_empty()
+        || !result.agents_updated.is_empty()
+        || !result.agents_removed.is_empty()
+    {
+        state.broadcast_workflow(WorkflowEvent {
+            run_id: None,
+            workflow_id,
+            user_id: None,
+            kind: WorkflowEventKind::RosterChanged { step_id },
+        });
+    }
+
     // Phase 4: Diff edges
     let step = repo
         .get_step(step_id)
@@ -288,6 +304,23 @@ pub(crate) async fn sync_to_db(
         .map_err(ServiceError::Internal)?;
 
     result.description_changed = previous_description != config_description;
+
+    // Broadcast step name + config updates so frontend sidebar refreshes
+    state.broadcast_workflow(WorkflowEvent {
+        run_id: None,
+        workflow_id,
+        user_id: None,
+        kind: WorkflowEventKind::StepNameUpdated {
+            step_id,
+            name: config_name.clone(),
+        },
+    });
+    state.broadcast_workflow(WorkflowEvent {
+        run_id: None,
+        workflow_id,
+        user_id: None,
+        kind: WorkflowEventKind::StepConfigUpdated { step_id },
+    });
 
     info!(
         step_id = %step_id,

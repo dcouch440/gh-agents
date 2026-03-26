@@ -245,6 +245,7 @@ pub async fn run_system_node_task(
                 workflow_id,
                 state.repos().workflows.as_ref(),
                 user_id.0,
+                &state,
             )
             .await;
 
