@@ -136,13 +136,21 @@ pub async fn build_snapshot(
     if upstream_step_ids.is_empty() {
         out.push_str("  (no connected sources)\n");
     } else {
+        // Load all parent workflow steps once, then look up by ID
+        let parent_steps = repo
+            .list_steps(ctx.parent_workflow_id)
+            .await
+            .unwrap_or_default();
+        let parent_step_map: HashMap<Uuid, &_> = parent_steps.iter().map(|s| (s.id, s)).collect();
+
         for upstream_id in upstream_step_ids {
-            let upstream = match repo.get_step(upstream_id).await {
-                Ok(Some(s)) => s,
-                _ => continue,
+            let upstream = match parent_step_map.get(&upstream_id) {
+                Some(s) => *s,
+                None => continue,
             };
             let name = upstream
                 .name
+                .clone()
                 .unwrap_or_else(|| format!("Step {}", upstream.id));
             out.push_str(&format!("  - {} ({})\n", name, upstream.execution_mode));
         }

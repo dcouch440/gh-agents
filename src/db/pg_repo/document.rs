@@ -106,6 +106,16 @@ impl DocumentRepo for PgRepo {
         Ok(row)
     }
 
+    async fn get_documents_by_ids(&self, doc_ids: &[Uuid]) -> Result<Vec<DocumentRow>> {
+        let rows: Vec<DocumentRow> = sqlx::query_as(
+            "SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at, workflow_id, target_length, is_static, source_protocol_step_id FROM documents WHERE id = ANY($1)",
+        )
+        .bind(doc_ids)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
     async fn get_document_by_ref_tag(&self, ref_tag: &str) -> Result<Option<DocumentRow>> {
         let row: Option<DocumentRow> = sqlx::query_as("SELECT id, user_id, session_id, title, content, summary, doc_type, ref_tag, tags, created_at, updated_at, workflow_id, target_length, is_static, source_protocol_step_id FROM documents WHERE ref_tag = $1")
             .bind(ref_tag)

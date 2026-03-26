@@ -1,6 +1,6 @@
 //! Resolution helpers for protocol associations, agent names, schemas, and tools.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use uuid::Uuid;
 
@@ -44,27 +44,38 @@ pub(crate) async fn resolve_protocol_associations(
     Ok((agent, output_schema, prompt_template))
 }
 
+/// Collect unique agent IDs from port rows.
+fn unique_agent_ids(ports: &[ProtocolPortRow]) -> Vec<Uuid> {
+    ports
+        .iter()
+        .map(|p| p.agent_id)
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect()
+}
+
 /// Resolve agent names from agent IDs found in the port rows.
+///
+/// Returns a validation error if any referenced agent is missing from the DB.
 pub(crate) async fn resolve_agent_names(
     agent_repo: &dyn AgentRepo,
     ports: &[ProtocolPortRow],
 ) -> Result<HashMap<Uuid, String>, ServiceError> {
-    let mut names = HashMap::new();
+    let agents = agent_repo
+        .get_agents_by_ids(&unique_agent_ids(ports))
+        .await?;
+    let names: HashMap<Uuid, String> = agents.into_iter().map(|a| (a.id, a.name)).collect();
+
+    // Validate all referenced agents were found (original contract)
     for port in ports {
-        if names.contains_key(&port.agent_id) {
-            continue;
+        if !names.contains_key(&port.agent_id) {
+            return Err(ServiceError::validation(format!(
+                "Agent {} not found for port {}",
+                port.agent_id, port.port_name
+            )));
         }
-        let agent = agent_repo
-            .get_persisted_agent(port.agent_id)
-            .await?
-            .ok_or_else(|| {
-                ServiceError::validation(format!(
-                    "Agent {} not found for port {}",
-                    port.agent_id, port.port_name
-                ))
-            })?;
-        names.insert(port.agent_id, agent.name);
     }
+
     Ok(names)
 }
 
@@ -75,18 +86,15 @@ pub(crate) async fn resolve_agent_schemas(
     schema_repo: &dyn OutputSchemaRepo,
     ports: &[ProtocolPortRow],
 ) -> Result<HashMap<Uuid, serde_json::Value>, ServiceError> {
+    let agents = agent_repo
+        .get_agents_by_ids(&unique_agent_ids(ports))
+        .await?;
+
     let mut schemas = HashMap::new();
-    for port in ports {
-        if schemas.contains_key(&port.agent_id) {
-            continue;
-        }
-        let agent = agent_repo.get_persisted_agent(port.agent_id).await?;
-        if let Some(agent) = agent {
-            if let Some(schema_id) = agent.output_schema_id {
-                let schema_row = schema_repo.get_output_schema(schema_id).await?;
-                if let Some(row) = schema_row {
-                    schemas.insert(port.agent_id, row.schema);
-                }
+    for agent in agents {
+        if let Some(schema_id) = agent.output_schema_id {
+            if let Some(row) = schema_repo.get_output_schema(schema_id).await? {
+                schemas.insert(agent.id, row.schema);
             }
         }
     }
@@ -98,14 +106,12 @@ pub(crate) async fn resolve_agent_tools(
     tool_repo: &dyn ToolRepo,
     ports: &[ProtocolPortRow],
 ) -> Result<HashMap<Uuid, Vec<String>>, ServiceError> {
-    let mut tools_map = HashMap::new();
-    for port in ports {
-        if tools_map.contains_key(&port.agent_id) {
-            continue;
-        }
-        let tools = tool_repo.get_agent_tools(port.agent_id).await?;
-        let tool_names: Vec<String> = tools.into_iter().map(|t| t.name).collect();
-        tools_map.insert(port.agent_id, tool_names);
+    let agent_ids = unique_agent_ids(ports);
+    let all_tools = tool_repo.get_tools_for_agents(&agent_ids).await?;
+
+    let mut tools_map: HashMap<Uuid, Vec<String>> = HashMap::new();
+    for (agent_id, tool) in all_tools {
+        tools_map.entry(agent_id).or_default().push(tool.name);
     }
     Ok(tools_map)
 }
