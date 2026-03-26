@@ -180,7 +180,8 @@ impl SystemNodeStrategy {
         let summary = input["summary"].as_str().unwrap_or("").to_string();
         let verify = &input["verify"];
 
-        let mut success = match validate::validate_verify(&self.base_dir, verify) {
+        let user_text_words = validate::extract_user_text_words(&self.instruction);
+        let mut success = match validate::validate_verify(&self.base_dir, verify, user_text_words) {
             Ok(v) => v,
             Err(error_response) => return error_response,
         };

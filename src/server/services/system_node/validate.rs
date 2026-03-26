@@ -5,8 +5,18 @@
 
 use std::collections::HashSet;
 use std::path::Path;
+use std::sync::LazyLock;
 
+use regex::Regex;
 use serde_json::Value;
+
+/// Matches save/write verb followed by a filename (case-insensitive).
+static PRESCRIBED_FILENAME_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"(?i)\b(save|write|output|export|store)\s+(it\s+)?(as|to|in|into)\s+[\w.-]+\.(md|json|txt|csv|html|py|js|yaml|yml|xml)\b",
+    )
+    .unwrap()
+});
 
 #[cfg(test)]
 #[path = "validate_tests.rs"]
@@ -90,6 +100,98 @@ fn require_non_empty_string(
         Some(_) => Err(format!("\"{field}\" is empty")),
         None => Err(format!("missing required field \"{field}\"")),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Quality validators
+// ---------------------------------------------------------------------------
+
+/// Check assignment/expected_output for prescribed filenames.
+///
+/// Returns `(field, message)` pairs for each violation.
+pub(crate) fn check_prescribed_filenames(content: &str) -> Vec<(String, String)> {
+    let mut issues = Vec::new();
+    let val: Value = match serde_json::from_str(content) {
+        Ok(v) => v,
+        Err(_) => return issues,
+    };
+    let obj = match val.as_object() {
+        Some(o) => o,
+        None => return issues,
+    };
+
+    for field in ["assignment", "expected_output"] {
+        if let Some(text) = obj.get(field).and_then(|v| v.as_str()) {
+            for m in PRESCRIBED_FILENAME_RE.find_iter(text) {
+                issues.push((
+                    field.into(),
+                    format!(
+                        "{field} prescribes filename '{}' — let the agent decide what to produce and where",
+                        m.as_str()
+                    ),
+                ));
+            }
+        }
+    }
+    issues
+}
+
+/// Check system_prompt word count against minimum threshold.
+pub(crate) fn check_prompt_length(content: &str, min_words: usize) -> Option<String> {
+    let val: Value = serde_json::from_str(content).ok()?;
+    let sp = val.get("system_prompt")?.as_str()?;
+    let word_count = sp.split_whitespace().count();
+    if word_count < min_words {
+        Some(format!(
+            "system_prompt is only {word_count} words (minimum {min_words}) \
+             — add behavioral instructions (methodology, criteria, boundaries)"
+        ))
+    } else {
+        None
+    }
+}
+
+/// Check assignment word count against user input word count.
+///
+/// Assignment should expand on user intent, not compress it.
+pub(crate) fn check_assignment_expansion(
+    content: &str,
+    user_text_words: usize,
+) -> Option<String> {
+    let val: Value = serde_json::from_str(content).ok()?;
+    let assignment = val.get("assignment")?.as_str()?;
+    let assignment_words = assignment.split_whitespace().count();
+    if assignment_words < user_text_words {
+        Some(format!(
+            "assignment is {assignment_words} words but user input was \
+             {user_text_words} words — assignment should expand on user \
+             intent, not compress it"
+        ))
+    } else {
+        None
+    }
+}
+
+/// Extract word count from `<user_text>` block in the instruction.
+///
+/// Returns `None` if no `<user_text>` block is found (e.g., update/propagation).
+pub(crate) fn extract_user_text_words(instruction: &str) -> Option<usize> {
+    let start = instruction.find("<user_text>")? + "<user_text>".len();
+    let end = instruction.find("</user_text>")?;
+    if start >= end {
+        return None;
+    }
+    Some(instruction[start..end].split_whitespace().count())
+}
+
+/// Count the number of agents in the topology file.
+fn count_topology_agents(base_dir: &Path) -> usize {
+    let topology_path = base_dir.join("topology.json");
+    std::fs::read_to_string(&topology_path)
+        .ok()
+        .and_then(|c| serde_json::from_str::<Value>(&c).ok())
+        .and_then(|v| v.get("agents")?.as_object().map(|o| o.len()))
+        .unwrap_or(0)
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +287,14 @@ pub(crate) fn cross_reference(base_dir: &Path) -> Vec<CrossRefError> {
 ///
 /// Returns `Ok(success_json)` if all claims hold, or `Err(error_json)` with
 /// structured errors the agent can act on.
-pub(crate) fn validate_verify(base_dir: &Path, verify: &Value) -> Result<Value, Value> {
+///
+/// `user_text_words` is the word count from the `<user_text>` instruction block,
+/// used by `assignments_expanded`. Pass `None` for update/propagation scenarios.
+pub(crate) fn validate_verify(
+    base_dir: &Path,
+    verify: &Value,
+    user_text_words: Option<usize>,
+) -> Result<Value, Value> {
     let mut errors: Vec<Value> = Vec::new();
 
     // topology_complete
@@ -254,6 +363,91 @@ pub(crate) fn validate_verify(base_dir: &Path, verify: &Value) -> Result<Value, 
                     "file": "config.json",
                     "error": "file does not exist",
                 }));
+            }
+        }
+    }
+
+    // no_filenames_prescribed
+    if verify["no_filenames_prescribed"].as_bool() == Some(true) {
+        let agents_dir = base_dir.join("agents");
+        if let Ok(entries) = std::fs::read_dir(&agents_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                    let name = path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        for (field, msg) in check_prescribed_filenames(&content) {
+                            errors.push(serde_json::json!({
+                                "verify": "no_filenames_prescribed",
+                                "file": format!("agents/{name}"),
+                                "field": field,
+                                "error": msg,
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // prompts_not_trivial
+    if verify["prompts_not_trivial"].as_bool() == Some(true) {
+        let agent_count = count_topology_agents(base_dir);
+        let min_words = if agent_count > 1 { 20 } else { 10 };
+        let agents_dir = base_dir.join("agents");
+        if let Ok(entries) = std::fs::read_dir(&agents_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                    let name = path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_string();
+                    if let Ok(content) = std::fs::read_to_string(&path) {
+                        if let Some(msg) = check_prompt_length(&content, min_words) {
+                            errors.push(serde_json::json!({
+                                "verify": "prompts_not_trivial",
+                                "file": format!("agents/{name}"),
+                                "error": msg,
+                            }));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // assignments_expanded
+    if verify["assignments_expanded"].as_bool() == Some(true) {
+        if let Some(user_words) = user_text_words {
+            let agents_dir = base_dir.join("agents");
+            if let Ok(entries) = std::fs::read_dir(&agents_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                        let name = path
+                            .file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string();
+                        if let Ok(content) = std::fs::read_to_string(&path) {
+                            if let Some(msg) =
+                                check_assignment_expansion(&content, user_words)
+                            {
+                                errors.push(serde_json::json!({
+                                    "verify": "assignments_expanded",
+                                    "file": format!("agents/{name}"),
+                                    "error": msg,
+                                }));
+                            }
+                        }
+                    }
+                }
             }
         }
     }
