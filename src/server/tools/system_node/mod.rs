@@ -41,9 +41,21 @@ pub fn complete_system_tool() -> Tool {
                         "config_accurate": {
                             "type": "boolean",
                             "description": "config.json name and description accurately reflect this system."
+                        },
+                        "no_filenames_prescribed": {
+                            "type": "boolean",
+                            "description": "No agent assignments or expected_outputs prescribe specific filenames — agents decide what to produce."
+                        },
+                        "prompts_not_trivial": {
+                            "type": "boolean",
+                            "description": "Every system_prompt has substantive content, not just a role label."
+                        },
+                        "assignments_expanded": {
+                            "type": "boolean",
+                            "description": "Every assignment expands beyond the user's input — not shorter than what the user wrote."
                         }
                     },
-                    "required": ["topology_complete", "agents_complete", "config_accurate"]
+                    "required": ["topology_complete", "agents_complete", "config_accurate", "no_filenames_prescribed", "prompts_not_trivial", "assignments_expanded"]
                 }
             },
             "required": ["summary", "verify"]
