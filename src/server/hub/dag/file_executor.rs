@@ -61,7 +61,7 @@ pub(crate) async fn execute_from_files(
     );
 
     // 2. Read agent configs from filesystem
-    let designed_prompts = file_reader::read_agent_configs(base_dir)
+    let mut designed_prompts = file_reader::read_agent_configs(base_dir)
         .map_err(|e| HubError::Internal(anyhow!("Failed to read agent configs: {e}")))?;
 
     if designed_prompts.is_empty() {
@@ -69,6 +69,29 @@ pub(crate) async fn execute_from_files(
             "No agent configs found in {}",
             base_dir.display()
         )));
+    }
+
+    // 2b. Patch in real roster entry IDs from DB (file reader sets Uuid::nil).
+    // The roster was created by sync_to_db during dispatch. Without real IDs,
+    // the frontend can't associate agent progress events with the right row.
+    if let Ok(Some(brief)) = dag.state.repos().workflows.get_mission_brief(step.id).await {
+        if let Ok(roster) = dag
+            .state
+            .repos()
+            .workflows
+            .list_agent_roster(brief.id)
+            .await
+        {
+            let normalize = crate::server::services::system_node::normalize_agent_name;
+            for prompt in &mut designed_prompts {
+                if let Some(entry) = roster
+                    .iter()
+                    .find(|r| normalize(&r.name) == normalize(&prompt.agent_name))
+                {
+                    prompt.agent_roster_entry_id = entry.id;
+                }
+            }
+        }
     }
 
     // 3. Read config.json description for traceability recording
