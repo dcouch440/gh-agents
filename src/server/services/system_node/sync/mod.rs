@@ -25,7 +25,6 @@ use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
 use super::file_reader;
 
 #[cfg(test)]
-#[path = "sync_tests.rs"]
 mod tests;
 
 // ---------------------------------------------------------------------------
@@ -116,19 +115,25 @@ pub(crate) async fn sync_to_db(
 
     let agent_diff = diff_agents(&desired_agents, &current_roster);
 
+    // Build lookup maps for O(1) access in mutation loops
+    let desired_by_name: HashMap<String, &DesiredAgent> = desired_agents
+        .iter()
+        .map(|a| (normalize_agent_name(&a.name), a))
+        .collect();
+    let current_by_id: HashMap<Uuid, &TaskAgentRosterRow> = current_roster
+        .iter()
+        .map(|a| (a.id, a))
+        .collect();
+
     // Apply agent mutations
-    let mut created_count: i32 = 0;
     let max_order = current_roster
         .iter()
         .map(|a| a.execution_order)
         .max()
         .unwrap_or(-1);
 
-    for name in &agent_diff.to_create {
-        let agent = desired_agents
-            .iter()
-            .find(|a| normalize_agent_name(&a.name) == normalize_agent_name(name))
-            .unwrap();
+    for (created_count, name) in (0i32..).zip(agent_diff.to_create.iter()) {
+        let agent = desired_by_name[&normalize_agent_name(name)];
 
         let next_order = max_order + 1 + created_count;
 
@@ -163,17 +168,12 @@ pub(crate) async fn sync_to_db(
             .await
             .map_err(ServiceError::Internal)?;
 
-        created_count += 1;
         result.agents_created.push(agent.name.clone());
     }
 
     for (agent_id, name) in &agent_diff.to_update {
-        let agent = desired_agents
-            .iter()
-            .find(|a| normalize_agent_name(&a.name) == normalize_agent_name(name))
-            .unwrap();
-
-        let current = current_roster.iter().find(|r| r.id == *agent_id).unwrap();
+        let agent = desired_by_name[&normalize_agent_name(name)];
+        let current = current_by_id[agent_id];
         let new_role = if current.role_description != agent.role_description {
             Some(agent.role_description.clone())
         } else {
