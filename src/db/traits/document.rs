@@ -55,6 +55,9 @@ pub trait DocumentRepo: Send + Sync {
     /// Get a document by ID.
     async fn get_document(&self, doc_id: Uuid) -> Result<Option<DocumentRow>>;
 
+    /// Get multiple documents by IDs in a single query.
+    async fn get_documents_by_ids(&self, doc_ids: &[Uuid]) -> Result<Vec<DocumentRow>>;
+
     /// Get a document by ref_tag.
     async fn get_document_by_ref_tag(&self, ref_tag: &str) -> Result<Option<DocumentRow>>;
 

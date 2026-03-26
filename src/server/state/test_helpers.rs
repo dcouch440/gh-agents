@@ -19,9 +19,14 @@ use super::Repos;
 /// Each mock is created with `new()` - tests can customize expectations
 /// on individual repos after calling this.
 pub fn default_mock_repos() -> Repos {
+    let mut doc_repo = MockDocumentRepo::new();
+    doc_repo
+        .expect_get_documents_by_ids()
+        .returning(|_| Ok(vec![]));
+
     Repos::new(
         Arc::new(MockUserRepo::new()),
-        Arc::new(MockDocumentRepo::new()),
+        Arc::new(doc_repo),
         Arc::new(MockOutputSchemaRepo::new()),
         Arc::new(MockPromptTemplateRepo::new()),
         Arc::new(MockWorkflowRepo::new()),

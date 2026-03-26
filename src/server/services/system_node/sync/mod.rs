@@ -120,10 +120,8 @@ pub(crate) async fn sync_to_db(
         .iter()
         .map(|a| (normalize_agent_name(&a.name), a))
         .collect();
-    let current_by_id: HashMap<Uuid, &TaskAgentRosterRow> = current_roster
-        .iter()
-        .map(|a| (a.id, a))
-        .collect();
+    let current_by_id: HashMap<Uuid, &TaskAgentRosterRow> =
+        current_roster.iter().map(|a| (a.id, a)).collect();
 
     // Apply agent mutations
     let max_order = current_roster

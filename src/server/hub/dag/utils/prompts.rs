@@ -154,12 +154,11 @@ pub(crate) async fn compose_prompt(
     if let Some(wf_repo) = repos.workflow_repo {
         if let Ok(step_docs) = wf_repo.list_step_documents(step.id).await {
             if let Some(d_repo) = repos.doc_repo {
-                let mut step_doc_contents = Vec::new();
-                for sd in &step_docs {
-                    if let Ok(Some(doc)) = d_repo.get_document(sd.document_id).await {
-                        step_doc_contents.push(doc);
-                    }
-                }
+                let doc_ids: Vec<uuid::Uuid> = step_docs.iter().map(|sd| sd.document_id).collect();
+                let step_doc_contents = d_repo
+                    .get_documents_by_ids(&doc_ids)
+                    .await
+                    .unwrap_or_default();
                 if !step_doc_contents.is_empty() && !context_opened {
                     full_prompt.push_str("\n\n<context>");
                     context_opened = true;
