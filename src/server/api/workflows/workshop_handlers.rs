@@ -165,18 +165,22 @@ pub async fn execute_workshop_step(
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    // Check step readiness
+    // Check step readiness — use pre-built incoming edge index
+    let incoming = port_meta
+        .incoming_edges
+        .get(&path.step_id)
+        .map(|v| v.as_slice())
+        .unwrap_or(&[]);
     match check_step_readiness(
         path.step_id,
-        &edges,
+        incoming,
         &dag_state.completed,
         &dag_state.completed_envelopes,
     ) {
         StepReadiness::Ready => {}
         StepReadiness::Waiting => {
-            let parents: Vec<Uuid> = edges
+            let parents: Vec<Uuid> = incoming
                 .iter()
-                .filter(|e| e.to_step_id == path.step_id)
                 .filter(|e| !dag_state.completed.contains_key(&e.from_step_id))
                 .map(|e| e.from_step_id)
                 .collect();
