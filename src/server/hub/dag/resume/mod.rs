@@ -27,8 +27,8 @@ use crate::types::{ExecutionMetadata, ExecutionStatus, StepExecutionEnvelope};
 
 use super::dag_state::{prefetch_port_metadata, resolve_output_key, DagExecutionState};
 use super::{
-    broadcast_workflow_event, run_dag_loop, DagContext, StepOutput, WorkflowExecutionContext,
-    WorkflowExecutionResult,
+    broadcast_workflow_event, run_dag_loop, topological_sort_levels, DagContext, StepOutput,
+    WorkflowExecutionContext, WorkflowExecutionResult,
 };
 
 /// Pre-populated state for resuming a paused workflow.
@@ -76,6 +76,8 @@ pub async fn resume_workflow_via_engine(
     // Pre-fetch port metadata
     let port_meta = prefetch_port_metadata(state, steps, edges).await;
 
+    let levels = topological_sort_levels(steps, edges).map_err(|_| HubError::DagCycle)?;
+
     let dag = DagContext {
         engine,
         state,
@@ -85,7 +87,7 @@ pub async fn resume_workflow_via_engine(
         port_meta: &port_meta,
         cancel,
     };
-    run_dag_loop(&dag, &mut dag_state).await?;
+    run_dag_loop(&dag, &mut dag_state, &levels).await?;
 
     let final_outputs: HashMap<String, StepOutput> = dag_state
         .completed

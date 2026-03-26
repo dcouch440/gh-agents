@@ -24,7 +24,6 @@ use super::pipeline::{build_upstream_step_output, AgentExecutionInput};
 use super::{broadcast_workflow_event, step_display_name, DagContext};
 
 #[cfg(test)]
-#[path = "file_executor_tests.rs"]
 mod tests;
 
 /// Execute agents configured by files on disk.
