@@ -134,40 +134,52 @@ fn classify_command(cmd: &str) -> CommandType {
 /// Split a command string on `&&`, `;`, and `|` (outside quotes) into segments.
 fn split_chain_segments(cmd: &str) -> Vec<&str> {
     let mut segments = Vec::new();
-    let mut start = 0;
-    let chars: Vec<char> = cmd.chars().collect();
+    let mut start_byte = 0;
+    let chars: Vec<(usize, char)> = cmd.char_indices().collect();
     let len = chars.len();
     let mut in_single = false;
     let mut in_double = false;
     let mut i = 0;
 
     while i < len {
-        match chars[i] {
+        let (byte_pos, ch) = chars[i];
+        match ch {
             '\\' if !in_single && i + 1 < len => {
-                i += 2; // skip escaped char
+                i += 2;
                 continue;
             }
             '\'' if !in_double => in_single = !in_single,
             '"' if !in_single => in_double = !in_double,
-            '&' if !in_single && !in_double && i + 1 < len && chars[i + 1] == '&' => {
-                segments.push(&cmd[start..i]);
-                start = i + 2;
+            '&' if !in_single && !in_double && i + 1 < len && chars[i + 1].1 == '&' => {
+                segments.push(&cmd[start_byte..byte_pos]);
+                start_byte = if i + 2 < len {
+                    chars[i + 2].0
+                } else {
+                    cmd.len()
+                };
                 i += 2;
                 continue;
             }
             ';' if !in_single && !in_double => {
-                segments.push(&cmd[start..i]);
-                start = i + 1;
+                segments.push(&cmd[start_byte..byte_pos]);
+                start_byte = if i + 1 < len {
+                    chars[i + 1].0
+                } else {
+                    cmd.len()
+                };
             }
             '|' if !in_single && !in_double => {
-                // Skip || (OR operator) — treat as two-char separator
-                let skip = if i + 1 < len && chars[i + 1] == '|' {
+                let skip = if i + 1 < len && chars[i + 1].1 == '|' {
                     2
                 } else {
                     1
                 };
-                segments.push(&cmd[start..i]);
-                start = i + skip;
+                segments.push(&cmd[start_byte..byte_pos]);
+                start_byte = if i + skip < len {
+                    chars[i + skip].0
+                } else {
+                    cmd.len()
+                };
                 i += skip;
                 continue;
             }
@@ -175,7 +187,7 @@ fn split_chain_segments(cmd: &str) -> Vec<&str> {
         }
         i += 1;
     }
-    segments.push(&cmd[start..]);
+    segments.push(&cmd[start_byte..]);
     segments
 }
 
