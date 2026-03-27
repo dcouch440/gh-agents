@@ -214,8 +214,8 @@ pub static ASSISTANT: Lazy<ProtocolConfig> = Lazy::new(|| {
 /// Workforce runtime agent config.
 pub static WORKFORCE: Lazy<ProtocolConfig> = Lazy::new(|| {
     load_protocol_config(
-        include_str!("../../config/archetype/workforce/agent/config.yaml"),
-        "config/archetype/workforce/agent/config.yaml",
+        include_str!("../../config/archetype/workforce/runtime_agent/config.yaml"),
+        "config/archetype/workforce/runtime_agent/config.yaml",
     )
 });
 
@@ -275,8 +275,8 @@ pub mod roles {
 
     /// Workforce runtime agent prompt template.
     pub static WORKFORCE_AGENT: RoleDefinition = RoleDefinition {
-        system: include_str!("../../config/archetype/workforce/agent/system.md"),
-        prompt: include_str!("../../config/archetype/workforce/agent/prompt.md"),
+        system: include_str!("../../config/archetype/workforce/runtime_agent/system.md"),
+        prompt: include_str!("../../config/archetype/workforce/runtime_agent/prompt.md"),
         response: None,
     };
 
