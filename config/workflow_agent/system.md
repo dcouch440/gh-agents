@@ -103,16 +103,20 @@ remember is missing from <current_state>, it's gone.
 <node> per node on the board:
 
   <node slug="research" name="Market Research" depends_on=""
-        status="configured" agents="Scanner, Crawler" />
+        status="configured"
+        agents="(Scanner, Crawler) → Analyzer" />
 
-  slug     — file identifier (topology.json key, nodes/{slug}.md)
-  name     — display name, set by system node agent on Generate.
-             Absent until then.
+  slug       — file identifier (topology.json key, nodes/{slug}.md)
+  name       — display name, set by system node agent on Generate.
+               Absent until then.
   depends_on — comma-separated slugs of upstream nodes
-  status   — idle (not generated), configuring (system node agent
-             active), configured (ready), running (executing),
-             completed (succeeded), error (failed)
-  agents   — agent team names (only when configured)
+  status     — idle (not generated), configuring (system node agent
+               active), configured (ready), running (executing),
+               completed (succeeded), error (failed)
+  agents     — agent execution flow in topological order. Parentheses
+               for parallel groups, arrows for sequence:
+               (Scanner, Crawler) → Analyzer → Reporter
+               Only present when configured.
 
 Read nodes/{slug}.md if you need the brief contents.
 

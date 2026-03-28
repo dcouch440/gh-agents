@@ -238,7 +238,7 @@ The agent's context window compresses over long conversations — file contents 
 ```xml
 <current_state>
   <topology>
-    <node slug="research" name="Market Research" depends_on="" status="configured" agents="Scanner, Crawler" />
+    <node slug="research" name="Market Research" depends_on="" status="configured" agents="(Scanner, Crawler) → Analyzer" />
     <node slug="fact_checker" depends_on="research" status="configuring" />
     <node slug="unnamed_01" depends_on="fact_checker" status="idle" />
   </topology>
@@ -268,7 +268,7 @@ One self-closing tag per node. The agent reads `nodes/{slug}.md` if it needs the
 | `name` | System node agent's `config.json` | Display name — used in conversation. Absent until system node agent runs. |
 | `depends_on` | `topology.json` | Which nodes feed into this one |
 | `status` | DB step status | Current activity state (see table above) |
-| `agents` | System node agent's roster | Comma-separated agent names (only present when configured) |
+| `agents` | System node agent's roster | Agent execution flow in topological order. Parentheses for parallel groups, arrows for sequence: `(Scanner, Crawler) → Analyzer → Reporter`. Only present when configured. |
 
 Nodes are self-closing tags with attributes only — no child elements. The agent reads `nodes/{slug}.md` via shell if it needs the brief contents.
 
