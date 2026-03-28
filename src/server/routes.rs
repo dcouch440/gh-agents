@@ -193,6 +193,10 @@ fn workflow_routes() -> Router<AppState> {
                 .delete(api::remove_step_document),
         )
         .route(
+            routes::WORKFLOW_AGENT_SESSION,
+            get(api::get_or_create_workflow_agent_session),
+        )
+        .route(
             routes::WORKFLOW_STEP_CHAT_SESSION,
             get(api::get_step_session).post(api::get_or_create_step_session),
         )

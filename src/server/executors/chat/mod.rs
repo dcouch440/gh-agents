@@ -82,6 +82,42 @@ async fn handle_message(
     let message_id = msg.id;
     let cancel_token = state.register_cancellation(message_id);
 
+    // Check if this is a workflow agent session — route to run_workflow_agent_chat
+    if let Some(session_id) = msg.session_id {
+        if let Ok(Some(session)) = state.repos().sessions.get_session(session_id).await {
+            if let Some(ref dc) = session.draft_config {
+                if dc.get("role").and_then(|v| v.as_str()) == Some("workflow_agent") {
+                    if let Some(wf_id_str) = dc.get("workflow_id").and_then(|v| v.as_str()) {
+                        if let Ok(workflow_id) = uuid::Uuid::parse_str(wf_id_str) {
+                            match crate::server::hub::run_workflow_agent_chat(
+                                state,
+                                crate::server::hub::ChatRequest {
+                                    provider: provider.clone(),
+                                    message_id,
+                                    content: &msg.content,
+                                    user_id: msg.user_id,
+                                },
+                                session_id,
+                                workflow_id,
+                                Some(&cancel_token),
+                            )
+                            .await
+                            {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    handle_chat_error(state, message_id, e);
+                                }
+                            }
+                            state.remove_cancellation(message_id);
+                            crate::server::hub::schedule_stream_cleanup(state, message_id);
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Check if this is a step-scoped session — route to run_step_chat
     if let Some(session_id) = msg.session_id {
         if let Ok(Some(session)) = state.repos().sessions.get_session(session_id).await {
