@@ -236,8 +236,8 @@ Same pattern as the system node agent. The backend reads the repo and builds a c
 The agent's context window compresses over long conversations — file contents from early turns get lost. The agent should not trust its memory of file contents. `<current_state>` provides the summary; the agent must read any file before modifying it.
 
 ```xml
-<current_state description="rebuilt every turn from the live board. Always trust this over your conversation history. Read any file before modifying it — writes to unread files are rejected.">
-  <topology description="slugs are file identifiers (topology.json keys, nodes/{slug}.md filenames). Names are display names set by the system node agent on Generate — absent until then. Statuses: idle (not yet generated), configuring (system node agent active — edits won't take effect until next Generate), configured (agent team ready), running (executing), completed (last run succeeded), error (failed).">
+<current_state>
+  <topology>
     <node slug="research" name="Market Research" depends_on="" status="configured" agents="Scanner, Crawler">
       Research competitor pricing data from public sources.
       <last_run>Found 15 competitor profiles across 4 markets. Saved to competitor_data.json.</last_run>
@@ -251,6 +251,8 @@ The agent's context window compresses over long conversations — file contents 
   </topology>
 </current_state>
 ```
+
+The system prompt explains what each attribute means. The XML is pure data — no inline descriptions.
 
 **Read-before-write enforcement:** The backend rejects writes to any file the agent hasn't read this turn. This prevents the agent from writing based on stale history — it always works from the current file contents.
 
@@ -284,7 +286,7 @@ The agent's context window compresses over long conversations — file contents 
 
 When the board is empty:
 ```xml
-<current_state description="rebuilt every turn from the live board. Always trust this over your conversation history. Read any file before modifying it — writes to unread files are rejected.">
+<current_state>
   <topology status="empty" />
 </current_state>
 ```
