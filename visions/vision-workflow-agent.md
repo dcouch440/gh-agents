@@ -65,7 +65,7 @@ Two rules handle conflicts:
 **1. Read-before-write with freshness check.** The write watcher checks `last_read_by_agent >= last_modified` before accepting a write. If the file was modified after the agent's last read (user edited it between the agent's read and write), the write is rejected:
 
 ```
-Error: nodes/research.json modified since your last read. Read it again.
+Error: nodes/research.md modified since your last read. Read it again.
 ```
 
 The agent re-reads (tracked by the read watcher), sees the user's version, and adapts. One extra tool call, not a wasted turn.
@@ -73,7 +73,7 @@ The agent re-reads (tracked by the read watcher), sees the user's version, and a
 **2. Debounce cancellation on agent write.** When the write watcher syncs a file to DB, the backend sends a websocket event with the node ID. The frontend cancels any pending debounce for that node and applies the agent's version. If the debounce already fired and is in flight, the backend rejects it — the user's write has an older timestamp than the agent's write.
 
 ```
-Agent writes nodes/research.json → write watcher validates → DB updates (last_modified = T1)
+Agent writes nodes/research.md → write watcher validates → DB updates (last_modified = T1)
     ↓
 Websocket fires → frontend cancels pending debounce for research
     ↓
@@ -317,9 +317,9 @@ Version Snapshot
 ├── board/                              # Workflow topology layer
 │   ├── topology.json                   # Nodes + edges
 │   └── nodes/                          # Per-node task descriptions
-│       ├── research.json
-│       ├── fact_checker.json
-│       └── report.json
+│       ├── research.md
+│       ├── fact_checker.md
+│       └── report.md
 │
 ├── node_repos/                         # System node agent layer (per node)
 │   ├── research/
@@ -545,7 +545,7 @@ During the cascade, the user can keep talking to the workflow agent and editing 
 
 - Container + JuiceFS workspace
 - `run_command` for file writes
-- Write-time JSON validation on topology + node files
+- Write-time validation (JSON schema for `topology.json`, existence check for `nodes/*.md`)
 - `ExecutionStrategy` trait
 - `compute_execution_levels` for auto-layout and execution ordering
 - System node agent cascade on node description changes
