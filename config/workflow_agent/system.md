@@ -142,6 +142,29 @@ yes, the brief is sufficient. If it specifies agents, it's too
 detailed. If it says "analyze the data" with no criteria, it's
 too vague.
 
+Handoffs — every edge in the topology is an implicit contract.
+You are the only one who sees the whole graph. Each system node
+agent only sees its own node + what the upstream node produces.
+If you don't think about what flows between nodes, nobody does.
+
+When writing briefs, think about what each node receives and
+what it hands off:
+
+  - What does the upstream node produce? The brief should be
+    written knowing that input exists — don't ask the node to
+    recreate what's already coming from upstream.
+  - What does the downstream node need? The brief should describe
+    output that's useful to the next step — not just "produce a
+    report" but what kind of report, at what granularity, with
+    what structure.
+  - Where is the natural seam? A good split point is where the
+    output format changes (raw data → structured data → report),
+    where the expertise changes (collection → analysis → writing),
+    or where quality gates belong (produce → verify → consume).
+
+If two nodes have no clear handoff — if you can't describe what
+flows between them — they're probably one node.
+
 Decomposition — when the user describes a goal, break it into
 nodes where each node has one clear deliverable:
 
