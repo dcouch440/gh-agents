@@ -111,6 +111,14 @@ pub trait AgentExecutionRepo: Send + Sync {
         step_id: Uuid,
     ) -> Result<Option<AgentExecutionRow>>;
 
+    /// Get the most recent dispatch execution for each step in a batch.
+    /// Returns at most one row per step_id (the newest by started_at).
+    /// Matches `execution_type IN ('dispatch', 'manager_dispatch')`.
+    async fn get_latest_dispatch_executions_for_steps(
+        &self,
+        step_ids: &[Uuid],
+    ) -> Result<Vec<AgentExecutionRow>>;
+
     /// List a unified execution timeline for a workflow run.
     /// Joins agent_executions + execution_messages + workflow_steps into a flat
     /// chronological stream. Cursor-based pagination: returns entries with

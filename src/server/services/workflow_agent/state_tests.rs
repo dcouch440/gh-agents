@@ -1,13 +1,16 @@
 #[cfg(test)]
 mod tests {
+    use chrono::Utc;
+    use tokio_util::sync::CancellationToken;
     use uuid::Uuid;
 
-    use crate::db::WorkflowStepRow;
+    use crate::db::{AgentExecutionRow, WorkflowStepRow};
     use crate::server::services::workflow_agent::state::{
-        derive_node_status, format_pipeline_summary,
+        format_pipeline_summary, resolve_node_status,
     };
+    use crate::server::state::task_registry::{TaskEntry, TaskStatus};
 
-    // ── derive_node_status ─────────────────────────────────────────────
+    // ── Helpers ────────────────────────────────────────────────────────
 
     fn base_step() -> WorkflowStepRow {
         WorkflowStepRow {
@@ -50,38 +53,144 @@ mod tests {
         }
     }
 
+    fn make_task(step_id: Uuid, status: TaskStatus) -> TaskEntry {
+        TaskEntry {
+            execution_id: Uuid::new_v4(),
+            step_id,
+            workflow_id: Uuid::new_v4(),
+            session_id: Uuid::new_v4(),
+            status,
+            instruction: String::new(),
+            cancel_token: CancellationToken::new(),
+            created_at: Utc::now(),
+            result: None,
+            trace: Vec::new(),
+        }
+    }
+
+    fn make_dispatch(step_id: Uuid, status: &str) -> AgentExecutionRow {
+        AgentExecutionRow {
+            workflow_step_id: Some(step_id),
+            execution_type: "dispatch".to_string(),
+            status: status.to_string(),
+            ..AgentExecutionRow::default()
+        }
+    }
+
+    // ── resolve_node_status: static statuses ───────────────────────────
+
     #[test]
     fn status_idle() {
         let step = base_step();
-        assert_eq!(derive_node_status(&step), "idle");
+        assert_eq!(resolve_node_status(&step, &[], None), "idle");
     }
 
     #[test]
     fn status_described() {
         let mut step = base_step();
         step.description = "Some description".to_string();
-        assert_eq!(derive_node_status(&step), "described");
+        assert_eq!(resolve_node_status(&step, &[], None), "described");
     }
 
     #[test]
     fn status_configured() {
         let mut step = base_step();
         step.child_workflow_id = Some(Uuid::new_v4());
-        assert_eq!(derive_node_status(&step), "configured");
+        assert_eq!(resolve_node_status(&step, &[], None), "configured");
     }
 
     #[test]
     fn status_completed_pinned() {
         let mut step = base_step();
         step.pinned = true;
-        assert_eq!(derive_node_status(&step), "completed");
+        assert_eq!(resolve_node_status(&step, &[], None), "completed");
     }
 
     #[test]
     fn status_completed_has_results() {
         let mut step = base_step();
         step.run_results_summary = "some results".to_string();
-        assert_eq!(derive_node_status(&step), "completed");
+        assert_eq!(resolve_node_status(&step, &[], None), "completed");
+    }
+
+    // ── resolve_node_status: active statuses ───────────────────────────
+
+    #[test]
+    fn status_configuring_active_task() {
+        let step = base_step();
+        let task = make_task(step.id, TaskStatus::Running);
+        assert_eq!(resolve_node_status(&step, &[task], None), "configuring");
+    }
+
+    #[test]
+    fn status_error_failed_dispatch() {
+        let step = base_step();
+        let dispatch = make_dispatch(step.id, "failed");
+        assert_eq!(
+            resolve_node_status(&step, &[], Some(&dispatch)),
+            "error"
+        );
+    }
+
+    // ── resolve_node_status: priority ordering ─────────────────────────
+
+    #[test]
+    fn configuring_beats_configured() {
+        let mut step = base_step();
+        step.child_workflow_id = Some(Uuid::new_v4());
+        let task = make_task(step.id, TaskStatus::Running);
+        // Active task overrides the configured status
+        assert_eq!(resolve_node_status(&step, &[task], None), "configuring");
+    }
+
+    #[test]
+    fn configuring_beats_error() {
+        let step = base_step();
+        let task = make_task(step.id, TaskStatus::Running);
+        let dispatch = make_dispatch(step.id, "failed");
+        // Active re-dispatch overrides previous failure
+        assert_eq!(
+            resolve_node_status(&step, &[task], Some(&dispatch)),
+            "configuring"
+        );
+    }
+
+    #[test]
+    fn error_beats_configured() {
+        let mut step = base_step();
+        step.child_workflow_id = Some(Uuid::new_v4());
+        let dispatch = make_dispatch(step.id, "failed");
+        assert_eq!(
+            resolve_node_status(&step, &[], Some(&dispatch)),
+            "error"
+        );
+    }
+
+    #[test]
+    fn completed_task_not_configuring() {
+        let step = base_step();
+        let task = make_task(step.id, TaskStatus::Completed);
+        // Completed task should NOT show as configuring
+        assert_eq!(resolve_node_status(&step, &[task], None), "idle");
+    }
+
+    #[test]
+    fn completed_dispatch_not_error() {
+        let mut step = base_step();
+        step.child_workflow_id = Some(Uuid::new_v4());
+        let dispatch = make_dispatch(step.id, "completed");
+        // Completed dispatch → configured (from child_workflow_id), not error
+        assert_eq!(
+            resolve_node_status(&step, &[], Some(&dispatch)),
+            "configured"
+        );
+    }
+
+    #[test]
+    fn cancelled_task_not_configuring() {
+        let step = base_step();
+        let task = make_task(step.id, TaskStatus::Cancelled);
+        assert_eq!(resolve_node_status(&step, &[task], None), "idle");
     }
 
     // ── format_pipeline_summary ────────────────────────────────────────
