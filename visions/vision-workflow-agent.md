@@ -44,7 +44,7 @@ The gap is wiring canvas element changes through the websocket to persist in `ca
 The agent has full shell access — it can read with `cat`, write with heredocs, use `sed`, `python`, anything. We can't parse shell commands to figure out what got read or written. Instead, two filesystem watchers run in the container alongside the agent. The agent doesn't know they exist.
 
 **Write watcher** (inotify/fswatch on the repo directory). Any file create, modify, or delete triggers:
-1. Validate the file (JSON schema check for `topology.json` and `nodes/*.json`)
+1. Validate the file (JSON schema check for `topology.json`, existence check for `nodes/*.md`)
 2. Reject invalid writes (revert the file, return error to the agent via `run_command` output)
 3. Sync valid writes to DB immediately
 4. Broadcast websocket update to frontend
@@ -125,9 +125,9 @@ The agent works in a repo synced to the workflow's board state at `{mount}/workf
 ./
 ├── topology.json
 └── nodes/
-    ├── research.json
-    ├── fact_checker.json
-    └── report.json
+    ├── research.md
+    ├── fact_checker.md
+    └── report.md
 ```
 
 ### `topology.json`
@@ -148,27 +148,42 @@ Slugs, not UUIDs. Backend maps slugs to step IDs during sync.
 
 No positions. The backend auto-layouts from the dependency graph using `compute_execution_levels` (Kahn's algorithm). Same level = same x, offset y within level. Users drag to adjust after.
 
-### `nodes/{slug}.json`
+### `nodes/{slug}.md`
 
-One field: the task description.
+Markdown, not JSON. Node descriptions are briefs — they can be multi-paragraph documents with scope, quality criteria, constraints, and context. Markdown lets the workflow agent write at the level of detail the system node agent needs to expand from.
 
-```json
-{
-  "description": "Research competitor pricing data from public sources."
-}
+```markdown
+# Research
+
+Research competitor pricing data from public sources.
+
+## Scope
+- Focus on direct competitors in the project management SaaS space
+- 2024-2025 data only
+- Top 5 competitors by market share
+
+## Quality Criteria
+- Every pricing claim backed by a public source URL
+- Distinguish between published pricing and estimated/reported pricing
+- Flag any data older than 6 months
+
+## Constraints
+- Do not contact competitors directly
+- Public sources only: pricing pages, press releases, analyst reports
 ```
 
-The `description` is the task text that the system node agent receives as `<task>`. The system node agent owns:
-- **Naming** — writes `config.json` with a display name
-- **Output description** — writes `config.json` with what this node produces (used as `<previous_step>` for downstream nodes)
-- **Agent team** — writes `topology.json` + `agents/*.json`
+The entire markdown file is the task text that the system node agent receives as `<task>`. The system node agent reads this brief and decides:
+- **What agents are needed** — one researcher or a team
+- **What name to give the node** — writes `config.json` with a display name
+- **What this step produces** — writes `config.json` with an output description (used as `<previous_step>` for downstream nodes)
+- **How to design the agent team** — writes `topology.json` + `agents/*.json` with system prompts that encode the methodology, quality criteria, and domain expertise the brief describes
 
-The workflow agent writes what the node should DO. The system node agent decides what it's CALLED and what it PRODUCES.
+The workflow agent writes the brief — intent, scope, quality standards, constraints. The system node agent turns the brief into a working system. Simple descriptions work too — a node file can be a single line ("Summarize the research into a blog post") when the task is simple. Markdown scales from one line to a full spec.
 
 ### Slugs and Names
 
 Nodes have two identifiers:
-- **Slug** — file identifier in the repo (`research`, `fact_checker`, `unnamed_01`). Immutable once created. Used in `topology.json` keys and `nodes/{slug}.json` filenames.
+- **Slug** — file identifier in the repo (`research`, `fact_checker`, `unnamed_01`). Immutable once created. Used in `topology.json` keys and `nodes/{slug}.md` filenames.
 - **Name** — display name in the UI ("Market Research", "Fact Checker"). Set by the system node agent when it writes `config.json`. Absent until the system node agent runs.
 
 When the agent creates nodes via `run_command`, it picks meaningful slugs — `research`, `fact_checker`. The agent uses slugs in file operations and names in conversation with the user.
@@ -178,14 +193,12 @@ When the agent creates nodes via `run_command`, it picks meaningful slugs — `r
 When the user draws a node on the canvas, live sync persists it to DB. The backend projects it into the repo:
 
 1. Assign slug: `unnamed_01`, `unnamed_02`, etc. (incrementing counter)
-2. Create `nodes/unnamed_01.json` with the user's text as the description
+2. Create `nodes/unnamed_01.md` with the user's text as the content
 3. Add to `topology.json` with no edges
 
-```json
-// nodes/unnamed_01.json — user typed "Research competitors" in the box
-{
-  "description": "Research competitors"
-}
+```markdown
+<!-- nodes/unnamed_01.md — user typed "Research competitors" in the box -->
+Research competitors
 ```
 
 ```json
@@ -205,7 +218,7 @@ The workflow agent sees user-created nodes in `<current_state>` and can work wit
 
 **Repo → DB (agent made changes):**
 1. Diff `topology.json` against existing steps → create new, remove missing, update edges
-2. Diff `nodes/*.json` against step descriptions → update task text where changed
+2. Diff `nodes/*.md` against step descriptions → update task text where changed
 3. Auto-layout positions from dependency graph
 4. Broadcast websocket updates → frontend canvas updates
 
@@ -266,7 +279,7 @@ The agent's context window compresses over long conversations — file contents 
 
 | Element | Source | Purpose |
 |---------|--------|---------|
-| Text content | `nodes/{slug}.json` description | What this node does (task text) |
+| Text content | First line or heading of `nodes/{slug}.md` | Brief summary of what this node does. For long briefs, the agent reads the full file. |
 | `<last_run>` | Run summarizer | What happened last time this node executed (only present if the node has run) |
 
 When the board is empty:
@@ -287,7 +300,7 @@ A session is created on the user's first message, capturing the current board st
 | `run_command` | Shell access to read and write repo files |
 | `think` | Internal reasoning (not shown to user) |
 
-The agent reads the repo to understand the current board, writes `topology.json` and `nodes/*.json` to make changes. Each file write syncs to DB immediately via the filesystem watcher — the frontend sees changes on the canvas in real-time as the agent works.
+The agent reads the repo to understand the current board, writes `topology.json` and `nodes/*.md` to make changes. Node files are markdown — they can range from a single line to a full multi-section brief. Each file write syncs to DB immediately via the filesystem watcher — the frontend sees changes on the canvas in real-time as the agent works.
 
 System node agents are triggered separately when the user clicks "Generate," not by the workflow agent.
 
@@ -332,7 +345,7 @@ Version Snapshot
             └── messages[]
 ```
 
-**Board layer** — the workflow agent's repo. `topology.json` and `nodes/*.json`. This is the topology the user sees on the canvas.
+**Board layer** — the workflow agent's repo. `topology.json` and `nodes/*.md`. This is the topology the user sees on the canvas.
 
 **Node repos layer** — each node's system node agent repo on JuiceFS at `{mount}/workflows/{wf_id}/system_node/{step_id}/`. These contain `config.json` (name + output description), `topology.json` (agent dependency graph), and `agents/*.json` (agent configs). This is the agent team configuration per node.
 
@@ -348,17 +361,22 @@ Content is packed by logical entity, not per-file. One entry per node repo (all 
 
 | Content Type | Source ID | Content |
 |-------------|-----------|---------|
-| `board_state` | workflow_id | Full board: topology + all node descriptions |
+| `board_state` | workflow_id | Full board: topology + all node markdown briefs |
 | `node_repo` | step_id | Entire system node agent repo: config + agent topology + all agent files |
 | `session_history` | session_id | Full message array for one session |
 
 **`board_state` content:**
 ```json
 {
+  "topology": {
+    "research": { "depends_on": [] },
+    "fact_checker": { "depends_on": ["research"] },
+    "report": { "depends_on": ["fact_checker"] }
+  },
   "nodes": {
-    "research": { "depends_on": [], "description": "Research competitor pricing..." },
-    "fact_checker": { "depends_on": ["research"], "description": "Verify claims..." },
-    "report": { "depends_on": ["fact_checker"], "description": "Produce summary report..." }
+    "research": "# Research\n\nResearch competitor pricing data...\n\n## Scope\n...",
+    "fact_checker": "Verify claims against authoritative sources.",
+    "report": "Produce summary report with verified data."
   }
 }
 ```
@@ -429,7 +447,7 @@ CREATE INDEX idx_vs_content ON version_snapshots(content_version_id);
 1. User clicks "Save Version" (or system auto-saves before large agent changes)
 2. Backend creates a `workflow_versions` row
 3. Backend packs and snapshots three content types:
-   - **`board_state`**: Read `topology.json` + all `nodes/*.json` → pack into one JSON object → `find_or_create_version()` → link via `version_snapshots`
+   - **`board_state`**: Read `topology.json` + all `nodes/*.md` → pack into one JSON object → `find_or_create_version()` → link via `version_snapshots`
    - **`node_repo`** (per node): Read each node's `config.json` + `topology.json` + `agents/*.json` from JuiceFS → pack into one JSON object per node → `find_or_create_version()` per node → link via `version_snapshots`
    - **`session_history`** (per session): Read `chat_messages` for the workflow agent session + all node sessions → serialize each → `find_or_create_version()` per session → link via `version_snapshots`
 4. Dedup: `find_or_create_version()` hashes each packed object. Unchanged entities reuse existing content rows. A 10-node workflow with one changed node creates ~3 new content rows.
@@ -439,7 +457,7 @@ CREATE INDEX idx_vs_content ON version_snapshots(content_version_id);
 1. User selects a version to rebase to
 2. Backend auto-saves current state as a backup version (same as today's rebase pattern)
 3. Restore process:
-   - **Board layer**: Write `topology.json` and `nodes/*.json` back to the workflow agent's repo → sync to DB → websocket update → canvas reverts
+   - **Board layer**: Write `topology.json` and `nodes/*.md` back to the workflow agent's repo → sync to DB → websocket update → canvas reverts
    - **Node repos**: Write each node's `config.json`, `topology.json`, `agents/*.json` back to JuiceFS at `{mount}/workflows/{wf_id}/system_node/{step_id}/` → sync to DB
    - **Sessions**: Truncate `chat_messages` for each affected session to the checkpoint timestamp, then re-insert the snapshotted messages. Or simpler: clear and rewrite.
    - **DB state**: Restore steps, edges, rosters, agents from the node repo files (same as the existing `restore_workflow_from_snapshot` but driven by files instead of a monolithic JSONB blob)
@@ -517,7 +535,7 @@ During the cascade, the user can keep talking to the workflow agent and editing 
 | **Scope** | Agents within one node | Nodes + edges across the workflow |
 | **Trigger** | "Generate" / upstream cascade | User message in conversation |
 | **Input** | Node task text + upstream context | Board state + user message + history |
-| **Output** | config.json, topology.json, agents/*.json | topology.json, nodes/*.json |
+| **Output** | config.json, topology.json, agents/*.json | topology.json, nodes/*.md |
 | **Consumer** | file_executor → runtime agents | Backend sync → DB → frontend canvas |
 | **Session** | Per-step, across dispatches | Per-workflow, persistent conversation |
 | **Board state source** | Own filesystem (stable) | Live-synced repo (reflects current canvas) |
