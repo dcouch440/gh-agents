@@ -1,8 +1,8 @@
 //! Board state types — variant-agnostic snapshots of workflow and node state.
 //!
 //! These types capture all data needed to render `<board_state>` XML across
-//! all 4 layers of the manager node stack. The rendering layer selects what
-//! to include based on [`BoardStateVariant`].
+//! the manager node stack. The rendering layer selects what to include based
+//! on [`BoardStateVariant`].
 
 use uuid::Uuid;
 
@@ -22,8 +22,6 @@ pub enum BoardStateVariant {
     ManagerBuilder,
     /// L3 — Node Assistant: own node with agents, ports — no agent ids.
     NodeAssistant,
-    /// L4 — Dispatch/Node Builder: own node, full detail with ids.
-    Dispatch,
 }
 
 /// Scope of the board state — which nodes to include.
@@ -31,7 +29,7 @@ pub enum BoardStateVariant {
 pub enum Scope {
     /// All visible nodes in the workflow (L1, L2).
     AllNodes,
-    /// Only the current node (L3, L4).
+    /// Only the current node (L3).
     OwnNode,
 }
 
@@ -40,18 +38,18 @@ impl BoardStateVariant {
     pub fn scope(&self) -> Scope {
         match self {
             Self::ManagerAssistant | Self::ManagerBuilder => Scope::AllNodes,
-            Self::NodeAssistant | Self::Dispatch => Scope::OwnNode,
+            Self::NodeAssistant => Scope::OwnNode,
         }
     }
 
     /// Whether node UUIDs appear in the output.
     pub fn include_node_ids(&self) -> bool {
-        matches!(self, Self::ManagerBuilder | Self::Dispatch)
+        matches!(self, Self::ManagerBuilder)
     }
 
     /// Whether agent UUIDs appear in the output.
     pub fn include_agent_ids(&self) -> bool {
-        matches!(self, Self::Dispatch)
+        false
     }
 
     /// Whether the `<status>` tag is rendered (compressed node status from question extraction).
@@ -66,7 +64,7 @@ impl BoardStateVariant {
 
     /// Whether `task` appears as an attribute on `<node>`.
     pub fn include_task_attr(&self) -> bool {
-        matches!(self, Self::NodeAssistant | Self::Dispatch)
+        matches!(self, Self::NodeAssistant)
     }
 
     /// Whether capabilities are shown (attribute or element).
@@ -77,38 +75,32 @@ impl BoardStateVariant {
     /// Whether individual `<agent>` child elements are rendered inside `<node>`.
     /// L1 shows agents as a summary attribute instead.
     pub fn include_agent_children(&self) -> bool {
-        matches!(
-            self,
-            Self::ManagerBuilder | Self::NodeAssistant | Self::Dispatch
-        )
+        matches!(self, Self::ManagerBuilder | Self::NodeAssistant)
     }
 
     /// Whether agent role descriptions are included in agent elements.
     pub fn include_agent_descriptions(&self) -> bool {
-        matches!(
-            self,
-            Self::ManagerBuilder | Self::NodeAssistant | Self::Dispatch
-        )
+        matches!(self, Self::ManagerBuilder | Self::NodeAssistant)
     }
 
     /// Whether incoming port/context details are included.
     pub fn include_ports(&self) -> bool {
-        matches!(self, Self::NodeAssistant | Self::Dispatch)
+        matches!(self, Self::NodeAssistant)
     }
 
-    /// Whether ports include schema and json_path detail (L4 only).
+    /// Whether ports include schema and json_path detail.
     pub fn include_port_schemas(&self) -> bool {
-        matches!(self, Self::Dispatch)
+        false
     }
 
-    /// Whether the step plan is included (L4 only).
+    /// Whether the step plan is included.
     pub fn include_plan(&self) -> bool {
-        matches!(self, Self::Dispatch)
+        false
     }
 
-    /// Whether `<node_text>` (raw canvas text) is rendered as a child element (L4 only).
+    /// Whether `<node_text>` (raw canvas text) is rendered as a child element.
     pub fn include_node_text(&self) -> bool {
-        matches!(self, Self::Dispatch)
+        false
     }
 
     /// Whether the `initial_instructions` attribute is rendered on nodes.
@@ -151,7 +143,7 @@ pub struct NodeSnapshot {
     pub input_ports: Vec<InputPortSnapshot>,
     pub output_ports: Vec<OutputPortSnapshot>,
     pub incoming_context: Vec<IncomingContextSnapshot>,
-    /// Step plan content (L4).
+    /// Step plan content.
     pub plan: String,
     /// Pending question for the user (L1 renders as `<asking>`).
     pub asking: Option<String>,
@@ -160,7 +152,7 @@ pub struct NodeSnapshot {
     /// Whether this node has received initial instructions from a dispatch.
     /// Rendered for L1/L2 variants as `initial_instructions="sent"`.
     pub initial_instructions_sent: bool,
-    /// Raw canvas text (step.prompt_template). Rendered as `<node_text>` for L4.
+    /// Raw canvas text (step.prompt_template). Rendered as `<node_text>`.
     pub node_text: String,
 }
 
@@ -172,20 +164,6 @@ pub struct AgentSnapshot {
     pub role_description: String,
     pub capabilities: Vec<String>,
     pub receives_from: Vec<String>,
-    /// Design status from the system store. Populated by enrichment, not fetch.
-    pub design_status: AgentDesignStatus,
-}
-
-/// Design status for an agent in the roster.
-#[derive(Debug, Clone, Default)]
-pub enum AgentDesignStatus {
-    /// Not enriched — builder path where design info isn't relevant.
-    #[default]
-    Unknown,
-    /// Changed by builder or no config exists — needs (re)design.
-    Pending,
-    /// Has a config in the system store.
-    Designed { version: i32, config_path: String },
 }
 
 /// Snapshot of an incoming context connection (L3 style).
@@ -198,7 +176,7 @@ pub struct IncomingContextSnapshot {
     pub word_count: Option<usize>,
 }
 
-/// Snapshot of a typed input port with schema (L4 style).
+/// Snapshot of a typed input port with schema.
 #[derive(Debug, Clone)]
 pub struct InputPortSnapshot {
     pub port_name: String,
@@ -207,7 +185,7 @@ pub struct InputPortSnapshot {
     pub json_path: Option<String>,
 }
 
-/// Snapshot of a typed output port with schema (L4 style).
+/// Snapshot of a typed output port with schema.
 #[derive(Debug, Clone)]
 pub struct OutputPortSnapshot {
     pub port_name: String,

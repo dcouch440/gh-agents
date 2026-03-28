@@ -261,7 +261,6 @@ async fn load_agents(
                 id: a.id,
                 name: a.name.clone(),
                 role_description: a.role_description.clone(),
-                design_status: Default::default(),
                 capabilities: a.capabilities.clone(),
                 receives_from,
             }

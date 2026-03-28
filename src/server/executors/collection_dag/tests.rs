@@ -528,12 +528,6 @@ mod tests {
             ) -> Result<Vec<crate::db::AgentDesignerRunRow>> {
                 unimplemented!()
             }
-            async fn get_latest_designer_run_for_step(
-                &self,
-                _: Uuid,
-            ) -> Result<Option<crate::db::AgentDesignerRunRow>> {
-                unimplemented!()
-            }
             // Assistant Notes stubs
             async fn get_plan(&self, _: Uuid) -> Result<Option<String>> {
                 unimplemented!()

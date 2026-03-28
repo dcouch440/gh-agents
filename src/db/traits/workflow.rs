@@ -416,12 +416,6 @@ pub trait WorkflowRepo: Send + Sync {
         workflow_execution_id: Uuid,
     ) -> Result<Vec<AgentDesignerRunRow>>;
 
-    /// Get the most recent designer run for a step (across all executions).
-    async fn get_latest_designer_run_for_step(
-        &self,
-        step_id: Uuid,
-    ) -> Result<Option<AgentDesignerRunRow>>;
-
     // --- Step Plan ---
 
     /// Get a single step's plan content. Returns None if no plan exists.

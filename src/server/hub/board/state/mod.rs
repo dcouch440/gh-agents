@@ -8,7 +8,6 @@
 //! | `ManagerAssistant` | All nodes | Compressed status, `<asking>`, no ids    |
 //! | `ManagerBuilder`   | All nodes | Ids, capabilities, agent summary         |
 //! | `NodeAssistant`    | Own node  | Agents, incoming ports, no agent ids     |
-//! | `Dispatch`         | Own node  | Full detail: port schemas, roster, notes |
 //!
 //! # Usage
 //!
@@ -38,19 +37,18 @@ pub mod types;
 
 pub use render::render;
 pub use types::{
-    AgentDesignStatus, AgentSnapshot, BoardSnapshot, BoardStateVariant, IncomingContextSnapshot,
-    InputPortSnapshot, NodeSnapshot, OutputPortSnapshot, Scope,
+    AgentSnapshot, BoardSnapshot, BoardStateVariant, IncomingContextSnapshot, InputPortSnapshot,
+    NodeSnapshot, OutputPortSnapshot, Scope,
 };
 
 mod tests;
 
 /// Build a [`BoardSnapshot`] without rendering.
 ///
-/// For `OwnNode` scope (L3/L4), fetches the single step and its detail.
+/// For `OwnNode` scope (L3), fetches the single step and its detail.
 /// For `AllNodes` scope (L1/L2), bulk-loads all visible steps in the workflow.
 ///
-/// The returned snapshot can be enriched (e.g. with design status) before
-/// rendering via [`render`].
+/// The returned snapshot can be enriched before rendering via [`render`].
 pub async fn build_snapshot(
     repo: &dyn WorkflowRepo,
     sessions: Option<&dyn SessionRepo>,

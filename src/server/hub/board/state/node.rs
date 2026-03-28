@@ -1,6 +1,6 @@
 //! Node element renderer.
 //!
-//! One function builds the `<node>` element for all 4 variants.
+//! One function builds the `<node>` element for all 3 variants.
 //! The variant's flags control which attributes and children are included.
 
 use super::agent;
@@ -44,7 +44,7 @@ pub fn render_node(node: &NodeSnapshot, variant: BoardStateVariant) -> String {
         "sent",
     );
 
-    // L1/L2: agent names as attribute (not rendered as children)
+    // L1: agent names as attribute (not rendered as children)
     if !variant.include_agent_children() && !node.agents.is_empty() {
         let names: Vec<&str> = node.agents.iter().map(|a| a.name.as_str()).collect();
         el.attr("agents", &names.join(", "));
@@ -53,16 +53,6 @@ pub fn render_node(node: &NodeSnapshot, variant: BoardStateVariant) -> String {
     // ── Text content ────────────────────────────────────────────────────
 
     el.text(&node.summary);
-
-    // ── Node text (L4 — raw canvas text) ─────────────────────────────────
-
-    if variant.include_node_text() && !node.node_text.is_empty() {
-        el.raw(
-            &XmlBuilder::new("node_text", indent + 1)
-                .text(&node.node_text)
-                .build(),
-        );
-    }
 
     // ── Compressed status (L1/L2) ───────────────────────────────────────
 
@@ -80,50 +70,11 @@ pub fn render_node(node: &NodeSnapshot, variant: BoardStateVariant) -> String {
         }
     }
 
-    // ── L4: input/output ports with schemas ─────────────────────────────
-
-    if variant.include_port_schemas() {
-        if !node.input_ports.is_empty() {
-            let mut section = XmlBuilder::new("input_ports", indent + 1);
-            for p in &node.input_ports {
-                section.raw(&port::render_input_port(p, indent + 2));
-            }
-            el.raw(&section.build());
-        }
-        if !node.output_ports.is_empty() {
-            let mut section = XmlBuilder::new("output_ports", indent + 1);
-            for p in &node.output_ports {
-                section.raw(&port::render_output_port(p, indent + 2));
-            }
-            el.raw(&section.build());
-        }
-    }
-
-    // ── Dispatch: capabilities as child element ─────────────────────────
-
-    if matches!(variant, BoardStateVariant::Dispatch) && !node.capabilities.is_empty() {
-        el.raw(
-            &XmlBuilder::new("capabilities", indent + 1)
-                .text(&node.capabilities.join(", "))
-                .build(),
-        );
-    }
-
     // ── Agents ──────────────────────────────────────────────────────────
 
     if variant.include_agent_children() && !node.agents.is_empty() {
-        if variant.include_agent_ids() {
-            // L4: wrap in <agent_roster>
-            let mut roster = XmlBuilder::new("agent_roster", indent + 1);
-            for a in &node.agents {
-                roster.raw(&agent::render_agent(a, variant, indent + 2));
-            }
-            el.raw(&roster.build());
-        } else {
-            // L3: flat agent children
-            for a in &node.agents {
-                el.raw(&agent::render_agent(a, variant, indent + 1));
-            }
+        for a in &node.agents {
+            el.raw(&agent::render_agent(a, variant, indent + 1));
         }
     }
 
@@ -135,12 +86,6 @@ pub fn render_node(node: &NodeSnapshot, variant: BoardStateVariant) -> String {
             incoming.raw(&port::render_incoming_port(p, indent + 2));
         }
         el.raw(&incoming.build());
-    }
-
-    // ── L4: plan ────────────────────────────────────────────────────────
-
-    if variant.include_plan() && !node.plan.is_empty() {
-        el.raw(&XmlBuilder::new("plan", indent + 1).text(&node.plan).build());
     }
 
     el.build()

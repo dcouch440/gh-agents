@@ -48,17 +48,6 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "render_panel" => Some(render_panel_tool()),
         "update_plan" => Some(update_plan_tool()),
 
-        // Workforce archetype tools (5)
-        "set_task" => Some(set_task_tool()),
-        "add_agent" => Some(add_agent_tool()),
-        "update_agent" => Some(update_agent_tool()),
-        "remove_agent" => Some(remove_agent_tool()),
-        "set_capabilities" => Some(set_capabilities_tool()),
-
-        "configure_team" => Some(configure_team_tool()),
-        "set_dependency" => Some(set_dependency_tool()),
-        "remove_dependency" => Some(remove_dependency_tool()),
-
         // Dispatch tools (background service layer)
         "dispatch" => Some(dispatch_tool()),
         "cancel_dispatch" => Some(cancel_dispatch_tool()),
@@ -67,9 +56,6 @@ pub fn get_tool_definition(name: &str) -> Option<Tool> {
         "send_message" => Some(send_message_tool()),
         "dispatch_to_nodes" => Some(dispatch_to_nodes_tool()),
         "dispatch_to_builders" => Some(dispatch_to_builders_tool()),
-
-        // Builder completion tool
-        "complete_task" => Some(complete_task_tool()),
 
         // Manager topology tools (6)
         "create_pipeline" => Some(create_pipeline_tool()),
@@ -563,281 +549,6 @@ fn update_plan_tool() -> Tool {
 }
 
 // ============================================================================
-// Workforce Archetype Tool Definitions
-// ============================================================================
-
-fn set_task_tool() -> Tool {
-    Tool {
-        name: "set_task".into(),
-        description: concat!(
-            "Set or update the mission description for this node's agent team. The task ",
-            "description frames the overall objective in the agent designer's prompts — it ",
-            "tells agents what they are collectively working toward. Use this for targeted ",
-            "task-only changes. For initial setup or full rebuilds, use configure_team ",
-            "instead (it includes a task field). Provide a clear description of what the ",
-            "team produces, what inputs they work from, and what success looks like.",
-        )
-        .into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string",
-                    "description": "What the workforce should accomplish"
-                }
-            },
-            "required": ["description"]
-        }),
-    }
-}
-
-fn add_agent_tool() -> Tool {
-    Tool {
-        name: "add_agent".into(),
-        description: concat!(
-            "Add a new agent to this node's team. Use this for incremental roster changes ",
-            "after initial setup with configure_team. Each agent needs a unique name within ",
-            "this node and a role description (1-2 sentences: domain expertise, scope ",
-            "boundary, output type). Optionally assign capabilities from: file_read, ",
-            "file_write, content_search, shell, document_read, database_query. Wire the new ",
-            "agent into the data flow with set_dependency after adding it.",
-        )
-        .into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "name": {
-                    "type": "string",
-                    "description": "Agent name (e.g., 'Scanner', 'Developer', 'Tester')"
-                },
-                "role": {
-                    "type": "string",
-                    "description": "What this agent does in the mission"
-                },
-                "capabilities": {
-                    "type": "array",
-                    "items": { "type": "string" },
-                    "description": "Tool capabilities: file_read, file_write, content_search, shell, document_read, database_query"
-                }
-            },
-            "required": ["name"]
-        }),
-    }
-}
-
-fn update_agent_tool() -> Tool {
-    Tool {
-        name: "update_agent".into(),
-        description: concat!(
-            "Update an existing agent's name, role, or capabilities. Provide either ",
-            "agent_id or name to identify the agent — name matching is case-insensitive. ",
-            "Only provided fields are changed; omitted fields keep their current values. ",
-            "Use this for targeted changes to a single agent without reconfiguring the ",
-            "whole team.",
-        )
-        .into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "agent_id": {
-                    "type": "string",
-                    "description": "UUID of the agent to update (from board_state agent_roster)"
-                },
-                "name": {
-                    "type": "string",
-                    "description": "Agent name to identify the agent (alternative to agent_id), or new name if agent_id is provided"
-                },
-                "role": {
-                    "type": "string",
-                    "description": "New role description"
-                },
-                "capabilities": {
-                    "type": "array",
-                    "items": { "type": "string" },
-                    "description": "New capabilities list (replaces existing)"
-                }
-            }
-        }),
-    }
-}
-
-fn remove_agent_tool() -> Tool {
-    Tool {
-        name: "remove_agent".into(),
-        description: concat!(
-            "Remove an agent from this node's team. Provide either agent_id or name to ",
-            "identify the agent — name matching is case-insensitive. Also removes any ",
-            "dependencies involving this agent and cleans up the associated pipeline step. ",
-            "The remaining agents' execution order is recomputed automatically.",
-        )
-        .into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "agent_id": {
-                    "type": "string",
-                    "description": "UUID of the agent to remove (from board_state agent_roster)"
-                },
-                "name": {
-                    "type": "string",
-                    "description": "Agent name to remove (alternative to agent_id, case-insensitive)"
-                }
-            }
-        }),
-    }
-}
-
-fn set_capabilities_tool() -> Tool {
-    Tool {
-        name: "set_capabilities".into(),
-        description: concat!(
-            "Set the node-level capability pool — the set of tools available for assignment ",
-            "to individual agents. Valid values: file_read, file_write, content_search, ",
-            "shell, document_read, database_query. All agents can browse the web and search ",
-            "X/Twitter natively without needing a capability assignment. Assign the minimum ",
-            "each agent needs; per-agent capabilities are set via configure_team or add_agent.",
-        )
-        .into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "capabilities": {
-                    "type": "array",
-                    "items": { "type": "string" },
-                    "description": "Available capabilities: file_read, file_write, content_search, shell, document_read, database_query"
-                }
-            },
-            "required": ["capabilities"]
-        }),
-    }
-}
-
-fn configure_team_tool() -> Tool {
-    Tool {
-        name: "configure_team".into(),
-        description: concat!(
-            "Declaratively configure the full team for this node in a single call. ",
-            "Provide the complete desired state: task description, agent roster, and ",
-            "dependencies. The tool diffs against the current state and applies only ",
-            "the changes needed — creating new agents, removing unlisted agents, ",
-            "updating agents whose role or capabilities changed, and reconciling ",
-            "dependencies.",
-        )
-        .into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "task": {
-                    "type": "string",
-                    "description": "Mission description: what the team produces, what inputs they work from, what success looks like"
-                },
-                "agents": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "name": {
-                                "type": "string",
-                                "description": "Agent name (e.g. 'Scanner', 'Analyzer', 'Reporter')"
-                            },
-                            "role_description": {
-                                "type": "string",
-                                "description": "What this agent does — domain expertise, approach, scope boundaries, output expectations"
-                            },
-                            "capabilities": {
-                                "type": "array",
-                                "items": { "type": "string" },
-                                "description": "Tool capabilities: file_read, file_write, content_search, shell, document_read, database_query"
-                            }
-                        },
-                        "required": ["name", "role_description"]
-                    },
-                    "description": "Complete agent roster in data-flow order (producers before consumers)"
-                },
-                "dependencies": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "from": {
-                                "type": "string",
-                                "description": "Upstream agent name (produces output)"
-                            },
-                            "to": {
-                                "type": "string",
-                                "description": "Downstream agent name (receives output)"
-                            }
-                        },
-                        "required": ["from", "to"]
-                    },
-                    "description": "Data routing between agents. Each dependency means to_agent receives from_agent's output"
-                }
-            },
-            "required": ["task", "agents"]
-        }),
-    }
-}
-
-// ============================================================================
-// Workforce Dependency Tool Definitions
-// ============================================================================
-
-fn set_dependency_tool() -> Tool {
-    Tool {
-        name: "set_dependency".into(),
-        description: concat!(
-            "Create a data-flow dependency between two agents. The downstream agent ",
-            "(to_agent) receives the upstream agent's (from_agent) output before executing. ",
-            "Without explicit dependencies, agents receive all prior outputs — fine for ",
-            "2-agent teams, but unfocused for larger ones. Both agents must already exist ",
-            "in the roster. Use agent names, not IDs.",
-        )
-        .into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "from_agent": {
-                    "type": "string",
-                    "description": "Name of the upstream agent (produces output)"
-                },
-                "to_agent": {
-                    "type": "string",
-                    "description": "Name of the downstream agent (depends on from_agent's output)"
-                }
-            },
-            "required": ["from_agent", "to_agent"]
-        }),
-    }
-}
-
-fn remove_dependency_tool() -> Tool {
-    Tool {
-        name: "remove_dependency".into(),
-        description: concat!(
-            "Remove a data-flow dependency between two agents. After removal, to_agent no ",
-            "longer receives from_agent's output directly — it falls back to receiving all ",
-            "prior outputs in execution order. Use this when restructuring the team's data ",
-            "flow, for example when inserting a new agent between two existing ones.",
-        )
-        .into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "from_agent": {
-                    "type": "string",
-                    "description": "Name of the upstream agent"
-                },
-                "to_agent": {
-                    "type": "string",
-                    "description": "Name of the downstream agent"
-                }
-            },
-            "required": ["from_agent", "to_agent"]
-        }),
-    }
-}
-
-// ============================================================================
 // Dispatch Tool Definitions (background service layer)
 // ============================================================================
 
@@ -846,10 +557,8 @@ fn dispatch_tool() -> Tool {
         name: "dispatch".into(),
         description: concat!(
             "Send a plain English instruction to a background agent that will configure this ",
-            "step. The background agent loads the current step state and calls mutation tools ",
-            "(add_agent, set_task, configure_team, etc.) on your behalf. You stay responsive ",
-            "while the work happens in the background. Use this instead of calling mutation ",
-            "tools directly.",
+            "step. The background agent loads the current step state and configures the node ",
+            "on your behalf. You stay responsive while the work happens in the background.",
         )
         .into(),
         input_schema: json!({
@@ -994,38 +703,6 @@ fn dispatch_to_builders_tool() -> Tool {
                 }
             },
             "required": ["messages"]
-        }),
-    }
-}
-
-// ============================================================================
-// Builder Completion Tool Definition
-// ============================================================================
-
-fn complete_task_tool() -> Tool {
-    Tool {
-        name: "complete_task".into(),
-        description: concat!(
-            "Signal that you have finished configuring this node. Call this once when done ",
-            "— do not call any other tools after this. Provide a summary of what you ",
-            "configured (displayed to the user), and optionally a question if you need ",
-            "user input to proceed.",
-        )
-        .into(),
-        input_schema: json!({
-            "type": "object",
-            "properties": {
-                "summary": {
-                    "type": "string",
-                    "description": "What you configured and key decisions made (1-3 sentences). Displayed to the manager/user."
-                },
-                "question": {
-                    "type": "string",
-                    "description": "Question for the manager/user if you need input to proceed. Leave null if no question.",
-                    "nullable": true
-                }
-            },
-            "required": ["summary"]
         }),
     }
 }
