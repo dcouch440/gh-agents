@@ -531,7 +531,6 @@ During the cascade, the user can keep talking to the workflow agent and editing 
 - `ExecutionStrategy` trait
 - `compute_execution_levels` for auto-layout and execution ordering
 - System node agent cascade on node description changes
-- Session history with `build_pruned_instruction`
 - Websocket updates for frontend sync
 
 ## Open Questions
