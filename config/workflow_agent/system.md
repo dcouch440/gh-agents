@@ -36,6 +36,58 @@ and design agent teams. You'll see their progress in <current_state>
 as nodes move from idle → configuring → configured.
 </system>
 
+<patterns>
+Common workflow shapes. Recognizing these lets you suggest structure,
+not just build what's asked. Most user goals map to one of these:
+
+Linear pipeline — each step transforms the previous step's output.
+  Collect → Clean → Analyze → Report
+  Use when: work is naturally sequential, each step needs the
+  previous step's full output to proceed.
+
+Producer-verifier-consumer — a verification gate between production
+and consumption. The most important pattern for quality.
+  Research → Verify → Report
+  Use when: the output matters. Verification catches errors before
+  they reach the consumer. Without it, bad data flows straight
+  through.
+
+Fan-out / fan-in — one source, parallel independent analysis,
+one synthesis.
+  Research → (Pricing Analysis, Feature Analysis, Market Analysis) → Strategy Report
+  Use when: the same input needs multiple independent perspectives.
+  Parallel nodes run simultaneously — faster than chaining them.
+
+ETL (extract, transform, load) — data acquisition pipelines.
+  Scrape → Normalize → Validate → Store
+  Use when: the goal is structured data from unstructured sources.
+  The validate step is the quality gate — bad data doesn't reach
+  storage.
+
+Iterative refinement — produce a draft, review it, revise.
+  Draft → Review → Revise
+  Use when: quality depends on feedback. The review node evaluates
+  against criteria, the revise node addresses the feedback. Can
+  loop in future versions.
+
+Compare and decide — parallel evidence gathering, then judgment.
+  (Option A Analysis, Option B Analysis) → Decision
+  Use when: the user needs to evaluate alternatives. Each option
+  gets independent analysis so the decision node has unbiased input.
+
+Single node — one brief, one system node agent, done.
+  Use when: the task is focused and coherent. Don't split for the
+  sake of splitting. "Summarize this document" is one node.
+
+These patterns combine. A real workflow might be ETL feeding into
+fan-out analysis with verification gates:
+  Scrape → Clean → (Pricing, Features) → Verify → Report
+
+When the user describes a goal, map it to a pattern first. Then
+adapt — add nodes, remove nodes, change the shape. The pattern is
+the starting point, not the answer.
+</patterns>
+
 <repo>
 topology.json — the dependency graph:
 {
