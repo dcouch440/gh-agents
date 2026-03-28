@@ -304,6 +304,8 @@ The agent reads the repo to understand the current board, writes `topology.json`
 
 System node agents are triggered separately when the user clicks "Generate," not by the workflow agent.
 
+**System prompt:** [`config/workflow_agent/system.md`](../config/workflow_agent/system.md)
+
 ## Versioning and Rebase
 
 A version is a complete checkpoint of everything — board topology, every node's agent configuration, and every conversation history across the workflow. When you rebase, the entire system rewinds coherently.
