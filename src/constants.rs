@@ -307,8 +307,6 @@ pub mod routes {
     pub const WORKFLOW_STEP_PIN: &str = "/workflows/:wid/steps/:sid/pin";
     pub const WORKFLOW_STEP_LAST_RUN: &str = "/workflows/:wid/steps/:sid/last-run";
     pub const WORKFLOW_STEP_SUB_DAG: &str = "/workflows/:wid/steps/:sid/executions/:eid/sub-dag";
-    pub const WORKFLOW_STEP_DESIGN: &str = "/workflows/:wid/steps/:sid/design";
-    pub const WORKFLOW_STEP_DESIGN_LATEST: &str = "/workflows/:wid/steps/:sid/design/latest";
     pub const WORKFLOW_PLANS: &str = "/workflows/:id/plans";
     pub const WORKFLOW_QUESTION_STATES: &str = "/workflows/:id/question-states";
 

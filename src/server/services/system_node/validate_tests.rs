@@ -421,7 +421,10 @@ mod tests {
             "capabilities": []
         }"#;
         let issues = check_prescribed_filenames(content);
-        assert!(issues.is_empty(), "should not flag 'Read ... report.md': {issues:?}");
+        assert!(
+            issues.is_empty(),
+            "should not flag 'Read ... report.md': {issues:?}"
+        );
     }
 
     #[test]
@@ -582,7 +585,9 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         let errors = err["errors"].as_array().unwrap();
-        assert!(errors.iter().any(|e| e["verify"] == "no_filenames_prescribed"));
+        assert!(errors
+            .iter()
+            .any(|e| e["verify"] == "no_filenames_prescribed"));
     }
 
     #[test]

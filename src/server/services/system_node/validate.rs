@@ -154,10 +154,7 @@ pub(crate) fn check_prompt_length(content: &str, min_words: usize) -> Option<Str
 /// Check assignment word count against user input word count.
 ///
 /// Assignment should expand on user intent, not compress it.
-pub(crate) fn check_assignment_expansion(
-    content: &str,
-    user_text_words: usize,
-) -> Option<String> {
+pub(crate) fn check_assignment_expansion(content: &str, user_text_words: usize) -> Option<String> {
     let val: Value = serde_json::from_str(content).ok()?;
     let assignment = val.get("assignment")?.as_str()?;
     let assignment_words = assignment.split_whitespace().count();
@@ -436,9 +433,7 @@ pub(crate) fn validate_verify(
                             .to_string_lossy()
                             .to_string();
                         if let Ok(content) = std::fs::read_to_string(&path) {
-                            if let Some(msg) =
-                                check_assignment_expansion(&content, user_words)
-                            {
+                            if let Some(msg) = check_assignment_expansion(&content, user_words) {
                                 errors.push(serde_json::json!({
                                     "verify": "assignments_expanded",
                                     "file": format!("agents/{name}"),

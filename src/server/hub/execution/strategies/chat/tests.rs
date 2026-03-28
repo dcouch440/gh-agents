@@ -181,15 +181,6 @@ mod tests {
 
         // update_plan is now owned by the assistant (plan is user's design doc)
         assert!(names.contains(&"update_plan"));
-
-        // Does NOT have workforce mutation tools
-        assert!(!names.contains(&"set_task"));
-        assert!(!names.contains(&"add_agent"));
-        assert!(!names.contains(&"update_agent"));
-        assert!(!names.contains(&"remove_agent"));
-        assert!(!names.contains(&"set_dependency"));
-        assert!(!names.contains(&"remove_dependency"));
-        assert!(!names.contains(&"set_capabilities"));
     }
 
     // ========================================================================

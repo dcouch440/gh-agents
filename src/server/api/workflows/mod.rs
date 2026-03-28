@@ -2,7 +2,6 @@
 
 pub mod types;
 
-pub mod designer_handlers;
 pub mod document_handlers;
 pub mod edge_handlers;
 pub mod execution_handlers;
@@ -16,7 +15,6 @@ pub mod template_handlers;
 pub mod workflow_handlers;
 pub mod workshop_handlers;
 
-pub use designer_handlers::{design_step, get_latest_step_design};
 pub use document_handlers::{add_step_document, list_step_documents, remove_step_document};
 pub use edge_handlers::{
     add_workflow_edge, delete_workflow_edge_by_id, list_workflow_edges, remove_workflow_edge,

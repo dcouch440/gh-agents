@@ -214,8 +214,8 @@ pub static ASSISTANT: Lazy<ProtocolConfig> = Lazy::new(|| {
 /// Workforce runtime agent config.
 pub static WORKFORCE: Lazy<ProtocolConfig> = Lazy::new(|| {
     load_protocol_config(
-        include_str!("../../config/archetype/workforce/runtime_agent/config.yaml"),
-        "config/archetype/workforce/runtime_agent/config.yaml",
+        include_str!("../../config/runtime_agent/config.yaml"),
+        "config/runtime_agent/config.yaml",
     )
 });
 
@@ -238,8 +238,8 @@ pub static MANAGER_BUILDER: Lazy<ProtocolConfig> = Lazy::new(|| {
 /// System node agent config (replaces builder + designer).
 pub static SYSTEM_NODE_AGENT: Lazy<ProtocolConfig> = Lazy::new(|| {
     load_protocol_config(
-        include_str!("../../config/archetype/workforce/system_agent/config.yaml"),
-        "config/archetype/workforce/system_agent/config.yaml",
+        include_str!("../../config/system_agent/config.yaml"),
+        "config/system_agent/config.yaml",
     )
 });
 
@@ -266,17 +266,15 @@ pub mod roles {
     };
 
     /// Workforce archetype block, injected via `{{.System.archetype_block}}`.
-    pub const WORKFORCE_ARCHETYPE: &str =
-        include_str!("../../config/archetype/workforce/archetype.md");
+    pub const WORKFORCE_ARCHETYPE: &str = include_str!("../../config/archetype.md");
 
     /// System node agent system prompt (designs runtime agent teams).
-    pub const SYSTEM_NODE_AGENT_SYSTEM: &str =
-        include_str!("../../config/archetype/workforce/system_agent/system.md");
+    pub const SYSTEM_NODE_AGENT_SYSTEM: &str = include_str!("../../config/system_agent/system.md");
 
     /// Workforce runtime agent prompt template.
     pub static WORKFORCE_AGENT: RoleDefinition = RoleDefinition {
-        system: include_str!("../../config/archetype/workforce/runtime_agent/system.md"),
-        prompt: include_str!("../../config/archetype/workforce/runtime_agent/prompt.md"),
+        system: include_str!("../../config/runtime_agent/system.md"),
+        prompt: include_str!("../../config/runtime_agent/prompt.md"),
         response: None,
     };
 

@@ -1197,22 +1197,6 @@ impl WorkflowRepo for PgRepo {
         Ok(rows)
     }
 
-    async fn get_latest_designer_run_for_step(
-        &self,
-        step_id: Uuid,
-    ) -> Result<Option<AgentDesignerRunRow>> {
-        let row = sqlx::query_as::<_, AgentDesignerRunRow>(
-            "SELECT * FROM agent_designer_runs \
-             WHERE step_id = $1 \
-             ORDER BY created_at DESC \
-             LIMIT 1",
-        )
-        .bind(step_id)
-        .fetch_optional(&self.pool)
-        .await?;
-        Ok(row)
-    }
-
     // --- Step Plan ---
 
     async fn get_plan(&self, step_id: Uuid) -> Result<Option<String>> {

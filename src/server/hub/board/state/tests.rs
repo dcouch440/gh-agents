@@ -17,7 +17,6 @@ mod tests {
             role_description: desc.to_string(),
             capabilities: caps.iter().map(|s| s.to_string()).collect(),
             receives_from: receives.iter().map(|s| s.to_string()).collect(),
-            design_status: AgentDesignStatus::default(),
         }
     }
 
@@ -267,76 +266,15 @@ mod tests {
         assert!(!xml.contains("<incoming>"));
     }
 
-    // ========================================================================
-    // L4 — Dispatch
-    // ========================================================================
-
     #[test]
-    fn render_l4_full_detail() {
-        let mut node = make_node(
-            "Research Team",
-            vec![
-                make_agent(
-                    "Researcher",
-                    &["content_search"],
-                    &[],
-                    "Investigates sources",
-                ),
-                make_agent("Synthesizer", &[], &["Researcher"], "Combines findings"),
-            ],
-        );
-        node.input_ports = vec![InputPortSnapshot {
-            port_name: "requirements".to_string(),
-            from_node: "Context Node".to_string(),
-            schema: Some(r#"{"type": "string"}"#.to_string()),
-            json_path: Some("$.output".to_string()),
-        }];
-        node.output_ports = vec![OutputPortSnapshot {
-            port_name: "report".to_string(),
-            to_node: "Writer Node".to_string(),
-            schema: Some(r#"{"type": "string"}"#.to_string()),
-        }];
-        node.plan = "Focus on academic sources.".to_string();
+    fn render_l3_omits_node_text() {
+        let mut node = make_node("Worker", vec![make_agent("Agent", &[], &[], "Works")]);
+        node.node_text = "Some canvas text".to_string();
 
         let snapshot = make_own_node_snapshot(node);
-        let xml = render::render(&snapshot, BoardStateVariant::Dispatch);
+        let xml = render::render(&snapshot, BoardStateVariant::NodeAssistant);
 
-        // No workflow wrapper
-        assert!(!xml.contains("<workflow"));
-        // Node has task attr
-        assert!(xml.contains("task=\"Research best practices\""));
-        // Input ports with schema
-        assert!(xml.contains("<input_ports>"));
-        assert!(xml.contains("<port name=\"requirements\" from=\"Context Node\">"));
-        assert!(xml.contains(r#"<schema>{"type": "string"}</schema>"#));
-        assert!(xml.contains("<json_path>$.output</json_path>"));
-        // Output ports
-        assert!(xml.contains("<output_ports>"));
-        assert!(xml.contains("<port name=\"report\" to=\"Writer Node\">"));
-        // Capabilities as child element
-        assert!(xml.contains("<capabilities>content_search</capabilities>"));
-        // Agent roster with ids
-        assert!(xml.contains("<agent_roster>"));
-        assert!(xml.contains("<agent name=\"Researcher\" id=\""));
-        assert!(xml.contains("<role>Investigates sources</role>"));
-        assert!(xml.contains("<depends_on>Researcher</depends_on>"));
-        // Notes
-        assert!(xml.contains("<plan>Focus on academic sources.</plan>"));
-    }
-
-    #[test]
-    fn render_l4_no_ports_no_plan() {
-        let node = make_node(
-            "Minimal",
-            vec![make_agent("Worker", &[], &[], "Does things")],
-        );
-        let snapshot = make_own_node_snapshot(node);
-        let xml = render::render(&snapshot, BoardStateVariant::Dispatch);
-
-        assert!(!xml.contains("<input_ports>"));
-        assert!(!xml.contains("<output_ports>"));
-        assert!(!xml.contains("<plan>"));
-        assert!(xml.contains("<agent_roster>"));
+        assert!(!xml.contains("<node_text>"));
     }
 
     // ========================================================================
@@ -386,94 +324,6 @@ mod tests {
     }
 
     // ========================================================================
-    // Design Status & Node Text
-    // ========================================================================
-
-    #[test]
-    fn render_l4_node_text() {
-        let mut node = make_node(
-            "Story Writer",
-            vec![make_agent("Writer", &[], &[], "Writes stories")],
-        );
-        node.node_text = "Write a story about weather in Portland.".to_string();
-
-        let snapshot = make_own_node_snapshot(node);
-        let xml = render::render(&snapshot, BoardStateVariant::Dispatch);
-
-        assert!(xml.contains("<node_text>Write a story about weather in Portland.</node_text>"));
-    }
-
-    #[test]
-    fn render_l4_node_text_empty_omitted() {
-        let node = make_node("Minimal", vec![make_agent("Worker", &[], &[], "Works")]);
-        let snapshot = make_own_node_snapshot(node);
-        let xml = render::render(&snapshot, BoardStateVariant::Dispatch);
-
-        assert!(!xml.contains("<node_text>"));
-    }
-
-    #[test]
-    fn render_l3_omits_node_text() {
-        let mut node = make_node("Worker", vec![make_agent("Agent", &[], &[], "Works")]);
-        node.node_text = "Some canvas text".to_string();
-
-        let snapshot = make_own_node_snapshot(node);
-        let xml = render::render(&snapshot, BoardStateVariant::NodeAssistant);
-
-        assert!(!xml.contains("<node_text>"));
-    }
-
-    #[test]
-    fn render_l4_design_status_pending() {
-        let mut agent = make_agent("Scanner", &[], &[], "Scans code");
-        agent.design_status = AgentDesignStatus::Pending;
-
-        let node = make_node("Security", vec![agent]);
-        let snapshot = make_own_node_snapshot(node);
-        let xml = render::render(&snapshot, BoardStateVariant::Dispatch);
-
-        assert!(xml.contains("design_status=\"pending\""));
-        assert!(!xml.contains("config_path"));
-    }
-
-    #[test]
-    fn render_l4_design_status_designed() {
-        let mut agent = make_agent("Scanner", &[], &[], "Scans code");
-        agent.design_status = AgentDesignStatus::Designed {
-            version: 2,
-            config_path: "design/abc/agents/scanner.json".to_string(),
-        };
-
-        let node = make_node("Security", vec![agent]);
-        let snapshot = make_own_node_snapshot(node);
-        let xml = render::render(&snapshot, BoardStateVariant::Dispatch);
-
-        assert!(xml.contains("design_status=\"designed (v2)\""));
-        assert!(xml.contains("config_path=\"design/abc/agents/scanner.json\""));
-    }
-
-    #[test]
-    fn render_l4_design_status_unknown_omitted() {
-        let agent = make_agent("Scanner", &[], &[], "Scans code");
-        // default is Unknown
-
-        let node = make_node("Security", vec![agent]);
-        let snapshot = make_own_node_snapshot(node);
-        let xml = render::render(&snapshot, BoardStateVariant::Dispatch);
-
-        assert!(!xml.contains("design_status"));
-        assert!(!xml.contains("config_path"));
-    }
-
-    #[test]
-    fn render_l4_include_node_text_flag() {
-        assert!(BoardStateVariant::Dispatch.include_node_text());
-        assert!(!BoardStateVariant::NodeAssistant.include_node_text());
-        assert!(!BoardStateVariant::ManagerBuilder.include_node_text());
-        assert!(!BoardStateVariant::ManagerAssistant.include_node_text());
-    }
-
-    // ========================================================================
     // Variant methods
     // ========================================================================
 
@@ -482,7 +332,6 @@ mod tests {
         assert_eq!(BoardStateVariant::ManagerAssistant.scope(), Scope::AllNodes);
         assert_eq!(BoardStateVariant::ManagerBuilder.scope(), Scope::AllNodes);
         assert_eq!(BoardStateVariant::NodeAssistant.scope(), Scope::OwnNode);
-        assert_eq!(BoardStateVariant::Dispatch.scope(), Scope::OwnNode);
     }
 
     #[test]
@@ -507,16 +356,10 @@ mod tests {
         assert!(BoardStateVariant::NodeAssistant.include_ports());
         assert!(!BoardStateVariant::NodeAssistant.include_port_schemas());
 
-        // Dispatch
-        assert!(BoardStateVariant::Dispatch.include_agent_ids());
-        assert!(BoardStateVariant::Dispatch.include_port_schemas());
-        assert!(BoardStateVariant::Dispatch.include_plan());
-
         // initial_instructions — manager variants only
         assert!(BoardStateVariant::ManagerAssistant.include_initial_instructions());
         assert!(BoardStateVariant::ManagerBuilder.include_initial_instructions());
         assert!(!BoardStateVariant::NodeAssistant.include_initial_instructions());
-        assert!(!BoardStateVariant::Dispatch.include_initial_instructions());
     }
 
     // ========================================================================
