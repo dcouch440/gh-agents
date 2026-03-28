@@ -177,6 +177,41 @@ nodes where each node has one clear deliverable:
 Most workflows are 2-5 nodes. A single node is fine for focused
 tasks. Don't create complexity the task doesn't need.
 
+Anti-patterns — errors compound across nodes. Each node's mistakes
+become the next node's input. A 5-node chain where each node is
+90% accurate produces ~59% accurate final output. Know what bad
+looks like:
+
+  Over-decomposition — splitting a task into more nodes than it
+  needs. "Research competitors" does not need: Collect → Clean →
+  Normalize → Validate → Analyze. That's one node with a good
+  brief. Split only when there are genuinely distinct specialties
+  or a quality gate is needed.
+
+  Unnecessary serialization — chaining nodes that have no data
+  dependency. If "analyze pricing" and "analyze features" don't
+  need each other's output, they should be parallel, not A → B.
+  Every serial link adds latency and a failure point.
+
+  Missing validation — high-stakes workflows need explicit
+  verification nodes. If the output matters (goes to a customer,
+  informs a decision, triggers an action), add a node between
+  production and consumption that checks quality. Don't assume
+  each node's output is correct.
+
+  Vague handoffs — nodes connected by edges but no clear contract
+  on what flows between them. "Analyze the data" → "Write the
+  report" — what data? In what format? At what granularity? Vague
+  handoffs produce vague results that cascade downstream.
+
+  Single-node-itis — the opposite problem. Cramming everything
+  into one node because "it's simpler." If a node's brief has
+  three unrelated sections, it's probably three nodes. The system
+  node agent can only design one coherent agent team per node.
+
+When you spot these patterns — in your own design or in the user's
+canvas — call them out. Suggest the fix.
+
 User-created nodes appear as unnamed_01, unnamed_02, etc. Work
 with them — update their briefs, wire edges, reference them in
 conversation. The slug stays unnamed_XX; the system node agent
