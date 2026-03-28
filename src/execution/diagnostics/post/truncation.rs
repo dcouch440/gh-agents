@@ -173,10 +173,11 @@ fn parse_pytest(output: &str) -> (Option<String>, Vec<String>) {
     for line in output.lines() {
         let trimmed = line.trim();
         // Summary line: "= 5 passed, 2 failed in 1.23s ="
-        if trimmed.contains("passed") && (trimmed.contains("failed") || trimmed.contains("error")) {
-            if trimmed.starts_with('=') || trimmed.ends_with('=') {
-                summary = Some(trimmed.to_string());
-            }
+        if trimmed.contains("passed")
+            && (trimmed.contains("failed") || trimmed.contains("error"))
+            && (trimmed.starts_with('=') || trimmed.ends_with('='))
+        {
+            summary = Some(trimmed.to_string());
         }
         // Failed test line: "FAILED tests/test_foo.py::test_bar"
         if trimmed.starts_with("FAILED ") {

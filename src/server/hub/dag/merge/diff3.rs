@@ -87,7 +87,6 @@ fn parse_conflict_markers(conflicted: &str, base: &str) -> Vec<ConflictHunk> {
 
     while i < lines.len() {
         if lines[i].starts_with("<<<<<<<") {
-            let marker_start = i;
             i += 1;
 
             // Collect base/original lines until ||||||| or =======
@@ -130,14 +129,11 @@ fn parse_conflict_markers(conflicted: &str, base: &str) -> Vec<ConflictHunk> {
                 i += 1;
             }
 
-            let marker_end = if i < lines.len() { i + 1 } else { i };
-
             // Estimate base line range by searching for the base content
             let base_range = estimate_base_range(&base_section, &base_lines, base_line_cursor);
             base_line_cursor = base_range.end;
 
             hunks.push(ConflictHunk {
-                marker_range: marker_start..marker_end,
                 base_lines: base_section.join("\n"),
                 version_a_lines: version_a.join("\n"),
                 version_b_lines: version_b.join("\n"),

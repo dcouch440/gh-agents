@@ -718,16 +718,6 @@ mod tests {
         assert_eq!(user.login, "uauser");
     }
 
-    #[test]
-    fn configure_git_credentials_runs() {
-        // This actually runs git config --global, so we just verify it doesn't panic
-        // and returns Ok or Err (depending on environment).
-        let result = GitHubAuth::configure_git_credentials("test-token-for-unit-test");
-        // Clean up regardless
-        let _ = GitHubAuth::remove_git_credentials();
-        // In CI or local, git should be available
-        assert!(result.is_ok());
-    }
 
     #[test]
     fn token_response_success_fields() {

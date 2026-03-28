@@ -36,11 +36,11 @@ pub struct StepOverlay {
 #[derive(Debug)]
 pub enum FileClassification {
     /// Created by exactly one step — auto-accept.
-    NewFileSingle { step_id: Uuid, content: Vec<u8> },
+    NewFileSingle { content: Vec<u8> },
     /// Same path created by 2+ steps — LLM merge needed.
     NewFileMulti { versions: Vec<(Uuid, Vec<u8>)> },
     /// Modified by exactly one step — auto-accept.
-    ModifiedSingle { step_id: Uuid, content: Vec<u8> },
+    ModifiedSingle { content: Vec<u8> },
     /// Modified by 2+ steps — needs three-way merge.
     ModifiedMulti { versions: Vec<(Uuid, Vec<u8>)> },
     /// Deleted by one step, untouched by others — auto-accept deletion.
@@ -51,7 +51,7 @@ pub enum FileClassification {
         modified_content: Vec<u8>,
     },
     /// Binary file from one step — auto-accept.
-    BinarySingle { step_id: Uuid, content: Vec<u8> },
+    BinarySingle { content: Vec<u8> },
     /// Binary file from 2+ steps — last-write-wins.
     BinaryMulti { versions: Vec<(Uuid, Vec<u8>)> },
 }
@@ -59,13 +59,14 @@ pub enum FileClassification {
 // ── File Type Detection ──────────────────────────────────────────────────────
 
 /// Detected file type, used for context extraction strategy.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum FileType {
     Code(Language),
     Markup(MarkupKind),
     Structured(StructuredKind),
     Config,
     Binary,
+    #[default]
     Unknown,
 }
 
@@ -101,8 +102,6 @@ pub enum StructuredKind {
 /// A single conflict region extracted from diff3 conflict markers.
 #[derive(Debug, Clone)]
 pub struct ConflictHunk {
-    /// Line range in the conflicted output where this hunk lives.
-    pub marker_range: Range<usize>,
     /// Base version of the conflicting lines.
     pub base_lines: String,
     /// Version A's modification.
@@ -144,12 +143,6 @@ pub struct ScopeInfo {
     pub start_line: usize,
 }
 
-impl Default for FileType {
-    fn default() -> Self {
-        FileType::Unknown
-    }
-}
-
 // ── Merge Results ────────────────────────────────────────────────────────────
 
 /// Result of a three-way merge on a single file.
@@ -166,14 +159,6 @@ pub enum MergeResult {
     },
 }
 
-/// Outcome of LLM verification on a resolved hunk.
-#[derive(Debug)]
-pub enum VerifyResult {
-    Ok,
-    Warning(String),
-    Failed(String),
-}
-
 /// Summary of merge operations for a parallel batch.
 #[derive(Debug, Default)]
 pub struct MergeReport {
@@ -187,29 +172,11 @@ pub struct MergeReport {
     pub fallback_used: usize,
     /// Total LLM tokens used for merge resolution.
     pub total_tokens: u64,
-    /// Per-file details for observability.
-    pub file_details: Vec<MergeFileDetail>,
-}
-
-#[derive(Debug)]
-pub struct MergeFileDetail {
-    pub path: PathBuf,
-    pub action: MergeAction,
-}
-
-#[derive(Debug)]
-pub enum MergeAction {
-    AutoAccepted,
-    CleanMerge,
-    LlmResolved { hunks: usize },
-    Fallback { reason: String },
-    Deleted,
 }
 
 /// Info about a step used in merge prompts.
 #[derive(Debug, Clone)]
 pub struct StepInfo {
-    pub step_id: Uuid,
     pub name: String,
     pub description: String,
     pub display_order: i32,

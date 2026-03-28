@@ -133,6 +133,12 @@ impl DiagnosticsEngine {
     }
 }
 
+impl Default for DiagnosticsEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Sanitize model tool inputs: unescape HTML entities and strip
 /// model-specific XML artifacts (e.g. Grok citation tags).
 pub fn html_unescape(s: &str) -> String {

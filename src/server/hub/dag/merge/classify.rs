@@ -4,7 +4,7 @@
 //! into one of the `FileClassification` variants.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
 
@@ -61,7 +61,7 @@ pub fn classify_overlays(
 }
 
 /// Detect the file type from its extension.
-pub fn detect_file_type(path: &PathBuf) -> FileType {
+pub fn detect_file_type(path: &Path) -> FileType {
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
@@ -141,7 +141,7 @@ pub fn detect_file_type(path: &PathBuf) -> FileType {
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
 
-fn detect_binary(path: &PathBuf, changes: &[(Uuid, &OverlayChange)]) -> bool {
+fn detect_binary(path: &Path, changes: &[(Uuid, &OverlayChange)]) -> bool {
     // Check extension
     let ext = path
         .extension()
@@ -178,10 +178,7 @@ fn classify_binary(changes: &[(Uuid, &OverlayChange)]) -> FileClassification {
 
     if versions.len() <= 1 {
         match versions.into_iter().next() {
-            Some((id, content)) => FileClassification::BinarySingle {
-                step_id: id,
-                content,
-            },
+            Some((_id, content)) => FileClassification::BinarySingle { content },
             None => FileClassification::DeletedSingle,
         }
     } else {
@@ -217,11 +214,8 @@ fn classify_existing_file(changes: &[(Uuid, &OverlayChange)]) -> FileClassificat
 
     // Single modifier
     if modifiers.len() == 1 {
-        let (id, content) = modifiers.into_iter().next().unwrap();
-        return FileClassification::ModifiedSingle {
-            step_id: id,
-            content,
-        };
+        let (_id, content) = modifiers.into_iter().next().unwrap();
+        return FileClassification::ModifiedSingle { content };
     }
 
     // Multi-modifier — needs diff3
@@ -240,11 +234,8 @@ fn classify_new_file(changes: &[(Uuid, &OverlayChange)]) -> FileClassification {
         .collect();
 
     if creators.len() == 1 {
-        let (id, content) = creators.into_iter().next().unwrap();
-        FileClassification::NewFileSingle {
-            step_id: id,
-            content,
-        }
+        let (_id, content) = creators.into_iter().next().unwrap();
+        FileClassification::NewFileSingle { content }
     } else {
         FileClassification::NewFileMulti { versions: creators }
     }
