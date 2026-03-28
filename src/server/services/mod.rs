@@ -34,6 +34,7 @@ pub mod system_store;
 pub mod timeline;
 pub mod tools;
 pub mod validation;
+pub mod workflow_agent;
 pub mod workflows;
 pub mod workspace;
 
