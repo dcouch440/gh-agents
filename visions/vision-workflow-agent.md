@@ -238,21 +238,14 @@ The agent's context window compresses over long conversations — file contents 
 ```xml
 <current_state>
   <topology>
-    <node slug="research" name="Market Research" depends_on="" status="configured" agents="Scanner, Crawler">
-      Research competitor pricing data from public sources.
-      <last_run>Found 15 competitor profiles across 4 markets. Saved to competitor_data.json.</last_run>
-    </node>
-    <node slug="fact_checker" depends_on="research" status="configuring">
-      Verify claims against authoritative sources.
-    </node>
-    <node slug="unnamed_01" depends_on="fact_checker" status="idle">
-      Produce summary report with verified data.
-    </node>
+    <node slug="research" name="Market Research" depends_on="" status="configured" agents="Scanner, Crawler" />
+    <node slug="fact_checker" depends_on="research" status="configuring" />
+    <node slug="unnamed_01" depends_on="fact_checker" status="idle" />
   </topology>
 </current_state>
 ```
 
-The system prompt explains what each attribute means. The XML is pure data — no inline descriptions.
+One self-closing tag per node. The agent reads `nodes/{slug}.md` if it needs the brief contents. No text content, no execution summaries — `<current_state>` is topology metadata only.
 
 **Read-before-write enforcement:** The backend rejects writes to any file the agent hasn't read this turn. This prevents the agent from writing based on stale history — it always works from the current file contents.
 
@@ -277,12 +270,7 @@ The system prompt explains what each attribute means. The XML is pure data — n
 | `status` | DB step status | Current activity state (see table above) |
 | `agents` | System node agent's roster | Comma-separated agent names (only present when configured) |
 
-**Node children:**
-
-| Element | Source | Purpose |
-|---------|--------|---------|
-| Text content | First line or heading of `nodes/{slug}.md` | Brief summary of what this node does. For long briefs, the agent reads the full file. |
-| `<last_run>` | Run summarizer | What happened last time this node executed (only present if the node has run) |
+Nodes are self-closing tags with attributes only — no child elements. The agent reads `nodes/{slug}.md` via shell if it needs the brief contents.
 
 When the board is empty:
 ```xml

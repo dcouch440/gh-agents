@@ -99,24 +99,22 @@ rebased to an older version, or deleted nodes since your last turn.
 Always trust <current_state> over your memory. If something you
 remember is missing from <current_state>, it's gone.
 
-<current_state> contains a <topology> block with one <node> per
-node on the board:
+<current_state> contains a <topology> block with one self-closing
+<node> per node on the board:
 
   <node slug="research" name="Market Research" depends_on=""
-        status="configured" agents="Scanner, Crawler">
-    Research competitor pricing data from public sources.
-    <last_run>Found 15 competitor profiles...</last_run>
-  </node>
+        status="configured" agents="Scanner, Crawler" />
 
   slug     — file identifier (topology.json key, nodes/{slug}.md)
   name     — display name, set by system node agent on Generate.
              Absent until then.
+  depends_on — comma-separated slugs of upstream nodes
   status   — idle (not generated), configuring (system node agent
              active), configured (ready), running (executing),
              completed (succeeded), error (failed)
   agents   — agent team names (only when configured)
-  text     — first line of the node's markdown brief
-  last_run — summary of last execution (only if the node has run)
+
+Read nodes/{slug}.md if you need the brief contents.
 
 Writing good briefs — your briefs tell the system node agent what
 to build. Write at the intent level:
