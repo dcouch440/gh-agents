@@ -310,6 +310,9 @@ pub mod routes {
     pub const WORKFLOW_PLANS: &str = "/workflows/:id/plans";
     pub const WORKFLOW_QUESTION_STATES: &str = "/workflows/:id/question-states";
 
+    // Workflow Agent Session
+    pub const WORKFLOW_AGENT_SESSION: &str = "/workflows/:id/agent-session";
+
     // Workshop (node-by-node execution)
     pub const WORKFLOW_WORKSHOP: &str = "/workflows/:id/workshop";
     pub const WORKFLOW_WORKSHOP_STEP_EXECUTE: &str =

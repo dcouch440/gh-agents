@@ -36,6 +36,7 @@ pub use sub_dag_handlers::get_step_sub_dag;
 pub use template_handlers::{
     create_template, delete_template, get_template, list_templates, rebase_workshop,
 };
+pub use types::WorkflowAgentSessionResponse;
 pub use types::{
     CreateStepRequest, CreateTemplateRequest, CreateWorkflowRequest, EdgeRequest, EdgeResponse,
     RebaseResponse, RunDetailResponse, RunStepResultResponse, RunTemplateDetailResponse,
@@ -45,7 +46,8 @@ pub use types::{
     WorkshopStepResponse,
 };
 pub use workflow_handlers::{
-    create_workflow, delete_workflow, get_workflow, list_workflows, update_workflow,
+    create_workflow, delete_workflow, get_or_create_workflow_agent_session, get_workflow,
+    list_workflows, update_workflow,
 };
 pub use workshop_handlers::{execute_workshop_step, get_or_create_workshop, get_workshop};
 

@@ -369,3 +369,15 @@ pub fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
         designer_handoff: r.designer_handoff,
     }
 }
+
+// ============================================================================
+// Workflow Agent Session
+// ============================================================================
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct WorkflowAgentSessionResponse {
+    pub session_id: Uuid,
+    pub workflow_id: Uuid,
+    pub title: String,
+    pub created_at: DateTime<Utc>,
+}

@@ -271,6 +271,9 @@ pub mod roles {
     /// System node agent system prompt (designs runtime agent teams).
     pub const SYSTEM_NODE_AGENT_SYSTEM: &str = include_str!("../../config/system_agent/system.md");
 
+    /// Workflow agent system prompt (designs workflow topology via conversation).
+    pub const WORKFLOW_AGENT_SYSTEM: &str = include_str!("../../config/workflow_agent/system.md");
+
     /// Workforce runtime agent prompt template.
     pub static WORKFORCE_AGENT: RoleDefinition = RoleDefinition {
         system: include_str!("../../config/runtime_agent/system.md"),

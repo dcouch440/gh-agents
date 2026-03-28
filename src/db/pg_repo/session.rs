@@ -138,6 +138,10 @@ impl SessionRepo for PgRepo {
         crate::db::find_manager_builder_session(&self.pool, workflow_id).await
     }
 
+    async fn find_workflow_agent_session(&self, workflow_id: Uuid) -> Result<Option<SessionRow>> {
+        crate::db::find_workflow_agent_session(&self.pool, workflow_id).await
+    }
+
     async fn check_initial_instructions_sent(
         &self,
         step_ids: &[Uuid],

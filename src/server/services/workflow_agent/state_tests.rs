@@ -126,10 +126,7 @@ mod tests {
     fn status_error_failed_dispatch() {
         let step = base_step();
         let dispatch = make_dispatch(step.id, "failed");
-        assert_eq!(
-            resolve_node_status(&step, &[], Some(&dispatch)),
-            "error"
-        );
+        assert_eq!(resolve_node_status(&step, &[], Some(&dispatch)), "error");
     }
 
     // ── resolve_node_status: priority ordering ─────────────────────────
@@ -160,10 +157,7 @@ mod tests {
         let mut step = base_step();
         step.child_workflow_id = Some(Uuid::new_v4());
         let dispatch = make_dispatch(step.id, "failed");
-        assert_eq!(
-            resolve_node_status(&step, &[], Some(&dispatch)),
-            "error"
-        );
+        assert_eq!(resolve_node_status(&step, &[], Some(&dispatch)), "error");
     }
 
     #[test]

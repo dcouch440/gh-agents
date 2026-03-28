@@ -210,6 +210,27 @@ pub async fn find_manager_builder_session(
     Ok(row)
 }
 
+/// Find the workflow agent session for a workflow.
+///
+/// Workflow agent sessions have `draft_config->>'role' = 'workflow_agent'`
+/// and `draft_config->>'workflow_id'` matching the given workflow.
+pub async fn find_workflow_agent_session(
+    pool: &PgPool,
+    workflow_id: Uuid,
+) -> Result<Option<SessionRow>> {
+    let row: Option<SessionRow> = sqlx::query_as(
+        "SELECT id, user_id, mode_id, title, summary, agent_id, draft_config, created_at, updated_at \
+         FROM chat_sessions \
+         WHERE draft_config->>'workflow_id' = $1 \
+           AND draft_config->>'role' = 'workflow_agent'"
+    )
+        .bind(workflow_id.to_string())
+        .fetch_optional(pool)
+        .await
+        .context("Failed to find workflow agent session")?;
+    Ok(row)
+}
+
 /// Batch-check which steps have received initial instructions.
 ///
 /// A step is considered "instructed" if its L3 assistant session contains at

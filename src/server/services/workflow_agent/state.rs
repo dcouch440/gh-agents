@@ -160,10 +160,7 @@ pub(crate) fn resolve_node_status(
     latest_dispatch: Option<&AgentExecutionRow>,
 ) -> &'static str {
     // 1. Active dispatch task → configuring
-    if active_tasks
-        .iter()
-        .any(|t| t.status == TaskStatus::Running)
-    {
+    if active_tasks.iter().any(|t| t.status == TaskStatus::Running) {
         return "configuring";
     }
 
