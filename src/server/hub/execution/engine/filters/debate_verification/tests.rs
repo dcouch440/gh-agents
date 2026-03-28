@@ -413,7 +413,8 @@ mod tests {
 
         let provider: Arc<dyn LLMProvider> = Arc::new(SlowLLMProvider);
         let repo = mock_repo_with_agents(vec![agent]);
-        let filter = DebateVerificationFilter::new(provider, repo, vec![agent_id], None, None);
+        let filter = DebateVerificationFilter::new(provider, repo, vec![agent_id], None, None)
+            .with_timeout_secs(1);
         let filter: &dyn ExecutionFilter = &filter;
 
         let ctx = FilterContext::new("m", Uuid::new_v4());
@@ -425,9 +426,9 @@ mod tests {
 
         let response = mock_response();
 
-        // The filter should timeout (60s) and treat as approved, not hang forever.
+        // The filter should timeout (1s) and treat as approved, not hang forever.
         let action = tokio::time::timeout(
-            std::time::Duration::from_secs(90),
+            std::time::Duration::from_secs(5),
             filter.on_response(&ctx, &response),
         )
         .await

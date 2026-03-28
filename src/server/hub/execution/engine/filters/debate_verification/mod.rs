@@ -49,6 +49,8 @@ pub struct DebateVerificationFilter {
     ae_repo: Option<Arc<dyn AgentExecutionRepo>>,
     /// For recording token/cost usage of verification calls.
     tl_repo: Option<Arc<dyn TokenLedgerRepo>>,
+    /// Per-agent timeout in seconds (defaults to VERIFICATION_AGENT_TIMEOUT_SECS).
+    timeout_secs: u64,
 }
 
 /// Maximum tokens for a verification critique response.
@@ -92,7 +94,15 @@ impl DebateVerificationFilter {
             prompt_context: tokio::sync::Mutex::new(None),
             ae_repo,
             tl_repo,
+            timeout_secs: VERIFICATION_AGENT_TIMEOUT_SECS,
         }
+    }
+
+    /// Override the per-agent timeout (useful for testing).
+    #[cfg(test)]
+    pub fn with_timeout_secs(mut self, secs: u64) -> Self {
+        self.timeout_secs = secs;
+        self
     }
 
     /// Build the system prompt for a verification agent.
@@ -271,6 +281,7 @@ impl ExecutionFilter for DebateVerificationFilter {
             let repo = Arc::clone(&self.repo);
             let ae_repo = self.ae_repo.clone();
             let tl_repo = self.tl_repo.clone();
+            let timeout_secs = self.timeout_secs;
             let system_prompt_summary = capture.system_prompt.clone();
             let user_prompt = capture.user_prompt.clone();
             let primary_response = response.content.clone();
@@ -347,7 +358,7 @@ impl ExecutionFilter for DebateVerificationFilter {
 
                 // Execute with timeout.
                 let llm_result = tokio::time::timeout(
-                    Duration::from_secs(VERIFICATION_AGENT_TIMEOUT_SECS),
+                    Duration::from_secs(timeout_secs),
                     provider.send_message(request),
                 )
                 .await;
@@ -406,7 +417,7 @@ impl ExecutionFilter for DebateVerificationFilter {
                     Err(_elapsed) => {
                         warn!(
                             verifier = agent.name,
-                            timeout_secs = VERIFICATION_AGENT_TIMEOUT_SECS,
+                            timeout_secs = timeout_secs,
                             "verification agent timed out, treating as approved"
                         );
                         (
