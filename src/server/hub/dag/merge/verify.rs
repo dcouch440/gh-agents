@@ -9,7 +9,7 @@ use super::types::{FileType, Language, StructuredKind};
 #[derive(Debug)]
 pub enum VerifyOutcome {
     Ok,
-    Warning(String),
+    Warning,
     Failed(String),
 }
 
@@ -51,28 +51,24 @@ pub fn verify_resolution(
         let imports_merged = count_imports(merged, lang);
         let expected = imports_a.max(imports_b);
         if expected > 0 && imports_merged < expected {
-            return VerifyOutcome::Warning(format!(
-                "Fewer imports than expected: {} in merged vs {} expected (A={}, B={})",
-                imports_merged, expected, imports_a, imports_b
-            ));
+            return VerifyOutcome::Warning;
         }
     }
 
     // 4. Bracket balance (code files — heuristic)
     if matches!(file_type, FileType::Code(_)) && !brackets_balanced(merged) {
-        return VerifyOutcome::Warning("Bracket imbalance in merged output".to_string());
+        return VerifyOutcome::Warning;
     }
 
     // 5. JSON validity (structured data)
     if matches!(file_type, FileType::Structured(StructuredKind::Json)) {
         // Only check if the merged content looks like a complete JSON value
         let trimmed = merged.trim();
-        if (trimmed.starts_with('{') && trimmed.ends_with('}'))
-            || (trimmed.starts_with('[') && trimmed.ends_with(']'))
+        if ((trimmed.starts_with('{') && trimmed.ends_with('}'))
+            || (trimmed.starts_with('[') && trimmed.ends_with(']')))
+            && serde_json::from_str::<serde_json::Value>(trimmed).is_err()
         {
-            if serde_json::from_str::<serde_json::Value>(trimmed).is_err() {
-                return VerifyOutcome::Failed("Invalid JSON in merged output".to_string());
-            }
+            return VerifyOutcome::Failed("Invalid JSON in merged output".to_string());
         }
     }
 

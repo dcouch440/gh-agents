@@ -78,7 +78,7 @@ pub async fn resolve_hunk(
         &hunk.version_b_lines,
         &context.file_type,
     ) {
-        VerifyOutcome::Ok | VerifyOutcome::Warning(_) => Ok((result, tokens)),
+        VerifyOutcome::Ok | VerifyOutcome::Warning => Ok((result, tokens)),
         VerifyOutcome::Failed(reason) => {
             warn!(
                 file = %context.file_path,
@@ -101,7 +101,7 @@ pub async fn resolve_hunk(
                 &hunk.version_b_lines,
                 &context.file_type,
             ) {
-                VerifyOutcome::Ok | VerifyOutcome::Warning(_) => Ok((retry_result, tokens)),
+                VerifyOutcome::Ok | VerifyOutcome::Warning => Ok((retry_result, tokens)),
                 VerifyOutcome::Failed(reason) => {
                     warn!(
                         file = %context.file_path,

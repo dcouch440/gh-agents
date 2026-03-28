@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use tracing::{info, warn};
+use tracing::info;
 use uuid::Uuid;
 
 use crate::server::services::workspace::{WorkspaceError, WorkspaceManager};

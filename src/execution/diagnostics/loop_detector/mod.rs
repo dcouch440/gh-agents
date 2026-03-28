@@ -15,15 +15,13 @@ use super::types::{ChangeType, FileChange};
 const MAX_TRACKED_FILES: usize = 100;
 
 /// Tracks per-file edit history within an agent's execution.
+#[derive(Default)]
 pub struct LoopDetector {
     /// Map from file path to list of edit records.
     file_edits: HashMap<PathBuf, Vec<EditRecord>>,
 }
 
-struct EditRecord {
-    command_index: usize,
-    size: u64,
-}
+struct EditRecord;
 
 /// Loop detection status for the current command.
 #[derive(Debug)]
@@ -63,15 +61,13 @@ impl LoopStatus {
 
 impl LoopDetector {
     pub fn new() -> Self {
-        Self {
-            file_edits: HashMap::new(),
-        }
+        Self::default()
     }
 
     /// Record file changes and return the loop status.
     ///
     /// Only tracks `Modified` files — `Created` and `Deleted` don't indicate loops.
-    pub fn record(&mut self, command_index: usize, changes: &[FileChange]) -> LoopStatus {
+    pub fn record(&mut self, _command_index: usize, changes: &[FileChange]) -> LoopStatus {
         let mut max_status = LoopStatus::Clean;
 
         for change in changes {
@@ -94,10 +90,7 @@ impl LoopDetector {
             }
 
             let edits = self.file_edits.entry(change.path.clone()).or_default();
-            edits.push(EditRecord {
-                command_index,
-                size: change.size,
-            });
+            edits.push(EditRecord);
 
             let count = edits.len();
             if count >= 5 {

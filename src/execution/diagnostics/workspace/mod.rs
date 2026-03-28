@@ -5,7 +5,7 @@ pub mod snapshot;
 
 mod tests;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use digest::WorkspaceDigest;
 use snapshot::{FileMetadata, UpperDirSnapshot};
@@ -13,6 +13,7 @@ use snapshot::{FileMetadata, UpperDirSnapshot};
 use super::types::{ChangeType, FileChange};
 
 /// Tracks workspace state across commands within an agent's lifecycle.
+#[derive(Default)]
 pub struct WorkspaceTracker {
     prev_file_count: usize,
     prev_dir_count: usize,
@@ -21,11 +22,7 @@ pub struct WorkspaceTracker {
 
 impl WorkspaceTracker {
     pub fn new() -> Self {
-        Self {
-            prev_file_count: 0,
-            prev_dir_count: 0,
-            initialized: false,
-        }
+        Self::default()
     }
 
     /// Initialize baseline counts from the first pre-command snapshot.
@@ -145,7 +142,7 @@ fn file_changed(before: &FileMetadata, after: &FileMetadata) -> bool {
 }
 
 /// Strip the `.wh.` prefix from OverlayFS whiteout filenames.
-fn strip_whiteout_prefix(path: &PathBuf) -> PathBuf {
+fn strip_whiteout_prefix(path: &Path) -> PathBuf {
     if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
         if let Some(stripped) = name.strip_prefix(".wh.") {
             if let Some(parent) = path.parent() {
@@ -154,5 +151,5 @@ fn strip_whiteout_prefix(path: &PathBuf) -> PathBuf {
             return PathBuf::from(stripped);
         }
     }
-    path.clone()
+    path.to_path_buf()
 }

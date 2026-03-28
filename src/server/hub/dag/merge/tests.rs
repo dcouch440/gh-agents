@@ -327,7 +327,6 @@ mod tests {
         let version_a = "import os\nfrom flask import Flask\nfrom auth import token\n\ndef main():\n    app = Flask(__name__, static_folder='static')\n    return app\n";
         let version_b = "import os\nfrom flask import Flask\nfrom db import conn\n\ndef main():\n    app = Flask(__name__, template_folder='templates')\n    return app\n";
         let hunk = ConflictHunk {
-            marker_range: 0..1,
             base_lines: "    app = Flask(__name__)".to_string(),
             version_a_lines: "    app = Flask(__name__, static_folder='static')".to_string(),
             version_b_lines: "    app = Flask(__name__, template_folder='templates')".to_string(),
@@ -363,7 +362,6 @@ mod tests {
     fn test_markdown_outline_extraction() {
         let content = "# Title\n\n## Section 1\n\nSome text.\n\n## Section 2\n\nMore text.\n\n### Subsection\n\nDetails.\n";
         let hunk = ConflictHunk {
-            marker_range: 0..1,
             base_lines: "More text.".to_string(),
             version_a_lines: "Updated text A.".to_string(),
             version_b_lines: "Updated text B.".to_string(),
@@ -389,7 +387,6 @@ mod tests {
     fn test_small_json_full_file() {
         let content = "{\n  \"name\": \"my-app\",\n  \"version\": \"1.0\"\n}\n";
         let hunk = ConflictHunk {
-            marker_range: 0..1,
             base_lines: "  \"version\": \"1.0\"".to_string(),
             version_a_lines: "  \"version\": \"1.1\"".to_string(),
             version_b_lines: "  \"version\": \"2.0\"".to_string(),
@@ -452,7 +449,7 @@ mod tests {
             "def foo():\n    return {}",
             &FileType::Code(Language::Python),
         );
-        assert!(matches!(result, VerifyOutcome::Warning(_)));
+        assert!(matches!(result, VerifyOutcome::Warning));
     }
 
     #[test]

@@ -6,7 +6,7 @@
 //! via Grok one-shot LLM calls with file-type-aware context extraction.
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use tracing::{info, warn};
 
@@ -26,16 +26,12 @@ mod tests;
 use classify::detect_file_type;
 use context::extract_context;
 use diff3::{n_way_merge, reassemble, three_way_merge};
-use types::{
-    FileClassification, FileType, MergeAction, MergeFileDetail, MergeReport, MergeResult, StepInfo,
-    StepOverlay,
-};
+use types::{FileClassification, FileType, MergeReport, MergeResult, StepInfo, StepOverlay};
 
 /// Result from an async file merge task.
 struct AsyncMergeResult {
     path: PathBuf,
     outcome: MergeOutcome,
-    detail: MergeFileDetail,
     tokens: u64,
     hunks_resolved: usize,
 }
@@ -73,36 +69,22 @@ pub async fn merge_parallel_overlays(
 
         match classification {
             // Auto-accept cases (no LLM needed)
-            FileClassification::NewFileSingle { content, .. }
-            | FileClassification::ModifiedSingle { content, .. }
-            | FileClassification::BinarySingle { content, .. } => {
-                outcomes.insert(path.clone(), MergeOutcome::Write(content));
+            FileClassification::NewFileSingle { content }
+            | FileClassification::ModifiedSingle { content }
+            | FileClassification::BinarySingle { content } => {
+                outcomes.insert(path, MergeOutcome::Write(content));
                 report.auto_merged += 1;
-                report.file_details.push(MergeFileDetail {
-                    path,
-                    action: MergeAction::AutoAccepted,
-                });
             }
 
             FileClassification::DeletedSingle => {
-                outcomes.insert(path.clone(), MergeOutcome::Delete);
+                outcomes.insert(path, MergeOutcome::Delete);
                 report.auto_merged += 1;
-                report.file_details.push(MergeFileDetail {
-                    path,
-                    action: MergeAction::Deleted,
-                });
             }
 
             FileClassification::BinaryMulti { versions } => {
                 let winner = pick_last_write(&versions, &step_infos);
-                outcomes.insert(path.clone(), MergeOutcome::Write(winner));
+                outcomes.insert(path, MergeOutcome::Write(winner));
                 report.fallback_used += 1;
-                report.file_details.push(MergeFileDetail {
-                    path,
-                    action: MergeAction::Fallback {
-                        reason: "Binary file — last-write-wins".to_string(),
-                    },
-                });
             }
 
             // LLM-needing cases — spawn concurrently
@@ -131,7 +113,7 @@ pub async fn merge_parallel_overlays(
                 let modifier_info = step_infos
                     .get(&modifier_step_id)
                     .cloned()
-                    .unwrap_or_else(|| unknown_step_info(modifier_step_id));
+                    .unwrap_or_else(unknown_step_info);
                 let p = path.clone();
                 join_set.spawn(async move {
                     handle_delete_conflict(p, deleter_info, modifier_info, modified_content).await
@@ -151,7 +133,6 @@ pub async fn merge_parallel_overlays(
                 } else {
                     report.auto_merged += 1;
                 }
-                report.file_details.push(result.detail);
                 outcomes.insert(result.path, result.outcome);
             }
             Err(e) => {
@@ -179,7 +160,7 @@ pub fn fallback_last_write_wins(overlays: &[StepOverlay]) -> HashMap<PathBuf, Me
         for (path, change) in &overlay.diff {
             let dominated = all_paths
                 .get(path)
-                .map_or(true, |(order, _)| overlay.display_order > *order);
+                .is_none_or(|(order, _)| overlay.display_order > *order);
 
             if dominated {
                 let outcome = match change {
@@ -206,7 +187,7 @@ pub enum MergeOutcome {
 // ── Internal Handlers (return AsyncMergeResult for concurrent collection) ────
 
 async fn handle_modified_multi(
-    path: &PathBuf,
+    path: &Path,
     file_type: &FileType,
     versions: &[(uuid::Uuid, Vec<u8>)],
     base_files: &HashMap<PathBuf, Vec<u8>>,
@@ -217,14 +198,8 @@ async fn handle_modified_multi(
         None => {
             warn!(path = %path.display(), "No base file for modified_multi — using first version");
             return AsyncMergeResult {
-                path: path.clone(),
+                path: path.to_path_buf(),
                 outcome: MergeOutcome::Write(versions[0].1.clone()),
-                detail: MergeFileDetail {
-                    path: path.clone(),
-                    action: MergeAction::Fallback {
-                        reason: "No base file found".to_string(),
-                    },
-                },
                 tokens: 0,
                 hunks_resolved: 0,
             };
@@ -235,14 +210,8 @@ async fn handle_modified_multi(
     if base_bytes.len() > constants::MERGE_MAX_FILE_SIZE {
         warn!(path = %path.display(), size = base_bytes.len(), "File too large for merge");
         return AsyncMergeResult {
-            path: path.clone(),
+            path: path.to_path_buf(),
             outcome: MergeOutcome::Write(pick_last_write(versions, step_infos)),
-            detail: MergeFileDetail {
-                path: path.clone(),
-                action: MergeAction::Fallback {
-                    reason: format!("File too large: {} bytes", base_bytes.len()),
-                },
-            },
             tokens: 0,
             hunks_resolved: 0,
         };
@@ -253,14 +222,8 @@ async fn handle_modified_multi(
         Ok(s) => s,
         Err(_) => {
             return AsyncMergeResult {
-                path: path.clone(),
+                path: path.to_path_buf(),
                 outcome: MergeOutcome::Write(pick_last_write(versions, step_infos)),
-                detail: MergeFileDetail {
-                    path: path.clone(),
-                    action: MergeAction::Fallback {
-                        reason: "Non-UTF8 file".to_string(),
-                    },
-                },
                 tokens: 0,
                 hunks_resolved: 0,
             };
@@ -274,12 +237,8 @@ async fn handle_modified_multi(
 
     if version_strs.len() < 2 {
         return AsyncMergeResult {
-            path: path.clone(),
+            path: path.to_path_buf(),
             outcome: MergeOutcome::Write(versions[0].1.clone()),
-            detail: MergeFileDetail {
-                path: path.clone(),
-                action: MergeAction::AutoAccepted,
-            },
             tokens: 0,
             hunks_resolved: 0,
         };
@@ -299,12 +258,8 @@ async fn handle_modified_multi(
     let str_refs: Vec<&str> = sorted_versions.iter().map(|(_, _, s)| *s).collect();
     match n_way_merge(base_str, &str_refs) {
         MergeResult::Clean(merged) => AsyncMergeResult {
-            path: path.clone(),
+            path: path.to_path_buf(),
             outcome: MergeOutcome::Write(merged.into_bytes()),
-            detail: MergeFileDetail {
-                path: path.clone(),
-                action: MergeAction::CleanMerge,
-            },
             tokens: 0,
             hunks_resolved: 0,
         },
@@ -314,11 +269,11 @@ async fn handle_modified_multi(
             let step_a = step_infos
                 .get(&step_a_id)
                 .cloned()
-                .unwrap_or_else(|| unknown_step_info(step_a_id));
+                .unwrap_or_else(unknown_step_info);
             let step_b = step_infos
                 .get(&step_b_id)
                 .cloned()
-                .unwrap_or_else(|| unknown_step_info(step_b_id));
+                .unwrap_or_else(unknown_step_info);
 
             let mut resolved_hunks = Vec::new();
             let hunk_count = hunks.len();
@@ -352,12 +307,8 @@ async fn handle_modified_multi(
 
             let final_content = reassemble(&conflicted, &resolved_hunks);
             AsyncMergeResult {
-                path: path.clone(),
+                path: path.to_path_buf(),
                 outcome: MergeOutcome::Write(final_content.into_bytes()),
-                detail: MergeFileDetail {
-                    path: path.clone(),
-                    action: MergeAction::LlmResolved { hunks: hunk_count },
-                },
                 tokens: hunk_tokens,
                 hunks_resolved: hunk_count,
             }
@@ -366,19 +317,15 @@ async fn handle_modified_multi(
 }
 
 async fn handle_new_new(
-    path: &PathBuf,
+    path: &Path,
     file_type: &FileType,
     versions: &[(uuid::Uuid, Vec<u8>)],
     step_infos: &HashMap<uuid::Uuid, StepInfo>,
 ) -> AsyncMergeResult {
     if versions.len() < 2 {
         return AsyncMergeResult {
-            path: path.clone(),
+            path: path.to_path_buf(),
             outcome: MergeOutcome::Write(versions[0].1.clone()),
-            detail: MergeFileDetail {
-                path: path.clone(),
-                action: MergeAction::AutoAccepted,
-            },
             tokens: 0,
             hunks_resolved: 0,
         };
@@ -391,12 +338,8 @@ async fn handle_new_new(
 
     if strs.len() < 2 {
         return AsyncMergeResult {
-            path: path.clone(),
+            path: path.to_path_buf(),
             outcome: MergeOutcome::Write(versions[0].1.clone()),
-            detail: MergeFileDetail {
-                path: path.clone(),
-                action: MergeAction::AutoAccepted,
-            },
             tokens: 0,
             hunks_resolved: 0,
         };
@@ -405,12 +348,8 @@ async fn handle_new_new(
     // Try diff3 with empty string as base
     match three_way_merge("", strs[0].1, strs[1].1) {
         MergeResult::Clean(merged) => AsyncMergeResult {
-            path: path.clone(),
+            path: path.to_path_buf(),
             outcome: MergeOutcome::Write(merged.into_bytes()),
-            detail: MergeFileDetail {
-                path: path.clone(),
-                action: MergeAction::CleanMerge,
-            },
             tokens: 0,
             hunks_resolved: 0,
         },
@@ -418,11 +357,11 @@ async fn handle_new_new(
             let step_a = step_infos
                 .get(strs[0].0)
                 .cloned()
-                .unwrap_or_else(|| unknown_step_info(*strs[0].0));
+                .unwrap_or_else(unknown_step_info);
             let step_b = step_infos
                 .get(strs[1].0)
                 .cloned()
-                .unwrap_or_else(|| unknown_step_info(*strs[1].0));
+                .unwrap_or_else(unknown_step_info);
 
             match resolve::resolve_new_new(
                 &path.to_string_lossy(),
@@ -435,26 +374,16 @@ async fn handle_new_new(
             .await
             {
                 Ok((merged, tokens)) => AsyncMergeResult {
-                    path: path.clone(),
+                    path: path.to_path_buf(),
                     outcome: MergeOutcome::Write(merged.into_bytes()),
-                    detail: MergeFileDetail {
-                        path: path.clone(),
-                        action: MergeAction::LlmResolved { hunks: 1 },
-                    },
                     tokens,
                     hunks_resolved: 1,
                 },
                 Err(e) => {
                     warn!(path = %path.display(), error = %e, "New-new merge failed");
                     AsyncMergeResult {
-                        path: path.clone(),
+                        path: path.to_path_buf(),
                         outcome: MergeOutcome::Write(versions[0].1.clone()),
-                        detail: MergeFileDetail {
-                            path: path.clone(),
-                            action: MergeAction::Fallback {
-                                reason: format!("LLM failed: {e}"),
-                            },
-                        },
                         tokens: 0,
                         hunks_resolved: 0,
                     }
@@ -484,10 +413,6 @@ async fn handle_delete_conflict(
         } else {
             MergeOutcome::Delete
         },
-        detail: MergeFileDetail {
-            path: path.clone(),
-            action: MergeAction::LlmResolved { hunks: 1 },
-        },
         path,
         tokens,
         hunks_resolved: 1,
@@ -503,7 +428,6 @@ fn build_step_info_map(overlays: &[StepOverlay]) -> HashMap<uuid::Uuid, StepInfo
             (
                 o.step_id,
                 StepInfo {
-                    step_id: o.step_id,
                     name: o.step_name.clone(),
                     description: o.step_description.clone(),
                     display_order: o.display_order,
@@ -526,7 +450,7 @@ fn pick_last_write(
 
 fn find_deleter_step(
     overlays: &[StepOverlay],
-    path: &PathBuf,
+    path: &Path,
     modifier_step_id: uuid::Uuid,
 ) -> StepInfo {
     for overlay in overlays {
@@ -535,19 +459,17 @@ fn find_deleter_step(
         }
         if let Some(types::OverlayChange::Deleted) = overlay.diff.get(path) {
             return StepInfo {
-                step_id: overlay.step_id,
                 name: overlay.step_name.clone(),
                 description: overlay.step_description.clone(),
                 display_order: overlay.display_order,
             };
         }
     }
-    unknown_step_info(uuid::Uuid::nil())
+    unknown_step_info()
 }
 
-fn unknown_step_info(step_id: uuid::Uuid) -> StepInfo {
+fn unknown_step_info() -> StepInfo {
     StepInfo {
-        step_id,
         name: "Unknown".to_string(),
         description: "Unknown step".to_string(),
         display_order: 0,

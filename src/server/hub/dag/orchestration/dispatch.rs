@@ -30,7 +30,7 @@ pub(crate) async fn dispatch_step(
 ) -> Result<(), HubError> {
     match step.execution_mode.as_str() {
         "context" | "input" => execute_passthrough(dag, dag_state, step).await,
-        "workforce" | _ if step.child_workflow_id.is_some() => {
+        _ if step.child_workflow_id.is_some() => {
             // File-based execution: read system node agent's config files
             let base_dir = crate::server::services::system_node::resolve_base_dir(
                 dag.state,

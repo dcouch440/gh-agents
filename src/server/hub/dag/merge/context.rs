@@ -285,14 +285,14 @@ fn find_scope_end(lines: &[&str], start: usize, scope_indent: usize, lang: &Lang
     }
 
     // For indentation-based (Python) or fallback
-    for i in (start + 1)..lines.len() {
-        let trimmed = lines[i].trim();
+    for (offset, line) in lines[(start + 1)..].iter().enumerate() {
+        let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
-        let indent = lines[i].len() - trimmed.len();
+        let indent = line.len() - trimmed.len();
         if indent <= scope_indent && !trimmed.starts_with('#') && !trimmed.starts_with("//") {
-            return i;
+            return start + 1 + offset;
         }
     }
 
@@ -426,11 +426,11 @@ fn find_enclosing_section(lines: &[&str], target_line: usize) -> Option<ScopeInf
 
     // Walk forward to find the end (next heading of equal or higher level)
     let mut section_end = lines.len();
-    for i in (section_start + 1)..lines.len() {
-        if let Some(caps) = heading_re.captures(lines[i]) {
+    for (offset, line) in lines[(section_start + 1)..].iter().enumerate() {
+        if let Some(caps) = heading_re.captures(line) {
             let level = caps.get(1).unwrap().as_str().len();
             if level <= section_level {
-                section_end = i;
+                section_end = section_start + 1 + offset;
                 break;
             }
         }
