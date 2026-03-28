@@ -278,11 +278,7 @@ When the board is empty:
 
 ### Conversation history
 
-Persistent across messages. Standard session history with pruning. The agent remembers what it discussed, what it dispatched, what the user asked for.
-
-### Dispatch status
-
-Which system node agents are running, what completed since last turn. Same `dispatch_status` pattern as today.
+Persistent across messages. Standard session history with pruning. The agent remembers what it discussed, what changes it made, what the user asked for.
 
 ## Tools
 
@@ -291,7 +287,7 @@ Which system node agents are running, what completed since last turn. Same `disp
 | `run_command` | Shell access to read and write repo files |
 | `think` | Internal reasoning (not shown to user) |
 
-The agent reads the repo to understand the current board, writes `topology.json` and `nodes/*.json` to make changes. File writes go to the draft layer — the frontend renders them as ghost overlays on the canvas in real-time as the agent works. Changes become live when the user accepts the draft.
+The agent reads the repo to understand the current board, writes `topology.json` and `nodes/*.json` to make changes. Each file write syncs to DB immediately via the filesystem watcher — the frontend sees changes on the canvas in real-time as the agent works.
 
 System node agents are triggered separately when the user clicks "Generate," not by the workflow agent.
 
