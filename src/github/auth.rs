@@ -718,7 +718,6 @@ mod tests {
         assert_eq!(user.login, "uauser");
     }
 
-
     #[test]
     fn token_response_success_fields() {
         let json = r#"{"access_token":"gho_xyz","token_type":"bearer","scope":"repo read:org"}"#;
