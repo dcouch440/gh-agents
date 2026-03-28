@@ -119,7 +119,7 @@ The board serializer's diff logic stays the same — it just diffs against the l
 
 ## Repository
 
-The agent works in a repo synced to the workflow's board state. Same file-based pattern as the system node agent, one level up.
+The agent works in a repo synced to the workflow's board state at `{mount}/workflows/{wf_id}/board/`. Same file-based pattern as the system node agent, one level up.
 
 ```
 ./
@@ -278,7 +278,7 @@ When the board is empty:
 
 ### Conversation history
 
-Persistent across messages. Standard session history with pruning. The agent remembers what it discussed, what changes it made, what the user asked for.
+A session is created on the user's first message, capturing the current board state as context. Persistent across messages from that point. One session per workflow — the user talks to the same agent with the same history for the lifetime of the workflow (unless a rebase rewinds the session).
 
 ## Tools
 
@@ -340,48 +340,99 @@ Version Snapshot
 
 ### Storage Strategy
 
-The existing `content_versions` system handles snapshot storage. It's SHA-256 deduplicated, source-agnostic, and supports arbitrary content types — no schema changes needed.
+Content is stored in the existing `content_versions` table (SHA-256 deduplicated, immutable, append-only). A new `version_snapshots` join table links versions to their content — separate from `run_snapshots`, which is execution-scoped.
 
-Each version creates content version entries:
+Content is packed by logical entity, not per-file. One entry per node repo (all agent configs packed together), not one entry per agent file. This keeps the join table small and restore simple — one read per entity.
 
-| Content Type | Source ID | Content | Role |
-|-------------|-----------|---------|------|
-| `board_topology` | workflow_id | Serialized `topology.json` | `checkpoint` |
-| `board_node` | step_id | Serialized `nodes/{slug}.json` | `checkpoint` |
-| `node_repo_config` | step_id | Serialized `config.json` | `checkpoint` |
-| `node_repo_topology` | step_id | Serialized `topology.json` (agents) | `checkpoint` |
-| `node_repo_agent` | step_id | Serialized `agents/{slug}.json` | `checkpoint` |
-| `session_history` | session_id | Serialized message array | `checkpoint` |
+**Three content types:**
 
-Deduplication means: if a node's config didn't change between Version 2 and Version 3, the content is stored once. Only changed files create new content version rows. A 10-node workflow where the user changed one node description creates ~3 new rows (board topology, the changed node file, maybe the changed session), not 30+.
+| Content Type | Source ID | Content |
+|-------------|-----------|---------|
+| `board_state` | workflow_id | Full board: topology + all node descriptions |
+| `node_repo` | step_id | Entire system node agent repo: config + agent topology + all agent files |
+| `session_history` | session_id | Full message array for one session |
 
-A lightweight `workflow_versions` table links it all:
+**`board_state` content:**
+```json
+{
+  "nodes": {
+    "research": { "depends_on": [], "description": "Research competitor pricing..." },
+    "fact_checker": { "depends_on": ["research"], "description": "Verify claims..." },
+    "report": { "depends_on": ["fact_checker"], "description": "Produce summary report..." }
+  }
+}
+```
+
+**`node_repo` content:**
+```json
+{
+  "config": { "name": "Market Research", "description": "Structured dataset of competitor pricing..." },
+  "topology": { "agents": { "scanner": { "depends_on": [] }, "crawler": { "depends_on": [] } } },
+  "agents": {
+    "scanner": { "name": "Scanner", "system_prompt": "...", "assignment": "...", "expected_output": "...", "capabilities": [] },
+    "crawler": { "name": "Crawler", "system_prompt": "...", "assignment": "...", "expected_output": "...", "capabilities": [] }
+  }
+}
+```
+
+**`session_history` content:**
+```json
+[
+  { "role": "user", "content": "...", "timestamp": "..." },
+  { "role": "assistant", "content": "...", "timestamp": "..." }
+]
+```
+
+Deduplication: if a node repo didn't change between Version 2 and Version 3, the content hash is identical — stored once, referenced twice. A 10-node workflow where the user changed one node creates ~3 new content rows (board state, the changed node repo, maybe a session), not 10+.
+
+**Schema:**
 
 ```sql
 CREATE TABLE workflow_versions (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workflow_id UUID NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
     user_id UUID NOT NULL,
     name TEXT NOT NULL DEFAULT '',
     description TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE INDEX idx_wv_workflow ON workflow_versions(workflow_id, created_at DESC);
+
+CREATE TABLE version_snapshots (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    version_id UUID NOT NULL REFERENCES workflow_versions(id) ON DELETE CASCADE,
+    source_id UUID NOT NULL,
+    content_type TEXT NOT NULL,
+    content_version_id UUID NOT NULL REFERENCES content_versions(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    CONSTRAINT uq_version_snapshot UNIQUE (version_id, source_id, content_type)
+);
+
+CREATE INDEX idx_vs_version ON version_snapshots(version_id);
+CREATE INDEX idx_vs_content ON version_snapshots(content_version_id);
 ```
 
-Content version entries reference the `workflow_version.id` via `run_snapshots` (reusing the existing join table with a new role = `'checkpoint'`).
+**Key properties:**
+- `version_snapshots` is separate from `run_snapshots` — different scopes, different cardinality, no shared columns beyond `content_version_id`
+- Unique constraint on `(version_id, source_id, content_type)` — one snapshot per entity per version, no duplicates
+- `ON DELETE CASCADE` from `workflow_versions` — deleting a version cleans up its snapshots
+- Content versions are never deleted by cascade — they're shared across versions via dedup
+- `idx_vs_version` — fast "load all snapshots for this version" (the restore path)
+- `idx_vs_content` — fast "which versions reference this content" (for future pruning)
 
 ### How It Works
 
 **Saving a version:**
 
 1. User clicks "Save Version" (or system auto-saves before large agent changes)
-2. Backend reads:
-   - Workflow agent's repo files (`topology.json`, `nodes/*.json`)
-   - Each node's system node agent repo from JuiceFS (`{mount}/workflows/{wf_id}/system_node/{step_id}/`)
-   - All session histories (`chat_messages` for the workflow agent session + all node sessions)
-3. Each piece goes through `find_or_create_version()` — deduplicated by SHA-256 hash
-4. A `workflow_versions` row links all the snapshots together
-5. Fast: only changed content creates new rows
+2. Backend creates a `workflow_versions` row
+3. Backend packs and snapshots three content types:
+   - **`board_state`**: Read `topology.json` + all `nodes/*.json` → pack into one JSON object → `find_or_create_version()` → link via `version_snapshots`
+   - **`node_repo`** (per node): Read each node's `config.json` + `topology.json` + `agents/*.json` from JuiceFS → pack into one JSON object per node → `find_or_create_version()` per node → link via `version_snapshots`
+   - **`session_history`** (per session): Read `chat_messages` for the workflow agent session + all node sessions → serialize each → `find_or_create_version()` per session → link via `version_snapshots`
+4. Dedup: `find_or_create_version()` hashes each packed object. Unchanged entities reuse existing content rows. A 10-node workflow with one changed node creates ~3 new content rows.
 
 **Rebasing:**
 
@@ -421,14 +472,22 @@ They coexist:
 
 A user might save many design versions while iterating with the workflow agent, then save a run template when the design is finalized and ready for execution.
 
-### No Undo, Just Rebase
+### No Undo, Just Save and Rebase
 
-There is no undo for committed changes. The user's options:
+There is no granular undo, no timeline scrubbing, no "go back one step." The conversation and the board are interleaved — every agent message, user message, file write, and canvas edit is a point in a shared timeline. Rewinding one without the other creates incoherence.
+
+Instead: **save explicitly, rebase explicitly.** The user saves a version when they want a checkpoint. Everything between checkpoints is just the live state. If they need to go back, they rebase to a saved version.
+
+The user's options when something goes wrong:
 - **Rebase** to a saved version (reverts everything coherently — board, node configs, conversations)
 - **Ask the agent** to revert specific changes ("remove the validator node you just added")
 - **Edit the canvas** manually
 
 Canvas-level ctrl+z only undoes the user's own unsaved visual edits (dragging, resizing) that haven't synced via live sync yet.
+
+### Known Limitation: No Granular History
+
+A real "go back to any point" would require versioning every action across the conversation and board state atomically — git for a collaborative human-AI workspace. This is a future system. The current design is save/rebase only.
 
 ## Visibility and Cancellation
 
