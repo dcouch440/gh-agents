@@ -90,6 +90,17 @@ pub(crate) async fn build_current_state(
         .filter_map(|ae| ae.workflow_step_id.map(|sid| (sid, ae)))
         .collect();
 
+    // Check for active runtime run → running step IDs
+    let running_step_ids: std::collections::HashSet<Uuid> = {
+        let mut ids = std::collections::HashSet::new();
+        if let Ok(Some(run_id)) = wf_repo.get_active_run_for_workflow(workflow_id).await {
+            if let Ok(step_ids) = ae_repo.get_running_step_ids_for_run(run_id).await {
+                ids.extend(step_ids);
+            }
+        }
+        ids
+    };
+
     // Build roster summaries for configured steps
     let agent_summaries = build_agent_summaries(&workforce_steps, wf_repo).await;
 
@@ -110,7 +121,8 @@ pub(crate) async fn build_current_state(
         // Resolve real-time status
         let active_tasks = state.task_registry().list_tasks_for_step(step.id);
         let latest_dispatch = dispatch_by_step.get(&step.id).copied();
-        let status = resolve_node_status(step, &active_tasks, latest_dispatch);
+        let is_running = running_step_ids.contains(&step.id);
+        let status = resolve_node_status(step, &active_tasks, latest_dispatch, is_running);
 
         let deps = depends_on_map
             .get(&step.id)
@@ -158,13 +170,19 @@ pub(crate) fn resolve_node_status(
     step: &WorkflowStepRow,
     active_tasks: &[TaskEntry],
     latest_dispatch: Option<&AgentExecutionRow>,
+    is_running: bool,
 ) -> &'static str {
     // 1. Active dispatch task → configuring
     if active_tasks.iter().any(|t| t.status == TaskStatus::Running) {
         return "configuring";
     }
 
-    // 2. Latest dispatch failed → error
+    // 2. Active runtime execution → running
+    if is_running {
+        return "running";
+    }
+
+    // 3. Latest dispatch failed → error
     if let Some(dispatch) = latest_dispatch {
         if dispatch.status == "failed" {
             return "error";

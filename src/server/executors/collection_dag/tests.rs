@@ -664,6 +664,9 @@ mod tests {
             async fn delete_workflow_version(&self, _: Uuid) -> Result<()> {
                 unimplemented!()
             }
+            async fn get_active_run_for_workflow(&self, _: Uuid) -> Result<Option<Uuid>> {
+                Ok(None)
+            }
         }
 
         // Create test data

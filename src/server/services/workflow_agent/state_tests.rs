@@ -82,35 +82,35 @@ mod tests {
     #[test]
     fn status_idle() {
         let step = base_step();
-        assert_eq!(resolve_node_status(&step, &[], None), "idle");
+        assert_eq!(resolve_node_status(&step, &[], None, false), "idle");
     }
 
     #[test]
     fn status_described() {
         let mut step = base_step();
         step.description = "Some description".to_string();
-        assert_eq!(resolve_node_status(&step, &[], None), "described");
+        assert_eq!(resolve_node_status(&step, &[], None, false), "described");
     }
 
     #[test]
     fn status_configured() {
         let mut step = base_step();
         step.child_workflow_id = Some(Uuid::new_v4());
-        assert_eq!(resolve_node_status(&step, &[], None), "configured");
+        assert_eq!(resolve_node_status(&step, &[], None, false), "configured");
     }
 
     #[test]
     fn status_completed_pinned() {
         let mut step = base_step();
         step.pinned = true;
-        assert_eq!(resolve_node_status(&step, &[], None), "completed");
+        assert_eq!(resolve_node_status(&step, &[], None, false), "completed");
     }
 
     #[test]
     fn status_completed_has_results() {
         let mut step = base_step();
         step.run_results_summary = "some results".to_string();
-        assert_eq!(resolve_node_status(&step, &[], None), "completed");
+        assert_eq!(resolve_node_status(&step, &[], None, false), "completed");
     }
 
     // ── resolve_node_status: active statuses ───────────────────────────
@@ -119,14 +119,44 @@ mod tests {
     fn status_configuring_active_task() {
         let step = base_step();
         let task = make_task(step.id, TaskStatus::Running);
-        assert_eq!(resolve_node_status(&step, &[task], None), "configuring");
+        assert_eq!(
+            resolve_node_status(&step, &[task], None, false),
+            "configuring"
+        );
     }
 
     #[test]
     fn status_error_failed_dispatch() {
         let step = base_step();
         let dispatch = make_dispatch(step.id, "failed");
-        assert_eq!(resolve_node_status(&step, &[], Some(&dispatch)), "error");
+        assert_eq!(
+            resolve_node_status(&step, &[], Some(&dispatch), false),
+            "error"
+        );
+    }
+
+    #[test]
+    fn status_running() {
+        let step = base_step();
+        assert_eq!(resolve_node_status(&step, &[], None, true), "running");
+    }
+
+    #[test]
+    fn running_beats_configured() {
+        let mut step = base_step();
+        step.child_workflow_id = Some(Uuid::new_v4());
+        assert_eq!(resolve_node_status(&step, &[], None, true), "running");
+    }
+
+    #[test]
+    fn configuring_beats_running() {
+        let step = base_step();
+        let task = make_task(step.id, TaskStatus::Running);
+        // Active dispatch task overrides running status
+        assert_eq!(
+            resolve_node_status(&step, &[task], None, true),
+            "configuring"
+        );
     }
 
     // ── resolve_node_status: priority ordering ─────────────────────────
@@ -137,7 +167,10 @@ mod tests {
         step.child_workflow_id = Some(Uuid::new_v4());
         let task = make_task(step.id, TaskStatus::Running);
         // Active task overrides the configured status
-        assert_eq!(resolve_node_status(&step, &[task], None), "configuring");
+        assert_eq!(
+            resolve_node_status(&step, &[task], None, false),
+            "configuring"
+        );
     }
 
     #[test]
@@ -147,7 +180,7 @@ mod tests {
         let dispatch = make_dispatch(step.id, "failed");
         // Active re-dispatch overrides previous failure
         assert_eq!(
-            resolve_node_status(&step, &[task], Some(&dispatch)),
+            resolve_node_status(&step, &[task], Some(&dispatch), false),
             "configuring"
         );
     }
@@ -157,7 +190,10 @@ mod tests {
         let mut step = base_step();
         step.child_workflow_id = Some(Uuid::new_v4());
         let dispatch = make_dispatch(step.id, "failed");
-        assert_eq!(resolve_node_status(&step, &[], Some(&dispatch)), "error");
+        assert_eq!(
+            resolve_node_status(&step, &[], Some(&dispatch), false),
+            "error"
+        );
     }
 
     #[test]
@@ -165,7 +201,7 @@ mod tests {
         let step = base_step();
         let task = make_task(step.id, TaskStatus::Completed);
         // Completed task should NOT show as configuring
-        assert_eq!(resolve_node_status(&step, &[task], None), "idle");
+        assert_eq!(resolve_node_status(&step, &[task], None, false), "idle");
     }
 
     #[test]
@@ -175,7 +211,7 @@ mod tests {
         let dispatch = make_dispatch(step.id, "completed");
         // Completed dispatch → configured (from child_workflow_id), not error
         assert_eq!(
-            resolve_node_status(&step, &[], Some(&dispatch)),
+            resolve_node_status(&step, &[], Some(&dispatch), false),
             "configured"
         );
     }
@@ -184,7 +220,7 @@ mod tests {
     fn cancelled_task_not_configuring() {
         let step = base_step();
         let task = make_task(step.id, TaskStatus::Cancelled);
-        assert_eq!(resolve_node_status(&step, &[task], None), "idle");
+        assert_eq!(resolve_node_status(&step, &[task], None, false), "idle");
     }
 
     // ── format_pipeline_summary ────────────────────────────────────────

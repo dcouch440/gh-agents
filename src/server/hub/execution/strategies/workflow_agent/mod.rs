@@ -63,11 +63,19 @@ impl WorkflowAgentStrategy {
     }
 
     /// Execute a shell command in the base_dir (host execution, no container).
+    ///
+    /// Snapshots the repo before and after the command. If files changed,
+    /// syncs to DB immediately so the frontend sees changes in real-time.
     async fn host_run_command(&self, input: &Value) -> Value {
+        use crate::server::services::workflow_agent::file_reader::snapshot_board_files;
+
         let command = match input["command"].as_str() {
             Some(c) => c,
             None => return json!({ "error": "Missing required parameter: command" }),
         };
+
+        // Snapshot before command
+        let before = snapshot_board_files(&self.base_dir);
 
         let output = match tokio::process::Command::new("sh")
             .arg("-c")
@@ -95,6 +103,27 @@ impl WorkflowAgentStrategy {
         let errors = validate_written_files(&self.base_dir);
         if !errors.is_empty() {
             result["write_validation_errors"] = json!(errors);
+        }
+
+        // Snapshot after command — if files changed, sync immediately
+        let after = snapshot_board_files(&self.base_dir);
+        if before != after {
+            let wf_repo = &*self.state.repos().workflows;
+            if let Err(e) = crate::server::services::workflow_agent::sync::sync_to_db(
+                &self.base_dir,
+                self.workflow_id,
+                self.user_id,
+                wf_repo,
+                &self.state,
+            )
+            .await
+            {
+                warn!(
+                    workflow_id = %self.workflow_id,
+                    error = %e,
+                    "Per-command sync failed — will retry on turn completion"
+                );
+            }
         }
 
         result

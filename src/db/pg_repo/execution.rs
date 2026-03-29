@@ -273,6 +273,19 @@ impl AgentExecutionRepo for PgRepo {
         Ok(rows)
     }
 
+    async fn get_running_step_ids_for_run(&self, workflow_execution_id: Uuid) -> Result<Vec<Uuid>> {
+        let rows: Vec<(Uuid,)> = sqlx::query_as(
+            "SELECT DISTINCT workflow_step_id FROM agent_executions \
+             WHERE workflow_execution_id = $1 \
+               AND status IN ('pending', 'running') \
+               AND workflow_step_id IS NOT NULL",
+        )
+        .bind(workflow_execution_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows.into_iter().map(|r| r.0).collect())
+    }
+
     async fn list_execution_timeline(
         &self,
         workflow_execution_id: Uuid,

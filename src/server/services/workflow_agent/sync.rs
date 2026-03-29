@@ -195,16 +195,24 @@ pub(crate) async fn sync_to_db(
 
     let edge_diff = diff_edges(&desired, &slug_to_id, &current_edges, &workforce_ids);
 
+    let mut created_edges: Vec<crate::db::WorkflowStepEdgeRow> = Vec::new();
     for (from_id, to_id) in &edge_diff.to_add {
         match repo.add_edge(workflow_id, *from_id, *to_id).await {
-            Ok(_) => result.edges_created += 1,
+            Ok(edge) => {
+                created_edges.push(edge);
+                result.edges_created += 1;
+            }
             Err(e) => warn!(error = %e, "Failed to add edge"),
         }
     }
 
+    let mut removed_edges: Vec<(Uuid, Uuid, Uuid)> = Vec::new(); // (edge_id, from, to)
     for (from_id, to_id) in &edge_diff.to_remove {
         match repo.remove_edge(*from_id, *to_id).await {
-            Ok(_) => result.edges_removed += 1,
+            Ok(edge) => {
+                removed_edges.push((edge.id, edge.from_step_id, edge.to_step_id));
+                result.edges_removed += 1;
+            }
             Err(e) => warn!(error = %e, "Failed to remove edge"),
         }
     }
@@ -236,19 +244,59 @@ pub(crate) async fn sync_to_db(
         }
     }
 
-    // Phase 5: Broadcast
-    if !result.nodes_created.is_empty()
-        || !result.nodes_removed.is_empty()
-        || !result.nodes_updated.is_empty()
-        || result.edges_created > 0
-        || result.edges_removed > 0
-    {
+    // Phase 5: Broadcast fine-grained events for real-time canvas updates
+    for slug in &result.nodes_created {
+        if let Some(&step_id) = slug_to_id.get(slug) {
+            state.broadcast_workflow(WorkflowEvent {
+                run_id: None,
+                workflow_id,
+                user_id: Some(user_id),
+                kind: WorkflowEventKind::StepCreated {
+                    step_id,
+                    name: slug_to_display_name(slug),
+                },
+            });
+        }
+    }
+    for (step_id, _slug) in &node_diff.to_remove {
         state.broadcast_workflow(WorkflowEvent {
             run_id: None,
             workflow_id,
             user_id: Some(user_id),
-            kind: WorkflowEventKind::StepConfigUpdated {
-                step_id: workflow_id, // workflow-level update signal
+            kind: WorkflowEventKind::StepDeleted { step_id: *step_id },
+        });
+    }
+    for slug in &result.nodes_updated {
+        if let Some(&step_id) = slug_to_id.get(slug) {
+            state.broadcast_workflow(WorkflowEvent {
+                run_id: None,
+                workflow_id,
+                user_id: Some(user_id),
+                kind: WorkflowEventKind::StepConfigUpdated { step_id },
+            });
+        }
+    }
+    for edge in &created_edges {
+        state.broadcast_workflow(WorkflowEvent {
+            run_id: None,
+            workflow_id,
+            user_id: Some(user_id),
+            kind: WorkflowEventKind::EdgeCreated {
+                edge_id: edge.id,
+                from_step_id: edge.from_step_id,
+                to_step_id: edge.to_step_id,
+            },
+        });
+    }
+    for (edge_id, from_id, to_id) in &removed_edges {
+        state.broadcast_workflow(WorkflowEvent {
+            run_id: None,
+            workflow_id,
+            user_id: Some(user_id),
+            kind: WorkflowEventKind::EdgeDeleted {
+                edge_id: *edge_id,
+                from_step_id: *from_id,
+                to_step_id: *to_id,
             },
         });
     }

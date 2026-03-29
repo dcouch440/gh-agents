@@ -534,4 +534,9 @@ pub trait WorkflowRepo: Send + Sync {
 
     /// Delete a version.
     async fn delete_workflow_version(&self, id: Uuid) -> Result<()>;
+
+    // --- Runtime Execution State ---
+
+    /// Get the ID of a currently running workflow execution, if any.
+    async fn get_active_run_for_workflow(&self, workflow_id: Uuid) -> Result<Option<Uuid>>;
 }

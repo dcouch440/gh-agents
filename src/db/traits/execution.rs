@@ -119,6 +119,9 @@ pub trait AgentExecutionRepo: Send + Sync {
         step_ids: &[Uuid],
     ) -> Result<Vec<AgentExecutionRow>>;
 
+    /// Get step IDs that are currently running or pending in a workflow execution.
+    async fn get_running_step_ids_for_run(&self, workflow_execution_id: Uuid) -> Result<Vec<Uuid>>;
+
     /// List a unified execution timeline for a workflow run.
     /// Joins agent_executions + execution_messages + workflow_steps into a flat
     /// chronological stream. Cursor-based pagination: returns entries with
