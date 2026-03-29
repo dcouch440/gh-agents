@@ -12,6 +12,7 @@ pub mod step_chat_handlers;
 pub mod step_handlers;
 pub mod sub_dag_handlers;
 pub mod template_handlers;
+pub mod version_handlers;
 pub mod workflow_handlers;
 pub mod workshop_handlers;
 
@@ -36,7 +37,6 @@ pub use sub_dag_handlers::get_step_sub_dag;
 pub use template_handlers::{
     create_template, delete_template, get_template, list_templates, rebase_workshop,
 };
-pub use types::WorkflowAgentSessionResponse;
 pub use types::{
     CreateStepRequest, CreateTemplateRequest, CreateWorkflowRequest, EdgeRequest, EdgeResponse,
     RebaseResponse, RunDetailResponse, RunStepResultResponse, RunTemplateDetailResponse,
@@ -44,6 +44,12 @@ pub use types::{
     UpdateStepRequest, UpdateWorkflowRequest, WorkflowExecutionResponse, WorkflowResponse,
     WorkflowRunResponse, WorkflowStepResponse, WorkshopResponse, WorkshopStatusResponse,
     WorkshopStepResponse,
+};
+pub use types::{
+    RestoreResponse, SaveVersionRequest, VersionResponse, WorkflowAgentSessionResponse,
+};
+pub use version_handlers::{
+    list_workflow_versions, restore_workflow_version, save_workflow_version,
 };
 pub use workflow_handlers::{
     create_workflow, delete_workflow, get_or_create_workflow_agent_session, get_workflow,

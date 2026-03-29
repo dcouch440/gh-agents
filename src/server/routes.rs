@@ -197,6 +197,14 @@ fn workflow_routes() -> Router<AppState> {
             get(api::get_or_create_workflow_agent_session),
         )
         .route(
+            routes::WORKFLOW_VERSIONS,
+            get(api::list_workflow_versions).post(api::save_workflow_version),
+        )
+        .route(
+            routes::WORKFLOW_VERSION_RESTORE,
+            post(api::restore_workflow_version),
+        )
+        .route(
             routes::WORKFLOW_STEP_CHAT_SESSION,
             get(api::get_step_session).post(api::get_or_create_step_session),
         )

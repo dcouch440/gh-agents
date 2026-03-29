@@ -313,6 +313,10 @@ pub mod routes {
     // Workflow Agent Session
     pub const WORKFLOW_AGENT_SESSION: &str = "/workflows/:id/agent-session";
 
+    // Workflow Versions
+    pub const WORKFLOW_VERSIONS: &str = "/workflows/:id/versions";
+    pub const WORKFLOW_VERSION_RESTORE: &str = "/workflows/:id/versions/:vid/restore";
+
     // Workshop (node-by-node execution)
     pub const WORKFLOW_WORKSHOP: &str = "/workflows/:id/workshop";
     pub const WORKFLOW_WORKSHOP_STEP_EXECUTE: &str =
