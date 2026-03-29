@@ -91,3 +91,35 @@ pub(crate) fn read_board(
     let nodes = read_all_nodes(base_dir)?;
     Ok((topology, nodes))
 }
+
+/// Snapshot the board repo as relative_path → content.
+///
+/// Captures `topology.json` + all `nodes/*.md`. Used for pre/post diffing
+/// around `run_command` to detect file changes for immediate sync.
+pub(crate) fn snapshot_board_files(base_dir: &Path) -> HashMap<std::path::PathBuf, String> {
+    let mut snapshot = HashMap::new();
+
+    // topology.json
+    let topology_path = base_dir.join("topology.json");
+    if let Ok(content) = std::fs::read_to_string(&topology_path) {
+        snapshot.insert(std::path::PathBuf::from("topology.json"), content);
+    }
+
+    // nodes/*.md
+    let nodes_dir = base_dir.join("nodes");
+    if let Ok(entries) = std::fs::read_dir(&nodes_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("md") {
+                if let (Some(name), Ok(content)) = (
+                    path.file_name().map(|n| n.to_string_lossy().to_string()),
+                    std::fs::read_to_string(&path),
+                ) {
+                    snapshot.insert(std::path::PathBuf::from("nodes").join(&name), content);
+                }
+            }
+        }
+    }
+
+    snapshot
+}
