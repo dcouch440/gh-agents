@@ -36,6 +36,23 @@ pub async fn run_sequential_design_pipeline(
     steps: Vec<WorkflowStepRow>,
     edges: Vec<WorkflowStepEdgeRow>,
 ) {
+    // Auto-checkpoint before destructive design pipeline
+    if let Err(e) = crate::server::services::workflow_agent::versions::save_version(
+        workflow_id,
+        user_id.0,
+        None,
+        "auto_pre_generate",
+        &state,
+    )
+    .await
+    {
+        tracing::warn!(
+            workflow_id = %workflow_id,
+            error = %e,
+            "Failed to auto-checkpoint before Generate — continuing anyway"
+        );
+    }
+
     // Build topo-sorted order over ALL steps in the workflow
     let topo_order = match crate::server::hub::dag::topological_sort(&steps, &edges) {
         Ok(order) => order,

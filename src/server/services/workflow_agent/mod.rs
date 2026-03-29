@@ -15,6 +15,7 @@ pub mod project;
 pub mod state;
 pub mod sync;
 pub mod validate;
+pub mod versions;
 
 use std::path::PathBuf;
 

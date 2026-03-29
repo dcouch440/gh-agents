@@ -11,7 +11,7 @@ use crate::db::{
     CanvasElementMapRow, CanvasSnapshotRow, ProtocolDocumentDefRow, RoomStepConfigRow,
     RoomStepMemberRow, RunTemplateRow, StepDocumentRow, StepInputRow, StepOutputRow,
     StepQuestionStateRow, StepRoutingRuleRow, TaskAgentRosterRow, TaskMissionBriefRow, WorkflowRow,
-    WorkflowStepEdgeRow, WorkflowStepRow,
+    WorkflowStepEdgeRow, WorkflowStepRow, WorkflowVersionRow,
 };
 
 use super::PgRepo;
@@ -1476,5 +1476,67 @@ impl WorkflowRepo for PgRepo {
                 .fetch_optional(&self.pool)
                 .await?;
         Ok(row.map(|r| r.0).filter(|s| !s.is_empty()))
+    }
+
+    // --- Workflow Versions ---
+
+    async fn create_workflow_version(&self, row: WorkflowVersionRow) -> Result<WorkflowVersionRow> {
+        let created = sqlx::query_as::<_, WorkflowVersionRow>(
+            "INSERT INTO workflow_versions \
+                (id, workflow_id, version_number, label, source, snapshot, created_by) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7) \
+             RETURNING *",
+        )
+        .bind(row.id)
+        .bind(row.workflow_id)
+        .bind(row.version_number)
+        .bind(&row.label)
+        .bind(&row.source)
+        .bind(&row.snapshot)
+        .bind(row.created_by)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(created)
+    }
+
+    async fn list_workflow_versions(&self, workflow_id: Uuid) -> Result<Vec<WorkflowVersionRow>> {
+        let rows = sqlx::query_as::<_, WorkflowVersionRow>(
+            "SELECT * FROM workflow_versions \
+             WHERE workflow_id = $1 \
+             ORDER BY version_number DESC",
+        )
+        .bind(workflow_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn get_workflow_version(&self, id: Uuid) -> Result<Option<WorkflowVersionRow>> {
+        let row = sqlx::query_as::<_, WorkflowVersionRow>(
+            "SELECT * FROM workflow_versions WHERE id = $1",
+        )
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn get_latest_version_number(&self, workflow_id: Uuid) -> Result<i32> {
+        let num: (i32,) = sqlx::query_as(
+            "SELECT COALESCE(MAX(version_number), 0) FROM workflow_versions \
+             WHERE workflow_id = $1",
+        )
+        .bind(workflow_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(num.0)
+    }
+
+    async fn delete_workflow_version(&self, id: Uuid) -> Result<()> {
+        sqlx::query("DELETE FROM workflow_versions WHERE id = $1")
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 }
