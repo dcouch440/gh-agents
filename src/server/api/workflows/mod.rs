@@ -52,8 +52,8 @@ pub use version_handlers::{
     list_workflow_versions, restore_workflow_version, save_workflow_version,
 };
 pub use workflow_handlers::{
-    create_workflow, delete_workflow, get_or_create_workflow_agent_session, get_workflow,
-    list_workflows, update_workflow,
+    create_workflow, delete_workflow, generate_workflow, get_or_create_workflow_agent_session,
+    get_workflow, list_workflows, update_workflow,
 };
 pub use workshop_handlers::{execute_workshop_step, get_or_create_workshop, get_workshop};
 

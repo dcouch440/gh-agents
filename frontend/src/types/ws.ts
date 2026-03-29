@@ -86,6 +86,11 @@ export const WORKFLOW_EVENT = {
   WORKFORCE_AGENT_PROGRESS: 'workforce_agent_progress',
   DESIGNER_AGENT_DESIGNED: 'designer_agent_designed',
   STEP_PIN_CHANGED: 'step_pin_changed',
+  // Board topology changes (fine-grained events from workflow agent sync)
+  STEP_CREATED: 'step_created',
+  STEP_DELETED: 'step_deleted',
+  EDGE_CREATED: 'edge_created',
+  EDGE_DELETED: 'edge_deleted',
   // Generic step streaming (token-level events from any execution source)
   STEP_STREAM_TOKEN: 'step_stream_token',
   STEP_STREAM_TOOL_START: 'step_stream_tool_start',
@@ -129,6 +134,10 @@ export type RosterChangedData = { workflow_id: string; step_id: string }
 export type RoomMembersChangedData = { workflow_id: string; step_id: string }
 export type PlanUpdatedData = { workflow_id: string; step_id: string; content: string }
 export type StepPinChangedData = { workflow_id: string; step_id: string; pinned: boolean }
+export type StepCreatedData = { workflow_id: string; step_id: string; name: string }
+export type StepDeletedData = { workflow_id: string; step_id: string }
+export type EdgeCreatedData = { workflow_id: string; edge_id: string; from_step_id: string; to_step_id: string }
+export type EdgeDeletedData = { workflow_id: string; edge_id: string; from_step_id: string; to_step_id: string }
 // Workforce high-level progress
 export type WorkforceDesignerProgressData = { workflow_id: string; step_id: string; status: string }
 export type DesignerAgentDesignedData = {

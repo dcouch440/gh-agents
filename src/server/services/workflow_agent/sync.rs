@@ -301,6 +301,17 @@ pub(crate) async fn sync_to_db(
         });
     }
 
+    // Phase 6: Sync canvas elements so the Board component renders them
+    if !result.nodes_created.is_empty()
+        || !result.nodes_removed.is_empty()
+        || result.edges_created > 0
+        || result.edges_removed > 0
+    {
+        if let Err(e) = sync_canvas_elements(workflow_id, repo).await {
+            warn!(error = %e, "Failed to sync canvas elements");
+        }
+    }
+
     info!(
         workflow_id = %workflow_id,
         created = result.nodes_created.len(),
@@ -312,6 +323,114 @@ pub(crate) async fn sync_to_db(
     );
 
     Ok(result)
+}
+
+// ── Canvas element generation ──────────────────────────────────────────────
+
+/// Generate Excalidraw JSON elements from steps + edges and upsert into canvas_snapshots.
+///
+/// Produces the same format as the frontend's serialize.ts: rectangles with bound text
+/// elements, and arrows with start/end bindings. The Board component loads these on
+/// page refresh via getBoardElements.
+async fn sync_canvas_elements(
+    workflow_id: Uuid,
+    repo: &dyn WorkflowRepo,
+) -> Result<(), ServiceError> {
+    let steps = repo.list_steps(workflow_id).await.map_err(ServiceError::Internal)?;
+    let edges = repo.list_edges(workflow_id).await.map_err(ServiceError::Internal)?;
+
+    let workforce_steps: Vec<&WorkflowStepRow> = steps
+        .iter()
+        .filter(|s| s.execution_mode == "workforce")
+        .collect();
+
+    let mut elements = Vec::new();
+
+    const BOX_WIDTH: f64 = 200.0;
+    const BOX_HEIGHT: f64 = 48.0;
+    const PAD_X: f64 = 20.0;
+    const PAD_Y: f64 = 12.0;
+
+    for step in &workforce_steps {
+        let x = step.position_x.unwrap_or(100.0);
+        let y = step.position_y.unwrap_or(100.0);
+        let w = step.width.unwrap_or(BOX_WIDTH);
+        let h = step.height.unwrap_or(BOX_HEIGHT);
+        let text = step.name.as_deref()
+            .or(step.ref_id.as_deref())
+            .unwrap_or("Node");
+        let text_id = format!("{}-text", step.id);
+
+        // Connected arrow IDs for boundElements
+        let arrow_ids: Vec<&Uuid> = edges
+            .iter()
+            .filter(|e| e.from_step_id == step.id || e.to_step_id == step.id)
+            .map(|e| &e.id)
+            .collect();
+
+        let mut bound_elements = vec![serde_json::json!({ "id": text_id, "type": "text" })];
+        for aid in &arrow_ids {
+            bound_elements.push(serde_json::json!({ "id": aid.to_string(), "type": "arrow" }));
+        }
+
+        // Rectangle
+        elements.push(serde_json::json!({
+            "type": "rectangle",
+            "id": step.id.to_string(),
+            "x": x,
+            "y": y,
+            "width": w,
+            "height": h,
+            "isDeleted": false,
+            "boundElements": bound_elements,
+        }));
+
+        // Text
+        elements.push(serde_json::json!({
+            "type": "text",
+            "id": text_id,
+            "x": x + PAD_X,
+            "y": y + PAD_Y,
+            "width": (w - PAD_X * 2.0).max(0.0),
+            "height": (h - PAD_Y * 2.0).max(0.0),
+            "isDeleted": false,
+            "text": text,
+            "containerId": step.id.to_string(),
+        }));
+    }
+
+    // Arrows
+    for edge in &edges {
+        elements.push(serde_json::json!({
+            "type": "arrow",
+            "id": edge.id.to_string(),
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+            "isDeleted": false,
+            "startBinding": { "elementId": edge.from_step_id.to_string() },
+            "endBinding": { "elementId": edge.to_step_id.to_string() },
+        }));
+    }
+
+    let elements_json = serde_json::to_string(&elements)
+        .map_err(|e| ServiceError::Internal(anyhow::anyhow!("Failed to serialize elements: {e}")))?;
+
+    let row = crate::db::CanvasSnapshotRow {
+        workflow_id,
+        snapshot_json: String::new(), // Not used by getBoardElements
+        elements_json,
+        last_response_json: None,
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    };
+
+    repo.upsert_canvas_snapshot(row)
+        .await
+        .map_err(ServiceError::Internal)?;
+
+    Ok(())
 }
 
 // ── Pure diff helpers (testable without DB) ────────────────────────────────

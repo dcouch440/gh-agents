@@ -336,6 +336,15 @@ const workflows = freeze({
   clearStepMessages: (workflowId: string, stepId: string, config?: RequestConfig) =>
     baseApi.del<void>(API.STEP_CHAT_MESSAGES(workflowId, stepId), config),
 
+  getOrCreateAgentSession: (workflowId: string, config?: RequestConfig) =>
+    baseApi.get<{ session_id: string; workflow_id: string; title: string; created_at: string }>(
+      API.WORKFLOW_AGENT_SESSION(workflowId),
+      config,
+    ),
+
+  generate: (workflowId: string, config?: RequestConfig) =>
+    baseApi.post<{ generating: number }>(API.WORKFLOW_GENERATE(workflowId), {}, config),
+
   getStepChatDebug: (workflowId: string, stepId: string, config?: RequestConfig) =>
     baseApi.get<StepChatDebugResponse>(API.STEP_CHAT_DEBUG(workflowId, stepId), config),
 

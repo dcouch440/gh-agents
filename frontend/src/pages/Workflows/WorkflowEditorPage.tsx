@@ -5,11 +5,14 @@ import CircularProgress from '@mui/material/CircularProgress'
 import { useStore, workflowStore, agentStore, outputSchemaStore, protocolStore, workflowExecutionStore, sidebarStore } from '@/stores'
 import { Board } from '@/components/board'
 import { WorkflowSidebar } from '@/components/sidebar'
+import { ChatPanel } from '@/components/chat/ChatPanel'
+import { useWorkflowAgentChat } from '@/hooks/useWorkflowAgentChat'
 
 function WorkflowEditorPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const loading = useStore(workflowStore.store, workflowStore.selectLoading)
+  const { messages, sendMessage, streaming, cancelChat } = useWorkflowAgentChat(id ?? null)
   useEffect(() => {
     if (!id) {
       void navigate('/workflows')
@@ -66,6 +69,32 @@ function WorkflowEditorPage() {
           </Box>
         )}
       </Box>
+
+      {/* Workflow Agent Chat */}
+      {id && (
+        <Box
+          sx={{
+            width: 400,
+            minWidth: 320,
+            display: 'flex',
+            flexDirection: 'column',
+            borderLeft: 1,
+            borderColor: 'divider',
+            backgroundColor: 'background.paper',
+          }}
+        >
+          <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', fontWeight: 600, fontSize: 14 }}>
+            Workflow Agent
+          </Box>
+          <ChatPanel
+            messages={messages}
+            onSend={sendMessage}
+            onCancel={cancelChat}
+            streaming={streaming}
+            emptyMessage="Describe your workflow and I'll build it."
+          />
+        </Box>
+      )}
 
       {/* Sidebar */}
       {id && <WorkflowSidebar />}
