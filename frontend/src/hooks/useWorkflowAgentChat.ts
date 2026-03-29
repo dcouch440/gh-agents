@@ -25,11 +25,18 @@ const useWorkflowAgentChat = (workflowId: string | null) => {
         setSessionId(res.session_id)
         const history = await api.sessions.getHistory(res.session_id)
         setMessages(
-          history.map((m) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-          })),
+          history.map((m) => {
+            if (m.source_type === 'tool') {
+              const sepIdx = m.content.indexOf('\n---\n')
+              const header = sepIdx >= 0 ? m.content.slice(0, sepIdx) : m.content
+              const result = sepIdx >= 0 ? m.content.slice(sepIdx + 5) : ''
+              const colonIdx = header.indexOf(': ')
+              const toolName = colonIdx >= 0 ? header.slice(0, colonIdx) : 'tool'
+              const toolInput = colonIdx >= 0 ? header.slice(colonIdx + 2) : header
+              return { id: m.id, role: 'tool' as const, content: toolInput, toolName, toolResult: result }
+            }
+            return { id: m.id, role: m.role, content: m.content }
+          }),
         )
       } catch (err) {
         console.error('[useWorkflowAgentChat] Failed to init session:', err)
@@ -53,6 +60,40 @@ const useWorkflowAgentChat = (workflowId: string | null) => {
       contentRef.current = ''
 
       const onEvent = (event: SSEEvent) => {
+        if (event.event === 'tool_start') {
+          try {
+            const data = JSON.parse(event.data) as { name: string; id: string; input: string }
+            // Parse the input to extract the command
+            let inputText = data.input
+            try {
+              const parsed: unknown = JSON.parse(data.input)
+              if (parsed !== null && typeof parsed === 'object' && 'command' in parsed) {
+                inputText = String((parsed as Record<string, unknown>).command)
+              }
+            } catch { /* use raw */ }
+            setMessages((prev) => [...prev, {
+              id: `tool-${data.id}`,
+              role: 'tool' as const,
+              content: inputText,
+              toolName: data.name,
+            }])
+          } catch { /* ignore parse errors */ }
+          return
+        }
+        if (event.event === 'tool_end') {
+          try {
+            const data = JSON.parse(event.data) as { name: string; id: string; result: string }
+            setMessages((prev) => {
+              const msgs = [...prev]
+              const toolIdx = msgs.findIndex((m) => m.id === `tool-${data.id}`)
+              if (toolIdx >= 0) {
+                msgs[toolIdx] = { ...msgs[toolIdx], toolResult: data.result }
+              }
+              return msgs
+            })
+          } catch { /* ignore parse errors */ }
+          return
+        }
         if (event.event === 'token' || event.event === 'message' || event.event === 'content') {
           let text = event.data
           try {

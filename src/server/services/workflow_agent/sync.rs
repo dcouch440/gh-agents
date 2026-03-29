@@ -346,19 +346,41 @@ async fn sync_canvas_elements(
 
     let mut elements = Vec::new();
 
-    const BOX_WIDTH: f64 = 200.0;
-    const BOX_HEIGHT: f64 = 48.0;
+    const MAX_BOX_WIDTH: f64 = 400.0;
+    const MIN_BOX_WIDTH: f64 = 200.0;
+    const MIN_BOX_HEIGHT: f64 = 48.0;
     const PAD_X: f64 = 20.0;
     const PAD_Y: f64 = 12.0;
+    const CHAR_WIDTH: f64 = 7.0; // approximate monospace char width at 14px
+    const LINE_HEIGHT: f64 = 20.0;
 
     for step in &workforce_steps {
         let x = step.position_x.unwrap_or(100.0);
         let y = step.position_y.unwrap_or(100.0);
-        let w = step.width.unwrap_or(BOX_WIDTH);
-        let h = step.height.unwrap_or(BOX_HEIGHT);
-        let text = step.name.as_deref()
-            .or(step.ref_id.as_deref())
-            .unwrap_or("Node");
+
+        // Use the full description (markdown brief) as box text
+        let text = if step.description.is_empty() {
+            step.name.as_deref()
+                .or(step.ref_id.as_deref())
+                .unwrap_or("Node")
+                .to_string()
+        } else {
+            step.description.clone()
+        };
+
+        // Estimate box size from text content
+        let max_content_width = MAX_BOX_WIDTH - PAD_X * 2.0;
+        let lines: Vec<&str> = text.lines().collect();
+        let mut total_lines = 0.0_f64;
+        for line in &lines {
+            let line_width = line.len() as f64 * CHAR_WIDTH;
+            let wrapped = (line_width / max_content_width).ceil().max(1.0);
+            total_lines += wrapped;
+        }
+        let content_height = total_lines * LINE_HEIGHT;
+        let longest_line = lines.iter().map(|l| l.len()).max().unwrap_or(10) as f64 * CHAR_WIDTH;
+        let w = step.width.unwrap_or_else(|| (longest_line + PAD_X * 2.0).clamp(MIN_BOX_WIDTH, MAX_BOX_WIDTH));
+        let h = step.height.unwrap_or_else(|| (content_height + PAD_Y * 2.0).max(MIN_BOX_HEIGHT));
         let text_id = format!("{}-text", step.id);
 
         // Connected arrow IDs for boundElements
