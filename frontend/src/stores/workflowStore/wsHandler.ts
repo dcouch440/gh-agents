@@ -1,9 +1,12 @@
 import { nmGet, nmSet } from '../lib'
 import { api } from '@/api'
 import { WORKFLOW_EVENT } from '@/types/ws'
-import type { WsWireMessage, StepConfigUpdatedData, StepNameUpdatedData, RosterChangedData, RoomMembersChangedData, PlanUpdatedData, StepPinChangedData } from '@/types/ws'
+import type { WsWireMessage, StepConfigUpdatedData, StepNameUpdatedData, RosterChangedData, RoomMembersChangedData, PlanUpdatedData, StepPinChangedData, StepCreatedData, StepDeletedData, EdgeCreatedData, EdgeDeletedData } from '@/types/ws'
 import { store, getActiveId } from './_store'
 import { fetchRoster, fetchRoomStepMembers } from './roster'
+import { refreshStepsAndEdges } from './workflows'
+
+let refreshTimer: ReturnType<typeof setTimeout>
 
 /** Fetch a single step from the API and patch it into the store silently.
  *  Skips the update if the step has unsaved local edits (dirty). */
@@ -73,6 +76,17 @@ const handleWsEvent = (msg: WsWireMessage): void => {
           if (!existing) return {}
           return { steps: nmSet(s.steps, d.step_id, { ...existing, pinned: d.pinned }) }
         })
+        break
+      }
+      case WORKFLOW_EVENT.STEP_CREATED:
+      case WORKFLOW_EVENT.STEP_DELETED:
+      case WORKFLOW_EVENT.EDGE_CREATED:
+      case WORKFLOW_EVENT.EDGE_DELETED: {
+        const d = msg.data as StepCreatedData | StepDeletedData | EdgeCreatedData | EdgeDeletedData
+        if (d.workflow_id !== activeId) break
+        // Debounce: multiple events may fire in rapid succession from a single sync
+        clearTimeout(refreshTimer)
+        refreshTimer = setTimeout(() => void refreshStepsAndEdges(d.workflow_id), 200)
         break
       }
     }

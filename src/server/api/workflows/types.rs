@@ -422,3 +422,8 @@ pub struct RestoreResponse {
     pub auto_checkpoint_version: i32,
     pub message: String,
 }
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct GenerateResponse {
+    pub generating: usize,
+}

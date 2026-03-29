@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
+import { api } from '@/api'
 import { boardStore, workflowStore, sidebarStore, useStore } from '@/stores'
 import { boardElementStore } from '@/stores/boardElementStore'
 import { useWorkflowRun } from '@/components/canvas/useWorkflowRun'
@@ -34,7 +35,14 @@ function Board({ workflowId }: BoardProps) {
   // ── Data hooks ────────────────────────────────────────────────────────────
   const theme = useBoardTheme()
   const { loading } = useBoardElements(workflowId)
-  const { handleSubmit, isSubmitting, error, status } = useBoardSubmit(workflowId)
+  useBoardSubmit(workflowId) // kept for initial element load
+  const [isGenerating, setIsGenerating] = useState(false)
+  const handleGenerate = useCallback(() => {
+    setIsGenerating(true)
+    void api.workflows.generate(workflowId)
+      .catch((err: unknown) => console.error('Generate failed:', err))
+      .finally(() => setIsGenerating(false))
+  }, [workflowId])
 
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
   const entryStep = useMemo(() => {
@@ -123,10 +131,8 @@ function Board({ workflowId }: BoardProps) {
       />
 
       <SubmitBar
-        onSubmit={handleSubmit}
-        isSubmitting={isSubmitting}
-        status={status}
-        error={error}
+        onGenerate={handleGenerate}
+        isGenerating={isGenerating}
         onRun={handleRun}
         runStatus={runStatus}
         showDebug={showDebug}

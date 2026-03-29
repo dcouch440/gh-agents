@@ -161,6 +161,8 @@ export const API = {
   WORKFLOW_QUESTION_STATES: (id: string) => `/workflows/${id}/question-states`,
   WORKFLOW_REBASE: (id: string) => `/workflows/${id}/rebase`,
   WORKFLOW_TEMPLATES: (id: string) => `/workflows/${id}/templates`,
+  WORKFLOW_AGENT_SESSION: (id: string) => `/workflows/${id}/agent-session`,
+  WORKFLOW_GENERATE: (id: string) => `/workflows/${id}/generate`,
   WORKFLOW_BOARD_SUBMIT: (id: string) => `/workflows/${id}/board/submit`,
   WORKFLOW_BOARD_ELEMENTS: (id: string) => `/workflows/${id}/board/elements`,
 

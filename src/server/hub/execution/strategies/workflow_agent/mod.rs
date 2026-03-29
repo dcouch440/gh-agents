@@ -41,6 +41,10 @@ pub struct WorkflowAgentStrategy {
 }
 
 impl WorkflowAgentStrategy {
+    fn config(&self) -> &crate::config::protocols::AgentConfig {
+        crate::config::protocols::WORKFLOW_AGENT.agent("agent")
+    }
+
     /// Build a new workflow agent strategy.
     ///
     /// `system_prompt` should already include the `<current_state>` block.
@@ -148,15 +152,15 @@ impl ExecutionStrategy for WorkflowAgentStrategy {
     }
 
     fn model_id(&self) -> &str {
-        crate::constants::DEFAULT_MODEL
+        &self.config().model_id
     }
 
     fn max_rounds(&self) -> u32 {
-        15
+        self.config().max_rounds
     }
 
     fn context_budget(&self) -> usize {
-        480_000
+        self.config().context_budget
     }
 
     fn streaming(&self) -> bool {
@@ -164,7 +168,7 @@ impl ExecutionStrategy for WorkflowAgentStrategy {
     }
 
     fn temperature(&self) -> f32 {
-        0.3
+        self.config().temperature
     }
 
     fn state(&self) -> Option<&AppState> {
