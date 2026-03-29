@@ -188,9 +188,12 @@ impl ExecutionStrategy for WorkflowAgentStrategy {
             .await
             .unwrap_or_default();
 
-        // Convert history to messages
+        // Convert history to messages (skip tool calls — the LLM doesn't need them)
         let mut messages = Vec::new();
         for row in &history {
+            if row.source_type.as_deref() == Some("tool") {
+                continue;
+            }
             match row.role.as_str() {
                 "user" => messages.push(Message::user(&row.content)),
                 "assistant" => messages.push(Message::assistant(&row.content)),
@@ -211,11 +214,49 @@ impl ExecutionStrategy for WorkflowAgentStrategy {
     }
 
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
-        match name {
+        let result = match name {
             "run_command" => self.host_run_command(input).await,
             "think" => json!({ "status": "ok" }),
             _ => json!({ "error": format!("Unknown tool: {name}") }),
-        }
+        };
+
+        // Persist tool call + result to session (source_type = "tool")
+        let tool_input = match name {
+            "run_command" => input
+                .get("command")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            "think" => input
+                .get("thought")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            _ => serde_json::to_string(input).unwrap_or_default(),
+        };
+        let result_str = serde_json::to_string(&result).unwrap_or_default();
+        let truncated = if result_str.len() > 4096 {
+            format!("{}…", &result_str[..4096])
+        } else {
+            result_str
+        };
+        let combined = format!("{name}: {tool_input}\n---\n{truncated}");
+
+        let _ = self
+            .state
+            .repos()
+            .sessions
+            .insert_agent_message(
+                crate::types::UserId(self.user_id),
+                self.session_id,
+                Uuid::new_v4(),
+                "assistant".to_string(),
+                combined,
+                "tool".to_string(),
+            )
+            .await;
+
+        result
     }
 
     async fn rebuild_system_prompt(&self) -> Result<Option<String>, HubError> {
