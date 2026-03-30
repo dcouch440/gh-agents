@@ -63,7 +63,6 @@ const useWorkflowAgentChat = (workflowId: string | null) => {
         if (event.event === 'tool_start') {
           try {
             const data = JSON.parse(event.data) as { name: string; id: string; input: string }
-            // Parse the input to extract the command
             let inputText = data.input
             try {
               const parsed: unknown = JSON.parse(data.input)
@@ -71,6 +70,8 @@ const useWorkflowAgentChat = (workflowId: string | null) => {
                 inputText = String((parsed as Record<string, unknown>).command)
               }
             } catch { /* use raw */ }
+            // Reset content accumulator — next tokens will be a new assistant response
+            contentRef.current = ''
             setMessages((prev) => [...prev, {
               id: `tool-${data.id}`,
               role: 'tool' as const,
@@ -108,9 +109,22 @@ const useWorkflowAgentChat = (workflowId: string | null) => {
             const content = contentRef.current
             setMessages((prev) => {
               const msgs = [...prev]
-              const lastIdx = msgs.length - 1
-              if (lastIdx >= 0 && msgs[lastIdx].role === 'assistant') {
-                msgs[lastIdx] = { ...msgs[lastIdx], content }
+              // Find the last assistant message AFTER the last tool message.
+              // Tool messages get inserted between LLM rounds, so the
+              // "current" assistant response is always after the last tool.
+              let lastToolIdx = -1
+              for (let i = msgs.length - 1; i >= 0; i--) {
+                if (msgs[i].role === 'tool') { lastToolIdx = i; break }
+              }
+              let assistantIdx = -1
+              for (let i = msgs.length - 1; i > lastToolIdx; i--) {
+                if (msgs[i].role === 'assistant') { assistantIdx = i; break }
+              }
+              if (assistantIdx >= 0) {
+                msgs[assistantIdx] = { ...msgs[assistantIdx], content }
+              } else {
+                // No assistant message after tools — create one
+                msgs.push({ id: `msg-${Date.now()}`, role: 'assistant', content })
               }
               return msgs
             })
@@ -122,12 +136,24 @@ const useWorkflowAgentChat = (workflowId: string | null) => {
         if (pendingFrameRef.current !== null) {
           cancelAnimationFrame(pendingFrameRef.current)
           pendingFrameRef.current = null
-          const content = contentRef.current
+        }
+        // Final flush — ensure the last assistant content is rendered
+        const content = contentRef.current
+        if (content) {
           setMessages((prev) => {
             const msgs = [...prev]
-            const lastIdx = msgs.length - 1
-            if (lastIdx >= 0 && msgs[lastIdx].role === 'assistant') {
-              msgs[lastIdx] = { ...msgs[lastIdx], content }
+            let lastToolIdx = -1
+            for (let i = msgs.length - 1; i >= 0; i--) {
+              if (msgs[i].role === 'tool') { lastToolIdx = i; break }
+            }
+            let assistantIdx = -1
+            for (let i = msgs.length - 1; i > lastToolIdx; i--) {
+              if (msgs[i].role === 'assistant') { assistantIdx = i; break }
+            }
+            if (assistantIdx >= 0) {
+              msgs[assistantIdx] = { ...msgs[assistantIdx], content }
+            } else {
+              msgs.push({ id: `msg-${Date.now()}`, role: 'assistant', content })
             }
             return msgs
           })
