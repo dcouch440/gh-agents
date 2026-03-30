@@ -83,7 +83,20 @@ function WorkflowEditorPage() {
             backgroundColor: 'background.paper',
           }}
         >
-          <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', fontWeight: 600, fontSize: 14 }}>
+          <Box
+            sx={{
+              px: 2,
+              py: 1,
+              borderBottom: 1,
+              borderColor: 'divider',
+              fontSize: 11,
+              fontWeight: 600,
+              letterSpacing: '0.05em',
+              textTransform: 'uppercase',
+              color: 'text.secondary',
+              backgroundColor: (theme) => theme.palette.custom.bgHeader,
+            }}
+          >
             Workflow Agent
           </Box>
           <ChatPanel

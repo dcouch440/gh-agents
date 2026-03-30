@@ -51,8 +51,12 @@ impl WorkflowRepo for PgRepo {
 
     async fn list_workflows(&self, user_id: Uuid) -> Result<Vec<WorkflowRow>> {
         let rows: Vec<WorkflowRow> = sqlx::query_as(
-            "SELECT id, user_id, name, description, execution_mode, created_at, version, container_enabled, target_repo_url, target_branch, vpn_enabled, board_overview_summary \
-             FROM workflows WHERE user_id = $1 ORDER BY created_at DESC",
+            "SELECT id, user_id, name, description, execution_mode, created_at, version, \
+                    container_enabled, target_repo_url, target_branch, vpn_enabled, board_overview_summary \
+             FROM workflows \
+             WHERE user_id = $1 \
+               AND id NOT IN (SELECT DISTINCT child_workflow_id FROM workflow_steps WHERE child_workflow_id IS NOT NULL) \
+             ORDER BY created_at DESC",
         )
         .bind(user_id)
         .fetch_all(&self.pool)

@@ -64,9 +64,12 @@ function WorkflowsPage() {
         sortable: true,
         width: 280,
         render: (wf) => (
-          <Typography variant="body2" fontWeight={500}>
-            {wf.name}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+            <AccountTreeOutlined sx={{ fontSize: 16, color: 'text.disabled', flexShrink: 0 }} />
+            <Typography variant="body2" fontWeight={500} noWrap>
+              {wf.name}
+            </Typography>
+          </Box>
         ),
       },
       {
@@ -75,8 +78,8 @@ function WorkflowsPage() {
         truncate: true,
         width: 400,
         render: (wf) => (
-          <Typography variant="body2" color="text.secondary">
-            {wf.description ?? 'No description'}
+          <Typography variant="body2" color={wf.description ? 'text.secondary' : 'text.disabled'} noWrap>
+            {wf.description ?? '\u2014'}
           </Typography>
         ),
       },
@@ -221,13 +224,14 @@ function WorkflowsPage() {
             searchFields={['name', 'description']}
             defaultSortColumn="created_at"
             defaultSortDirection="desc"
-            defaultPageSize={25}
+            defaultPageSize={10}
             pageSizeOptions={[10, 25, 50]}
             onRowClick={(wf) => {
               void navigate(`/workflows/${wf.id}`)
             }}
+            enablePagination
             stickyHeader
-            density="normal"
+            density="compact"
           />
         )}
 
