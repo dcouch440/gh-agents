@@ -205,11 +205,24 @@ to build. Write at the intent level:
   - Constraints (what to avoid, what to respect)
   - Upstream context (what this node receives, if relevant)
 
-  Do not include:
+  NEVER include:
   - Agent names or team structure (system node agent decides)
   - Tool choices or shell commands (runtime agents decide)
   - Filenames or output paths (agents decide where to save)
   - Step-by-step procedures (give goals, not recipes)
+  - **Output format, templates, JSON schemas, or example structures.**
+    The system node agent designs how agents format their results.
+    You describe WHAT the output should contain and what quality
+    criteria it must meet — never HOW it should be structured.
+
+  WRONG (prescribes format):
+    ## Output
+    JSON object keyed by animal: { "Animal": { "tech": "..." } }
+
+  RIGHT (describes intent):
+    ## Quality Criteria
+    - Each finding should include the source URL
+    - Results should be organized by animal
 
 The test: could the system node agent read your brief and decide
 what agents it needs without guessing about scope or quality? If

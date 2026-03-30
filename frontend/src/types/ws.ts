@@ -91,6 +91,7 @@ export const WORKFLOW_EVENT = {
   STEP_DELETED: 'step_deleted',
   EDGE_CREATED: 'edge_created',
   EDGE_DELETED: 'edge_deleted',
+  BOARD_ELEMENTS_UPDATED: 'board_elements_updated',
   // Generic step streaming (token-level events from any execution source)
   STEP_STREAM_TOKEN: 'step_stream_token',
   STEP_STREAM_TOOL_START: 'step_stream_tool_start',
