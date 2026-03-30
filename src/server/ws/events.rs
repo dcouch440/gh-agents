@@ -358,6 +358,8 @@ pub enum WorkflowEventKind {
         from_step_id: Uuid,
         to_step_id: Uuid,
     },
+    /// Canvas elements were updated (board needs to reload).
+    BoardElementsUpdated {},
     /// A protocol was applied to a step.
     ProtocolApplied {
         step_id: Uuid,
@@ -402,6 +404,7 @@ impl WorkflowEvent {
             WorkflowEventKind::StepDeleted { .. } => "step_deleted",
             WorkflowEventKind::EdgeCreated { .. } => "edge_created",
             WorkflowEventKind::EdgeDeleted { .. } => "edge_deleted",
+            WorkflowEventKind::BoardElementsUpdated { .. } => "board_elements_updated",
             WorkflowEventKind::ProtocolApplied { .. } => "protocol_applied",
             WorkflowEventKind::ProtocolUnapplied { .. } => "protocol_unapplied",
         }

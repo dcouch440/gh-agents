@@ -23,7 +23,7 @@ pub const ENV_NEXOR_STATIC_DIR: &str = "NEXOR_STATIC_DIR";
 /// The default LLM provider name used by the registry and all internal callers.
 pub const ACTIVE_PROVIDER: &str = "xai";
 /// Orchestrator tier — highest capability.
-pub const MODEL_TIER1: &str = "grok-4-0709";
+pub const MODEL_TIER1: &str = "grok-4.20-multi-agent-0309";
 /// Worker tier — fast reasoning.
 pub const MODEL_TIER2: &str = "grok-4-1-fast-reasoning";
 /// Utility tier — fast non-reasoning.

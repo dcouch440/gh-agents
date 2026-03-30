@@ -244,7 +244,19 @@ pub(crate) async fn sync_to_db(
         }
     }
 
-    // Phase 5: Broadcast fine-grained events for real-time canvas updates
+    // Phase 5: Sync canvas elements BEFORE broadcasting (so frontend fetches fresh data)
+    if !result.nodes_created.is_empty()
+        || !result.nodes_removed.is_empty()
+        || !result.nodes_updated.is_empty()
+        || result.edges_created > 0
+        || result.edges_removed > 0
+    {
+        if let Err(e) = sync_canvas_elements(workflow_id, user_id, repo, state).await {
+            warn!(error = %e, "Failed to sync canvas elements");
+        }
+    }
+
+    // Phase 6: Broadcast fine-grained events for real-time canvas updates
     for slug in &result.nodes_created {
         if let Some(&step_id) = slug_to_id.get(slug) {
             state.broadcast_workflow(WorkflowEvent {
@@ -301,17 +313,6 @@ pub(crate) async fn sync_to_db(
         });
     }
 
-    // Phase 6: Sync canvas elements so the Board component renders them
-    if !result.nodes_created.is_empty()
-        || !result.nodes_removed.is_empty()
-        || result.edges_created > 0
-        || result.edges_removed > 0
-    {
-        if let Err(e) = sync_canvas_elements(workflow_id, repo).await {
-            warn!(error = %e, "Failed to sync canvas elements");
-        }
-    }
-
     info!(
         workflow_id = %workflow_id,
         created = result.nodes_created.len(),
@@ -334,7 +335,9 @@ pub(crate) async fn sync_to_db(
 /// page refresh via getBoardElements.
 async fn sync_canvas_elements(
     workflow_id: Uuid,
+    user_id: Uuid,
     repo: &dyn WorkflowRepo,
+    state: &AppState,
 ) -> Result<(), ServiceError> {
     let steps = repo.list_steps(workflow_id).await.map_err(ServiceError::Internal)?;
     let edges = repo.list_edges(workflow_id).await.map_err(ServiceError::Internal)?;
@@ -350,9 +353,9 @@ async fn sync_canvas_elements(
     const MIN_BOX_WIDTH: f64 = 200.0;
     const MIN_BOX_HEIGHT: f64 = 48.0;
     const PAD_X: f64 = 20.0;
-    const PAD_Y: f64 = 12.0;
-    const CHAR_WIDTH: f64 = 7.0; // approximate monospace char width at 14px
-    const LINE_HEIGHT: f64 = 20.0;
+    const PAD_Y: f64 = 16.0;
+    const CHAR_WIDTH: f64 = 9.6; // 16px font * 0.6
+    const LINE_HEIGHT: f64 = 22.4; // 16px font * 1.4
 
     for step in &workforce_steps {
         let x = step.position_x.unwrap_or(100.0);
@@ -380,7 +383,8 @@ async fn sync_canvas_elements(
         let content_height = total_lines * LINE_HEIGHT;
         let longest_line = lines.iter().map(|l| l.len()).max().unwrap_or(10) as f64 * CHAR_WIDTH;
         let w = step.width.unwrap_or_else(|| (longest_line + PAD_X * 2.0).clamp(MIN_BOX_WIDTH, MAX_BOX_WIDTH));
-        let h = step.height.unwrap_or_else(|| (content_height + PAD_Y * 2.0).max(MIN_BOX_HEIGHT));
+        // Add 20% safety margin for word-wrap differences between estimation and renderer
+        let h = step.height.unwrap_or_else(|| (content_height * 1.2 + PAD_Y * 2.0).max(MIN_BOX_HEIGHT));
         let text_id = format!("{}-text", step.id);
 
         // Connected arrow IDs for boundElements
@@ -451,6 +455,14 @@ async fn sync_canvas_elements(
     repo.upsert_canvas_snapshot(row)
         .await
         .map_err(ServiceError::Internal)?;
+
+    // Broadcast so frontend reloads board elements
+    state.broadcast_workflow(WorkflowEvent {
+        run_id: None,
+        workflow_id,
+        user_id: Some(user_id),
+        kind: WorkflowEventKind::BoardElementsUpdated {},
+    });
 
     Ok(())
 }
