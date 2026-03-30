@@ -5,7 +5,6 @@ import CircularProgress from '@mui/material/CircularProgress'
 import { useStore, workflowStore, agentStore, outputSchemaStore, protocolStore, workflowExecutionStore, sidebarStore } from '@/stores'
 import { Board } from '@/components/board'
 import { WorkflowSidebar } from '@/components/sidebar'
-import { ChatPanel } from '@/components/chat/ChatPanel'
 import { useWorkflowAgentChat } from '@/hooks/useWorkflowAgentChat'
 
 function WorkflowEditorPage() {
@@ -70,47 +69,15 @@ function WorkflowEditorPage() {
         )}
       </Box>
 
-      {/* Workflow Agent Chat */}
+      {/* Sidebar (includes Chat tab) */}
       {id && (
-        <Box
-          sx={{
-            width: 400,
-            minWidth: 320,
-            display: 'flex',
-            flexDirection: 'column',
-            borderLeft: 1,
-            borderColor: 'divider',
-            backgroundColor: 'background.paper',
-          }}
-        >
-          <Box
-            sx={{
-              px: 2,
-              py: 1,
-              borderBottom: 1,
-              borderColor: 'divider',
-              fontSize: 11,
-              fontWeight: 600,
-              letterSpacing: '0.05em',
-              textTransform: 'uppercase',
-              color: 'text.secondary',
-              backgroundColor: (theme) => theme.palette.custom.bgHeader,
-            }}
-          >
-            Workflow Agent
-          </Box>
-          <ChatPanel
-            messages={messages}
-            onSend={sendMessage}
-            onCancel={cancelChat}
-            streaming={streaming}
-            emptyMessage="Describe your workflow and I'll build it."
-          />
-        </Box>
+        <WorkflowSidebar
+          messages={messages}
+          onSend={sendMessage}
+          onCancel={cancelChat}
+          streaming={streaming}
+        />
       )}
-
-      {/* Sidebar */}
-      {id && <WorkflowSidebar />}
     </Box>
   )
 }
