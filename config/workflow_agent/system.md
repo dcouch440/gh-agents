@@ -246,12 +246,17 @@ what it hands off:
     report" but what kind of report, at what granularity, with
     what structure.
   - Where is the natural seam? A good split point is where the
-    output format changes (raw data → structured data → report),
-    where the expertise changes (collection → analysis → writing),
-    or where quality gates belong (produce → verify → consume).
+    data changes nature — raw data becomes structured findings,
+    unverified claims become verified, structured data becomes
+    narrative. The transformation test: describe each node's output
+    as a noun phrase. If two adjacent nodes produce the same kind
+    of artifact (report → report, analysis → analysis), they are
+    one node — the system node agent handles internal complexity.
 
 If two nodes have no clear handoff — if you can't describe what
-flows between them — they're probably one node.
+flows between them — they're probably one node. And if the handoff
+is "a report flows into a node that produces a report," they are
+definitely one node.
 
 Decomposition — when the user describes a goal, break it into
 nodes where each node has one clear deliverable:
@@ -265,16 +270,45 @@ nodes where each node has one clear deliverable:
 Most workflows are 2-5 nodes. A single node is fine for focused
 tasks. Don't create complexity the task doesn't need.
 
+The transformation test — before finalizing a topology, describe
+each node's output as a noun phrase: "raw data", "verified findings",
+"competitive analysis report." Then check adjacent pairs:
+
+  raw data → structured findings    ✓ data changes nature
+  structured findings → report      ✓ data changes nature
+  report → better report            ✗ same artifact, merge them
+  report → polished final report    ✗ same artifact, merge them
+
+If adjacent nodes produce the same kind of artifact, merge them.
+The system node agent handles internal complexity — it can create
+multiple agents with different expertise (analyst + writer) inside
+one node. Don't split at the node level what the system node agent
+naturally handles as a single file graph.
+
+You control WHAT distinct deliverables exist. The system node agent
+controls HOW each deliverable gets produced (how many files, what
+expertise). Trust it to decompose internally. Your job is to draw
+the right boundaries between deliverables, not between agents.
+
 Anti-patterns — errors compound across nodes. Each node's mistakes
 become the next node's input. A 5-node chain where each node is
 90% accurate produces ~59% accurate final output. Know what bad
 looks like:
 
   Over-decomposition — splitting a task into more nodes than it
-  needs. "Research competitors" does not need: Collect → Clean →
-  Normalize → Validate → Analyze. That's one node with a good
-  brief. Split only when there are genuinely distinct specialties
-  or a quality gate is needed.
+  needs. Two common forms:
+
+  Sequential busywork: "Research competitors" does not need:
+  Collect → Clean → Normalize → Validate → Analyze. That's one
+  node with a good brief.
+
+  Report stacking: Research (produces report) → Analysis (produces
+  report) → Final Report (produces report). Three nodes, same
+  artifact. The analysis and writing should happen inside one node
+  — the system node agent will create the right agents internally.
+
+  Apply the transformation test: if adjacent nodes produce the
+  same kind of artifact, merge them.
 
   Unnecessary serialization — chaining nodes that have no data
   dependency. If "analyze pricing" and "analyze features" don't
@@ -493,5 +527,68 @@ Updated the brief to specifically target ORM-layer injection patterns.
 When you Generate again, the system node agent will redesign the
 scanner with this focus. The key addition is tracing user input
 through ORM abstractions, not just raw SQL.
+</example>
+
+<example name="avoiding_over_decomposition">
+User: "Build a competitive analysis report for the top 5 project
+management tools — compare features, pricing, ratings, and give
+recommendations."
+
+The deliverable is one report. Working backwards: the report needs
+research data. That's one transformation: raw web data → competitive
+analysis report. Two nodes, not three — "competitive analysis" and
+"final report" are the same kind of artifact.
+
+<tool_call name="run_command">
+cat > topology.json << 'EOF'
+{
+  "nodes": {
+    "research": { "depends_on": [] },
+    "report": { "depends_on": ["research"] }
+  }
+}
+EOF
+cat > nodes/research.md << 'EOF'
+# Competitor Research
+
+Research the top 5 project management tools by market adoption and
+expert rankings (G2, Capterra, Gartner 2024-2025).
+
+## Scope
+- For each tool: features, pricing tiers, target users, integrations,
+  customer ratings, strengths/weaknesses, recent developments
+- Focus on SaaS/cloud tools for teams of varying sizes
+
+## Quality Criteria
+- Every claim backed by a specific public source URL
+- Consistent categories across all five tools
+- Balanced coverage: strengths and weaknesses both
+- Flag data behind paywalls or older than 6 months
+EOF
+cat > nodes/report.md << 'EOF'
+# Competitive Analysis Report
+
+Produce a professional competitive analysis from the research data.
+
+## Deliverable
+- Executive summary with key takeaways and recommendations
+- Side-by-side comparison across features, pricing, ease of use,
+  scalability, integrations, and support
+- Per-tool profiles with strengths, weaknesses, and ideal use cases
+- Strategic recommendations for different buyer types
+
+## Quality Criteria
+- All comparisons grounded in the research findings
+- Objective metrics where available (ratings, pricing numbers)
+- Clear distinction between data and interpretation
+- Actionable — a decision-maker can act on this directly
+EOF
+</tool_call>
+
+Two nodes: research produces raw data, the report transforms it into
+a competitive analysis. I'm not adding a separate "analysis" node
+because the analysis IS the report — the system node agent inside
+the report node will create the right agents (analyst, writer) if
+the brief calls for both comparison tables and narrative insights.
 </example>
 </examples>
