@@ -1,7 +1,10 @@
 //! Run detail handlers — per-step results for a specific historical execution.
 
 use axum::{
+    body::Body,
     extract::{Path, State},
+    http::{header, StatusCode},
+    response::Response,
     Json,
 };
 use std::sync::Arc;
@@ -242,4 +245,111 @@ pub async fn get_step_run_for_execution(
         error: resp.error,
         phases: resp.phases,
     }))
+}
+
+/// GET /api/workflows/:wid/executions/:eid/files — Download all run files as a zip archive.
+#[utoipa::path(
+    get,
+    path = "/api/workflows/{wid}/executions/{eid}/files",
+    tag = "Workflows",
+    security(("bearer_auth" = [])),
+    params(
+        ("wid" = Uuid, Path, description = "Workflow ID"),
+        ("eid" = Uuid, Path, description = "Execution ID"),
+    ),
+    responses(
+        (status = 200, description = "Zip archive of run files", content_type = "application/zip"),
+        (status = 404, description = "Workflow, execution, or no files found")
+    )
+)]
+pub async fn download_run_files(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(path): Path<ExecutionPath>,
+) -> Result<Response, AppError> {
+    // Verify workflow ownership
+    let workflow = state
+        .repos()
+        .workflows
+        .get_workflow(path.wid)
+        .await?
+        .ok_or(AppError::not_found("Workflow"))?;
+    if workflow.user_id != auth.user_id.0 {
+        return Err(AppError::not_found("Workflow"));
+    }
+
+    // Verify execution belongs to this workflow
+    let db = state
+        .db()
+        .ok_or(AppError::Internal("Database not available".into()))?
+        .clone();
+    let collection_repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
+    let execution = collection_repo
+        .get_workflow_execution(path.eid)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Execution"))?;
+    if execution.workflow_id != path.wid {
+        return Err(AppError::not_found("Execution"));
+    }
+
+    // Read files from JuiceFS workspace
+    let workspace = state
+        .workspace()
+        .ok_or(AppError::Internal("Workspace not available".into()))?;
+
+    let files = workspace
+        .list_files(path.wid, path.eid, None)
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    if files.is_empty() {
+        return Err(AppError::not_found("Run files"));
+    }
+
+    // Build zip in memory from workspace files
+    let buf = std::io::Cursor::new(Vec::new());
+    let mut zip = zip::ZipWriter::new(buf);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+
+    let mut count = 0usize;
+    for rel_path in &files {
+        // Skip internal metadata
+        if rel_path.starts_with(".nexor") {
+            continue;
+        }
+
+        let content = workspace
+            .read_file(path.wid, path.eid, rel_path)
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        let Some(bytes) = content else { continue };
+
+        let name = rel_path.to_string_lossy();
+        zip.start_file(name.as_ref(), options)
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        std::io::Write::write_all(&mut zip, &bytes)
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+        count += 1;
+    }
+
+    if count == 0 {
+        return Err(AppError::not_found("Run files"));
+    }
+
+    let zip_bytes = zip
+        .finish()
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .into_inner();
+
+    let filename = format!("run-{}.zip", &path.eid.to_string()[..8]);
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/zip")
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{filename}\""),
+        )
+        .header(header::CONTENT_LENGTH, zip_bytes.len())
+        .body(Body::from(zip_bytes))
+        .map_err(|e| AppError::Internal(e.to_string()))
 }
