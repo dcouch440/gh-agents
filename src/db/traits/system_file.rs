@@ -49,6 +49,9 @@ pub trait SystemFileRepo: Send + Sync {
         run_id: Option<Uuid>,
     ) -> Result<Vec<SystemFileRow>>;
 
+    /// List all files for a specific workflow run.
+    async fn list_by_run(&self, workflow_id: Uuid, run_id: Uuid) -> Result<Vec<SystemFileRow>>;
+
     /// Set the `sealed` flag on all files produced by a given step.
     async fn seal_files_by_producer(&self, step_id: Uuid, sealed: bool) -> Result<u64>;
 }

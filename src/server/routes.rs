@@ -265,6 +265,10 @@ fn workflow_routes() -> Router<AppState> {
             routes::WORKFLOW_EXECUTION_STEP,
             get(api::get_step_run_for_execution),
         )
+        .route(
+            routes::WORKFLOW_EXECUTION_FILES,
+            get(api::download_run_files),
+        )
 }
 
 fn collection_routes() -> Router<AppState> {
