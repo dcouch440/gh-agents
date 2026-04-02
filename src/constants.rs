@@ -25,7 +25,7 @@ pub const ACTIVE_PROVIDER: &str = "xai";
 /// Orchestrator tier — highest capability.
 pub const MODEL_TIER1: &str = "grok-4.20-0309-reasoning";
 /// Worker tier — fast reasoning.
-pub const MODEL_TIER2: &str = "grok-4.20-0309-reasoning";
+pub const MODEL_TIER2: &str = "grok-4-1-fast-reasoning";
 /// Utility tier — fast non-reasoning.
 pub const MODEL_TIER3: &str = "grok-4-1-fast-non-reasoning";
 
@@ -326,6 +326,7 @@ pub mod routes {
     // Execution History (per-step results for specific runs)
     pub const WORKFLOW_EXECUTION_STEPS: &str = "/workflows/:wid/executions/:eid/steps";
     pub const WORKFLOW_EXECUTION_STEP: &str = "/workflows/:wid/executions/:eid/steps/:sid";
+    pub const WORKFLOW_EXECUTION_FILES: &str = "/workflows/:wid/executions/:eid/files";
 
     // Run Templates (frozen workflow snapshots)
     pub const WORKFLOW_TEMPLATES: &str = "/workflows/:id/templates";

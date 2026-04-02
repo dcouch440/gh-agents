@@ -109,7 +109,7 @@ pub use results::{delete_result, get_result, list_results, ResultQuery, ResultRe
 pub use workflows::{
     add_step_document, add_workflow_edge, clear_step_messages, create_template, create_workflow,
     create_workflow_step, delete_template, delete_workflow, delete_workflow_edge_by_id,
-    delete_workflow_step, execute_workshop_step, get_or_create_step_session,
+    delete_workflow_step, download_run_files, execute_workshop_step, get_or_create_step_session,
     generate_workflow, get_or_create_workflow_agent_session, get_or_create_workshop,
     get_run_detail,
     get_step_chat_debug, get_step_config, get_step_dispatch_history, get_step_last_run,

@@ -136,6 +136,23 @@ impl SystemFileRepo for PgRepo {
         Ok(rows)
     }
 
+    async fn list_by_run(&self, workflow_id: Uuid, run_id: Uuid) -> Result<Vec<SystemFileRow>> {
+        let rows: Vec<SystemFileRow> = sqlx::query_as(
+            r#"
+            SELECT id, workflow_id, path, media_type, description, tags, produced_by, produced_by_agent, version, size_bytes, workflow_run_id, sealed, created_at, updated_at
+            FROM system_files
+            WHERE workflow_id = $1 AND workflow_run_id = $2
+            ORDER BY path
+            "#,
+        )
+        .bind(workflow_id)
+        .bind(run_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows)
+    }
+
     async fn seal_files_by_producer(&self, step_id: Uuid, sealed: bool) -> Result<u64> {
         let result = sqlx::query("UPDATE system_files SET sealed = $1 WHERE produced_by = $2")
             .bind(sealed)

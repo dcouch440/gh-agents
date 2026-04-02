@@ -1,5 +1,5 @@
 import { api as baseApi } from './client'
-import { API } from '@/constants'
+import { API, API_BASE, LS_AUTH_TOKEN } from '@/constants'
 import type { RequestConfig } from './client'
 import type {
   Agent,
@@ -362,6 +362,33 @@ const workflows = freeze({
 
   getRunDetail: (workflowId: string, executionId: string, config?: RequestConfig) =>
     baseApi.get<RunDetailResponse>(API.WORKFLOW_EXECUTION_STEPS(workflowId, executionId), config),
+
+  downloadRunFiles: async (workflowId: string, executionId: string): Promise<void> => {
+    const url = `${API_BASE}${API.WORKFLOW_EXECUTION_FILES(workflowId, executionId)}`
+    const token = localStorage.getItem(LS_AUTH_TOKEN)
+    const headers: Record<string, string> = {}
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+
+    const response = await fetch(url, { headers })
+    if (!response.ok) {
+      const body = await response.text().catch(() => null)
+      throw new Error(body ?? `Download failed: ${response.status}`)
+    }
+
+    const blob = await response.blob()
+    const blobUrl = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = blobUrl
+    anchor.download =
+      response.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1]
+      ?? `run-${executionId.slice(0, 8)}.zip`
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    URL.revokeObjectURL(blobUrl)
+  },
 
   getAllPlans: (workflowId: string, config?: RequestConfig) =>
     baseApi.get<Array<{ step_id: string; content: string }>>(API.WORKFLOW_PLANS(workflowId), config),
