@@ -9,6 +9,7 @@ pub mod agent_executions;
 pub mod agent_roster;
 pub mod agents;
 pub mod board;
+pub mod canvas_sync;
 pub mod chat;
 pub mod collections;
 pub mod costs;

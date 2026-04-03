@@ -117,14 +117,26 @@ async fn handle_socket(
                     Some(Ok(Message::Text(text))) => {
                         match serde_json::from_str::<ClientMessage>(&text) {
                             Ok(client_msg) => {
-                                let response = handle_client_message(
-                                    client_msg, &topics, &run_subs,
-                                );
-                                if let Some(ctrl) = response {
-                                    if let Ok(json) = serde_json::to_string(&ctrl) {
-                                        if sender.send(Message::Text(json)).await.is_err() {
-                                            warn!("Failed to send message to client");
-                                            break;
+                                if client_msg.is_canvas_mutation() {
+                                    let state_clone = state.clone();
+                                    let uid = user_id;
+                                    tokio::spawn(async move {
+                                        if let Err(e) = crate::server::services::canvas_sync::handle_canvas_message(
+                                            client_msg, &state_clone, uid,
+                                        ).await {
+                                            warn!(error = %e, "Canvas sync failed");
+                                        }
+                                    });
+                                } else {
+                                    let response = handle_client_message(
+                                        client_msg, &topics, &run_subs,
+                                    );
+                                    if let Some(ctrl) = response {
+                                        if let Ok(json) = serde_json::to_string(&ctrl) {
+                                            if sender.send(Message::Text(json)).await.is_err() {
+                                                warn!("Failed to send message to client");
+                                                break;
+                                            }
                                         }
                                     }
                                 }
@@ -269,6 +281,8 @@ fn handle_client_message(
             client_ts: ts,
             server_ts: chrono::Utc::now(),
         }),
+        // Canvas mutations are handled asynchronously — they never reach here.
+        _ => None,
     }
 }
 

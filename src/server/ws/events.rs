@@ -100,6 +100,69 @@ pub enum ClientMessage {
     /// Application-level ping for latency measurement.
     #[serde(rename = "ping")]
     Ping { ts: String },
+    /// Canvas element was moved/resized by the user.
+    #[serde(rename = "canvas_element_moved")]
+    CanvasElementMoved {
+        workflow_id: Uuid,
+        element_id: String,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+    },
+    /// Canvas node text was changed by the user.
+    #[serde(rename = "canvas_text_changed")]
+    CanvasTextChanged {
+        workflow_id: Uuid,
+        element_id: String,
+        text: String,
+    },
+    /// User created a new node on the canvas.
+    #[serde(rename = "canvas_node_created")]
+    CanvasNodeCreated {
+        workflow_id: Uuid,
+        element_id: String,
+        x: f64,
+        y: f64,
+        width: f64,
+        height: f64,
+        text: String,
+    },
+    /// User created a new edge on the canvas.
+    #[serde(rename = "canvas_edge_created")]
+    CanvasEdgeCreated {
+        workflow_id: Uuid,
+        element_id: String,
+        source_element_id: String,
+        target_element_id: String,
+    },
+    /// User deleted a node from the canvas.
+    #[serde(rename = "canvas_node_deleted")]
+    CanvasNodeDeleted {
+        workflow_id: Uuid,
+        element_id: String,
+    },
+    /// User deleted an edge from the canvas.
+    #[serde(rename = "canvas_edge_deleted")]
+    CanvasEdgeDeleted {
+        workflow_id: Uuid,
+        element_id: String,
+    },
+}
+
+impl ClientMessage {
+    /// Returns true if this is a canvas mutation message that needs async handling.
+    pub fn is_canvas_mutation(&self) -> bool {
+        matches!(
+            self,
+            Self::CanvasElementMoved { .. }
+                | Self::CanvasTextChanged { .. }
+                | Self::CanvasNodeCreated { .. }
+                | Self::CanvasEdgeCreated { .. }
+                | Self::CanvasNodeDeleted { .. }
+                | Self::CanvasEdgeDeleted { .. }
+        )
+    }
 }
 
 // ============================================================================
