@@ -296,6 +296,10 @@ export const FOCUS_MODE = {
 // Auto-save
 export const AUTO_SAVE_DEBOUNCE_MS = 500
 
+// Canvas live sync debounce
+export const CANVAS_SYNC_POSITION_DEBOUNCE_MS = 150
+export const CANVAS_SYNC_TEXT_DEBOUNCE_MS = 500
+
 // Animation
 export const ANIMATION = {
   FAST: 150,

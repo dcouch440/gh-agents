@@ -5,7 +5,7 @@ import { api } from '@/api'
 import { boardStore, workflowStore, sidebarStore, useStore } from '@/stores'
 import { boardElementStore } from '@/stores/boardElementStore'
 import { useWorkflowRun } from '@/components/canvas/useWorkflowRun'
-import { useBoardTheme, useBoardSubmit, useBoardElements, useDispatchHistory, useActivityHistory } from './hooks'
+import { useBoardTheme, useBoardSubmit, useBoardElements, useCanvasSync, useDispatchHistory, useActivityHistory } from './hooks'
 import { BoardContextMenu } from './BoardContextMenu'
 import type { MenuPosition } from './BoardContextMenu'
 import { SubmitBar } from './SubmitBar'
@@ -78,6 +78,9 @@ function Board({ workflowId }: BoardProps) {
     setContextMenu({ x, y, elementId })
   }, [])
 
+  // ── Live sync ──────────────────────────────────────────────────────────
+  const handleCanvasChange = useCanvasSync(workflowId)
+
   // ── Interactions ─────────────────────────────────────────────────────────
 
   const {
@@ -85,7 +88,7 @@ function Board({ workflowId }: BoardProps) {
     editingBoxId, previews, handlers,
     setActiveTool, zoomIn, zoomOut, resetZoom,
     handleContextMenuDelete, handleContextMenuSelectAll,
-  } = useBoardInteractions(elements, setElements, containerRef, syncDeletedElements, handleContextMenuOpen)
+  } = useBoardInteractions(elements, setElements, containerRef, syncDeletedElements, handleContextMenuOpen, handleCanvasChange)
 
   // ── Context menu ─────────────────────────────────────────────────────────
 

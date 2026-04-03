@@ -10,6 +10,12 @@ vi.mock('./hooks/useBoardElements', () => ({
   useBoardElements: (_wfId: string, _setElements: unknown) => ({ loading: false }),
 }))
 
+// ── Mock useCanvasSync to avoid WebSocket dependency ──────────────────
+
+vi.mock('./hooks/useCanvasSync', () => ({
+  useCanvasSync: () => vi.fn(),
+}))
+
 // ── Setup ────────────────────────────────────────────────────────────────
 
 beforeEach(() => {
