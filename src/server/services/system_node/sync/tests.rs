@@ -286,13 +286,7 @@ mod tests {
 
         let desired = vec![
             desired_with_slug("brainstormer", "Idea Brainstormer", "Brainstorm.", &[], &[]),
-            desired_with_slug(
-                "curator",
-                "Idea Curator",
-                "Curate.",
-                &[],
-                &["brainstormer"],
-            ),
+            desired_with_slug("curator", "Idea Curator", "Curate.", &[], &["brainstormer"]),
         ];
 
         // name_to_step is keyed by normalized display name (how sync_to_db builds it)
@@ -305,7 +299,11 @@ mod tests {
 
         let diff = diff_edges(&desired, &name_to_step, &[], &agent_step_ids);
 
-        assert_eq!(diff.to_add.len(), 1, "should create brainstormer→curator edge");
+        assert_eq!(
+            diff.to_add.len(),
+            1,
+            "should create brainstormer→curator edge"
+        );
         assert_eq!(diff.to_add[0], (step_brainstormer, step_curator));
         assert!(diff.to_remove.is_empty());
     }

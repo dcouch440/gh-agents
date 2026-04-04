@@ -58,9 +58,17 @@ pub enum StreamChunk {
     /// A token of text
     Token(String),
     /// A tool has started executing
-    ToolStart { name: String, tool_id: String, input: String },
+    ToolStart {
+        name: String,
+        tool_id: String,
+        input: String,
+    },
     /// A tool has finished executing
-    ToolEnd { name: String, tool_id: String, result: String },
+    ToolEnd {
+        name: String,
+        tool_id: String,
+        result: String,
+    },
     /// A document was created or updated
     DocUpdate { doc_id: String, title: String },
     /// An interactive panel was rendered on the node
