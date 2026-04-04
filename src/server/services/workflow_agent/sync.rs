@@ -12,7 +12,7 @@ use uuid::Uuid;
 use super::file_reader;
 use super::slug_to_display_name;
 use crate::db::traits::WorkflowRepo;
-use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
+use crate::db::{CanvasElementMapRow, WorkflowStepEdgeRow, WorkflowStepRow};
 use crate::server::services::ServiceError;
 use crate::server::state::AppState;
 use crate::server::ws::events::{WorkflowEvent, WorkflowEventKind};
@@ -217,7 +217,7 @@ pub(crate) async fn sync_to_db(
         }
     }
 
-    // Phase 4: Auto-layout
+    // Phase 4: Auto-layout (only newly created nodes — preserve user-set positions)
     if !result.nodes_created.is_empty() || result.edges_created > 0 || result.edges_removed > 0 {
         let fresh_steps = repo
             .list_steps(workflow_id)
@@ -235,11 +235,19 @@ pub(crate) async fn sync_to_db(
 
         let positions = auto_layout(&workforce_steps, &fresh_edges);
 
+        let new_step_ids: HashSet<Uuid> = result
+            .nodes_created
+            .iter()
+            .filter_map(|slug| slug_to_id.get(slug).copied())
+            .collect();
+
         for (step_id, x, y) in positions {
-            if let Ok(Some(mut step)) = repo.get_step(step_id).await {
-                step.position_x = Some(x);
-                step.position_y = Some(y);
-                let _ = repo.update_step(step).await;
+            if new_step_ids.contains(&step_id) {
+                if let Ok(Some(mut step)) = repo.get_step(step_id).await {
+                    step.position_x = Some(x);
+                    step.position_y = Some(y);
+                    let _ = repo.update_step(step).await;
+                }
             }
         }
     }
@@ -328,31 +336,14 @@ pub(crate) async fn sync_to_db(
 
 // ── Canvas element generation ──────────────────────────────────────────────
 
-/// Generate Excalidraw JSON elements from steps + edges and upsert into canvas_snapshots.
+/// Build Excalidraw JSON elements from workforce steps + edges.
 ///
-/// Produces the same format as the frontend's serialize.ts: rectangles with bound text
-/// elements, and arrows with start/end bindings. The Board component loads these on
-/// page refresh via getBoardElements.
-pub(crate) async fn sync_canvas_elements(
-    workflow_id: Uuid,
-    user_id: Uuid,
-    repo: &dyn WorkflowRepo,
-    state: &AppState,
-) -> Result<(), ServiceError> {
-    let steps = repo
-        .list_steps(workflow_id)
-        .await
-        .map_err(ServiceError::Internal)?;
-    let edges = repo
-        .list_edges(workflow_id)
-        .await
-        .map_err(ServiceError::Internal)?;
-
-    let workforce_steps: Vec<&WorkflowStepRow> = steps
-        .iter()
-        .filter(|s| s.execution_mode == "workforce")
-        .collect();
-
+/// Pure function — no DB writes. Returns a JSON array of rectangles, text, and arrows
+/// in the same format as the frontend's serialize.ts.
+pub(crate) fn build_canvas_elements(
+    workforce_steps: &[&WorkflowStepRow],
+    edges: &[WorkflowStepEdgeRow],
+) -> Vec<serde_json::Value> {
     let mut elements = Vec::new();
 
     const MAX_BOX_WIDTH: f64 = 400.0;
@@ -363,7 +354,7 @@ pub(crate) async fn sync_canvas_elements(
     const CHAR_WIDTH: f64 = 9.6; // 16px font * 0.6
     const LINE_HEIGHT: f64 = 22.4; // 16px font * 1.4
 
-    for step in &workforce_steps {
+    for step in workforce_steps {
         let x = step.position_x.unwrap_or(100.0);
         let y = step.position_y.unwrap_or(100.0);
 
@@ -437,7 +428,7 @@ pub(crate) async fn sync_canvas_elements(
     }
 
     // Arrows
-    for edge in &edges {
+    for edge in edges {
         elements.push(serde_json::json!({
             "type": "arrow",
             "id": edge.id.to_string(),
@@ -449,6 +440,61 @@ pub(crate) async fn sync_canvas_elements(
             "startBinding": { "elementId": edge.from_step_id.to_string() },
             "endBinding": { "elementId": edge.to_step_id.to_string() },
         }));
+    }
+
+    elements
+}
+
+/// Generate Excalidraw JSON elements from steps + edges, upsert element maps
+/// and canvas snapshot, then broadcast.
+///
+/// Produces the same format as the frontend's serialize.ts: rectangles with bound text
+/// elements, and arrows with start/end bindings. The Board component loads these on
+/// page refresh via getBoardElements.
+pub(crate) async fn sync_canvas_elements(
+    workflow_id: Uuid,
+    user_id: Uuid,
+    repo: &dyn WorkflowRepo,
+    state: &AppState,
+) -> Result<(), ServiceError> {
+    let steps = repo
+        .list_steps(workflow_id)
+        .await
+        .map_err(ServiceError::Internal)?;
+    let edges = repo
+        .list_edges(workflow_id)
+        .await
+        .map_err(ServiceError::Internal)?;
+
+    let workforce_steps: Vec<&WorkflowStepRow> = steps
+        .iter()
+        .filter(|s| s.execution_mode == "workforce")
+        .collect();
+
+    let elements = build_canvas_elements(&workforce_steps, &edges);
+
+    // Ensure element maps exist so canvas sync can resolve element IDs
+    for step in &workforce_steps {
+        repo.upsert_element_map(CanvasElementMapRow {
+            workflow_id,
+            element_id: step.id.to_string(),
+            step_id: Some(step.id),
+            edge_id: None,
+            created_at: chrono::Utc::now(),
+        })
+        .await
+        .map_err(ServiceError::Internal)?;
+    }
+    for edge in &edges {
+        repo.upsert_element_map(CanvasElementMapRow {
+            workflow_id,
+            element_id: edge.id.to_string(),
+            step_id: None,
+            edge_id: Some(edge.id),
+            created_at: chrono::Utc::now(),
+        })
+        .await
+        .map_err(ServiceError::Internal)?;
     }
 
     let elements_json = serde_json::to_string(&elements).map_err(|e| {
