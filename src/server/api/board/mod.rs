@@ -252,31 +252,40 @@ pub struct BoardElementsResponse {
     pub last_submit: Option<serde_json::Value>,
 }
 
-/// Return the last saved Excalidraw elements for a workflow.
+/// Return current Excalidraw elements for a workflow, built from live step positions.
 ///
-/// If the workflow has never been submitted, returns `{ "elements": null }`.
+/// Generates elements from current step/edge data so positions always reflect
+/// the latest state (including canvas sync updates). Falls back to the stored
+/// snapshot only for the `last_submit` field.
 pub async fn get_board_elements(
     State(state): State<AppState>,
     _auth: AuthUser,
     Path(workflow_id): Path<Uuid>,
 ) -> Result<Json<BoardElementsResponse>, AppError> {
-    let row = state
-        .repos()
-        .workflows
-        .get_canvas_snapshot(workflow_id)
-        .await?;
+    use crate::server::services::workflow_agent::sync::build_canvas_elements;
 
-    let (elements, last_submit) = match row {
-        Some(r) => {
-            let val: serde_json::Value = serde_json::from_str(&r.elements_json)
-                .map_err(|e| AppError::Internal(format!("Bad stored elements: {e}")))?;
-            let last = r
-                .last_response_json
-                .and_then(|json| serde_json::from_str(&json).ok());
-            (Some(val), last)
-        }
-        None => (None, None),
+    let repo = state.repos().workflows.as_ref();
+    let steps = repo.list_steps(workflow_id).await?;
+    let edges = repo.list_edges(workflow_id).await?;
+
+    let workforce_steps: Vec<&crate::db::WorkflowStepRow> = steps
+        .iter()
+        .filter(|s| s.execution_mode == "workforce")
+        .collect();
+
+    let elements = if workforce_steps.is_empty() {
+        None
+    } else {
+        Some(serde_json::to_value(build_canvas_elements(&workforce_steps, &edges))
+            .map_err(|e| AppError::Internal(format!("Failed to build elements: {e}")))?)
     };
+
+    // Preserve last_submit from the snapshot for debug panel rehydration
+    let last_submit = repo
+        .get_canvas_snapshot(workflow_id)
+        .await?
+        .and_then(|r| r.last_response_json)
+        .and_then(|json| serde_json::from_str(&json).ok());
 
     Ok(Json(BoardElementsResponse {
         elements,

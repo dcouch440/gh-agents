@@ -53,8 +53,8 @@ const useCanvasSync = (workflowId: string): CanvasChangeCallback => {
   useEffect(() => {
     const unsubscribe = ws.subscribe(WS_TOPIC.WORKFLOW, (msg: WsWireMessage) => {
       if (msg.event === WORKFLOW_EVENT.BOARD_ELEMENTS_UPDATED) {
-        positionDebouncerRef.current?.cancelAll()
-        textDebouncerRef.current?.cancelAll()
+        positionDebouncerRef.current?.flushAll()
+        textDebouncerRef.current?.flushAll()
       }
     })
     return unsubscribe
