@@ -148,7 +148,8 @@ pub fn html_unescape(s: &str) -> String {
         .replace("&lt;", "<")
         .replace("&quot;", "\"")
         .replace("&#39;", "'")
-        .replace("&#x27;", "'");
+        .replace("&#x27;", "'")
+        .replace("&apos;", "'");
 
     strip_grok_tags(&s)
 }

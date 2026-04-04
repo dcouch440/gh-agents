@@ -333,14 +333,20 @@ pub(crate) async fn sync_to_db(
 /// Produces the same format as the frontend's serialize.ts: rectangles with bound text
 /// elements, and arrows with start/end bindings. The Board component loads these on
 /// page refresh via getBoardElements.
-async fn sync_canvas_elements(
+pub(crate) async fn sync_canvas_elements(
     workflow_id: Uuid,
     user_id: Uuid,
     repo: &dyn WorkflowRepo,
     state: &AppState,
 ) -> Result<(), ServiceError> {
-    let steps = repo.list_steps(workflow_id).await.map_err(ServiceError::Internal)?;
-    let edges = repo.list_edges(workflow_id).await.map_err(ServiceError::Internal)?;
+    let steps = repo
+        .list_steps(workflow_id)
+        .await
+        .map_err(ServiceError::Internal)?;
+    let edges = repo
+        .list_edges(workflow_id)
+        .await
+        .map_err(ServiceError::Internal)?;
 
     let workforce_steps: Vec<&WorkflowStepRow> = steps
         .iter()
@@ -363,7 +369,8 @@ async fn sync_canvas_elements(
 
         // Use the full description (markdown brief) as box text
         let text = if step.description.is_empty() {
-            step.name.as_deref()
+            step.name
+                .as_deref()
                 .or(step.ref_id.as_deref())
                 .unwrap_or("Node")
                 .to_string()
@@ -382,9 +389,13 @@ async fn sync_canvas_elements(
         }
         let content_height = total_lines * LINE_HEIGHT;
         let longest_line = lines.iter().map(|l| l.len()).max().unwrap_or(10) as f64 * CHAR_WIDTH;
-        let w = step.width.unwrap_or_else(|| (longest_line + PAD_X * 2.0).clamp(MIN_BOX_WIDTH, MAX_BOX_WIDTH));
+        let w = step
+            .width
+            .unwrap_or_else(|| (longest_line + PAD_X * 2.0).clamp(MIN_BOX_WIDTH, MAX_BOX_WIDTH));
         // Add 20% safety margin for word-wrap differences between estimation and renderer
-        let h = step.height.unwrap_or_else(|| (content_height * 1.2 + PAD_Y * 2.0).max(MIN_BOX_HEIGHT));
+        let h = step
+            .height
+            .unwrap_or_else(|| (content_height * 1.2 + PAD_Y * 2.0).max(MIN_BOX_HEIGHT));
         let text_id = format!("{}-text", step.id);
 
         // Connected arrow IDs for boundElements
@@ -440,8 +451,9 @@ async fn sync_canvas_elements(
         }));
     }
 
-    let elements_json = serde_json::to_string(&elements)
-        .map_err(|e| ServiceError::Internal(anyhow::anyhow!("Failed to serialize elements: {e}")))?;
+    let elements_json = serde_json::to_string(&elements).map_err(|e| {
+        ServiceError::Internal(anyhow::anyhow!("Failed to serialize elements: {e}"))
+    })?;
 
     let row = crate::db::CanvasSnapshotRow {
         workflow_id,
