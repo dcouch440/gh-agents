@@ -39,7 +39,9 @@ Adam Tornhill's "Your Code as a Crime Scene" showed that in a 400KLOC codebase, 
 
 ### SKILL.md
 
-````yaml
+#### Frontmatter
+
+```yaml
 ---
 name: co-change
 description: Find historically co-changed files missing from this PR and bug hotspots using git history algorithms
@@ -47,10 +49,13 @@ disable-model-invocation: true
 argument-hint: [branch-name or leave blank for current]
 allowed-tools: Bash Read Grep Glob
 ---
+```
+
+#### Instructions
 
 Analyze git history to find **co-change coupling violations** and **bug hotspots**.
 
-## Step 1: Identify files in this change
+**Step 1: Identify files in this change**
 
 Get the files changed on this branch vs main:
 
@@ -58,7 +63,7 @@ Get the files changed on this branch vs main:
 git diff --name-only main...HEAD
 ```
 
-## Step 2: Build co-change frequency matrix
+**Step 2: Build co-change frequency matrix**
 
 For each changed file, find which OTHER files historically change in the same commit:
 
@@ -71,7 +76,7 @@ done | sort | uniq -c | sort -rn
 
 A file pair with >60% co-change rate is **coupled**. If one is in the PR and the other isn't, that's a potential incomplete change.
 
-## Step 3: Compute bugspots scores
+**Step 3: Compute bugspots scores**
 
 Find bug-fixing commits (messages matching fix/bug/patch/resolve/close):
 
@@ -85,29 +90,31 @@ For each file touched by fix commits, compute:
 
 Recent fixes weight exponentially more than old ones.
 
-## Step 4: Cross-reference
+**Step 4: Cross-reference**
 
 For the files in this PR:
 1. **Coupling violations**: Files with >60% co-change rate that are NOT in this PR. Show the co-change rate and recent commits where they changed together.
 2. **Hotspot overlap**: If any PR file is in the top 10% of hotspots, flag it as high-risk and recommend extra review.
 3. **Divergent fix detection**: Find file pairs with >80% co-change rate where the most recent commit changed only ONE of the pair. Show what changed — the other file may need the same fix.
 
-## Output format
+**Output format**
 
-### Co-Change Violations
+Co-Change Violations:
+
 | Missing File | Co-Changed With | Rate | Last Joint Commit |
 |---|---|---|---|
 
-### Bug Hotspots in This PR
+Bug Hotspots in This PR:
+
 | File | Score | Fix Commits (last 6mo) | Risk |
 |---|---|---|---|
 
-### Divergent Fixes (one got fixed, other didn't)
+Divergent Fixes (one got fixed, other didn't):
+
 | Fixed File | Unfixed Partner | Fix Commit | What Changed |
 |---|---|---|---|
 
 Only report findings with evidence. No speculative warnings.
-````
 
 ---
 
@@ -132,7 +139,9 @@ These aren't opinions — they're documented failure modes from Cloudflare outag
 
 ### SKILL.md
 
-````yaml
+#### Frontmatter
+
+```yaml
 ---
 name: audit-async
 description: Scan Rust async code for deadlocks, resource starvation, and cancellation-safety bugs
@@ -140,24 +149,27 @@ disable-model-invocation: true
 argument-hint: [file-or-module path, or blank for whole src/]
 allowed-tools: Bash Read Grep Glob
 ---
+```
+
+#### Instructions
 
 Audit Rust async code for specific documented footgun patterns. Target: $ARGUMENTS (default: entire src/).
 
-## Check 1: Mutex guards held across .await
+**Check 1: Mutex guards held across .await**
 
 Find every `lock()`, `read()`, `write()` call on Mutex/RwLock types. Trace the guard's scope. If the scope contains an `.await`, flag it.
 
-**Why it's a bug:** Tokio may suspend the task and resume it on a different thread. `std::sync::MutexGuard` is not `Send`, causing a deadlock. Even `tokio::sync::MutexGuard` held across await points can cause contention starvation.
+*Why it's a bug:* Tokio may suspend the task and resume it on a different thread. `std::sync::MutexGuard` is not `Send`, causing a deadlock. Even `tokio::sync::MutexGuard` held across await points can cause contention starvation.
 
-**Fix:** Scope the guard so it drops before the `.await`, or use `tokio::sync::Mutex` if the guard must span the await (with a comment explaining why).
+*Fix:* Scope the guard so it drops before the `.await`, or use `tokio::sync::Mutex` if the guard must span the await (with a comment explaining why).
 
-## Check 2: std::sync::Mutex in async functions
+**Check 2: std::sync::Mutex in async functions**
 
 Grep for `std::sync::Mutex` or `parking_lot::Mutex` usage in `async fn` or functions returning `impl Future`. If the guard is held across any `.await`, it MUST be `tokio::sync::Mutex`.
 
 Conversely, if `tokio::sync::Mutex` is used but no `.await` exists within the guard scope, flag it as unnecessary overhead — `std::sync::Mutex` is cheaper.
 
-## Check 3: Blocking operations in async context
+**Check 3: Blocking operations in async context**
 
 Search for these patterns inside `async fn`:
 - `std::fs::` operations (use `tokio::fs::` instead)
@@ -166,32 +178,33 @@ Search for these patterns inside `async fn`:
 - `.read()` / `.write()` on `std::io` types
 - CPU-heavy loops without `spawn_blocking`
 
-**Why it's a bug:** Blocks a Tokio worker thread. With the default 4-thread pool, 4 concurrent blocking calls freeze the entire runtime.
+*Why it's a bug:* Blocks a Tokio worker thread. With the default 4-thread pool, 4 concurrent blocking calls freeze the entire runtime.
 
-## Check 4: Futures recreated inside select! loops
+**Check 4: Futures recreated inside select! loops**
 
 Find `loop { select! { ... } }` patterns. Check if any branch creates a new future on each iteration (e.g., `some_async_fn()` called inline). The future should be created outside the loop with `pin!()`.
 
-**Why it's a bug:** Each iteration allocates a new future, discarding partial progress. For channel receives or timers, this means dropped messages.
+*Why it's a bug:* Each iteration allocates a new future, discarding partial progress. For channel receives or timers, this means dropped messages.
 
-## Check 5: Cancellation safety
+**Check 5: Cancellation safety**
 
 Find any `.await` where the code after it performs cleanup (state mutation, file deletion, channel sends). If the task is cancelled at that await point, the cleanup never runs.
 
-**Pattern to flag:**
+Pattern to flag:
+
 ```rust
 state.mark_started();
 let result = do_work().await;  // <-- cancellation here means...
 state.mark_finished();          // <-- ...this never runs
 ```
 
-**Fix:** Use RAII guards (`scopeguard::defer!`) or `tokio::select!` with cancellation-safe branches.
+*Fix:* Use RAII guards (`scopeguard::defer!`) or `tokio::select!` with cancellation-safe branches.
 
-## Check 6: Blocking Drop implementations
+**Check 6: Blocking Drop implementations**
 
 Find `impl Drop for` on types used in async code. If the `drop()` method does I/O (file ops, network, database), it blocks the runtime.
 
-## Output
+**Output**
 
 For each finding, report:
 - **File:line** — exact location
@@ -200,7 +213,6 @@ For each finding, report:
 - **Fix** — specific code change, not generic advice
 
 Group by severity. Skip anything behind `#[cfg(test)]`.
-````
 
 ---
 
@@ -218,7 +230,9 @@ The Scott Logic blog documents that invalid-state bugs are "easy to introduce an
 
 ### SKILL.md
 
-````yaml
+#### Frontmatter
+
+```yaml
 ---
 name: state-machine
 description: Extract implicit state machines from enums/status fields, build transition tables, find dead states
@@ -226,10 +240,13 @@ disable-model-invocation: true
 argument-hint: [enum-name or module-path]
 allowed-tools: Bash Read Grep Glob
 ---
+```
+
+#### Instructions
 
 Extract the implicit state machine for $ARGUMENTS and audit it.
 
-## Step 1: Identify state types
+**Step 1: Identify state types**
 
 Find all enums that represent states, statuses, or phases. Indicators:
 - Name contains `State`, `Status`, `Phase`, `Stage`, `Mode`, `Step`
@@ -238,7 +255,7 @@ Find all enums that represent states, statuses, or phases. Indicators:
 
 If $ARGUMENTS names a specific enum, use that. Otherwise scan the target module.
 
-## Step 2: Build the transition table
+**Step 2: Build the transition table**
 
 For each state enum, search the ENTIRE codebase for every `match` or `if let` on that type. For each arm, record:
 - **From state**: The matched variant
@@ -247,22 +264,23 @@ For each state enum, search the ENTIRE codebase for every `match` or `if let` on
 - **Location**: file:line
 
 Build a table:
+
 | From | To | Trigger | Location |
 |---|---|---|---|
 
-## Step 3: Check automata properties
+**Step 3: Check automata properties**
 
-**3a. Unreachable states:** Variants with NO inbound transitions (never transitioned TO). These are either initial states or dead code.
+3a. **Unreachable states:** Variants with NO inbound transitions (never transitioned TO). These are either initial states or dead code.
 
-**3b. Terminal states:** Variants with NO outbound transitions (never transitioned FROM). Verify these are intentionally terminal (e.g., `Completed`, `Failed`). If not, it's a state that traps execution.
+3b. **Terminal states:** Variants with NO outbound transitions (never transitioned FROM). Verify these are intentionally terminal (e.g., `Completed`, `Failed`). If not, it's a state that traps execution.
 
-**3c. Wildcard absorption:** Any `_ => ...` or `other => ...` match arm that handles unknown variants. These silently absorb new variants added later. Flag with: "Adding a new variant to this enum will be silently handled by the wildcard at file:line instead of forcing explicit handling."
+3c. **Wildcard absorption:** Any `_ => ...` or `other => ...` match arm that handles unknown variants. These silently absorb new variants added later. Flag with: "Adding a new variant to this enum will be silently handled by the wildcard at file:line instead of forcing explicit handling."
 
-**3d. Missing transitions:** For each (from, trigger) pair, check if there's an explicit handler. If state A handles triggers X, Y, Z, but state B only handles X, Y — trigger Z in state B is either impossible (good) or unhandled (bug).
+3d. **Missing transitions:** For each (from, trigger) pair, check if there's an explicit handler. If state A handles triggers X, Y, Z, but state B only handles X, Y — trigger Z in state B is either impossible (good) or unhandled (bug).
 
-**3e. Contradictory transitions:** Same (from, trigger) producing different to-states in different locations.
+3e. **Contradictory transitions:** Same (from, trigger) producing different to-states in different locations.
 
-## Step 4: Draw the machine
+**Step 4: Draw the machine**
 
 Output an ASCII state diagram:
 
@@ -272,13 +290,12 @@ Output an ASCII state diagram:
                        --fail--> [Failed]
 ```
 
-## Output
+**Output**
 
 1. The transition table
 2. The state diagram
 3. Findings: dead states, trapping states, wildcard absorption, missing handlers
 4. For each finding: the exact location and whether it's a bug or intentional
-````
 
 ---
 
@@ -299,7 +316,9 @@ Output an ASCII state diagram:
 
 ### SKILL.md
 
-````yaml
+#### Frontmatter
+
+```yaml
 ---
 name: doc-drift
 description: Find documentation references to deleted code, stale commands, and drifted descriptions
@@ -307,41 +326,44 @@ disable-model-invocation: true
 argument-hint: [doc-file-or-directory, or blank for all .md files]
 allowed-tools: Bash Read Grep Glob
 ---
+```
+
+#### Instructions
 
 Scan documentation for references that have drifted from reality. Target: $ARGUMENTS (default: all .md files in the repo).
 
-## Phase 1: Extract references
+**Phase 1: Extract references**
 
 For each markdown file, extract:
 
-**1a. Backticked identifiers** — anything in single backticks that looks like a code symbol: function names (`snake_case`), type names (`CamelCase`), constants (`UPPER_CASE`), enum variants (`Type::Variant`).
+1a. **Backticked identifiers** — anything in single backticks that looks like a code symbol: function names (`snake_case`), type names (`CamelCase`), constants (`UPPER_CASE`), enum variants (`Type::Variant`).
 
-**1b. File paths** — anything matching `src/`, `frontend/`, `config/`, or other project directory patterns. Also relative paths like `./foo/bar.rs`.
+1b. **File paths** — anything matching `src/`, `frontend/`, `config/`, or other project directory patterns. Also relative paths like `./foo/bar.rs`.
 
-**1c. Shell commands** — anything in code blocks tagged as `bash`, `sh`, `shell`, or starting with `$`, `cargo`, `npm`, `npx`, `docker`. Extract the command and its arguments.
+1c. **Shell commands** — anything in code blocks tagged as bash/sh/shell, or starting with `$`, `cargo`, `npm`, `npx`, `docker`. Extract the command and its arguments.
 
-**1d. Config keys** — environment variable names (`UPPER_SNAKE`), TOML/YAML keys, CLI flags.
+1d. **Config keys** — environment variable names (`UPPER_SNAKE`), TOML/YAML keys, CLI flags.
 
-## Phase 2: Verify each reference
+**Phase 2: Verify each reference**
 
-**2a. Code symbols:** Search the codebase with grep. If no match, check git log to confirm it once existed (deletion vs. typo). Report:
+2a. **Code symbols:** Search the codebase with grep. If no match, check git log to confirm it once existed (deletion vs. typo). Report:
 - DELETED: existed in git history, now removed
 - NEVER_EXISTED: no git history match (likely a typo or pseudo-code)
 - RENAMED: similar symbol exists (Levenshtein distance < 3)
 
-**2b. File paths:** Check if the path exists. If not, check git log for the old path. Report:
+2b. **File paths:** Check if the path exists. If not, check git log for the old path. Report:
 - DELETED: file was removed
 - MOVED: similar filename exists elsewhere
 - NEVER_EXISTED: no history
 
-**2c. Shell commands:** Verify:
+2c. **Shell commands:** Verify:
 - Referenced binaries exist (`which` or `command -v`)
 - Referenced cargo modules/tests exist (`grep` for the module path)
 - Flags are valid for the command version
 
-**2d. Config keys:** Search for usage in code. If the key is documented but never read by any code, flag it.
+2d. **Config keys:** Search for usage in code. If the key is documented but never read by any code, flag it.
 
-## Phase 3: Staleness scoring
+**Phase 3: Staleness scoring**
 
 For each doc file, compare:
 - `doc_age`: last modified date of the doc (via git blame)
@@ -350,28 +372,30 @@ For each doc file, compare:
 
 Flag docs where drift_score > 10 (the code has changed significantly since the doc was written).
 
-## Phase 4: Command verification
+**Phase 4: Command verification**
 
 For shell commands in CLAUDE.md, README.md, and any setup/installation docs:
 - Verify the commands actually work (check paths, module names, flags exist)
 - Check if the output format described in docs matches current behavior
 
-## Output
+**Output**
 
-### Dead References
+Dead References:
+
 | Doc File | Line | Reference | Status | Last Existed |
 |---|---|---|---|---|
 
-### Stale Documentation
+Stale Documentation:
+
 | Doc File | Last Updated | Code Changes Since | Drift Score |
 |---|---|---|---|
 
-### Broken Commands
+Broken Commands:
+
 | Doc File | Line | Command | Issue |
 |---|---|---|---|
 
 Only report confirmed issues. Do NOT flag intentional pseudo-code or placeholder examples.
-````
 
 ---
 
@@ -392,7 +416,9 @@ The technique decomposes into: extract rule → enumerate candidates → evaluat
 
 ### SKILL.md
 
-````yaml
+#### Frontmatter
+
+```yaml
 ---
 name: clone-divergence
 description: Given a bug fix, find other code locations with the same unfixed pattern
@@ -400,10 +426,13 @@ disable-model-invocation: true
 argument-hint: [commit-hash or file:line of the fix]
 allowed-tools: Bash Read Grep Glob
 ---
+```
+
+#### Instructions
 
 Given a bug fix at $ARGUMENTS, find other locations in the codebase that may have the same unfixed bug.
 
-## Step 1: Extract the fix pattern
+**Step 1: Extract the fix pattern**
 
 Read the diff of the fix (commit or staged change). Identify:
 - **Pre-pattern**: What the buggy code looked like (the `-` lines in context)
@@ -412,43 +441,44 @@ Read the diff of the fix (commit or staged change). Identify:
 
 State the rule in one sentence. This is the search target.
 
-## Step 2: Build search queries
+**Step 2: Build search queries**
 
 From the pre-pattern, extract structural markers — function calls, method chains, type names, variable patterns — that would appear in code with the same bug. Build 2-3 grep patterns that would match structurally similar code.
 
 Example: if the fix was adding `.unwrap_or_default()` after `.get()`, search for all `.get(` calls that don't have null-handling.
 
-## Step 3: Enumerate candidates
+**Step 3: Enumerate candidates**
 
 Search the codebase for all matches. Exclude:
 - The already-fixed location
 - Test files (unless the bug is in test infrastructure)
 - Generated code
 
-## Step 4: Evaluate each candidate
+**Step 4: Evaluate each candidate**
 
 For each candidate, assess:
 - **VULNERABLE**: The pre-pattern matches and the fix is absent. This is likely the same bug.
 - **SAFE**: The code has the same structure but already handles the case (different fix, same effect).
 - **DIFFERENT**: Superficially similar but the context makes the bug impossible here.
 
-## Output
+**Output**
 
-### Bug Pattern
-**Rule:** [one-sentence abstract rule]
-**Fixed at:** [location]
-**Fix:** [what changed]
+Bug Pattern:
+- **Rule:** [one-sentence abstract rule]
+- **Fixed at:** [location]
+- **Fix:** [what changed]
 
-### Unfixed Clones
+Unfixed Clones:
+
 | Location | Code Snippet | Assessment | Confidence |
 |---|---|---|---|
 
-### Safe Clones (already handled differently)
+Safe Clones (already handled differently):
+
 | Location | How It's Handled |
 |---|---|
 
 Report ONLY locations you've actually read and evaluated. Never guess from grep output alone.
-````
 
 ---
 
@@ -466,7 +496,9 @@ The UT Austin paper "Static Detection of Asymptotic Performance Bugs in Collecti
 
 ### SKILL.md
 
-````yaml
+#### Frontmatter
+
+```yaml
 ---
 name: boundary
 description: Systematically check every loop, index, and range for off-by-one and empty-input bugs
@@ -474,10 +506,13 @@ disable-model-invocation: true
 argument-hint: [file-path or function-name]
 allowed-tools: Read Grep Glob
 ---
+```
+
+#### Instructions
 
 Interrogate every boundary condition in $ARGUMENTS.
 
-## For each loop (`for`, `while`, iterator chain):
+**For each loop (`for`, `while`, iterator chain):**
 
 1. **Empty collection**: What happens if the input is empty? Does the code produce the correct result (empty output, zero, identity) or does it panic/produce garbage?
 2. **Single element**: Does the logic work correctly with exactly one item? (Many off-by-one bugs only manifest with 1 or 2 elements.)
@@ -485,21 +520,21 @@ Interrogate every boundary condition in $ARGUMENTS.
 4. **First/last special cases**: Does the loop body assume it's not on the first or last iteration? (e.g., accessing `i-1` without checking `i > 0`)
 5. **Early termination**: If the loop uses `break` or `return`, what's the state of any accumulated result?
 
-## For each index/slice operation (`[i]`, `[start..end]`, `.get(i)`):
+**For each index/slice operation (`[i]`, `[start..end]`, `.get(i)`):**
 
 1. **Could `i` equal the length?** `vec[vec.len()]` panics. `vec[vec.len() - 1]` panics on empty vec.
 2. **Could `i` be negative (or wrap)?** In Rust, `usize` subtraction wraps. `0usize - 1` is `usize::MAX`.
 3. **Slice bounds**: `[start..end]` — could `start > end`? Could `end > len`?
 4. **Is `.get()` used where `[]` is used?** If the index comes from external input or computation, `.get()` with error handling is safer.
 
-## For each arithmetic operation producing an index or size:
+**For each arithmetic operation producing an index or size:**
 
 1. **Division**: Could the divisor be zero?
 2. **Subtraction on unsigned**: Could this wrap? (`a - b` where `a < b` and both are `usize`)
 3. **Multiplication**: Could this overflow?
 4. **Integer division rounding**: `5 / 2 = 2` in integer math. Is truncation correct or should it round up?
 
-## Output format
+**Output format**
 
 For each finding:
 - **Location**: file:line
@@ -508,7 +543,6 @@ For each finding:
 - **Verdict**: BUG (will fail), SUSPECT (could fail with certain inputs), or SAFE (handled correctly — explain how)
 
 Only report BUG and SUSPECT findings. Don't list SAFE items unless they use a non-obvious technique worth noting.
-````
 
 ---
 
@@ -527,7 +561,9 @@ The technique: infer semantic domains from naming, then check if values from dif
 
 ### SKILL.md
 
-````yaml
+#### Frontmatter
+
+```yaml
 ---
 name: phantom-types
 description: Find where primitive types mask semantic domain mismatches (wrong ID, wrong unit, wrong coordinate)
@@ -535,38 +571,48 @@ disable-model-invocation: true
 argument-hint: [module-path or blank for full scan]
 allowed-tools: Read Grep Glob
 ---
+```
+
+#### Instructions
 
 Find semantic type confusion risks in $ARGUMENTS.
 
-## Step 1: Catalog primitive usage
+**Step 1: Catalog primitive usage**
 
 Find all function signatures and struct definitions. For each parameter or field that uses a primitive type (`i64`, `i32`, `u64`, `u32`, `usize`, `f64`, `f32`, `String`, `&str`), record:
 - The name
 - The inferred semantic domain (from naming: `_id`, `_count`, `_ms`, `_seconds`, `_bytes`, `_px`, `_index`, `_offset`, `_price`, `_score`)
 
-## Step 2: Find confusion-prone signatures
+**Step 2: Find confusion-prone signatures**
 
-**2a. Multiple same-type parameters from different domains:**
+2a. **Multiple same-type parameters from different domains:**
+
 ```rust
 fn transfer(from_id: i64, to_id: i64, amount: i64)  // 3 i64s, 2 domains
 ```
+
 Flag any function with 2+ parameters of the same primitive type where the names suggest different semantic domains.
 
-**2b. Cross-domain arithmetic:**
+2b. **Cross-domain arithmetic:**
+
 ```rust
 let total = user_count + item_count;  // both usize, but adding apples and oranges
 ```
+
 Flag arithmetic operations where the operand names suggest different domains.
 
-**2c. Cross-domain assignment:**
+2c. **Cross-domain assignment:**
+
 ```rust
 let user_id = group_id;  // both i64, but semantically wrong
 ```
+
 Flag assignments where the variable names suggest a domain mismatch.
 
-## Step 3: Recommend newtypes
+**Step 3: Recommend newtypes**
 
 For each semantic domain that appears 3+ times, suggest a newtype wrapper:
+
 ```rust
 struct UserId(i64);
 struct GroupId(i64);
@@ -575,22 +621,24 @@ struct Milliseconds(u64);
 
 Estimate the blast radius: how many function signatures and struct fields would need to change.
 
-## Output
+**Output**
 
-### High Risk: Confusion-Prone Signatures
+High Risk — Confusion-Prone Signatures:
+
 | Function | Parameters | Domains | Risk |
 |---|---|---|---|
 
-### Medium Risk: Cross-Domain Operations
+Medium Risk — Cross-Domain Operations:
+
 | Location | Operation | Left Domain | Right Domain |
 |---|---|---|---|
 
-### Recommended Newtypes
+Recommended Newtypes:
+
 | Domain | Current Type | Occurrences | Blast Radius |
 |---|---|---|---|
 
 Skip types that are already wrapped (existing newtypes). Focus on the highest-risk domain mixups.
-````
 
 ---
 
@@ -608,7 +656,9 @@ The technique: for each `?` in a function that mutates state, check if the mutat
 
 ### SKILL.md
 
-````yaml
+#### Frontmatter
+
+```yaml
 ---
 name: error-paths
 description: Check if early returns via ? leave state inconsistent after partial mutations
@@ -616,10 +666,13 @@ disable-model-invocation: true
 argument-hint: [file-path or function-name]
 allowed-tools: Read Grep Glob
 ---
+```
+
+#### Instructions
 
 Audit error path consistency in $ARGUMENTS.
 
-## Step 1: Find state-mutating fallible functions
+**Step 1: Find state-mutating fallible functions**
 
 Identify functions that:
 1. Return `Result<_, _>` or `anyhow::Result<_>`
@@ -628,20 +681,21 @@ Identify functions that:
 
 These are the candidates — a `?` after a mutation means the error path skips subsequent mutations.
 
-## Step 2: Trace each error path
+**Step 2: Trace each error path**
 
 For each function, list:
 - **Mutations**: ordered list of state changes (M1, M2, M3...)
 - **Failure points**: each `?` and which mutations precede it
 
 Example:
+
 ```
 M1: db.insert(record)        // mutation
 M2: cache.invalidate(key)?   // <-- failure here means M1 happened but M3 won't
 M3: db.update_counter()
 ```
 
-## Step 3: Classify each error path
+**Step 3: Classify each error path**
 
 For each failure point, classify the resulting state:
 
@@ -649,7 +703,7 @@ For each failure point, classify the resulting state:
 - **INCONSISTENT**: Some mutations persist while others don't, leaving the system in a state that no successful execution would produce
 - **SWALLOWED**: Error is caught with `let _ =`, `.ok()`, `.unwrap_or_default()` without a comment explaining why — the error might be important
 
-## Step 4: Check for silent discards
+**Step 4: Check for silent discards**
 
 Search for these patterns:
 - `let _ = fallible_call()`
@@ -659,18 +713,19 @@ Search for these patterns:
 
 For each, check: is the error intentionally discarded (with a comment), or is it an oversight?
 
-## Output
+**Output**
 
-### Inconsistent Error Paths
+Inconsistent Error Paths:
+
 | Function | Failure Point | Persisted Mutations | Skipped Mutations | Impact |
 |---|---|---|---|---|
 
-### Silently Discarded Errors
+Silently Discarded Errors:
+
 | Location | Pattern | Discarded Error Type | Intentional? |
 |---|---|---|---|
 
 Only report cases where inconsistency is possible. Functions that use database transactions or RAII cleanup guards are safe — note them briefly but don't flag them.
-````
 
 ---
 
@@ -686,7 +741,9 @@ Only report cases where inconsistency is possible. Functions that use database t
 
 ### SKILL.md
 
-````yaml
+#### Frontmatter
+
+```yaml
 ---
 name: archaeology
 description: Reconstruct WHY code exists before changing it — git blame + PR context + constraint discovery
@@ -694,10 +751,13 @@ disable-model-invocation: true
 argument-hint: [file:line-range or function-name]
 allowed-tools: Bash Read Grep Glob
 ---
+```
+
+#### Instructions
 
 Investigate the history and rationale of $ARGUMENTS before making changes.
 
-## Step 1: Timeline reconstruction
+**Step 1: Timeline reconstruction**
 
 ```bash
 # Whitespace-ignoring blame with copy detection
@@ -715,7 +775,7 @@ Build a timeline of significant changes to this code, noting:
 - Each significant modification with its commit message
 - Any reverts or reintroductions
 
-## Step 2: PR and issue context
+**Step 2: PR and issue context**
 
 For each significant commit, look for PR or issue references:
 
@@ -732,7 +792,7 @@ If GitHub PRs are available, check the discussion for:
 - Constraints that shaped the design
 - Known limitations acknowledged at the time
 
-## Step 3: Constraint discovery
+**Step 3: Constraint discovery**
 
 Identify forces that shaped this code:
 - **Performance constraints**: Was this optimized for a specific bottleneck?
@@ -742,7 +802,7 @@ Identify forces that shaped this code:
 
 Look for comments, commit messages, and nearby TODO/FIXME/HACK markers.
 
-## Step 4: Change coupling
+**Step 4: Change coupling**
 
 ```bash
 # What other files changed alongside this code?
@@ -753,21 +813,20 @@ done | sort | uniq -c | sort -rn | head -10
 
 These co-changed files are likely coupled. Changing this code may require changing them too.
 
-## Output
+**Output**
 
-### Timeline
+Timeline:
+
 | Date | Author | What Changed | Why (from commit/PR) |
 |---|---|---|---|
 
-### Constraints Discovered
+Constraints Discovered:
 - [list each constraint with evidence]
 
-### Coupled Files
+Coupled Files:
 - [files that historically change with this code]
 
-### Recommendation
-Based on the archaeology: is the proposed change safe? What constraints must be preserved? What coupled files might need updating?
-````
+Recommendation: Based on the archaeology — is the proposed change safe? What constraints must be preserved? What coupled files might need updating?
 
 ---
 
@@ -785,7 +844,9 @@ Unlike the broader `/doc-drift` skill, this one is fast and deterministic — no
 
 ### SKILL.md
 
-````yaml
+#### Frontmatter
+
+```yaml
 ---
 name: dead-refs
 description: Find documentation references to deleted files, renamed functions, and obsolete commands
@@ -793,10 +854,13 @@ disable-model-invocation: true
 argument-hint: [doc-file or blank for all .md]
 allowed-tools: Bash Read Grep Glob
 ---
+```
+
+#### Instructions
 
 Scan $ARGUMENTS (default: all .md files) for references to code that no longer exists.
 
-## Step 1: Extract all code references from docs
+**Step 1: Extract all code references from docs**
 
 Parse each markdown file for:
 
@@ -809,9 +873,9 @@ Parse each markdown file for:
 - `module::path::style` (Rust paths)
 - `Type::Variant` (enum variants)
 
-**Shell commands** — content in ```bash/sh blocks, extract the first word of each command and any path arguments.
+**Shell commands** — content in bash/sh code blocks. Extract the first word of each command and any path arguments.
 
-## Step 2: Verify each reference
+**Step 2: Verify each reference**
 
 **File paths**: Does the file exist? `test -f <path>`
 - If not, check `git log --all --follow -- <path>` for history
@@ -823,9 +887,10 @@ Parse each markdown file for:
 
 **Commands**: Verify module paths in cargo test commands, binary names, etc.
 
-## Step 3: Report
+**Step 3: Report**
 
-### Dead References
+Dead References:
+
 | Doc File | Line | Reference | Type | Status | Last Seen |
 |---|---|---|---|---|---|
 
@@ -835,7 +900,6 @@ Status: DELETED, RENAMED (suggest new name), MOVED (suggest new path), NEVER_EXI
 Sort by doc file, then line number. Only report confirmed dead references — if uncertain, skip it.
 
 This skill is intentionally narrow and fast. For deeper analysis (staleness scoring, semantic drift), use /doc-drift instead.
-````
 
 ---
 
