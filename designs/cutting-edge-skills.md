@@ -39,7 +39,7 @@ Adam Tornhill's "Your Code as a Crime Scene" showed that in a 400KLOC codebase, 
 
 ### SKILL.md
 
-```yaml
+````yaml
 ---
 name: co-change
 description: Find historically co-changed files missing from this PR and bug hotspots using git history algorithms
@@ -107,7 +107,7 @@ For the files in this PR:
 |---|---|---|---|
 
 Only report findings with evidence. No speculative warnings.
-```
+````
 
 ---
 
@@ -132,7 +132,7 @@ These aren't opinions — they're documented failure modes from Cloudflare outag
 
 ### SKILL.md
 
-```yaml
+````yaml
 ---
 name: audit-async
 description: Scan Rust async code for deadlocks, resource starvation, and cancellation-safety bugs
@@ -200,7 +200,7 @@ For each finding, report:
 - **Fix** — specific code change, not generic advice
 
 Group by severity. Skip anything behind `#[cfg(test)]`.
-```
+````
 
 ---
 
@@ -218,7 +218,7 @@ The Scott Logic blog documents that invalid-state bugs are "easy to introduce an
 
 ### SKILL.md
 
-```yaml
+````yaml
 ---
 name: state-machine
 description: Extract implicit state machines from enums/status fields, build transition tables, find dead states
@@ -278,7 +278,7 @@ Output an ASCII state diagram:
 2. The state diagram
 3. Findings: dead states, trapping states, wildcard absorption, missing handlers
 4. For each finding: the exact location and whether it's a bug or intentional
-```
+````
 
 ---
 
@@ -299,7 +299,7 @@ Output an ASCII state diagram:
 
 ### SKILL.md
 
-```yaml
+````yaml
 ---
 name: doc-drift
 description: Find documentation references to deleted code, stale commands, and drifted descriptions
@@ -371,7 +371,7 @@ For shell commands in CLAUDE.md, README.md, and any setup/installation docs:
 |---|---|---|---|
 
 Only report confirmed issues. Do NOT flag intentional pseudo-code or placeholder examples.
-```
+````
 
 ---
 
@@ -392,7 +392,7 @@ The technique decomposes into: extract rule → enumerate candidates → evaluat
 
 ### SKILL.md
 
-```yaml
+````yaml
 ---
 name: clone-divergence
 description: Given a bug fix, find other code locations with the same unfixed pattern
@@ -448,7 +448,7 @@ For each candidate, assess:
 |---|---|
 
 Report ONLY locations you've actually read and evaluated. Never guess from grep output alone.
-```
+````
 
 ---
 
@@ -466,7 +466,7 @@ The UT Austin paper "Static Detection of Asymptotic Performance Bugs in Collecti
 
 ### SKILL.md
 
-```yaml
+````yaml
 ---
 name: boundary
 description: Systematically check every loop, index, and range for off-by-one and empty-input bugs
@@ -508,7 +508,7 @@ For each finding:
 - **Verdict**: BUG (will fail), SUSPECT (could fail with certain inputs), or SAFE (handled correctly — explain how)
 
 Only report BUG and SUSPECT findings. Don't list SAFE items unless they use a non-obvious technique worth noting.
-```
+````
 
 ---
 
@@ -527,7 +527,7 @@ The technique: infer semantic domains from naming, then check if values from dif
 
 ### SKILL.md
 
-```yaml
+````yaml
 ---
 name: phantom-types
 description: Find where primitive types mask semantic domain mismatches (wrong ID, wrong unit, wrong coordinate)
@@ -590,7 +590,7 @@ Estimate the blast radius: how many function signatures and struct fields would 
 |---|---|---|---|
 
 Skip types that are already wrapped (existing newtypes). Focus on the highest-risk domain mixups.
-```
+````
 
 ---
 
@@ -608,7 +608,7 @@ The technique: for each `?` in a function that mutates state, check if the mutat
 
 ### SKILL.md
 
-```yaml
+````yaml
 ---
 name: error-paths
 description: Check if early returns via ? leave state inconsistent after partial mutations
@@ -670,7 +670,7 @@ For each, check: is the error intentionally discarded (with a comment), or is it
 |---|---|---|---|
 
 Only report cases where inconsistency is possible. Functions that use database transactions or RAII cleanup guards are safe — note them briefly but don't flag them.
-```
+````
 
 ---
 
@@ -686,7 +686,7 @@ Only report cases where inconsistency is possible. Functions that use database t
 
 ### SKILL.md
 
-```yaml
+````yaml
 ---
 name: archaeology
 description: Reconstruct WHY code exists before changing it — git blame + PR context + constraint discovery
@@ -767,7 +767,7 @@ These co-changed files are likely coupled. Changing this code may require changi
 
 ### Recommendation
 Based on the archaeology: is the proposed change safe? What constraints must be preserved? What coupled files might need updating?
-```
+````
 
 ---
 
@@ -785,7 +785,7 @@ Unlike the broader `/doc-drift` skill, this one is fast and deterministic — no
 
 ### SKILL.md
 
-```yaml
+````yaml
 ---
 name: dead-refs
 description: Find documentation references to deleted files, renamed functions, and obsolete commands
@@ -835,7 +835,7 @@ Status: DELETED, RENAMED (suggest new name), MOVED (suggest new path), NEVER_EXI
 Sort by doc file, then line number. Only report confirmed dead references — if uncertain, skip it.
 
 This skill is intentionally narrow and fast. For deeper analysis (staleness scoring, semantic drift), use /doc-drift instead.
-```
+````
 
 ---
 
