@@ -276,8 +276,10 @@ pub async fn get_board_elements(
     let elements = if workforce_steps.is_empty() {
         None
     } else {
-        Some(serde_json::to_value(build_canvas_elements(&workforce_steps, &edges))
-            .map_err(|e| AppError::Internal(format!("Failed to build elements: {e}")))?)
+        Some(
+            serde_json::to_value(build_canvas_elements(&workforce_steps, &edges))
+                .map_err(|e| AppError::Internal(format!("Failed to build elements: {e}")))?,
+        )
     };
 
     // Preserve last_submit from the snapshot for debug panel rehydration
