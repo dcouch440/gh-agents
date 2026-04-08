@@ -358,15 +358,14 @@ pub(crate) fn build_canvas_elements(
         let x = step.position_x.unwrap_or(100.0);
         let y = step.position_y.unwrap_or(100.0);
 
-        // Use the full description (markdown brief) as box text
-        let text = if step.description.is_empty() {
+        let text = if !step.description.is_empty() {
+            step.description.clone()
+        } else {
             step.name
                 .as_deref()
                 .or(step.ref_id.as_deref())
                 .unwrap_or("Node")
                 .to_string()
-        } else {
-            step.description.clone()
         };
 
         // Estimate box size from text content

@@ -346,14 +346,18 @@ async fn run_system_node_propagation(
 
     let task_text = step
         .as_ref()
-        .map(|s| {
-            if !s.prompt_template.is_empty() {
-                s.prompt_template.clone()
-            } else {
-                s.description.clone()
-            }
-        })
+        .map(|s| s.description.clone())
         .unwrap_or_default();
+
+    if task_text.is_empty() {
+        if let Some(s) = step.as_ref() {
+            tracing::warn!(
+                step_id = %step_id,
+                name = ?s.name,
+                "System node propagation: step has no description (canvas text)"
+            );
+        }
+    }
 
     if task_text.is_empty() && previous_step_handoff.is_empty() {
         tracing::debug!(

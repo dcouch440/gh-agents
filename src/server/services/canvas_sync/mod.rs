@@ -149,7 +149,15 @@ async fn process_text_changed(
     let map_row = maps.iter().find(|m| m.element_id == element_id);
     let step_id = match map_row.and_then(|m| m.step_id) {
         Some(id) => id,
-        None => return Ok(()),
+        None => {
+            tracing::warn!(
+                workflow_id = %workflow_id,
+                element_id = %element_id,
+                map_count = maps.len(),
+                "canvas_text_changed: no element map found — text edit dropped"
+            );
+            return Ok(());
+        }
     };
 
     let mut step = repo
@@ -199,9 +207,15 @@ async fn process_node_created(
     let slug = next_unnamed_slug(&existing_slugs);
     let display_name = slug_to_display_name(&slug);
 
+    // Use the frontend's element_id as the step_id so IDs match everywhere —
+    // no element map mismatch after get_board_elements regenerates boxes.
+    let step_id = element_id
+        .parse::<Uuid>()
+        .unwrap_or_else(|_| Uuid::new_v4());
+
     // Create step
     let step = crate::db::WorkflowStepRow {
-        id: Uuid::new_v4(),
+        id: step_id,
         workflow_id,
         agent_id: None,
         execution_mode: "workforce".to_string(),
