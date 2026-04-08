@@ -261,18 +261,9 @@ pub async fn run_system_node_task(
                         "System node sync completed"
                     );
 
-                    // Generate canvas elements so the frontend board renders boxes
-                    if let Err(e) =
-                        crate::server::services::workflow_agent::sync::sync_canvas_elements(
-                            workflow_id,
-                            user_id.0,
-                            state.repos().workflows.as_ref(),
-                            &state,
-                        )
-                        .await
-                    {
-                        tracing::warn!(error = %e, "Failed to sync canvas elements");
-                    }
+                    // Canvas state is managed by canvas_sync — no need to
+                    // regenerate here. Sidebar updates via StepNameUpdated
+                    // and StepConfigUpdated events from sync_to_db.
                 }
                 Err(e) => {
                     tracing::error!(
