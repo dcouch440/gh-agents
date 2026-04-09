@@ -3,10 +3,8 @@ import { render, screen, fireEvent } from '@/test/render'
 import { SubmitBar } from './SubmitBar'
 
 const defaultProps = {
-  onSubmit: vi.fn(),
-  isSubmitting: false,
-  status: 'idle' as const,
-  error: null,
+  onGenerate: vi.fn(),
+  isGenerating: false,
   onRun: vi.fn(),
   runStatus: 'idle' as const,
   showDebug: false,
@@ -14,32 +12,17 @@ const defaultProps = {
 }
 
 describe('SubmitBar', () => {
-  it('renders a submit button', () => {
+  it('renders a generate button', () => {
     render(<SubmitBar {...defaultProps} />)
-    expect(screen.getByRole('button', { name: /submit/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /generate/i })).toBeInTheDocument()
   })
 
-  it('calls onSubmit when clicked', () => {
-    const onSubmit = vi.fn()
-    render(<SubmitBar {...defaultProps} onSubmit={onSubmit} />)
+  it('calls onGenerate when clicked', () => {
+    const onGenerate = vi.fn()
+    render(<SubmitBar {...defaultProps} onGenerate={onGenerate} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /submit/i }))
-    expect(onSubmit).toHaveBeenCalledOnce()
-  })
-
-  it('disables button while submitting', () => {
-    render(<SubmitBar {...defaultProps} isSubmitting={true} status="submitting" />)
-    expect(screen.getByRole('button', { name: /submit/i })).toBeDisabled()
-  })
-
-  it('shows error message on error status', () => {
-    render(<SubmitBar {...defaultProps} status="error" error="Network timeout" />)
-    expect(screen.getByText('Network timeout')).toBeInTheDocument()
-  })
-
-  it('does not show error message when idle', () => {
-    render(<SubmitBar {...defaultProps} />)
-    expect(screen.queryByText(/timeout/i)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /generate/i }))
+    expect(onGenerate).toHaveBeenCalledOnce()
   })
 
   it('renders a run button', () => {

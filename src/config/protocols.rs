@@ -486,7 +486,7 @@ mod tests {
         assert_eq!(system.model_id, crate::constants::MODEL_TIER2);
         assert_eq!(system.temperature, 0.3);
         assert_eq!(system.max_tokens, 8192);
-        assert_eq!(system.max_rounds, 10);
+        assert_eq!(system.max_rounds, 30);
         assert_eq!(system.context_budget, 480_000);
     }
 
