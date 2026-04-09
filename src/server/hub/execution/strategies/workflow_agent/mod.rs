@@ -38,6 +38,7 @@ pub struct WorkflowAgentStrategy {
     workflow_id: Uuid,
     session_id: Uuid,
     base_dir: PathBuf,
+    message_id: Uuid,
 }
 
 impl WorkflowAgentStrategy {
@@ -55,6 +56,7 @@ impl WorkflowAgentStrategy {
         workflow_id: Uuid,
         session_id: Uuid,
         base_dir: PathBuf,
+        message_id: Uuid,
     ) -> Self {
         Self {
             system_prompt,
@@ -63,6 +65,7 @@ impl WorkflowAgentStrategy {
             workflow_id,
             session_id,
             base_dir,
+            message_id,
         }
     }
 
@@ -141,11 +144,14 @@ impl ExecutionStrategy for WorkflowAgentStrategy {
     }
 
     fn tools(&self) -> Vec<Tool> {
-        let mut tools = Vec::with_capacity(2);
+        let mut tools = Vec::with_capacity(3);
         if let Some(t) = get_tool_definition("run_command") {
             tools.push(t);
         }
         if let Some(t) = get_tool_definition("think") {
+            tools.push(t);
+        }
+        if let Some(t) = get_tool_definition("render_panel") {
             tools.push(t);
         }
         tools
@@ -217,6 +223,18 @@ impl ExecutionStrategy for WorkflowAgentStrategy {
         let result = match name {
             "run_command" => self.host_run_command(input).await,
             "think" => json!({ "status": "ok" }),
+            "render_panel" => {
+                let content = input["content"].as_str().unwrap_or("");
+                let submit_label = input["submit_label"].as_str().unwrap_or("Submit");
+                self.state.send_stream_chunk(
+                    self.message_id,
+                    crate::server::state::StreamChunk::PanelRender {
+                        content: content.to_string(),
+                        submit_label: submit_label.to_string(),
+                    },
+                );
+                json!({ "rendered": true, "content": content, "submit_label": submit_label })
+            }
             _ => json!({ "error": format!("Unknown tool: {name}") }),
         };
 

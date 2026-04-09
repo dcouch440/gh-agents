@@ -247,6 +247,7 @@ pub async fn run_workflow_agent_chat(
         workflow_id,
         session_id,
         base_dir,
+        req.message_id,
     );
     let engine = ExecutionEngine::new(req.provider, state.env().debug_stream);
     let sink = streaming::SseSink::new(state.clone(), req.message_id);
