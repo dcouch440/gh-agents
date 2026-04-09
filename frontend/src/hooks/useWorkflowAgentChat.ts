@@ -33,6 +33,21 @@ const useWorkflowAgentChat = (workflowId: string | null) => {
               const colonIdx = header.indexOf(': ')
               const toolName = colonIdx >= 0 ? header.slice(0, colonIdx) : 'tool'
               const toolInput = colonIdx >= 0 ? header.slice(colonIdx + 2) : header
+
+              // Reconstruct render_panel as an interactive panel (already submitted)
+              if (toolName === 'render_panel') {
+                try {
+                  const parsed = JSON.parse(toolInput) as { content?: string; submit_label?: string }
+                  return {
+                    id: m.id,
+                    role: 'assistant' as const,
+                    content: parsed.content ?? '',
+                    source_type: 'panel_render',
+                    panelMeta: { submitLabel: parsed.submit_label ?? 'Submit', submitted: true },
+                  }
+                } catch { /* fall through to normal tool display */ }
+              }
+
               return { id: m.id, role: 'tool' as const, content: toolInput, toolName, toolResult: result }
             }
             return { id: m.id, role: m.role, content: m.content }
@@ -63,6 +78,7 @@ const useWorkflowAgentChat = (workflowId: string | null) => {
         if (event.event === 'tool_start') {
           try {
             const data = JSON.parse(event.data) as { name: string; id: string; input: string }
+            if (data.name === 'render_panel') return
             let inputText = data.input
             try {
               const parsed: unknown = JSON.parse(data.input)
@@ -84,11 +100,35 @@ const useWorkflowAgentChat = (workflowId: string | null) => {
         if (event.event === 'tool_end') {
           try {
             const data = JSON.parse(event.data) as { name: string; id: string; result: string }
+            if (data.name === 'render_panel') return
             setMessages((prev) => {
               const msgs = [...prev]
               const toolIdx = msgs.findIndex((m) => m.id === `tool-${data.id}`)
               if (toolIdx >= 0) {
                 msgs[toolIdx] = { ...msgs[toolIdx], toolResult: data.result }
+              }
+              return msgs
+            })
+          } catch { /* ignore parse errors */ }
+          return
+        }
+        if (event.event === 'panel_render') {
+          try {
+            const data = JSON.parse(event.data) as { content: string; submit_label: string }
+            const panelMsg: ChatMessageData = {
+              id: `panel-${Date.now()}`,
+              role: 'assistant',
+              content: data.content,
+              source_type: 'panel_render',
+              panelMeta: { submitLabel: data.submit_label, submitted: false },
+            }
+            setMessages((prev) => {
+              const msgs = [...prev]
+              const lastIdx = msgs.length - 1
+              if (lastIdx >= 0 && msgs[lastIdx].role === 'assistant' && msgs[lastIdx].source_type !== 'panel_render') {
+                msgs.splice(lastIdx, 0, panelMsg)
+              } else {
+                msgs.push(panelMsg)
               }
               return msgs
             })
@@ -166,7 +206,21 @@ const useWorkflowAgentChat = (workflowId: string | null) => {
     [sessionId, send],
   )
 
-  return { messages, sendMessage, streaming, cancelChat, sessionId }
+  const submitPanel = useCallback(
+    (messageId: string, selections: string) => {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId && m.panelMeta
+            ? { ...m, panelMeta: { ...m.panelMeta, submitted: true } }
+            : m,
+        ),
+      )
+      sendMessage(selections)
+    },
+    [sendMessage],
+  )
+
+  return { messages, sendMessage, streaming, cancelChat, sessionId, submitPanel }
 }
 
 export { useWorkflowAgentChat }

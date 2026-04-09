@@ -20,11 +20,12 @@ type WorkflowSidebarProps = {
   onSend: (message: string) => void
   onCancel?: () => void
   streaming?: boolean
+  onPanelSubmit?: (messageId: string, selections: string) => void
 }
 
 // ── Component ───────────────────────────────────────────────────────────────
 
-function WorkflowSidebar({ messages, onSend, onCancel, streaming }: WorkflowSidebarProps) {
+function WorkflowSidebar({ messages, onSend, onCancel, streaming, onPanelSubmit }: WorkflowSidebarProps) {
   const theme = useTheme()
   const activeTab = useStore(sidebarStore.store, sidebarStore.selectActiveTab)
   const width = useStore(sidebarStore.store, sidebarStore.selectWidth)
@@ -150,6 +151,7 @@ function WorkflowSidebar({ messages, onSend, onCancel, streaming }: WorkflowSide
             onCancel={onCancel}
             streaming={streaming}
             emptyMessage="Describe your workflow and I'll build it."
+            onPanelSubmit={onPanelSubmit}
           />
         </Box>
       )}
