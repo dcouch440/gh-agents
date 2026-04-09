@@ -29,7 +29,7 @@ describe('Board', () => {
   it('renders Canvas and SubmitBar', () => {
     render(<Board workflowId="wf-1" />)
 
-    expect(screen.getByRole('button', { name: /submit/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /generate/i })).toBeInTheDocument()
   })
 
   it('renders toolbar with select, box, and arrow tools', () => {
