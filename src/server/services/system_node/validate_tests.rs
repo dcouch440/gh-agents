@@ -330,9 +330,12 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         let errors = err["errors"].as_array().unwrap();
+        // Bad agent file caught by mandatory checks
         let agent_errors: Vec<&Value> = errors
             .iter()
-            .filter(|e| e["verify"] == "agents_complete")
+            .filter(|e| {
+                e["verify"] == "mandatory" && e["file"].as_str().unwrap_or("").contains("agents/")
+            })
             .collect();
         assert!(!agent_errors.is_empty());
     }
@@ -343,7 +346,7 @@ mod tests {
         std::fs::create_dir(dir.path().join("agents")).unwrap();
 
         std::fs::write(dir.path().join("topology.json"), r#"{"agents": {}}"#).unwrap();
-        // config missing description
+        // config missing description — caught by mandatory checks
         std::fs::write(dir.path().join("config.json"), r#"{"name": "Test"}"#).unwrap();
 
         let verify = json!({
@@ -357,22 +360,29 @@ mod tests {
         let errors = err["errors"].as_array().unwrap();
         let config_errors: Vec<&Value> = errors
             .iter()
-            .filter(|e| e["verify"] == "config_accurate")
+            .filter(|e| e["verify"] == "mandatory" && e["file"] == "config.json")
             .collect();
         assert!(!config_errors.is_empty());
     }
 
     #[test]
-    fn validate_verify_skips_unchecked() {
+    fn validate_verify_mandatory_checks_always_run() {
         let dir = tempfile::tempdir().unwrap();
-        // Empty dir — nothing exists. But all verify = false, so no checks run.
+        // Empty dir — nothing exists. Mandatory checks catch missing files
+        // even when all verify flags are false.
         let verify = json!({
             "topology_complete": false,
             "agents_complete": false,
             "config_accurate": false
         });
         let result = validate_verify(dir.path(), &verify, None);
-        assert!(result.is_ok());
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        let errors = err["errors"].as_array().unwrap();
+        assert!(
+            errors.iter().any(|e| e["verify"] == "mandatory"),
+            "mandatory checks should fire regardless of verify flags"
+        );
     }
 
     // ── check_prescribed_filenames ────────────────────────────────────────

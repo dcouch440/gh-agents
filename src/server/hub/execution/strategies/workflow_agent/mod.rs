@@ -374,5 +374,13 @@ fn validate_written_files(base_dir: &Path) -> Vec<String> {
         }
     }
 
+    // Cross-reference validation (topology ↔ node files, cycles, dangling refs).
+    // Only runs once topology.json exists — early commands that haven't created it skip this.
+    if base_dir.join("topology.json").exists() {
+        for err in validate::cross_reference(base_dir) {
+            errors.push(format!("{}: {}", err.file, err.error));
+        }
+    }
+
     errors
 }
