@@ -42,12 +42,20 @@ pub async fn create_pipeline(
         .await
         .map_err(ServiceError::Internal)?;
 
-    // Link child workflow to parent step
+    // Link child workflow to parent step.
+    // If the link fails, delete the child workflow to prevent orphans.
     let mut updated_step = step;
     updated_step.child_workflow_id = Some(child_workflow.id);
-    repo.update_step(updated_step)
-        .await
-        .map_err(ServiceError::Internal)?;
+    if let Err(e) = repo.update_step(updated_step).await {
+        tracing::warn!(
+            child_workflow_id = %child_workflow.id,
+            parent_step_id = %ctx.parent_step_id,
+            error = %e,
+            "Failed to link child workflow to parent step — deleting orphan"
+        );
+        let _ = repo.delete_workflow(child_workflow.id).await;
+        return Err(ServiceError::Internal(e));
+    }
 
     Ok(PipelineCreated {
         pipeline_id: child_workflow.id,
