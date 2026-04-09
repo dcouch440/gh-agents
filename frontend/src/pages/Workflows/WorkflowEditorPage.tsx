@@ -11,7 +11,7 @@ function WorkflowEditorPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const loading = useStore(workflowStore.store, workflowStore.selectLoading)
-  const { messages, sendMessage, streaming, cancelChat } = useWorkflowAgentChat(id ?? null)
+  const { messages, sendMessage, streaming, cancelChat, submitPanel } = useWorkflowAgentChat(id ?? null)
   useEffect(() => {
     if (!id) {
       void navigate('/workflows')
@@ -76,6 +76,7 @@ function WorkflowEditorPage() {
           onSend={sendMessage}
           onCancel={cancelChat}
           streaming={streaming}
+          onPanelSubmit={submitPanel}
         />
       )}
     </Box>
