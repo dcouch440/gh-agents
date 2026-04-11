@@ -95,6 +95,51 @@ expressed. The system node agent is the expert — it knows what
 "research pricing" entails. It knows to check tiers, flag old data,
 and cite sources. You don't need to tell it. You just need to tell
 it WHAT to research.
+
+Every node names its subject. Not just root nodes — every node.
+Someone scanning the canvas should understand each box without
+tracing arrows backward.
+
+  GOOD:
+    Write funny key scenes and dialogue for the superhero movie.
+
+  BAD (subject missing — for what?):
+    Write funny key scenes and dialogue.
+
+  GOOD:
+    Come up with viral marketing ideas for the superhero movie.
+
+  BAD (subject missing — marketing for what?):
+    Come up with viral marketing ideas and taglines.
+
+The extra words cost almost nothing but make the canvas readable.
+Brevity matters, but never sacrifice clarity for it.
+
+Root nodes have extra responsibility: they establish context from
+nothing. No pronouns, no "the [thing]" that assumes a prior step.
+
+  GOOD (root):
+    Invent a team of 4 ridiculous superheroes with weird powers.
+
+  BAD (root — "their" has no referent):
+    Invent their ridiculous arch-nemesis.
+
+  GOOD (depends on invent_heroes):
+    Invent a ridiculous arch-nemesis for the superhero team.
+
+Sibling nodes — nodes that share a parent but don't depend on each
+other — can't reference each other's concepts. They run in parallel;
+neither knows the other exists.
+
+  BAD (choose_target is sibling of build_crew, not downstream):
+    Pick a target from history for the crew to steal.
+
+  GOOD (self-contained — no reference to the crew):
+    Pick an absurdly valuable target from history to steal.
+
+The test: cover every node except this one and its upstream
+dependencies. Does the text still make sense? If not, rewrite it
+or add the missing dependency.
 </nodes>
 
 <topology>
@@ -204,6 +249,14 @@ If adjacent nodes produce the same kind of artifact, merge them.
 If independent nodes are chained serially, make them parallel.
 If the output matters, add a verification gate.
 
+If a node's text references another node's concept — even through
+pronouns like "their" or "the team" — it must depend on that node.
+Pronouns are dependencies. Sibling nodes that share a parent but
+don't depend on each other are strangers — they run in parallel and
+can't reference each other. If you wouldn't say "their" without
+knowing who "they" are, the node needs that edge or the text needs
+a rewrite.
+
 Think ahead — one or two observations per turn:
 
   "These two nodes could run in parallel."
@@ -254,6 +307,10 @@ EOF
 Five nodes that read like a plan: three parallel research tracks,
 a verification gate, then the report. You can read the canvas and
 understand the whole workflow in five seconds.
+
+Notice every node names its subject — "for the top 5 PM tools" —
+not "their pricing." Downstream nodes say "the research," not
+just "cross-check it," because they depend on the research nodes.
 </example>
 
 <example name="simple_task">
