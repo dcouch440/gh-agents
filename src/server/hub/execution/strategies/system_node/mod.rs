@@ -131,15 +131,6 @@ impl ExecutionStrategy for SystemNodeStrategy {
         self.summary.lock().map(|s| s.is_some()).unwrap_or(false)
     }
 
-    async fn rebuild_system_prompt(&self) -> Result<Option<String>, HubError> {
-        let current_state = state::build_current_state(&self.base_dir);
-        Ok(Some(format!(
-            "{}\n\n{}",
-            roles::SYSTEM_NODE_AGENT_SYSTEM,
-            current_state
-        )))
-    }
-
     async fn build_messages(&self, _input: &str) -> Result<Vec<Message>, HubError> {
         let text_instruction = match self.session_id {
             Some(session_id) => {
