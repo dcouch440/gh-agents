@@ -88,9 +88,14 @@ pub trait ExecutionStrategy: Send + Sync {
     /// Called before each LLM call after round 0. Return `Some(prompt)` to
     /// replace the current system prompt, or `None` to keep it unchanged.
     ///
-    /// The default is a no-op. Strategies whose tools mutate state visible
-    /// in the system prompt (e.g. dispatch agents that modify the roster)
-    /// should override this to re-fetch current state.
+    /// The default is a no-op. Strategies that talk to a live user turn by
+    /// turn and whose tools mutate state visible in the system prompt (e.g.
+    /// `WorkflowAgentStrategy`) should override this to re-fetch current
+    /// state. Background strategies that never surface state changes to a
+    /// human mid-run (e.g. `SystemNodeStrategy`, `ManagerDispatchStrategy`)
+    /// intentionally do not override this — their tools' results already
+    /// carry the state the agent needs, and a stable system prompt lets it
+    /// be cached.
     async fn rebuild_system_prompt(&self) -> Result<Option<String>, HubError> {
         Ok(None)
     }
