@@ -15,10 +15,12 @@ See @visions/vision-visual-dispatch.md for the current product vision.
 ~/.cargo/bin/cargo fmt                      # Format
 ~/.cargo/bin/cargo clippy                   # Lint
 
-# When running cargo test, ALWAYS use `grep "^test result:"` — never `tail`.
-# There are 3 test binaries (lib, bin, doctests). `tail` only shows the last
-# one (doctests: ~3 tests) and misses the main suite (~2400 tests).
-# Example: ~/.cargo/bin/cargo test 2>&1 | grep "^test result:"
+# ALWAYS run `cargo check` before `cargo test` — catch compile errors fast
+# instead of waiting 3 min for a test run that can't compile.
+#
+# When running cargo test, use this grep to capture both compile errors AND
+# test results in one pass (there are 3 test binaries — never use `tail`):
+# ~/.cargo/bin/cargo test 2>&1 | grep -E "^(test result:|error)" | head -20
 
 # Frontend (run from frontend/)
 npx tsc --noEmit                            # Type check — zero errors

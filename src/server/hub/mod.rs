@@ -205,6 +205,64 @@ pub async fn run_step_chat(
         .await
 }
 
+/// Run a chat turn for the workflow agent. Builds the strategy from the workflow's
+/// board repo, executes with streaming, and syncs file changes to DB on completion.
+///
+/// Called by the chat consumer when a session has `role = "workflow_agent"` in its
+/// draft_config.
+pub async fn run_workflow_agent_chat(
+    state: &AppState,
+    req: ChatRequest<'_>,
+    session_id: Uuid,
+    workflow_id: Uuid,
+    cancel: Option<&CancellationToken>,
+) -> Result<ExecutionResult, HubError> {
+    use crate::config::protocols::roles;
+    use crate::server::services::workflow_agent;
+
+    // 1. Resolve base_dir and ensure repo reflects latest DB state
+    let base_dir = workflow_agent::resolve_base_dir(state, workflow_id);
+    let wf_repo = &*state.repos().workflows;
+    if let Err(e) = workflow_agent::project::project_to_repo(&base_dir, workflow_id, wf_repo).await
+    {
+        tracing::warn!(
+            workflow_id = %workflow_id,
+            error = %e,
+            "Failed to project DB state to board repo"
+        );
+    }
+
+    // 2. Build system prompt with live <current_state>
+    let current_state = workflow_agent::state::build_current_state(workflow_id, state)
+        .await
+        .map_err(|e| HubError::Internal(anyhow::anyhow!("{e}")))?;
+    let system_prompt = format!("{}\n\n{}", roles::WORKFLOW_AGENT_SYSTEM, current_state);
+
+    // 3. Create strategy + engine
+    // Note: user message is already persisted by send_session_chat API handler
+    let strategy = strategies::WorkflowAgentStrategy::new(
+        system_prompt,
+        state.clone(),
+        req.user_id.0,
+        workflow_id,
+        session_id,
+        base_dir,
+        req.message_id,
+    );
+    let engine = ExecutionEngine::new(req.provider, state.env().debug_stream);
+    let sink = streaming::SseSink::new(state.clone(), req.message_id);
+    let recorder = ExecutionRecorder::new(
+        &*state.repos().sessions,
+        &*state.repos().chat_messages,
+        Some(&*state.repos().agent_executions),
+        Some(&*state.repos().token_ledger),
+    );
+
+    engine
+        .execute(&strategy, req.content, &sink, &recorder, cancel)
+        .await
+}
+
 /// Build the system prompt for a step chat session.
 ///
 /// Dispatches to `build_manager_system_prompt` or `build_node_system_prompt`

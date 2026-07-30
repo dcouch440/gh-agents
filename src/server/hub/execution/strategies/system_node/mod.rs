@@ -131,6 +131,10 @@ impl ExecutionStrategy for SystemNodeStrategy {
         self.summary.lock().map(|s| s.is_some()).unwrap_or(false)
     }
 
+    fn requires_terminal_tool(&self) -> Option<&str> {
+        Some("complete_system")
+    }
+
     async fn rebuild_system_prompt(&self) -> Result<Option<String>, HubError> {
         let current_state = state::build_current_state(&self.base_dir);
         Ok(Some(format!(

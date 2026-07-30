@@ -76,10 +76,10 @@ mod tests {
         assert!(scanner.receives_from.is_empty());
 
         let analyzer = prompts.iter().find(|p| p.agent_name == "Analyzer").unwrap();
-        assert_eq!(analyzer.receives_from, vec!["scanner"]);
+        assert_eq!(analyzer.receives_from, vec!["Scanner"]);
 
         let reporter = prompts.iter().find(|p| p.agent_name == "Reporter").unwrap();
-        assert_eq!(reporter.receives_from, vec!["analyzer"]);
+        assert_eq!(reporter.receives_from, vec!["Analyzer"]);
     }
 
     #[test]
@@ -103,10 +103,44 @@ mod tests {
         assert_eq!(prompts.len(), 3);
 
         let writer = prompts.iter().find(|p| p.agent_name == "Writer").unwrap();
-        assert_eq!(writer.receives_from, vec!["researcher"]);
+        assert_eq!(writer.receives_from, vec!["Researcher"]);
 
         let reviewer = prompts.iter().find(|p| p.agent_name == "Reviewer").unwrap();
-        assert_eq!(reviewer.receives_from, vec!["researcher"]);
+        assert_eq!(reviewer.receives_from, vec!["Researcher"]);
+    }
+
+    /// Regression: topology slugs differ from agent display names.
+    /// receives_from must contain display names, not slugs, for downstream
+    /// matching in compute_execution_levels and filter_outputs_for_agent.
+    #[test]
+    fn read_pipeline_slug_differs_from_display_name() {
+        let dir = tempfile::tempdir().unwrap();
+        write_repo(
+            dir.path(),
+            r#"{"agents": {"brainstormer": {"depends_on": []}, "curator": {"depends_on": ["brainstormer"]}}}"#,
+            &[
+                (
+                    "brainstormer",
+                    &agent_json("Idea Brainstormer", "Brainstorm.", "Generate ideas."),
+                ),
+                (
+                    "curator",
+                    &agent_json("Idea Curator", "Curate.", "Pick best ideas."),
+                ),
+            ],
+            r#"{"name": "Fun Ideas", "description": "test"}"#,
+        );
+
+        let prompts = read_agent_configs(dir.path()).unwrap();
+        let curator = prompts
+            .iter()
+            .find(|p| p.agent_name == "Idea Curator")
+            .unwrap();
+        assert_eq!(
+            curator.receives_from,
+            vec!["Idea Brainstormer"],
+            "receives_from should contain display names, not topology slugs"
+        );
     }
 
     #[test]

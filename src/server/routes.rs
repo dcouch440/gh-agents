@@ -193,6 +193,19 @@ fn workflow_routes() -> Router<AppState> {
                 .delete(api::remove_step_document),
         )
         .route(
+            routes::WORKFLOW_AGENT_SESSION,
+            get(api::get_or_create_workflow_agent_session),
+        )
+        .route(routes::WORKFLOW_GENERATE, post(api::generate_workflow))
+        .route(
+            routes::WORKFLOW_VERSIONS,
+            get(api::list_workflow_versions).post(api::save_workflow_version),
+        )
+        .route(
+            routes::WORKFLOW_VERSION_RESTORE,
+            post(api::restore_workflow_version),
+        )
+        .route(
             routes::WORKFLOW_STEP_CHAT_SESSION,
             get(api::get_step_session).post(api::get_or_create_step_session),
         )
@@ -248,6 +261,10 @@ fn workflow_routes() -> Router<AppState> {
         .route(
             routes::WORKFLOW_EXECUTION_STEP,
             get(api::get_step_run_for_execution),
+        )
+        .route(
+            routes::WORKFLOW_EXECUTION_FILES,
+            get(api::download_run_files),
         )
 }
 

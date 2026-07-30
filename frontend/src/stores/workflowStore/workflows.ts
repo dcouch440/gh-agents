@@ -106,4 +106,35 @@ const setDirty = (dirty: boolean): void => {
   store.setState({ dirty })
 }
 
-export { fetchAll, fetchIfStale, fetchOne, create, update, remove, loadWorkflow, clearActive, upsert, setDirty }
+/** Refetch steps + edges for the active workflow without reloading everything. */
+const refreshStepsAndEdges = async (workflowId: string): Promise<void> => {
+  try {
+    const [steps, edges] = await Promise.all([
+      api.workflows.listSteps(workflowId),
+      api.workflows.listEdges(workflowId),
+    ])
+    store.setState({
+      steps: nmFromArray(steps),
+      edges: nmFromArray(edges),
+    })
+  } catch (err) {
+    console.error('[workflowStore] Failed to refresh steps/edges:', err)
+  }
+}
+
+/** Reload board canvas elements from the backend. Called when BoardElementsUpdated fires. */
+const refreshBoardElements = async (workflowId: string): Promise<void> => {
+  try {
+    const { boardElementStore } = await import('@/stores/boardElementStore')
+    const { deserializeFromExcalidraw } = await import('@/components/board/elements')
+    const resp = await api.workflows.getBoardElements(workflowId)
+    if (resp.elements !== null) {
+      const board = deserializeFromExcalidraw(resp.elements as Record<string, unknown>[])
+      boardElementStore.replaceElements(board)
+    }
+  } catch (err) {
+    console.error('[workflowStore] Failed to refresh board elements:', err)
+  }
+}
+
+export { fetchAll, fetchIfStale, fetchOne, create, update, remove, loadWorkflow, clearActive, upsert, setDirty, refreshStepsAndEdges, refreshBoardElements }

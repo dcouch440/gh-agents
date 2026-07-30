@@ -7,7 +7,7 @@ import { undoStore } from '@/stores/undoStore'
 import type { ActiveTool, BoardElements } from '../elements'
 import { removeElements, selectAllIds } from '../elements'
 import { EMPTY_SELECTION } from './useSelection'
-import type { SetElements, SetInteraction, SetSelection } from './types'
+import type { CanvasChangeCallback, SetElements, SetInteraction, SetSelection } from './types'
 
 const useKeyboard = (
   elements: BoardElements,
@@ -18,6 +18,7 @@ const useKeyboard = (
   setInteraction: SetInteraction,
   onDelete?: (deletedIds: ReadonlySet<string>) => void,
   setActiveTool?: (tool: ActiveTool) => void,
+  onCanvasChange?: CanvasChangeCallback,
 ) => {
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Don't intercept when editing text
@@ -27,6 +28,7 @@ const useKeyboard = (
     if ((e.key === 'Delete' || e.key === 'Backspace') && selection.selectedIds.size > 0) {
       e.preventDefault()
       undoStore.push('delete')
+      onCanvasChange?.({ kind: 'elements_deleted', deletedIds: selection.selectedIds, elements })
       setElements((s) => removeElements(s, selection.selectedIds))
       onDelete?.(selection.selectedIds)
       setSelection(() => EMPTY_SELECTION)
@@ -75,7 +77,7 @@ const useKeyboard = (
       }
       return
     }
-  }, [elements, interaction, onDelete, selection, setActiveTool, setElements, setInteraction, setSelection])
+  }, [elements, interaction, onCanvasChange, onDelete, selection, setActiveTool, setElements, setInteraction, setSelection])
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown)

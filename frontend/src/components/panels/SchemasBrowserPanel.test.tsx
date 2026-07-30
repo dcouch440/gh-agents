@@ -72,11 +72,16 @@ vi.mock('@/stores', () => ({
   },
 }))
 
-vi.mock('@/constants', () => ({
-  DESIGN: {
-    PORT_ARRAY: '#2dd4bf',
-  },
-}))
+vi.mock('@/constants', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/constants')>()
+  return {
+    ...actual,
+    DESIGN: {
+      ...actual.DESIGN,
+      PORT_ARRAY: '#2dd4bf',
+    },
+  }
+})
 
 beforeEach(() => {
   vi.clearAllMocks()

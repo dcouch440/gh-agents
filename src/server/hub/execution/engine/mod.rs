@@ -4,9 +4,12 @@
 //! `ExecutionEngine::execute()`. The loop is parameterized by an
 //! `ExecutionStrategy` that controls prompts, tools, and post-processing.
 
+use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
 use futures::StreamExt;
+use serde_json::Value;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
@@ -55,6 +58,45 @@ pub struct ExecutionEngine {
     filters: Vec<Arc<dyn ExecutionFilter>>,
     filter_ctx: Option<FilterContext>,
     debug_stream: bool,
+}
+
+/// Maximum consecutive identical tool failures before injecting a hint.
+const TOOL_FAILURE_HINT_THRESHOLD: u32 = 3;
+
+/// Maximum premature EndTurn re-prompts before allowing completion.
+const MAX_END_TURN_RETRIES: u32 = 2;
+
+/// Check whether a tool result indicates failure.
+///
+/// Returns `Some(error_summary)` for clear failures, `None` for success or ambiguous results.
+fn is_tool_failure(result: &Value) -> Option<String> {
+    if result.get("success") == Some(&Value::Bool(false)) {
+        let stderr = result["stderr"].as_str().unwrap_or("");
+        let snippet = if stderr.len() > 200 {
+            &stderr[..200]
+        } else {
+            stderr
+        };
+        return Some(format!(
+            "exit_code {}, stderr: {}",
+            result["exit_code"], snippet
+        ));
+    }
+    if let Some(err) = result.get("error") {
+        if !err.is_null() {
+            let msg = err.as_str().unwrap_or("unknown error");
+            return Some(msg.to_string());
+        }
+    }
+    None
+}
+
+/// Hash a tool call (name + serialized input) for deduplication.
+fn tool_call_hash(name: &str, input: &Value) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    name.hash(&mut hasher);
+    input.to_string().hash(&mut hasher);
+    hasher.finish()
 }
 
 impl ExecutionEngine {
@@ -146,6 +188,12 @@ impl ExecutionEngine {
 
         // Track filter retries (max 1 retry per filter per execution)
         let mut filter_retried = vec![false; self.filters.len()];
+
+        // Track consecutive identical tool failures for loop-break detection
+        let mut consecutive_failures: HashMap<u64, u32> = HashMap::new();
+
+        // Track premature EndTurn re-prompts (for strategies with terminal tools)
+        let mut end_turn_retries: u32 = 0;
 
         for round in 0..max_rounds {
             // Check cancellation
@@ -271,6 +319,7 @@ impl ExecutionEngine {
                             &mut messages,
                             total_input,
                             total_output,
+                            &mut consecutive_failures,
                         )
                         .await?
                     {
@@ -287,12 +336,13 @@ impl ExecutionEngine {
                             total_input,
                             total_output,
                             &mut filter_retried,
+                            &mut end_turn_retries,
                         )
                         .await?
                     {
                         return Ok(result);
                     }
-                    // None means a filter requested retry — continue the loop
+                    // None means a filter or terminal-tool check requested retry — continue the loop
                 }
             }
         }
@@ -305,6 +355,7 @@ impl ExecutionEngine {
     ///
     /// Returns `Some(ExecutionResult)` if the strategy signalled stop (e.g.
     /// `complete_task` was called), or `None` to continue the loop.
+    #[allow(clippy::too_many_arguments)]
     async fn handle_tool_use_round(
         &self,
         ctx: &LoopContext<'_>,
@@ -313,6 +364,7 @@ impl ExecutionEngine {
         messages: &mut Vec<Message>,
         total_input: u64,
         total_output: u64,
+        consecutive_failures: &mut HashMap<u64, u32>,
     ) -> Result<Option<ExecutionResult>, HubError> {
         let LoopContext {
             strategy,
@@ -349,8 +401,45 @@ impl ExecutionEngine {
             let result = strategy.execute_tool(tool_name, tool_input).await;
             sink.tool_end(tool_name, tool_id, &result).await;
 
+            // Track consecutive identical failures
+            let hash = tool_call_hash(tool_name, tool_input);
+            if let Some(error_summary) = is_tool_failure(&result) {
+                let count = consecutive_failures.entry(hash).or_insert(0);
+                *count += 1;
+
+                if *count >= TOOL_FAILURE_HINT_THRESHOLD * 2 {
+                    return Err(HubError::RepeatedToolFailure {
+                        tool_name: tool_name.clone(),
+                        count: *count,
+                    });
+                }
+
+                if *count == TOOL_FAILURE_HINT_THRESHOLD {
+                    warn!(
+                        round,
+                        tool = %tool_name,
+                        count = *count,
+                        "consecutive identical tool failure — injecting hint"
+                    );
+                    // Inject the hint into the tool result so the LLM sees it
+                    let hint = format!(
+                        "{}\n\n[System: This tool has failed {} consecutive times \
+                         with identical input. Error: {}. You MUST try a \
+                         fundamentally different approach.]",
+                        result, TOOL_FAILURE_HINT_THRESHOLD, error_summary,
+                    );
+                    result_blocks.push(ContentBlock::ToolResult {
+                        tool_use_id: tool_id.clone(),
+                        content: hint,
+                    });
+                    continue;
+                }
+            } else {
+                consecutive_failures.remove(&hash);
+            }
+
             let result_str = match &result {
-                serde_json::Value::String(s) => s.clone(),
+                Value::String(s) => s.clone(),
                 other => other.to_string(),
             };
             result_blocks.push(ContentBlock::ToolResult {
@@ -446,7 +535,7 @@ impl ExecutionEngine {
     ///
     /// Returns `Some(ExecutionResult)` when the turn is complete, or `None`
     /// if a filter requested a retry (the caller should `continue` the loop).
-    #[allow(clippy::too_many_arguments)] // 8 args (1 over); filter_retried is loop-specific state
+    #[allow(clippy::too_many_arguments)]
     async fn handle_end_turn(
         &self,
         ctx: &LoopContext<'_>,
@@ -456,6 +545,7 @@ impl ExecutionEngine {
         total_input: u64,
         total_output: u64,
         filter_retried: &mut [bool],
+        end_turn_retries: &mut u32,
     ) -> Result<Option<ExecutionResult>, HubError> {
         let LoopContext {
             strategy,
@@ -463,6 +553,29 @@ impl ExecutionEngine {
             recorder,
             ..
         } = ctx;
+
+        // ── Premature EndTurn check ──
+        // If the strategy requires a terminal tool (e.g. complete_system) and it
+        // hasn't been called yet, re-prompt the LLM instead of completing.
+        if let Some(terminal_tool) = strategy.requires_terminal_tool() {
+            if !strategy.should_stop() && *end_turn_retries < MAX_END_TURN_RETRIES {
+                *end_turn_retries += 1;
+                warn!(
+                    round,
+                    terminal_tool,
+                    attempt = *end_turn_retries,
+                    "LLM returned EndTurn without calling terminal tool — re-prompting"
+                );
+                messages.push(Message::assistant(&response.content));
+                messages.push(Message::user(&format!(
+                    "You must call the `{terminal_tool}` tool to complete this task. \
+                     Do not end your turn without calling it. Review your work and \
+                     call `{terminal_tool}` now."
+                )));
+                return Ok(None);
+            }
+        }
+
         // ── on_response filters ──
         if let Some(ref filter_ctx) = self.filter_ctx {
             for (i, f) in self.filters.iter().enumerate() {

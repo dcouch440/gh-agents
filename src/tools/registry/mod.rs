@@ -314,7 +314,7 @@ fn run_command_tool() -> Tool {
             "properties": {
                 "command": {
                     "type": "string",
-                    "description": "Shell command to execute. Chain with && for efficiency."
+                    "description": "Shell command to execute. Chain with && for efficiency. For multi-line commands (heredocs, for-loops), use real newlines in the JSON string (\\n), NOT literal backslash-n characters (\\\\n). The command is passed directly to sh -c."
                 }
             },
             "required": ["command"]

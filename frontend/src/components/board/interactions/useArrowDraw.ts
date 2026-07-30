@@ -5,7 +5,7 @@
 import { useCallback } from 'react'
 import { undoStore } from '@/stores/undoStore'
 import { anchorToFocus, computeGeometricFocus } from '../arrows'
-import type { AnchorPoint, BoardElements, InteractionMode, ViewportState } from '../elements'
+import type { AnchorPoint, ArrowElement, BoardElements, InteractionMode, ViewportState } from '../elements'
 import { addArrow, containerEventToCanvas, createArrow, hasArrow, hitTestBox } from '../elements'
 import type { SetElements, SetInteraction } from './types'
 
@@ -41,15 +41,18 @@ const useArrowDraw = (
     })
   }, [containerRef, setInteraction, viewport])
 
-  const onArrowEnd = useCallback((e: React.PointerEvent, interaction: InteractionMode, elements: BoardElements) => {
-    if (interaction.type !== 'drawing-arrow') return
+  const onArrowEnd = useCallback((e: React.PointerEvent, interaction: InteractionMode, elements: BoardElements): ArrowElement | null => {
+    if (interaction.type !== 'drawing-arrow') {
+      return null
+    }
 
     const canvas = containerEventToCanvas(containerRef, e, viewport)
     if (canvas === null) {
       setInteraction({ type: 'idle' })
-      return
+      return null
     }
 
+    let created: ArrowElement | null = null
     const targetBoxId = hitTestBox(elements, canvas)
     if (targetBoxId !== null && targetBoxId !== interaction.sourceBoxId) {
       const targetBox = elements.boxes.get(targetBoxId)
@@ -58,17 +61,18 @@ const useArrowDraw = (
         undoStore.push('draw-arrow')
         const sourceFocus = computeGeometricFocus(sourceBox, targetBox)
         const targetFocus = computeGeometricFocus(targetBox, sourceBox)
-        const arrow = createArrow(
+        created = createArrow(
           interaction.sourceBoxId,
           targetBoxId,
           sourceFocus,
           targetFocus,
         )
-        setElements((s) => addArrow(s, arrow))
+        setElements((s) => addArrow(s, created!))
       }
     }
 
     setInteraction({ type: 'idle' })
+    return created
   }, [containerRef, setElements, setInteraction, viewport])
 
   return { onArrowStart, onArrowMove, onArrowEnd } as const

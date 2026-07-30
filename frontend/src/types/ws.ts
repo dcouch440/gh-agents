@@ -43,7 +43,63 @@ export const WS_MSG = {
   SUBSCRIBE_RUN: 'subscribe_run',
   UNSUBSCRIBE_RUN: 'unsubscribe_run',
   PING: 'ping',
+  // Canvas sync (client → server)
+  CANVAS_ELEMENT_MOVED: 'canvas_element_moved',
+  CANVAS_TEXT_CHANGED: 'canvas_text_changed',
+  CANVAS_NODE_CREATED: 'canvas_node_created',
+  CANVAS_EDGE_CREATED: 'canvas_edge_created',
+  CANVAS_NODE_DELETED: 'canvas_node_deleted',
+  CANVAS_EDGE_DELETED: 'canvas_edge_deleted',
 } as const
+
+// Canvas sync payload types
+export type CanvasElementMovedMsg = {
+  type: typeof WS_MSG.CANVAS_ELEMENT_MOVED
+  workflow_id: string
+  element_id: string
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export type CanvasTextChangedMsg = {
+  type: typeof WS_MSG.CANVAS_TEXT_CHANGED
+  workflow_id: string
+  element_id: string
+  text: string
+}
+
+export type CanvasNodeCreatedMsg = {
+  type: typeof WS_MSG.CANVAS_NODE_CREATED
+  workflow_id: string
+  element_id: string
+  x: number
+  y: number
+  width: number
+  height: number
+  text: string
+}
+
+export type CanvasEdgeCreatedMsg = {
+  type: typeof WS_MSG.CANVAS_EDGE_CREATED
+  workflow_id: string
+  element_id: string
+  source_element_id: string
+  target_element_id: string
+}
+
+export type CanvasNodeDeletedMsg = {
+  type: typeof WS_MSG.CANVAS_NODE_DELETED
+  workflow_id: string
+  element_id: string
+}
+
+export type CanvasEdgeDeletedMsg = {
+  type: typeof WS_MSG.CANVAS_EDGE_DELETED
+  workflow_id: string
+  element_id: string
+}
 
 // Client messages (sent from client to server)
 export type WsClientMessage =
@@ -52,6 +108,12 @@ export type WsClientMessage =
   | { type: typeof WS_MSG.SUBSCRIBE_RUN; run_id: string }
   | { type: typeof WS_MSG.UNSUBSCRIBE_RUN; run_id: string }
   | { type: typeof WS_MSG.PING; ts: string }
+  | CanvasElementMovedMsg
+  | CanvasTextChangedMsg
+  | CanvasNodeCreatedMsg
+  | CanvasEdgeCreatedMsg
+  | CanvasNodeDeletedMsg
+  | CanvasEdgeDeletedMsg
 
 // Connection status
 export const WS_STATUS = {
@@ -86,6 +148,12 @@ export const WORKFLOW_EVENT = {
   WORKFORCE_AGENT_PROGRESS: 'workforce_agent_progress',
   DESIGNER_AGENT_DESIGNED: 'designer_agent_designed',
   STEP_PIN_CHANGED: 'step_pin_changed',
+  // Board topology changes (fine-grained events from workflow agent sync)
+  STEP_CREATED: 'step_created',
+  STEP_DELETED: 'step_deleted',
+  EDGE_CREATED: 'edge_created',
+  EDGE_DELETED: 'edge_deleted',
+  BOARD_ELEMENTS_UPDATED: 'board_elements_updated',
   // Generic step streaming (token-level events from any execution source)
   STEP_STREAM_TOKEN: 'step_stream_token',
   STEP_STREAM_TOOL_START: 'step_stream_tool_start',
@@ -129,6 +197,10 @@ export type RosterChangedData = { workflow_id: string; step_id: string }
 export type RoomMembersChangedData = { workflow_id: string; step_id: string }
 export type PlanUpdatedData = { workflow_id: string; step_id: string; content: string }
 export type StepPinChangedData = { workflow_id: string; step_id: string; pinned: boolean }
+export type StepCreatedData = { workflow_id: string; step_id: string; name: string }
+export type StepDeletedData = { workflow_id: string; step_id: string }
+export type EdgeCreatedData = { workflow_id: string; edge_id: string; from_step_id: string; to_step_id: string }
+export type EdgeDeletedData = { workflow_id: string; edge_id: string; from_step_id: string; to_step_id: string }
 // Workforce high-level progress
 export type WorkforceDesignerProgressData = { workflow_id: string; step_id: string; status: string }
 export type DesignerAgentDesignedData = {

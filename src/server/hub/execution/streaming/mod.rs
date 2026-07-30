@@ -91,22 +91,31 @@ impl StreamSink for SseSink {
             .send_stream_chunk(self.message_id, StreamChunk::Token(text.to_string()));
     }
 
-    async fn tool_start(&self, name: &str, tool_id: &str, _input: &Value) {
+    async fn tool_start(&self, name: &str, tool_id: &str, input: &Value) {
         self.state.send_stream_chunk(
             self.message_id,
             StreamChunk::ToolStart {
                 name: name.to_string(),
                 tool_id: tool_id.to_string(),
+                input: serde_json::to_string(input).unwrap_or_default(),
             },
         );
     }
 
-    async fn tool_end(&self, name: &str, tool_id: &str, _result: &Value) {
+    async fn tool_end(&self, name: &str, tool_id: &str, result: &Value) {
+        // Truncate large results to avoid massive SSE payloads
+        let result_str = serde_json::to_string(result).unwrap_or_default();
+        let truncated = if result_str.len() > 4096 {
+            format!("{}…(truncated)", &result_str[..4096])
+        } else {
+            result_str
+        };
         self.state.send_stream_chunk(
             self.message_id,
             StreamChunk::ToolEnd {
                 name: name.to_string(),
                 tool_id: tool_id.to_string(),
+                result: truncated,
             },
         );
     }

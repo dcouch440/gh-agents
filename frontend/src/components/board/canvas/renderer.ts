@@ -572,8 +572,8 @@ const renderBoard = (
     drawPen(ctx, pen, isSelected, theme)
   }
 
-  // Drawing pen preview
-  if (drawingPen !== null) {
+  // Drawing pen preview (guard against stale data after board element replacement)
+  if (drawingPen !== null && drawingPen.points.length > 0) {
     drawDrawingPen(ctx, drawingPen.points, drawingPen.pressures, theme)
   }
 
