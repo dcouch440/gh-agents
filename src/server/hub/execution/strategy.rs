@@ -77,18 +77,6 @@ pub trait ExecutionStrategy: Send + Sync {
         false
     }
 
-    /// Rebuild the system prompt between tool-use rounds.
-    ///
-    /// Called before each LLM call after round 0. Return `Some(prompt)` to
-    /// replace the current system prompt, or `None` to keep it unchanged.
-    ///
-    /// The default is a no-op. Strategies whose tools mutate state visible
-    /// in the system prompt (e.g. dispatch agents that modify the roster)
-    /// should override this to re-fetch current state.
-    async fn rebuild_system_prompt(&self) -> Result<Option<String>, HubError> {
-        Ok(None)
-    }
-
     /// Post-processing after the final LLM response.
     ///
     /// The default implementation logs token usage to the ledger.

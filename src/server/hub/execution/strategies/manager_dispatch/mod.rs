@@ -130,23 +130,6 @@ impl ExecutionStrategy for ManagerDispatchStrategy {
         Some(&self.state)
     }
 
-    async fn rebuild_system_prompt(&self) -> Result<Option<String>, HubError> {
-        let board_state_xml = board_state::build(
-            self.state.repos().workflows.as_ref(),
-            Some(self.state.repos().sessions.as_ref()),
-            BoardStateVariant::ManagerBuilder,
-            self.workflow_id,
-            Uuid::nil(),
-        )
-        .await
-        .map_err(|e| HubError::Internal(anyhow::anyhow!("{}", e)))?;
-
-        let mut vars = HashMap::new();
-        vars.insert("System.board_state".to_string(), board_state_xml);
-
-        Ok(Some(resolve_template(roles::MANAGER_BUILDER_SYSTEM, &vars)))
-    }
-
     async fn build_messages(&self, _input: &str) -> Result<Vec<Message>, HubError> {
         if let Some(session_id) = self.session_id {
             let history = self
