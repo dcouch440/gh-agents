@@ -10,8 +10,10 @@ mod tests;
 /// Build the `<current_state>` XML from the repository filesystem.
 ///
 /// Reads topology.json, agents/*.json, and config.json to produce a summary
-/// of what exists, what's valid, and what's missing. Injected into the system
-/// prompt between turns so the agent always sees fresh filesystem state.
+/// of what exists, what's valid, and what's missing. Injected into the
+/// system prompt once at the start of execution — it is a snapshot, not
+/// refreshed between turns, so the agent should re-check via `run_command`
+/// (e.g. `cat`/`ls`) if it needs current state mid-task.
 pub(crate) fn build_current_state(base_dir: &Path) -> String {
     let topology_path = base_dir.join("topology.json");
     let config_path = base_dir.join("config.json");
@@ -19,7 +21,7 @@ pub(crate) fn build_current_state(base_dir: &Path) -> String {
 
     // Empty state — nothing exists yet
     if !topology_path.exists() && !config_path.exists() {
-        return "<current_state refresh=\"every turn — always reflects the current filesystem\">\n  \
+        return "<current_state refresh=\"snapshot at execution start — re-check via run_command if you need current state mid-task\">\n  \
                 <topology status=\"empty\" />\n  \
                 <config status=\"missing\" />\n\
                 </current_state>"
@@ -28,7 +30,7 @@ pub(crate) fn build_current_state(base_dir: &Path) -> String {
 
     let mut lines = Vec::new();
     lines.push(
-        "<current_state refresh=\"every turn — always reflects the current filesystem\">".into(),
+        "<current_state refresh=\"snapshot at execution start — re-check via run_command if you need current state mid-task\">".into(),
     );
 
     // Parse topology and render agent statuses
