@@ -36,16 +36,34 @@ pub async fn run_sequential_design_pipeline(
     steps: Vec<WorkflowStepRow>,
     edges: Vec<WorkflowStepEdgeRow>,
 ) {
-    // Build topo-sorted order over ALL steps in the workflow
-    let topo_order = match crate::server::hub::dag::topological_sort(&steps, &edges) {
-        Ok(order) => order,
+    // Auto-checkpoint before destructive design pipeline
+    if let Err(e) = crate::server::services::workflow_agent::versions::save_version(
+        workflow_id,
+        user_id.0,
+        None,
+        "auto_pre_generate",
+        &state,
+    )
+    .await
+    {
+        tracing::warn!(
+            workflow_id = %workflow_id,
+            error = %e,
+            "Failed to auto-checkpoint before Generate — continuing anyway"
+        );
+    }
+
+    // Build topo-sorted levels — steps in the same level have no edges
+    // between them and can run in parallel.
+    let levels = match crate::server::hub::dag::topological_sort_levels(&steps, &edges) {
+        Ok(lvls) => lvls,
         Err(e) => {
             tracing::warn!(
                 workflow_id = %workflow_id,
                 error = %e,
-                "Failed to topological sort for sequential design — falling back to instruction order"
+                "Failed to topological sort for design pipeline — falling back to instruction order"
             );
-            instructions.iter().map(|i| i.step_id).collect()
+            vec![instructions.iter().map(|i| i.step_id).collect()]
         }
     };
 
@@ -53,7 +71,7 @@ pub async fn run_sequential_design_pipeline(
     let instruction_map: HashMap<Uuid, &NodeDispatchInstruction> =
         instructions.iter().map(|i| (i.step_id, i)).collect();
 
-    // Build step lookup (refreshed after each iteration)
+    // Build step lookup (refreshed after each level completes)
     let mut step_map: HashMap<Uuid, WorkflowStepRow> =
         steps.into_iter().map(|s| (s.id, s)).collect();
 
@@ -62,91 +80,166 @@ pub async fn run_sequential_design_pipeline(
     let mut dispatched_count: usize = 0;
     let mut propagated_count: usize = 0;
 
-    for step_id in &topo_order {
-        let has_instruction = instruction_map.contains_key(step_id);
+    for level in &levels {
+        // Partition level steps into dispatch vs propagate vs skip.
+        // Capture old handoffs before any tasks run.
+        let mut level_tasks: Vec<(Uuid, Option<NodeDispatchInstruction>, String)> = Vec::new();
 
-        // Check if any parent's handoff changed (propagation trigger)
-        let parent_ids = crate::server::hub::dag::get_parent_steps(*step_id, &edges);
-        let parent_changed = parent_ids.iter().any(|pid| handoff_changed.contains(pid));
+        for step_id in level {
+            let has_instruction = instruction_map.contains_key(step_id);
+            let parent_ids = crate::server::hub::dag::get_parent_steps(*step_id, &edges);
+            let parent_changed = parent_ids.iter().any(|pid| handoff_changed.contains(pid));
 
-        if !has_instruction && !parent_changed {
+            if !has_instruction && !parent_changed {
+                continue;
+            }
+
+            let old_handoff = step_map
+                .get(step_id)
+                .map(|s| s.designer_handoff.clone())
+                .unwrap_or_default();
+
+            if has_instruction {
+                let instruction = instruction_map[step_id].clone();
+                level_tasks.push((*step_id, Some(instruction), old_handoff));
+            } else {
+                tracing::info!(
+                    step_id = %step_id,
+                    "Propagating re-design: upstream handoff changed"
+                );
+                level_tasks.push((*step_id, None, old_handoff));
+            }
+        }
+
+        if level_tasks.is_empty() {
             continue;
         }
 
-        // Save old handoff for comparison after design
-        let old_handoff = step_map
-            .get(step_id)
-            .map(|s| s.designer_handoff.clone())
-            .unwrap_or_default();
+        // Run all tasks in this level in parallel
+        if level_tasks.len() == 1 {
+            // Single task — run directly (no spawn overhead)
+            let (step_id, instruction, _) = &level_tasks[0];
+            let parent_ids = crate::server::hub::dag::get_parent_steps(*step_id, &edges);
+            let previous_step_handoff = lookup_previous_handoff(&parent_ids, &step_map);
 
-        // Build context for this step
-        let previous_step_handoff = lookup_previous_handoff(&parent_ids, &step_map);
-
-        if has_instruction {
-            // Run system node agent (replaces builder + designer)
-            let instruction = instruction_map[step_id];
-            run_system_node_dispatch(
-                &state,
-                *step_id,
-                workflow_id,
-                user_id,
-                instruction,
-                previous_step_handoff,
-            )
-            .await;
-            dispatched_count += 1;
+            if let Some(instr) = instruction {
+                run_system_node_dispatch(
+                    &state,
+                    *step_id,
+                    workflow_id,
+                    user_id,
+                    instr,
+                    previous_step_handoff,
+                )
+                .await;
+                dispatched_count += 1;
+            } else {
+                run_system_node_propagation(
+                    &state,
+                    *step_id,
+                    workflow_id,
+                    user_id,
+                    previous_step_handoff,
+                )
+                .await;
+                propagated_count += 1;
+            }
         } else {
-            // Propagation: re-run system node agent with upstream context
-            tracing::info!(
-                step_id = %step_id,
-                "Propagating re-design: upstream handoff changed"
-            );
-            run_system_node_propagation(
-                &state,
-                *step_id,
-                workflow_id,
-                user_id,
-                previous_step_handoff,
-            )
-            .await;
-            propagated_count += 1;
-        }
+            // Multiple tasks — run in parallel via JoinSet
+            let mut join_set = tokio::task::JoinSet::new();
 
-        // Re-read step from DB to pick up the designer_handoff written by complete_design
-        match state.repos().workflows.get_step(*step_id).await {
-            Ok(Some(updated_step)) => {
-                let new_handoff = updated_step.designer_handoff.clone();
-                step_map.insert(*step_id, updated_step);
+            for (step_id, instruction, _) in &level_tasks {
+                let task_state = state.clone();
+                let task_step_id = *step_id;
+                let task_workflow_id = workflow_id;
+                let task_user_id = user_id;
+                let parent_ids = crate::server::hub::dag::get_parent_steps(*step_id, &edges);
+                let task_handoff = lookup_previous_handoff(&parent_ids, &step_map);
 
-                if old_handoff != new_handoff {
-                    tracing::info!(
-                        step_id = %step_id,
-                        old_len = old_handoff.len(),
-                        new_len = new_handoff.len(),
-                        "Handoff changed — downstream steps will be re-designed"
-                    );
-                    handoff_changed.insert(*step_id);
+                if let Some(instr) = instruction.clone() {
+                    join_set.spawn(async move {
+                        run_system_node_dispatch(
+                            &task_state,
+                            task_step_id,
+                            task_workflow_id,
+                            task_user_id,
+                            &instr,
+                            task_handoff,
+                        )
+                        .await;
+                        (task_step_id, true)
+                    });
                 } else {
-                    tracing::info!(
-                        step_id = %step_id,
-                        handoff_len = new_handoff.len(),
-                        had_instruction = has_instruction,
-                        "Handoff unchanged after design — no downstream propagation"
-                    );
+                    join_set.spawn(async move {
+                        run_system_node_propagation(
+                            &task_state,
+                            task_step_id,
+                            task_workflow_id,
+                            task_user_id,
+                            task_handoff,
+                        )
+                        .await;
+                        (task_step_id, false)
+                    });
                 }
             }
-            Ok(None) => {
-                tracing::warn!(
-                    step_id = %step_id,
-                    "Step not found after design — cannot check handoff propagation"
-                );
+
+            while let Some(join_result) = join_set.join_next().await {
+                match join_result {
+                    Ok((_, was_dispatch)) => {
+                        if was_dispatch {
+                            dispatched_count += 1;
+                        } else {
+                            propagated_count += 1;
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            error = %e,
+                            "Design pipeline task panicked"
+                        );
+                    }
+                }
             }
-            Err(e) => {
-                tracing::warn!(
-                    step_id = %step_id,
-                    error = %e,
-                    "Failed to re-read step after design — cannot check handoff propagation"
-                );
+        }
+
+        // After level completes: re-read all dispatched/propagated steps and
+        // check handoff changes for downstream propagation.
+        for (step_id, _, old_handoff) in &level_tasks {
+            match state.repos().workflows.get_step(*step_id).await {
+                Ok(Some(updated_step)) => {
+                    let new_handoff = updated_step.designer_handoff.clone();
+                    step_map.insert(*step_id, updated_step);
+
+                    if *old_handoff != new_handoff {
+                        tracing::info!(
+                            step_id = %step_id,
+                            old_len = old_handoff.len(),
+                            new_len = new_handoff.len(),
+                            "Handoff changed — downstream steps will be re-designed"
+                        );
+                        handoff_changed.insert(*step_id);
+                    } else {
+                        tracing::info!(
+                            step_id = %step_id,
+                            handoff_len = new_handoff.len(),
+                            "Handoff unchanged after design — no downstream propagation"
+                        );
+                    }
+                }
+                Ok(None) => {
+                    tracing::warn!(
+                        step_id = %step_id,
+                        "Step not found after design — cannot check handoff propagation"
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        step_id = %step_id,
+                        error = %e,
+                        "Failed to re-read step after design — cannot check handoff propagation"
+                    );
+                }
             }
         }
     }
@@ -253,14 +346,18 @@ async fn run_system_node_propagation(
 
     let task_text = step
         .as_ref()
-        .map(|s| {
-            if !s.prompt_template.is_empty() {
-                s.prompt_template.clone()
-            } else {
-                s.description.clone()
-            }
-        })
+        .map(|s| s.description.clone())
         .unwrap_or_default();
+
+    if task_text.is_empty() {
+        if let Some(s) = step.as_ref() {
+            tracing::warn!(
+                step_id = %step_id,
+                name = ?s.name,
+                "System node propagation: step has no description (canvas text)"
+            );
+        }
+    }
 
     if task_text.is_empty() && previous_step_handoff.is_empty() {
         tracing::debug!(

@@ -10,6 +10,7 @@ import { router } from './router'
 import { createAppTheme } from './theme'
 import { CommandPalette } from './components/command-palette'
 import { ReviewQueueNotification } from './components/layout/ReviewQueueNotification'
+import { ToastStack } from './components/primitives'
 import { authStore, reviewQueueStore } from './stores'
 import { setupAuthInterceptor } from './api/authInterceptor'
 import { dismissSplash } from './utils/splash'
@@ -35,6 +36,7 @@ function AppInner() {
           <RouterProvider router={router} />
         </CommandPaletteProvider>
         <ReviewQueueNotification />
+        <ToastStack />
       </WebSocketProvider>
     </ThemeProvider>
   )

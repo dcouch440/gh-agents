@@ -12,6 +12,7 @@ pub mod step_chat_handlers;
 pub mod step_handlers;
 pub mod sub_dag_handlers;
 pub mod template_handlers;
+pub mod version_handlers;
 pub mod workflow_handlers;
 pub mod workshop_handlers;
 
@@ -21,7 +22,7 @@ pub use edge_handlers::{
 };
 pub use execution_handlers::list_workflow_executions;
 pub use last_run_handlers::get_step_last_run;
-pub use run_detail_handlers::{get_run_detail, get_step_run_for_execution};
+pub use run_detail_handlers::{download_run_files, get_run_detail, get_step_run_for_execution};
 pub use run_handlers::run_workflow;
 pub use step_chat_handlers::{
     clear_step_messages, get_or_create_step_session, get_step_chat_debug,
@@ -44,8 +45,15 @@ pub use types::{
     WorkflowRunResponse, WorkflowStepResponse, WorkshopResponse, WorkshopStatusResponse,
     WorkshopStepResponse,
 };
+pub use types::{
+    RestoreResponse, SaveVersionRequest, VersionResponse, WorkflowAgentSessionResponse,
+};
+pub use version_handlers::{
+    list_workflow_versions, restore_workflow_version, save_workflow_version,
+};
 pub use workflow_handlers::{
-    create_workflow, delete_workflow, get_workflow, list_workflows, update_workflow,
+    create_workflow, delete_workflow, generate_workflow, get_or_create_workflow_agent_session,
+    get_workflow, list_workflows, update_workflow,
 };
 pub use workshop_handlers::{execute_workshop_step, get_or_create_workshop, get_workshop};
 

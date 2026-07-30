@@ -244,6 +244,48 @@ impl AgentExecutionRepo for PgRepo {
         Ok(row)
     }
 
+    async fn get_latest_dispatch_executions_for_steps(
+        &self,
+        step_ids: &[Uuid],
+    ) -> Result<Vec<AgentExecutionRow>> {
+        if step_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let rows = sqlx::query_as::<_, AgentExecutionRow>(
+            "SELECT id, execution_type, agent_id, workflow_step_id, \
+                    workflow_execution_id, is_interactive, \
+                    parent_agent_execution_id, system_prompt_rendered, \
+                    input, output, structured_output, room_session_id, \
+                    speaker_order, status, started_at, completed_at, \
+                    is_exemplary, trace \
+             FROM ( \
+                 SELECT *, ROW_NUMBER() OVER ( \
+                     PARTITION BY workflow_step_id ORDER BY started_at DESC \
+                 ) AS rn \
+                 FROM agent_executions \
+                 WHERE workflow_step_id = ANY($1) \
+                   AND execution_type IN ('dispatch', 'manager_dispatch') \
+             ) sub WHERE rn = 1",
+        )
+        .bind(step_ids)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows)
+    }
+
+    async fn get_running_step_ids_for_run(&self, workflow_execution_id: Uuid) -> Result<Vec<Uuid>> {
+        let rows: Vec<(Uuid,)> = sqlx::query_as(
+            "SELECT DISTINCT workflow_step_id FROM agent_executions \
+             WHERE workflow_execution_id = $1 \
+               AND status IN ('pending', 'running') \
+               AND workflow_step_id IS NOT NULL",
+        )
+        .bind(workflow_execution_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows.into_iter().map(|r| r.0).collect())
+    }
+
     async fn list_execution_timeline(
         &self,
         workflow_execution_id: Uuid,

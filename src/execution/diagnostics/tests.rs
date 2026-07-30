@@ -99,6 +99,7 @@ mod tests {
             "echo \"hello\" && exit"
         );
         assert_eq!(html_unescape("echo &#x27;world&#x27;"), "echo 'world'");
+        assert_eq!(html_unescape("brother&apos;s form"), "brother's form");
     }
 
     #[test]

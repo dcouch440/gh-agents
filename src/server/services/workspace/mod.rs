@@ -91,6 +91,15 @@ impl WorkspaceManager {
             .join(run_id.to_string())
     }
 
+    /// Path for the workflow agent's board repo:
+    /// `{mount}/workflows/{wf_id}/board/`.
+    ///
+    /// Contains `topology.json` and `nodes/*.md`. Lives outside `runs/`
+    /// so it persists across the workflow's lifetime.
+    pub fn board_path(&self, workflow_id: Uuid) -> PathBuf {
+        self.workflow_path(workflow_id).join("board")
+    }
+
     /// Path for a system node agent's config repository:
     /// `{mount}/workflows/{wf_id}/system_node/{step_id}`.
     ///

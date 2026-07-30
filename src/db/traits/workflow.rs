@@ -7,7 +7,7 @@ use crate::db::{
     CanvasElementMapRow, CanvasSnapshotRow, ProtocolDocumentDefRow, RoomStepConfigRow,
     RoomStepMemberRow, RunTemplateRow, StepDocumentRow, StepInputRow, StepOutputRow,
     StepQuestionStateRow, StepRoutingRuleRow, TaskAgentRosterRow, TaskMissionBriefRow, WorkflowRow,
-    WorkflowStepEdgeRow, WorkflowStepRow,
+    WorkflowStepEdgeRow, WorkflowStepRow, WorkflowVersionRow,
 };
 
 // ============================================================================
@@ -517,4 +517,26 @@ pub trait WorkflowRepo: Send + Sync {
 
     /// Load the pre-rendered stroke PNG for a step. Returns None if no image exists.
     async fn get_step_stroke_image(&self, step_id: Uuid) -> Result<Option<String>>;
+
+    // --- Workflow Versions ---
+
+    /// Create a workflow version checkpoint.
+    async fn create_workflow_version(&self, row: WorkflowVersionRow) -> Result<WorkflowVersionRow>;
+
+    /// List all versions for a workflow, newest first.
+    async fn list_workflow_versions(&self, workflow_id: Uuid) -> Result<Vec<WorkflowVersionRow>>;
+
+    /// Get a specific version by ID.
+    async fn get_workflow_version(&self, id: Uuid) -> Result<Option<WorkflowVersionRow>>;
+
+    /// Get the highest version number for a workflow (0 if none).
+    async fn get_latest_version_number(&self, workflow_id: Uuid) -> Result<i32>;
+
+    /// Delete a version.
+    async fn delete_workflow_version(&self, id: Uuid) -> Result<()>;
+
+    // --- Runtime Execution State ---
+
+    /// Get the ID of a currently running workflow execution, if any.
+    async fn get_active_run_for_workflow(&self, workflow_id: Uuid) -> Result<Option<Uuid>>;
 }

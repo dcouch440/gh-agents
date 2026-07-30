@@ -107,7 +107,7 @@ describe('WorkflowsPage', () => {
     )
 
     expect(screen.getByText('Processes incoming data')).toBeInTheDocument()
-    expect(screen.getByText('No description')).toBeInTheDocument()
+    expect(screen.getByText('\u2014')).toBeInTheDocument()
   })
 
   it('renders table column headers', () => {

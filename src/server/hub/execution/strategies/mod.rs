@@ -4,12 +4,14 @@ pub mod chat;
 pub mod dag_step;
 pub mod manager_dispatch;
 pub mod system_node;
+pub mod workflow_agent;
 pub mod workforce_agent;
 
 pub use chat::{ChatConfig, ChatStrategy, StepChatContext};
 pub use dag_step::DagStepStrategy;
 pub use manager_dispatch::ManagerDispatchStrategy;
 pub use system_node::SystemNodeStrategy;
+pub use workflow_agent::WorkflowAgentStrategy;
 pub use workforce_agent::{WorkforceAgentConfig, WorkforceAgentStrategy};
 
 use crate::db::ChatMessageRow;

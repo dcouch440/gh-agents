@@ -10,11 +10,13 @@ import ArrowBackOutlined from '@mui/icons-material/ArrowBackOutlined'
 import RefreshOutlined from '@mui/icons-material/RefreshOutlined'
 import RestoreOutlined from '@mui/icons-material/RestoreOutlined'
 import AssignmentOutlined from '@mui/icons-material/AssignmentOutlined'
+import FileDownloadOutlined from '@mui/icons-material/FileDownloadOutlined'
 import { FadeIn } from '@/components/animation'
 import { PageHeader, EmptyState, ConfirmModal } from '@/components/primitives'
 import { useConfirmModal } from '@/hooks'
 import { StepResultCard } from '@/components/execution/StepResultCard'
 import { api } from '@/api'
+import { uiStore } from '@/stores/uiStore'
 import type { Workflow, RunDetailResponse } from '@/types'
 
 const STATUS_COLORS: Record<string, 'success' | 'error' | 'warning' | 'info' | 'default'> = {
@@ -115,6 +117,20 @@ function RunDetailPage() {
             <MuiTooltip title="Refresh">
               <IconButton size="small" onClick={() => { void fetchData() }} disabled={loading}>
                 <RefreshOutlined fontSize="small" />
+              </IconButton>
+            </MuiTooltip>
+            <MuiTooltip title="Download run files">
+              <IconButton
+                size="small"
+                onClick={() => {
+                  api.workflows.downloadRunFiles(workflowId, runId).catch((err: unknown) => {
+                    const msg = err instanceof Error ? err.message : 'Download failed'
+                    uiStore.addToast({ message: msg, type: 'error' })
+                  })
+                }}
+                disabled={loading || detail === null || detail.execution.status === 'running'}
+              >
+                <FileDownloadOutlined fontSize="small" />
               </IconButton>
             </MuiTooltip>
             {detail?.execution.template_id && (

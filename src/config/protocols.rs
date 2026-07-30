@@ -251,6 +251,14 @@ pub static MERGE: Lazy<ProtocolConfig> = Lazy::new(|| {
     )
 });
 
+/// Workflow agent config (designs workflow topology via conversation).
+pub static WORKFLOW_AGENT: Lazy<ProtocolConfig> = Lazy::new(|| {
+    load_protocol_config(
+        include_str!("../../config/workflow_agent/config.yaml"),
+        "config/workflow_agent/config.yaml",
+    )
+});
+
 // ---------------------------------------------------------------------------
 // Role statics — compile-time embedded content
 // ---------------------------------------------------------------------------
@@ -270,6 +278,9 @@ pub mod roles {
 
     /// System node agent system prompt (designs runtime agent teams).
     pub const SYSTEM_NODE_AGENT_SYSTEM: &str = include_str!("../../config/system_agent/system.md");
+
+    /// Workflow agent system prompt (designs workflow topology via conversation).
+    pub const WORKFLOW_AGENT_SYSTEM: &str = include_str!("../../config/workflow_agent/system.md");
 
     /// Workforce runtime agent prompt template.
     pub static WORKFORCE_AGENT: RoleDefinition = RoleDefinition {
@@ -475,7 +486,7 @@ mod tests {
         assert_eq!(system.model_id, crate::constants::MODEL_TIER2);
         assert_eq!(system.temperature, 0.3);
         assert_eq!(system.max_tokens, 8192);
-        assert_eq!(system.max_rounds, 10);
+        assert_eq!(system.max_rounds, 30);
         assert_eq!(system.context_budget, 480_000);
     }
 
@@ -502,6 +513,17 @@ mod tests {
         assert_eq!(complex.model_id, crate::constants::MODEL_TIER2);
         assert_eq!(complex.temperature, 0.0);
         assert_eq!(complex.max_tokens, 4096);
+    }
+
+    #[test]
+    fn workflow_agent_config_parses() {
+        let cfg = &*WORKFLOW_AGENT;
+        let agent = cfg.agent("agent");
+        assert!(!agent.model_id.is_empty());
+        assert!(agent.temperature >= 0.0);
+        assert!(agent.max_tokens > 0);
+        assert!(agent.max_rounds > 0);
+        assert!(agent.context_budget > 0);
     }
 
     #[test]

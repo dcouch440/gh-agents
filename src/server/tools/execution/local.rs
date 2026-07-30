@@ -188,11 +188,11 @@ fn test_result_to_json(result: &crate::execution::TestResult) -> Value {
 
 pub(super) async fn exec_run_command(input: &Value, ctx: &ExecutionContext) -> Value {
     let command = match input["command"].as_str() {
-        Some(c) => c,
+        Some(c) => crate::execution::diagnostics::html_unescape(c),
         None => return json!({ "error": "Missing required parameter: command" }),
     };
     let sandbox = Sandbox::with_defaults(ctx.clone());
-    match sandbox.exec_shell(command).await {
+    match sandbox.exec_shell(&command).await {
         Ok(result) => json!({
             "exit_code": result.exit_code,
             "stdout": result.stdout,
