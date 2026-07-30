@@ -102,7 +102,7 @@ services:
     environment:
       LANG: en
       WG_HOST: host.docker.internal
-      PASSWORD_HASH: "$$2y$$10$$hBCoykrB95WSzuV4fafBzOHWKu9sbyVa34GJim6Lzt8/G23OjBYga"
+      PASSWORD_HASH: "${WGEASY_PASSWORD_HASH}"
       PORT: "51821"
       WG_PORT: "51820"
       WG_DEFAULT_DNS: "10.8.0.1"
