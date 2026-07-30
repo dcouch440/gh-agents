@@ -9,13 +9,13 @@ Rust/Axum backend, React/Vite frontend, PostgreSQL.
 - Rust (via [rustup](https://rustup.rs))
 - Node.js + npm
 - Docker + Docker Compose (for Postgres, MinIO, and JuiceFS)
-- An Anthropic API key
+- An xAI API key (the default LLM provider)
 
 ## Setup
 
 ```bash
 cp .env.example .env
-# fill in ANTHROPIC_API_KEY and JWT_SECRET at minimum
+# fill in XAI_API_KEY and JWT_SECRET at minimum
 ```
 
 ```bash
