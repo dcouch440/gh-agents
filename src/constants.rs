@@ -23,7 +23,7 @@ pub const ENV_NEXOR_STATIC_DIR: &str = "NEXOR_STATIC_DIR";
 /// The default LLM provider name used by the registry and all internal callers.
 pub const ACTIVE_PROVIDER: &str = "xai";
 /// Orchestrator tier — highest capability.
-pub const MODEL_TIER1: &str = "grok-4-0709";
+pub const MODEL_TIER1: &str = "grok-4.20-0309-reasoning";
 /// Worker tier — fast reasoning.
 pub const MODEL_TIER2: &str = "grok-4-1-fast-reasoning";
 /// Utility tier — fast non-reasoning.
@@ -310,6 +310,14 @@ pub mod routes {
     pub const WORKFLOW_PLANS: &str = "/workflows/:id/plans";
     pub const WORKFLOW_QUESTION_STATES: &str = "/workflows/:id/question-states";
 
+    // Workflow Agent
+    pub const WORKFLOW_AGENT_SESSION: &str = "/workflows/:id/agent-session";
+    pub const WORKFLOW_GENERATE: &str = "/workflows/:id/generate";
+
+    // Workflow Versions
+    pub const WORKFLOW_VERSIONS: &str = "/workflows/:id/versions";
+    pub const WORKFLOW_VERSION_RESTORE: &str = "/workflows/:id/versions/:vid/restore";
+
     // Workshop (node-by-node execution)
     pub const WORKFLOW_WORKSHOP: &str = "/workflows/:id/workshop";
     pub const WORKFLOW_WORKSHOP_STEP_EXECUTE: &str =
@@ -318,6 +326,7 @@ pub mod routes {
     // Execution History (per-step results for specific runs)
     pub const WORKFLOW_EXECUTION_STEPS: &str = "/workflows/:wid/executions/:eid/steps";
     pub const WORKFLOW_EXECUTION_STEP: &str = "/workflows/:wid/executions/:eid/steps/:sid";
+    pub const WORKFLOW_EXECUTION_FILES: &str = "/workflows/:wid/executions/:eid/files";
 
     // Run Templates (frozen workflow snapshots)
     pub const WORKFLOW_TEMPLATES: &str = "/workflows/:id/templates";

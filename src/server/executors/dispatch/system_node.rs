@@ -260,6 +260,10 @@ pub async fn run_system_node_task(
                         description_changed = sr.description_changed,
                         "System node sync completed"
                     );
+
+                    // Canvas state is managed by canvas_sync — no need to
+                    // regenerate here. Sidebar updates via StepNameUpdated
+                    // and StepConfigUpdated events from sync_to_db.
                 }
                 Err(e) => {
                     tracing::error!(

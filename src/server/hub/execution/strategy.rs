@@ -77,6 +77,12 @@ pub trait ExecutionStrategy: Send + Sync {
         false
     }
 
+    /// If this strategy requires a terminal tool before completion,
+    /// return its name. The engine re-prompts the LLM on premature EndTurn.
+    fn requires_terminal_tool(&self) -> Option<&str> {
+        None
+    }
+
     /// Rebuild the system prompt between tool-use rounds.
     ///
     /// Called before each LLM call after round 0. Return `Some(prompt)` to

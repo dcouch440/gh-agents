@@ -190,6 +190,45 @@ pub async fn artifacts_for_step(
     repo.list_by_producer(workflow_id, step_id, run_id).await
 }
 
+/// Build a zip archive containing all files from a specific workflow run.
+///
+/// Returns the zip bytes and the count of files included.
+/// Returns `Ok((empty vec, 0))` if no files exist for the run.
+pub async fn build_run_zip(
+    s3: &S3Backend,
+    repo: &dyn SystemFileRepo,
+    workflow_id: Uuid,
+    run_id: Uuid,
+) -> Result<(Vec<u8>, usize)> {
+    let files = repo.list_by_run(workflow_id, run_id).await?;
+    if files.is_empty() {
+        return Ok((Vec::new(), 0));
+    }
+
+    // Read all file contents from S3
+    let mut entries: Vec<(String, Vec<u8>)> = Vec::with_capacity(files.len());
+    for file in &files {
+        let key = s3_key(workflow_id, &file.path);
+        let bytes = s3.read(&key).await?;
+        entries.push((file.path.clone(), bytes));
+    }
+
+    // Build zip in memory
+    let count = entries.len();
+    let buf = std::io::Cursor::new(Vec::new());
+    let mut zip = zip::ZipWriter::new(buf);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+
+    for (path, content) in &entries {
+        zip.start_file(path, options)?;
+        std::io::Write::write_all(&mut zip, content)?;
+    }
+
+    let cursor = zip.finish()?;
+    Ok((cursor.into_inner(), count))
+}
+
 #[cfg(test)]
 mod unit_tests {
     use super::*;

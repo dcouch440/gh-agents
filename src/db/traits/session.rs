@@ -97,6 +97,17 @@ pub trait SessionRepo: Send + Sync {
     /// Find the L2 manager builder session for a workflow.
     async fn find_manager_builder_session(&self, workflow_id: Uuid) -> Result<Option<SessionRow>>;
 
+    /// Find the workflow agent session for a workflow.
+    async fn find_workflow_agent_session(&self, workflow_id: Uuid) -> Result<Option<SessionRow>>;
+
+    /// Hide messages after a timestamp (soft-delete for rebase).
+    /// Sets `hidden_at = now()` on messages with `timestamp > after`.
+    async fn hide_messages_after(
+        &self,
+        session_id: Uuid,
+        after: chrono::DateTime<chrono::Utc>,
+    ) -> Result<u64>;
+
     /// Batch-check which steps have received initial instructions.
     /// Returns the set of step_ids that have been instructed.
     async fn check_initial_instructions_sent(

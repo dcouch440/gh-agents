@@ -135,6 +135,19 @@ pub struct StepQuestionStateRow {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Row type for workflow version checkpoints.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+pub struct WorkflowVersionRow {
+    pub id: Uuid,
+    pub workflow_id: Uuid,
+    pub version_number: i32,
+    pub label: Option<String>,
+    pub source: String,
+    pub snapshot: serde_json::Value,
+    pub created_by: Uuid,
+    pub created_at: DateTime<Utc>,
+}
+
 /// Row type for workflow step agents (multi-agent step support).
 #[derive(Debug, Clone, serde::Serialize, sqlx::FromRow)]
 pub struct WorkflowStepAgentRow {

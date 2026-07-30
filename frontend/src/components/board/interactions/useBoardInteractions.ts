@@ -21,7 +21,7 @@ import { usePanZoom } from './usePanZoom'
 import { usePenDraw } from './usePenDraw'
 import { useResize } from './useResize'
 import { EMPTY_SELECTION, useSelection } from './useSelection'
-import type { SetElements } from './types'
+import type { CanvasChangeCallback, SetElements } from './types'
 
 // ── Return type ──────────────────────────────────────────────────────────
 
@@ -64,6 +64,7 @@ const useBoardInteractions = (
   containerRef: React.RefObject<HTMLDivElement | null>,
   onDeleteElements: (deletedIds: ReadonlySet<string>) => void,
   onContextMenuOpen: (x: number, y: number, elementId: string | null) => void,
+  onCanvasChange: CanvasChangeCallback,
 ): BoardInteractions => {
   // ── State ────────────────────────────────────────────────────────────
   const [selection, setSelection] = useState<SelectionState>(EMPTY_SELECTION)
@@ -78,7 +79,7 @@ const useBoardInteractions = (
   const resize = useResize(setElements, setInteraction, viewport, containerRef)
   const penDraw = usePenDraw(setElements, setInteraction, viewport, containerRef)
   const sel = useSelection(setSelection)
-  useKeyboard(elements, setElements, selection, setSelection, interaction, setInteraction, onDeleteElements, setActiveTool)
+  useKeyboard(elements, setElements, selection, setSelection, interaction, setInteraction, onDeleteElements, setActiveTool, onCanvasChange)
 
   // ── Derived state ────────────────────────────────────────────────────
   const editingBoxId = interaction.type === 'editing' ? interaction.boxId : null
@@ -106,11 +107,12 @@ const useBoardInteractions = (
 
   const createBoxAtPoint = useCallback((point: Point) => {
     undoStore.push('create-box')
-    const box = createBox(point.x - BOARD.DEFAULT_BOX_WIDTH / 2, point.y - BOARD.DEFAULT_BOX_HEIGHT / 2)
-    setElements((s) => addBox(s, box))
-    setInteraction({ type: 'editing', boxId: box.id })
-    sel.selectElement(box.id, false)
-  }, [sel, setElements])
+    const newBox = createBox(point.x - BOARD.DEFAULT_BOX_WIDTH / 2, point.y - BOARD.DEFAULT_BOX_HEIGHT / 2)
+    setElements((s) => addBox(s, newBox))
+    setInteraction({ type: 'editing', boxId: newBox.id })
+    sel.selectElement(newBox.id, false)
+    onCanvasChange({ kind: 'node_created', box: newBox })
+  }, [onCanvasChange, sel, setElements])
 
   // ── Pointer event handlers ───────────────────────────────────────────
 
@@ -178,6 +180,11 @@ const useBoardInteractions = (
       case 'dragging': {
         drag.onDragEnd()
         undoStore.commit()
+        // Sync final position to backend
+        const draggedBox = elements.boxes.get(interaction.elementId)
+        if (draggedBox) {
+          onCanvasChange({ kind: 'moved', elementId: draggedBox.id, x: draggedBox.x, y: draggedBox.y, width: draggedBox.width, height: draggedBox.height })
+        }
         break
       }
       case 'drawing-box': {
@@ -187,38 +194,51 @@ const useBoardInteractions = (
         undoStore.push('draw-box')
 
         if (dx < 5 && dy < 5) {
-          const box = createBox(
+          const newBox = createBox(
             interaction.startX - BOARD.DEFAULT_BOX_WIDTH / 2,
             interaction.startY - BOARD.DEFAULT_BOX_HEIGHT / 2,
           )
-          setElements((s) => addBox(s, box))
-          setInteraction({ type: 'editing', boxId: box.id })
-          sel.selectElement(box.id, false)
+          setElements((s) => addBox(s, newBox))
+          setInteraction({ type: 'editing', boxId: newBox.id })
+          sel.selectElement(newBox.id, false)
+          onCanvasChange({ kind: 'node_created', box: newBox })
         } else {
-          const x = Math.min(interaction.startX, interaction.cursorX)
-          const y = Math.min(interaction.startY, interaction.cursorY)
-          const w = Math.max(BOARD.MIN_BOX_WIDTH, dx)
-          const h = Math.max(BOARD.MIN_BOX_HEIGHT, dy)
+          const bx = Math.min(interaction.startX, interaction.cursorX)
+          const by = Math.min(interaction.startY, interaction.cursorY)
+          const bw = Math.max(BOARD.MIN_BOX_WIDTH, dx)
+          const bh = Math.max(BOARD.MIN_BOX_HEIGHT, dy)
 
-          const box = createBoxWithSize(x, y, w, h)
-          setElements((s) => addBox(s, box))
-          setInteraction({ type: 'editing', boxId: box.id })
-          sel.selectElement(box.id, false)
+          const newBox = createBoxWithSize(bx, by, bw, bh)
+          setElements((s) => addBox(s, newBox))
+          setInteraction({ type: 'editing', boxId: newBox.id })
+          sel.selectElement(newBox.id, false)
+          onCanvasChange({ kind: 'node_created', box: newBox })
         }
 
         setActiveTool('select')
         break
       }
-      case 'drawing-arrow': { arrowDraw.onArrowEnd(e, interaction, elements); break }
+      case 'drawing-arrow': {
+        const createdArrow = arrowDraw.onArrowEnd(e, interaction, elements)
+        if (createdArrow) {
+          onCanvasChange({ kind: 'edge_created', arrow: createdArrow })
+        }
+        break
+      }
       case 'resizing': {
         resize.onResizeEnd()
         undoStore.commit()
+        // Sync resized geometry to backend
+        const resizedBox = elements.boxes.get(interaction.boxId)
+        if (resizedBox) {
+          onCanvasChange({ kind: 'moved', elementId: resizedBox.id, x: resizedBox.x, y: resizedBox.y, width: resizedBox.width, height: resizedBox.height })
+        }
         break
       }
       case 'panning': { setInteraction({ type: 'idle' }); break }
       case 'idle': case 'editing': break
     }
-  }, [arrowDraw, drag, elements, interaction, penDraw, resize, sel, setElements])
+  }, [arrowDraw, drag, elements, interaction, onCanvasChange, penDraw, resize, sel, setElements])
 
   const onDoubleClick = useCallback((e: React.MouseEvent) => {
     const canvas = containerEventToCanvas(containerRef, e, viewport)
@@ -252,8 +272,13 @@ const useBoardInteractions = (
     if (interaction.type === 'editing' && interaction.boxId === boxId) {
       undoStore.commit()
       setInteraction({ type: 'idle' })
+      // Sync text change to backend
+      const blurredBox = elements.boxes.get(boxId)
+      if (blurredBox) {
+        onCanvasChange({ kind: 'text_changed', elementId: boxId, text: blurredBox.text, width: blurredBox.width, height: blurredBox.height })
+      }
     }
-  }, [interaction])
+  }, [elements, interaction, onCanvasChange])
 
   const onBoxTextChange = useCallback((boxId: string, text: string, width: number, height: number) => {
     setElements((s) => updateBoxText(s, boxId, text, width, height))
@@ -278,10 +303,12 @@ const useBoardInteractions = (
     const ids = selection.selectedIds.has(elementId)
       ? selection.selectedIds
       : new Set([elementId])
+    // Notify backend before removing from local state (need element type info)
+    onCanvasChange({ kind: 'elements_deleted', deletedIds: ids, elements })
     setElements((s) => removeElements(s, ids))
     onDeleteElements(ids)
     setSelection(() => EMPTY_SELECTION)
-  }, [selection.selectedIds, setElements, onDeleteElements])
+  }, [elements, selection.selectedIds, setElements, onDeleteElements, onCanvasChange])
 
   const handleContextMenuSelectAll = useCallback(() => {
     setSelection(() => ({ selectedIds: selectAllIds(elements), marquee: null }))

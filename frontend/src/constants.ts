@@ -157,10 +157,13 @@ export const API = {
   WORKFLOW_EXECUTIONS: (id: string) => `/workflows/${id}/executions`,
   WORKFLOW_EXECUTION_STEPS: (wid: string, eid: string) => `/workflows/${wid}/executions/${eid}/steps`,
   WORKFLOW_EXECUTION_STEP: (wid: string, eid: string, sid: string) => `/workflows/${wid}/executions/${eid}/steps/${sid}`,
+  WORKFLOW_EXECUTION_FILES: (wid: string, eid: string) => `/workflows/${wid}/executions/${eid}/files`,
   WORKFLOW_PLANS: (id: string) => `/workflows/${id}/plans`,
   WORKFLOW_QUESTION_STATES: (id: string) => `/workflows/${id}/question-states`,
   WORKFLOW_REBASE: (id: string) => `/workflows/${id}/rebase`,
   WORKFLOW_TEMPLATES: (id: string) => `/workflows/${id}/templates`,
+  WORKFLOW_AGENT_SESSION: (id: string) => `/workflows/${id}/agent-session`,
+  WORKFLOW_GENERATE: (id: string) => `/workflows/${id}/generate`,
   WORKFLOW_BOARD_SUBMIT: (id: string) => `/workflows/${id}/board/submit`,
   WORKFLOW_BOARD_ELEMENTS: (id: string) => `/workflows/${id}/board/elements`,
 
@@ -292,6 +295,10 @@ export const FOCUS_MODE = {
 
 // Auto-save
 export const AUTO_SAVE_DEBOUNCE_MS = 500
+
+// Canvas live sync debounce
+export const CANVAS_SYNC_POSITION_DEBOUNCE_MS = 150
+export const CANVAS_SYNC_TEXT_DEBOUNCE_MS = 500
 
 // Animation
 export const ANIMATION = {

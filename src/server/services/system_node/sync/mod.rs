@@ -45,6 +45,8 @@ pub(crate) struct SyncResult {
 /// Agent definition read from the filesystem for diffing against DB state.
 #[derive(Debug, Clone)]
 pub(crate) struct DesiredAgent {
+    /// Topology key — used to resolve `depends_on` references.
+    pub slug: String,
     pub name: String,
     pub role_description: String,
     pub capabilities: Vec<String>,
@@ -410,12 +412,24 @@ pub(crate) fn diff_edges(
     current_edges: &[crate::db::WorkflowStepEdgeRow],
     agent_step_ids: &HashSet<Uuid>,
 ) -> EdgeDiff {
+    // Build slug → step_id map so depends_on slugs resolve correctly.
+    // `name_to_step` is keyed by normalized display names (e.g. "ideabrainstormer"),
+    // but `depends_on` values are topology slugs (e.g. "brainstormer").
+    let slug_to_step: HashMap<&str, Uuid> = desired_agents
+        .iter()
+        .filter_map(|a| {
+            name_to_step
+                .get(&normalize_agent_name(&a.name))
+                .map(|&sid| (a.slug.as_str(), sid))
+        })
+        .collect();
+
     // Build desired edge set from topology depends_on
     let mut desired: HashSet<(Uuid, Uuid)> = HashSet::new();
     for agent in desired_agents {
         if let Some(&to_sid) = name_to_step.get(&normalize_agent_name(&agent.name)) {
             for dep_slug in &agent.depends_on {
-                if let Some(&from_sid) = name_to_step.get(&normalize_agent_name(dep_slug)) {
+                if let Some(&from_sid) = slug_to_step.get(dep_slug.as_str()) {
                     desired.insert((from_sid, to_sid));
                 }
             }
@@ -460,6 +474,7 @@ fn read_desired_agents(
         })?;
 
         agents.push(DesiredAgent {
+            slug: slug.clone(),
             name: config.name,
             role_description: config.system_prompt,
             capabilities: config.capabilities,
