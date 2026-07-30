@@ -640,6 +640,33 @@ mod tests {
             async fn get_step_stroke_image(&self, _: Uuid) -> Result<Option<String>> {
                 unimplemented!()
             }
+            async fn create_workflow_version(
+                &self,
+                _: crate::db::WorkflowVersionRow,
+            ) -> Result<crate::db::WorkflowVersionRow> {
+                unimplemented!()
+            }
+            async fn list_workflow_versions(
+                &self,
+                _: Uuid,
+            ) -> Result<Vec<crate::db::WorkflowVersionRow>> {
+                unimplemented!()
+            }
+            async fn get_workflow_version(
+                &self,
+                _: Uuid,
+            ) -> Result<Option<crate::db::WorkflowVersionRow>> {
+                unimplemented!()
+            }
+            async fn get_latest_version_number(&self, _: Uuid) -> Result<i32> {
+                unimplemented!()
+            }
+            async fn delete_workflow_version(&self, _: Uuid) -> Result<()> {
+                unimplemented!()
+            }
+            async fn get_active_run_for_workflow(&self, _: Uuid) -> Result<Option<Uuid>> {
+                Ok(None)
+            }
         }
 
         // Create test data

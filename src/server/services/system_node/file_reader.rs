@@ -72,17 +72,33 @@ pub(crate) fn read_agent_configs(base_dir: &Path) -> Result<Vec<DesignedAgentPro
         slug_deps.push((slug.clone(), depends_on));
     }
 
-    // 3. Read each agent file and build prompts
+    // 3. Read each agent file and build slug → display_name map
     let agents_dir = base_dir.join("agents");
-    let mut prompts = Vec::with_capacity(slug_deps.len());
+    let mut slug_to_name: HashMap<String, String> = HashMap::with_capacity(slug_deps.len());
+    let mut configs: Vec<(Vec<String>, AgentConfig)> = Vec::with_capacity(slug_deps.len());
 
-    for (i, (slug, depends_on)) in slug_deps.iter().enumerate() {
+    for (slug, depends_on) in &slug_deps {
         let agent_path = agents_dir.join(format!("{slug}.json"));
         let agent_content = std::fs::read_to_string(&agent_path)
             .map_err(|e| format!("cannot read agents/{slug}.json: {e}"))?;
 
         let config: AgentConfig = serde_json::from_str(&agent_content)
             .map_err(|e| format!("invalid JSON in agents/{slug}.json: {e}"))?;
+
+        slug_to_name.insert(slug.clone(), config.name.clone());
+        configs.push((depends_on.clone(), config));
+    }
+
+    // 4. Build prompts with receives_from resolved from slugs to display names.
+    // Downstream code (compute_execution_levels, filter_outputs_for_agent) matches
+    // receives_from against agent_name via normalize_agent_name — this only works
+    // when both sides are display names, not topology slugs.
+    let mut prompts = Vec::with_capacity(configs.len());
+    for (i, (depends_on, config)) in configs.into_iter().enumerate() {
+        let resolved_receives: Vec<String> = depends_on
+            .iter()
+            .filter_map(|dep_slug| slug_to_name.get(dep_slug).cloned())
+            .collect();
 
         prompts.push(DesignedAgentPrompt {
             agent_roster_entry_id: Uuid::nil(),
@@ -92,7 +108,7 @@ pub(crate) fn read_agent_configs(base_dir: &Path) -> Result<Vec<DesignedAgentPro
             assignment: config.assignment,
             expected_output: Some(config.expected_output),
             execution_order: i as i32,
-            receives_from: depends_on.clone(),
+            receives_from: resolved_receives,
         });
     }
 

@@ -346,7 +346,8 @@ async fn execute_single_agent(
         env.step_id,
         designed.agent_roster_entry_id,
         designed.agent_name.clone(),
-    );
+    )
+    .with_agent_name(Some(designed.agent_name.clone()));
     let result = engine
         .execute(
             &strategy,
@@ -402,9 +403,22 @@ async fn execute_single_agent(
                 },
             );
 
+            // When the LLM returns EndTurn with no text after tool use,
+            // synthesize a summary from recorded tool results so downstream
+            // agents have context about what this agent did.
+            let content = if exec_result.content.trim().is_empty() && exec_result.rounds_used > 1 {
+                if let Some(id) = ae_id {
+                    synthesize_tool_summary(id, &env.state).await
+                } else {
+                    format!("[Completed {} rounds of tool use]", exec_result.rounds_used)
+                }
+            } else {
+                exec_result.content
+            };
+
             Ok(AgentExecutionResult {
                 name: designed.agent_name.clone(),
-                content: exec_result.content,
+                content,
                 input_tokens: exec_result.input_tokens as i64,
                 output_tokens: exec_result.output_tokens as i64,
                 cost,
@@ -448,6 +462,65 @@ async fn execute_single_agent(
             );
             Err(e)
         }
+    }
+}
+
+/// When an agent completes with empty text (tool-only execution),
+/// synthesize a summary from recorded tool results so downstream agents
+/// have context about what was done (e.g., which files were created/modified).
+async fn synthesize_tool_summary(
+    ae_id: uuid::Uuid,
+    state: &crate::server::state::AppState,
+) -> String {
+    let messages = match state
+        .repos()
+        .agent_executions
+        .list_execution_messages(ae_id)
+        .await
+    {
+        Ok(m) => m,
+        Err(_) => return "[Agent completed via tool use]".to_string(),
+    };
+
+    let tool_messages: Vec<_> = messages.iter().filter(|m| m.role == "tool").collect();
+
+    if tool_messages.is_empty() {
+        return "[Agent completed via tool use]".to_string();
+    }
+
+    // Extract file changes from diagnostics output
+    let mut files_created = Vec::new();
+    let mut files_modified = Vec::new();
+
+    for msg in &tool_messages {
+        // Tool content may be JSON ({"output": "..."}) or plain text
+        let text = serde_json::from_str::<serde_json::Value>(&msg.content)
+            .ok()
+            .and_then(|v| v.get("output").and_then(|o| o.as_str()).map(String::from))
+            .unwrap_or_else(|| msg.content.clone());
+
+        for line in text.lines() {
+            let trimmed = line.trim();
+            if let Some(name) = trimmed.strip_prefix("created: ") {
+                files_created.push(name.to_string());
+            } else if let Some(name) = trimmed.strip_prefix("modified: ") {
+                files_modified.push(name.to_string());
+            }
+        }
+    }
+
+    let mut parts = Vec::new();
+    if !files_created.is_empty() {
+        parts.push(format!("Created {}", files_created.join(", ")));
+    }
+    if !files_modified.is_empty() {
+        parts.push(format!("Modified {}", files_modified.join(", ")));
+    }
+
+    if parts.is_empty() {
+        format!("[Completed {} tool calls]", tool_messages.len())
+    } else {
+        format!("Task complete: {}.", parts.join(". "))
     }
 }
 

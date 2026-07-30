@@ -57,6 +57,9 @@ pub enum HubError {
     #[error("workspace merge failed: {reason}")]
     MergeFailed { reason: String },
 
+    #[error("tool '{tool_name}' failed {count} consecutive times with identical input")]
+    RepeatedToolFailure { tool_name: String, count: u32 },
+
     #[error("execution cancelled")]
     Cancelled,
 

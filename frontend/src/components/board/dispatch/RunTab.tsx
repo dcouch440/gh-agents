@@ -3,13 +3,18 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Divider from '@mui/material/Divider'
 import IconButton from '@mui/material/IconButton'
+import MuiTooltip from '@mui/material/Tooltip'
 import ContentCopyRounded from '@mui/icons-material/ContentCopyRounded'
 import CheckRounded from '@mui/icons-material/CheckRounded'
+import FileDownloadOutlined from '@mui/icons-material/FileDownloadOutlined'
 import { useStore } from '@/stores/lib'
 import { agentTraceStore } from '@/stores/agentTraceStore'
 import type { AgentTrace } from '@/stores/agentTraceStore'
 import { activityStore } from '@/stores/activity'
 import { workflowStore } from '@/stores/workflowStore'
+import { workflowExecutionStore } from '@/stores/workflowExecutionStore'
+import { uiStore } from '@/stores/uiStore'
+import { api } from '@/api'
 import { Collections } from '@/utils/collections'
 import { ActivityTimeline } from './ActivityTimeline'
 import { AgentTraceCard } from './AgentTraceCard'
@@ -23,6 +28,9 @@ function RunTab() {
   const order = useStore(agentTraceStore.store, agentTraceStore.selectOrder)
   const activities = useStore(activityStore.store, activityStore.selectAll)
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
+  const workflowId = useStore(workflowExecutionStore.store, workflowExecutionStore.selectWorkflowId)
+  const runId = useStore(workflowExecutionStore.store, workflowExecutionStore.selectRunId)
+  const isRunning = useStore(workflowExecutionStore.store, workflowExecutionStore.selectIsRunning)
   const [copied, setCopied] = useState(false)
 
   const stepNameMap = useMemo(
@@ -50,7 +58,26 @@ function RunTab() {
 
   return (
     <>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', px: 1, py: 0.5 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.5, px: 1, py: 0.5 }}>
+        <MuiTooltip title="Download run files">
+          <span>
+            <IconButton
+              size="small"
+              aria-label="Download run files"
+              disabled={workflowId === null || runId === null || isRunning}
+              onClick={() => {
+                if (workflowId !== null && runId !== null) {
+                  api.workflows.downloadRunFiles(workflowId, runId).catch((err: unknown) => {
+                    const msg = err instanceof Error ? err.message : 'Download failed'
+                    uiStore.addToast({ message: msg, type: 'error' })
+                  })
+                }
+              }}
+            >
+              <FileDownloadOutlined sx={{ fontSize: 14, color: 'text.disabled' }} />
+            </IconButton>
+          </span>
+        </MuiTooltip>
         <IconButton
           size="small"
           aria-label="Copy run JSON"

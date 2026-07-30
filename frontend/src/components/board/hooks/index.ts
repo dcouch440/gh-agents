@@ -1,6 +1,7 @@
 export { useBoardTheme } from './useBoardTheme'
 export { useBoardSubmit } from './useBoardSubmit'
 export { useBoardElements } from './useBoardElements'
+export { useCanvasSync } from './useCanvasSync'
 export { useDispatchPoll } from './useDispatchPoll'
 export { useDispatchPollAll } from './useDispatchPollAll'
 export { useDispatchHistory } from './useDispatchHistory'

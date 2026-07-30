@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef } from 'react'
 import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
 import { useTheme } from '@mui/material/styles'
 import { TabSelector } from '@/components/primitives'
 import { useStore, sidebarStore } from '@/stores'
+import { ChatPanel } from '@/components/chat/ChatPanel'
+import type { ChatMessageData } from '@/components/chat/MessageList'
 import { StepTree } from './StepTree'
 import type { TabOption } from '@/components/primitives'
 
@@ -14,9 +15,17 @@ const TAB_OPTIONS: TabOption[] = [
   { value: 'chat', label: 'Chat' },
 ]
 
+type WorkflowSidebarProps = {
+  messages: ChatMessageData[]
+  onSend: (message: string) => void
+  onCancel?: () => void
+  streaming?: boolean
+  onPanelSubmit?: (messageId: string, selections: string) => void
+}
+
 // ── Component ───────────────────────────────────────────────────────────────
 
-function WorkflowSidebar() {
+function WorkflowSidebar({ messages, onSend, onCancel, streaming, onPanelSubmit }: WorkflowSidebarProps) {
   const theme = useTheme()
   const activeTab = useStore(sidebarStore.store, sidebarStore.selectActiveTab)
   const width = useStore(sidebarStore.store, sidebarStore.selectWidth)
@@ -135,18 +144,15 @@ function WorkflowSidebar() {
           <StepTree />
         </Box>
       ) : (
-        <Box
-          sx={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            p: 3,
-          }}
-        >
-          <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12 }}>
-            Chat coming soon.
-          </Typography>
+        <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+          <ChatPanel
+            messages={messages}
+            onSend={onSend}
+            onCancel={onCancel}
+            streaming={streaming}
+            emptyMessage="Describe your workflow and I'll build it."
+            onPanelSubmit={onPanelSubmit}
+          />
         </Box>
       )}
     </Box>

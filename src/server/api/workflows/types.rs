@@ -369,3 +369,61 @@ pub fn step_response(r: crate::db::WorkflowStepRow) -> WorkflowStepResponse {
         designer_handoff: r.designer_handoff,
     }
 }
+
+// ============================================================================
+// Workflow Agent Session
+// ============================================================================
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct WorkflowAgentSessionResponse {
+    pub session_id: Uuid,
+    pub workflow_id: Uuid,
+    pub title: String,
+    pub created_at: DateTime<Utc>,
+}
+
+// ============================================================================
+// Workflow Versions
+// ============================================================================
+
+#[derive(Deserialize, utoipa::ToSchema)]
+pub struct SaveVersionRequest {
+    pub label: Option<String>,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct VersionResponse {
+    pub id: Uuid,
+    pub workflow_id: Uuid,
+    pub version_number: i32,
+    pub label: Option<String>,
+    pub source: String,
+    pub created_by: Uuid,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<crate::db::WorkflowVersionRow> for VersionResponse {
+    fn from(r: crate::db::WorkflowVersionRow) -> Self {
+        Self {
+            id: r.id,
+            workflow_id: r.workflow_id,
+            version_number: r.version_number,
+            label: r.label,
+            source: r.source,
+            created_by: r.created_by,
+            created_at: r.created_at,
+        }
+    }
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct RestoreResponse {
+    pub auto_checkpoint_id: Uuid,
+    pub auto_checkpoint_version: i32,
+    pub message: String,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct GenerateResponse {
+    pub generating: usize,
+}

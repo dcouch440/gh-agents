@@ -131,6 +131,10 @@ impl ExecutionStrategy for SystemNodeStrategy {
         self.summary.lock().map(|s| s.is_some()).unwrap_or(false)
     }
 
+    fn requires_terminal_tool(&self) -> Option<&str> {
+        Some("complete_system")
+    }
+
     async fn build_messages(&self, _input: &str) -> Result<Vec<Message>, HubError> {
         let text_instruction = match self.session_id {
             Some(session_id) => {

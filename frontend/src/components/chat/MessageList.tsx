@@ -9,10 +9,12 @@ export type PanelMessageMetadata = {
 
 export type ChatMessageData = {
   id: string
-  role: 'user' | 'assistant' | 'system'
+  role: 'user' | 'assistant' | 'system' | 'tool'
   content: string
   source_type?: string | null
   panelMeta?: PanelMessageMetadata | null
+  toolName?: string
+  toolResult?: string
 }
 
 export type MessageListProps = {
@@ -76,6 +78,32 @@ function MessageList({ messages, emptyMessage, streamingContent, streaming, focu
           {messages.map((message, index) => {
             const isLastAssistant = message.role === 'assistant' && index === messages.length - 1
             if (isLastAssistant && streamingContent) return null
+            if (message.role === 'tool') {
+              return (
+                <Box
+                  key={message.id}
+                  component="details"
+                  sx={{
+                    mx: 1,
+                    my: 0.5,
+                    px: 1.5,
+                    py: 0.5,
+                    borderRadius: 1,
+                    backgroundColor: 'action.hover',
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                    '& summary': { cursor: 'pointer', color: 'text.secondary', userSelect: 'none' },
+                    '& pre': { whiteSpace: 'pre-wrap', wordBreak: 'break-all', m: 0, mt: 0.5, fontSize: 11 },
+                  }}
+                >
+                  <summary>{message.toolName ?? 'tool'}: {message.content.slice(0, 80)}{message.content.length > 80 ? '…' : ''}</summary>
+                  <pre>{message.content}</pre>
+                  {message.toolResult !== undefined && message.toolResult !== '' && (
+                    <pre style={{ color: '#888', marginTop: 4 }}>{message.toolResult}</pre>
+                  )}
+                </Box>
+              )
+            }
             return (
               <ChatMessage
                 key={message.id}

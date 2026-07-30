@@ -8,7 +8,25 @@ mod tests {
     };
 
     fn desired(name: &str, role: &str, caps: &[&str], deps: &[&str]) -> DesiredAgent {
+        use crate::server::services::system_node::normalize_agent_name;
         DesiredAgent {
+            slug: normalize_agent_name(name),
+            name: name.to_string(),
+            role_description: role.to_string(),
+            capabilities: caps.iter().map(|s| s.to_string()).collect(),
+            depends_on: deps.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    fn desired_with_slug(
+        slug: &str,
+        name: &str,
+        role: &str,
+        caps: &[&str],
+        deps: &[&str],
+    ) -> DesiredAgent {
+        DesiredAgent {
+            slug: slug.to_string(),
             name: name.to_string(),
             role_description: role.to_string(),
             capabilities: caps.iter().map(|s| s.to_string()).collect(),
@@ -249,6 +267,44 @@ mod tests {
         let diff = diff_edges(&desired, &name_to_step, &current_edges, &agent_step_ids);
 
         assert!(diff.to_add.is_empty());
+        assert!(diff.to_remove.is_empty());
+    }
+
+    /// Regression: depends_on slugs differ from agent display names.
+    ///
+    /// topology: { "brainstormer": { depends_on: [] }, "curator": { depends_on: ["brainstormer"] } }
+    /// agents/brainstormer.json: { name: "Idea Brainstormer" }
+    /// agents/curator.json: { name: "Idea Curator" }
+    ///
+    /// name_to_step is keyed by normalized display name ("ideabrainstormer"),
+    /// but depends_on contains the slug ("brainstormer"). The slug→step lookup
+    /// must bridge this gap.
+    #[test]
+    fn diff_edges_slug_differs_from_display_name() {
+        let step_brainstormer = Uuid::new_v4();
+        let step_curator = Uuid::new_v4();
+
+        let desired = vec![
+            desired_with_slug("brainstormer", "Idea Brainstormer", "Brainstorm.", &[], &[]),
+            desired_with_slug("curator", "Idea Curator", "Curate.", &[], &["brainstormer"]),
+        ];
+
+        // name_to_step is keyed by normalized display name (how sync_to_db builds it)
+        let mut name_to_step = std::collections::HashMap::new();
+        name_to_step.insert("ideabrainstormer".to_string(), step_brainstormer);
+        name_to_step.insert("ideacurator".to_string(), step_curator);
+
+        let agent_step_ids: std::collections::HashSet<Uuid> =
+            [step_brainstormer, step_curator].into_iter().collect();
+
+        let diff = diff_edges(&desired, &name_to_step, &[], &agent_step_ids);
+
+        assert_eq!(
+            diff.to_add.len(),
+            1,
+            "should create brainstormer→curator edge"
+        );
+        assert_eq!(diff.to_add[0], (step_brainstormer, step_curator));
         assert!(diff.to_remove.is_empty());
     }
 }

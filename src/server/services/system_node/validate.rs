@@ -294,75 +294,75 @@ pub(crate) fn validate_verify(
 ) -> Result<Value, Value> {
     let mut errors: Vec<Value> = Vec::new();
 
-    // topology_complete
-    if verify["topology_complete"].as_bool() == Some(true) {
-        let xref = cross_reference(base_dir);
-        for err in xref {
+    // ── Mandatory checks (always run, regardless of verify flags) ──
+    // These ensure the required artifacts exist and are structurally valid.
+
+    let xref = cross_reference(base_dir);
+    for err in xref {
+        errors.push(serde_json::json!({
+            "verify": "mandatory",
+            "file": err.file,
+            "error": err.error,
+        }));
+    }
+
+    // config.json must be valid
+    let config_path = base_dir.join("config.json");
+    if let Ok(content) = std::fs::read_to_string(&config_path) {
+        if let Err(msg) = validate_config(&content) {
             errors.push(serde_json::json!({
-                "verify": "topology_complete",
-                "file": err.file,
-                "error": err.error,
+                "verify": "mandatory",
+                "file": "config.json",
+                "error": msg,
             }));
         }
     }
+    // (config missing is already caught by cross_reference above)
 
-    // agents_complete
-    if verify["agents_complete"].as_bool() == Some(true) {
-        let agents_dir = base_dir.join("agents");
-        if let Ok(entries) = std::fs::read_dir(&agents_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.extension().and_then(|e| e.to_str()) == Some("json") {
-                    let name = path
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .to_string();
-                    match std::fs::read_to_string(&path) {
-                        Ok(content) => {
-                            if let Err(msg) = validate_agent(&content) {
-                                errors.push(serde_json::json!({
-                                    "verify": "agents_complete",
-                                    "file": format!("agents/{name}"),
-                                    "error": msg,
-                                }));
-                            }
-                        }
-                        Err(e) => {
+    // Every agent file must be structurally valid
+    let agents_dir = base_dir.join("agents");
+    if let Ok(entries) = std::fs::read_dir(&agents_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) == Some("json") {
+                let name = path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+                match std::fs::read_to_string(&path) {
+                    Ok(content) => {
+                        if let Err(msg) = validate_agent(&content) {
                             errors.push(serde_json::json!({
-                                "verify": "agents_complete",
+                                "verify": "mandatory",
                                 "file": format!("agents/{name}"),
-                                "error": format!("cannot read file: {e}"),
+                                "error": msg,
                             }));
                         }
+                    }
+                    Err(e) => {
+                        errors.push(serde_json::json!({
+                            "verify": "mandatory",
+                            "file": format!("agents/{name}"),
+                            "error": format!("cannot read file: {e}"),
+                        }));
                     }
                 }
             }
         }
     }
 
-    // config_accurate
-    if verify["config_accurate"].as_bool() == Some(true) {
-        let config_path = base_dir.join("config.json");
-        match std::fs::read_to_string(&config_path) {
-            Ok(content) => {
-                if let Err(msg) = validate_config(&content) {
-                    errors.push(serde_json::json!({
-                        "verify": "config_accurate",
-                        "file": "config.json",
-                        "error": msg,
-                    }));
-                }
-            }
-            Err(_) => {
-                errors.push(serde_json::json!({
-                    "verify": "config_accurate",
-                    "file": "config.json",
-                    "error": "file does not exist",
-                }));
-            }
-        }
+    // Bail early if mandatory checks failed — quality checks don't matter yet
+    if !errors.is_empty() {
+        return Err(serde_json::json!({
+            "status": "verification_failed",
+            "errors": errors,
+        }));
     }
+
+    // ── Quality checks (flag-gated) ──
+    // topology_complete: cross_reference already ran above, skip the duplicate.
+    // agents_complete: structural validity already ran above, skip the duplicate.
 
     // no_filenames_prescribed
     if verify["no_filenames_prescribed"].as_bool() == Some(true) {

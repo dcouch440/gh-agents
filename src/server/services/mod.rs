@@ -9,6 +9,7 @@ pub mod agent_executions;
 pub mod agent_roster;
 pub mod agents;
 pub mod board;
+pub mod canvas_sync;
 pub mod chat;
 pub mod collections;
 pub mod costs;
@@ -34,6 +35,7 @@ pub mod system_store;
 pub mod timeline;
 pub mod tools;
 pub mod validation;
+pub mod workflow_agent;
 pub mod workflows;
 pub mod workspace;
 

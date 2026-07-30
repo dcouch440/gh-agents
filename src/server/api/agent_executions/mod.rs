@@ -196,12 +196,12 @@ pub async fn execution_message_stream(
                 StreamChunk::Token(text) => {
                     yield Ok(Event::default().event("token").data(serde_json::to_string(&text).unwrap_or(text)));
                 }
-                StreamChunk::ToolStart { name, tool_id } => {
-                    let data = format!(r#"{{"name":"{}","id":"{}"}}"#, name, tool_id);
+                StreamChunk::ToolStart { name, tool_id, input } => {
+                    let data = serde_json::json!({ "name": name, "id": tool_id, "input": input }).to_string();
                     yield Ok(Event::default().event("tool_start").data(data));
                 }
-                StreamChunk::ToolEnd { name, tool_id } => {
-                    let data = format!(r#"{{"name":"{}","id":"{}"}}"#, name, tool_id);
+                StreamChunk::ToolEnd { name, tool_id, result } => {
+                    let data = serde_json::json!({ "name": name, "id": tool_id, "result": result }).to_string();
                     yield Ok(Event::default().event("tool_end").data(data));
                 }
                 StreamChunk::DocUpdate { doc_id, title } => {
@@ -236,12 +236,12 @@ pub async fn execution_message_stream(
                         StreamChunk::Token(text) => {
                             yield Ok(Event::default().event("token").data(serde_json::to_string(&text).unwrap_or(text)));
                         }
-                        StreamChunk::ToolStart { name, tool_id } => {
-                            let data = format!(r#"{{"name":"{}","id":"{}"}}"#, name, tool_id);
+                        StreamChunk::ToolStart { name, tool_id, input } => {
+                            let data = serde_json::json!({ "name": name, "id": tool_id, "input": input }).to_string();
                             yield Ok(Event::default().event("tool_start").data(data));
                         }
-                        StreamChunk::ToolEnd { name, tool_id } => {
-                            let data = format!(r#"{{"name":"{}","id":"{}"}}"#, name, tool_id);
+                        StreamChunk::ToolEnd { name, tool_id, result } => {
+                            let data = serde_json::json!({ "name": name, "id": tool_id, "result": result }).to_string();
                             yield Ok(Event::default().event("tool_end").data(data));
                         }
                         StreamChunk::DocUpdate { doc_id, title } => {

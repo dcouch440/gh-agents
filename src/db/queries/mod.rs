@@ -210,6 +210,27 @@ pub async fn find_manager_builder_session(
     Ok(row)
 }
 
+/// Find the workflow agent session for a workflow.
+///
+/// Workflow agent sessions have `draft_config->>'role' = 'workflow_agent'`
+/// and `draft_config->>'workflow_id'` matching the given workflow.
+pub async fn find_workflow_agent_session(
+    pool: &PgPool,
+    workflow_id: Uuid,
+) -> Result<Option<SessionRow>> {
+    let row: Option<SessionRow> = sqlx::query_as(
+        "SELECT id, user_id, mode_id, title, summary, agent_id, draft_config, created_at, updated_at \
+         FROM chat_sessions \
+         WHERE draft_config->>'workflow_id' = $1 \
+           AND draft_config->>'role' = 'workflow_agent'"
+    )
+        .bind(workflow_id.to_string())
+        .fetch_optional(pool)
+        .await
+        .context("Failed to find workflow agent session")?;
+    Ok(row)
+}
+
 /// Batch-check which steps have received initial instructions.
 ///
 /// A step is considered "instructed" if its L3 assistant session contains at
@@ -282,6 +303,28 @@ pub async fn insert_session_message(
     Ok(())
 }
 
+/// Hide messages in a session after a given timestamp (soft-delete for rebase).
+///
+/// Sets `hidden_at = now()` on messages with `timestamp > after`.
+/// Returns the number of messages hidden.
+pub async fn hide_messages_after(
+    pool: &PgPool,
+    session_id: Uuid,
+    after: DateTime<Utc>,
+) -> Result<u64> {
+    let result = sqlx::query(
+        "UPDATE chat_messages \
+         SET hidden_at = now() \
+         WHERE session_id = $1 AND timestamp > $2 AND hidden_at IS NULL",
+    )
+    .bind(session_id)
+    .bind(after)
+    .execute(pool)
+    .await
+    .context("Failed to hide session messages")?;
+    Ok(result.rows_affected())
+}
+
 /// Insert an agent-sourced message into a session.
 pub async fn insert_agent_session_message(
     pool: &PgPool,
@@ -313,7 +356,7 @@ pub async fn get_session_history(
     limit: u32,
 ) -> Result<Vec<ChatMessageRow>> {
     let limit = limit.min(1000) as i64;
-    let rows: Vec<ChatMessageRow> = sqlx::query_as("SELECT id, role, content, timestamp, source_type FROM chat_messages WHERE session_id = $1 ORDER BY timestamp ASC LIMIT $2")
+    let rows: Vec<ChatMessageRow> = sqlx::query_as("SELECT id, role, content, timestamp, source_type FROM chat_messages WHERE session_id = $1 AND hidden_at IS NULL ORDER BY timestamp ASC LIMIT $2")
         .bind(session_id)
         .bind(limit)
         .fetch_all(pool)
