@@ -38,7 +38,6 @@ docker exec nexor-postgres-1 psql -U nexor -d nexor -c "SQL"
 - Always write tests when completing a ticket
 - Commit format: `type(scope): description` (feat, fix, docs, refactor, test, chore)
 - Branch naming: `type/short-description` (same `type` values as commits, e.g. `docs/public-repo-cleanup`, `feat/agent-pool`)
-- No co-authored-by on commits
 
 ## Rust Conventions
 
