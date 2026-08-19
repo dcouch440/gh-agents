@@ -1,0 +1,1089 @@
+{
+  "meta": {
+    "phase": 3,
+    "description": "Long-chain belief threading across 9-node workflow",
+    "model": "claude-sonnet-4-5-20250929",
+    "timestamp": "2026-02-11T18:54:26.980018",
+    "total_llm_calls": 7
+  },
+  "workflow_topology": {
+    "nodes": [
+      {
+        "id": 1,
+        "name": "PRD",
+        "depth": 9
+      },
+      {
+        "id": 2,
+        "name": "Researchers",
+        "depth": 8
+      },
+      {
+        "id": 3,
+        "name": "API Docs",
+        "depth": 7
+      },
+      {
+        "id": 4,
+        "name": "Architecture",
+        "depth": 6
+      },
+      {
+        "id": 5,
+        "name": "Task Decomposition",
+        "depth": 5
+      },
+      {
+        "id": 6,
+        "name": "Implementation Plan",
+        "depth": 4
+      },
+      {
+        "id": 7,
+        "name": "Module A: CRDT Engine",
+        "depth": 3
+      },
+      {
+        "id": 8,
+        "name": "Module B: WS Relay",
+        "depth": 2
+      },
+      {
+        "id": 9,
+        "name": "Integration Test",
+        "depth": 1
+      },
+      {
+        "id": 10,
+        "name": "Shipping Meeting",
+        "depth": 0
+      }
+    ],
+    "edges": [
+      [
+        1,
+        4
+      ],
+      [
+        2,
+        4
+      ],
+      [
+        3,
+        4
+      ],
+      [
+        4,
+        5
+      ],
+      [
+        5,
+        6
+      ],
+      [
+        6,
+        7
+      ],
+      [
+        6,
+        8
+      ],
+      [
+        7,
+        9
+      ],
+      [
+        8,
+        9
+      ],
+      [
+        1,
+        10
+      ],
+      [
+        2,
+        10
+      ],
+      [
+        3,
+        10
+      ],
+      [
+        4,
+        10
+      ],
+      [
+        5,
+        10
+      ],
+      [
+        6,
+        10
+      ],
+      [
+        7,
+        10
+      ],
+      [
+        8,
+        10
+      ],
+      [
+        9,
+        10
+      ]
+    ]
+  },
+  "belief_store": [
+    {
+      "id": "b01",
+      "semantic_tag": "core_feature_scope",
+      "confidence": "high",
+      "emotional_tone": "ambitious",
+      "source_node": 1,
+      "source_node_name": "PRD",
+      "source_depth": 9,
+      "content": "The product requires real-time collaborative editing with conflict resolution for up to 50 concurrent users per document. Must support rich text, embedded images, and @mentions. Positioned as the flagship differentiator for the Q2 enterprise launch."
+    },
+    {
+      "id": "b02",
+      "semantic_tag": "gdpr_data_residency",
+      "confidence": "high",
+      "emotional_tone": "non-negotiable",
+      "source_node": 1,
+      "source_node_name": "PRD",
+      "source_depth": 9,
+      "content": "GDPR compliance requires all document content and edit history to remain within EU data centers. Real-time sync infrastructure must not route data through US-based relay servers. Legal has flagged this as a hard launch blocker."
+    },
+    {
+      "id": "b03",
+      "semantic_tag": "timeline_pressure",
+      "confidence": "high",
+      "emotional_tone": "urgent",
+      "source_node": 1,
+      "source_node_name": "PRD",
+      "source_depth": 9,
+      "content": "Q2 launch deadline is fixed and non-negotiable per executive commitment. Scope cuts may be necessary but core editing and conflict resolution must ship. Image embedding and @mentions are P1 stretch goals."
+    },
+    {
+      "id": "b04",
+      "semantic_tag": "offline_editing_requirement",
+      "confidence": "medium",
+      "emotional_tone": "aspirational",
+      "source_node": 1,
+      "source_node_name": "PRD",
+      "source_depth": 9,
+      "content": "Offline editing capability where users make changes while disconnected and sync on reconnect. Listed as P0 but technical complexity acknowledged as significant. Product believes this is essential for mobile enterprise users."
+    },
+    {
+      "id": "b05",
+      "semantic_tag": "performance_sla",
+      "confidence": "high",
+      "emotional_tone": "precise",
+      "source_node": 1,
+      "source_node_name": "PRD",
+      "source_depth": 9,
+      "content": "200ms maximum latency for edit propagation between users. P99 must stay under 500ms. Derived from user research showing latency above 300ms causes perceived lag in collaborative typing."
+    },
+    {
+      "id": "b06",
+      "semantic_tag": "api_versioning_constraint",
+      "confidence": "medium",
+      "emotional_tone": "cautious",
+      "source_node": 1,
+      "source_node_name": "PRD",
+      "source_depth": 9,
+      "content": "Existing REST API is at v2. New real-time endpoints must coexist with current request-response model. Breaking changes to v2 are not permitted for Q2 release."
+    },
+    {
+      "id": "b07",
+      "semantic_tag": "crdt_vs_ot_analysis",
+      "confidence": "high",
+      "emotional_tone": "analytical",
+      "source_node": 2,
+      "source_node_name": "Researchers",
+      "source_depth": 8,
+      "content": "CRDTs (specifically Yjs/Y-CRDT) preferred over Operational Transformation. CRDTs handle offline editing natively, need no central coordination. OT rejected due to server-dependency conflicting with offline requirement."
+    },
+    {
+      "id": "b08",
+      "semantic_tag": "competitor_landscape",
+      "confidence": "medium",
+      "emotional_tone": "observational",
+      "source_node": 2,
+      "source_node_name": "Researchers",
+      "source_depth": 8,
+      "content": "Notion and Google Docs use proprietary OT variants. Linear recently shipped CRDT-based collaboration. Figma uses custom CRDT for design files. CRDTs are the emerging standard for new implementations."
+    },
+    {
+      "id": "b09",
+      "semantic_tag": "yjs_library_risk",
+      "confidence": "medium",
+      "emotional_tone": "cautious",
+      "source_node": 2,
+      "source_node_name": "Researchers",
+      "source_depth": 8,
+      "content": "Yjs maintained primarily by a single developer. MIT-licensed and widely adopted but bus-factor risk exists. The Rust port (y-crdt) is less mature. Research recommends wrapping in an abstraction layer to enable future replacement."
+    },
+    {
+      "id": "b10",
+      "semantic_tag": "eu_relay_options",
+      "confidence": "high",
+      "emotional_tone": "thorough",
+      "source_node": 2,
+      "source_node_name": "Researchers",
+      "source_depth": 8,
+      "content": "Three EU-compliant WebSocket relay options identified: self-hosted in Frankfurt (AWS eu-central-1), Cloudflare Durable Objects with EU-only routing, Hetzner bare metal. Self-hosted gives full control but requires ops investment."
+    },
+    {
+      "id": "b11",
+      "semantic_tag": "50_user_scalability",
+      "confidence": "medium",
+      "emotional_tone": "worried",
+      "source_node": 2,
+      "source_node_name": "Researchers",
+      "source_depth": 8,
+      "content": "Benchmarking Yjs with 50 concurrent users showed 120MB memory per document and ~2000 messages/second sync rate. Within bounds for server-side relay but may stress WebSocket connections. Connection pooling and document-level sharding recommended."
+    },
+    {
+      "id": "b12",
+      "semantic_tag": "current_api_surface",
+      "confidence": "high",
+      "emotional_tone": "factual",
+      "source_node": 3,
+      "source_node_name": "API Docs",
+      "source_depth": 7,
+      "content": "Existing v2 API has 47 endpoints across documents, users, teams, and permissions. Document CRUD returns JSON averaging 2KB. No WebSocket support \u2014 all interactions are request-response over HTTPS."
+    },
+    {
+      "id": "b13",
+      "semantic_tag": "auth_model_limitation",
+      "confidence": "high",
+      "emotional_tone": "concerned",
+      "source_node": 3,
+      "source_node_name": "API Docs",
+      "source_depth": 7,
+      "content": "Current auth uses short-lived JWTs (15 min expiry) with refresh tokens. WebSocket connections persisting for hours need a different auth strategy. Current middleware only handles HTTP request headers."
+    },
+    {
+      "id": "b14",
+      "semantic_tag": "document_model_incompatibility",
+      "confidence": "high",
+      "emotional_tone": "structural",
+      "source_node": 3,
+      "source_node_name": "API Docs",
+      "source_depth": 7,
+      "content": "Documents stored as JSON blobs in PostgreSQL with optimistic locking. Entire document replaced on each save. Fundamentally incompatible with CRDT-based editing which requires merging incremental updates."
+    },
+    {
+      "id": "b15",
+      "semantic_tag": "rate_limiting_config",
+      "confidence": "medium",
+      "emotional_tone": "administrative",
+      "source_node": 3,
+      "source_node_name": "API Docs",
+      "source_depth": 7,
+      "content": "API enforces 100 req/s per user, 1000 req/s per org. These limits would immediately throttle real-time editing which generates 10-30 operations per second per active user."
+    },
+    {
+      "id": "b16",
+      "semantic_tag": "existing_webhook_system",
+      "confidence": "low",
+      "emotional_tone": "tangential",
+      "source_node": 3,
+      "source_node_name": "API Docs",
+      "source_depth": 7,
+      "content": "Existing webhook system for document change notifications used by 12 enterprise customers. Changes to document update patterns must maintain webhook compatibility or provide migration path."
+    },
+    {
+      "id": "b17",
+      "semantic_tag": "dual_storage_architecture",
+      "confidence": "high",
+      "emotional_tone": "decisive",
+      "source_node": 4,
+      "source_node_name": "Architecture",
+      "source_depth": 6,
+      "content": "CRDT state stored in separate binary column alongside existing JSON. JSON column serves REST API. Background process materializes CRDT to JSON for backward compatibility. Avoids breaking v2 API while enabling real-time."
+    },
+    {
+      "id": "b18",
+      "semantic_tag": "websocket_gateway_design",
+      "confidence": "high",
+      "emotional_tone": "confident",
+      "source_node": 4,
+      "source_node_name": "Architecture",
+      "source_depth": 6,
+      "content": "Dedicated WebSocket gateway service separate from REST API servers. Enables independent scaling \u2014 WS connections are long-lived and memory-intensive while REST is stateless. Authenticates via one-time token exchange at connection time."
+    },
+    {
+      "id": "b19",
+      "semantic_tag": "eu_deployment_topology",
+      "confidence": "high",
+      "emotional_tone": "deliberate",
+      "source_node": 4,
+      "source_node_name": "Architecture",
+      "source_depth": 6,
+      "content": "WebSocket gateway and CRDT state deployed exclusively in eu-central-1 for GDPR. Geo-fence at load balancer routes EU organization requests to EU infra. Non-EU traffic goes to us-east-1 as before."
+    },
+    {
+      "id": "b20",
+      "semantic_tag": "crdt_abstraction_layer",
+      "confidence": "high",
+      "emotional_tone": "careful",
+      "source_node": 4,
+      "source_node_name": "Architecture",
+      "source_depth": 6,
+      "content": "CRDT engine wrapped in DocumentSyncEngine trait abstracting the specific implementation (Yjs today, replaceable). Addresses bus-factor risk. Trait exposes: apply_update, get_state_vector, encode_diff, merge_states."
+    },
+    {
+      "id": "b21",
+      "semantic_tag": "offline_sync_protocol",
+      "confidence": "medium",
+      "emotional_tone": "uncertain",
+      "source_node": 4,
+      "source_node_name": "Architecture",
+      "source_depth": 6,
+      "content": "Offline sync uses store-and-forward: edits queued locally, sent as batch on reconnect. CRDT guarantees convergence regardless of ordering. Conflict presentation to users is an unsolved UX problem deferred to frontend team."
+    },
+    {
+      "id": "b22",
+      "semantic_tag": "latency_budget_allocation",
+      "confidence": "medium",
+      "emotional_tone": "analytical",
+      "source_node": 4,
+      "source_node_name": "Architecture",
+      "source_depth": 6,
+      "content": "Of 200ms budget: 20ms client CRDT encoding, 40ms network transit (EU), 60ms server relay + merge, 40ms peer broadcast, 40ms client apply. Zero margin. Assumes optimal EU-internal network conditions."
+    },
+    {
+      "id": "b23",
+      "semantic_tag": "sprint_plan_tension",
+      "confidence": "high",
+      "emotional_tone": "strained",
+      "source_node": 5,
+      "source_node_name": "Task Decomposition",
+      "source_depth": 5,
+      "content": "14-week estimate against 10-week runway to Q2. Critical path: CRDT engine (4w) \u2192 WS gateway (3w) \u2192 integration (2w) \u2192 hardening (2w). 4-week gap requires scope cuts or parallel workstreams with risk."
+    },
+    {
+      "id": "b24",
+      "semantic_tag": "offline_descoped",
+      "confidence": "high",
+      "emotional_tone": "pragmatic",
+      "source_node": 5,
+      "source_node_name": "Task Decomposition",
+      "source_depth": 5,
+      "content": "Offline editing recommended for descoping from Q2 to Q3. CRDT foundation supports it inherently, but client-side storage, queue management, conflict UX, and testing add 4+ weeks. Removing it closes the timeline gap."
+    },
+    {
+      "id": "b25",
+      "semantic_tag": "parallel_workstream_risk",
+      "confidence": "medium",
+      "emotional_tone": "apprehensive",
+      "source_node": 5,
+      "source_node_name": "Task Decomposition",
+      "source_depth": 5,
+      "content": "Module A (CRDT) and Module B (WS relay) develop in parallel but share DocumentSyncEngine trait. If trait API changes during CRDT dev, WS relay needs rework. Trait API stabilization assigned as week-1 deliverable."
+    },
+    {
+      "id": "b26",
+      "semantic_tag": "testing_harness_gap",
+      "confidence": "medium",
+      "emotional_tone": "worried",
+      "source_node": 5,
+      "source_node_name": "Task Decomposition",
+      "source_depth": 5,
+      "content": "50-user load testing requires a harness that doesn't exist. Building it is 1.5 weeks. Hidden dependency not on critical path but could delay hardening if not started early."
+    },
+    {
+      "id": "b27",
+      "semantic_tag": "phase_1_scope_lock",
+      "confidence": "high",
+      "emotional_tone": "decisive",
+      "source_node": 6,
+      "source_node_name": "Implementation Plan",
+      "source_depth": 4,
+      "content": "Q2 scope locked to: CRDT with Yjs, WS relay EU-only, automatic conflict merge (no manual resolution UI), real-time presence, dual-storage for backward compat. Offline editing, @mentions, image embedding deferred."
+    },
+    {
+      "id": "b28",
+      "semantic_tag": "auth_ticket_system",
+      "confidence": "high",
+      "emotional_tone": "methodical",
+      "source_node": 6,
+      "source_node_name": "Implementation Plan",
+      "source_depth": 4,
+      "content": "WebSocket auth via one-time ticket: client requests short-lived WS ticket via REST (JWT-authenticated), presents ticket during WS handshake. Tickets expire in 30s, single-use. Avoids modifying existing JWT middleware."
+    },
+    {
+      "id": "b29",
+      "semantic_tag": "rate_limit_exemption",
+      "confidence": "medium",
+      "emotional_tone": "pragmatic",
+      "source_node": 6,
+      "source_node_name": "Implementation Plan",
+      "source_depth": 4,
+      "content": "Real-time operations bypass REST rate limiter. WS gateway implements own backpressure based on message queue depth per connection. Known deviation from API governance \u2014 needs security review sign-off."
+    },
+    {
+      "id": "b30",
+      "semantic_tag": "crdt_implementation_complete",
+      "confidence": "high",
+      "emotional_tone": "satisfied",
+      "source_node": 7,
+      "source_node_name": "Module A: CRDT Engine",
+      "source_depth": 3,
+      "content": "CRDT engine implemented using y-crdt (Rust Yjs port). DocumentSyncEngine trait stable. 47 unit tests pass. Implementation took 3.5 weeks (0.5 under estimate)."
+    },
+    {
+      "id": "b31",
+      "semantic_tag": "memory_optimization",
+      "confidence": "medium",
+      "emotional_tone": "cautious",
+      "source_node": 7,
+      "source_node_name": "Module A: CRDT Engine",
+      "source_depth": 3,
+      "content": "50-user simulation: 140MB per document (above 120MB research estimate). Undo stack is 35% of usage. Config option to limit undo to 100 operations drops memory to 95MB."
+    },
+    {
+      "id": "b32",
+      "semantic_tag": "rich_text_partial",
+      "confidence": "medium",
+      "emotional_tone": "frustrated",
+      "source_node": 7,
+      "source_node_name": "Module A: CRDT Engine",
+      "source_depth": 3,
+      "content": "Rich text formatting (bold, italic, headings) works. Embedded images require binary blob handling that y-crdt supports but serialization layer doesn't yet. Image embedding confirmed deferred to Q3."
+    },
+    {
+      "id": "b33",
+      "semantic_tag": "ws_relay_implementation",
+      "confidence": "high",
+      "emotional_tone": "confident",
+      "source_node": 8,
+      "source_node_name": "Module B: WS Relay",
+      "source_depth": 2,
+      "content": "WebSocket relay implemented with Axum + Tokio broadcast channels. Per-document rooms. Connection lifecycle (join, leave, reconnect) handled. One-time ticket auth integrated and working."
+    },
+    {
+      "id": "b34",
+      "semantic_tag": "eu_deployment_gap",
+      "confidence": "high",
+      "emotional_tone": "alarmed",
+      "source_node": 8,
+      "source_node_name": "Module B: WS Relay",
+      "source_depth": 2,
+      "content": "WS relay developed and tested locally but EU deployment infrastructure NOT provisioned. Terraform for eu-central-1 written but untested. DNS geo-routing designed but not implemented. CRITICAL PATH BLOCKER: without EU deployment, feature cannot ship due to GDPR."
+    },
+    {
+      "id": "b35",
+      "semantic_tag": "latency_measurement_gap",
+      "confidence": "medium",
+      "emotional_tone": "nervous",
+      "source_node": 8,
+      "source_node_name": "Module B: WS Relay",
+      "source_depth": 2,
+      "content": "Local testing shows 15ms relay latency (within budget). No cross-region testing performed. 60ms server budget assumes EU-internal traffic. Some EU enterprise customers connect from UK (post-Brexit routing). No telemetry for real-world latency vs 200ms SLA."
+    },
+    {
+      "id": "b36",
+      "semantic_tag": "integration_test_results",
+      "confidence": "high",
+      "emotional_tone": "mixed",
+      "source_node": 9,
+      "source_node_name": "Integration Test",
+      "source_depth": 1,
+      "content": "Full stack integration: 23 of 26 tests pass. Three failures in dual-storage materialization: background JSON sync produces stale reads for REST clients within 2-second window after real-time edits."
+    },
+    {
+      "id": "b37",
+      "semantic_tag": "load_test_incomplete",
+      "confidence": "medium",
+      "emotional_tone": "incomplete",
+      "source_node": 9,
+      "source_node_name": "Integration Test",
+      "source_depth": 1,
+      "content": "50-user load test harness built (1 week, under estimate). 20-user tests pass. Full 50-user test not run \u2014 needs EU production environment which is not deployed. Performance validation blocked by EU deployment gap."
+    },
+    {
+      "id": "b38",
+      "semantic_tag": "webhook_compat_verified",
+      "confidence": "high",
+      "emotional_tone": "relieved",
+      "source_node": 9,
+      "source_node_name": "Integration Test",
+      "source_depth": 1,
+      "content": "Dual-storage materialization correctly triggers existing webhooks. Enterprise integrations work. 2-second materialization delay means slightly later webhook fires but within all 12 enterprise customers' SLAs."
+    },
+    {
+      "id": "b39",
+      "semantic_tag": "security_review_pending",
+      "confidence": "high",
+      "emotional_tone": "blocked",
+      "source_node": 9,
+      "source_node_name": "Integration Test",
+      "source_depth": 1,
+      "content": "Security review for rate-limit exemption (WS bypass of REST limiter) and one-time ticket auth is scheduled but not completed. Ship blocker: implementation plan flagged rate-limit exemption as needing sign-off, and ticket auth is a new attack surface."
+    }
+  ],
+  "questions": [
+    {
+      "question_id": "Q1",
+      "question_text": "Are we ready to ship this feature? Give me a go/no-go assessment with specific blockers.",
+      "tests": "risk_assessment_across_chain",
+      "gatekeeper_selection": {
+        "belief_threads": [
+          {
+            "thread_name": "GDPR EU Deployment - Critical Blocker",
+            "belief_ids": [
+              "b02",
+              "b10",
+              "b19",
+              "b34",
+              "b37"
+            ],
+            "thread_summary": "PRD mandated EU data residency as a hard launch blocker. Research identified EU relay options, architecture designed EU-exclusive deployment topology, but WS relay implementation reveals EU infrastructure is NOT provisioned. Terraform written but untested, DNS geo-routing not implemented. Load testing also blocked by missing EU environment. This is the most critical ship blocker."
+          },
+          {
+            "thread_name": "Security Review - Ship Blocker",
+            "belief_ids": [
+              "b15",
+              "b29",
+              "b39"
+            ],
+            "thread_summary": "Existing rate limiting (100 req/s) incompatible with real-time operations. Implementation plan chose to bypass REST rate limiter for WS traffic, flagged it as needing security review. Integration testing confirms review is scheduled but NOT completed. New auth surface (one-time tickets) also requires sign-off. Ship blocker per implementation plan."
+          },
+          {
+            "thread_name": "Performance SLA Validation Gap",
+            "belief_ids": [
+              "b05",
+              "b22",
+              "b35",
+              "b37"
+            ],
+            "thread_summary": "PRD requires 200ms P99 latency as user-research-derived SLA. Architecture allocated precise budget with zero margin. WS relay shows only local testing (15ms), no cross-region validation. UK routing concern raised. 50-user load test not run due to missing EU environment. Performance compliance unverified."
+          },
+          {
+            "thread_name": "Dual-Storage Materialization Delay",
+            "belief_ids": [
+              "b06",
+              "b12",
+              "b17",
+              "b36",
+              "b38"
+            ],
+            "thread_summary": "PRD required v2 API compatibility (no breaking changes). Existing API serves JSON blobs. Architecture chose dual-storage: CRDT + background materialization to JSON. Integration tests reveal 2-second stale read window for REST clients after real-time edits. Webhooks work but delayed. Functional issue requiring product judgment on acceptability."
+          },
+          {
+            "thread_name": "Timeline vs Reality Check",
+            "belief_ids": [
+              "b03",
+              "b23",
+              "b24",
+              "b27",
+              "b30",
+              "b33"
+            ],
+            "thread_summary": "PRD set non-negotiable Q2 deadline with 14-week estimate against 10-week runway. Task decomposition recommended offline descoping (done) and parallel workstreams. Phase 1 scope locked. CRDT engine delivered slightly under estimate, WS relay implemented. Implementation on schedule but infrastructure/security gaps jeopardize launch."
+          },
+          {
+            "thread_name": "Offline Editing Descoped Successfully",
+            "belief_ids": [
+              "b04",
+              "b07",
+              "b21",
+              "b24",
+              "b27"
+            ],
+            "thread_summary": "PRD listed offline as P0. Research chose CRDT specifically for offline support. Architecture noted unsolved UX issues. Task decomposition recommended descoping to close timeline gap. Phase 1 confirmed offline deferred to Q3. Clean scope decision - not a current blocker."
+          }
+        ],
+        "selected_belief_ids": [
+          "b02",
+          "b03",
+          "b05",
+          "b06",
+          "b10",
+          "b12",
+          "b15",
+          "b17",
+          "b19",
+          "b22",
+          "b24",
+          "b27",
+          "b29",
+          "b30",
+          "b33",
+          "b34",
+          "b35",
+          "b36",
+          "b37",
+          "b38",
+          "b39"
+        ],
+        "selection_reasoning": "SELECTED 21 beliefs focused on ship-readiness assessment:\n- Launch constraints from PRD: GDPR requirement (b02), timeline (b03), performance SLA (b05), API compatibility (b06)\n- Infrastructure decisions: EU relay options (b10), existing API (b12), dual-storage (b17), EU topology (b19), latency budget (b22)\n- Scope decisions: offline descoped (b24), locked Q2 scope (b27)\n- Implementation status: CRDT done (b30), WS relay done (b33)\n- CRITICAL BLOCKERS: EU deployment gap (b34), security review pending (b39), load test incomplete (b37)\n- QUALITY RISKS: latency not validated (b35), stale reads (b36), but webhooks work (b38)\n- SECURITY: rate limit issue (b15), exemption plan (b29)\n\nPRUNED beliefs are historical/contextual noise for a go/no-go decision: competitor analysis (b08), research comparisons (b07), bus-factor mitigation already implemented (b09, b20), detailed API inventory (b13, b14, b16), architectural alternatives already chosen (b18, b21), planning concerns already resolved (b23, b25, b26, b28), implementation details (b31, b32). The question is \"can we ship NOW\" not \"how did we get here.\"",
+        "dormant_resurfacings": [
+          {
+            "belief_id": "b02",
+            "resurfacing_reason": "GDPR EU data residency was mandated at depth 9 (PRD) as a 'hard launch blocker' per legal. For 7 nodes it was handled correctly in design. At depth 2 (WS relay implementation) a CRITICAL gap emerged: EU infrastructure not provisioned. This forgotten constraint is now THE primary ship blocker. The deepest belief becomes the most urgent."
+          },
+          {
+            "belief_id": "b05",
+            "resurfacing_reason": "200ms latency SLA was specified at depth 9 from user research showing 300ms+ causes perceived lag. Architecture allocated budget with zero margin (b22). At depth 2 and 1, we discover NO cross-region testing and no 50-user load validation. A PRD performance constraint assumed solved is actually unverified. This depth-9 requirement is unvalidated at depth-1."
+          },
+          {
+            "belief_id": "b06",
+            "resurfacing_reason": "PRD depth-9 constraint: no breaking changes to v2 API. At depth-1 integration testing reveals 2-second stale read window where REST clients see old data after real-time edits. Technically not a breaking change but potentially a breaking behavior for customers expecting immediate consistency. Depth-9 compatibility promise meets depth-1 reality check."
+          }
+        ],
+        "pruned_belief_ids": [
+          "b01",
+          "b07",
+          "b08",
+          "b09",
+          "b11",
+          "b13",
+          "b14",
+          "b16",
+          "b18",
+          "b20",
+          "b21",
+          "b23",
+          "b25",
+          "b26",
+          "b28",
+          "b31",
+          "b32"
+        ]
+      },
+      "mask_answer": "# GO/NO-GO ASSESSMENT: **NO-GO**\n\n## Critical Blockers (Must Resolve Before Ship)\n\n### 1. **EU Infrastructure Not Deployed** [b34]\n**Status:** CRITICAL PATH BLOCKER\n\nThe feature cannot ship. Period.\n\n- **Problem:** [b02] marks GDPR EU data residency as a *legal hard launch blocker*. [b19] designed EU-exclusive deployment topology. [b34] confirms the infrastructure **does not exist** - Terraform written but untested, DNS geo-routing not implemented.\n- **Impact:** Without eu-central-1 deployment, any EU customer data hits US servers, violating GDPR compliance requirements.\n- **Action Required:** \n  - Execute and validate Terraform deployment to eu-central-1\n  - Implement and test DNS geo-routing at load balancer\n  - Verify geo-fencing correctly routes EU traffic to EU infrastructure\n  - Estimated time: 1-2 weeks if prioritized immediately\n\n### 2. **Security Review Not Completed** [b39]\n**Status:** SHIP BLOCKER per implementation plan\n\n- **Problem:** [b29] documented rate-limit exemption as \"known deviation from API governance \u2014 needs security review sign-off.\" [b39] confirms review is scheduled but NOT completed. New one-time ticket auth also requires sign-off as a new attack surface.\n- **Impact:** [b15] shows existing rate limits (100 req/s) would throttle real-time traffic immediately. WS bypass works but hasn't been security-approved.\n- **Action Required:**\n  - Complete security review of WebSocket rate-limit exemption\n  - Sign off on one-time ticket authentication mechanism\n  - Estimated time: 1-3 days if security team is available\n\n## High-Risk Gaps (Ship With Caution)\n\n### 3. **Performance SLA Unvalidated** [b35, b37]\n**Status:** CANNOT VERIFY COMPLIANCE\n\n- **Problem:** [b05] specifies 200ms P99 latency as user-research-derived SLA. [b22] allocated budget with *zero margin*. [b35] shows only local testing (15ms) - no cross-region validation, UK routing concern raised. [b37] confirms 50-user load test blocked by missing EU environment.\n- **Risk:** First production load could violate SLA, causing perceived lag that user research showed degrades experience above 300ms.\n- **Action Required:**\n  - Run full 50-user load test in deployed EU environment\n  - Measure actual cross-region latency (especially UK-Frankfurt post-Brexit)\n  - Add telemetry to track real-world P99 against 200ms target\n  - **Consider:** Soft launch with limited EU orgs to validate before full rollout\n\n### 4. **Dual-Storage Stale Read Window** [b36]\n**Status:** FUNCTIONAL ISSUE - Needs Product Decision\n\n- **Problem:** [b36] shows 3 of 26 integration tests failing. REST API clients see stale data for 2 seconds after real-time edits due to background materialization delay.\n- **Mitigation:** [b38] confirms webhooks work (delayed but within enterprise SLAs). [b06] required no breaking changes to v2 API - dual-storage achieved this.\n- **Question for Product:** Is 2-second stale read acceptable for REST clients while real-time users see instant updates? This is a documented trade-off of [b17]'s dual-storage architecture.\n\n## Non-Blockers (Acceptable for Q2)\n\n\u2705 **Offline editing descoped** [b24, b27] - Clean decision, deferred to Q3  \n\u2705 **Core implementation complete** [b30, b33] - CRDT engine and WS relay functional  \n\u2705 **Timeline manageable** [b03, b27] - IF blockers #1-2 resolve in next 1-2 weeks\n\n## Immediate Actions (Next 48 Hours)\n\n1. **Infrastructure Team:** Deploy and validate eu-central-1 environment with geo-routing\n2. **Security Team:** Expedite review of rate-limit exemption and ticket auth\n3. **Product Team:** Decide on 2-second stale read acceptability for REST clients\n4. **Engineering:** Prepare load testing runbook for execution once EU env is live\n\n## Timeline Impact\n\nWith [b03]'s non-negotiable Q2 deadline and current blockers:\n- **Best case:** 1-2 week delay if infrastructure deployment starts immediately and security review completes\n- **Realistic case:** 2-3 weeks to resolve both blockers + performance validation\n- **Risk:** Q2 ship date in jeopardy without immediate action on EU infrastructure\n\n**Recommendation:** Do not commit to ship date until EU infrastructure is deployed and security review completes.",
+      "tokens": {
+        "gatekeeper_in": 4476,
+        "gatekeeper_out": 1692,
+        "mask_in": 4625,
+        "mask_out": 1122
+      }
+    },
+    {
+      "question_id": "Q2",
+      "question_text": "What are the top 3 risks to this launch and what is the mitigation plan for each?",
+      "tests": "prioritization_and_thread_ranking",
+      "gatekeeper_selection": {
+        "selected_belief_ids": [
+          "b02",
+          "b03",
+          "b19",
+          "b23",
+          "b24",
+          "b27",
+          "b34",
+          "b35",
+          "b37",
+          "b39",
+          "b36",
+          "b05",
+          "b22",
+          "b29",
+          "b28"
+        ],
+        "selection_reasoning": "Selected 15 of 39 beliefs focused exclusively on launch-blocking risks and mitigations. Included: (1) EU deployment gap beliefs (b02, b19, b34, b35, b37) - GDPR requirement cascading to deployment blocker; (2) Security review blocker (b39, b29, b28) - implementation complete but can't ship without sign-off; (3) Timeline/scope tension (b03, b23, b24, b27) - context for scope decisions; (4) Performance validation gap (b05, b22, b35, b36, b37) - SLA risk without EU testing.\n\nPRUNED categories:\n- Technical implementation details that worked (b30, b31, b32, b33, b38) - already complete, not risks\n- Research/analysis from early nodes that informed decisions already made (b07, b08, b09, b10, b11) - historical context, not actionable\n- API compatibility concerns successfully addressed by dual-storage (b12, b13, b14, b15, b16, b17, b18, b20, b21) - architectural decisions already locked and verified\n- Workstream coordination risks (b25, b26) - development phase complete, no longer relevant\n- Feature scope already descoped (b04, offline editing; b06, API versioning handled by b17)\n\nThe meeting needs to address what can still go wrong, not what went right or what was already decided.",
+        "belief_threads": [
+          {
+            "thread_name": "GDPR Compliance \u2192 EU Deployment Blocker",
+            "belief_ids": [
+              "b02",
+              "b19",
+              "b34",
+              "b35",
+              "b37"
+            ],
+            "thread_summary": "PRD established GDPR data residency as hard launch blocker requiring EU-only infrastructure (b02). Architecture designed EU deployment topology with geo-fencing (b19). Implementation complete but EU infrastructure NOT provisioned - Terraform untested, DNS not implemented (b34). Cannot validate 50-user performance or real-world latency without EU environment (b35, b37). This is the most critical launch risk: feature cannot legally ship without EU deployment, and it's on the critical path with zero validation."
+          },
+          {
+            "thread_name": "Performance SLA \u2192 Validation Gap",
+            "belief_ids": [
+              "b05",
+              "b22",
+              "b35",
+              "b36",
+              "b37"
+            ],
+            "thread_summary": "PRD mandated 200ms P50 / 500ms P99 latency SLA (b05). Architecture allocated zero-margin latency budget assuming optimal EU conditions (b22). Local testing shows good numbers but no cross-region validation (b35). Dual-storage has 2-second materialization lag causing stale reads (b36). 50-user load test blocked by missing EU environment (b37). Risk: shipping without proving we meet the performance SLA that was the basis for the product positioning."
+          },
+          {
+            "thread_name": "Security Review Dependency Chain",
+            "belief_ids": [
+              "b29",
+              "b28",
+              "b39"
+            ],
+            "thread_summary": "Implementation plan identified rate-limit exemption as requiring security sign-off (b29) and designed one-time ticket auth system (b28). Security review scheduled but not complete - both are flagged as ship blockers (b39). Unlike infrastructure, this is not engineering work - it's a gate that requires external stakeholder approval with unknown timeline."
+          },
+          {
+            "thread_name": "Timeline Pressure \u2192 Scope Cuts",
+            "belief_ids": [
+              "b03",
+              "b23",
+              "b24",
+              "b27"
+            ],
+            "thread_summary": "Fixed Q2 deadline from executive commitment (b03) against 14-week estimate vs 10-week runway (b23). Offline editing descoped to close gap (b24), final scope locked (b27). Provides context for why there's no schedule buffer - all slack already consumed in planning phase. Any blocker resolution that takes >0 time puts launch at risk."
+          }
+        ],
+        "dormant_resurfacings": [
+          {
+            "belief_id": "b02",
+            "resurfacing_reason": "GDPR requirement from PRD (depth 9, established before any technical work) is THE reason b34's EU deployment gap is a ship blocker vs just a bug. This legal constraint from the earliest node transforms an infrastructure task into an absolute launch gate. The meeting must understand this isn't a 'nice to have' deployment - it's the only legally permissible deployment."
+          },
+          {
+            "belief_id": "b05",
+            "resurfacing_reason": "200ms SLA from PRD (depth 9, derived from user research) is what makes b35's latency measurement gap and b37's incomplete load testing material risks vs routine QA items. This performance promise was the product differentiation basis and is now unvalidated. The dormant number from PRD is the standard we're launching against blindly."
+          },
+          {
+            "belief_id": "b03",
+            "resurfacing_reason": "Fixed Q2 deadline (depth 9) explains why the three identified risks are critical: there's zero schedule buffer to absorb delays. This PRD constraint set up the entire timeline tension (b23) that eliminated slack. Any mitigation that requires time will miss the executive commitment."
+          }
+        ],
+        "pruned_belief_ids": [
+          "b01",
+          "b04",
+          "b06",
+          "b07",
+          "b08",
+          "b09",
+          "b10",
+          "b11",
+          "b12",
+          "b13",
+          "b14",
+          "b15",
+          "b16",
+          "b17",
+          "b18",
+          "b20",
+          "b21",
+          "b25",
+          "b26",
+          "b30",
+          "b31",
+          "b32",
+          "b33",
+          "b38"
+        ]
+      },
+      "mask_answer": "# Top 3 Launch Risks & Mitigation Plans\n\n## 1. **EU Deployment Not Provisioned** [CRITICAL - LEGAL BLOCKER]\n\n**Risk:** The feature cannot legally ship without EU infrastructure per [gdpr_data_residency], but [eu_deployment_gap] confirms the Terraform for eu-central-1 is written but completely untested, and DNS geo-routing is not implemented. This blocks both legal compliance AND all performance validation ([load_test_incomplete], [latency_measurement_gap]).\n\n**Mitigation:**\n- **Immediate action (next 48h):** Provision eu-central-1 infrastructure using existing Terraform. Do NOT wait for full validation\u2014get environment running.\n- **Parallel track:** Stand up DNS geo-routing to load balancer while infrastructure deploys.\n- **Escalation needed:** This should have been done weeks ago per [eu_deployment_topology]. Someone needs to own deployment end-to-end TODAY, not as a \"we'll get to it\" item.\n- **Risk if not resolved:** Zero-day slip. We literally cannot ship without this.\n\n## 2. **Security Review Not Complete** [HIGH - EXTERNAL DEPENDENCY]\n\n**Risk:** [security_review_pending] confirms both the rate-limit exemption [rate_limit_exemption] and one-time ticket auth system [auth_ticket_system] require security sign-off that is \"scheduled but not completed.\" Unlike infrastructure work, we cannot engineer our way out\u2014this requires external stakeholder approval with unknown timeline.\n\n**Mitigation:**\n- **Today:** Escalate to security team leadership. Frame as Q2 launch blocker per [timeline_pressure] with fixed deadline.\n- **Prep mitigation options:** If review identifies issues, what's our fallback? Can we ship with existing REST rate limits (degraded UX) or revert to JWT-on-websocket (requires auth middleware changes)?\n- **Timeline impact:** Given [sprint_plan_tension] already consumed all buffer with scope cuts, ANY delay here misses Q2. Get executive air cover if security review timeline slips.\n\n## 3. **Performance SLA Unvalidated in Real Conditions** [MEDIUM-HIGH - PRODUCT POSITIONING RISK]\n\n**Risk:** [performance_sla] promised 200ms P50 / 500ms P99 based on user research, but [latency_budget_allocation] has zero margin, [latency_measurement_gap] shows no cross-region testing (UK-EU post-Brexit routing unknown), and [load_test_incomplete] confirms 50-user tests blocked by missing EU environment. We're shipping on local test numbers that assumed \"optimal EU-internal network conditions.\"\n\n**Mitigation:**\n- **Week 1 post-EU deployment:** Run full 50-user load tests immediately when environment is live. Include UK-origin connections specifically.\n- **Telemetry before launch:** Instrument actual latency metrics in staging. [latency_measurement_gap] notes we have no real-world telemetry vs SLA.\n- **Contingency:** If SLA miss discovered late, options are (a) reduce scope to lower user counts, (b) revise SLA with product/marketing (reputational damage), or (c) slip launch. No good options\u2014this needed validation 2 sprints ago.\n- **Known issue:** [integration_test_results] shows 2-second stale read window in dual-storage. Assess if this violates implicit performance expectations for REST clients.\n\n---\n\n**Bottom line:** Risk #1 blocks everything and needs resolution this week. Risk #2 is out of our direct control\u2014escalate now. Risk #3 becomes measurable only after #1 is fixed, but timelines per [timeline_pressure] leave no room for surprises.",
+      "tokens": {
+        "gatekeeper_in": 4475,
+        "gatekeeper_out": 1493,
+        "mask_in": 3264,
+        "mask_out": 859
+      }
+    },
+    {
+      "question_id": "Q3",
+      "question_text": "What changed from the original PRD requirements and why? Trace each change back to its root cause.",
+      "tests": "dormant_resurfacing_and_requirement_tracing",
+      "gatekeeper_selection": {
+        "selected_belief_ids": [
+          "b01",
+          "b02",
+          "b03",
+          "b04",
+          "b05",
+          "b23",
+          "b24",
+          "b27",
+          "b32",
+          "b07",
+          "b09",
+          "b20",
+          "b14",
+          "b17",
+          "b22",
+          "b34",
+          "b35",
+          "b36",
+          "b37",
+          "b39"
+        ],
+        "selection_reasoning": "Selected beliefs that trace requirement changes from PRD through to their outcomes. Core PRD requirements (b01-b05) establish baseline. Timeline analysis (b23) reveals the forcing function for scope cuts. Descoping decisions (b24, b27) show what was cut. Research findings (b07, b09) explain architectural choices that enabled/constrained scope. Storage incompatibility (b14) and dual-storage solution (b17) explain a major architectural deviation. Latency allocation (b22) shows performance SLA pressure. Implementation gaps (b32, b34, b35, b36, b37, b39) reveal what actually shipped vs planned.\n\nPRUNED: b06 (API versioning) - addressed by dual-storage, not actionable now. b08 (competitor landscape) - contextual but not actionable for tracing changes. b10, b11 (research details on relay/scalability) - informed decisions but not the decisions themselves. b12, b13, b15, b16 (existing API details) - led to b14/b17 which captures the outcome. b18, b19, b21 (architecture details) - implementation choices not requirement changes. b25, b26, b28, b29 (task planning/auth details) - tactical execution not scope changes. b30, b31, b33, b38 (successful implementations) - don't explain requirement changes. Focus is on what changed and why, not what worked as planned.",
+        "belief_threads": [
+          {
+            "thread_name": "Offline Editing Descoped Due to Timeline Gap",
+            "belief_ids": [
+              "b04",
+              "b03",
+              "b07",
+              "b23",
+              "b24",
+              "b27"
+            ],
+            "thread_summary": "PRD specified offline editing as P0 (b04) under fixed Q2 deadline (b03). CRDT research (b07) confirmed technical feasibility but task decomposition (b23) revealed 14-week estimate vs 10-week runway. Offline editing descoped to Q3 (b24, b27) to close the 4-week gap, though CRDT foundation supports it inherently."
+          },
+          {
+            "thread_name": "Image Embedding Cut from Scope",
+            "belief_ids": [
+              "b01",
+              "b03",
+              "b23",
+              "b27",
+              "b32"
+            ],
+            "thread_summary": "PRD listed embedded images as part of rich text (b01) and P1 stretch goal (b03). Timeline pressure (b23) forced focus on core conflict resolution. Image embedding explicitly deferred to Q3 (b27). CRDT engine partially implemented rich text but confirmed image blob handling incomplete (b32)."
+          },
+          {
+            "thread_name": "Dual-Storage Architecture to Handle Document Model Incompatibility",
+            "belief_ids": [
+              "b14",
+              "b17",
+              "b36"
+            ],
+            "thread_summary": "Existing document storage as JSON blobs with optimistic locking (b14, depth 7) fundamentally incompatible with CRDT incremental updates. Architecture introduced dual-storage: CRDT binary + materialized JSON for REST API backward compatibility (b17). Integration testing (b36) revealed 2-second stale read window - not a blocker but a deviation from instant consistency."
+          },
+          {
+            "thread_name": "CRDT Library Bus-Factor Risk Mitigation",
+            "belief_ids": [
+              "b09",
+              "b20"
+            ],
+            "thread_summary": "Research identified Yjs single-maintainer bus-factor risk (b09, depth 8). Architecture responded with DocumentSyncEngine abstraction layer (b20) to enable future replacement. Implemented but not a requirement change - risk mitigation strategy."
+          },
+          {
+            "thread_name": "EU Deployment Infrastructure Unfinished - GDPR Hard Blocker",
+            "belief_ids": [
+              "b02",
+              "b34",
+              "b37"
+            ],
+            "thread_summary": "GDPR data residency is non-negotiable legal blocker (b02, depth 9). WS relay built but EU infrastructure NOT provisioned (b34, depth 2). 50-user load test cannot run without EU environment (b37). CRITICAL: Feature cannot ship without EU deployment regardless of code readiness."
+          },
+          {
+            "thread_name": "Performance SLA Validation Incomplete",
+            "belief_ids": [
+              "b05",
+              "b22",
+              "b35",
+              "b37"
+            ],
+            "thread_summary": "PRD mandates 200ms max latency, 500ms P99 (b05, depth 9). Latency budget allocated with zero margin (b22). Local testing shows compliance but no cross-region or production telemetry (b35). 50-user load test not run (b37). Performance SLA validation blocked - risk of shipping below SLA."
+          },
+          {
+            "thread_name": "Security Review Blocking Ship",
+            "belief_ids": [
+              "b39"
+            ],
+            "thread_summary": "Security review for rate-limit exemption and ticket auth pending. Implementation plan flagged this as required sign-off. Standalone blocker not traced to specific PRD requirement but gated by process."
+          }
+        ],
+        "dormant_resurfacings": [
+          {
+            "belief_id": "b02",
+            "resurfacing_reason": "GDPR data residency from PRD (depth 9) identified as 'non-negotiable legal blocker' but EU deployment infrastructure is NOT provisioned (b34, depth 2). The earliest, hardest constraint is now the active critical path blocker. This requirement never changed but its implementation is incomplete."
+          },
+          {
+            "belief_id": "b05",
+            "resurfacing_reason": "200ms latency SLA from PRD (depth 9) is unvalidated. Architecture allocated zero-margin budget (b22, depth 6) and integration testing (depth 1) reveals no real-world telemetry or 50-user load test completion (b35, b37). Shipping with unverified SLA compliance contradicts the PRD's precise performance requirement derived from user research."
+          },
+          {
+            "belief_id": "b04",
+            "resurfacing_reason": "Offline editing listed as P0 in PRD (depth 9) but descoped to Q3 (b24, b27). This is the clearest example of a requirement change due to timeline pressure. The PRD called it 'essential for mobile enterprise users' but it was cut - needs to be acknowledged as a priority shift, not just a deferral."
+          }
+        ],
+        "pruned_belief_ids": [
+          "b06",
+          "b08",
+          "b10",
+          "b11",
+          "b12",
+          "b13",
+          "b15",
+          "b16",
+          "b18",
+          "b19",
+          "b21",
+          "b25",
+          "b26",
+          "b28",
+          "b29",
+          "b30",
+          "b31",
+          "b33",
+          "b38"
+        ]
+      },
+      "mask_answer": "# PRD Changes and Root Causes\n\n## 1. **Offline Editing: P0 \u2192 Descoped to Q3**\n\n**Root Cause:** Timeline gap ([b23], [b03])\n- **Original:** P0 requirement for mobile enterprise users [b04]\n- **Driver:** 14-week engineering estimate vs 10-week runway created 4-week gap [b23]\n- **Resolution:** Descoped to Q3 [b24], [b27] despite CRDT foundation supporting it [b07]\n- **Justification:** Client-side storage, queue management, conflict UX, and testing added 4+ weeks beyond CRDT implementation [b24]\n\n**Trade-off:** Timeline over feature completeness. CRDT choice [b07] was influenced by offline requirement, but that capability won't ship in Q2.\n\n---\n\n## 2. **Image Embedding: P1 Stretch \u2192 Deferred to Q3**\n\n**Root Cause:** Timeline pressure forcing core focus ([b23], [b03])\n- **Original:** Part of rich text requirement [b01], P1 stretch goal [b03]\n- **Status:** Serialization layer incomplete [b32]; deferred [b27]\n- **Driver:** Same 4-week gap forced prioritization of conflict resolution over rich media [b23]\n\n---\n\n## 3. **@Mentions: Specified \u2192 Deferred to Q3**\n\n**Root Cause:** Timeline pressure ([b23])\n- **Original:** Listed in core scope [b01]\n- **Status:** Deferred [b27]\n- **Note:** No upstream technical blocker documented\u2014pure scope cut for timeline\n\n---\n\n## 4. **Manual Conflict Resolution UI: Implied \u2192 Explicitly Cut**\n\n**Root Cause:** Scope reduction strategy\n- **Changed to:** Automatic merge only [b27]\n- **Driver:** Same timeline constraints [b23]; CRDT automatic merging reduces UI complexity\n- **Note:** [b07] shows CRDTs handle conflicts natively, reducing need for manual UI\n\n---\n\n## 5. **UNRESOLVED: Performance SLA (200ms/500ms P99) Status Unknown**\n\n**Root Cause:** EU deployment gap blocking validation ([b34])\n- **Requirement:** 200ms max latency [b05] with zero-margin budget [b22]\n- **Risk:** 50-user load test NOT run [b37]; no production telemetry [b35]\n- **Critical Issue:** UK post-Brexit routing concerns [b35] not validated against 60ms server budget [b22]\n\n**\u26a0\ufe0f Cannot confirm SLA compliance without EU environment deployment**\n\n---\n\n## 6. **UNRESOLVED: Dual-Storage Stale Reads**\n\n**Root Cause:** Architectural compromise for backward compatibility ([b17])\n- **Original:** Single source of truth implied by JSON blob storage [b14]\n- **Changed to:** Dual-storage (CRDT binary + JSON materialization) [b17]\n- **Side Effect:** 2-second stale read window for REST API clients [b36]\n- **Status:** Flagged in testing but not confirmed as acceptable deviation from \"real-time\" promise [b01]\n\n**Question for product:** Is 2-second REST API staleness acceptable, or does \"real-time\" cover all API surfaces?\n\n---\n\n## CRITICAL BLOCKERS (Not Changes\u2014Validation Gaps)\n\n### **A. EU Deployment Infrastructure (HARD BLOCKER)**\n- **Status:** NOT provisioned [b34]\n- **Impact:** Blocks GDPR compliance [b02], load testing [b37], and performance validation [b35]\n- **Root Cause:** Infrastructure work not on critical path or underestimated\n\n### **B. Security Review Pending (PROCESS BLOCKER)**\n- **Status:** Rate-limit exemption and ticket auth awaiting sign-off [b39]\n- **Root Cause:** New attack surface from architectural choices\n\n---\n\n## Summary Table\n\n| Requirement | Original | Q2 Scope | Root Cause | Risk |\n|-------------|----------|----------|------------|------|\n| Offline editing | P0 | Q3 | Timeline gap [b23] | Medium (foundation exists [b07]) |\n| Image embedding | P1 | Q3 | Timeline pressure [b23] | Low (incremental feature) |\n| @Mentions | Specified | Q3 | Timeline pressure [b23] | Low (incremental feature) |\n| Manual conflict UI | Implied | Cut | Timeline + CRDT auto-merge [b07] | Medium (user expectation?) |\n| **200ms SLA** | **Required [b05]** | **UNVALIDATED** | **EU deployment gap [b34]** | **HIGH** |\n| REST API consistency | Implied real-time | 2s stale reads [b36] | Dual-storage compromise [b17] | **Medium-High** (product call) |\n\n---\n\n## Immediate Actions Required\n\n1. **Provision EU infrastructure** [b34] \u2014 blocks everything\n2. **Run 50-user load test** [b37] in EU to validate 200ms SLA [b05]\n3. **Complete security review** [b39] for rate-limit exemption\n4. **Product decision:** Accept 2-second REST API staleness [b36] or block on fixing materialization?\n5. **Clarify:** Does offline editing deferral [b24] conflict with executive messaging, given CRDT was chosen specifically for offline support [b07]?",
+      "tokens": {
+        "gatekeeper_in": 4475,
+        "gatekeeper_out": 1778,
+        "mask_in": 4377,
+        "mask_out": 1282
+      }
+    }
+  ],
+  "baseline": {
+    "answer": "# Shipping Readiness Assessment\n\n## Q1: GO/NO-GO ASSESSMENT\n\n**NO-GO. We have 2 critical blockers and 1 ship-stopper:**\n\n### CRITICAL BLOCKERS (Must resolve before ship):\n\n1. **EU Infrastructure Not Deployed** [b34]\n   - **Status:** WS relay code complete but eu-central-1 infrastructure NOT provisioned\n   - **Impact:** GDPR hard requirement [b02] cannot be met. Feature literally cannot ship.\n   - **What's needed:** Execute Terraform, provision Frankfurt infrastructure, implement DNS geo-routing, validate end-to-end EU data residency\n   - **Time estimate:** 1-2 weeks if nothing goes wrong\n\n2. **Security Review Not Complete** [b39]\n   - **Status:** Scheduled but not completed\n   - **Scope:** Rate-limit exemption for WS traffic [b29] + one-time ticket auth [b28]\n   - **Impact:** New attack surfaces unapproved. Implementation plan itself flagged this as requiring sign-off\n   - **Time estimate:** Unknown - depends on security team findings and potential required changes\n\n### SHIP-STOPPER (Unknown quality):\n\n3. **Performance SLA Unvalidated** [b05, b35, b37]\n   - **Requirement:** 200ms P50, 500ms P99 latency [b05]\n   - **Status:** Only local testing (15ms). No cross-region testing. 50-user load test blocked by missing EU environment\n   - **Risk:** Zero margin in latency budget [b22]. UK post-Brexit routing untested. Could discover P99 violations only after ship\n   - **Cannot ship without:** Real EU environment performance validation\n\n### KNOWN ISSUES (Acceptable with caveats):\n\n4. **Dual-Storage Stale Reads** [b36]\n   - 2-second window where REST API returns stale data after real-time edits\n   - 23/26 integration tests pass; these 3 failures are the symptom\n   - **Acceptable IF:** Product signs off that 2-second staleness won't break user workflows\n   - **Mitigation needed:** Document behavior, add cache headers indicating freshness\n\n5. **Memory Above Estimate** [b31]\n   - 140MB vs 120MB estimate for 50-user docs (with fix: 95MB)\n   - **Acceptable IF:** Undo limit config deployed (drops to 95MB)\n   - **Action required:** Deploy with undo limited to 100 operations\n\n---\n\n## Q2: TOP 3 RISKS & MITIGATION\n\n### RISK 1: EU Infrastructure Deployment Failure (CRITICAL - Likelihood: Medium, Impact: Fatal)\n\n**Why it's critical:** Never been deployed or tested. Terraform written but unvalidated. DNS geo-routing designed but not implemented. This is the longest pole and a GDPR hard blocker.\n\n**Failure modes:**\n- Terraform errors requiring architecture changes\n- DNS geo-routing misconfiguration sending EU traffic to US\n- Certificate/TLS issues in new region\n- Peering/networking problems between EU WS gateway and US database (if not architected correctly)\n\n**Mitigation plan:**\n1. **Immediate (this week):** Deploy to EU staging environment, validate full GDPR data flow\n2. **Validation checklist:** \n   - Confirm ALL WebSocket traffic terminates in eu-central-1\n   - Verify CRDT state stored only in EU database\n   - Test geo-fence at load balancer with requests from EU IPs\n   - Validate materialized JSON stays in EU (if PostgreSQL is also geo-distributed)\n3. **Rollback plan:** Feature flag to disable real-time collaboration, fall back to existing REST-only editing\n4. **Timeline:** Budget 2 weeks. If not done in 2 weeks, slip launch date.\n\n---\n\n### RISK 2: Performance SLA Breach in Production (HIGH - Likelihood: Medium-High, Impact: High)\n\n**Why it's dangerous:** 200ms budget has zero margin [b22]. UK routing untested. P99 could spike under real load. User research shows >300ms causes perceived lag [b05] - this will tank the flagship feature.\n\n**Failure modes:**\n- UK-to-Frankfurt routing adds 50-80ms (blows budget)\n- 50-user contention creates message storms (seen in research at 2000 msg/sec [b11])\n- WebSocket connection pooling under real load causes queuing delays\n- Network variance in production vs controlled test environment\n\n**Mitigation plan:**\n1. **Pre-launch (mandatory):** \n   - Run 50-user load test in actual EU production environment immediately after infrastructure deployed\n   - Test from multiple EU locations including UK\n   - Instrument telemetry: measure actual P50/P95/P99 latency by region\n2. **Launch strategy:** \n   - Soft launch to 5 EU customers (week 1), monitor latency metrics\n   - If P99 > 500ms: implement document-level sharding [b11] or reduce concurrent user limit\n   - Gradual rollout with kill switch\n3. **Fallback options:**\n   - Reduce concurrent user limit from 50 to 30 (buys ~40% reduction in message rate)\n   - Implement operation batching (trades latency consistency for average throughput)\n4. **Timeline:** If load test shows >500ms P99, need 1-2 weeks for optimization before launch\n\n---\n\n### RISK 3: Security Review Uncovers Blocker (MEDIUM - Likelihood: Medium, Impact: High)\n\n**Why it matters:** Two new attack surfaces. Rate-limit exemption [b29] is a known governance deviation. One-time tickets [b28] are a new auth mechanism. Security could require architectural changes.\n\n**Failure modes:**\n- Rate-limit bypass enables DoS via WebSocket message flooding\n- One-time ticket generation/validation has timing vulnerabilities\n- Ticket reuse or replay attacks if implementation has gaps\n- Required changes force code rework, delaying 1-3 weeks\n\n**Mitigation plan:**\n1. **Immediate:** Escalate security review to urgent. Need sign-off this week.\n2. **Proactive hardening:**\n   - Ensure WS gateway has message-level backpressure (claimed in [b29] but validate implementation)\n   - Add rate limiting at gateway: max 30 ops/sec per user (matches research observation)\n   - Ticket system: confirm cryptographic randomness, single-use enforcement, 30s expiry\n3. **Parallel track:** If security blocks, prepare downscoped version:\n   - Keep JWT auth, require JWT in every WS message (higher overhead but no new auth mechanism)\n   - Accept REST rate limits, reduce feature to <10 concurrent users\n4. **Timeline:** If major changes required, 1-2 week delay\n\n---\n\n## Q3: REQUIREMENTS CHANGES & ROOT CAUSES\n\n### CHANGE 1: Offline Editing DESCOPED from Q2 \u2192 Q3\n\n**Original requirement:** [b04] \"Offline editing... Listed as P0... essential for mobile enterprise users\"\n\n**Current status:** [b24, b27] Explicitly descoped to Q3\n\n**Root cause chain:**\n1. **Timeline pressure** [b03]: Q2 deadline fixed and non-negotiable\n2. **Sprint plan reveals gap** [b23]: 14-week estimate vs 10-week runway = 4-week shortfall\n3. **Complexity assessment** [b24]: Offline adds 4+ weeks (client storage, queue management, conflict UX, testing)\n4. **Decision:** [b24] Offline recommended for descope specifically to close 4-week gap\n5. **Technical enabler:** CRDT foundation [b07] supports offline inherently, so deferral doesn't create technical debt\n\n**Why this was the right cut:** Offline is technically feasible later (CRDT supports it natively), but is high complexity for user-facing behavior (conflict UX unsolved [b21]). Core real-time collaboration can ship without it.\n\n---\n\n### CHANGE 2: @mentions and Image Embedding DESCOPED from Q2 \u2192 Q3\n\n**Original requirement:** [b01] \"@mentions and embedded images... P1 stretch goals\"\n\n**Current status:** [b27, b32] Deferred to Q3\n\n**Root cause chain:**\n1. **PRD ambiguity** [b01]: Listed as \"P1 stretch goals\" not P0 - already soft commitment\n2. **Timeline pressure** [b03]: \"Scope cuts may be necessary\"\n3. **Technical blocker discovered** [b32]: Image embedding requires binary blob handling; y-crdt supports it but serialization layer doesn't\n4. **Implementation reality** [b32]: Rich text (bold/italic) works but images need additional 1-2 weeks\n5. **Decision:** [b27] Phase 1 scope explicitly excludes both features\n\n**Why this was acceptable:** Both were stretch goals. Core editing [b01] and conflict resolution are the \"flagship differentiator\" - shipped. Images hit unexpected technical complexity [b32]. Better to ship solid core than buggy complete feature.\n\n---\n\n### CHANGE 3: Manual Conflict Resolution UI REMOVED\n\n**Original requirement:** [b01] \"conflict resolution for up to 50 concurrent users\"\n\n**Current status:** [b27] \"automatic conflict merge (no manual resolution UI)\"\n\n**Root cause chain:**\n1. **CRDT decision** [b07]: CRDTs chosen over OT specifically for automatic merging\n2. **CRDT property** [b07]: \"CRDTs handle offline editing natively, need no central coordination\" - merges are automatic\n3. **UX gap identified** [b21]: \"Conflict presentation to users is an unsolved UX problem deferred to frontend team\"\n4. **Scope decision** [b27]: Automatic merge only, no manual UI\n\n**Why this changed:** The technology choice (CRDT) fundamentally changed the conflict model. OT requires manual resolution; CRDTs merge automatically. This is actually a better user experience (Google Docs-like) but required redefining \"conflict resolution\" from manual to automatic. The UX problem [b21] is how to *show* users what happened, not how to let them choose - deferred as non-blocking.\n\n---\n\n### CHANGE 4: WebSocket Auth Model (NEW, not a descope)\n\n**Original requirement:** [b13] Short-lived JWTs (15 min expiry) with existing middleware\n\n**Current status:** [b28] One-time ticket system for WebSocket connections\n\n**Root cause chain:**\n1. **Technical incompatibility** [b13]: \"WebSocket connections persisting for hours need a different auth strategy. Current middleware only handles HTTP request headers\"\n2. **Architectural constraint** [b18]: \"Authenticates via one-time token exchange at connection time\"\n3. **Implementation** [b28]: REST endpoint issues 30-second single-use tickets\n4. **Consequence** [b39]: New attack surface requiring security review (now a blocker)\n\n**Why this was necessary:** Not a choice - the existing auth system [b13] literally doesn't work for long-lived WebSocket connections. The JWT middleware expects HTTP headers; WebSockets don't send headers after initial handshake. One-time tickets are the industry-standard pattern, but introduced the security review dependency that's now blocking ship.\n\n---\n\n### CHANGE 5: Rate Limiting Exemption for Real-Time Traffic\n\n**Original requirement:** [b15] 100 req/s per user, 1000 req/s per org\n\n**Current status:** [b29] Real-time operations bypass REST rate limiter\n\n**Root cause chain:**\n1. **Performance math** [b15]: Limits \"would immediately throttle real-time editing which generates 10-30 operations per second per active user\"\n2. **50-user requirement** [b01, b11]: 50 concurrent users \u00d7 30 ops/sec = 1500 ops/sec per document - exceeds org limit\n3. **Architectural decision** [b29]: WS gateway implements separate backpressure mechanism\n4. **Governance issue** [b29]: \"Known deviation from API governance \u2014 needs security review sign-off\"\n5. **Consequence** [b39]: Security review now blocking (same as auth change)\n\n**Why this was necessary:** Math doesn't work. Real-time collaboration is fundamentally incompatible with request-based rate limiting. The existing limits [b15] were designed for REST API bulk operations, not collaborative editing. Alternative would be to reduce concurrent users from 50 to ~3, destroying the product value.\n\n---\n\n### CHANGE 6: Performance SLA Implicit Scope Reduction\n\n**Original requirement:** [b05] 200ms P50, 500ms P99 \"for edit propagation between users\"\n\n**Current status:** [b22] Zero margin in latency budget under optimal conditions\n\n**Root cause (not a formal change but a risk):**\n1. **Budget allocation** [b22]: 200ms split as 20+40+60+40+40 = 200ms exactly\n2. **Assumption baked in** [b22]: \"Assumes optimal EU-internal network conditions\"\n3. **Reality check missing** [b35]: \"Some EU enterprise customers connect from UK (post-Brexit routing)\" - untested\n4. **Testing gap** [b37]: 50-user full load test blocked by EU deployment gap\n\n**Why this matters:** The SLA hasn't officially changed, but the architecture has zero margin [b22]. Any real-world variance (UK routing, network jitter, 50-user contention) could breach the SLA. This wasn't a conscious descope - it's an **unmitigated risk** that could force post-launch SLA renegotiation or emergency performance work.\n\n---\n\n## SUMMARY\n\n**Ship decision: NO-GO** until EU infrastructure deployed, security review complete, and performance validated in real EU environment.\n\n**Timeline impact:** Minimum 2 weeks (EU infra + security + load test), possibly 3-4 weeks if issues found.\n\n**Recommendation:** \n1. Treat EU deployment as P0 this week\n2. Expedite security review (escalate to executive sponsor if needed)\n3. Run full 50-user EU load test the moment infrastructure is up\n4. Only then make ship decision based on actual performance data\n\nThe feature is 85% done but the remaining 15% are **hard blockers** - infrastructure, security, and performance validation. Shipping without these is launching a GDPR-non-compliant, potentially insecure, unvalidated feature as your \"flagship differentiator.\" That's a company-threatening risk for a Q2 deadline that's already contextually flexible given all the descoping that's occurred.",
+    "tokens": {
+      "input": 2950,
+      "output": 3433
+    }
+  },
+  "analysis": {
+    "per_question": [
+      {
+        "question_id": "Q1",
+        "selected_count": 21,
+        "selection_ratio": "54%",
+        "thread_count": 6,
+        "avg_thread_length": 4.7,
+        "multi_node_threads": 6,
+        "dormant_resurfacing_rate": "100%",
+        "dormant_hits": [
+          "b02"
+        ],
+        "dormant_misses": [],
+        "noise_prune_accuracy": "100%",
+        "noise_leaked": [],
+        "correctly_pruned": [
+          "b08",
+          "b16"
+        ],
+        "depth_distribution": {
+          "9": 4,
+          "8": 1,
+          "7": 2,
+          "6": 3,
+          "5": 1,
+          "4": 2,
+          "3": 1,
+          "2": 3,
+          "1": 4
+        }
+      },
+      {
+        "question_id": "Q2",
+        "selected_count": 15,
+        "selection_ratio": "38%",
+        "thread_count": 4,
+        "avg_thread_length": 4.2,
+        "multi_node_threads": 3,
+        "dormant_resurfacing_rate": "100%",
+        "dormant_hits": [
+          "b05"
+        ],
+        "dormant_misses": [],
+        "noise_prune_accuracy": "100%",
+        "noise_leaked": [],
+        "correctly_pruned": [
+          "b07",
+          "b08"
+        ],
+        "depth_distribution": {
+          "9": 3,
+          "6": 2,
+          "5": 2,
+          "4": 3,
+          "2": 2,
+          "1": 3
+        }
+      },
+      {
+        "question_id": "Q3",
+        "selected_count": 20,
+        "selection_ratio": "51%",
+        "thread_count": 7,
+        "avg_thread_length": 3.4,
+        "multi_node_threads": 5,
+        "dormant_resurfacing_rate": "33%",
+        "dormant_hits": [
+          "b04"
+        ],
+        "dormant_misses": [
+          "b03",
+          "b06"
+        ],
+        "noise_prune_accuracy": "100%",
+        "noise_leaked": [],
+        "correctly_pruned": [
+          "b30",
+          "b33"
+        ],
+        "depth_distribution": {
+          "9": 5,
+          "8": 2,
+          "7": 1,
+          "6": 3,
+          "5": 2,
+          "4": 1,
+          "3": 1,
+          "2": 2,
+          "1": 3
+        }
+      }
+    ],
+    "summary": {
+      "total_beliefs": 39,
+      "avg_selected_per_question": 18.7,
+      "avg_selection_ratio": "48%",
+      "total_threads_detected": 17,
+      "multi_node_threads_3plus": 14,
+      "avg_dormant_resurfacing_rate": "78%",
+      "mask_total_input_tokens": 12266,
+      "baseline_input_tokens": 2950,
+      "token_savings_vs_baseline": "-316%",
+      "pipeline_total_tokens": 33918,
+      "baseline_total_tokens": 6383,
+      "total_llm_calls": 7
+    }
+  },
+  "call_log": [
+    {
+      "label": "Q1:GATEKEEPER_SELECT",
+      "text": "{\"belief_threads\": [{\"thread_name\": \"GDPR EU Deployment - Critical Blocker\", \"belief_ids\": [\"b02\", \"b10\", \"b19\", \"b34\", \"b37\"], \"thread_summary\": \"PRD mandated EU data residency as a hard launch block",
+      "input_tokens": 4476,
+      "output_tokens": 1692,
+      "ms": 36489
+    },
+    {
+      "label": "Q1:MASK_ANSWER",
+      "text": "# GO/NO-GO ASSESSMENT: **NO-GO**\n\n## Critical Blockers (Must Resolve Before Ship)\n\n### 1. **EU Infrastructure Not Deployed** [b34]\n**Status:** CRITICAL PATH BLOCKER\n\nThe feature cannot ship. Period.\n\n- **Problem:** [b02] marks GDPR EU data residency as a *legal hard launch blocker*. [b19] designed EU-exclusive deployment topology. [b34] confirms the infrastructure **does not exist** - Terraform written but untested, DNS geo-routing not implemented.\n- **Impact:** Without eu-central-1 deployment, any EU customer data hits US servers, violating GDPR compliance requirements.\n- **Action Required:** \n  - Execute and validate Terraform deployment to eu-central-1\n  - Implement and test DNS geo-routing at load balancer\n  - Verify geo-fencing correctly routes EU traffic to EU infrastructure\n  - Estimated time: 1-2 weeks if prioritized immediately\n\n### 2. **Security Review Not Completed** [b39]\n**Status:** SHIP BLOCKER per implementation plan\n\n- **Problem:** [b29] documented rate-limit exemption as \"known deviation from API governance \u2014 needs security review sign-off.\" [b39] confirms review is scheduled but NOT completed. New one-time ticket auth also requires sign-off as a new attack surface.\n- **Impact:** [b15] shows existing rate limits (100 req/s) would throttle real-time traffic immediately. WS bypass works but hasn't been security-approved.\n- **Action Required:**\n  - Complete security review of WebSocket rate-limit exemption\n  - Sign off on one-time ticket authentication mechanism\n  - Estimated time: 1-3 days if security team is available\n\n## High-Risk Gaps (Ship With Caution)\n\n### 3. **Performance SLA Unvalidated** [b35, b37]\n**Status:** CANNOT VERIFY COMPLIANCE\n\n- **Problem:** [b05] specifies 200ms P99 latency as user-research-derived SLA. [b22] allocated budget with *zero margin*. [b35] shows only local testing (15ms) - no cross-region validation, UK routing concern raised. [b37] confirms 50-user load test blocked by missing EU environment.\n- **Risk:** First production load could violate SLA, causing perceived lag that user research showed degrades experience above 300ms.\n- **Action Required:**\n  - Run full 50-user load test in deployed EU environment\n  - Measure actual cross-region latency (especially UK-Frankfurt post-Brexit)\n  - Add telemetry to track real-world P99 against 200ms target\n  - **Consider:** Soft launch with limited EU orgs to validate before full rollout\n\n### 4. **Dual-Storage Stale Read Window** [b36]\n**Status:** FUNCTIONAL ISSUE - Needs Product Decision\n\n- **Problem:** [b36] shows 3 of 26 integration tests failing. REST API clients see stale data for 2 seconds after real-time edits due to background materialization delay.\n- **Mitigation:** [b38] confirms webhooks work (delayed but within enterprise SLAs). [b06] required no breaking changes to v2 API - dual-storage achieved this.\n- **Question for Product:** Is 2-second stale read acceptable for REST clients while real-time users see instant updates? This is a documented trade-off of [b17]'s dual-storage architecture.\n\n## Non-Blockers (Acceptable for Q2)\n\n\u2705 **Offline editing descoped** [b24, b27] - Clean decision, deferred to Q3  \n\u2705 **Core implementation complete** [b30, b33] - CRDT engine and WS relay functional  \n\u2705 **Timeline manageable** [b03, b27] - IF blockers #1-2 resolve in next 1-2 weeks\n\n## Immediate Actions (Next 48 Hours)\n\n1. **Infrastructure Team:** Deploy and validate eu-central-1 environment with geo-routing\n2. **Security Team:** Expedite review of rate-limit exemption and ticket auth\n3. **Product Team:** Decide on 2-second stale read acceptability for REST clients\n4. **Engineering:** Prepare load testing runbook for execution once EU env is live\n\n## Timeline Impact\n\nWith [b03]'s non-negotiable Q2 deadline and current blockers:\n- **Best case:** 1-2 week delay if infrastructure deployment starts immediately and security review completes\n- **Realistic case:** 2-3 weeks to resolve both blockers + performance validation\n- **Risk:** Q2 ship date in jeopardy without immediate action on EU infrastructure\n\n**Recommendation:** Do not commit to ship date until EU infrastructure is deployed and security review completes.",
+      "input_tokens": 4625,
+      "output_tokens": 1122,
+      "ms": 25784
+    },
+    {
+      "label": "Q2:GATEKEEPER_SELECT",
+      "text": "{\"selected_belief_ids\": [\"b02\", \"b03\", \"b19\", \"b23\", \"b24\", \"b27\", \"b34\", \"b35\", \"b37\", \"b39\", \"b36\", \"b05\", \"b22\", \"b29\", \"b28\"], \"selection_reasoning\": \"Selected 15 of 39 beliefs focused exclusively",
+      "input_tokens": 4475,
+      "output_tokens": 1493,
+      "ms": 34324
+    },
+    {
+      "label": "Q2:MASK_ANSWER",
+      "text": "# Top 3 Launch Risks & Mitigation Plans\n\n## 1. **EU Deployment Not Provisioned** [CRITICAL - LEGAL BLOCKER]\n\n**Risk:** The feature cannot legally ship without EU infrastructure per [gdpr_data_residency], but [eu_deployment_gap] confirms the Terraform for eu-central-1 is written but completely untested, and DNS geo-routing is not implemented. This blocks both legal compliance AND all performance validation ([load_test_incomplete], [latency_measurement_gap]).\n\n**Mitigation:**\n- **Immediate action (next 48h):** Provision eu-central-1 infrastructure using existing Terraform. Do NOT wait for full validation\u2014get environment running.\n- **Parallel track:** Stand up DNS geo-routing to load balancer while infrastructure deploys.\n- **Escalation needed:** This should have been done weeks ago per [eu_deployment_topology]. Someone needs to own deployment end-to-end TODAY, not as a \"we'll get to it\" item.\n- **Risk if not resolved:** Zero-day slip. We literally cannot ship without this.\n\n## 2. **Security Review Not Complete** [HIGH - EXTERNAL DEPENDENCY]\n\n**Risk:** [security_review_pending] confirms both the rate-limit exemption [rate_limit_exemption] and one-time ticket auth system [auth_ticket_system] require security sign-off that is \"scheduled but not completed.\" Unlike infrastructure work, we cannot engineer our way out\u2014this requires external stakeholder approval with unknown timeline.\n\n**Mitigation:**\n- **Today:** Escalate to security team leadership. Frame as Q2 launch blocker per [timeline_pressure] with fixed deadline.\n- **Prep mitigation options:** If review identifies issues, what's our fallback? Can we ship with existing REST rate limits (degraded UX) or revert to JWT-on-websocket (requires auth middleware changes)?\n- **Timeline impact:** Given [sprint_plan_tension] already consumed all buffer with scope cuts, ANY delay here misses Q2. Get executive air cover if security review timeline slips.\n\n## 3. **Performance SLA Unvalidated in Real Conditions** [MEDIUM-HIGH - PRODUCT POSITIONING RISK]\n\n**Risk:** [performance_sla] promised 200ms P50 / 500ms P99 based on user research, but [latency_budget_allocation] has zero margin, [latency_measurement_gap] shows no cross-region testing (UK-EU post-Brexit routing unknown), and [load_test_incomplete] confirms 50-user tests blocked by missing EU environment. We're shipping on local test numbers that assumed \"optimal EU-internal network conditions.\"\n\n**Mitigation:**\n- **Week 1 post-EU deployment:** Run full 50-user load tests immediately when environment is live. Include UK-origin connections specifically.\n- **Telemetry before launch:** Instrument actual latency metrics in staging. [latency_measurement_gap] notes we have no real-world telemetry vs SLA.\n- **Contingency:** If SLA miss discovered late, options are (a) reduce scope to lower user counts, (b) revise SLA with product/marketing (reputational damage), or (c) slip launch. No good options\u2014this needed validation 2 sprints ago.\n- **Known issue:** [integration_test_results] shows 2-second stale read window in dual-storage. Assess if this violates implicit performance expectations for REST clients.\n\n---\n\n**Bottom line:** Risk #1 blocks everything and needs resolution this week. Risk #2 is out of our direct control\u2014escalate now. Risk #3 becomes measurable only after #1 is fixed, but timelines per [timeline_pressure] leave no room for surprises.",
+      "input_tokens": 3264,
+      "output_tokens": 859,
+      "ms": 22293
+    },
+    {
+      "label": "Q3:GATEKEEPER_SELECT",
+      "text": "{\"selected_belief_ids\": [\"b01\", \"b02\", \"b03\", \"b04\", \"b05\", \"b23\", \"b24\", \"b27\", \"b32\", \"b07\", \"b09\", \"b20\", \"b14\", \"b17\", \"b22\", \"b34\", \"b35\", \"b36\", \"b37\", \"b39\"], \"selection_reasoning\": \"Selected b",
+      "input_tokens": 4475,
+      "output_tokens": 1778,
+      "ms": 35021
+    },
+    {
+      "label": "Q3:MASK_ANSWER",
+      "text": "# PRD Changes and Root Causes\n\n## 1. **Offline Editing: P0 \u2192 Descoped to Q3**\n\n**Root Cause:** Timeline gap ([b23], [b03])\n- **Original:** P0 requirement for mobile enterprise users [b04]\n- **Driver:** 14-week engineering estimate vs 10-week runway created 4-week gap [b23]\n- **Resolution:** Descoped to Q3 [b24], [b27] despite CRDT foundation supporting it [b07]\n- **Justification:** Client-side storage, queue management, conflict UX, and testing added 4+ weeks beyond CRDT implementation [b24]\n\n**Trade-off:** Timeline over feature completeness. CRDT choice [b07] was influenced by offline requirement, but that capability won't ship in Q2.\n\n---\n\n## 2. **Image Embedding: P1 Stretch \u2192 Deferred to Q3**\n\n**Root Cause:** Timeline pressure forcing core focus ([b23], [b03])\n- **Original:** Part of rich text requirement [b01], P1 stretch goal [b03]\n- **Status:** Serialization layer incomplete [b32]; deferred [b27]\n- **Driver:** Same 4-week gap forced prioritization of conflict resolution over rich media [b23]\n\n---\n\n## 3. **@Mentions: Specified \u2192 Deferred to Q3**\n\n**Root Cause:** Timeline pressure ([b23])\n- **Original:** Listed in core scope [b01]\n- **Status:** Deferred [b27]\n- **Note:** No upstream technical blocker documented\u2014pure scope cut for timeline\n\n---\n\n## 4. **Manual Conflict Resolution UI: Implied \u2192 Explicitly Cut**\n\n**Root Cause:** Scope reduction strategy\n- **Changed to:** Automatic merge only [b27]\n- **Driver:** Same timeline constraints [b23]; CRDT automatic merging reduces UI complexity\n- **Note:** [b07] shows CRDTs handle conflicts natively, reducing need for manual UI\n\n---\n\n## 5. **UNRESOLVED: Performance SLA (200ms/500ms P99) Status Unknown**\n\n**Root Cause:** EU deployment gap blocking validation ([b34])\n- **Requirement:** 200ms max latency [b05] with zero-margin budget [b22]\n- **Risk:** 50-user load test NOT run [b37]; no production telemetry [b35]\n- **Critical Issue:** UK post-Brexit routing concerns [b35] not validated against 60ms server budget [b22]\n\n**\u26a0\ufe0f Cannot confirm SLA compliance without EU environment deployment**\n\n---\n\n## 6. **UNRESOLVED: Dual-Storage Stale Reads**\n\n**Root Cause:** Architectural compromise for backward compatibility ([b17])\n- **Original:** Single source of truth implied by JSON blob storage [b14]\n- **Changed to:** Dual-storage (CRDT binary + JSON materialization) [b17]\n- **Side Effect:** 2-second stale read window for REST API clients [b36]\n- **Status:** Flagged in testing but not confirmed as acceptable deviation from \"real-time\" promise [b01]\n\n**Question for product:** Is 2-second REST API staleness acceptable, or does \"real-time\" cover all API surfaces?\n\n---\n\n## CRITICAL BLOCKERS (Not Changes\u2014Validation Gaps)\n\n### **A. EU Deployment Infrastructure (HARD BLOCKER)**\n- **Status:** NOT provisioned [b34]\n- **Impact:** Blocks GDPR compliance [b02], load testing [b37], and performance validation [b35]\n- **Root Cause:** Infrastructure work not on critical path or underestimated\n\n### **B. Security Review Pending (PROCESS BLOCKER)**\n- **Status:** Rate-limit exemption and ticket auth awaiting sign-off [b39]\n- **Root Cause:** New attack surface from architectural choices\n\n---\n\n## Summary Table\n\n| Requirement | Original | Q2 Scope | Root Cause | Risk |\n|-------------|----------|----------|------------|------|\n| Offline editing | P0 | Q3 | Timeline gap [b23] | Medium (foundation exists [b07]) |\n| Image embedding | P1 | Q3 | Timeline pressure [b23] | Low (incremental feature) |\n| @Mentions | Specified | Q3 | Timeline pressure [b23] | Low (incremental feature) |\n| Manual conflict UI | Implied | Cut | Timeline + CRDT auto-merge [b07] | Medium (user expectation?) |\n| **200ms SLA** | **Required [b05]** | **UNVALIDATED** | **EU deployment gap [b34]** | **HIGH** |\n| REST API consistency | Implied real-time | 2s stale reads [b36] | Dual-storage compromise [b17] | **Medium-High** (product call) |\n\n---\n\n## Immediate Actions Required\n\n1. **Provision EU infrastructure** [b34] \u2014 blocks everything\n2. **Run 50-user load test** [b37] in EU to validate 200ms SLA [b05]\n3. **Complete security review** [b39] for rate-limit exemption\n4. **Product decision:** Accept 2-second REST API staleness [b36] or block on fixing materialization?\n5. **Clarify:** Does offline editing deferral [b24] conflict with executive messaging, given CRDT was chosen specifically for offline support [b07]?",
+      "input_tokens": 4377,
+      "output_tokens": 1282,
+      "ms": 28547
+    },
+    {
+      "label": "BASELINE:ALL",
+      "text": "# Shipping Readiness Assessment\n\n## Q1: GO/NO-GO ASSESSMENT\n\n**NO-GO. We have 2 critical blockers and 1 ship-stopper:**\n\n### CRITICAL BLOCKERS (Must resolve before ship):\n\n1. **EU Infrastructure Not Deployed** [b34]\n   - **Status:** WS relay code complete but eu-central-1 infrastructure NOT provisioned\n   - **Impact:** GDPR hard requirement [b02] cannot be met. Feature literally cannot ship.\n   - **What's needed:** Execute Terraform, provision Frankfurt infrastructure, implement DNS geo-routing, validate end-to-end EU data residency\n   - **Time estimate:** 1-2 weeks if nothing goes wrong\n\n2. **Security Review Not Complete** [b39]\n   - **Status:** Scheduled but not completed\n   - **Scope:** Rate-limit exemption for WS traffic [b29] + one-time ticket auth [b28]\n   - **Impact:** New attack surfaces unapproved. Implementation plan itself flagged this as requiring sign-off\n   - **Time estimate:** Unknown - depends on security team findings and potential required changes\n\n### SHIP-STOPPER (Unknown quality):\n\n3. **Performance SLA Unvalidated** [b05, b35, b37]\n   - **Requirement:** 200ms P50, 500ms P99 latency [b05]\n   - **Status:** Only local testing (15ms). No cross-region testing. 50-user load test blocked by missing EU environment\n   - **Risk:** Zero margin in latency budget [b22]. UK post-Brexit routing untested. Could discover P99 violations only after ship\n   - **Cannot ship without:** Real EU environment performance validation\n\n### KNOWN ISSUES (Acceptable with caveats):\n\n4. **Dual-Storage Stale Reads** [b36]\n   - 2-second window where REST API returns stale data after real-time edits\n   - 23/26 integration tests pass; these 3 failures are the symptom\n   - **Acceptable IF:** Product signs off that 2-second staleness won't break user workflows\n   - **Mitigation needed:** Document behavior, add cache headers indicating freshness\n\n5. **Memory Above Estimate** [b31]\n   - 140MB vs 120MB estimate for 50-user docs (with fix: 95MB)\n   - **Acceptable IF:** Undo limit config deployed (drops to 95MB)\n   - **Action required:** Deploy with undo limited to 100 operations\n\n---\n\n## Q2: TOP 3 RISKS & MITIGATION\n\n### RISK 1: EU Infrastructure Deployment Failure (CRITICAL - Likelihood: Medium, Impact: Fatal)\n\n**Why it's critical:** Never been deployed or tested. Terraform written but unvalidated. DNS geo-routing designed but not implemented. This is the longest pole and a GDPR hard blocker.\n\n**Failure modes:**\n- Terraform errors requiring architecture changes\n- DNS geo-routing misconfiguration sending EU traffic to US\n- Certificate/TLS issues in new region\n- Peering/networking problems between EU WS gateway and US database (if not architected correctly)\n\n**Mitigation plan:**\n1. **Immediate (this week):** Deploy to EU staging environment, validate full GDPR data flow\n2. **Validation checklist:** \n   - Confirm ALL WebSocket traffic terminates in eu-central-1\n   - Verify CRDT state stored only in EU database\n   - Test geo-fence at load balancer with requests from EU IPs\n   - Validate materialized JSON stays in EU (if PostgreSQL is also geo-distributed)\n3. **Rollback plan:** Feature flag to disable real-time collaboration, fall back to existing REST-only editing\n4. **Timeline:** Budget 2 weeks. If not done in 2 weeks, slip launch date.\n\n---\n\n### RISK 2: Performance SLA Breach in Production (HIGH - Likelihood: Medium-High, Impact: High)\n\n**Why it's dangerous:** 200ms budget has zero margin [b22]. UK routing untested. P99 could spike under real load. User research shows >300ms causes perceived lag [b05] - this will tank the flagship feature.\n\n**Failure modes:**\n- UK-to-Frankfurt routing adds 50-80ms (blows budget)\n- 50-user contention creates message storms (seen in research at 2000 msg/sec [b11])\n- WebSocket connection pooling under real load causes queuing delays\n- Network variance in production vs controlled test environment\n\n**Mitigation plan:**\n1. **Pre-launch (mandatory):** \n   - Run 50-user load test in actual EU production environment immediately after infrastructure deployed\n   - Test from multiple EU locations including UK\n   - Instrument telemetry: measure actual P50/P95/P99 latency by region\n2. **Launch strategy:** \n   - Soft launch to 5 EU customers (week 1), monitor latency metrics\n   - If P99 > 500ms: implement document-level sharding [b11] or reduce concurrent user limit\n   - Gradual rollout with kill switch\n3. **Fallback options:**\n   - Reduce concurrent user limit from 50 to 30 (buys ~40% reduction in message rate)\n   - Implement operation batching (trades latency consistency for average throughput)\n4. **Timeline:** If load test shows >500ms P99, need 1-2 weeks for optimization before launch\n\n---\n\n### RISK 3: Security Review Uncovers Blocker (MEDIUM - Likelihood: Medium, Impact: High)\n\n**Why it matters:** Two new attack surfaces. Rate-limit exemption [b29] is a known governance deviation. One-time tickets [b28] are a new auth mechanism. Security could require architectural changes.\n\n**Failure modes:**\n- Rate-limit bypass enables DoS via WebSocket message flooding\n- One-time ticket generation/validation has timing vulnerabilities\n- Ticket reuse or replay attacks if implementation has gaps\n- Required changes force code rework, delaying 1-3 weeks\n\n**Mitigation plan:**\n1. **Immediate:** Escalate security review to urgent. Need sign-off this week.\n2. **Proactive hardening:**\n   - Ensure WS gateway has message-level backpressure (claimed in [b29] but validate implementation)\n   - Add rate limiting at gateway: max 30 ops/sec per user (matches research observation)\n   - Ticket system: confirm cryptographic randomness, single-use enforcement, 30s expiry\n3. **Parallel track:** If security blocks, prepare downscoped version:\n   - Keep JWT auth, require JWT in every WS message (higher overhead but no new auth mechanism)\n   - Accept REST rate limits, reduce feature to <10 concurrent users\n4. **Timeline:** If major changes required, 1-2 week delay\n\n---\n\n## Q3: REQUIREMENTS CHANGES & ROOT CAUSES\n\n### CHANGE 1: Offline Editing DESCOPED from Q2 \u2192 Q3\n\n**Original requirement:** [b04] \"Offline editing... Listed as P0... essential for mobile enterprise users\"\n\n**Current status:** [b24, b27] Explicitly descoped to Q3\n\n**Root cause chain:**\n1. **Timeline pressure** [b03]: Q2 deadline fixed and non-negotiable\n2. **Sprint plan reveals gap** [b23]: 14-week estimate vs 10-week runway = 4-week shortfall\n3. **Complexity assessment** [b24]: Offline adds 4+ weeks (client storage, queue management, conflict UX, testing)\n4. **Decision:** [b24] Offline recommended for descope specifically to close 4-week gap\n5. **Technical enabler:** CRDT foundation [b07] supports offline inherently, so deferral doesn't create technical debt\n\n**Why this was the right cut:** Offline is technically feasible later (CRDT supports it natively), but is high complexity for user-facing behavior (conflict UX unsolved [b21]). Core real-time collaboration can ship without it.\n\n---\n\n### CHANGE 2: @mentions and Image Embedding DESCOPED from Q2 \u2192 Q3\n\n**Original requirement:** [b01] \"@mentions and embedded images... P1 stretch goals\"\n\n**Current status:** [b27, b32] Deferred to Q3\n\n**Root cause chain:**\n1. **PRD ambiguity** [b01]: Listed as \"P1 stretch goals\" not P0 - already soft commitment\n2. **Timeline pressure** [b03]: \"Scope cuts may be necessary\"\n3. **Technical blocker discovered** [b32]: Image embedding requires binary blob handling; y-crdt supports it but serialization layer doesn't\n4. **Implementation reality** [b32]: Rich text (bold/italic) works but images need additional 1-2 weeks\n5. **Decision:** [b27] Phase 1 scope explicitly excludes both features\n\n**Why this was acceptable:** Both were stretch goals. Core editing [b01] and conflict resolution are the \"flagship differentiator\" - shipped. Images hit unexpected technical complexity [b32]. Better to ship solid core than buggy complete feature.\n\n---\n\n### CHANGE 3: Manual Conflict Resolution UI REMOVED\n\n**Original requirement:** [b01] \"conflict resolution for up to 50 concurrent users\"\n\n**Current status:** [b27] \"automatic conflict merge (no manual resolution UI)\"\n\n**Root cause chain:**\n1. **CRDT decision** [b07]: CRDTs chosen over OT specifically for automatic merging\n2. **CRDT property** [b07]: \"CRDTs handle offline editing natively, need no central coordination\" - merges are automatic\n3. **UX gap identified** [b21]: \"Conflict presentation to users is an unsolved UX problem deferred to frontend team\"\n4. **Scope decision** [b27]: Automatic merge only, no manual UI\n\n**Why this changed:** The technology choice (CRDT) fundamentally changed the conflict model. OT requires manual resolution; CRDTs merge automatically. This is actually a better user experience (Google Docs-like) but required redefining \"conflict resolution\" from manual to automatic. The UX problem [b21] is how to *show* users what happened, not how to let them choose - deferred as non-blocking.\n\n---\n\n### CHANGE 4: WebSocket Auth Model (NEW, not a descope)\n\n**Original requirement:** [b13] Short-lived JWTs (15 min expiry) with existing middleware\n\n**Current status:** [b28] One-time ticket system for WebSocket connections\n\n**Root cause chain:**\n1. **Technical incompatibility** [b13]: \"WebSocket connections persisting for hours need a different auth strategy. Current middleware only handles HTTP request headers\"\n2. **Architectural constraint** [b18]: \"Authenticates via one-time token exchange at connection time\"\n3. **Implementation** [b28]: REST endpoint issues 30-second single-use tickets\n4. **Consequence** [b39]: New attack surface requiring security review (now a blocker)\n\n**Why this was necessary:** Not a choice - the existing auth system [b13] literally doesn't work for long-lived WebSocket connections. The JWT middleware expects HTTP headers; WebSockets don't send headers after initial handshake. One-time tickets are the industry-standard pattern, but introduced the security review dependency that's now blocking ship.\n\n---\n\n### CHANGE 5: Rate Limiting Exemption for Real-Time Traffic\n\n**Original requirement:** [b15] 100 req/s per user, 1000 req/s per org\n\n**Current status:** [b29] Real-time operations bypass REST rate limiter\n\n**Root cause chain:**\n1. **Performance math** [b15]: Limits \"would immediately throttle real-time editing which generates 10-30 operations per second per active user\"\n2. **50-user requirement** [b01, b11]: 50 concurrent users \u00d7 30 ops/sec = 1500 ops/sec per document - exceeds org limit\n3. **Architectural decision** [b29]: WS gateway implements separate backpressure mechanism\n4. **Governance issue** [b29]: \"Known deviation from API governance \u2014 needs security review sign-off\"\n5. **Consequence** [b39]: Security review now blocking (same as auth change)\n\n**Why this was necessary:** Math doesn't work. Real-time collaboration is fundamentally incompatible with request-based rate limiting. The existing limits [b15] were designed for REST API bulk operations, not collaborative editing. Alternative would be to reduce concurrent users from 50 to ~3, destroying the product value.\n\n---\n\n### CHANGE 6: Performance SLA Implicit Scope Reduction\n\n**Original requirement:** [b05] 200ms P50, 500ms P99 \"for edit propagation between users\"\n\n**Current status:** [b22] Zero margin in latency budget under optimal conditions\n\n**Root cause (not a formal change but a risk):**\n1. **Budget allocation** [b22]: 200ms split as 20+40+60+40+40 = 200ms exactly\n2. **Assumption baked in** [b22]: \"Assumes optimal EU-internal network conditions\"\n3. **Reality check missing** [b35]: \"Some EU enterprise customers connect from UK (post-Brexit routing)\" - untested\n4. **Testing gap** [b37]: 50-user full load test blocked by EU deployment gap\n\n**Why this matters:** The SLA hasn't officially changed, but the architecture has zero margin [b22]. Any real-world variance (UK routing, network jitter, 50-user contention) could breach the SLA. This wasn't a conscious descope - it's an **unmitigated risk** that could force post-launch SLA renegotiation or emergency performance work.\n\n---\n\n## SUMMARY\n\n**Ship decision: NO-GO** until EU infrastructure deployed, security review complete, and performance validated in real EU environment.\n\n**Timeline impact:** Minimum 2 weeks (EU infra + security + load test), possibly 3-4 weeks if issues found.\n\n**Recommendation:** \n1. Treat EU deployment as P0 this week\n2. Expedite security review (escalate to executive sponsor if needed)\n3. Run full 50-user EU load test the moment infrastructure is up\n4. Only then make ship decision based on actual performance data\n\nThe feature is 85% done but the remaining 15% are **hard blockers** - infrastructure, security, and performance validation. Shipping without these is launching a GDPR-non-compliant, potentially insecure, unvalidated feature as your \"flagship differentiator.\" That's a company-threatening risk for a Q2 deadline that's already contextually flexible given all the descoping that's occurred.",
+      "input_tokens": 2950,
+      "output_tokens": 3433,
+      "ms": 83961
+    }
+  ]
+}
