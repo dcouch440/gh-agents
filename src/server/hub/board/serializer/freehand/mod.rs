@@ -1,5 +1,8 @@
 //! Rust port of the `perfect-freehand` stroke algorithm.
 //!
+//! Original: https://github.com/steveruizok/perfect-freehand (MIT).
+//! Copyright (c) 2021 Stephen Ruiz Ltd — full licence text in NOTICE.
+//!
 //! Converts raw input points `[x, y, pressure]` into a closed outline
 //! polygon with variable width, pressure sensitivity, and smooth caps.
 
