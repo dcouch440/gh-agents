@@ -1,8 +1,18 @@
 # nexor
 
-Visual workflow design platform for AI agents. Draw workflows on an Excalidraw canvas, and the system builds the structure instantly, then designs the agents that run it asynchronously.
+**An experiment: can agents design their own agents?**
+
+Rather than hand-writing orchestration, could a designer agent read a plain-language goal, decide what roles the work needs, write their system prompts and tool assignments, and hand a structured plan to an executor that runs it?
+
+nexor is what I built to find out. Draw a workflow on an Excalidraw canvas; the system builds the structure instantly, then designs and runs the agents behind it.
 
 Rust/Axum backend, React/Vite frontend, PostgreSQL.
+
+I also used it to practise three things directly: orchestrating parallel agent pipelines, agentic coding against a large codebase, and refactoring at a scale I wouldn't attempt by hand. What came out of that is in [What I Learned](#what-i-learned).
+
+*A personal research project — built to answer the question above, documented rather than maintained as a product.*
+
+[How it works](#how-it-works) · [Workforce model](#the-workforce-model) · [Architecture](#architecture-overview) · [What I learned](#what-i-learned) · [Setup](#setup)
 
 ## Stack
 
@@ -153,13 +163,55 @@ The container is created once at the start of the step and torn down after all a
 
 ## What Makes This Interesting
 
-**Agents are designed by an agent.** The workforce designer runs before execution. It determines what roles are needed, writes the system prompts and tool assignments for each agent, and defines the dependency graph. The executor then reads that structured design and runs it — the "what" is separated from the "how."
+**A unified execution engine under all step types.** Whether a step is a single agent, a full workforce, or a conversational chat session, all LLM execution flows through the same engine. Strategies parameterize it — supplying the system prompt, tools, model, and completion logic — so cross-cutting behavior like streaming, cancellation, and token accounting works identically everywhere.
 
-**Dependency-aware parallelism without configuration.** The executor derives execution levels from the dependency graph automatically. No manual parallelism configuration — if two agents don't depend on each other, they run at the same time.
+**Behaviour is composed from filters, not branched into the engine.** Filters hook the execution loop at three points — `on_start` to augment the system prompt, `on_response` to accept or force a retry, `on_output` to transform final content. Seven ship today, including a multi-agent critique panel for step outputs, few-shot injection of exemplary execution traces, chain-of-thought wrapping for structured outputs, schema-validation retry, and recovery of truncated JSON by auto-closing brackets. Adding a behaviour is adding a filter.
 
-**A unified execution engine under all step types.** Whether a step is a single agent, a full workforce, or a conversational chat session, all LLM execution flows through the same engine. Strategies parameterize it — supplying the system prompt, tools, model, and completion logic — so cross-cutting behavior like streaming, filter pipelines, cancellation, and token accounting works identically everywhere.
+**Canvas changes are filtered before any LLM call.** Not every canvas edit is worth dispatching. The board serializer runs a five-stage noise pipeline on every diff: pan detection (all nodes moving by the same delta is a camera move, not a rearrangement), whitespace normalisation, oscillation detection against a baseline snapshot (you typed it and undid it — net zero), reorder detection (same lines, different order), then token-level change scoring on whatever survives. Only genuinely meaningful changes reach an agent, tiered by significance. Everything else is a direct database write.
 
-**Canvas changes are filtered before any LLM call.** Not every canvas edit is worth dispatching. The board serializer runs a multi-stage noise pipeline on every diff — detecting accidental pans, undo oscillations, whitespace rewrites, and low-significance edits. Only genuinely meaningful changes reach an agent. Everything else is a direct database write.
+**The backend re-renders your drawing in order to see it.** Freehand strokes aren't handed to the model as raw coordinates. The server rasterises them — `perfect-freehand`, the pressure-sensitive stroke algorithm the canvas draws with, ported to Rust and numerically verified against the TypeScript original, so the outline the backend fills is the one you actually saw. Strokes then leave by one of two paths depending on the model: an ASCII grid for text-only models, or an anti-aliased PNG cropped to the stroke's bounding box for vision models.
+
+**Parallel agents share a workspace, and the merge is verified.** Steps running in the same level write through OverlayFS; their diffs are merged before the next batch begins. Non-conflicting changes auto-merge, multi-step modifications go through a three-way diff3, and genuine conflict hunks are resolved by a one-shot LLM call with file-type-aware context extraction. That resolution is then checked programmatically — non-empty, plausible length, imports preserved, still syntactically valid — because a merge you can't verify is a merge you can't ship.
+
+## What I Learned
+
+It was an experiment, so the findings matter more than the feature list.
+
+### Handoff fidelity matters more than handoff volume
+
+The hard part wasn't execution. It was the protocol between agents.
+
+When a designer agent is uncertain and passes rich detail downstream, the receiving agent has no way to separate its guesses from its knowledge — everything arrives as established fact. The next agent builds on it, elaborates, and the invention hardens. By the third hop the fabrication *is* the spec, and every agent after that is faithfully implementing something nobody asked for.
+
+Brevity fixes it. A short, bounded summary of the job as it stands forces the downstream agent to derive detail from the actual source of truth rather than inherit an invention. Detail isn't free — detail from an uncertain agent is worse than none.
+
+That's why the designer's handoff is constrained rather than free-form. It writes **what** a node must accomplish, never **how** to staff it, across five fixed fields: the node's role, what it receives and from where, what it must produce, the constraints the user actually stated, and how it relates to its neighbours. Team composition is the downstream builder's decision, made with the context to make it. See [`config/manager/builder/system.md`](config/manager/builder/system.md).
+
+### Confidence-scored one-liners beat transcripts
+
+When a new agent joins an ongoing conversation, it doesn't need the transcript. It needs a small set of factual statements, each carrying a confidence score — so it knows not just what is believed, but how firmly.
+
+I tested this rather than assuming it, in a side experiment that grew into a short paper: [**Belief-Oriented Conversation Architecture**](proto/paper.md). A gatekeeper agent reads the full source and authors *belief slices* — tagged, confidence-weighted statements of understanding. Downstream agents never see the source at all; they reason entirely from the slices they are given.
+
+Converged belief slices scored **26/30 against full context's 27/30**, at roughly a fifth of the token cost, compressing 70 raw beliefs into 22 contradiction-free ones. Against adversarially poisoned sources, the revision pass identified and killed every planted distortion from the structure of the belief store alone, with no access to ground truth.
+
+The confidence score is what makes it work, and it is the fix for the failure above. Uncertainty that travels *with* a claim stays uncertainty. Uncertainty flattened into fluent prose becomes fact at the next hop.
+
+The paper reports where the approach loses, too — full context still wins outright when the source fits in the window, and convergence dropped a claim in Phase 5 that only better prompting recovered.
+
+### Refactoring at scale is a different skill from writing at scale
+
+The experiment code carries its own history. Phases 2 through 6 are standalone scripts that grew by copy-and-extend:
+
+```
+proto/phase2.py    483 lines
+proto/phase3.py    782
+proto/phase4.py   1207
+proto/phase5.py   1093
+proto/phase6.py   1452
+```
+
+Phase 7 came in at 635 lines while doing more, because the shared machinery was pulled into a package first — `schemas`, `prompts`, `claims`, `questions`, `sources`, `client`, `formatters`. The cost of the refactor was paid once; every phase after it was cheaper to write and easier to trust.
 
 ## Prerequisites
 
@@ -215,7 +267,8 @@ Run `make help` for the full target list.
 - [`docs/database-schema.md`](docs/database-schema.md) — full database schema
 - [`docs/database-model-guide.md`](docs/database-model-guide.md) — how the schema layers fit together
 - [`docs/frontend-build-guide.md`](docs/frontend-build-guide.md) — frontend pages, API endpoints, and components
+- [`proto/paper.md`](proto/paper.md) — *Belief-Oriented Conversation Architecture*, the belief-slice experiment and its results
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Third-party attributions are in [NOTICE](NOTICE).
