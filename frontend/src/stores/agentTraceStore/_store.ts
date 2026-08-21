@@ -4,6 +4,7 @@ import type { AgentTraceState } from './types'
 const initialState: AgentTraceState = {
   traces: {},
   order: [],
+  hydratedRunId: null,
 }
 
 const store = createStore<AgentTraceState>(() => ({ ...initialState }))

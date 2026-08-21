@@ -3,6 +3,8 @@
 //! Provides `TaskRegistry`, a concurrent map of dispatch task entries with
 //! lifecycle management (spawn, cancel, complete, fail) and cancellation tokens.
 
+use std::cmp::Reverse;
+
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use serde::Serialize;
@@ -171,7 +173,19 @@ impl TaskRegistry {
             .filter(|e| e.step_id == step_id)
             .map(|e| e.clone())
             .collect();
-        tasks.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        tasks.sort_by_key(|t| Reverse(t.created_at));
+        tasks
+    }
+
+    /// List all tasks for a given workflow, ordered by creation time (newest first).
+    pub fn list_tasks_for_workflow(&self, workflow_id: Uuid) -> Vec<TaskEntry> {
+        let mut tasks: Vec<TaskEntry> = self
+            .tasks
+            .iter()
+            .filter(|e| e.workflow_id == workflow_id)
+            .map(|e| e.clone())
+            .collect();
+        tasks.sort_by_key(|t| Reverse(t.created_at));
         tasks
     }
 

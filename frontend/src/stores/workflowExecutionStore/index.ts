@@ -21,7 +21,13 @@ import {
 } from './selectors'
 import { fetchRuns, viewHistoricalRun, returnToLive, reset } from './history'
 import { handleWsEvent } from './wsHandler'
-import { hydrateLatestRun, hydrateWorkshop, hydrateAgentSources } from './hydrate'
+import {
+  setActiveRun,
+  beginRun,
+  applyServerRun,
+  applyWorkshopFallback,
+  hydrateAgentSources,
+} from './hydrate'
 
 export const workflowExecutionStore = {
   store,
@@ -47,10 +53,13 @@ export const workflowExecutionStore = {
   viewHistoricalRun,
   returnToLive,
   handleWsEvent,
-  hydrateLatestRun,
-  hydrateWorkshop,
+  setActiveRun,
+  beginRun,
+  applyServerRun,
+  applyWorkshopFallback,
   hydrateAgentSources,
   reset,
 }
 
+export type { ServerRunSnapshot } from './hydrate'
 export type { WorkflowExecutionState, StepExecutionState, StepExecutionStatus, StepTimelineEvent, ViewMode } from './types'

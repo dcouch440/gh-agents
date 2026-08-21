@@ -43,9 +43,11 @@ describe('SubmitBar', () => {
     expect(screen.getByRole('button', { name: /running/i })).toBeDisabled()
   })
 
-  it('shows success label after run completes', () => {
-    render(<SubmitBar {...defaultProps} runStatus="completed" />)
-    expect(screen.getByRole('button', { name: /started/i })).toBeInTheDocument()
+  it('returns to the idle label once a run is no longer active', () => {
+    // There is no transient "Started!" state any more — the button tracks the
+    // server's isRunning flag, so it reads Run again the moment a run ends.
+    render(<SubmitBar {...defaultProps} runStatus="idle" />)
+    expect(screen.getByRole('button', { name: /^run$/i })).toBeInTheDocument()
   })
 
   it('shows error label when run fails', () => {

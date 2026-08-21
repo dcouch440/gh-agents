@@ -85,7 +85,38 @@ const selectTokenBuffer = memoFactory(
 const selectAllStepIds = (s: DispatchState): readonly string[] =>
   Object.keys(s.byStep)
 
+const selectByStep = (s: DispatchState): Readonly<Record<string, DispatchEntry>> => s.byStep
+
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+const makeDefaultEntry = (stepId: string, ts: string): DispatchEntry => ({
+  executionId: '',
+  stepId,
+  status: 'running',
+  instruction: '',
+  message: null,
+  summary: null,
+  error: null,
+  startedAt: ts,
+  trace: [],
+  tokenBuffer: '',
+})
+
+/**
+ * Update a step's entry, creating one if a stream event arrived before the
+ * `dispatch_started` event or before REST hydration. Dropping those events is
+ * how the panel used to end up blank after a refresh mid-dispatch.
+ */
+const upsertEntry = (
+  stepId: string,
+  ts: string,
+  updater: (entry: DispatchEntry) => DispatchEntry
+): void => {
+  store.setState((s) => {
+    const existing = s.byStep[stepId] ?? makeDefaultEntry(stepId, ts)
+    return { byStep: { ...s.byStep, [stepId]: updater(existing) } }
+  })
+}
 
 const updateEntry = (
   stepId: string,
@@ -130,7 +161,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
     }
     case SESSION_EVENT.DISPATCH_PROGRESS: {
       const message = (data.message as string | undefined) ?? null
-      updateEntry(stepId, (e) => ({
+      upsertEntry(stepId, msg.ts, (e) => ({
         ...e,
         message,
         trace: message !== null
@@ -165,7 +196,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
     // ── Dispatch streaming events ─────────────────────────────────────
     case SESSION_EVENT.DISPATCH_STREAM_TOKEN: {
       const content = data.content as string
-      updateEntry(stepId, (e) => ({
+      upsertEntry(stepId, msg.ts, (e) => ({
         ...e,
         tokenBuffer: e.tokenBuffer + content,
         trace: appendTrace(e.trace, { type: 'token', content, ts: msg.ts }),
@@ -173,7 +204,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
       break
     }
     case SESSION_EVENT.DISPATCH_STREAM_TOOL_START: {
-      updateEntry(stepId, (e) => ({
+      upsertEntry(stepId, msg.ts, (e) => ({
         ...e,
         trace: appendTrace(e.trace, {
           type: 'tool_start' as const,
@@ -186,7 +217,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
       break
     }
     case SESSION_EVENT.DISPATCH_STREAM_TOOL_END: {
-      updateEntry(stepId, (e) => ({
+      upsertEntry(stepId, msg.ts, (e) => ({
         ...e,
         trace: appendTrace(e.trace, {
           type: 'tool_end' as const,
@@ -199,14 +230,14 @@ const handleWsEvent = (msg: WsWireMessage): void => {
       break
     }
     case SESSION_EVENT.DISPATCH_STREAM_ERROR: {
-      updateEntry(stepId, (e) => ({
+      upsertEntry(stepId, msg.ts, (e) => ({
         ...e,
         trace: appendTrace(e.trace, { type: 'error' as const, error: data.error as string, ts: msg.ts }),
       }))
       break
     }
     case SESSION_EVENT.DISPATCH_STREAM_SYSTEM_PROMPT: {
-      updateEntry(stepId, (e) => ({
+      upsertEntry(stepId, msg.ts, (e) => ({
         ...e,
         trace: appendTrace(e.trace, {
           type: 'system_prompt' as const,
@@ -218,7 +249,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
       break
     }
     case SESSION_EVENT.DISPATCH_STREAM_USER_MESSAGE: {
-      updateEntry(stepId, (e) => ({
+      upsertEntry(stepId, msg.ts, (e) => ({
         ...e,
         trace: appendTrace(e.trace, {
           type: 'user_message' as const,
@@ -251,27 +282,51 @@ const mapApiTraceEvent = (e: ApiTraceEvent): DispatchTraceEvent => {
   }
 }
 
+const TERMINAL_STATUSES: ReadonlySet<DispatchStatus> = new Set<DispatchStatus>([
+  'completed',
+  'failed',
+  'cancelled',
+])
+
+/**
+ * Merge a REST trace into the view.
+ *
+ * WebSocket and REST race in both directions, so neither wins outright: keep
+ * whichever trace is longer, but always accept a terminal status from the
+ * server. Refusing to touch a `running` entry (the old behaviour) meant a
+ * dispatch that finished while the socket was down stayed spinning forever.
+ */
 const hydrateFromApi = (resp: DispatchTraceResponse): void => {
   const stepId = resp.step_id
-  // Don't overwrite a running entry with stale API data
   const existing = store.getState().byStep[stepId]
-  if (existing?.status === 'running') return
 
   const allTrace = Collections.mapBy(resp.trace, mapApiTraceEvent)
-  const trace = allTrace.length > MAX_TRACE_EVENTS ? allTrace.slice(-MAX_TRACE_EVENTS) : allTrace
-  const tokenBuffer = Collections.filterMap(trace, (e) =>
-    e.type === 'token' ? e.content : null,
-  ).join('')
+  const incomingTrace = allTrace.length > MAX_TRACE_EVENTS ? allTrace.slice(-MAX_TRACE_EVENTS) : allTrace
+
+  const incomingStatus = resp.status as DispatchStatus
+  const keepLocalTrace =
+    existing !== undefined && existing.trace.length > incomingTrace.length
+  const trace = keepLocalTrace ? existing.trace : incomingTrace
+
+  const tokenBuffer = keepLocalTrace
+    ? existing.tokenBuffer
+    : Collections.filterMap(trace, (e) => (e.type === 'token' ? e.content : null)).join('')
+
+  // A terminal server status is authoritative; otherwise let a live local
+  // 'running' survive a snapshot taken before the dispatch started.
+  const status = TERMINAL_STATUSES.has(incomingStatus)
+    ? incomingStatus
+    : existing?.status ?? incomingStatus
 
   const entry: DispatchEntry = {
     executionId: resp.execution_id,
     stepId,
-    status: resp.status as DispatchStatus,
-    instruction: resp.instruction,
-    message: null,
-    summary: resp.result,
-    error: null,
-    startedAt: '',
+    status,
+    instruction: resp.instruction || (existing?.instruction ?? ''),
+    message: existing?.message ?? null,
+    summary: resp.result ?? existing?.summary ?? null,
+    error: existing?.error ?? null,
+    startedAt: existing?.startedAt ?? '',
     trace,
     tokenBuffer,
   }
@@ -279,10 +334,32 @@ const hydrateFromApi = (resp: DispatchTraceResponse): void => {
   store.setState((s) => ({ byStep: { ...s.byStep, [stepId]: entry } }))
 }
 
+/**
+ * Drop view entries for steps the server no longer reports a dispatch for.
+ *
+ * View buffer only — this never deletes anything server-side.
+ */
+const pruneToSteps = (stepIds: readonly string[]): void => {
+  const keep = Collections.toSet(stepIds)
+  store.setState((s) => {
+    const next: Record<string, DispatchEntry> = {}
+    let changed = false
+    for (const [stepId, entry] of Object.entries(s.byStep)) {
+      if (keep.has(stepId)) {
+        next[stepId] = entry
+      } else {
+        changed = true
+      }
+    }
+    return changed ? { byStep: next } : s
+  })
+}
+
 // ── Export ───────────────────────────────────────────────────────────────────
 
 export const dispatchStore = {
   store,
+  selectByStep,
   selectByStepId,
   selectActiveForStep,
   selectTrace,
@@ -291,6 +368,7 @@ export const dispatchStore = {
   selectAllStepIds,
   handleWsEvent,
   hydrateFromApi,
+  pruneToSteps,
 }
 
 export { MAX_TRACE_EVENTS }

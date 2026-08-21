@@ -71,62 +71,15 @@ pub async fn get_run_detail(
     let steps = workflow_repo.list_steps(path.wid).await?;
 
     // Build per-step results
-    let mut step_results = Vec::new();
+    let step_results = build_run_steps(&state, &steps, path.eid).await;
+
     let mut total_input_tokens: i64 = 0;
     let mut total_output_tokens: i64 = 0;
     let mut total_cost_usd: f64 = 0.0;
-
-    for step in &steps {
-        // Skip context/input steps that have no execution data
-        if step.execution_mode == "context" || step.execution_mode == "input" {
-            continue;
-        }
-
-        match build_step_run_response(&state, step, path.eid).await {
-            Ok(resp) => {
-                total_input_tokens += resp.input_tokens.unwrap_or(0);
-                total_output_tokens += resp.output_tokens.unwrap_or(0);
-                total_cost_usd += resp.cost_usd.unwrap_or(0.0);
-
-                step_results.push(RunStepResultResponse {
-                    step_id: step.id,
-                    step_name: step.name.clone(),
-                    execution_mode: step.execution_mode.clone(),
-                    execution_id: Some(resp.execution_id),
-                    status: resp.status,
-                    started_at: resp.started_at,
-                    completed_at: resp.completed_at,
-                    duration_ms: resp.duration_ms,
-                    output: resp.output,
-                    structured_output: resp.structured_output,
-                    input_tokens: resp.input_tokens,
-                    output_tokens: resp.output_tokens,
-                    cost_usd: resp.cost_usd,
-                    error: resp.error,
-                    phases: resp.phases,
-                });
-            }
-            Err(_) => {
-                // Step may not have been executed in this run (e.g., skipped by conditional edge)
-                step_results.push(RunStepResultResponse {
-                    step_id: step.id,
-                    step_name: step.name.clone(),
-                    execution_mode: step.execution_mode.clone(),
-                    execution_id: None,
-                    status: "skipped".to_string(),
-                    started_at: None,
-                    completed_at: None,
-                    duration_ms: None,
-                    output: None,
-                    structured_output: None,
-                    input_tokens: None,
-                    output_tokens: None,
-                    cost_usd: None,
-                    error: None,
-                    phases: None,
-                });
-            }
-        }
+    for resp in &step_results {
+        total_input_tokens += resp.input_tokens.unwrap_or(0);
+        total_output_tokens += resp.output_tokens.unwrap_or(0);
+        total_cost_usd += resp.cost_usd.unwrap_or(0.0);
     }
 
     // Duration from execution timestamps
@@ -168,6 +121,66 @@ pub async fn get_run_detail(
         duration_ms,
         template_name,
     }))
+}
+
+/// Build per-step results for one execution.
+///
+/// Shared by `get_run_detail` and the live-state endpoint so both describe a run
+/// identically. Steps with no execution data for this run report `"skipped"`;
+/// `context`/`input` steps are omitted because they never execute.
+pub(crate) async fn build_run_steps(
+    state: &AppState,
+    steps: &[crate::db::WorkflowStepRow],
+    execution_id: uuid::Uuid,
+) -> Vec<RunStepResultResponse> {
+    let mut step_results = Vec::new();
+
+    for step in steps {
+        if step.execution_mode == "context" || step.execution_mode == "input" {
+            continue;
+        }
+
+        match build_step_run_response(state, step, execution_id).await {
+            Ok(resp) => step_results.push(RunStepResultResponse {
+                step_id: step.id,
+                step_name: step.name.clone(),
+                execution_mode: step.execution_mode.clone(),
+                execution_id: Some(resp.execution_id),
+                status: resp.status,
+                started_at: resp.started_at,
+                completed_at: resp.completed_at,
+                duration_ms: resp.duration_ms,
+                output: resp.output,
+                structured_output: resp.structured_output,
+                input_tokens: resp.input_tokens,
+                output_tokens: resp.output_tokens,
+                cost_usd: resp.cost_usd,
+                error: resp.error,
+                phases: resp.phases,
+            }),
+            // Step may not have been executed in this run (e.g. skipped by a
+            // conditional edge, or the run has not reached it yet).
+            Err(_) => step_results.push(RunStepResultResponse {
+                step_id: step.id,
+                step_name: step.name.clone(),
+                execution_mode: step.execution_mode.clone(),
+                execution_id: None,
+                status: "skipped".to_string(),
+                started_at: None,
+                completed_at: None,
+                duration_ms: None,
+                output: None,
+                structured_output: None,
+                input_tokens: None,
+                output_tokens: None,
+                cost_usd: None,
+                error: None,
+                phases: None,
+            }),
+        }
+    }
+
+    step_results
 }
 
 /// GET /api/workflows/:wid/executions/:eid/steps/:sid — Single step result for a specific run.

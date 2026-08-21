@@ -186,4 +186,45 @@ mod tests {
         // Running tasks are preserved regardless of age
         assert!(registry.get_task(id1).is_some());
     }
+
+    #[test]
+    fn list_tasks_for_workflow_filters_and_sorts() {
+        let registry = TaskRegistry::new();
+        let wf = Uuid::new_v4();
+        let other_wf = Uuid::new_v4();
+        let sess = Uuid::new_v4();
+
+        let (first, _) = registry.spawn_task(Uuid::new_v4(), wf, sess, "first".into());
+        let (second, _) = registry.spawn_task(Uuid::new_v4(), wf, sess, "second".into());
+        registry.spawn_task(Uuid::new_v4(), other_wf, sess, "elsewhere".into());
+
+        let tasks = registry.list_tasks_for_workflow(wf);
+
+        assert_eq!(tasks.len(), 2, "other workflows must be excluded");
+        // Newest first — the frontend takes [0] as the current dispatch.
+        assert_eq!(tasks[0].execution_id, second);
+        assert_eq!(tasks[1].execution_id, first);
+    }
+
+    #[test]
+    fn list_tasks_for_workflow_includes_terminal_entries() {
+        let registry = TaskRegistry::new();
+        let wf = Uuid::new_v4();
+        let sess = Uuid::new_v4();
+
+        let (done, _) = registry.spawn_task(Uuid::new_v4(), wf, sess, "done".into());
+        registry.mark_completed(done, Some("summary".into()));
+
+        let tasks = registry.list_tasks_for_workflow(wf);
+
+        assert_eq!(tasks.len(), 1);
+        assert_eq!(tasks[0].status, TaskStatus::Completed);
+        assert_eq!(tasks[0].result.as_deref(), Some("summary"));
+    }
+
+    #[test]
+    fn list_tasks_for_workflow_empty_for_unknown_workflow() {
+        let registry = TaskRegistry::new();
+        assert!(registry.list_tasks_for_workflow(Uuid::new_v4()).is_empty());
+    }
 }

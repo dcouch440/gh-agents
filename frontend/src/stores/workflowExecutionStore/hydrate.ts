@@ -1,10 +1,28 @@
 import { api } from '@/api'
+import { Collections } from '@/utils/collections'
 import type { RunStepResult, WorkshopStepSummary, RosterAgent } from '@/types'
 import type { StepExecutionState, StepExecutionStatus, StepTimelineEvent } from './types'
 import type { SourceStreamState } from '../stepStreamStore/types'
 import { store } from './_store'
 import { sidebarStore } from '../sidebarStore'
 import { stepStreamStore } from '../stepStreamStore'
+
+/**
+ * A run as the server currently describes it.
+ *
+ * `runId === null` means the workflow has never run — the overlay is cleared and
+ * the caller may fall back to workshop state.
+ */
+type ServerRunSnapshot = {
+  runId: string | null
+  workflowId: string
+  status: string | null
+  startedAt: string | null
+  completedAt: string | null
+  durationMs: number | null
+  error: string | null
+  steps: readonly RunStepResult[]
+}
 
 const mapApiStatusToStoreStatus = (apiStatus: string): StepExecutionStatus => {
   switch (apiStatus) {
@@ -33,7 +51,7 @@ const mapRunStepToStepState = (step: RunStepResult): StepExecutionState => ({
   completedAt: step.completed_at,
 })
 
-const buildEventLog = (steps: RunStepResult[]): StepTimelineEvent[] => {
+const buildEventLog = (steps: readonly RunStepResult[]): StepTimelineEvent[] => {
   const events: StepTimelineEvent[] = []
   for (const step of steps) {
     if (step.started_at) {
@@ -49,77 +67,141 @@ const buildEventLog = (steps: RunStepResult[]): StepTimelineEvent[] => {
   return events
 }
 
-const hydrateLatestRun = async (workflowId: string): Promise<void> => {
-  try {
-    const runs = await api.workflows.listExecutions(workflowId)
-    store.setState({ runs })
+// ── Run overlay ─────────────────────────────────────────────────────────────
 
-    if (runs.length === 0) return
+/**
+ * Point the live-run view overlay at `runId`.
+ *
+ * Clears only client-side per-run buffers (step states, event log, counters) so
+ * one run's results can never be painted as if they belonged to another. It
+ * never touches `runs` (the history list), never calls a mutating endpoint, and
+ * has no relationship to `pinned` / `run_results_summary` — those live in the
+ * baseline layer and are re-fetched from the server, not preserved by copying.
+ */
+const setActiveRun = (runId: string | null, workflowId: string | null): void => {
+  store.setState({
+    runId,
+    workflowId,
+    isRunning: false,
+    stepStates: {},
+    eventLog: [],
+    totalSteps: 0,
+    completedStepCount: 0,
+    durationMs: null,
+    error: null,
+    startedAt: null,
+    completedAt: null,
+    viewMode: 'live',
+    selectedHistoricalRunId: null,
+    historicalRun: null,
+  })
+}
 
-    const latestRun = runs[0]
+/** Optimistically open an overlay for a run the client just started. */
+const beginRun = (runId: string, workflowId: string): void => {
+  setActiveRun(runId, workflowId)
+  store.setState({ isRunning: true, startedAt: new Date().toISOString() })
+}
 
-    // Race guard: if a WS event already populated live state, skip hydration
-    if (store.getState().runId !== null) return
+/**
+ * Within one run, WebSocket may be ahead of a REST snapshot that was already
+ * in flight. Keep whichever side describes later progress.
+ */
+const preferLocal = (
+  local: StepExecutionState | undefined,
+  server: StepExecutionState,
+): boolean => {
+  if (local === undefined) return false
+  if (local.status === 'running' && server.status === 'pending') return true
+  const l = local.completedAt ?? local.startedAt
+  const s = server.completedAt ?? server.startedAt
+  if (l === null) return false
+  if (s === null) return true
+  // ISO-8601 is lexicographically ordered.
+  return l > s
+}
 
-    const detail = await api.workflows.getRunDetail(workflowId, latestRun.id)
+/**
+ * A step with no execution row is reported as `skipped`, which is right for a
+ * finished run but wrong for one still in flight — there the run simply has not
+ * reached it yet. Without this, every step of a just-started run reads as
+ * skipped.
+ */
+const normalizeForActiveRun = (
+  state: StepExecutionState,
+  isActive: boolean,
+): StepExecutionState =>
+  isActive && state.status === 'skipped' && state.executionId === null
+    ? { ...state, status: 'pending' }
+    : state
 
-    // Race guard (post-fetch): re-check after async gap
-    if (store.getState().runId !== null) return
+/**
+ * Apply the server's view of the current run. Idempotent — safe to call on
+ * every poll tick.
+ */
+const applyServerRun = (snapshot: ServerRunSnapshot): void => {
+  if (store.getState().runId !== snapshot.runId) {
+    setActiveRun(snapshot.runId, snapshot.workflowId)
+  }
 
-    const stepStates: Record<string, StepExecutionState> = {}
-    for (const step of detail.steps) {
-      stepStates[step.step_id] = mapRunStepToStepState(step)
+  if (snapshot.runId === null) {
+    store.setState({ workflowId: snapshot.workflowId })
+    return
+  }
+
+  const isActive = snapshot.status === 'running' || snapshot.status === 'pending'
+  const local = store.getState().stepStates
+  const stepStates: Record<string, StepExecutionState> = {}
+  for (const step of snapshot.steps) {
+    const server = mapRunStepToStepState(step)
+    const existing = local[step.step_id]
+    stepStates[step.step_id] = existing !== undefined && preferLocal(existing, server)
+      ? existing
+      : normalizeForActiveRun(server, isActive)
+  }
+
+  const completedStepCount = Object.values(stepStates).filter(
+    (s) => s.status === 'success' || s.status === 'error' || s.status === 'skipped',
+  ).length
+
+  store.setState({
+    runId: snapshot.runId,
+    workflowId: snapshot.workflowId,
+    isRunning: snapshot.status === 'running' || snapshot.status === 'pending',
+    stepStates,
+    eventLog: buildEventLog(snapshot.steps),
+    totalSteps: snapshot.steps.length,
+    completedStepCount,
+    durationMs: snapshot.durationMs,
+    error: snapshot.error,
+    startedAt: snapshot.startedAt,
+    completedAt: snapshot.completedAt,
+    viewMode: 'live',
+  })
+
+  // Auto-expand finished steps so their output is visible without a click.
+  for (const [stepId, state] of Object.entries(stepStates)) {
+    if (state.status === 'success' || state.status === 'error') {
+      sidebarStore.expandStep(stepId)
     }
-
-    const eventLog = buildEventLog(detail.steps)
-
-    const completedStepCount = detail.steps.filter(
-      (s) => s.status === 'completed' || s.status === 'failed' || s.status === 'skipped',
-    ).length
-
-    store.setState({
-      runId: latestRun.id,
-      workflowId: latestRun.workflow_id,
-      isRunning: latestRun.status === 'running',
-      stepStates,
-      eventLog,
-      totalSteps: detail.steps.length,
-      completedStepCount,
-      durationMs: detail.duration_ms,
-      error: latestRun.error,
-      startedAt: latestRun.started_at,
-      completedAt: latestRun.completed_at,
-      viewMode: 'live',
-    })
-
-    // Auto-expand completed steps so their output is visible
-    for (const [stepId, state] of Object.entries(stepStates)) {
-      if (state.status === 'success' || state.status === 'error') {
-        sidebarStore.expandStep(stepId)
-      }
-    }
-
-    // Stash detail steps for agent source hydration (called after roster loads)
-    _lastHydratedSteps = detail.steps
-  } catch (err) {
-    console.error('[workflowExecutionStore] hydration error:', err)
   }
 }
 
 // ── Agent source hydration ─────────────────────────────────────────────────
 
-let _lastHydratedSteps: RunStepResult[] | null = null
-
 /**
- * Populate stepStreamStore.sources from the last hydrated run's workforce outputs.
- * Must be called after both loadWorkflow (roster) and hydrateLatestRun have resolved.
+ * Populate `stepStreamStore.sources` from a run's workforce outputs.
+ *
+ * Only completed workforce steps carry `structured_output`; an agent still
+ * streaming has no REST equivalent for its partial buffer.
  */
-const hydrateAgentSources = (rosterByStep: Record<string, RosterAgent[]>): void => {
-  if (_lastHydratedSteps === null) return
-
+const hydrateAgentSources = (
+  rosterByStep: Record<string, RosterAgent[]>,
+  steps: readonly RunStepResult[],
+): void => {
   const sources: Record<string, SourceStreamState> = {}
 
-  for (const step of _lastHydratedSteps) {
+  for (const step of steps) {
     if (step.execution_mode !== 'workforce' || step.structured_output === null) continue
     const agents = step.structured_output.agents
     if (typeof agents !== 'object' || agents === null) continue
@@ -127,14 +209,19 @@ const hydrateAgentSources = (rosterByStep: Record<string, RosterAgent[]>): void 
     const roster = rosterByStep[step.step_id]
     if (!roster) continue
 
+    const agentRecord = agents as Record<string, unknown>
+    const normalizedKeys = Collections.toLookupMap(
+      Object.keys(agentRecord),
+      (k) => k.toLowerCase().replace(/[\s_-]/g, ''),
+      (k) => k,
+    )
+
     for (const rosterAgent of roster) {
       const normalizedName = rosterAgent.name.toLowerCase().replace(/[\s_-]/g, '')
-      const matchingKey = Object.keys(agents as Record<string, unknown>).find(
-        (k) => k.toLowerCase().replace(/[\s_-]/g, '') === normalizedName,
-      )
+      const matchingKey = normalizedKeys.get(normalizedName)
       if (matchingKey === undefined) continue
 
-      const output = (agents as Record<string, unknown>)[matchingKey]
+      const output = agentRecord[matchingKey]
       const outputStr = typeof output === 'string' ? output : JSON.stringify(output, null, 2)
 
       sources[rosterAgent.id] = {
@@ -158,9 +245,9 @@ const hydrateAgentSources = (rosterByStep: Record<string, RosterAgent[]>): void 
       sources: { ...s.sources, ...sources },
     }))
   }
-
-  _lastHydratedSteps = null
 }
+
+// ── Workshop fallback ───────────────────────────────────────────────────────
 
 const mapWorkshopStepToStepState = (step: WorkshopStepSummary, runId: string): StepExecutionState => ({
   status: mapApiStatusToStoreStatus(step.status),
@@ -177,22 +264,28 @@ const mapWorkshopStepToStepState = (step: WorkshopStepSummary, runId: string): S
   completedAt: null,
 })
 
-const hydrateWorkshop = async (workflowId: string): Promise<void> => {
+/**
+ * Show workshop progress when the workflow has no full run to display.
+ *
+ * Only applies when `applyServerRun` left the overlay empty — a real run always
+ * wins, which is what stops the workshop from clobbering live execution state.
+ */
+const applyWorkshopFallback = async (workflowId: string): Promise<void> => {
+  if (store.getState().runId !== null) return
+
   try {
     const workshop = await api.workflows.getWorkshopStatus(workflowId)
 
     if (workshop.completed_steps.length === 0) return
-
-    // Don't overwrite a live running execution
-    if (store.getState().isRunning) return
+    if (store.getState().runId !== null) return
 
     const stepStates: Record<string, StepExecutionState> = {}
     for (const step of workshop.completed_steps) {
       stepStates[step.step_id] = mapWorkshopStepToStepState(step, workshop.run_id)
     }
 
-    const completedCount = workshop.completed_steps.filter(
-      (s) => s.status === 'completed',
+    const completedCount = Collections.filterMap(workshop.completed_steps, (s) =>
+      s.status === 'completed' ? s.step_id : null,
     ).length
 
     store.setState({
@@ -205,8 +298,20 @@ const hydrateWorkshop = async (workflowId: string): Promise<void> => {
       viewMode: 'live',
     })
   } catch {
-    // Workshop may not exist yet — no-op
+    // Workshop may not exist yet — no-op.
   }
 }
 
-export { hydrateLatestRun, hydrateWorkshop, hydrateAgentSources, mapApiStatusToStoreStatus, mapRunStepToStepState, buildEventLog }
+export {
+  setActiveRun,
+  beginRun,
+  applyServerRun,
+  applyWorkshopFallback,
+  hydrateAgentSources,
+  preferLocal,
+  normalizeForActiveRun,
+  mapApiStatusToStoreStatus,
+  mapRunStepToStepState,
+  buildEventLog,
+}
+export type { ServerRunSnapshot }

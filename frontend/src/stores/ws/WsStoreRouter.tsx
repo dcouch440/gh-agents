@@ -9,6 +9,7 @@ import { workflowStore } from '@/stores/workflowStore'
 import { stepStreamStore } from '@/stores/stepStreamStore'
 import { activityStore } from '@/stores/activity'
 import { agentTraceStore } from '@/stores/agentTraceStore'
+import { workflowLiveStore } from '@/stores/workflowLiveStore'
 
 function WsStoreRouter() {
   const { subscribe } = useWebSocket()
@@ -38,6 +39,9 @@ function WsStoreRouter() {
     const handleEventsMissed = () => {
       void sessionStore.fetchAll()
       void workflowStore.fetchIfStale()
+      // Run and dispatch state are the parts that visibly break when events are
+      // dropped, so re-derive them from the server too.
+      void workflowLiveStore.hydrateActive()
     }
     window.addEventListener('ws:events-missed', handleEventsMissed)
     return () => {

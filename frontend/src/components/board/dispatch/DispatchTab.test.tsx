@@ -1,15 +1,23 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen } from '@/test/render'
 import { boardStore } from '@/stores/boardStore'
 import { workflowStore } from '@/stores/workflowStore'
+import { workflowLiveStore } from '@/stores/workflowLiveStore'
 import { createNormalizedMap, nmFromArray } from '@/stores/lib'
 import { DispatchTab } from './DispatchTab'
-import type { BoardSubmitResponse } from '@/types/board'
+import type { LiveDispatch } from '@/stores/workflowLiveStore'
 import type { WorkflowStep } from '@/types/workflow'
 
-vi.mock('../hooks/useDispatchPollAll', () => ({
-  useDispatchPollAll: vi.fn(),
-}))
+const makeDispatch = (stepId: string, executionId: string, instruction: string): LiveDispatch => ({
+  stepId,
+  executionId,
+  status: 'completed',
+  instruction,
+  createdAt: '2025-01-01T00:00:00Z',
+  result: null,
+  traceLen: 0,
+  source: 'registry',
+})
 
 const makeStep = (id: string, name: string): WorkflowStep => ({
   id,
@@ -41,28 +49,6 @@ const makeStep = (id: string, name: string): WorkflowStep => ({
   designer_handoff: '',
 })
 
-const makeBoardResponse = (dispatches: BoardSubmitResponse['dispatches'] = []): BoardSubmitResponse => ({
-  is_first_submit: false,
-  changeset: {
-    agentless: { deleted_node_ids: [], deleted_edge_ids: [], rewired_edges: [], moved_nodes: [] },
-    noise: [],
-    meaningful: [],
-    aggregate_score: 0,
-    should_dispatch: dispatches.length > 0,
-  },
-  snapshot: { nodes: [], edges: [], global_notes: [] },
-  phase_zero: {
-    created_steps: [],
-    created_edges: [],
-    deleted_steps: [],
-    deleted_edges: [],
-    rewired_edges: [],
-    moved_steps: [],
-    updated_steps: [],
-  },
-  dispatches,
-})
-
 describe('DispatchTab', () => {
   beforeEach(() => {
     boardStore.store.setState({
@@ -77,6 +63,16 @@ describe('DispatchTab', () => {
       steps: createNormalizedMap(),
       edges: createNormalizedMap(),
     })
+    workflowLiveStore.store.setState({
+      workflowId: 'wf-1',
+      baselineByStep: {},
+      dispatches: [],
+      runSteps: [],
+      isGenerating: false,
+      loading: false,
+      error: null,
+      hydratedAt: null,
+    })
   })
 
   it('shows empty state when no dispatches', () => {
@@ -84,19 +80,13 @@ describe('DispatchTab', () => {
     expect(screen.getByText(/no dispatches yet/i)).toBeInTheDocument()
   })
 
-  it('renders dispatch rows when dispatches exist', () => {
-    boardStore.store.setState({
-      status: 'success',
-      error: null,
-      lastResponse: makeBoardResponse([
-        { execution_id: 'exec-1', session_id: 'sess-1', step_id: 'step-1', instruction: 'Configure Research node' },
-        { execution_id: 'exec-2', session_id: 'sess-2', step_id: 'step-2', instruction: 'Configure Writer node' },
-      ]),
-      isFirstSubmit: false,
-      elementStepMap: {},
-      elementEdgeMap: {},
+  it('renders a row per dispatch reported by the server', () => {
+    workflowLiveStore.store.setState({
+      dispatches: [
+        makeDispatch('step-1', 'exec-1', 'Configure Research node'),
+        makeDispatch('step-2', 'exec-2', 'Configure Writer node'),
+      ],
     })
-
     workflowStore.store.setState({
       steps: nmFromArray([
         makeStep('step-1', 'Research'),
@@ -110,16 +100,44 @@ describe('DispatchTab', () => {
     expect(screen.getByText('Writer')).toBeInTheDocument()
   })
 
+  it('renders after a refresh, when there is no board-submit response at all', () => {
+    // The refresh case: `lastResponse` is only written by board submit, never by
+    // Generate, so rows must not depend on it.
+    boardStore.store.setState({ lastResponse: null })
+    workflowLiveStore.store.setState({
+      dispatches: [makeDispatch('step-1', 'exec-1', 'Configure Research node')],
+    })
+    workflowStore.store.setState({ steps: nmFromArray([makeStep('step-1', 'Research')]) })
+
+    render(<DispatchTab />)
+
+    expect(screen.getByText('Research')).toBeInTheDocument()
+    expect(screen.queryByText(/no dispatches yet/i)).not.toBeInTheDocument()
+  })
+
+  it('preserves the server ordering, which is newest-first per step', () => {
+    // Regression guard: the old hook read tasks[length - 1] against a
+    // newest-first list and hydrated the oldest dispatch.
+    workflowLiveStore.store.setState({
+      dispatches: [
+        makeDispatch('step-2', 'exec-newest', 'Newest'),
+        makeDispatch('step-1', 'exec-older', 'Older'),
+      ],
+    })
+    workflowStore.store.setState({
+      steps: nmFromArray([makeStep('step-1', 'Older step'), makeStep('step-2', 'Newest step')]),
+    })
+
+    render(<DispatchTab />)
+
+    const rows = screen.getAllByText(/step$/)
+    expect(rows[0]).toHaveTextContent('Newest step')
+    expect(rows[1]).toHaveTextContent('Older step')
+  })
+
   it('falls back to truncated step ID when step name is missing', () => {
-    boardStore.store.setState({
-      status: 'success',
-      error: null,
-      lastResponse: makeBoardResponse([
-        { execution_id: 'exec-1', session_id: 'sess-1', step_id: 'abcdef12-3456-7890', instruction: 'Configure' },
-      ]),
-      isFirstSubmit: false,
-      elementStepMap: {},
-      elementEdgeMap: {},
+    workflowLiveStore.store.setState({
+      dispatches: [makeDispatch('abcdef12-3456-7890', 'exec-1', 'Configure')],
     })
 
     render(<DispatchTab />)

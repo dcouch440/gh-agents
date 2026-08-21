@@ -30,7 +30,7 @@ const removeBox = (state: BoardElements, boxId: string): BoardElements => {
   }
 
   const boxOrder = state.boxOrder.filter((id) => id !== boxId)
-  return { boxes, arrows, boxOrder }
+  return { ...state, boxes, arrows, boxOrder }
 }
 
 const updateBoxPosition = (state: BoardElements, boxId: string, x: number, y: number): BoardElements => {

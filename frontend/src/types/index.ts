@@ -139,3 +139,13 @@ export type {
   SessionUpdatedEvent,
   SessionDeletedEvent,
 } from './activity'
+export type {
+  BaselineStatus,
+  DispatchSource,
+  LiveStepBaseline,
+  LiveDispatchInfo,
+  WorkflowLiveStateResponse,
+  TimelineEntryKind,
+  TimelineEntry,
+  TimelineResponse,
+} from './liveState'

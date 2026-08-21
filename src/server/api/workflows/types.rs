@@ -216,6 +216,59 @@ pub struct WorkflowExecutionResponse {
 }
 
 // ============================================================================
+// Live State Types
+// ============================================================================
+
+/// Design-time truth for one node, independent of any run.
+///
+/// The frontend keeps this as a baseline layer beneath the live-run overlay, so
+/// a pinned node keeps reading as completed while a new run is in flight.
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct LiveStepBaselineResponse {
+    pub step_id: Uuid,
+    pub name: Option<String>,
+    pub execution_mode: String,
+    /// `error` | `completed` | `configured` | `described` | `idle`
+    pub baseline_status: String,
+    pub pinned: bool,
+    pub has_run_summary: bool,
+    pub is_running_in_active_run: bool,
+}
+
+/// The most recent dispatch for one step.
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct LiveDispatchResponse {
+    pub step_id: Uuid,
+    pub execution_id: Uuid,
+    pub status: String,
+    pub instruction: String,
+    pub created_at: String,
+    pub result: Option<String>,
+    pub trace_len: usize,
+    /// `registry` — fetch its trace from `GET /dispatch/{execution_id}/trace`.
+    /// `persisted` — `execution_id` is an agent_execution id, so the trace must
+    /// come from `GET /workflows/{wid}/steps/{sid}/dispatch/history` instead.
+    pub source: String,
+}
+
+/// Everything the editor needs to rebuild its view after a page refresh.
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct WorkflowLiveStateResponse {
+    pub workflow_id: Uuid,
+    pub server_time: DateTime<Utc>,
+    /// Pending, running or paused. Null when nothing is in flight.
+    pub active_run: Option<WorkflowExecutionResponse>,
+    /// `active_run` when present, else the most recent run.
+    pub latest_run: Option<WorkflowExecutionResponse>,
+    /// Per-step results for `latest_run`. Empty when there has never been a run.
+    pub run_steps: Vec<RunStepResultResponse>,
+    pub steps: Vec<LiveStepBaselineResponse>,
+    /// Newest-first, at most one per step.
+    pub dispatches: Vec<LiveDispatchResponse>,
+    pub generating: bool,
+}
+
+// ============================================================================
 // Run Detail Types
 // ============================================================================
 

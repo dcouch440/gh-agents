@@ -2,19 +2,37 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@/test/render'
 import { useWorkflowRun } from './useWorkflowRun'
 
-const { mockSelectActiveWorkflowId, mockRunWorkflow } = vi.hoisted(() => ({
+const {
+  mockSelectActiveWorkflowId,
+  mockSelectIsRunning,
+  mockRunWorkflow,
+  mockBeginRun,
+  mockHydrateActive,
+} = vi.hoisted(() => ({
   mockSelectActiveWorkflowId: vi.fn<() => string | null>(() => 'wf-001'),
-  mockRunWorkflow: vi.fn(() => Promise.resolve({ id: 'exec-001' })),
+  mockSelectIsRunning: vi.fn<() => boolean>(() => false),
+  mockRunWorkflow: vi.fn(() => Promise.resolve({ execution_id: 'exec-001', workflow_id: 'wf-001', status: 'pending' })),
+  mockBeginRun: vi.fn(),
+  mockHydrateActive: vi.fn(() => Promise.resolve()),
 }))
 
 vi.mock('@/stores', () => ({
   useStore: vi.fn((_store: unknown, selector: unknown) => {
     if (selector === mockSelectActiveWorkflowId) return mockSelectActiveWorkflowId()
+    if (selector === mockSelectIsRunning) return mockSelectIsRunning()
     return undefined
   }),
   workflowStore: {
     store: { getState: vi.fn(), subscribe: vi.fn() },
     selectActiveWorkflowId: mockSelectActiveWorkflowId,
+  },
+  workflowExecutionStore: {
+    store: { getState: vi.fn(), subscribe: vi.fn() },
+    selectIsRunning: mockSelectIsRunning,
+    beginRun: mockBeginRun,
+  },
+  workflowLiveStore: {
+    hydrateActive: mockHydrateActive,
   },
 }))
 
@@ -30,7 +48,10 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.useFakeTimers({ shouldAdvanceTime: true })
   mockSelectActiveWorkflowId.mockReturnValue('wf-001')
-  mockRunWorkflow.mockReturnValue(Promise.resolve({ id: 'exec-001' }))
+  mockSelectIsRunning.mockReturnValue(false)
+  mockRunWorkflow.mockReturnValue(
+    Promise.resolve({ execution_id: 'exec-001', workflow_id: 'wf-001', status: 'pending' }),
+  )
 })
 
 describe('useWorkflowRun', () => {
@@ -40,7 +61,17 @@ describe('useWorkflowRun', () => {
     expect(result.current.tooltipText).toBe('Run workflow')
   })
 
-  it('transitions to running then completed', async () => {
+  it('reports running purely from server state, not a local timer', () => {
+    // This is what makes the button survive a refresh: it reflects whether the
+    // server says a run is in flight, with no client-side countdown.
+    mockSelectIsRunning.mockReturnValue(true)
+    const { result } = renderHook(() => useWorkflowRun('hello'))
+
+    expect(result.current.status).toBe('running')
+    expect(result.current.tooltipText).toBe('Workflow is running...')
+  })
+
+  it('opens the overlay for the new run so the previous run cannot linger', async () => {
     const { result } = renderHook(() => useWorkflowRun('hello'))
 
     await act(async () => {
@@ -48,13 +79,9 @@ describe('useWorkflowRun', () => {
       await vi.advanceTimersByTimeAsync(0)
     })
 
-    expect(result.current.status).toBe('completed')
-    expect(result.current.tooltipText).toBe('Execution started successfully')
     expect(mockRunWorkflow).toHaveBeenCalledWith('wf-001', { initial_input: 'hello' })
-
-    act(() => { vi.advanceTimersByTime(3000) })
-
-    expect(result.current.status).toBe('idle')
+    expect(mockBeginRun).toHaveBeenCalledWith('exec-001', 'wf-001')
+    expect(mockHydrateActive).toHaveBeenCalled()
   })
 
   it('transitions to error on failure', async () => {
@@ -68,10 +95,7 @@ describe('useWorkflowRun', () => {
 
     expect(result.current.status).toBe('error')
     expect(result.current.tooltipText).toBe('Execution failed to start')
-
-    act(() => { vi.advanceTimersByTime(3000) })
-
-    expect(result.current.status).toBe('idle')
+    expect(mockBeginRun).not.toHaveBeenCalled()
   })
 
   it('sends undefined body when prompt is empty', async () => {
@@ -85,20 +109,13 @@ describe('useWorkflowRun', () => {
     expect(mockRunWorkflow).toHaveBeenCalledWith('wf-001', undefined)
   })
 
-  it('does not fire when already running', () => {
-    let resolveRun: () => void = () => {}
-    mockRunWorkflow.mockReturnValue(new Promise<void>((r) => { resolveRun = r }))
-
+  it('does not fire while a run is already in flight', () => {
+    mockSelectIsRunning.mockReturnValue(true)
     const { result } = renderHook(() => useWorkflowRun('hello'))
 
     act(() => { result.current.handleRun() })
-    expect(result.current.status).toBe('running')
 
-    // Second call should be no-op
-    act(() => { result.current.handleRun() })
-    expect(mockRunWorkflow).toHaveBeenCalledOnce()
-
-    act(() => { resolveRun() })
+    expect(mockRunWorkflow).not.toHaveBeenCalled()
   })
 
   it('does not fire when no active workflow', async () => {
@@ -111,6 +128,5 @@ describe('useWorkflowRun', () => {
     })
 
     expect(mockRunWorkflow).not.toHaveBeenCalled()
-    expect(result.current.status).toBe('idle')
   })
 })
