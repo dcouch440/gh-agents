@@ -121,12 +121,12 @@ fn create_router(state: AppState) -> Router {
         info!("Rate limiting disabled (NEXOR_SKIP_RATE_LIMIT=1)");
         routes::build_public_routes()
     } else {
-        // Auth routes: 50 requests per second per IP (burst 100). Keyed by IP
+        // Auth routes: 500 requests per second per IP (burst 1000). Keyed by IP
         // because there is no session yet — this is the bucket a login attempt
         // is counted against.
         let auth_rate_limit = GovernorConfigBuilder::default()
-            .per_second(50)
-            .burst_size(100)
+            .per_second(500)
+            .burst_size(1000)
             .key_extractor(SmartIpKeyExtractor)
             .finish()
             .expect("valid governor config");
@@ -138,7 +138,7 @@ fn create_router(state: AppState) -> Router {
     let protected_routes = if skip_rate_limit {
         routes::build_protected_routes(state.clone())
     } else {
-        // ~1200 requests per minute per signed-in session. Keyed by session
+        // ~12000 requests per minute per signed-in session. Keyed by session
         // rather than IP: see `rate_limit` for why IP-keying silently throttles
         // every user behind a proxy or Docker bridge as if they were one caller.
         //
@@ -146,8 +146,8 @@ fn create_router(state: AppState) -> Router {
         // per node plus the editor's own hydration, so it is deliberately well
         // above the sustained rate.
         let api_rate_limit = GovernorConfigBuilder::default()
-            .per_second(20)
-            .burst_size(100)
+            .per_second(200)
+            .burst_size(1000)
             .key_extractor(rate_limit::SessionOrIpKeyExtractor)
             .finish()
             .expect("valid governor config");
