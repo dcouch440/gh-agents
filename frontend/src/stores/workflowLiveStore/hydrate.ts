@@ -101,6 +101,10 @@ const hydrateLiveState = async (workflowId: string): Promise<void> => {
   }
 
   const run = live.active_run ?? live.latest_run
+  // While the user is deliberately viewing a past run (via the Execution
+  // panel's history selector), the poller must not touch `agentTraceStore` —
+  // it would overwrite the traces of the run being viewed with the live run's.
+  const isLive = workflowExecutionStore.selectViewMode(workflowExecutionStore.store.getState()) === 'live'
 
   workflowExecutionStore.applyServerRun({
     runId: run?.id ?? null,
@@ -113,7 +117,9 @@ const hydrateLiveState = async (workflowId: string): Promise<void> => {
     steps: live.run_steps,
   })
 
-  agentTraceStore.setHydratedRun(run?.id ?? null)
+  if (isLive) {
+    agentTraceStore.setHydratedRun(run?.id ?? null)
+  }
 
   // The server saying "not generating" only overrides an optimistic flag once we
   // have spent its grace — see `setGenerating`. Server truth that agrees, or any
@@ -153,13 +159,15 @@ const hydrateLiveState = async (workflowId: string): Promise<void> => {
     return
   }
 
-  // Only worth fetching when we have nothing for this run and have not already
-  // asked — i.e. right after a refresh. Once traces exist, WebSocket keeps them
-  // current, and a run that answered with nothing will not answer differently on
-  // the next tick.
-  const traceState = agentTraceStore.store.getState()
-  const alreadyAsked = agentTraceStore.selectTimelineAttemptedRunId(traceState) === run.id
-  if (!alreadyAsked && agentTraceStore.selectOrder(traceState).length === 0) {
+  // Debug WS events (`NEXOR_DEBUG_STREAM`) are an opt-in dev flag and off by
+  // default — `execution_messages` rows are written unconditionally, but
+  // nothing pushes them to the client without that flag. This REST fetch is
+  // therefore often the *only* source of trace data, so it has to keep
+  // re-polling on every tick like the rest of this function, not just once —
+  // a run that has nothing yet can absolutely have something on the next
+  // tick. `hydrateFromTimeline`'s merge only ever keeps the richer version of
+  // each agent's trace, so re-fetching never discards WS-delivered data.
+  if (isLive) {
     try {
       await agentTraceStore.hydrateFromTimeline(run.id)
     } catch (e) {

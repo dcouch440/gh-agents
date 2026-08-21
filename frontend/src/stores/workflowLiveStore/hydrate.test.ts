@@ -337,7 +337,7 @@ describe('hydrateLiveState', () => {
 
   // ── Timeline ──────────────────────────────────────────────────────────────
 
-  it('does not re-ask the timeline for a run that answered with nothing', async () => {
+  it('keeps asking the timeline every tick, since debug WS events are opt-in and a run with nothing yet can produce something on the next poll', async () => {
     mockGetLiveState.mockResolvedValue(makeLiveState({ latest_run: makeRun() }))
     mockGetExecutionTimeline.mockResolvedValue({ entries: [], has_more: false, next_cursor: null })
 
@@ -345,7 +345,7 @@ describe('hydrateLiveState', () => {
     await hydrateLiveState('wf-1')
     await hydrateLiveState('wf-1')
 
-    expect(mockGetExecutionTimeline).toHaveBeenCalledTimes(1)
+    expect(mockGetExecutionTimeline).toHaveBeenCalledTimes(3)
   })
 
   it('asks again for a different run', async () => {
@@ -378,6 +378,67 @@ describe('hydrateLiveState', () => {
     expect(s.error).not.toBeNull()
     expect(s.loading).toBe(false)
     expect(s.workflowId).toBe('wf-1')
+  })
+
+  // ── Agent trace wiring ───────────────────────────────────────────────────
+
+  it('does not re-stamp an already-hydrated run, and repeated polling does not lose its traces', async () => {
+    // Regression for the "started resets hydratedRunId to null" race: once
+    // `agentTraceStore` correctly reflects the run on screen, `setHydratedRun`
+    // must be a no-op. The timeline is still re-polled every tick (debug WS
+    // events are opt-in), but the richer-wins merge must not lose what is
+    // already there.
+    mockGetLiveState.mockResolvedValue(makeLiveState({ latest_run: makeRun({ id: 'run-1' }) }))
+    agentTraceStore.setHydratedRun('run-1')
+    agentTraceStore.store.setState({
+      traces: { 'ae-1': { agentExecutionId: 'ae-1', agentName: 'A', stepId: 's-1', events: [] } },
+      order: ['ae-1'],
+    })
+
+    await hydrateLiveState('wf-1')
+
+    const s = agentTraceStore.store.getState()
+    expect(s.hydratedRunId).toBe('run-1')
+    expect(s.order).toEqual(['ae-1'])
+    expect(s.traces['ae-1']).toBeDefined()
+    expect(mockGetExecutionTimeline).toHaveBeenCalledWith('run-1', expect.any(Number))
+  })
+
+  it('grows a trace across ticks from repeated polling alone, with no WS involved', async () => {
+    mockGetLiveState.mockResolvedValue(makeLiveState({ latest_run: makeRun({ id: 'run-1', status: 'running' }) }))
+    mockGetExecutionTimeline.mockResolvedValueOnce({
+      entries: [
+        { id: 'e1', ts: '2025-01-01T00:00:00Z', kind: 'system_prompt', step_id: 's-1', step_name: 'Step', agent_name: 'A', agent_execution_id: 'ae-1', content: 'sys', tool_name: null, tool_call_id: null, input_tokens: 0, output_tokens: 0 },
+      ],
+      has_more: false,
+      next_cursor: null,
+    })
+    await hydrateLiveState('wf-1')
+    expect(agentTraceStore.store.getState().traces['ae-1']?.events).toHaveLength(1)
+
+    mockGetExecutionTimeline.mockResolvedValueOnce({
+      entries: [
+        { id: 'e1', ts: '2025-01-01T00:00:00Z', kind: 'system_prompt', step_id: 's-1', step_name: 'Step', agent_name: 'A', agent_execution_id: 'ae-1', content: 'sys', tool_name: null, tool_call_id: null, input_tokens: 0, output_tokens: 0 },
+        { id: 'e2', ts: '2025-01-01T00:00:01Z', kind: 'user_message', step_id: 's-1', step_name: 'Step', agent_name: 'A', agent_execution_id: 'ae-1', content: 'go', tool_name: null, tool_call_id: null, input_tokens: 0, output_tokens: 0 },
+      ],
+      has_more: false,
+      next_cursor: null,
+    })
+    await hydrateLiveState('wf-1')
+
+    expect(agentTraceStore.store.getState().traces['ae-1']?.events).toHaveLength(2)
+  })
+
+  it('does not touch agentTraceStore while the user is viewing history', async () => {
+    mockGetLiveState.mockResolvedValue(makeLiveState({ latest_run: makeRun({ id: 'run-live' }) }))
+    workflowExecutionStore.store.setState({ viewMode: 'history' })
+    agentTraceStore.setHydratedRun('run-historical')
+
+    await hydrateLiveState('wf-1')
+
+    const s = agentTraceStore.store.getState()
+    expect(s.hydratedRunId).toBe('run-historical')
+    expect(mockGetExecutionTimeline).not.toHaveBeenCalled()
   })
 })
 

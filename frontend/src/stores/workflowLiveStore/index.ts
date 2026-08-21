@@ -12,6 +12,7 @@ import {
 } from './selectors'
 import { hydrateLiveState, hydrateActive, UNCONFIRMED_LIMIT } from './hydrate'
 import { startLiveSync, stopLiveSync, rescheduleLiveSync } from './sync'
+import { viewHistoricalRun, returnToLive } from './history'
 
 const reset = (): void => {
   stopLiveSync()
@@ -51,6 +52,8 @@ export const workflowLiveStore = {
   stopLiveSync,
   rescheduleLiveSync,
   setGenerating,
+  viewHistoricalRun,
+  returnToLive,
   reset,
 }
 

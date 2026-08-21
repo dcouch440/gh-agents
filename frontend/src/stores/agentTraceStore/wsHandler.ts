@@ -8,7 +8,8 @@ import type {
   DebugToolResultData,
 } from '@/types/ws'
 import type { AgentTrace, AgentTraceEvent } from './types'
-import { store, reset } from './_store'
+import { store } from './_store'
+import { setHydratedRun } from './hydrate'
 
 const appendEvent = (agentExecutionId: string, agentName: string | null, stepId: string, event: AgentTraceEvent): void => {
   store.setState((s) => {
@@ -38,7 +39,12 @@ const handleWsEvent = (msg: WsWireMessage): void => {
   try {
     switch (msg.event) {
       case WORKFLOW_EVENT.STARTED: {
-        reset()
+        // Stamp the run that is actually starting, not just "clear everything".
+        // `workflowLiveStore`'s poller calls `setHydratedRun(run.id)` on every
+        // tick; if this left `hydratedRunId` at `null` instead, the next tick
+        // would see `null -> run.id` as a run change and wipe out any trace
+        // events that arrived in between.
+        setHydratedRun(msg.run_id)
         break
       }
       case WORKFLOW_EVENT.DEBUG_SYSTEM_PROMPT: {

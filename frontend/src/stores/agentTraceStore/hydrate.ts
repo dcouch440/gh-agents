@@ -79,16 +79,11 @@ const hydrateFromTimeline = async (executionId: string): Promise<void> => {
   } catch (e) {
     // Throttling is the caller's problem — it owns the poll cadence and needs to
     // know to back off. Anything else is best-effort and must not block the rest
-    // of the hydration, but do not mark the run attempted: we never got an
-    // answer, so asking again later is correct.
+    // of the hydration; the caller polls repeatedly, so a failed attempt is
+    // simply retried on the next tick.
     if (isRateLimitError(e)) throw e
-    store.setState({ timelineAttemptedRunId: executionId })
     return
   }
-
-  // The endpoint answered. Even an empty answer is an answer — record it so the
-  // poller stops re-asking a run that has not produced a message yet.
-  store.setState({ timelineAttemptedRunId: executionId })
 
   if (entries.length === 0) return
 
@@ -129,10 +124,21 @@ const hydrateFromTimeline = async (executionId: string): Promise<void> => {
   }
 
   store.setState((s) => {
-    // Live WebSocket traces are richer than the DB rows; never clobber them.
-    const merged = { ...traces, ...s.traces }
+    // Keep whichever version of each agent's trace has more events. WS
+    // delivers events in real time and can be ahead of what is committed to
+    // the DB yet, but this fetch is polled repeatedly and needs to be free to
+    // keep growing a trace across ticks — a version with fewer events is
+    // never allowed to overwrite a richer one, regardless of which side it
+    // came from.
+    const merged: Record<string, AgentTrace> = { ...s.traces }
+    for (const [id, fresh] of Object.entries(traces)) {
+      const existing = merged[id]
+      if (existing === undefined || fresh.events.length > existing.events.length) {
+        merged[id] = fresh
+      }
+    }
     const seen = Collections.toSet(s.order)
-    const mergedOrder = [...order.filter((id) => !seen.has(id)), ...s.order]
+    const mergedOrder = [...s.order, ...order.filter((id) => !seen.has(id))]
     return { traces: merged, order: mergedOrder }
   })
 }
@@ -145,7 +151,7 @@ const setHydratedRun = (runId: string | null): void => {
   store.setState((s) =>
     s.hydratedRunId === runId
       ? s
-      : { hydratedRunId: runId, traces: {}, order: [], timelineAttemptedRunId: null },
+      : { hydratedRunId: runId, traces: {}, order: [] },
   )
 }
 

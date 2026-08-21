@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
-import { useStore, workflowStore, agentStore, outputSchemaStore, protocolStore, workflowExecutionStore, workflowLiveStore, sidebarStore } from '@/stores'
+import { useStore, workflowStore, agentStore, agentTraceStore, outputSchemaStore, protocolStore, workflowExecutionStore, workflowLiveStore, sidebarStore } from '@/stores'
 import { Board } from '@/components/board'
 import { WorkflowSidebar } from '@/components/sidebar'
 import { useWorkflowAgentChat } from '@/hooks/useWorkflowAgentChat'
@@ -39,6 +39,7 @@ function WorkflowEditorPage() {
       workflowLiveStore.reset()
       workflowStore.clearActive()
       workflowExecutionStore.reset()
+      agentTraceStore.reset()
       sidebarStore.reset()
     }
   }, [id, navigate])

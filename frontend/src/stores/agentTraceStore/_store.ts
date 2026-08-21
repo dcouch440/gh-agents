@@ -5,7 +5,6 @@ const initialState: AgentTraceState = {
   traces: {},
   order: [],
   hydratedRunId: null,
-  timelineAttemptedRunId: null,
 }
 
 const store = createStore<AgentTraceState>(() => ({ ...initialState }))

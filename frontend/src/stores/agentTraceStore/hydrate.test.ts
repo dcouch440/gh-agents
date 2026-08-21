@@ -106,9 +106,19 @@ describe('hydrateFromTimeline', () => {
     }
   })
 
-  it('never clobbers a richer live trace', async () => {
+  it('never clobbers a richer live trace with a thinner DB snapshot', async () => {
     agentTraceStore.store.setState({
-      traces: { 'ae-1': { agentExecutionId: 'ae-1', agentName: 'Live', stepId: 'step-1', events: [] } },
+      traces: {
+        'ae-1': {
+          agentExecutionId: 'ae-1',
+          agentName: 'Live',
+          stepId: 'step-1',
+          events: [
+            { type: 'system_prompt', content: 'sys', ts: '2025-01-01T00:00:00Z' },
+            { type: 'user_message', content: 'go', ts: '2025-01-01T00:00:01Z' },
+          ],
+        },
+      },
       order: ['ae-1'],
     })
     mockGetExecutionTimeline.mockResolvedValue({
@@ -121,6 +131,43 @@ describe('hydrateFromTimeline', () => {
 
     expect(agentTraceStore.store.getState().traces['ae-1']?.agentName).toBe('Live')
     expect(agentTraceStore.store.getState().order).toEqual(['ae-1'])
+  })
+
+  it('adopts a richer DB snapshot over a thinner existing trace', async () => {
+    // Debug WS events are optional (`NEXOR_DEBUG_STREAM`); when nothing is
+    // streaming live, repeated polls of this endpoint are the only way a
+    // trace ever grows, so a fuller DB snapshot must win.
+    agentTraceStore.store.setState({
+      traces: { 'ae-1': { agentExecutionId: 'ae-1', agentName: 'Stale', stepId: 'step-1', events: [] } },
+      order: ['ae-1'],
+    })
+    mockGetExecutionTimeline.mockResolvedValue({
+      entries: [makeEntry({ agent_name: 'FromDb' })],
+      has_more: false,
+      next_cursor: null,
+    })
+
+    await hydrateFromTimeline('run-1')
+
+    const s = agentTraceStore.store.getState()
+    expect(s.traces['ae-1']?.agentName).toBe('FromDb')
+    expect(s.traces['ae-1']?.events).toHaveLength(1)
+  })
+
+  it('appends a newly discovered agent after existing ones, preserving chronological order', async () => {
+    agentTraceStore.store.setState({
+      traces: { 'ae-0': { agentExecutionId: 'ae-0', agentName: 'First', stepId: 'step-0', events: [] } },
+      order: ['ae-0'],
+    })
+    mockGetExecutionTimeline.mockResolvedValue({
+      entries: [makeEntry({ agent_execution_id: 'ae-1', agent_name: 'Second' })],
+      has_more: false,
+      next_cursor: null,
+    })
+
+    await hydrateFromTimeline('run-1')
+
+    expect(agentTraceStore.store.getState().order).toEqual(['ae-0', 'ae-1'])
   })
 
   it('swallows a failed fetch', async () => {

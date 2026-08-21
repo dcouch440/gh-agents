@@ -6,7 +6,7 @@ import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined'
 import ErrorOutline from '@mui/icons-material/ErrorOutline'
 import HistoryOutlined from '@mui/icons-material/HistoryOutlined'
 import { EmptyState } from '@/components/primitives'
-import { useStore, workflowExecutionStore, workflowStore } from '@/stores'
+import { useStore, workflowExecutionStore, workflowLiveStore, workflowStore } from '@/stores'
 import { ExecutionRunSelector } from './ExecutionRunSelector'
 import { ExecutionRunHeader } from './ExecutionRunHeader'
 import { ExecutionTimeline } from './ExecutionTimeline'
@@ -64,8 +64,8 @@ function ExecutionPanel() {
         selectedHistoricalRunId={selectedHistoricalRunId}
         isRunning={isRunning}
         loading={historyLoading}
-        onSelectRun={workflowExecutionStore.viewHistoricalRun}
-        onReturnToLive={workflowExecutionStore.returnToLive}
+        onSelectRun={(runId) => { void workflowLiveStore.viewHistoricalRun(runId) }}
+        onReturnToLive={() => { void workflowLiveStore.returnToLive() }}
       />
       {hasHistory && activeWorkflowId && (
         <Box sx={{ px: 1, pb: 0.5 }}>
