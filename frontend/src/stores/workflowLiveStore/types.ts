@@ -38,6 +38,23 @@ type WorkflowLiveState = {
   error: string | null
   /** Consecutive failed hydrations. Drives backoff and optimistic-flag expiry. */
   consecutiveFailures: number
+  /**
+   * Reads left to spend confirming an optimistic `isGenerating`.
+   *
+   * `POST /generate` spawns its pipeline and returns before any task is
+   * registered, so the first read back can honestly report "not generating" for
+   * work that is about to start. Zero means the flag is server truth and needs
+   * no grace.
+   */
+  unconfirmedGenerating: number
+  /**
+   * Set when the server is rate-limiting us, cleared on the next success.
+   *
+   * Distinct from `error`: being throttled is not a failure of the workflow, and
+   * the view stays valid — it is just going stale. `retryAfterMs` is what the
+   * server told us to wait, when it told us.
+   */
+  throttledUntilMs: number | null
   hydratedAt: string | null
 }
 

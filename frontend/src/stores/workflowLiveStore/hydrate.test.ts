@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { workflowLiveStore } from '.'
-import { hydrateLiveState, hydrateActive } from './hydrate'
+import { ApiError } from '@/api'
+import { hydrateLiveState, hydrateActive, UNCONFIRMED_LIMIT, DEFAULT_THROTTLE_MS } from './hydrate'
 import { workflowExecutionStore } from '../workflowExecutionStore'
 import { dispatchStore } from '../dispatchStore'
 import { agentTraceStore } from '../agentTraceStore'
 import type { WorkflowExecutionSummary, WorkflowLiveStateResponse } from '@/types'
+import type * as ApiModule from '@/api'
 
 const {
   mockGetLiveState,
@@ -20,7 +22,10 @@ const {
   mockGetWorkshopStatus: vi.fn(() => Promise.reject(new Error('no workshop'))),
 }))
 
-vi.mock('@/api', () => ({
+// Only `api` is stubbed — the error guards stay real so the throttling tests
+// exercise the same narrowing the app does.
+vi.mock('@/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiModule>()),
   api: {
     workflows: {
       getLiveState: mockGetLiveState,
@@ -214,6 +219,154 @@ describe('hydrateLiveState', () => {
     const s = workflowLiveStore.store.getState()
     expect(s.isGenerating).toBe(true)
     expect(s.consecutiveFailures).toBe(0)
+  })
+
+  // ── Rate limiting ─────────────────────────────────────────────────────────
+
+  const rateLimited = (retryAfterMs: number | null) =>
+    ApiError.rateLimit('/api/workflows/wf-1/live-state', 'Too Many Requests', null, retryAfterMs)
+
+  it('treats a 429 as backpressure, not a failure', async () => {
+    // Being throttled says nothing about the workflow. The view we already have
+    // is still correct, so it must survive — and the failure budget, which
+    // exists for "the server is broken", must not be spent on it.
+    mockGetLiveState.mockResolvedValueOnce(makeLiveState({ generating: true }))
+    await hydrateLiveState('wf-1')
+
+    mockGetLiveState.mockRejectedValue(rateLimited(4000))
+    await hydrateLiveState('wf-1')
+
+    const s = workflowLiveStore.store.getState()
+    expect(s.consecutiveFailures).toBe(0)
+    expect(s.error).toBeNull()
+    expect(s.isGenerating).toBe(true)
+    expect(s.throttledUntilMs).not.toBeNull()
+  })
+
+  it('honours the wait the server asked for', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2025-01-01T00:00:00Z'))
+    try {
+      mockGetLiveState.mockRejectedValue(rateLimited(4000))
+
+      await hydrateLiveState('wf-1')
+
+      expect(workflowLiveStore.store.getState().throttledUntilMs).toBe(Date.now() + 4000)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('falls back to a default wait when the server does not say', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2025-01-01T00:00:00Z'))
+    try {
+      mockGetLiveState.mockRejectedValue(rateLimited(null))
+
+      await hydrateLiveState('wf-1')
+
+      expect(workflowLiveStore.store.getState().throttledUntilMs).toBe(
+        Date.now() + DEFAULT_THROTTLE_MS,
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('clears the throttle once a request gets through', async () => {
+    mockGetLiveState.mockRejectedValueOnce(rateLimited(4000))
+    await hydrateLiveState('wf-1')
+    expect(workflowLiveStore.store.getState().throttledUntilMs).not.toBeNull()
+
+    mockGetLiveState.mockResolvedValue(makeLiveState())
+    await hydrateLiveState('wf-1')
+
+    expect(workflowLiveStore.store.getState().throttledUntilMs).toBeNull()
+  })
+
+  it('records a throttle hit from a trace fetch instead of swallowing it', async () => {
+    // These used to be swallowed wholesale, which rendered as an empty panel
+    // with nothing to explain it.
+    mockGetLiveState.mockResolvedValue(makeLiveState({
+      dispatches: [
+        { step_id: 's1', execution_id: 'exec-1', status: 'running', instruction: 'a', created_at: '2025-01-01T00:01:00Z', result: null, trace_len: 0, source: 'registry' },
+      ],
+    }))
+    mockDispatchTrace.mockRejectedValue(rateLimited(3000))
+
+    await hydrateLiveState('wf-1')
+
+    expect(workflowLiveStore.store.getState().throttledUntilMs).not.toBeNull()
+  })
+
+  // ── Optimistic generate ───────────────────────────────────────────────────
+
+  it('holds an optimistic spinner while the server has not caught up', async () => {
+    // POST /generate spawns its pipeline and returns before registering
+    // anything, so the first read back honestly says "not generating".
+    workflowLiveStore.setGenerating(true)
+    mockGetLiveState.mockResolvedValue(makeLiveState({ generating: false }))
+
+    for (let i = 0; i < UNCONFIRMED_LIMIT; i++) {
+      await hydrateLiveState('wf-1')
+      expect(workflowLiveStore.store.getState().isGenerating).toBe(true)
+    }
+
+    await hydrateLiveState('wf-1')
+    expect(workflowLiveStore.store.getState().isGenerating).toBe(false)
+  })
+
+  it('settles immediately once the server confirms the generate', async () => {
+    workflowLiveStore.setGenerating(true)
+    mockGetLiveState.mockResolvedValue(makeLiveState({ generating: true }))
+
+    await hydrateLiveState('wf-1')
+
+    const s = workflowLiveStore.store.getState()
+    expect(s.isGenerating).toBe(true)
+    expect(s.unconfirmedGenerating).toBe(0)
+  })
+
+  it('does not invent a spinner the server never reported', async () => {
+    mockGetLiveState.mockResolvedValue(makeLiveState({ generating: false }))
+
+    await hydrateLiveState('wf-1')
+
+    expect(workflowLiveStore.store.getState().isGenerating).toBe(false)
+  })
+
+  // ── Timeline ──────────────────────────────────────────────────────────────
+
+  it('does not re-ask the timeline for a run that answered with nothing', async () => {
+    mockGetLiveState.mockResolvedValue(makeLiveState({ latest_run: makeRun() }))
+    mockGetExecutionTimeline.mockResolvedValue({ entries: [], has_more: false, next_cursor: null })
+
+    await hydrateLiveState('wf-1')
+    await hydrateLiveState('wf-1')
+    await hydrateLiveState('wf-1')
+
+    expect(mockGetExecutionTimeline).toHaveBeenCalledTimes(1)
+  })
+
+  it('asks again for a different run', async () => {
+    mockGetExecutionTimeline.mockResolvedValue({ entries: [], has_more: false, next_cursor: null })
+
+    mockGetLiveState.mockResolvedValue(makeLiveState({ latest_run: makeRun({ id: 'run-1' }) }))
+    await hydrateLiveState('wf-1')
+
+    mockGetLiveState.mockResolvedValue(makeLiveState({ latest_run: makeRun({ id: 'run-2' }) }))
+    await hydrateLiveState('wf-1')
+
+    expect(mockGetExecutionTimeline).toHaveBeenCalledTimes(2)
+  })
+
+  it('records a throttled timeline so the poll backs off', async () => {
+    mockGetLiveState.mockResolvedValue(makeLiveState({ latest_run: makeRun() }))
+    mockGetExecutionTimeline.mockRejectedValue(rateLimited(5000))
+
+    await hydrateLiveState('wf-1')
+
+    expect(workflowLiveStore.store.getState().throttledUntilMs).not.toBeNull()
   })
 
   it('records an error without clearing the workflow id', async () => {

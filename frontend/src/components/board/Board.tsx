@@ -41,11 +41,19 @@ function Board({ workflowId }: BoardProps) {
   // generating, and the flag clears when the server says the work is done.
   const isGenerating = useStore(workflowLiveStore.store, workflowLiveStore.selectIsGenerating)
   const handleGenerate = useCallback(() => {
-    // Optimistic until the next sync tick replaces it with server truth.
+    // Optimistic until the sync tick confirms it. Deliberately no re-fetch on
+    // success: `POST /generate` returns before its pipeline has registered
+    // anything, so reading straight back reports "not generating" for work that
+    // is about to start. The poll, re-armed by `setGenerating`, settles it.
     workflowLiveStore.setGenerating(true)
     void api.workflows.generate(workflowId)
-      .catch((err: unknown) => console.error('Generate failed:', err))
-      .finally(() => { void workflowLiveStore.hydrateActive() })
+      .catch((err: unknown) => {
+        console.error('Generate failed:', err)
+        // Nothing is going to start, so drop the spinner now rather than making
+        // the user wait out the confirmation grace.
+        workflowLiveStore.setGenerating(false)
+        void workflowLiveStore.hydrateActive()
+      })
   }, [workflowId])
 
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)

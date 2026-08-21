@@ -10,6 +10,8 @@ const initialState: WorkflowLiveState = {
   loading: false,
   error: null,
   consecutiveFailures: 0,
+  unconfirmedGenerating: 0,
+  throttledUntilMs: null,
   hydratedAt: null,
 }
 

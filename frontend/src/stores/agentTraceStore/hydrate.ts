@@ -1,4 +1,4 @@
-import { api } from '@/api'
+import { api, isRateLimitError } from '@/api'
 import { Collections } from '@/utils/collections'
 import type { TimelineEntry } from '@/types'
 import { store } from './_store'
@@ -76,10 +76,19 @@ const hydrateFromTimeline = async (executionId: string): Promise<void> => {
   try {
     const resp = await api.workflows.getExecutionTimeline(executionId, TIMELINE_LIMIT)
     entries = resp.entries
-  } catch {
-    // Best-effort — a run with no messages yet simply has nothing to show.
+  } catch (e) {
+    // Throttling is the caller's problem — it owns the poll cadence and needs to
+    // know to back off. Anything else is best-effort and must not block the rest
+    // of the hydration, but do not mark the run attempted: we never got an
+    // answer, so asking again later is correct.
+    if (isRateLimitError(e)) throw e
+    store.setState({ timelineAttemptedRunId: executionId })
     return
   }
+
+  // The endpoint answered. Even an empty answer is an answer — record it so the
+  // poller stops re-asking a run that has not produced a message yet.
+  store.setState({ timelineAttemptedRunId: executionId })
 
   if (entries.length === 0) return
 
@@ -133,7 +142,11 @@ const hydrateFromTimeline = async (executionId: string): Promise<void> => {
  * "nothing has run yet" apart from "these traces predate this reload".
  */
 const setHydratedRun = (runId: string | null): void => {
-  store.setState((s) => (s.hydratedRunId === runId ? s : { hydratedRunId: runId, traces: {}, order: [] }))
+  store.setState((s) =>
+    s.hydratedRunId === runId
+      ? s
+      : { hydratedRunId: runId, traces: {}, order: [], timelineAttemptedRunId: null },
+  )
 }
 
 export { hydrateFromTimeline, setHydratedRun, parseToolInput, toEvent, pairKey }

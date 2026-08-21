@@ -9,6 +9,8 @@ const selectOrder = (s: AgentTraceState): string[] => s.order
 
 const selectHydratedRunId = (s: AgentTraceState): string | null => s.hydratedRunId
 
+const selectTimelineAttemptedRunId = (s: AgentTraceState): string | null => s.timelineAttemptedRunId
+
 const selectTraceById = (id: string) => (s: AgentTraceState): AgentTrace | null => s.traces[id] ?? null
 
 export const agentTraceStore = {
@@ -20,6 +22,7 @@ export const agentTraceStore = {
   selectTraces,
   selectOrder,
   selectHydratedRunId,
+  selectTimelineAttemptedRunId,
   selectTraceById,
 }
 

@@ -150,6 +150,78 @@ describe('api client', () => {
       })
     })
 
+    it('surfaces a 429 as its own type, not a generic http error', async () => {
+      // Callers need to tell "you are asking too fast" apart from "this failed":
+      // a poller should back off, and a message should say something actionable.
+      mockGetItem.mockReturnValue(null)
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 429,
+        statusText: 'Too Many Requests',
+        text: () => Promise.resolve('Too Many Requests! Wait for 7s'),
+        headers: new Headers({ 'x-ratelimit-after': '7' }),
+      })
+
+      await expect(api.get('/test')).rejects.toMatchObject({
+        type: 'rate_limit_error',
+        status: 429,
+        retryAfterMs: 7000,
+      })
+    })
+
+    it('reads the standard retry-after spelling too', async () => {
+      // A proxy in front of the app may add `retry-after` instead.
+      mockGetItem.mockReturnValue(null)
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 429,
+        statusText: 'Too Many Requests',
+        text: () => Promise.resolve(''),
+        headers: new Headers({ 'retry-after': '3' }),
+      })
+
+      await expect(api.get('/test')).rejects.toMatchObject({
+        type: 'rate_limit_error',
+        retryAfterMs: 3000,
+      })
+    })
+
+    it('leaves the wait unset when the server does not say', async () => {
+      // Cross-origin callers only see exposed headers, so absence is expected
+      // and must not become a bogus zero-length wait.
+      mockGetItem.mockReturnValue(null)
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 429,
+        statusText: 'Too Many Requests',
+        text: () => Promise.resolve(''),
+        headers: new Headers(),
+      })
+
+      await expect(api.get('/test')).rejects.toMatchObject({ type: 'rate_limit_error' })
+      await api.get('/test').catch((e: unknown) => {
+        expect(e).toBeInstanceOf(ApiError)
+        if (e instanceof ApiError) expect(e.retryAfterMs).toBeUndefined()
+      })
+    })
+
+    it('does not retry a 429', async () => {
+      // Retrying into a limiter is how a throttle turns into a ban.
+      mockGetItem.mockReturnValue(null)
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 429,
+        statusText: 'Too Many Requests',
+        text: () => Promise.resolve(''),
+        headers: new Headers(),
+      })
+
+      await expect(api.get('/test', { retries: 3 })).rejects.toMatchObject({
+        type: 'rate_limit_error',
+      })
+      expect(mockFetch).toHaveBeenCalledTimes(1)
+    })
+
     it('throws ApiError on failed request with text body', async () => {
       mockGetItem.mockReturnValue(null)
       mockFetch.mockResolvedValue({

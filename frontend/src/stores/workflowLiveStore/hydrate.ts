@@ -1,4 +1,4 @@
-import { api } from '@/api'
+import { api, isRateLimitError } from '@/api'
 import { Collections } from '@/utils/collections'
 import type { LiveDispatchInfo, WorkflowLiveStateResponse } from '@/types'
 import { extractError } from '../lib'
@@ -10,6 +10,9 @@ import type { BaselineStepState, LiveDispatch } from './types'
 
 /** Failed hydrations tolerated before optimistic flags are dropped. */
 const UNCONFIRMED_LIMIT = 2
+
+/** Fallback wait when the server throttles us without saying for how long. */
+const DEFAULT_THROTTLE_MS = 10_000
 
 const toBaseline = (s: WorkflowLiveStateResponse['steps'][number]): BaselineStepState => ({
   stepId: s.step_id,
@@ -45,8 +48,16 @@ const fetchTrace = async (workflowId: string, dispatch: LiveDispatch): Promise<v
       ? await api.dispatch.trace(dispatch.executionId)
       : await api.workflows.getStepDispatchHistory(workflowId, dispatch.stepId)
     dispatchStore.hydrateFromApi(resp)
-  } catch {
+  } catch (e) {
     // Best-effort — a missing trace must not block the rest of the hydration.
+    // A 429 is the exception worth recording: swallowing it renders as an empty
+    // panel with no explanation, which is the failure this whole path exists to
+    // avoid. Surface it so the next tick backs off instead of hammering.
+    if (isRateLimitError(e)) {
+      store.setState({
+        throttledUntilMs: Date.now() + (e.retryAfterMs ?? DEFAULT_THROTTLE_MS),
+      })
+    }
   }
 }
 
@@ -64,6 +75,17 @@ const hydrateLiveState = async (workflowId: string): Promise<void> => {
   try {
     live = await api.workflows.getLiveState(workflowId)
   } catch (e) {
+    // Being throttled is not a failure. The view we already have is still
+    // correct, just going stale, so keep it and wait the server out rather than
+    // counting this against the failure budget and dropping the spinner.
+    if (isRateLimitError(e)) {
+      store.setState({
+        loading: false,
+        throttledUntilMs: Date.now() + (e.retryAfterMs ?? DEFAULT_THROTTLE_MS),
+      })
+      return
+    }
+
     // `isGenerating` is set optimistically on click and only server truth can
     // confirm it. If we cannot reach the server we must not keep showing a
     // spinner we are unable to substantiate — a stuck spinner reads as a hung
@@ -73,7 +95,7 @@ const hydrateLiveState = async (workflowId: string): Promise<void> => {
       loading: false,
       error: extractError('workflowLive', e),
       consecutiveFailures: failures,
-      ...(failures >= UNCONFIRMED_LIMIT ? { isGenerating: false } : {}),
+      ...(failures >= UNCONFIRMED_LIMIT ? { isGenerating: false, unconfirmedGenerating: 0 } : {}),
     })
     return
   }
@@ -93,6 +115,14 @@ const hydrateLiveState = async (workflowId: string): Promise<void> => {
 
   agentTraceStore.setHydratedRun(run?.id ?? null)
 
+  // The server saying "not generating" only overrides an optimistic flag once we
+  // have spent its grace — see `setGenerating`. Server truth that agrees, or any
+  // positive reading, settles it immediately.
+  const grace = store.getState().unconfirmedGenerating
+  const holdOptimistic = !live.generating && grace > 0
+  const isGenerating = holdOptimistic ? true : live.generating
+  const unconfirmedGenerating = holdOptimistic ? grace - 1 : 0
+
   const dispatches = Collections.mapBy(live.dispatches, toDispatch)
   const baselineByStep: Record<string, BaselineStepState> = {}
   for (const step of live.steps) {
@@ -104,10 +134,12 @@ const hydrateLiveState = async (workflowId: string): Promise<void> => {
     baselineByStep,
     dispatches,
     runSteps: live.run_steps,
-    isGenerating: live.generating,
+    isGenerating,
+    unconfirmedGenerating,
     loading: false,
     error: null,
     consecutiveFailures: 0,
+    throttledUntilMs: null,
     hydratedAt: live.server_time,
   })
 
@@ -121,10 +153,22 @@ const hydrateLiveState = async (workflowId: string): Promise<void> => {
     return
   }
 
-  // Only worth fetching when we have nothing for this run — i.e. right after a
-  // refresh. Once traces exist, WebSocket keeps them current.
-  if (agentTraceStore.selectOrder(agentTraceStore.store.getState()).length === 0) {
-    await agentTraceStore.hydrateFromTimeline(run.id)
+  // Only worth fetching when we have nothing for this run and have not already
+  // asked — i.e. right after a refresh. Once traces exist, WebSocket keeps them
+  // current, and a run that answered with nothing will not answer differently on
+  // the next tick.
+  const traceState = agentTraceStore.store.getState()
+  const alreadyAsked = agentTraceStore.selectTimelineAttemptedRunId(traceState) === run.id
+  if (!alreadyAsked && agentTraceStore.selectOrder(traceState).length === 0) {
+    try {
+      await agentTraceStore.hydrateFromTimeline(run.id)
+    } catch (e) {
+      if (isRateLimitError(e)) {
+        store.setState({
+          throttledUntilMs: Date.now() + (e.retryAfterMs ?? DEFAULT_THROTTLE_MS),
+        })
+      }
+    }
   }
 }
 
@@ -135,4 +179,4 @@ const hydrateActive = async (): Promise<void> => {
   await hydrateLiveState(workflowId)
 }
 
-export { hydrateLiveState, hydrateActive, toBaseline, toDispatch }
+export { hydrateLiveState, hydrateActive, toBaseline, toDispatch, UNCONFIRMED_LIMIT, DEFAULT_THROTTLE_MS }

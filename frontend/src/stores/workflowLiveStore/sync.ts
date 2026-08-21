@@ -16,7 +16,18 @@ const isBusy = (): boolean => {
   return workflowExecutionStore.selectIsRunning(workflowExecutionStore.store.getState())
 }
 
+const remainingThrottleMs = (): number => {
+  const until = store.getState().throttledUntilMs
+  return until === null ? 0 : Math.max(0, until - Date.now())
+}
+
 const nextDelay = (): number => {
+  // Being throttled outranks everything: the server has told us exactly how long
+  // to wait, and polling sooner only deepens the hole. Floor it at the active
+  // cadence so a zero or already-elapsed wait cannot turn into a tight loop.
+  const throttled = remainingThrottleMs()
+  if (throttled > 0) return Math.max(throttled, ACTIVE_POLL_MS)
+
   // `hydrateLiveState` owns the failure count so the backoff and the
   // optimistic-flag expiry agree on what "failing" means.
   const failures = store.getState().consecutiveFailures
@@ -43,6 +54,15 @@ const tick = async (): Promise<void> => {
   const workflowId = activeWorkflowId
   if (workflowId === null) return
 
+  // A throttle can be recorded outside this loop — a trace fetch that came back
+  // 429, or the re-hydrate after dropped WebSocket events. The timer already
+  // pending at that moment was scheduled without knowing, so check again here
+  // rather than spending the request and earning a longer ban.
+  if (remainingThrottleMs() > 0) {
+    schedule()
+    return
+  }
+
   await hydrateLiveState(workflowId)
 
   // Guard against a workflow switch that happened during the await.
@@ -65,11 +85,13 @@ const startLiveSync = (workflowId: string): void => {
   activeWorkflowId = workflowId
   store.setState({ consecutiveFailures: 0 })
 
-  // A backgrounded tab throttles timers, so catch up the moment it returns.
+  // A backgrounded tab throttles timers, so catch up the moment it returns —
+  // unless the server has asked us to wait, in which case the scheduled timer
+  // already has the right delay and firing now would just earn another 429.
   visibilityHandler = () => {
-    if (document.visibilityState === 'visible' && activeWorkflowId !== null) {
-      void tick()
-    }
+    if (document.visibilityState !== 'visible' || activeWorkflowId === null) return
+    if (remainingThrottleMs() > 0) return
+    void tick()
   }
   document.addEventListener('visibilitychange', visibilityHandler)
 
@@ -84,6 +106,18 @@ const startLiveSync = (workflowId: string): void => {
   void tick()
 }
 
+/**
+ * Re-arm the timer against the current state.
+ *
+ * Cadence is chosen when a tick is scheduled, so a state change that should
+ * speed polling up (a Generate starting) would otherwise not take effect until
+ * the already-scheduled long delay elapsed.
+ */
+const rescheduleLiveSync = (): void => {
+  if (activeWorkflowId === null) return
+  schedule()
+}
+
 const stopLiveSync = (): void => {
   clearTimer()
   activeWorkflowId = null
@@ -93,4 +127,4 @@ const stopLiveSync = (): void => {
   }
 }
 
-export { startLiveSync, stopLiveSync, ACTIVE_POLL_MS, IDLE_POLL_MS, MAX_BACKOFF_MS }
+export { startLiveSync, stopLiveSync, rescheduleLiveSync, ACTIVE_POLL_MS, IDLE_POLL_MS, MAX_BACKOFF_MS }

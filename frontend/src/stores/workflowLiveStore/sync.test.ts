@@ -10,6 +10,8 @@ const { mockHydrate } = vi.hoisted(() => ({
 vi.mock('./hydrate', () => ({
   hydrateLiveState: mockHydrate,
   hydrateActive: vi.fn(() => Promise.resolve()),
+  UNCONFIRMED_LIMIT: 2,
+  DEFAULT_THROTTLE_MS: 10_000,
 }))
 
 const flush = async () => {
@@ -24,6 +26,8 @@ beforeEach(() => {
     hydratedAt: '2025-01-01T00:00:00Z',
     error: null,
     consecutiveFailures: 0,
+    throttledUntilMs: null,
+    unconfirmedGenerating: 0,
   })
   workflowExecutionStore.reset()
   mockHydrate.mockImplementation(() => Promise.resolve())
@@ -142,5 +146,56 @@ describe('startLiveSync deduplication', () => {
     await flush()
 
     expect(mockHydrate).toHaveBeenCalledWith('wf-2')
+  })
+})
+
+describe('backpressure', () => {
+  it('waits out a throttle instead of polling through it', async () => {
+    // A real hydration clears the throttle when a request gets through.
+    mockHydrate.mockImplementation(() => {
+      workflowLiveStore.store.setState({ throttledUntilMs: null })
+      return Promise.resolve()
+    })
+
+    startLiveSync('wf-1')
+    await flush()
+    expect(mockHydrate).toHaveBeenCalledTimes(1)
+
+    // Recorded out of band — by a trace fetch, say — so the timer already
+    // pending was scheduled without knowing about it. 20s is past both cadences.
+    const deadline = Date.now() + 20_000
+    workflowLiveStore.store.setState({ throttledUntilMs: deadline })
+
+    await vi.advanceTimersByTimeAsync(IDLE_POLL_MS + 1_000)
+    expect(mockHydrate).toHaveBeenCalledTimes(1)
+    expect(Date.now()).toBeLessThan(deadline)
+
+    // Past the deadline it resumes, once.
+    await vi.advanceTimersByTimeAsync(6_000)
+    expect(Date.now()).toBeGreaterThan(deadline)
+    expect(mockHydrate).toHaveBeenCalledTimes(2)
+  })
+
+  it('never busy-loops on a throttle that has no wait left', async () => {
+    // A zero or already-elapsed deadline must fall back to the normal cadence
+    // rather than scheduling a zero-delay timer.
+    startLiveSync('wf-1')
+    await flush()
+
+    workflowLiveStore.store.setState({ throttledUntilMs: Date.now() - 1 })
+    await vi.advanceTimersByTimeAsync(ACTIVE_POLL_MS - 1)
+    expect(mockHydrate).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not stampede when a throttled tab regains focus', async () => {
+    startLiveSync('wf-1')
+    await flush()
+    expect(mockHydrate).toHaveBeenCalledTimes(1)
+
+    workflowLiveStore.store.setState({ throttledUntilMs: Date.now() + 20_000 })
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flush()
+
+    expect(mockHydrate).toHaveBeenCalledTimes(1)
   })
 })

@@ -7,7 +7,7 @@ export { ApiError, configure, addInterceptor, cancelInFlightRequests } from './c
 export type { RequestConfig, RequestContext, ResponseContext, Interceptor, ApiErrorType } from './client'
 
 // Type guards for error narrowing
-export { isApiError, isHttpError, isNetworkError, isTimeoutError, isAbortError, hasStatus, isClientError, isServerError } from './guards'
+export { isApiError, isHttpError, isNetworkError, isTimeoutError, isAbortError, isRateLimitError, hasStatus, isClientError, isServerError } from './guards'
 
 // SSE support
 export { createSSEStream } from './sse'

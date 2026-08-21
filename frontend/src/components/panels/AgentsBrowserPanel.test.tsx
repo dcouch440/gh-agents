@@ -55,6 +55,7 @@ const { mockFetchAll, mockUpdateStep, _agents, _loading, _selectedStepIds, _step
   _selectedStepIds: { value: new Set<string>() },
   _steps: { value: [] as WorkflowStep[] },
 }))
+import type * as ConstantsModule from '@/constants'
 
 vi.mock('@/stores', () => ({
   useStore: vi.fn((_store: unknown, selector: unknown) => {
@@ -79,7 +80,7 @@ vi.mock('@/stores', () => ({
 }))
 
 vi.mock('@/constants', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/constants')>()
+  const actual = await importOriginal<typeof ConstantsModule>()
   return {
     ...actual,
     DESIGN: {

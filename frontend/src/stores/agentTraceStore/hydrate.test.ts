@@ -4,12 +4,14 @@ import { hydrateFromTimeline, setHydratedRun, parseToolInput } from './hydrate'
 import type { AgentTraceEvent } from '.'
 import { Collections } from '@/utils/collections'
 import type { TimelineEntry } from '@/types'
+import type * as ApiModule from '@/api'
 
 const { mockGetExecutionTimeline } = vi.hoisted(() => ({
   mockGetExecutionTimeline: vi.fn(),
 }))
 
-vi.mock('@/api', () => ({
+vi.mock('@/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiModule>()),
   api: {
     workflows: {
       getExecutionTimeline: mockGetExecutionTimeline,
