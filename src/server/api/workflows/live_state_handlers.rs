@@ -19,7 +19,7 @@ use crate::db::traits::WorkflowCollectionRepo;
 use crate::db::WorkflowExecutionRow;
 use crate::server::api::AppError;
 use crate::server::auth as auth_utils;
-use crate::server::services::workflow_state;
+use crate::server::services::{workflow_state, workflows};
 use crate::server::state::AppState;
 
 use super::run_detail_handlers::build_run_steps;
@@ -59,15 +59,7 @@ pub async fn get_workflow_live_state(
     auth: auth_utils::AuthUser,
     Path(id): Path<Uuid>,
 ) -> Result<Json<WorkflowLiveStateResponse>, AppError> {
-    let workflow_repo = &state.repos().workflows;
-
-    let workflow = workflow_repo
-        .get_workflow(id)
-        .await?
-        .ok_or(AppError::not_found("Workflow"))?;
-    if workflow.user_id != auth.user_id.0 {
-        return Err(AppError::not_found("Workflow"));
-    }
+    workflows::get_workflow(state.repos().workflows.as_ref(), auth.user_id.0, id).await?;
 
     let inputs = workflow_state::collect(&state, id).await?;
 

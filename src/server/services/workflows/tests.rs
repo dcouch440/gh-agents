@@ -88,6 +88,15 @@ mod tests {
         assert!(matches!(result, Err(ServiceError::NotFound(_))));
     }
 
+    #[tokio::test]
+    async fn get_rejects_missing_workflow() {
+        let mut repo = MockWorkflowRepo::new();
+        repo.expect_get_workflow().returning(|_| Ok(None));
+
+        let result = get_workflow(&repo, Uuid::new_v4(), Uuid::new_v4()).await;
+        assert!(matches!(result, Err(ServiceError::NotFound(_))));
+    }
+
     // ── update_workflow ───────────────────────────────────────────────
 
     #[tokio::test]
