@@ -7,10 +7,12 @@ mod tests {
 
     #[test]
     fn entry_response_from_service_entry() {
+        let step_id = Uuid::new_v4();
         let entry = TimelineEntry {
             id: Uuid::new_v4(),
             ts: Utc::now(),
             kind: TimelineEntryKind::ToolCall,
+            step_id: Some(step_id),
             step_name: Some("Worker".to_string()),
             agent_name: Some("Scanner".to_string()),
             agent_execution_id: Uuid::new_v4(),
@@ -23,6 +25,7 @@ mod tests {
 
         let response: TimelineEntryResponse = entry.into();
         assert_eq!(response.kind, "tool_call");
+        assert_eq!(response.step_id, Some(step_id));
         assert_eq!(response.step_name.unwrap(), "Worker");
         assert_eq!(response.agent_name.unwrap(), "Scanner");
         assert_eq!(response.tool_name.unwrap(), "search_web");
@@ -43,6 +46,7 @@ mod tests {
                 id: Uuid::new_v4(),
                 ts: Utc::now(),
                 kind,
+                step_id: None,
                 step_name: None,
                 agent_name: None,
                 agent_execution_id: Uuid::new_v4(),

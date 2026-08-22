@@ -257,6 +257,10 @@ fn workflow_routes() -> Router<AppState> {
             routes::WORKFLOW_EXECUTIONS,
             get(api::list_workflow_executions),
         )
+        .route(
+            routes::WORKFLOW_LIVE_STATE,
+            get(api::get_workflow_live_state),
+        )
         .route(routes::WORKFLOW_EXECUTION_STEPS, get(api::get_run_detail))
         .route(
             routes::WORKFLOW_EXECUTION_STEP,

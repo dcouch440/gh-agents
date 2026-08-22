@@ -155,6 +155,7 @@ export const API = {
   WORKFLOW_WORKSHOP: (id: string) => `/workflows/${id}/workshop`,
   WORKFLOW_WORKSHOP_STEP: (wid: string, stepId: string) => `/workflows/${wid}/workshop/steps/${stepId}/execute`,
   WORKFLOW_EXECUTIONS: (id: string) => `/workflows/${id}/executions`,
+  WORKFLOW_LIVE_STATE: (id: string) => `/workflows/${id}/live-state`,
   WORKFLOW_EXECUTION_STEPS: (wid: string, eid: string) => `/workflows/${wid}/executions/${eid}/steps`,
   WORKFLOW_EXECUTION_STEP: (wid: string, eid: string, sid: string) => `/workflows/${wid}/executions/${eid}/steps/${sid}`,
   WORKFLOW_EXECUTION_FILES: (wid: string, eid: string) => `/workflows/${wid}/executions/${eid}/files`,
@@ -170,6 +171,9 @@ export const API = {
   // Pipeline Stage Members
   STAGE_MEMBERS: (pid: string, num: number) => `/pipelines/${pid}/stages/${num}/members`,
   STAGE_MEMBER: (pid: string, num: number, mid: string) => `/pipelines/${pid}/stages/${num}/members/${mid}`,
+
+  // Execution Timeline
+  EXECUTION_TIMELINE: (executionId: string) => `/workflow-executions/${executionId}/timeline`,
 
   // Agent Executions
   AGENT_EXECUTIONS: '/agent-executions',
@@ -246,6 +250,9 @@ export const LS_RECENT_COMMANDS = 'nexor_recent_commands'
 export const LS_LEFT_PANEL_OPEN = 'nexor_left_panel_open'
 export const LS_LEFT_PANEL_SECTION = 'nexor_left_panel_section'
 export const LS_RIGHT_PANEL_WIDTH = 'nexor_right_panel_width'
+export const LS_DISPATCH_PANEL_OPEN = 'nexor_dispatch_panel_open'
+export const LS_DISPATCH_PANEL_WIDTH = 'nexor_dispatch_panel_width'
+export const LS_DISPATCH_PANEL_TAB = 'nexor_dispatch_panel_tab'
 
 // Layout
 export const LAYOUT = {

@@ -240,7 +240,7 @@ function StepTreeRow({
             {name || 'Untitled'}
           </Typography>
 
-          {/* Design progress label */}
+          {/* Latest dispatch phase marker (e.g. "designing agents") */}
           {designStatus === 'running' && designProgress !== null && (
             <Typography
               sx={{
@@ -249,6 +249,10 @@ function StepTreeRow({
                 fontFamily: 'monospace',
                 flexShrink: 0,
                 ml: 0.5,
+                maxWidth: 120,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}
             >
               {designProgress}
@@ -278,7 +282,7 @@ function StepTreeRow({
 
           {/* Status dot */}
           <Box sx={{ ml: 1, flexShrink: 0 }}>
-            <StatusDot status={status} designStatus={designStatus} />
+            <StatusDot status={status} designStatus={designStatus} pinned={pinned} />
           </Box>
         </Box>
 

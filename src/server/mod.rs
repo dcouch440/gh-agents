@@ -10,6 +10,7 @@ pub mod auth;
 pub mod executors;
 pub mod hub;
 pub mod openapi;
+pub mod rate_limit;
 mod routes;
 pub mod services;
 pub mod state;
@@ -120,10 +121,12 @@ fn create_router(state: AppState) -> Router {
         info!("Rate limiting disabled (NEXOR_SKIP_RATE_LIMIT=1)");
         routes::build_public_routes()
     } else {
-        // Rate limiter for auth routes: 50 requests per second per IP (burst 100)
+        // Auth routes: 500 requests per second per IP (burst 1000). Keyed by IP
+        // because there is no session yet — this is the bucket a login attempt
+        // is counted against.
         let auth_rate_limit = GovernorConfigBuilder::default()
-            .per_second(50)
-            .burst_size(100)
+            .per_second(500)
+            .burst_size(1000)
             .key_extractor(SmartIpKeyExtractor)
             .finish()
             .expect("valid governor config");
@@ -135,11 +138,17 @@ fn create_router(state: AppState) -> Router {
     let protected_routes = if skip_rate_limit {
         routes::build_protected_routes(state.clone())
     } else {
-        // Rate limiter for general API routes: ~1200 requests per minute per IP
+        // ~12000 requests per minute per signed-in session. Keyed by session
+        // rather than IP: see `rate_limit` for why IP-keying silently throttles
+        // every user behind a proxy or Docker bridge as if they were one caller.
+        //
+        // The burst has to absorb a page load, which fans out into one request
+        // per node plus the editor's own hydration, so it is deliberately well
+        // above the sustained rate.
         let api_rate_limit = GovernorConfigBuilder::default()
-            .per_second(20)
-            .burst_size(100)
-            .key_extractor(SmartIpKeyExtractor)
+            .per_second(200)
+            .burst_size(1000)
+            .key_extractor(rate_limit::SessionOrIpKeyExtractor)
             .finish()
             .expect("valid governor config");
         routes::build_protected_routes(state.clone()).layer(GovernorLayer {
@@ -176,6 +185,15 @@ fn create_router(state: AppState) -> Router {
 /// - If origins are provided, parse comma-separated values.
 /// - If `None`, default to permissive (dev mode) with a warning.
 fn build_cors_layer(cors_origins: Option<&str>) -> CorsLayer {
+    // The limiter puts the wait time on the 429 as `x-ratelimit-after`. A
+    // cross-origin caller cannot read it unless it is explicitly exposed, and
+    // without it a throttled client has nothing to back off against.
+    let expose: [HeaderName; 3] = [
+        HeaderName::from_static("x-ratelimit-after"),
+        HeaderName::from_static("x-ratelimit-limit"),
+        HeaderName::from_static("x-ratelimit-remaining"),
+    ];
+
     match cors_origins {
         Some(origins) => {
             let parsed: Vec<HeaderValue> = origins
@@ -193,6 +211,7 @@ fn build_cors_layer(cors_origins: Option<&str>) -> CorsLayer {
                     .allow_origin(Any)
                     .allow_methods(Any)
                     .allow_headers(Any)
+                    .expose_headers(expose)
             } else {
                 info!("CORS restricted to {} origin(s)", parsed.len());
                 CorsLayer::new()
@@ -200,6 +219,7 @@ fn build_cors_layer(cors_origins: Option<&str>) -> CorsLayer {
                     .allow_methods(Any)
                     .allow_headers(Any)
                     .allow_credentials(true)
+                    .expose_headers(expose)
             }
         }
         None => {
@@ -208,6 +228,7 @@ fn build_cors_layer(cors_origins: Option<&str>) -> CorsLayer {
                 .allow_origin(Any)
                 .allow_methods(Any)
                 .allow_headers(Any)
+                .expose_headers(expose)
         }
     }
 }

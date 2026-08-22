@@ -5,11 +5,13 @@ import type { SourceStreamStatus } from '@/stores/stepStreamStore'
 type StatusDotProps = {
   readonly status: StepExecutionStatus | undefined
   readonly designStatus?: SourceStreamStatus | null
+  /** Pinned-completed is drawn as a ring so it reads apart from a fresh result. */
+  readonly pinned?: boolean
 }
 
 const SIZE = 6
 
-function StatusDot({ status, designStatus }: StatusDotProps) {
+function StatusDot({ status, designStatus, pinned }: StatusDotProps) {
   const resolved = status ?? 'idle'
 
   // When execution is running and design status exists, show design indicator
@@ -77,6 +79,9 @@ function StatusDot({ status, designStatus }: StatusDotProps) {
           borderRadius: '50%',
           flexShrink: 0,
           backgroundColor: color,
+          ...(pinned === true && resolved === 'success'
+            ? { boxShadow: `0 0 0 2px rgba(63, 185, 80, 0.28)` }
+            : {}),
         }}
       />
     )

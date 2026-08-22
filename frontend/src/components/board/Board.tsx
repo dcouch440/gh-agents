@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
 import { api } from '@/api'
-import { boardStore, workflowStore, sidebarStore, useStore } from '@/stores'
+import { boardStore, workflowStore, workflowLiveStore, layoutStore, sidebarStore, useStore } from '@/stores'
 import { boardElementStore } from '@/stores/boardElementStore'
 import { useWorkflowRun } from '@/components/canvas/useWorkflowRun'
-import { useBoardTheme, useBoardSubmit, useBoardElements, useCanvasSync, useDispatchHistory, useActivityHistory } from './hooks'
+import { useBoardTheme, useBoardSubmit, useBoardElements, useCanvasSync, useActivityHistory } from './hooks'
 import { BoardContextMenu } from './BoardContextMenu'
 import type { MenuPosition } from './BoardContextMenu'
 import { SubmitBar } from './SubmitBar'
@@ -28,7 +28,8 @@ function Board({ workflowId }: BoardProps) {
   // ── State ────────────────────────────────────────────────────────────────
   const elements = useStore(boardElementStore.store, boardElementStore.selectElements)
   const setElements = boardElementStore.setElements
-  const [showDebug, setShowDebug] = useState(false)
+  // Persisted: reopening the editor should not silently hide the activity panel.
+  const showDebug = useStore(layoutStore.store, layoutStore.selectDispatchPanelOpen)
   const [contextMenu, setContextMenu] = useState<MenuPosition | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -36,12 +37,23 @@ function Board({ workflowId }: BoardProps) {
   const theme = useBoardTheme()
   const { loading } = useBoardElements(workflowId)
   useBoardSubmit(workflowId) // kept for initial element load
-  const [isGenerating, setIsGenerating] = useState(false)
+  // Server truth, not local state — a refresh mid-generation still reads as
+  // generating, and the flag clears when the server says the work is done.
+  const isGenerating = useStore(workflowLiveStore.store, workflowLiveStore.selectIsGenerating)
   const handleGenerate = useCallback(() => {
-    setIsGenerating(true)
+    // Optimistic until the sync tick confirms it. Deliberately no re-fetch on
+    // success: `POST /generate` returns before its pipeline has registered
+    // anything, so reading straight back reports "not generating" for work that
+    // is about to start. The poll, re-armed by `setGenerating`, settles it.
+    workflowLiveStore.setGenerating(true)
     void api.workflows.generate(workflowId)
-      .catch((err: unknown) => console.error('Generate failed:', err))
-      .finally(() => setIsGenerating(false))
+      .catch((err: unknown) => {
+        console.error('Generate failed:', err)
+        // Nothing is going to start, so drop the spinner now rather than making
+        // the user wait out the confirmation grace.
+        workflowLiveStore.setGenerating(false)
+        void workflowLiveStore.hydrateActive()
+      })
   }, [workflowId])
 
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
@@ -52,7 +64,6 @@ function Board({ workflowId }: BoardProps) {
   }, [steps])
   const { status: runStatus, handleRun } = useWorkflowRun(entryStep?.prompt_template ?? '')
 
-  useDispatchHistory(workflowId)
   useActivityHistory(workflowId)
 
   useEffect(() => {
@@ -139,10 +150,10 @@ function Board({ workflowId }: BoardProps) {
         onRun={handleRun}
         runStatus={runStatus}
         showDebug={showDebug}
-        onToggleDebug={() => setShowDebug((v) => !v)}
+        onToggleDebug={() => { layoutStore.toggleDispatchPanel() }}
       />
 
-      {showDebug && <DispatchPanel onClose={() => setShowDebug(false)} />}
+      {showDebug && <DispatchPanel onClose={() => { layoutStore.setDispatchPanelOpen(false) }} />}
 
       {contextMenu !== null && (
         <BoardContextMenu

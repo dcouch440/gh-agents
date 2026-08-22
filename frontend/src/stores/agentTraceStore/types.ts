@@ -15,6 +15,8 @@ type AgentTrace = {
 type AgentTraceState = {
   traces: Record<string, AgentTrace>
   order: string[]
+  /** Run these traces belong to. Null means nothing has run yet. */
+  hydratedRunId: string | null
 }
 
 export type { AgentTraceEvent, AgentTrace, AgentTraceState }

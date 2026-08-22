@@ -4,7 +4,10 @@ import userEvent from '@testing-library/user-event'
 import { RunButton } from './RunButton'
 import { mockWorkflowStep } from '@/test/fixtures'
 
-const { mockSelectActiveWorkflowId, mockSelectSteps, mockRunWorkflow } = vi.hoisted(() => ({
+const { mockSelectActiveWorkflowId, mockSelectSteps, mockRunWorkflow, mockSelectIsRunning, mockBeginRun, mockHydrateActive } = vi.hoisted(() => ({
+  mockSelectIsRunning: vi.fn<() => boolean>(() => false),
+  mockBeginRun: vi.fn(),
+  mockHydrateActive: vi.fn(() => Promise.resolve()),
   mockSelectActiveWorkflowId: vi.fn<() => string | null>(() => 'wf-001'),
   mockSelectSteps: vi.fn(() => [mockWorkflowStep]),
   mockRunWorkflow: vi.fn(() => Promise.resolve({ id: 'exec-001' })),
@@ -13,6 +16,7 @@ const { mockSelectActiveWorkflowId, mockSelectSteps, mockRunWorkflow } = vi.hois
 vi.mock('@/stores', () => ({
   useStore: vi.fn((_store: unknown, selector: unknown) => {
     if (selector === mockSelectActiveWorkflowId) return mockSelectActiveWorkflowId()
+    if (selector === mockSelectIsRunning) return mockSelectIsRunning()
     if (selector === mockSelectSteps) return mockSelectSteps()
     return undefined
   }),
@@ -20,6 +24,14 @@ vi.mock('@/stores', () => ({
     store: { getState: vi.fn(), subscribe: vi.fn() },
     selectActiveWorkflowId: mockSelectActiveWorkflowId,
     selectSteps: mockSelectSteps,
+  },
+  workflowExecutionStore: {
+    store: { getState: vi.fn(), subscribe: vi.fn() },
+    selectIsRunning: mockSelectIsRunning,
+    beginRun: mockBeginRun,
+  },
+  workflowLiveStore: {
+    hydrateActive: mockHydrateActive,
   },
 }))
 
@@ -32,6 +44,7 @@ vi.mock('@/api', () => ({
 }))
 
 beforeEach(() => {
+  mockSelectIsRunning.mockReturnValue(false)
   vi.clearAllMocks()
   vi.useFakeTimers({ shouldAdvanceTime: true })
   mockSelectActiveWorkflowId.mockReturnValue('wf-001')
@@ -84,21 +97,17 @@ describe('RunButton', () => {
     expect(mockRunWorkflow).toHaveBeenCalledWith('wf-001', { initial_input: 'Input text' })
   })
 
-  it('shows Running... while executing', async () => {
-    let resolveRun: () => void = () => {}
-    mockRunWorkflow.mockReturnValue(new Promise<void>((r) => { resolveRun = r }))
+  it('shows Running... whenever the server reports an active run', () => {
+    // Running is server state now, not a local flag set on click — which is why
+    // it is still correct after a page refresh.
+    mockSelectIsRunning.mockReturnValue(true)
 
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     render(<RunButton />)
 
-    await user.click(screen.getByText('Run'))
-
     expect(screen.getByText('Running...')).toBeInTheDocument()
-
-    act(() => { resolveRun() })
   })
 
-  it('recovers to idle after error', async () => {
+  it('keeps the failure visible instead of silently resetting', async () => {
     mockRunWorkflow.mockReturnValue(Promise.reject(new Error('network error')))
 
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
@@ -110,6 +119,7 @@ describe('RunButton', () => {
 
     act(() => { vi.advanceTimersByTime(3000) })
 
-    expect(screen.getByText('Run')).toBeInTheDocument()
+    // No timer clears it — the user keeps seeing that the run never started.
+    expect(screen.getByText('Failed')).toBeInTheDocument()
   })
 })

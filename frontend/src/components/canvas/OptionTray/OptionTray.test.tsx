@@ -3,9 +3,12 @@ import { render, screen } from '@/test/render'
 import userEvent from '@testing-library/user-event'
 import { OptionTray } from './OptionTray'
 
-const { mockSelectDirty, mockSelectActiveWorkflowId, mockSelectSteps, mockSaveAllDirtySteps, mockRevertSteps } = vi.hoisted(() => ({
+const { mockSelectDirty, mockSelectActiveWorkflowId, mockSelectSteps, mockSaveAllDirtySteps, mockRevertSteps, mockSelectIsRunning, mockBeginRun, mockHydrateActive } = vi.hoisted(() => ({
+  mockSelectIsRunning: vi.fn<() => boolean>(() => false),
+  mockBeginRun: vi.fn(),
+  mockHydrateActive: vi.fn(() => Promise.resolve()),
   mockSelectDirty: vi.fn(() => false),
-  mockSelectActiveWorkflowId: vi.fn(() => 'wf-001'),
+  mockSelectActiveWorkflowId: vi.fn<() => string | null>(() => 'wf-001'),
   mockSelectSteps: vi.fn((): unknown[] => []),
   mockSaveAllDirtySteps: vi.fn(() => Promise.resolve()),
   mockRevertSteps: vi.fn(() => Promise.resolve()),
@@ -15,6 +18,7 @@ vi.mock('@/stores', () => ({
   useStore: vi.fn((_store: unknown, selector: unknown) => {
     if (selector === mockSelectDirty) return mockSelectDirty()
     if (selector === mockSelectActiveWorkflowId) return mockSelectActiveWorkflowId()
+    if (selector === mockSelectIsRunning) return mockSelectIsRunning()
     if (selector === mockSelectSteps) return mockSelectSteps()
     return undefined
   }),
@@ -25,6 +29,14 @@ vi.mock('@/stores', () => ({
     selectSteps: mockSelectSteps,
     saveAllDirtySteps: mockSaveAllDirtySteps,
     revertSteps: mockRevertSteps,
+  },
+  workflowExecutionStore: {
+    store: { getState: vi.fn(), subscribe: vi.fn() },
+    selectIsRunning: mockSelectIsRunning,
+    beginRun: mockBeginRun,
+  },
+  workflowLiveStore: {
+    hydrateActive: mockHydrateActive,
   },
 }))
 
@@ -40,6 +52,7 @@ const mockAutoLayout = vi.fn()
 const renderTray = () => render(<OptionTray autoSaveFlush={mockFlush} autoSaveSaving={false} onAutoLayout={mockAutoLayout} />)
 
 beforeEach(() => {
+  mockSelectIsRunning.mockReturnValue(false)
   vi.clearAllMocks()
   mockFlush.mockClear()
   mockSelectDirty.mockReturnValue(false)

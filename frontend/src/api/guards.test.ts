@@ -9,6 +9,7 @@ import {
   hasStatus,
   isClientError,
   isServerError,
+  isRateLimitError,
 } from './guards'
 
 describe('isApiError', () => {
@@ -146,5 +147,38 @@ describe('isServerError', () => {
 
   it('returns false for non-ApiError', () => {
     expect(isServerError(new Error('fail'))).toBe(false)
+  })
+})
+
+describe('isRateLimitError', () => {
+  const throttled = ApiError.rateLimit('/test', 'Too Many Requests', null, 5000)
+
+  it('returns true for a 429', () => {
+    expect(isRateLimitError(throttled)).toBe(true)
+  })
+
+  it('returns false for other HTTP failures', () => {
+    expect(isRateLimitError(ApiError.http('/test', 500, 'Server Error', null))).toBe(false)
+  })
+
+  it('returns false for non-ApiError', () => {
+    expect(isRateLimitError(new Error('fail'))).toBe(false)
+  })
+
+  // A 429 has its own type, so `isHttpError` no longer matches it. Anything
+  // asking about the status code must still work, or callers would silently
+  // stop seeing throttles they used to catch.
+  it('is not an http_error', () => {
+    expect(isHttpError(throttled)).toBe(false)
+  })
+
+  it('still answers hasStatus', () => {
+    expect(hasStatus(throttled, 429)).toBe(true)
+    expect(hasStatus(throttled, 500)).toBe(false)
+  })
+
+  it('still counts as a client error', () => {
+    expect(isClientError(throttled)).toBe(true)
+    expect(isServerError(throttled)).toBe(false)
   })
 })

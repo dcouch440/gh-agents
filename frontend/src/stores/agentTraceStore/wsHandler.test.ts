@@ -19,7 +19,7 @@ describe('agentTraceStore wsHandler', () => {
   })
 
   describe('workflow started', () => {
-    it('resets all traces', () => {
+    it('resets all traces and stamps hydratedRunId to the starting run', () => {
       agentTraceStore.handleWsEvent(wire('debug_system_prompt', {
         workflow_id: 'wf-1', step_id: 's-1', agent_execution_id: 'ae-1', agent_name: 'Agent', content: 'prompt',
       }))
@@ -29,6 +29,28 @@ describe('agentTraceStore wsHandler', () => {
       const state = agentTraceStore.store.getState()
       expect(state.traces).toEqual({})
       expect(state.order).toEqual([])
+      // Regression: this must be the starting run's id, not null — otherwise
+      // the next `workflowLiveStore` poll tick (which calls
+      // `setHydratedRun(run.id)`) sees `null -> run.id` as a run change and
+      // wipes out any trace events that arrived in between.
+      expect(state.hydratedRunId).toBe('run-1')
+    })
+
+    it('does not wipe traces appended after the run is stamped, when re-stamped with the same run id', () => {
+      // Simulates: WS `started` fires for run-1, then a live debug event
+      // arrives, then the poller's next tick calls setHydratedRun('run-1')
+      // again (as `workflowLiveStore/hydrate.ts` does every tick).
+      agentTraceStore.handleWsEvent(wire('started', { workflow_id: 'wf-1', total_steps: 1 }))
+      agentTraceStore.handleWsEvent(wire('debug_system_prompt', {
+        workflow_id: 'wf-1', step_id: 's-1', agent_execution_id: 'ae-1', agent_name: 'Agent', content: 'prompt',
+      }))
+      expect(agentTraceStore.store.getState().order).toEqual(['ae-1'])
+
+      agentTraceStore.setHydratedRun('run-1')
+
+      const state = agentTraceStore.store.getState()
+      expect(state.order).toEqual(['ae-1'])
+      expect(state.hydratedRunId).toBe('run-1')
     })
   })
 

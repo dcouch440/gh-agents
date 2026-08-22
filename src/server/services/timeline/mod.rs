@@ -22,6 +22,9 @@ pub struct TimelineEntry {
     pub id: Uuid,
     pub ts: DateTime<Utc>,
     pub kind: TimelineEntryKind,
+    /// Needed by the frontend to group traces by node; `step_name` alone is
+    /// ambiguous when two steps share a name.
+    pub step_id: Option<Uuid>,
     pub step_name: Option<String>,
     pub agent_name: Option<String>,
     pub agent_execution_id: Uuid,
@@ -98,6 +101,7 @@ fn map_row_to_entry(row: TimelineRow) -> TimelineEntry {
         id: row.id,
         ts: row.ts,
         kind,
+        step_id: row.step_id,
         step_name: row.step_name,
         agent_name: row.agent_name,
         agent_execution_id: row.agent_execution_id,

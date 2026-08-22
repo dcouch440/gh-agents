@@ -86,6 +86,8 @@ import type {
   DispatchSessionResponse,
   BoardSubmitResponse,
   BoardElementsResponse,
+  WorkflowLiveStateResponse,
+  TimelineResponse,
 } from '@/types'
 
 // ============================================================================
@@ -359,6 +361,18 @@ const workflows = freeze({
 
   listExecutions: (workflowId: string, config?: RequestConfig) =>
     baseApi.get<WorkflowExecutionSummary[]>(API.WORKFLOW_EXECUTIONS(workflowId), config),
+
+  /** Everything currently happening on this workflow — see `WorkflowLiveStateResponse`. */
+  getLiveState: (workflowId: string, config?: RequestConfig) =>
+    baseApi.get<WorkflowLiveStateResponse>(API.WORKFLOW_LIVE_STATE(workflowId), config),
+
+  getExecutionTimeline: (executionId: string, limit?: number, config?: RequestConfig) =>
+    baseApi.get<TimelineResponse>(
+      limit === undefined
+        ? API.EXECUTION_TIMELINE(executionId)
+        : `${API.EXECUTION_TIMELINE(executionId)}?limit=${String(limit)}`,
+      config,
+    ),
 
   getRunDetail: (workflowId: string, executionId: string, config?: RequestConfig) =>
     baseApi.get<RunDetailResponse>(API.WORKFLOW_EXECUTION_STEPS(workflowId, executionId), config),

@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, act } from '@/test/render'
+import { render, screen } from '@/test/render'
 import userEvent from '@testing-library/user-event'
 import { InputNodeRunButton } from './InputNodeRunButton'
 
-const { mockSelectActiveWorkflowId, mockSelectStepById, mockRunWorkflow } = vi.hoisted(() => ({
+const { mockSelectActiveWorkflowId, mockSelectStepById, mockRunWorkflow, mockSelectIsRunning, mockBeginRun, mockHydrateActive } = vi.hoisted(() => ({
+  mockSelectIsRunning: vi.fn<() => boolean>(() => false),
+  mockBeginRun: vi.fn(),
+  mockHydrateActive: vi.fn(() => Promise.resolve()),
   mockSelectActiveWorkflowId: vi.fn<() => string | null>(() => 'wf-001'),
   mockSelectStepById: vi.fn(() => () => ({ prompt_template: 'Default input text' })),
   mockRunWorkflow: vi.fn(() => Promise.resolve({ id: 'exec-001' })),
@@ -12,6 +15,7 @@ const { mockSelectActiveWorkflowId, mockSelectStepById, mockRunWorkflow } = vi.h
 vi.mock('@/stores', () => ({
   useStore: vi.fn((_store: unknown, selector: unknown) => {
     if (selector === mockSelectActiveWorkflowId) return mockSelectActiveWorkflowId()
+    if (selector === mockSelectIsRunning) return mockSelectIsRunning()
     if (typeof selector === 'function') return (selector as () => unknown)()
     return undefined
   }),
@@ -19,6 +23,14 @@ vi.mock('@/stores', () => ({
     store: { getState: vi.fn(), subscribe: vi.fn() },
     selectActiveWorkflowId: mockSelectActiveWorkflowId,
     selectStepById: mockSelectStepById,
+  },
+  workflowExecutionStore: {
+    store: { getState: vi.fn(), subscribe: vi.fn() },
+    selectIsRunning: mockSelectIsRunning,
+    beginRun: mockBeginRun,
+  },
+  workflowLiveStore: {
+    hydrateActive: mockHydrateActive,
   },
 }))
 
@@ -31,6 +43,7 @@ vi.mock('@/api', () => ({
 }))
 
 beforeEach(() => {
+  mockSelectIsRunning.mockReturnValue(false)
   vi.clearAllMocks()
   vi.useFakeTimers({ shouldAdvanceTime: true })
   mockSelectActiveWorkflowId.mockReturnValue('wf-001')
@@ -70,21 +83,15 @@ describe('InputNodeRunButton', () => {
     expect(mockRunWorkflow).toHaveBeenCalledWith('wf-001', undefined)
   })
 
-  it('disables button while running', async () => {
-    let resolveRun: () => void = () => {}
-    mockRunWorkflow.mockReturnValue(new Promise<void>((r) => { resolveRun = r }))
+  it('disables the button whenever the server reports an active run', () => {
+    mockSelectIsRunning.mockReturnValue(true)
 
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     render(<InputNodeRunButton stepId="step-1" />)
 
-    await user.click(screen.getByRole('button'))
-
     expect(screen.getByRole('button')).toBeDisabled()
-
-    act(() => { resolveRun() })
   })
 
-  it('recovers to idle after error', async () => {
+  it('stays enabled after a failure so the run can be retried', async () => {
     mockRunWorkflow.mockReturnValue(Promise.reject(new Error('network error')))
 
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
@@ -92,12 +99,6 @@ describe('InputNodeRunButton', () => {
 
     await user.click(screen.getByRole('button'))
 
-    // Button should show error state
-    expect(screen.getByRole('button')).toBeInTheDocument()
-
-    act(() => { vi.advanceTimersByTime(3000) })
-
-    // Should recover — button re-enabled
     expect(screen.getByRole('button')).not.toBeDisabled()
   })
 })

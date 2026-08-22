@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import Paper from '@mui/material/Paper'
 import IconButton from '@mui/material/IconButton'
 import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined'
-import CheckCircleOutline from '@mui/icons-material/CheckCircleOutline'
 import ErrorOutline from '@mui/icons-material/ErrorOutline'
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome'
 import AccountTreeIcon from '@mui/icons-material/AccountTree'
@@ -21,14 +20,12 @@ type SubmitBarProps = {
 const RUN_ICON: Record<RunStatus, ReactNode> = {
   idle: <PlayArrowOutlined sx={{ fontSize: 18 }} />,
   running: null,
-  completed: <CheckCircleOutline sx={{ fontSize: 18 }} />,
   error: <ErrorOutline sx={{ fontSize: 18 }} />,
 }
 
 const RUN_LABEL: Record<RunStatus, string> = {
   idle: 'Run',
   running: 'Running…',
-  completed: 'Started!',
   error: 'Failed',
 }
 

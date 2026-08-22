@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
-import { useStore, workflowStore, agentStore, outputSchemaStore, protocolStore, workflowExecutionStore, sidebarStore } from '@/stores'
+import { useStore, workflowStore, agentStore, agentTraceStore, outputSchemaStore, protocolStore, workflowExecutionStore, workflowLiveStore, sidebarStore } from '@/stores'
 import { Board } from '@/components/board'
 import { WorkflowSidebar } from '@/components/sidebar'
 import { useWorkflowAgentChat } from '@/hooks/useWorkflowAgentChat'
@@ -25,17 +25,21 @@ function WorkflowEditorPage() {
     void agentStore.fetchAll()
     void outputSchemaStore.fetchIfStale()
     void protocolStore.fetchAll()
-    // Sequential: workshop hydration runs after latest-run so it gets the final say
-    const hydrateRun = workflowExecutionStore.hydrateLatestRun(id)
-      .then(() => workflowExecutionStore.hydrateWorkshop(id))
-    // After both workflow+rosters and run data are loaded, hydrate agent sources
+    // Single source of truth for "what is happening right now", polled while the
+    // page is open so a refresh — or a dropped WebSocket event — recovers.
+    const hydrateRun = workflowLiveStore.hydrateLiveState(id)
+    // Agent sources need both the roster and the run's step outputs.
     void Promise.all([loadWorkflowWithRosters, hydrateRun]).then(() => {
       const rosterByStep = workflowStore.selectRosterByStep(workflowStore.store.getState())
-      workflowExecutionStore.hydrateAgentSources(rosterByStep)
+      const runSteps = workflowLiveStore.selectRunSteps(workflowLiveStore.store.getState())
+      workflowExecutionStore.hydrateAgentSources(rosterByStep, runSteps)
+      workflowLiveStore.startLiveSync(id)
     })
     return () => {
+      workflowLiveStore.reset()
       workflowStore.clearActive()
       workflowExecutionStore.reset()
+      agentTraceStore.reset()
       sidebarStore.reset()
     }
   }, [id, navigate])

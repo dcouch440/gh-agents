@@ -38,6 +38,7 @@ pub struct TimelineEntryResponse {
     pub id: Uuid,
     pub ts: DateTime<Utc>,
     pub kind: String,
+    pub step_id: Option<Uuid>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub step_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -64,6 +65,7 @@ impl From<svc::TimelineEntry> for TimelineEntryResponse {
                 svc::TimelineEntryKind::ToolCall => "tool_call".to_string(),
                 svc::TimelineEntryKind::ToolResult => "tool_result".to_string(),
             },
+            step_id: e.step_id,
             step_name: e.step_name,
             agent_name: e.agent_name,
             agent_execution_id: e.agent_execution_id,

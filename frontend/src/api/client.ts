@@ -38,7 +38,24 @@ type Interceptor = {
 // Error Types
 // ============================================================================
 
-type ApiErrorType = 'network_error' | 'timeout_error' | 'abort_error' | 'http_error' | 'parse_error'
+type ApiErrorType = 'network_error' | 'timeout_error' | 'abort_error' | 'http_error' | 'rate_limit_error' | 'parse_error'
+
+/**
+ * Seconds the server says to wait before retrying, from the headers on a 429.
+ *
+ * `x-ratelimit-after` is what tower_governor sets; `retry-after` is the standard
+ * spelling a proxy in front of it may add. Absent when neither is readable —
+ * cross-origin callers only see headers the server explicitly exposes.
+ */
+const parseRetryAfterMs = (headers: Headers): number | null => {
+  for (const name of ['x-ratelimit-after', 'retry-after']) {
+    const raw = headers.get(name)
+    if (raw === null) continue
+    const seconds = Number(raw)
+    if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000
+  }
+  return null
+}
 
 class ApiError extends Error {
   readonly type: ApiErrorType
@@ -46,8 +63,10 @@ class ApiError extends Error {
   readonly statusText?: string
   readonly body?: unknown
   readonly url: string
+  /** Only set on `rate_limit_error`, and only when the server told us. */
+  readonly retryAfterMs?: number
 
-  constructor(type: ApiErrorType, message: string, url: string, details?: { status?: number; statusText?: string; body?: unknown }) {
+  constructor(type: ApiErrorType, message: string, url: string, details?: { status?: number; statusText?: string; body?: unknown; retryAfterMs?: number }) {
     super(message)
     this.name = 'ApiError'
     this.type = type
@@ -55,6 +74,7 @@ class ApiError extends Error {
     this.status = details?.status
     this.statusText = details?.statusText
     this.body = details?.body
+    this.retryAfterMs = details?.retryAfterMs
   }
 
   static network(url: string, originalError: Error): ApiError {
@@ -71,6 +91,23 @@ class ApiError extends Error {
 
   static http(url: string, status: number, statusText: string, body: unknown): ApiError {
     return new ApiError('http_error', `${status} ${statusText}`, url, { status, statusText, body })
+  }
+
+  /**
+   * A 429 is its own type rather than a plain `http_error`.
+   *
+   * Callers need to tell "you are asking too fast" apart from "this failed" —
+   * a poller should slow down, not surface an error, and a user-facing message
+   * has to say something they can act on instead of a generic failure.
+   */
+  static rateLimit(url: string, statusText: string, body: unknown, retryAfterMs: number | null): ApiError {
+    const wait = retryAfterMs === null ? '' : ` Retry in ${String(Math.ceil(retryAfterMs / 1000))}s.`
+    return new ApiError(
+      'rate_limit_error',
+      `Rate limited by the server.${wait}`,
+      url,
+      { status: 429, statusText, body, ...(retryAfterMs === null ? {} : { retryAfterMs }) },
+    )
   }
 
   static parse(url: string, originalError: Error): ApiError {
@@ -235,7 +272,9 @@ const executeRequest = async <T>(path: string, method: HttpMethod, body?: unknow
         } catch {
           // Keep as text
         }
-        const error = ApiError.http(context.url, res.status, res.statusText, parsedBody)
+        const error = res.status === 429
+          ? ApiError.rateLimit(context.url, res.statusText, parsedBody, parseRetryAfterMs(res.headers))
+          : ApiError.http(context.url, res.status, res.statusText, parsedBody)
 
         // Run error interceptors
         let interceptedError = error

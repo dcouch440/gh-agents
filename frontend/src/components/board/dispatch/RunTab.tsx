@@ -31,6 +31,7 @@ function RunTab() {
   const workflowId = useStore(workflowExecutionStore.store, workflowExecutionStore.selectWorkflowId)
   const runId = useStore(workflowExecutionStore.store, workflowExecutionStore.selectRunId)
   const isRunning = useStore(workflowExecutionStore.store, workflowExecutionStore.selectIsRunning)
+  const hydratedRunId = useStore(agentTraceStore.store, agentTraceStore.selectHydratedRunId)
   const [copied, setCopied] = useState(false)
 
   const stepNameMap = useMemo(
@@ -108,7 +109,9 @@ function RunTab() {
       ) : (
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 4 }}>
           <Typography variant="body2" sx={{ color: 'text.disabled', fontStyle: 'italic' }}>
-            No execution traces yet. Run the workflow to see agent activity.
+            {hydratedRunId === null
+              ? 'No execution traces yet. Run the workflow to see agent activity.'
+              : 'This run recorded no agent activity.'}
           </Typography>
         </Box>
       )}

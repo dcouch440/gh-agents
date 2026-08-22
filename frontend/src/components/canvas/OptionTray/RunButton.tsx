@@ -3,7 +3,6 @@ import MuiButton from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import Tooltip from '@mui/material/Tooltip'
 import Fade from '@mui/material/Fade'
-import CheckCircleOutline from '@mui/icons-material/CheckCircleOutline'
 import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined'
 import ErrorOutline from '@mui/icons-material/ErrorOutline'
 import { useTheme } from '@mui/material/styles'
@@ -28,24 +27,17 @@ function RunButton() {
   if (!activeWorkflowId) return null
 
   const runIcon =
-    status === 'completed' ? (
-      <CheckCircleOutline sx={{ fontSize: 16 }} />
-    ) : status === 'error' ? (
+    status === 'error' ? (
       <ErrorOutline sx={{ fontSize: 16 }} />
     ) : (
       <PlayArrowOutlined sx={{ fontSize: 16 }} />
     )
 
   const runLabel =
-    status === 'running' ? 'Running...' : status === 'completed' ? 'Started!' : status === 'error' ? 'Failed' : 'Run'
+    status === 'running' ? 'Running...' : status === 'error' ? 'Failed' : 'Run'
 
   const chromeBg = theme.palette.custom.chromeBg
-  const statusBg =
-    status === 'completed'
-      ? theme.palette.success.main
-      : status === 'error'
-        ? theme.palette.error.main
-        : chromeBg
+  const statusBg = status === 'error' ? theme.palette.error.main : chromeBg
 
   return (
     <Tooltip

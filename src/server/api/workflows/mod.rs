@@ -6,6 +6,7 @@ pub mod document_handlers;
 pub mod edge_handlers;
 pub mod execution_handlers;
 pub mod last_run_handlers;
+pub mod live_state_handlers;
 pub mod run_detail_handlers;
 pub mod run_handlers;
 pub mod step_chat_handlers;
@@ -22,6 +23,7 @@ pub use edge_handlers::{
 };
 pub use execution_handlers::list_workflow_executions;
 pub use last_run_handlers::get_step_last_run;
+pub use live_state_handlers::get_workflow_live_state;
 pub use run_detail_handlers::{download_run_files, get_run_detail, get_step_run_for_execution};
 pub use run_handlers::run_workflow;
 pub use step_chat_handlers::{

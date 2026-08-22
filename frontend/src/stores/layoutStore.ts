@@ -3,7 +3,15 @@
 // ============================================================================
 
 import { createStore, lsGet, lsSet } from './lib'
-import { LS_LEFT_PANEL_OPEN, LS_LEFT_PANEL_SECTION, LS_RIGHT_PANEL_WIDTH, LAYOUT } from '@/constants'
+import {
+  LS_LEFT_PANEL_OPEN,
+  LS_LEFT_PANEL_SECTION,
+  LS_RIGHT_PANEL_WIDTH,
+  LS_DISPATCH_PANEL_OPEN,
+  LS_DISPATCH_PANEL_WIDTH,
+  LS_DISPATCH_PANEL_TAB,
+  LAYOUT,
+} from '@/constants'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -14,7 +22,17 @@ type LayoutState = {
   rightPanelSection: string | null
   rightPanelWidth: number
   rightPanelDragging: boolean
+  /** Board activity overlay — persisted so a refresh does not close it. */
+  dispatchPanelOpen: boolean
+  dispatchPanelWidth: number
+  dispatchPanelTab: DispatchPanelTab
 }
+
+type DispatchPanelTab = 'dispatch' | 'run'
+
+const DISPATCH_PANEL_DEFAULT_WIDTH = 400
+const DISPATCH_PANEL_MIN_WIDTH = 300
+const DISPATCH_PANEL_MAX_WIDTH = 1200
 
 // ── Store ────────────────────────────────────────────────────────────────────
 
@@ -24,6 +42,13 @@ const parseWidth = (raw: string | null): number => {
   return Number.isFinite(n) ? Math.max(LAYOUT.PANEL_MIN_WIDTH, Math.min(LAYOUT.PANEL_MAX_WIDTH, n)) : LAYOUT.PANEL_WIDTH
 }
 
+const parseDispatchWidth = (raw: string | null): number => {
+  if (!raw) return DISPATCH_PANEL_DEFAULT_WIDTH
+  const n = Number(raw)
+  if (!Number.isFinite(n)) return DISPATCH_PANEL_DEFAULT_WIDTH
+  return Math.max(DISPATCH_PANEL_MIN_WIDTH, Math.min(DISPATCH_PANEL_MAX_WIDTH, n))
+}
+
 const store = createStore<LayoutState>(() => ({
   leftPanelOpen: lsGet(LS_LEFT_PANEL_OPEN) === 'true',
   leftPanelSection: lsGet(LS_LEFT_PANEL_SECTION),
@@ -31,6 +56,9 @@ const store = createStore<LayoutState>(() => ({
   rightPanelSection: null,
   rightPanelWidth: parseWidth(lsGet(LS_RIGHT_PANEL_WIDTH)),
   rightPanelDragging: false,
+  dispatchPanelOpen: lsGet(LS_DISPATCH_PANEL_OPEN) === 'true',
+  dispatchPanelWidth: parseDispatchWidth(lsGet(LS_DISPATCH_PANEL_WIDTH)),
+  dispatchPanelTab: lsGet(LS_DISPATCH_PANEL_TAB) === 'run' ? 'run' : 'dispatch',
 }))
 
 // ── Selectors ────────────────────────────────────────────────────────────────
@@ -108,6 +136,34 @@ const stopRightPanelDrag = (): void => {
   store.setState({ rightPanelDragging: false })
 }
 
+// ── Dispatch panel ───────────────────────────────────────────────────────────
+
+const selectDispatchPanelOpen = (s: LayoutState): boolean => s.dispatchPanelOpen
+
+const selectDispatchPanelWidth = (s: LayoutState): number => s.dispatchPanelWidth
+
+const selectDispatchPanelTab = (s: LayoutState): DispatchPanelTab => s.dispatchPanelTab
+
+const setDispatchPanelOpen = (open: boolean): void => {
+  store.setState({ dispatchPanelOpen: open })
+  lsSet(LS_DISPATCH_PANEL_OPEN, String(open))
+}
+
+const toggleDispatchPanel = (): void => {
+  setDispatchPanelOpen(!store.getState().dispatchPanelOpen)
+}
+
+const setDispatchPanelWidth = (width: number): void => {
+  const clamped = Math.max(DISPATCH_PANEL_MIN_WIDTH, Math.min(DISPATCH_PANEL_MAX_WIDTH, width))
+  store.setState({ dispatchPanelWidth: clamped })
+  lsSet(LS_DISPATCH_PANEL_WIDTH, String(clamped))
+}
+
+const setDispatchPanelTab = (tab: DispatchPanelTab): void => {
+  store.setState({ dispatchPanelTab: tab })
+  lsSet(LS_DISPATCH_PANEL_TAB, tab)
+}
+
 // ── Export ────────────────────────────────────────────────────────────────────
 
 export const layoutStore = {
@@ -128,6 +184,15 @@ export const layoutStore = {
   setRightPanelWidth,
   startRightPanelDrag,
   stopRightPanelDrag,
+  selectDispatchPanelOpen,
+  selectDispatchPanelWidth,
+  selectDispatchPanelTab,
+  setDispatchPanelOpen,
+  toggleDispatchPanel,
+  setDispatchPanelWidth,
+  setDispatchPanelTab,
+  DISPATCH_PANEL_MIN_WIDTH,
+  DISPATCH_PANEL_MAX_WIDTH,
 }
 
-export type { LayoutState }
+export type { LayoutState, DispatchPanelTab }

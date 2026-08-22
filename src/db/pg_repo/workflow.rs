@@ -1546,9 +1546,12 @@ impl WorkflowRepo for PgRepo {
 
     async fn get_active_run_for_workflow(&self, workflow_id: Uuid) -> Result<Option<Uuid>> {
         let row: Option<(Uuid,)> = sqlx::query_as(
+            // 'pending' matters: a just-created run has no started_at yet, and
+            // callers still need to treat it as the current run. Matches the
+            // partial index idx_workflow_executions_active.
             "SELECT id FROM workflow_executions \
-             WHERE workflow_id = $1 AND status = 'running' \
-             ORDER BY started_at DESC LIMIT 1",
+             WHERE workflow_id = $1 AND status IN ('pending', 'running') \
+             ORDER BY started_at DESC NULLS FIRST LIMIT 1",
         )
         .bind(workflow_id)
         .fetch_optional(&self.pool)

@@ -5,19 +5,22 @@
 //! DB-derived. The filesystem only has topology and descriptions that the
 //! agent already knows about.
 //!
-//! Status derivation uses two sources:
-//! - **TaskRegistry** (in-memory) — active dispatch tasks → "configuring"
-//! - **agent_executions** (DB) — latest dispatch result → "error" on failure
+//! Status resolution itself lives in `services::workflow_state`, shared with the
+//! live-state endpoint so the agent and the UI never disagree about what a node
+//! is doing.
 
 use std::collections::HashMap;
 
 use uuid::Uuid;
 
 use crate::db::traits::WorkflowRepo;
-use crate::db::{AgentExecutionRow, WorkflowStepRow};
+use crate::db::WorkflowStepRow;
+use crate::server::services::workflow_state;
 use crate::server::services::ServiceError;
-use crate::server::state::task_registry::{TaskEntry, TaskStatus};
 use crate::server::state::AppState;
+
+// Re-exported so `state_tests.rs` keeps its import path after the extraction.
+pub(crate) use crate::server::services::workflow_state::resolve_node_status;
 
 #[cfg(test)]
 #[path = "state_tests.rs"]
@@ -34,20 +37,12 @@ pub(crate) async fn build_current_state(
     workflow_id: Uuid,
     state: &AppState,
 ) -> Result<String, ServiceError> {
-    let wf_repo = &*state.repos().workflows;
-    let ae_repo = &*state.repos().agent_executions;
+    let inputs = workflow_state::collect(state, workflow_id).await?;
 
-    let steps = wf_repo
-        .list_steps(workflow_id)
-        .await
-        .map_err(ServiceError::Internal)?;
-    let edges = wf_repo
-        .list_edges(workflow_id)
-        .await
-        .map_err(ServiceError::Internal)?;
-
-    // Filter to workforce steps
-    let workforce_steps: Vec<&WorkflowStepRow> = steps
+    // The XML only describes workforce nodes; the collector deliberately holds
+    // every step so the live-state endpoint can describe the whole board.
+    let workforce_steps: Vec<&WorkflowStepRow> = inputs
+        .steps
         .iter()
         .filter(|s| s.execution_mode == "workforce")
         .collect();
@@ -69,7 +64,7 @@ pub(crate) async fn build_current_state(
 
     // Build per-node depends_on from edges
     let mut depends_on_map: HashMap<Uuid, Vec<&str>> = HashMap::new();
-    for edge in &edges {
+    for edge in &inputs.edges {
         if let Some(&from_slug) = id_to_slug.get(&edge.from_step_id) {
             depends_on_map
                 .entry(edge.to_step_id)
@@ -78,28 +73,7 @@ pub(crate) async fn build_current_state(
         }
     }
 
-    // Batch: latest dispatch execution per step
-    let step_ids: Vec<Uuid> = workforce_steps.iter().map(|s| s.id).collect();
-    let latest_dispatches = ae_repo
-        .get_latest_dispatch_executions_for_steps(&step_ids)
-        .await
-        .map_err(ServiceError::Internal)?;
-
-    let dispatch_by_step: HashMap<Uuid, &AgentExecutionRow> = latest_dispatches
-        .iter()
-        .filter_map(|ae| ae.workflow_step_id.map(|sid| (sid, ae)))
-        .collect();
-
-    // Check for active runtime run → running step IDs
-    let running_step_ids: std::collections::HashSet<Uuid> = {
-        let mut ids = std::collections::HashSet::new();
-        if let Ok(Some(run_id)) = wf_repo.get_active_run_for_workflow(workflow_id).await {
-            if let Ok(step_ids) = ae_repo.get_running_step_ids_for_run(run_id).await {
-                ids.extend(step_ids);
-            }
-        }
-        ids
-    };
+    let wf_repo = &*state.repos().workflows;
 
     // Build roster summaries for configured steps
     let agent_summaries = build_agent_summaries(&workforce_steps, wf_repo).await;
@@ -118,11 +92,15 @@ pub(crate) async fn build_current_state(
     for step in &sorted_steps {
         let slug = step.ref_id.as_deref().unwrap_or("unknown");
 
-        // Resolve real-time status
-        let active_tasks = state.task_registry().list_tasks_for_step(step.id);
-        let latest_dispatch = dispatch_by_step.get(&step.id).copied();
-        let is_running = running_step_ids.contains(&step.id);
-        let status = resolve_node_status(step, &active_tasks, latest_dispatch, is_running);
+        // Resolve real-time status from the batched collector — no per-step query.
+        let active_tasks = inputs
+            .registry_tasks_by_step
+            .get(&step.id)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[]);
+        let latest_dispatch = inputs.latest_dispatch_by_step.get(&step.id);
+        let is_running = inputs.running_step_ids.contains(&step.id);
+        let status = resolve_node_status(step, active_tasks, latest_dispatch, is_running);
 
         let deps = depends_on_map
             .get(&step.id)
@@ -151,61 +129,6 @@ pub(crate) async fn build_current_state(
     lines.push("</current_state>".to_string());
 
     Ok(lines.join("\n"))
-}
-
-// ── Status resolution ──────────────────────────────────────────────────────
-
-/// Resolve real-time status for a workflow node.
-///
-/// Priority (highest wins):
-/// 1. `configuring` — TaskRegistry has a Running task for this step
-/// 2. `error` — latest dispatch execution failed
-/// 3. `completed` — pinned or has run_results_summary
-/// 4. `configured` — has child_workflow_id (system node agent completed)
-/// 5. `described` — has description
-/// 6. `idle` — default
-///
-/// Pure function — takes pre-fetched data, no DB access.
-pub(crate) fn resolve_node_status(
-    step: &WorkflowStepRow,
-    active_tasks: &[TaskEntry],
-    latest_dispatch: Option<&AgentExecutionRow>,
-    is_running: bool,
-) -> &'static str {
-    // 1. Active dispatch task → configuring
-    if active_tasks.iter().any(|t| t.status == TaskStatus::Running) {
-        return "configuring";
-    }
-
-    // 2. Active runtime execution → running
-    if is_running {
-        return "running";
-    }
-
-    // 3. Latest dispatch failed → error
-    if let Some(dispatch) = latest_dispatch {
-        if dispatch.status == "failed" {
-            return "error";
-        }
-    }
-
-    // 3. Completed
-    if step.pinned || !step.run_results_summary.is_empty() {
-        return "completed";
-    }
-
-    // 4. Configured (system node agent ran successfully)
-    if step.child_workflow_id.is_some() {
-        return "configured";
-    }
-
-    // 5. Has description
-    if !step.description.is_empty() {
-        return "described";
-    }
-
-    // 6. Default
-    "idle"
 }
 
 // ── Agent summary builder ──────────────────────────────────────────────────

@@ -16,9 +16,24 @@ import type {
 import type { StepTimelineEvent } from './types'
 import { store, updateStep } from './_store'
 import { fetchRuns } from './history'
+import { setActiveRun } from './hydrate'
 import { sidebarStore } from '../sidebarStore'
 
 const appendEvent = (log: StepTimelineEvent[], event: StepTimelineEvent): StepTimelineEvent[] => [...log, event]
+
+/**
+ * Swap the overlay when an event belongs to a run we are not currently showing.
+ *
+ * Covers the gap where a refresh lands between two runs and we never see the
+ * new run's `started` event: without this, run B's step events would merge into
+ * run A's results. Only the client-side view buffer is affected.
+ */
+const ensureRunOverlay = (msg: WsWireMessage): void => {
+  const s = store.getState()
+  if (msg.run_id === null) return
+  if (s.runId === msg.run_id) return
+  setActiveRun(msg.run_id, s.workflowId)
+}
 
 const handleWsEvent = (msg: WsWireMessage): void => {
   try {
@@ -44,6 +59,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         break
       }
       case WORKFLOW_EVENT.STEP_STARTED: {
+        ensureRunOverlay(msg)
         const d = msg.data as StepStartedData
         store.setState((s) => ({
           stepStates: updateStep(s.stepStates, d.step_id, {
@@ -59,6 +75,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         break
       }
       case WORKFLOW_EVENT.STEP_COMPLETED: {
+        ensureRunOverlay(msg)
         const d = msg.data as StepCompletedData
         store.setState((s) => ({
           completedStepCount: s.completedStepCount + 1,
@@ -76,6 +93,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         break
       }
       case WORKFLOW_EVENT.STEP_FAILED: {
+        ensureRunOverlay(msg)
         const d = msg.data as StepFailedData
         store.setState((s) => ({
           stepStates: updateStep(s.stepStates, d.step_id, {
@@ -89,6 +107,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         break
       }
       case WORKFLOW_EVENT.STEP_PAUSED: {
+        ensureRunOverlay(msg)
         const d = msg.data as StepPausedData
         store.setState((s) => ({
           stepStates: updateStep(s.stepStates, d.step_id, {
@@ -100,6 +119,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         break
       }
       case WORKFLOW_EVENT.FOR_EACH_PROGRESS: {
+        ensureRunOverlay(msg)
         const d = msg.data as ForEachProgressData
         store.setState((s) => ({
           stepStates: updateStep(s.stepStates, d.step_id, {
@@ -131,6 +151,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         break
       }
       case WORKFLOW_EVENT.RESUMED: {
+        ensureRunOverlay(msg)
         const d = msg.data as WorkflowResumedData
         store.setState((s) => ({
           isRunning: true,

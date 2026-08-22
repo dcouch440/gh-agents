@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { ExecutionPanel } from './ExecutionPanel'
 import type { StepExecutionState, StepTimelineEvent } from '@/stores'
@@ -79,6 +79,8 @@ vi.mock('@/stores', () => ({
     fetchRuns: (...args: unknown[]): void => {
       _fetchRuns.fn(...args)
     },
+  },
+  workflowLiveStore: {
     viewHistoricalRun: (...args: unknown[]): void => {
       _viewHistoricalRun.fn(...args)
     },
@@ -220,5 +222,47 @@ describe('ExecutionPanel', () => {
     render(<MemoryRouter><ExecutionPanel /></MemoryRouter>)
     // Should not show the live timeline
     expect(screen.queryByText('Running...')).not.toBeInTheDocument()
+  })
+
+  it('selecting a historical run delegates to workflowLiveStore.viewHistoricalRun', () => {
+    _runs.value = [
+      {
+        id: 'run-old',
+        workflow_id: 'wf-1',
+        status: 'completed',
+        started_at: '2025-01-01T00:00:00Z',
+        completed_at: '2025-01-01T00:01:00Z',
+        outputs: null,
+        error: null,
+      },
+    ]
+
+    render(<MemoryRouter><ExecutionPanel /></MemoryRouter>)
+    fireEvent.click(screen.getByText('Select run'))
+    fireEvent.click(screen.getByText('run-old'))
+
+    expect(_viewHistoricalRun.fn).toHaveBeenCalledWith('run-old')
+  })
+
+  it('returning to live delegates to workflowLiveStore.returnToLive', () => {
+    _runId.value = 'run-live'
+    _selectedHistoricalRunId.value = 'run-old'
+    _runs.value = [
+      {
+        id: 'run-old',
+        workflow_id: 'wf-1',
+        status: 'completed',
+        started_at: '2025-01-01T00:00:00Z',
+        completed_at: '2025-01-01T00:01:00Z',
+        outputs: null,
+        error: null,
+      },
+    ]
+
+    render(<MemoryRouter><ExecutionPanel /></MemoryRouter>)
+    fireEvent.click(screen.getByText('Run run-old'))
+    fireEvent.click(screen.getByText('Back to live'))
+
+    expect(_returnToLive.fn).toHaveBeenCalled()
   })
 })

@@ -299,6 +299,7 @@ pub mod routes {
     pub const WORKFLOW_STEP_DOCUMENTS: &str = "/workflows/:wid/steps/:sid/documents";
     pub const WORKFLOW_RUN: &str = "/workflows/:id/run";
     pub const WORKFLOW_EXECUTIONS: &str = "/workflows/:id/executions";
+    pub const WORKFLOW_LIVE_STATE: &str = "/workflows/:id/live-state";
     pub const WORKFLOW_STEP_CHAT_SESSION: &str = "/workflows/:wid/steps/:sid/chat/session";
     pub const WORKFLOW_STEP_CHAT_MESSAGES: &str = "/workflows/:wid/steps/:sid/chat/messages";
     pub const WORKFLOW_STEP_CHAT_DEBUG: &str = "/workflows/:wid/steps/:sid/chat/debug";
