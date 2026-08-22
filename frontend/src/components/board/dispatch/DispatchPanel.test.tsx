@@ -6,11 +6,6 @@ import { agentTraceStore } from '@/stores/agentTraceStore'
 import { createNormalizedMap } from '@/stores/lib'
 import { DispatchPanel } from './DispatchPanel'
 
-// Mock hooks that make API calls
-vi.mock('../hooks/useDispatchPollAll', () => ({
-  useDispatchPollAll: vi.fn(),
-}))
-
 describe('DispatchPanel', () => {
   beforeEach(() => {
     boardStore.store.setState({
