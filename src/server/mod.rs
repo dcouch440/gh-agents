@@ -121,12 +121,28 @@ fn create_router(state: AppState) -> Router {
         info!("Rate limiting disabled (NEXOR_SKIP_RATE_LIMIT=1)");
         routes::build_public_routes()
     } else {
-        // Auth routes: 500 requests per second per IP (burst 1000). Keyed by IP
+        // Auth routes: 25 requests per second per IP (burst 100). Keyed by IP
         // because there is no session yet — this is the bucket a login attempt
         // is counted against.
+        //
+        // Unlike the protected API below, nothing on the frontend calls these
+        // routes on a loop — login/register/setup fire once per session and
+        // `/health` is polled by infra, not the app. The bucket only has to
+        // absorb several users behind the same IP (office NAT, shared proxy)
+        // hitting login around the same time, not a sustained per-user rate.
+        // 25/s with a 100 burst comfortably covers that without leaving the
+        // door open to credential-stuffing at hundreds of attempts/sec.
+        //
+        // tower_governor's `per_second(n)` is NOT "n requests per second" — it
+        // sets the replenishment *period* to n seconds, i.e. one slot back
+        // every n seconds (see `GovernorConfigBuilder::finish`, which feeds it
+        // straight into `Quota::with_period`). `per_second(500)` was refilling
+        // one slot every 500 seconds instead of 500/sec, so once the burst was
+        // spent the bucket needed the better part of a day to recover. Get N
+        // req/sec sustained by setting the period to 1000/N ms instead.
         let auth_rate_limit = GovernorConfigBuilder::default()
-            .per_second(500)
-            .burst_size(1000)
+            .per_millisecond(40) // 1000ms / 25 req/s
+            .burst_size(100)
             .key_extractor(SmartIpKeyExtractor)
             .finish()
             .expect("valid governor config");
@@ -138,15 +154,39 @@ fn create_router(state: AppState) -> Router {
     let protected_routes = if skip_rate_limit {
         routes::build_protected_routes(state.clone())
     } else {
-        // ~12000 requests per minute per signed-in session. Keyed by session
-        // rather than IP: see `rate_limit` for why IP-keying silently throttles
-        // every user behind a proxy or Docker bridge as if they were one caller.
+        // 20 requests per second per signed-in session (burst 1000). Keyed by
+        // session rather than IP: see `rate_limit` for why IP-keying silently
+        // throttles every user behind a proxy or Docker bridge as if they
+        // were one caller.
         //
-        // The burst has to absorb a page load, which fans out into one request
-        // per node plus the editor's own hydration, so it is deliberately well
-        // above the sustained rate.
+        // The 20/s floor is derived, not guessed. The only real per-tab
+        // background load while a workflow is open is `workflowLiveStore`'s
+        // poller (`frontend/src/stores/workflowLiveStore/sync.ts`): every
+        // `ACTIVE_POLL_MS` (2s) while a run is active it fires `getLiveState`
+        // plus one trace fetch per active dispatch plus a timeline fetch —
+        // ~4 requests per tick, i.e. ~2 req/s sustained per open tab (idle
+        // tabs fall back to `IDLE_POLL_MS` (15s) and barely register). Two
+        // tabs open on the same session doubles that to a 4 req/s floor. On
+        // top of that floor we need headroom for actual interactive work
+        // that isn't part of the poller — autosave, step edits, dispatching
+        // runs — so the sustained rate is set to 5x the floor. That lands at
+        // 20 req/s: comfortably above real usage, nowhere near the 200 req/s
+        // (12000/min) this bucket used to allow.
+        //
+        // The burst stays high (1000) because it has to absorb a page load,
+        // which fans out into one roster fetch per workflow step plus the
+        // editor's own hydration calls — unrelated to the sustained rate and
+        // sized independently.
+        //
+        // See the auth bucket above for why this is `per_millisecond`, not
+        // `per_second`: tower_governor's `per_second(n)` sets a refill period
+        // of n *seconds per slot*, not n slots per second. `per_second(200)`
+        // was replenishing one slot every 200 seconds — once the 1000-request
+        // burst was spent (easily, given the live-poll fan-out), the session
+        // stayed 429'd for the better part of an hour no matter how idle it
+        // was, which is exactly the symptom this bucket exists to prevent.
         let api_rate_limit = GovernorConfigBuilder::default()
-            .per_second(200)
+            .per_millisecond(50) // 1000ms / 20 req/s
             .burst_size(1000)
             .key_extractor(rate_limit::SessionOrIpKeyExtractor)
             .finish()
