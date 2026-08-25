@@ -29,19 +29,19 @@ I also used it to practise three things directly: orchestrating parallel agent p
 
 The walkthrough below follows one real run end-to-end: a request to research the current state of multi-agent orchestration and produce an executive brief. Five steps, six agents, 74 seconds. Every prompt behind it is reproduced verbatim in [The Workforce Model](#the-workforce-model) further down.
 
-### 1. Draw the workflow
+### 1. Tell the workflow agent what you want
 
-Five boxes and four arrows, drawn by hand. Three research angles fan out — architectures, production failures, economics — converge on a verification gate, and end in an executive brief. No orchestration code, no config: the shape on the canvas *is* the dependency graph.
+One message to the chat panel, describing the research goal. You can also draw or edit nodes by hand, but the primary flow is telling the workflow agent what to write — it decides the shape. Here it comes back with five boxes and four arrows: three research angles fan out — architectures, production failures, economics — converge on a verification gate, and end in an executive brief. No orchestration code, no config: the shape on the canvas *is* the dependency graph.
 
-The chat panel shows the workflow agent reading the board and committing that structure, writing `topology.json` and one markdown file per node. The first attempt hits a shell syntax error, visible in the log; it recovers on the next call and reports the topology back in plain language.
+The chat panel shows the workflow agent creating that structure, writing `topology.json` and one markdown file per node, then rendering it onto the board. The first attempt hits a shell syntax error, visible in the log; it recovers on the next call and reports the topology back in plain language.
 
-![Draw the workflow on the canvas](docs/images/run-1-draw-the-board.png)
+![The workflow agent builds the board from one message](docs/images/run-1-draw-the-board.png)
 
 ### 2. Dispatch designs the agents
 
 Before anything executes, each node is handed to its own **designer agent** — the Dispatch tab tracks them completing one by one, with the tool count each used.
 
-The expanded node shows what a designer actually produces. It writes `config.json`, `topology.json`, and `agents/researcher.json`, and the system prompt it composes is not a restatement of the box text — it names coordination protocols, race conditions in agent handoffs, prompt injection propagation, and which source types to prioritise. That expertise was chosen by the designer, not supplied by the person drawing.
+The expanded node shows what a designer actually produces. It writes `config.json`, `topology.json`, and `agents/researcher.json`, and the system prompt it composes is not a restatement of the box text — it names coordination protocols, race conditions in agent handoffs, prompt injection propagation, and which source types to prioritise. That expertise was chosen by the designer, not supplied in the instruction.
 
 ![Dispatch designs the agents](docs/images/run-2-dispatch-designs-agents.png)
 
@@ -63,7 +63,7 @@ The Verifier's brief is narrower than "check this": independent corroboration re
 
 ### 5. The brief is written and saved
 
-The final step runs two agents in sequence, which nothing in the drawn instruction asked for: an **Analyst** to synthesize the verified findings, then a **Writer** to compress them under 800 words for a named audience.
+The final step runs two agents in sequence, which nothing in the original instruction asked for: an **Analyst** to synthesize the verified findings, then a **Writer** to compress them under 800 words for a named audience.
 
 Both agents write to the shared workspace under descriptive filenames, and the tree shows the finished chain — research report, verified findings, synthesis, executive brief.
 
@@ -91,7 +91,7 @@ Here is that two-phase split in the run from [How It Works](#how-it-works), with
 
 ![Runtime — the designed agents' prompts](docs/images/runtime-prompts.svg)
 
-Two details worth pulling out. The designer gave the brief step **two** agents in sequence — an Analyst to synthesize and a Writer to compress under 800 words — which nothing in the drawn instruction asked for. And the shared-workspace contract held for four of six agents: two researchers returned their reports inline instead of writing files, despite being told not to.
+Two details worth pulling out. The designer gave the brief step **two** agents in sequence — an Analyst to synthesize and a Writer to compress under 800 words — which nothing in the original instruction asked for. And the shared-workspace contract held for four of six agents: two researchers returned their reports inline instead of writing files, despite being told not to.
 
 <details>
 <summary>The shared preamble, in full — byte-identical in all six runtime prompts</summary>
