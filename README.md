@@ -206,6 +206,15 @@ make server-up
 make dev
 ```
 
+There's no signup page — create your first account by hitting the register endpoint directly:
+
+```bash
+./scripts/seed-user.sh
+# or: EMAIL=me@example.com PASSWORD=***** ./scripts/seed-user.sh
+```
+
+Then log in at the frontend with that email/password.
+
 See `.env.example` for the full list of configuration options (LLM providers, S3/object storage, VPN, rate limiting, etc).
 
 ## Commands
