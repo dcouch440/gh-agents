@@ -198,4 +198,67 @@ describe('backpressure', () => {
 
     expect(mockHydrate).toHaveBeenCalledTimes(1)
   })
+
+  it('collapses overlapping ticks into one hydration', async () => {
+    // Each hydration fans out into a live-state call plus a fetch per dispatch
+    // plus a timeline call, so overlapping them multiplies that burst for no
+    // new information.
+    let release: (() => void) | null = null
+    mockHydrate.mockImplementation(() => new Promise<void>((resolve) => { release = resolve }))
+
+    workflowLiveStore.store.setState({ workflowId: null })
+
+    startLiveSync('wf-1')
+    await flush()
+    expect(mockHydrate).toHaveBeenCalledTimes(1)
+
+    // A returning tab fires while the first hydration is still in the air.
+    document.dispatchEvent(new Event('visibilitychange'))
+    document.dispatchEvent(new Event('visibilitychange'))
+    await flush()
+    expect(mockHydrate).toHaveBeenCalledTimes(1)
+
+    release?.()
+    await flush()
+    expect(mockHydrate).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not let a pending timer fire during an in-flight hydration', async () => {
+    let release: (() => void) | null = null
+    mockHydrate.mockImplementation(() => new Promise<void>((resolve) => { release = resolve }))
+    workflowLiveStore.store.setState({ isGenerating: true })
+
+    workflowLiveStore.store.setState({ workflowId: null })
+
+    startLiveSync('wf-1')
+    await flush()
+    expect(mockHydrate).toHaveBeenCalledTimes(1)
+
+    // Well past the active cadence, but the first hydration has not resolved.
+    await vi.advanceTimersByTimeAsync(ACTIVE_POLL_MS * 5)
+    expect(mockHydrate).toHaveBeenCalledTimes(1)
+
+    // Once it settles the cadence resumes normally.
+    release?.()
+    await flush()
+    await vi.advanceTimersByTimeAsync(ACTIVE_POLL_MS)
+    expect(mockHydrate).toHaveBeenCalledTimes(2)
+  })
+
+  it('lets a different workflow start while the previous one is in flight', async () => {
+    // The in-flight guard is per-workflow: a switch must never be blocked by the
+    // outgoing workflow's request still being in the air.
+    mockHydrate.mockImplementation(() => new Promise<void>(() => {}))
+
+    workflowLiveStore.store.setState({ workflowId: null })
+
+    startLiveSync('wf-1')
+    await flush()
+    expect(mockHydrate).toHaveBeenCalledWith('wf-1')
+
+    startLiveSync('wf-2')
+    await flush()
+
+    expect(mockHydrate).toHaveBeenCalledWith('wf-2')
+  })
 })
