@@ -3,7 +3,7 @@ import { Collections } from '@/utils/collections'
 import type { LiveDispatchInfo, WorkflowLiveStateResponse } from '@/types'
 import { extractError } from '../lib'
 import { workflowExecutionStore } from '../workflowExecutionStore'
-import { dispatchStore } from '../dispatchStore'
+import { dispatchStore, MAX_TRACE_EVENTS } from '../dispatchStore'
 import { agentTraceStore } from '../agentTraceStore'
 import { store } from './_store'
 import type { BaselineStepState, LiveDispatch } from './types'
@@ -35,6 +35,44 @@ const toDispatch = (d: LiveDispatchInfo): LiveDispatch => ({
   source: d.source,
 })
 
+/** A dispatch in one of these states will never produce another trace event. */
+const TERMINAL_DISPATCH_STATUSES: ReadonlySet<string> = new Set([
+  'completed',
+  'failed',
+  'cancelled',
+])
+
+/** A run in one of these states will never produce another timeline entry. */
+const TERMINAL_RUN_STATUSES: ReadonlySet<string> = new Set([
+  'completed',
+  'failed',
+  'cancelled',
+])
+
+/**
+ * True when re-fetching this dispatch's trace could not tell us anything new.
+ *
+ * The poller runs for as long as the editor is open, and it used to re-download
+ * every dispatch's full trace on every tick — a finished dispatch's trace is
+ * immutable, so that was the same bytes over and over for the life of the page.
+ *
+ * Requires the execution id to match: a step's *latest* dispatch is what the
+ * server reports, and a new one for the same step must not be mistaken for the
+ * old one already being in hand.
+ *
+ * `trace_len` is compared against `MAX_TRACE_EVENTS` too, because a trace longer
+ * than the view cap is stored truncated — without that the comparison could
+ * never be satisfied and the fetch would repeat forever.
+ */
+const isTraceSettled = (dispatch: LiveDispatch): boolean => {
+  if (!TERMINAL_DISPATCH_STATUSES.has(dispatch.status)) return false
+
+  const entry = dispatchStore.selectByStep(dispatchStore.store.getState())[dispatch.stepId]
+  if (entry?.executionId !== dispatch.executionId) return false
+
+  return entry.trace.length >= Math.min(dispatch.traceLen, MAX_TRACE_EVENTS)
+}
+
 /**
  * Fetch a dispatch's trace from whichever store actually holds it.
  *
@@ -43,6 +81,8 @@ const toDispatch = (d: LiveDispatchInfo): LiveDispatch => ({
  * is not resolvable by the dispatch route.
  */
 const fetchTrace = async (workflowId: string, dispatch: LiveDispatch): Promise<void> => {
+  if (isTraceSettled(dispatch)) return
+
   try {
     const resp = dispatch.source === 'registry'
       ? await api.dispatch.trace(dispatch.executionId)
@@ -167,7 +207,16 @@ const hydrateLiveState = async (workflowId: string): Promise<void> => {
   // a run that has nothing yet can absolutely have something on the next
   // tick. `hydrateFromTimeline`'s merge only ever keeps the richer version of
   // each agent's trace, so re-fetching never discards WS-delivered data.
-  if (isLive) {
+  //
+  // Once the run is finished and its timeline is in hand, that stops being true
+  // in the only direction that matters: there is nothing left to arrive, so the
+  // fetch can only ever return what we already have. This is the largest call in
+  // the tick, so skipping it is most of the idle cost.
+  const timelineSettled =
+    TERMINAL_RUN_STATUSES.has(run.status) &&
+    agentTraceStore.selectTimelineRunId(agentTraceStore.store.getState()) === run.id
+
+  if (isLive && !timelineSettled) {
     try {
       await agentTraceStore.hydrateFromTimeline(run.id)
     } catch (e) {

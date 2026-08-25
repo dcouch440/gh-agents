@@ -457,3 +457,156 @@ describe('hydrateActive', () => {
     expect(mockGetLiveState).toHaveBeenCalledWith('wf-1')
   })
 })
+
+describe('re-fetch suppression', () => {
+  const dispatch = (overrides: Record<string, unknown> = {}) => ({
+    step_id: 's1',
+    execution_id: 'ae-1',
+    status: 'completed',
+    instruction: 'Configure',
+    created_at: '2025-01-01T00:01:00Z',
+    result: null,
+    trace_len: 0,
+    source: 'persisted' as const,
+    ...overrides,
+  })
+
+  const timelineEntry = {
+    id: 'e1',
+    ts: '2025-01-01T00:00:30Z',
+    kind: 'assistant_message' as const,
+    step_id: 's1',
+    step_name: 'Scanner',
+    agent_name: 'Researcher',
+    agent_execution_id: 'ae-1',
+    content: 'done',
+    tool_name: null,
+    tool_call_id: null,
+    input_tokens: 0,
+    output_tokens: 0,
+  }
+
+  it('stops re-fetching a finished dispatch once its trace is in hand', async () => {
+    // The poller runs for the life of the page. A finished dispatch's trace is
+    // immutable, so re-fetching it every tick is the same bytes forever.
+    mockGetLiveState.mockResolvedValue(makeLiveState({ dispatches: [dispatch()] }))
+
+    await hydrateLiveState('wf-1')
+    expect(mockGetStepDispatchHistory).toHaveBeenCalledTimes(1)
+
+    await hydrateLiveState('wf-1')
+    await hydrateLiveState('wf-1')
+    expect(mockGetStepDispatchHistory).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps re-fetching a dispatch that is still running', async () => {
+    mockGetLiveState.mockResolvedValue(makeLiveState({
+      dispatches: [dispatch({ status: 'running' })],
+    }))
+
+    await hydrateLiveState('wf-1')
+    await hydrateLiveState('wf-1')
+
+    expect(mockGetStepDispatchHistory).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps re-fetching while the stored trace is short of trace_len', async () => {
+    // Terminal, but we do not have all of it yet — the server says 5 events and
+    // the store has none, so settling here would strand the panel half-empty.
+    mockGetLiveState.mockResolvedValue(makeLiveState({
+      dispatches: [dispatch({ trace_len: 5 })],
+    }))
+
+    await hydrateLiveState('wf-1')
+    await hydrateLiveState('wf-1')
+
+    expect(mockGetStepDispatchHistory).toHaveBeenCalledTimes(2)
+  })
+
+  it('fetches a new dispatch for a step whose previous one had settled', async () => {
+    mockGetLiveState.mockResolvedValue(makeLiveState({ dispatches: [dispatch()] }))
+    await hydrateLiveState('wf-1')
+    expect(mockGetStepDispatchHistory).toHaveBeenCalledTimes(1)
+
+    // Re-running the step produces a different execution id on the same step.
+    // Matching on step alone would mistake it for the one already in hand.
+    mockGetStepDispatchHistory.mockImplementation((_wf: string, stepId: string) =>
+      Promise.resolve({ ...makeTrace('ae-2', stepId), status: 'completed' }),
+    )
+    mockGetLiveState.mockResolvedValue(makeLiveState({
+      dispatches: [dispatch({ execution_id: 'ae-2' })],
+    }))
+
+    await hydrateLiveState('wf-1')
+    expect(mockGetStepDispatchHistory).toHaveBeenCalledTimes(2)
+  })
+
+  it('stops re-fetching the timeline of a finished run', async () => {
+    // The largest call in the tick — 89 kB of identical bytes every poll.
+    mockGetLiveState.mockResolvedValue(makeLiveState({
+      latest_run: makeRun({ status: 'completed' }),
+    }))
+    mockGetExecutionTimeline.mockResolvedValue({
+      entries: [timelineEntry], has_more: false, next_cursor: null,
+    })
+
+    await hydrateLiveState('wf-1')
+    expect(mockGetExecutionTimeline).toHaveBeenCalledTimes(1)
+
+    await hydrateLiveState('wf-1')
+    await hydrateLiveState('wf-1')
+    expect(mockGetExecutionTimeline).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps polling the timeline of a run that is still going', async () => {
+    mockGetLiveState.mockResolvedValue(makeLiveState({
+      active_run: makeRun({ id: 'run-1', status: 'running', completed_at: null }),
+    }))
+    mockGetExecutionTimeline.mockResolvedValue({
+      entries: [timelineEntry], has_more: false, next_cursor: null,
+    })
+
+    await hydrateLiveState('wf-1')
+    await hydrateLiveState('wf-1')
+
+    expect(mockGetExecutionTimeline).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries a finished run whose timeline fetch failed', async () => {
+    // The marker is stamped only on success, so a failed attempt must not be
+    // mistaken for "already have it".
+    mockGetLiveState.mockResolvedValue(makeLiveState({
+      latest_run: makeRun({ status: 'completed' }),
+    }))
+    mockGetExecutionTimeline.mockRejectedValueOnce(new Error('boom'))
+
+    await hydrateLiveState('wf-1')
+    expect(mockGetExecutionTimeline).toHaveBeenCalledTimes(1)
+
+    mockGetExecutionTimeline.mockResolvedValue({
+      entries: [timelineEntry], has_more: false, next_cursor: null,
+    })
+    await hydrateLiveState('wf-1')
+    expect(mockGetExecutionTimeline).toHaveBeenCalledTimes(2)
+  })
+
+  it('re-fetches the timeline when a new run starts', async () => {
+    mockGetLiveState.mockResolvedValue(makeLiveState({
+      latest_run: makeRun({ id: 'run-1', status: 'completed' }),
+    }))
+    mockGetExecutionTimeline.mockResolvedValue({
+      entries: [timelineEntry], has_more: false, next_cursor: null,
+    })
+
+    await hydrateLiveState('wf-1')
+    expect(mockGetExecutionTimeline).toHaveBeenCalledTimes(1)
+
+    mockGetLiveState.mockResolvedValue(makeLiveState({
+      active_run: makeRun({ id: 'run-2', status: 'running', completed_at: null }),
+    }))
+
+    await hydrateLiveState('wf-1')
+    expect(mockGetExecutionTimeline).toHaveBeenCalledWith('run-2', expect.anything())
+    expect(mockGetExecutionTimeline).toHaveBeenCalledTimes(2)
+  })
+})

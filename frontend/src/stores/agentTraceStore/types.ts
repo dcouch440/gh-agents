@@ -17,6 +17,14 @@ type AgentTraceState = {
   order: string[]
   /** Run these traces belong to. Null means nothing has run yet. */
   hydratedRunId: string | null
+  /**
+   * Run whose timeline has been fetched in full.
+   *
+   * Distinct from `hydratedRunId`, which is stamped before the fetch is made.
+   * This is only set once the entries are in, so a caller can tell "we know
+   * which run this is" apart from "we already have its timeline".
+   */
+  timelineRunId: string | null
 }
 
 export type { AgentTraceEvent, AgentTrace, AgentTraceState }
