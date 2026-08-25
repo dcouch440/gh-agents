@@ -7,7 +7,7 @@
 #
 # Usage:
 #   ./scripts/seed-user.sh
-#   EMAIL=me@example.com PASSWORD=supersecret1 ./scripts/seed-user.sh
+#   EMAIL=me@example.com PASSWORD=**** ./scripts/seed-user.sh
 
 set -euo pipefail
 
@@ -24,7 +24,10 @@ echo "Registering ${EMAIL} at ${API_URL}..."
 
 RESPONSE=$(curl -s -w '\n%{http_code}' -X POST "${API_URL}/api/auth/register" \
   -H 'Content-Type: application/json' \
-  -d "{\"email\":\"${EMAIL}\",\"password\":\"${PASSWORD}\"}")
+  -d "{\"email\":\"${EMAIL}\",\"password\":\"${PASSWORD}\"}") || {
+  echo "FAIL: could not reach ${API_URL} — is the backend running? (make dev / make server-up)" >&2
+  exit 1
+}
 
 STATUS="${RESPONSE##*$'\n'}"
 BODY="${RESPONSE%$'\n'*}"

@@ -180,7 +180,7 @@ ci: check fmt lint test ui-build cli-build
 
 clean:
 	cargo clean
-	rm -rf ui/dist ui/node_modules/.vite
+	rm -rf frontend/dist frontend/node_modules/.vite
 	rm -rf cli/dist cli/node_modules/.cache
 
 # --- Reports ---
