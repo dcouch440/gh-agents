@@ -4,7 +4,7 @@
 
 Rather than hand-writing orchestration, could a designer agent read a plain-language goal, decide what roles the work needs, write their system prompts and tool assignments, and hand a structured plan to an executor that runs it?
 
-nexor is what I built to find out. Draw a workflow on an Excalidraw canvas; the system builds the structure instantly, then designs and runs the agents behind it.
+nexor is what I built to find out. Draw a workflow on a canvas; the system builds the structure instantly, then designs and runs the agents behind it.
 
 Rust/Axum backend, React/Vite frontend, PostgreSQL.
 
