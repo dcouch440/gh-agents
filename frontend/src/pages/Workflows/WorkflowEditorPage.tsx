@@ -17,6 +17,13 @@ function WorkflowEditorPage() {
       void navigate('/workflows')
       return
     }
+    // Hydration below is several sequential round-trips, and the user can
+    // navigate away or switch workflows well before it settles. Without this
+    // guard the late `.then()` would start a poller after cleanup had already
+    // stopped one — leaving it running against a page that is gone, or worse,
+    // repointing it at the previous workflow after the next one had started.
+    let cancelled = false
+
     const loadWorkflowWithRosters = workflowStore.loadWorkflow(id).then(() => {
       // Fetch roster agents for all steps so the sidebar tree can display them
       const steps = workflowStore.selectSteps(workflowStore.store.getState())
@@ -30,12 +37,14 @@ function WorkflowEditorPage() {
     const hydrateRun = workflowLiveStore.hydrateLiveState(id)
     // Agent sources need both the roster and the run's step outputs.
     void Promise.all([loadWorkflowWithRosters, hydrateRun]).then(() => {
+      if (cancelled) return
       const rosterByStep = workflowStore.selectRosterByStep(workflowStore.store.getState())
       const runSteps = workflowLiveStore.selectRunSteps(workflowLiveStore.store.getState())
       workflowExecutionStore.hydrateAgentSources(rosterByStep, runSteps)
       workflowLiveStore.startLiveSync(id)
     })
     return () => {
+      cancelled = true
       workflowLiveStore.reset()
       workflowStore.clearActive()
       workflowExecutionStore.reset()
