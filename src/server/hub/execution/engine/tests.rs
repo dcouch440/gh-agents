@@ -851,6 +851,67 @@ mod tests {
         assert_eq!(provider.call_count(), 1, "must not re-issue");
     }
 
+    /// Fails at `send_message_stream` itself — the stream is never established.
+    struct FailingEstablishProvider {
+        calls: std::sync::atomic::AtomicU32,
+    }
+
+    impl FailingEstablishProvider {
+        fn new() -> Self {
+            Self {
+                calls: std::sync::atomic::AtomicU32::new(0),
+            }
+        }
+        fn call_count(&self) -> u32 {
+            self.calls.load(std::sync::atomic::Ordering::SeqCst)
+        }
+    }
+
+    #[async_trait]
+    impl LLMProvider for FailingEstablishProvider {
+        async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
+            Err(LLMError::StreamError("not implemented".into()))
+        }
+        async fn send_message_stream(
+            &self,
+            _req: LLMRequest,
+        ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
+        {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Err(LLMError::StreamTransport(connect_error().await))
+        }
+        fn provider_name(&self) -> &'static str {
+            "failing-establish"
+        }
+        fn model_id(&self) -> &str {
+            "test-model"
+        }
+    }
+
+    /// The engine's retry loop exists to cover errors yielded *by* an established
+    /// stream, which fall outside `RetryingProvider::with_retry`. A failure to
+    /// establish is already inside it, so retrying here would multiply the
+    /// provider's own attempts rather than cover anything new.
+    #[tokio::test]
+    async fn establish_failure_is_not_retried_by_the_engine() {
+        let provider = Arc::new(FailingEstablishProvider::new());
+        let engine = ExecutionEngine::new(provider.clone(), false);
+        let strategy = TestStrategy::new().with_streaming();
+        let recorder = make_mock_recorder();
+
+        let err = engine
+            .execute(&strategy, "Hi", &NullSink, &recorder, None)
+            .await
+            .expect_err("an unestablishable stream must surface the error");
+
+        assert!(matches!(err, HubError::LlmCallFailed { round: 0, .. }));
+        assert_eq!(
+            provider.call_count(),
+            1,
+            "RetryingProvider owns retries for this path — the engine must not add its own"
+        );
+    }
+
     #[tokio::test]
     async fn stream_retries_are_bounded() {
         let provider = Arc::new(FlakyStreamProvider::new(u32::MAX, false));

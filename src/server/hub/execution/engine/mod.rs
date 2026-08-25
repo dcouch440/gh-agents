@@ -102,9 +102,14 @@ fn tool_call_hash(name: &str, input: &Value) -> u64 {
 
 /// Why a single streaming round ended without producing a response.
 enum StreamRoundError {
-    /// The stream failed. `emitted` records whether any token had already
-    /// reached the client — if it had, the round cannot be safely re-issued
-    /// because the output would be duplicated.
+    /// The request never got off the ground — `send_message_stream` itself
+    /// failed. Not re-issued here: `RetryingProvider` already wraps that call in
+    /// `with_retry`, so retrying it again would multiply the provider's attempts
+    /// rather than add coverage.
+    Establish(LLMError),
+    /// The stream failed after it had been established. `emitted` records
+    /// whether any token had already reached the client — if it had, the round
+    /// cannot be safely re-issued because the output would be duplicated.
     Stream { source: LLMError, emitted: bool },
     /// An engine-level failure that must propagate untouched (cancellation,
     /// or a stream that ended without a complete response).
@@ -155,9 +160,13 @@ impl ExecutionEngine {
     ///
     /// `RetryingProvider` only retries *establishing* a stream — errors yielded
     /// by the returned stream land outside its `with_retry` wrapper entirely.
-    /// This closes that gap. The `!emitted` guard is what makes the re-issue
-    /// safe: once a token has been streamed, replaying the round would
-    /// duplicate output, so the error is surfaced instead.
+    /// This closes that gap, and only that gap: an `Establish` failure is passed
+    /// straight through, because retrying it here would stack on top of the
+    /// provider's own attempts instead of covering anything new.
+    ///
+    /// The `!emitted` guard is what makes the re-issue safe: once a token has
+    /// been streamed, replaying the round would duplicate output, so the error
+    /// is surfaced instead.
     async fn stream_round_with_retry(
         &self,
         request: LLMRequest,
@@ -175,6 +184,11 @@ impl ExecutionEngine {
             {
                 Ok(response) => return Ok(response),
                 Err(StreamRoundError::Fatal(e)) => return Err(e),
+                Err(StreamRoundError::Establish(source)) => {
+                    let msg = format!("stream error at round {}: {}", round, source);
+                    sink.error(&msg).await;
+                    return Err(HubError::LlmCallFailed { round, source });
+                }
                 Err(StreamRoundError::Stream { source, emitted }) => {
                     let retryable = !emitted
                         && attempts < crate::constants::MAX_STREAM_RETRY_ATTEMPTS
@@ -214,10 +228,7 @@ impl ExecutionEngine {
             .provider
             .send_message_stream(request)
             .await
-            .map_err(|source| StreamRoundError::Stream {
-                source,
-                emitted: false,
-            })?;
+            .map_err(StreamRoundError::Establish)?;
 
         let mut accumulator = StreamAccumulator::new();
         let mut pinned = std::pin::pin!(stream);
