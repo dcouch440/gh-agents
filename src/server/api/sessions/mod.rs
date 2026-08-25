@@ -387,6 +387,7 @@ pub async fn get_session_history(
             content: row.content,
             timestamp: row.timestamp,
             source_type: row.source_type,
+            error: row.error,
         })
         .collect();
 

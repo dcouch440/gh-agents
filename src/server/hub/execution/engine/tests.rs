@@ -45,6 +45,7 @@ mod tests {
     struct TestStrategy {
         system: String,
         model: String,
+        streaming: bool,
     }
 
     impl TestStrategy {
@@ -52,7 +53,13 @@ mod tests {
             Self {
                 system: "You are helpful.".into(),
                 model: "test-model".into(),
+                streaming: false,
             }
+        }
+
+        fn with_streaming(mut self) -> Self {
+            self.streaming = true;
+            self
         }
     }
 
@@ -74,7 +81,7 @@ mod tests {
             480_000
         }
         fn streaming(&self) -> bool {
-            false
+            self.streaming
         }
         fn temperature(&self) -> f32 {
             0.7
@@ -719,5 +726,148 @@ mod tests {
             .execute(&strategy, "go", &sink, &recorder, Some(&token))
             .await;
         assert!(matches!(result, Err(HubError::Cancelled)));
+    }
+
+    // ── Mid-stream transport failure ────────────────────────────────────
+
+    /// Produce a genuine `reqwest::Error` without touching the network — port 1
+    /// on loopback is never listening, so the connect attempt always fails.
+    async fn connect_error() -> reqwest::Error {
+        reqwest::Client::new()
+            .get("http://127.0.0.1:1/")
+            .send()
+            .await
+            .expect_err("connect to 127.0.0.1:1 must fail")
+    }
+
+    fn ok_chunks(text: &str) -> Vec<Result<StreamChunk, LLMError>> {
+        vec![
+            Ok(StreamChunk::MessageStart {
+                model: "test-model".into(),
+                input_tokens: 1,
+            }),
+            Ok(StreamChunk::ContentDelta {
+                text: text.into(),
+                index: 0,
+            }),
+            Ok(StreamChunk::MessageDelta {
+                stop_reason: Some(StopReason::EndTurn),
+                output_tokens: Some(1),
+            }),
+        ]
+    }
+
+    /// Fails the stream `fail_times` times before succeeding. Records how many
+    /// times a stream was requested so retries are observable.
+    struct FlakyStreamProvider {
+        fail_times: u32,
+        calls: std::sync::atomic::AtomicU32,
+        /// Emit a token before failing — makes the failure unsafe to replay.
+        emit_before_failing: bool,
+    }
+
+    impl FlakyStreamProvider {
+        fn new(fail_times: u32, emit_before_failing: bool) -> Self {
+            Self {
+                fail_times,
+                calls: std::sync::atomic::AtomicU32::new(0),
+                emit_before_failing,
+            }
+        }
+        fn call_count(&self) -> u32 {
+            self.calls.load(std::sync::atomic::Ordering::SeqCst)
+        }
+    }
+
+    #[async_trait]
+    impl LLMProvider for FlakyStreamProvider {
+        async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
+            Err(LLMError::StreamError("not implemented".into()))
+        }
+        async fn send_message_stream(
+            &self,
+            _req: LLMRequest,
+        ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
+        {
+            let n = self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+            if n < self.fail_times {
+                let mut chunks: Vec<Result<StreamChunk, LLMError>> =
+                    vec![Ok(StreamChunk::MessageStart {
+                        model: "test-model".into(),
+                        input_tokens: 1,
+                    })];
+                if self.emit_before_failing {
+                    chunks.push(Ok(StreamChunk::ContentDelta {
+                        text: "partial".into(),
+                        index: 0,
+                    }));
+                }
+                chunks.push(Err(LLMError::StreamTransport(connect_error().await)));
+                return Ok(Box::pin(futures::stream::iter(chunks)));
+            }
+
+            Ok(Box::pin(futures::stream::iter(ok_chunks("recovered"))))
+        }
+        fn provider_name(&self) -> &'static str {
+            "flaky"
+        }
+        fn model_id(&self) -> &str {
+            "test-model"
+        }
+    }
+
+    #[tokio::test]
+    async fn stream_retried_when_nothing_emitted() {
+        let provider = Arc::new(FlakyStreamProvider::new(1, false));
+        let engine = ExecutionEngine::new(provider.clone(), false);
+        let strategy = TestStrategy::new().with_streaming();
+        let recorder = make_mock_recorder();
+
+        let result = engine
+            .execute(&strategy, "Hi", &NullSink, &recorder, None)
+            .await
+            .expect("transient stream failure should be retried");
+
+        assert_eq!(result.content, "recovered");
+        assert_eq!(provider.call_count(), 2, "expected exactly one re-issue");
+    }
+
+    #[tokio::test]
+    async fn stream_not_retried_once_tokens_emitted() {
+        // Replaying a round after output has reached the client would duplicate
+        // it, so the error must surface instead.
+        let provider = Arc::new(FlakyStreamProvider::new(1, true));
+        let engine = ExecutionEngine::new(provider.clone(), false);
+        let strategy = TestStrategy::new().with_streaming();
+        let recorder = make_mock_recorder();
+
+        let err = engine
+            .execute(&strategy, "Hi", &NullSink, &recorder, None)
+            .await
+            .expect_err("must not replay a round that already streamed output");
+
+        assert!(matches!(err, HubError::LlmCallFailed { round: 0, .. }));
+        assert_eq!(provider.call_count(), 1, "must not re-issue");
+    }
+
+    #[tokio::test]
+    async fn stream_retries_are_bounded() {
+        let provider = Arc::new(FlakyStreamProvider::new(u32::MAX, false));
+        let engine = ExecutionEngine::new(provider.clone(), false);
+        let strategy = TestStrategy::new().with_streaming();
+        let recorder = make_mock_recorder();
+
+        let err = engine
+            .execute(&strategy, "Hi", &NullSink, &recorder, None)
+            .await
+            .expect_err("a permanently failing stream must give up");
+
+        assert!(matches!(err, HubError::LlmCallFailed { round: 0, .. }));
+        assert_eq!(
+            provider.call_count(),
+            crate::constants::MAX_STREAM_RETRY_ATTEMPTS + 1,
+            "one initial attempt plus MAX_STREAM_RETRY_ATTEMPTS re-issues"
+        );
     }
 }

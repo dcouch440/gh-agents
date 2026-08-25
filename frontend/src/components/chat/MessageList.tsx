@@ -1,6 +1,7 @@
 import { useRef, useEffect, type ReactNode } from 'react'
 import { Box, Typography } from '@mui/material'
 import { ChatMessage } from './ChatMessage'
+import { MessageErrorNotice } from './MessageErrorNotice'
 
 export type PanelMessageMetadata = {
   submitLabel: string
@@ -12,6 +13,8 @@ export type ChatMessageData = {
   role: 'user' | 'assistant' | 'system' | 'tool'
   content: string
   source_type?: string | null
+  /** Set when the turn this message started failed. */
+  error?: string | null
   panelMeta?: PanelMessageMetadata | null
   toolName?: string
   toolResult?: string
@@ -24,9 +27,11 @@ export type MessageListProps = {
   streaming?: boolean
   focusMode?: boolean
   onPanelSubmit?: (messageId: string, selections: string) => void
+  /** Resend the content of a message whose turn failed. */
+  onRetry?: (content: string) => void
 }
 
-function MessageList({ messages, emptyMessage, streamingContent, streaming, focusMode, onPanelSubmit }: MessageListProps) {
+function MessageList({ messages, emptyMessage, streamingContent, streaming, focusMode, onPanelSubmit, onRetry }: MessageListProps) {
   const messagesRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -104,17 +109,25 @@ function MessageList({ messages, emptyMessage, streamingContent, streaming, focu
                 </Box>
               )
             }
+            const content = message.content
             return (
-              <ChatMessage
-                key={message.id}
-                role={message.role}
-                content={message.content}
-                streaming={isLastAssistant ? streaming : undefined}
-                sourceType={message.source_type}
-                panelMeta={message.panelMeta}
-                onPanelSubmit={onPanelSubmit}
-                messageId={message.id}
-              />
+              <Box key={message.id}>
+                <ChatMessage
+                  role={message.role}
+                  content={content}
+                  streaming={isLastAssistant ? streaming : undefined}
+                  sourceType={message.source_type}
+                  panelMeta={message.panelMeta}
+                  onPanelSubmit={onPanelSubmit}
+                  messageId={message.id}
+                />
+                {message.error ? (
+                  <MessageErrorNotice
+                    error={message.error}
+                    onRetry={onRetry ? () => onRetry(content) : null}
+                  />
+                ) : null}
+              </Box>
             )
           })}
           {streamingContent}

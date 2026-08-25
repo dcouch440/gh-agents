@@ -23,6 +23,8 @@ type ChatMessage = {
   content: string
   timestamp: string
   source_type: string | null
+  /** Set when the turn this message started failed. */
+  error: string | null
 }
 
 type Mode = {

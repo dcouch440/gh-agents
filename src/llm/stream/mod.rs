@@ -34,8 +34,9 @@ pub const DEFAULT_MAX_STREAM_BUFFER: usize = 10 * 1024 * 1024;
 /// Returns each line as a `String` (without the trailing newline).
 /// Empty lines are yielded — callers decide whether to skip them.
 ///
-/// Yields `LLMError::StreamError` if the buffer exceeds `max_buffer`
-/// bytes or if the underlying transport errors.
+/// Yields `LLMError::StreamError` if the buffer exceeds `max_buffer` bytes,
+/// or `LLMError::StreamTransport` (carrying the underlying `reqwest::Error`)
+/// if the transport fails mid-stream.
 pub fn safe_line_stream(
     byte_stream: impl Stream<Item = Result<Bytes, reqwest::Error>> + Send + 'static,
     max_buffer: usize,
@@ -68,8 +69,11 @@ pub fn safe_line_stream(
                     }
                 }
                 Err(e) => {
-                    let msg = e.to_string();
-                    yield Err(LLMError::StreamError(msg));
+                    // Preserve the reqwest error rather than stringifying it —
+                    // `e.to_string()` renders only the top-level Display and
+                    // discards the source chain, which is what retry
+                    // classification needs to recognise a timeout.
+                    yield Err(LLMError::StreamTransport(e));
                     return;
                 }
             }

@@ -10,6 +10,7 @@ const mapHistory = (history: readonly ChatMessage[]): ChatMessageData[] =>
     role: m.role,
     content: m.content,
     source_type: m.source_type,
+    error: m.error,
   }))
 
 const initStep = (stepId: string): void => {

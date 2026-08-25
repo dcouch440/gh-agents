@@ -20,6 +20,9 @@ pub struct ChatMessageRow {
     pub timestamp: DateTime<Utc>,
     /// Message source: None = human, Some("agent") = agent-injected, Some("system") = system notification.
     pub source_type: Option<String>,
+    /// Set when the turn this message started failed. Durable counterpart to
+    /// the live SSE error chunk, which is lost if no client is attached.
+    pub error: Option<String>,
 }
 
 /// Insert a new chat message
@@ -43,6 +46,18 @@ pub async fn insert_chat_message(
     Ok(())
 }
 
+/// Record a failure against the message whose turn failed.
+pub async fn set_chat_message_error(pool: &PgPool, id: &Uuid, error: &str) -> Result<()> {
+    sqlx::query("UPDATE chat_messages SET error = $2 WHERE id = $1")
+        .bind(id)
+        .bind(error)
+        .execute(pool)
+        .await
+        .context("Failed to record chat message error")?;
+
+    Ok(())
+}
+
 /// Get chat history with pagination
 pub async fn get_chat_history(
     pool: &PgPool,
@@ -53,7 +68,7 @@ pub async fn get_chat_history(
     let limit = limit.min(1000) as i64;
     let offset = offset as i64;
 
-    let rows: Vec<ChatMessageRow> = sqlx::query_as("SELECT id, role, content, timestamp, source_type FROM chat_messages WHERE user_id = $1 ORDER BY timestamp ASC LIMIT $2 OFFSET $3")
+    let rows: Vec<ChatMessageRow> = sqlx::query_as("SELECT id, role, content, timestamp, source_type, error FROM chat_messages WHERE user_id = $1 ORDER BY timestamp ASC LIMIT $2 OFFSET $3")
         .bind(user_id.0)
         .bind(limit)
         .bind(offset)
@@ -356,7 +371,7 @@ pub async fn get_session_history(
     limit: u32,
 ) -> Result<Vec<ChatMessageRow>> {
     let limit = limit.min(1000) as i64;
-    let rows: Vec<ChatMessageRow> = sqlx::query_as("SELECT id, role, content, timestamp, source_type FROM chat_messages WHERE session_id = $1 AND hidden_at IS NULL ORDER BY timestamp ASC LIMIT $2")
+    let rows: Vec<ChatMessageRow> = sqlx::query_as("SELECT id, role, content, timestamp, source_type, error FROM chat_messages WHERE session_id = $1 AND hidden_at IS NULL ORDER BY timestamp ASC LIMIT $2")
         .bind(session_id)
         .bind(limit)
         .fetch_all(pool)

@@ -114,6 +114,9 @@ pub const RETRY_MAX_BACKOFF_SECS: u64 = 60;
 pub const RETRY_MAX_ATTEMPTS: u32 = 5;
 /// Jitter factor applied to backoff delays.
 pub const RETRY_JITTER_FACTOR: f64 = 0.25;
+/// Maximum re-issues of a streaming round after a mid-stream transport failure.
+/// Only applied when no tokens have reached the client yet.
+pub const MAX_STREAM_RETRY_ATTEMPTS: u32 = 2;
 
 // ── Rate Limiting ─────────────────────────────────────────────────────────
 

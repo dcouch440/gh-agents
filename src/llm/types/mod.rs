@@ -24,6 +24,16 @@ pub enum LLMError {
     #[error("Stream error: {0}")]
     StreamError(String),
 
+    /// Transport failure while reading a streaming response body.
+    ///
+    /// Distinct from `StreamError` (which covers stream-protocol faults like a
+    /// buffer-cap overflow): this preserves the underlying `reqwest::Error` so
+    /// retry classification can still call `is_timeout()`/`is_connect()`.
+    /// Uses `#[source]` rather than `#[from]` — `HttpError` owns the
+    /// `From<reqwest::Error>` impl.
+    #[error("Stream transport error: {0}")]
+    StreamTransport(#[source] reqwest::Error),
+
     #[error("Timeout after {0}ms")]
     Timeout(u64),
 
