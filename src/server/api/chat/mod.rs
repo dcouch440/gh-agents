@@ -48,6 +48,8 @@ pub struct ChatMessage {
     pub content: String,
     pub timestamp: DateTime<Utc>,
     pub source_type: Option<String>,
+    /// Set when the turn this message started failed.
+    pub error: Option<String>,
 }
 
 /// Send a chat message to the orchestrator
@@ -147,6 +149,7 @@ pub async fn get_chat_history(
             content: row.content,
             timestamp: row.timestamp,
             source_type: row.source_type,
+            error: row.error,
         })
         .collect();
 

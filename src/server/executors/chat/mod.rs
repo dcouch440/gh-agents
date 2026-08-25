@@ -105,7 +105,7 @@ async fn handle_message(
                             {
                                 Ok(_) => {}
                                 Err(e) => {
-                                    handle_chat_error(state, message_id, e);
+                                    handle_chat_error(state, message_id, e).await;
                                 }
                             }
                             state.remove_cancellation(message_id);
@@ -147,7 +147,7 @@ async fn handle_message(
                         {
                             Ok(_) => {}
                             Err(e) => {
-                                handle_chat_error(state, message_id, e);
+                                handle_chat_error(state, message_id, e).await;
                             }
                         }
                         state.remove_cancellation(message_id);
@@ -179,7 +179,7 @@ async fn handle_message(
         {
             Ok(_) => {}
             Err(e) => {
-                handle_chat_error(state, message_id, e);
+                handle_chat_error(state, message_id, e).await;
             }
         },
         None => {
@@ -198,16 +198,37 @@ async fn handle_message(
 }
 
 /// Handle errors from chat execution, with special treatment for cancellation.
-fn handle_chat_error(state: &AppState, message_id: uuid::Uuid, error: HubError) {
+///
+/// The stream chunks below only reach a client that is attached right now, and
+/// the buffer behind them is dropped by `schedule_stream_cleanup` shortly
+/// after. Failures are therefore also written to the message row so a client
+/// that reconnects — or reloads minutes later — still sees what happened.
+async fn handle_chat_error(state: &AppState, message_id: uuid::Uuid, error: HubError) {
     match error {
         HubError::Cancelled => {
+            // A user-initiated stop is not a failure — do not record it.
             info!("Chat message {} cancelled by user", message_id);
             state.send_stream_chunk(message_id, StreamChunk::Error("Generation stopped".into()));
             state.send_stream_chunk(message_id, StreamChunk::Done);
         }
         e => {
-            warn!("Chat error for {}: {}", message_id, e);
-            state.send_stream_chunk(message_id, StreamChunk::Error(format!("{}", e)));
+            // Log the full source chain, not just the top-level Display —
+            // `{}` on an LLM stream failure renders only "error decoding
+            // response body" and hides the cause underneath it.
+            warn!("Chat error for {}: {:?}", message_id, e);
+            let detail = format!("{}", e);
+            if let Err(save_err) = state
+                .repos()
+                .chat_messages
+                .set_chat_message_error(message_id, detail.clone())
+                .await
+            {
+                error!(
+                    "Failed to persist chat error for {}: {}",
+                    message_id, save_err
+                );
+            }
+            state.send_stream_chunk(message_id, StreamChunk::Error(detail));
             state.send_stream_chunk(message_id, StreamChunk::Done);
         }
     }

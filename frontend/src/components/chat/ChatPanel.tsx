@@ -44,6 +44,7 @@ function ChatPanel({ messages, onSend, onCancel, streaming, disabled, emptyMessa
         streaming={streaming}
         focusMode={focusMode}
         onPanelSubmit={onPanelSubmit}
+        onRetry={onSend}
       />
       {stepId ? (
         <RichChatInput onSend={onSend} onCancel={onCancel} stepId={stepId} disabled={disabled} focusMode={focusMode} />

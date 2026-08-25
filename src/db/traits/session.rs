@@ -146,6 +146,9 @@ pub trait ChatMessageRepo: Send + Sync {
 
     /// Clear all chat history.
     async fn clear_chat_history(&self, user_id: UserId) -> Result<()>;
+
+    /// Record a failure against the message whose turn failed.
+    async fn set_chat_message_error(&self, id: Uuid, error: String) -> Result<()>;
 }
 
 // ============================================================================

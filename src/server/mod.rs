@@ -185,10 +185,15 @@ fn create_router(state: AppState) -> Router {
         // burst was spent (easily, given the live-poll fan-out), the session
         // stayed 429'd for the better part of an hour no matter how idle it
         // was, which is exactly the symptom this bucket exists to prevent.
+        //
+        // The extractor needs the JWT secret: it only grants a session bucket to
+        // a token that actually verifies, because this layer runs ahead of the
+        // auth extractor and an unverified token would let a caller mint a fresh
+        // bucket per request. See `rate_limit`.
         let api_rate_limit = GovernorConfigBuilder::default()
             .per_millisecond(50) // 1000ms / 20 req/s
             .burst_size(1000)
-            .key_extractor(rate_limit::SessionOrIpKeyExtractor)
+            .key_extractor(rate_limit::SessionOrIpKeyExtractor::new(state.jwt_secret()))
             .finish()
             .expect("valid governor config");
         routes::build_protected_routes(state.clone()).layer(GovernorLayer {

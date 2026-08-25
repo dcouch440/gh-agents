@@ -116,22 +116,58 @@ mod tests {
         }
     }
 
+    /// Produce a genuine `reqwest::Error` without touching the network — port 1
+    /// on loopback is never listening, so the connect attempt always fails.
+    async fn connect_error() -> reqwest::Error {
+        reqwest::Client::new()
+            .get("http://127.0.0.1:1/")
+            .send()
+            .await
+            .expect_err("connect to 127.0.0.1:1 must fail")
+    }
+
     #[tokio::test]
     async fn transport_error_forwarded() {
-        let chunks: Vec<Result<Bytes, reqwest::Error>> = vec![
-            Ok(Bytes::from("ok\n")),
-            // reqwest::Error can't be constructed directly, so we simulate via
-            // a custom stream that errors
-        ];
+        let chunks: Vec<Result<Bytes, reqwest::Error>> =
+            vec![Ok(Bytes::from("ok\n")), Err(connect_error().await)];
         let byte_stream = stream::iter(chunks);
 
         let lines: Vec<_> = safe_line_stream(byte_stream, DEFAULT_MAX_STREAM_BUFFER)
             .collect()
             .await;
 
-        // At least the first line should come through
-        assert_eq!(lines.len(), 1);
+        // The complete line arrives, then the transport failure.
+        assert_eq!(lines.len(), 2);
         assert_eq!(lines[0].as_deref().unwrap(), "ok");
+
+        // The reqwest error must survive intact — classification downstream
+        // depends on it, and stringifying it here is what previously reduced
+        // every mid-stream failure to "error decoding response body".
+        match lines[1].as_ref().unwrap_err() {
+            LLMError::StreamTransport(e) => {
+                assert!(
+                    e.is_connect() || e.is_request(),
+                    "lost classification: {e:?}"
+                )
+            }
+            other => panic!("expected StreamTransport, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn buffer_overflow_still_yields_stream_error() {
+        // Protocol-level faults keep the plain `StreamError` variant — only
+        // transport failures carry a `reqwest::Error`.
+        let big = Bytes::from(vec![b'x'; 128]);
+        let byte_stream = stream::iter(vec![Ok(big)]);
+
+        let lines: Vec<_> = safe_line_stream(byte_stream, 16).collect().await;
+
+        assert_eq!(lines.len(), 1);
+        match lines[0].as_ref().unwrap_err() {
+            LLMError::StreamError(msg) => assert!(msg.contains("exceeded")),
+            other => panic!("expected StreamError, got {other:?}"),
+        }
     }
 
     #[tokio::test]

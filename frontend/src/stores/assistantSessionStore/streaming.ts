@@ -76,6 +76,7 @@ const mapHistory = (history: readonly ChatMessage[]): ChatMessageData[] =>
     role: m.role,
     content: m.content,
     source_type: m.source_type,
+    error: m.error,
     panelMeta: m.source_type === 'panel_render'
       ? { submitLabel: 'Submit', submitted: true }
       : undefined,

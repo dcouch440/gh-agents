@@ -40,6 +40,7 @@ mod tests {
                 content,
                 timestamp: Utc::now(),
                 source_type: None,
+                error: None,
             });
             Ok(())
         }
@@ -56,6 +57,13 @@ mod tests {
                 .take(limit as usize)
                 .cloned()
                 .collect())
+        }
+        async fn set_chat_message_error(&self, id: Uuid, error: String) -> anyhow::Result<()> {
+            let mut msgs = self.messages.lock().unwrap();
+            if let Some(m) = msgs.iter_mut().find(|m| m.id == id) {
+                m.error = Some(error);
+            }
+            Ok(())
         }
         async fn clear_chat_history(&self, _user_id: UserId) -> anyhow::Result<()> {
             Ok(())

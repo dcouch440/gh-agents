@@ -345,6 +345,41 @@ mod tests {
         assert!(!RetryPolicy::Default.should_retry(&error));
     }
 
+    /// Produce a genuine `reqwest::Error` without touching the network — port 1
+    /// on loopback is never listening, so the connect attempt always fails.
+    async fn connect_error() -> reqwest::Error {
+        reqwest::Client::new()
+            .get("http://127.0.0.1:1/")
+            .send()
+            .await
+            .expect_err("connect to 127.0.0.1:1 must fail")
+    }
+
+    #[tokio::test]
+    async fn test_retry_policy_stream_transport_connect_is_retried() {
+        let source = connect_error().await;
+        assert!(
+            source.is_connect() || source.is_request(),
+            "expected a transport-level failure, got: {source:?}"
+        );
+
+        let error = LLMError::StreamTransport(source);
+        assert!(RetryPolicy::Default.should_retry(&error));
+    }
+
+    #[tokio::test]
+    async fn test_stream_transport_preserves_source_chain() {
+        // The whole point of the variant: `is_timeout()`/`is_connect()` must
+        // still be callable after the error has been wrapped. Stringifying it
+        // (the previous behaviour) destroyed this.
+        let error = LLMError::StreamTransport(connect_error().await);
+        match &error {
+            LLMError::StreamTransport(e) => assert!(e.is_connect() || e.is_request()),
+            other => panic!("expected StreamTransport, got {other:?}"),
+        }
+        assert!(std::error::Error::source(&error).is_some());
+    }
+
     #[test]
     fn test_retry_policy_default_max_retries_exceeded_not_retried() {
         let error = LLMError::MaxRetriesExceeded(5);

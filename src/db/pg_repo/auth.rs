@@ -58,4 +58,8 @@ impl ChatMessageRepo for PgRepo {
     async fn clear_chat_history(&self, user_id: UserId) -> Result<()> {
         crate::db::clear_chat_history(&self.pool, user_id).await
     }
+
+    async fn set_chat_message_error(&self, id: Uuid, error: String) -> Result<()> {
+        crate::db::set_chat_message_error(&self.pool, &id, &error).await
+    }
 }

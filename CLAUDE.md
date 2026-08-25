@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Visual workflow design platform for AI agents. Users draw workflows on an Excalidraw canvas, the system builds structure instantly (Phase 0), then designs agents asynchronously. Rust/Axum backend, React/Vite frontend, PostgreSQL.
+Visual workflow design platform for AI agents. Users draw workflows on a custom canvas (hand-rolled `<canvas>` renderer, Excalidraw-inspired; serialized to an Excalidraw-compatible element schema), the system builds structure instantly (Phase 0), then designs agents asynchronously. Rust/Axum backend, React/Vite frontend, PostgreSQL.
 
 See @visions/vision-visual-dispatch.md for the current product vision.
 

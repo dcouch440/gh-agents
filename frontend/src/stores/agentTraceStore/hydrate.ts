@@ -139,7 +139,10 @@ const hydrateFromTimeline = async (executionId: string): Promise<void> => {
     }
     const seen = Collections.toSet(s.order)
     const mergedOrder = [...s.order, ...order.filter((id) => !seen.has(id))]
-    return { traces: merged, order: mergedOrder }
+    // Stamped only on the success path, so a caller can skip re-fetching a
+    // finished run's timeline. A failure above returns early and leaves this
+    // unset, which is what makes the next tick retry.
+    return { traces: merged, order: mergedOrder, timelineRunId: executionId }
   })
 }
 
@@ -151,7 +154,7 @@ const setHydratedRun = (runId: string | null): void => {
   store.setState((s) =>
     s.hydratedRunId === runId
       ? s
-      : { hydratedRunId: runId, traces: {}, order: [] },
+      : { hydratedRunId: runId, traces: {}, order: [], timelineRunId: null },
   )
 }
 

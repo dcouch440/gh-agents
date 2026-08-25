@@ -14,7 +14,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
 use crate::llm::{
-    ContentBlock, LLMProvider, LLMRequest, LLMResponse, Message, StopReason, StreamAccumulator,
+    BackoffConfig, ContentBlock, ExponentialBackoff, LLMError, LLMProvider, LLMRequest,
+    LLMResponse, Message, RetryPolicy, StopReason, StreamAccumulator,
     StreamChunk as LLMStreamChunk, TokenUsage,
 };
 
@@ -99,6 +100,22 @@ fn tool_call_hash(name: &str, input: &Value) -> u64 {
     hasher.finish()
 }
 
+/// Why a single streaming round ended without producing a response.
+enum StreamRoundError {
+    /// The request never got off the ground — `send_message_stream` itself
+    /// failed. Not re-issued here: `RetryingProvider` already wraps that call in
+    /// `with_retry`, so retrying it again would multiply the provider's attempts
+    /// rather than add coverage.
+    Establish(LLMError),
+    /// The stream failed after it had been established. `emitted` records
+    /// whether any token had already reached the client — if it had, the round
+    /// cannot be safely re-issued because the output would be duplicated.
+    Stream { source: LLMError, emitted: bool },
+    /// An engine-level failure that must propagate untouched (cancellation,
+    /// or a stream that ended without a complete response).
+    Fatal(HubError),
+}
+
 impl ExecutionEngine {
     pub fn new(provider: Arc<dyn LLMProvider>, debug_stream: bool) -> Self {
         Self {
@@ -136,6 +153,125 @@ impl ExecutionEngine {
     /// Used by room execution which needs `Arc<dyn LLMProvider>` directly.
     pub fn provider(&self) -> Arc<dyn LLMProvider> {
         Arc::clone(&self.provider)
+    }
+
+    /// Run one streaming LLM round, re-issuing it on a transient transport
+    /// failure so long as nothing has reached the client yet.
+    ///
+    /// `RetryingProvider` only retries *establishing* a stream — errors yielded
+    /// by the returned stream land outside its `with_retry` wrapper entirely.
+    /// This closes that gap, and only that gap: an `Establish` failure is passed
+    /// straight through, because retrying it here would stack on top of the
+    /// provider's own attempts instead of covering anything new.
+    ///
+    /// The `!emitted` guard is what makes the re-issue safe: once a token has
+    /// been streamed, replaying the round would duplicate output, so the error
+    /// is surfaced instead.
+    async fn stream_round_with_retry(
+        &self,
+        request: LLMRequest,
+        sink: &dyn StreamSink,
+        cancel: Option<&CancellationToken>,
+        round: u32,
+    ) -> Result<LLMResponse, HubError> {
+        let mut attempts: u32 = 0;
+        let mut backoff = ExponentialBackoff::new(BackoffConfig::default());
+
+        loop {
+            match self
+                .stream_round(request.clone(), sink, cancel, round)
+                .await
+            {
+                Ok(response) => return Ok(response),
+                Err(StreamRoundError::Fatal(e)) => return Err(e),
+                Err(StreamRoundError::Establish(source)) => {
+                    let msg = format!("stream error at round {}: {}", round, source);
+                    sink.error(&msg).await;
+                    return Err(HubError::LlmCallFailed { round, source });
+                }
+                Err(StreamRoundError::Stream { source, emitted }) => {
+                    let retryable = !emitted
+                        && attempts < crate::constants::MAX_STREAM_RETRY_ATTEMPTS
+                        && RetryPolicy::Default.should_retry(&source);
+
+                    if retryable {
+                        attempts += 1;
+                        warn!(
+                            round,
+                            attempts,
+                            error = %source,
+                            "Stream failed before any output — re-issuing round"
+                        );
+                        if let Some(delay) = backoff.next() {
+                            tokio::time::sleep(delay).await;
+                        }
+                        continue;
+                    }
+
+                    let msg = format!("stream error at round {}: {}", round, source);
+                    sink.error(&msg).await;
+                    return Err(HubError::LlmCallFailed { round, source });
+                }
+            }
+        }
+    }
+
+    /// Consume a single streaming response into an `LLMResponse`.
+    async fn stream_round(
+        &self,
+        request: LLMRequest,
+        sink: &dyn StreamSink,
+        cancel: Option<&CancellationToken>,
+        round: u32,
+    ) -> Result<LLMResponse, StreamRoundError> {
+        let stream = self
+            .provider
+            .send_message_stream(request)
+            .await
+            .map_err(StreamRoundError::Establish)?;
+
+        let mut accumulator = StreamAccumulator::new();
+        let mut pinned = std::pin::pin!(stream);
+        let mut emitted = false;
+
+        loop {
+            let chunk_result = if let Some(ct) = cancel {
+                tokio::select! {
+                    biased;
+                    _ = ct.cancelled() => {
+                        return Err(StreamRoundError::Fatal(HubError::Cancelled));
+                    }
+                    next = pinned.next() => next,
+                }
+            } else {
+                pinned.next().await
+            };
+
+            match chunk_result {
+                Some(Ok(chunk)) => {
+                    // Forward text tokens to sink
+                    if let LLMStreamChunk::ContentDelta { ref text, .. } = chunk {
+                        sink.token(text).await;
+                        emitted = true;
+                    }
+                    // Note: tool_start is NOT emitted here. The execution loop
+                    // (below) sends tool_start/tool_end when the tool actually
+                    // runs, avoiding duplicate events on the frontend.
+                    accumulator.apply(&chunk);
+                }
+                Some(Err(source)) => {
+                    return Err(StreamRoundError::Stream { source, emitted });
+                }
+                None => break,
+            }
+        }
+
+        accumulator.build().ok_or_else(|| {
+            StreamRoundError::Fatal(HubError::Internal(anyhow::anyhow!(
+                "incomplete stream at round {}",
+                round
+            )))
+        })
     }
 
     /// Run the execution loop.
@@ -230,51 +366,8 @@ impl ExecutionEngine {
             // Call LLM
             let response = if strategy.streaming() {
                 request = request.with_streaming();
-                let stream = self
-                    .provider
-                    .send_message_stream(request)
-                    .await
-                    .map_err(|e| HubError::LlmCallFailed { round, source: e })?;
-
-                let mut accumulator = StreamAccumulator::new();
-                let mut pinned = std::pin::pin!(stream);
-
-                loop {
-                    let chunk_result = if let Some(ct) = cancel {
-                        tokio::select! {
-                            biased;
-                            _ = ct.cancelled() => {
-                                return Err(HubError::Cancelled);
-                            }
-                            next = pinned.next() => next,
-                        }
-                    } else {
-                        pinned.next().await
-                    };
-
-                    match chunk_result {
-                        Some(Ok(chunk)) => {
-                            // Forward text tokens to sink
-                            if let LLMStreamChunk::ContentDelta { ref text, .. } = chunk {
-                                sink.token(text).await;
-                            }
-                            // Note: tool_start is NOT emitted here. The execution loop
-                            // (below) sends tool_start/tool_end when the tool actually
-                            // runs, avoiding duplicate events on the frontend.
-                            accumulator.apply(&chunk);
-                        }
-                        Some(Err(e)) => {
-                            let msg = format!("stream error at round {}: {}", round, e);
-                            sink.error(&msg).await;
-                            return Err(HubError::LlmCallFailed { round, source: e });
-                        }
-                        None => break,
-                    }
-                }
-
-                accumulator.build().ok_or_else(|| {
-                    HubError::Internal(anyhow::anyhow!("incomplete stream at round {}", round))
-                })?
+                self.stream_round_with_retry(request, sink, cancel, round)
+                    .await?
             } else if let Some(ct) = cancel {
                 tokio::select! {
                     biased;

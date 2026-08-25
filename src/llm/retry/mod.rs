@@ -196,6 +196,11 @@ impl RetryPolicy {
                 e.is_timeout() || e.is_connect() || e.is_request()
             }
 
+            // Transport failure mid-stream — same predicate as `HttpError`,
+            // which is possible only because the source error is preserved
+            // rather than stringified.
+            LLMError::StreamTransport(e) => e.is_timeout() || e.is_connect() || e.is_request(),
+
             // These should NOT be retried
             LLMError::AuthError(_) => false,
             LLMError::ParseError(_) => false,

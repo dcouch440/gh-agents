@@ -10,6 +10,12 @@ const MAX_BACKOFF_MS = 30_000
 let timer: ReturnType<typeof setTimeout> | null = null
 let activeWorkflowId: string | null = null
 let visibilityHandler: (() => void) | null = null
+/**
+ * Which workflow has a hydration in flight, so overlapping ticks collapse into
+ * one. Holds the id rather than a bare flag: a switch to a *different* workflow
+ * must never be blocked by the previous one's request still being in the air.
+ */
+let inFlightFor: string | null = null
 
 const isBusy = (): boolean => {
   if (store.getState().isGenerating) return true
@@ -54,6 +60,15 @@ const tick = async (): Promise<void> => {
   const workflowId = activeWorkflowId
   if (workflowId === null) return
 
+  // One hydration at a time. `tick` is reachable from the timer and from the
+  // visibility handler, and each hydration fans out into a live-state call plus
+  // a fetch per dispatch plus a timeline call — overlapping them multiplies that
+  // burst for no new information. The in-flight tick re-arms the timer when it
+  // finishes, so bailing out here never stalls the cadence.
+  if (inFlightFor === workflowId) return
+  // The pending timer would otherwise fire mid-await and start a second tick.
+  clearTimer()
+
   // A throttle can be recorded outside this loop — a trace fetch that came back
   // 429, or the re-hydrate after dropped WebSocket events. The timer already
   // pending at that moment was scheduled without knowing, so check again here
@@ -63,7 +78,13 @@ const tick = async (): Promise<void> => {
     return
   }
 
-  await hydrateLiveState(workflowId)
+  inFlightFor = workflowId
+  try {
+    await hydrateLiveState(workflowId)
+  } finally {
+    // Only release the slot if a later tick has not already claimed it.
+    if (inFlightFor === workflowId) inFlightFor = null
+  }
 
   // Guard against a workflow switch that happened during the await.
   if (activeWorkflowId !== workflowId) return
@@ -121,6 +142,10 @@ const rescheduleLiveSync = (): void => {
 const stopLiveSync = (): void => {
   clearTimer()
   activeWorkflowId = null
+  // Release the in-flight slot. The request itself cannot be cancelled, but its
+  // result is discarded by the workflow-id guard in `tick`, so holding the slot
+  // would only block a restart of the same workflow until it happened to settle.
+  inFlightFor = null
   if (visibilityHandler !== null) {
     document.removeEventListener('visibilitychange', visibilityHandler)
     visibilityHandler = null

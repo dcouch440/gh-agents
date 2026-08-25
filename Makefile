@@ -107,19 +107,19 @@ sync:
 # --- Frontend (React) ---
 
 ui-install:
-	cd ui && npm install
+	cd frontend && npm install
 
 ui-dev:
-	cd ui && npm run dev
+	cd frontend && npm run dev
 
 ui-build:
-	cd ui && npm run build
+	cd frontend && npm run build
 
 ui-lint:
-	cd ui && npm run lint
+	cd frontend && npm run lint
 
 ui-preview:
-	cd ui && npm run preview
+	cd frontend && npm run preview
 
 # --- CLI (Terminal) ---
 
@@ -167,7 +167,7 @@ dev:
 	@echo "Starting backend and frontend..."
 	@trap 'kill 0' INT; \
 		cargo run & \
-		(cd ui && npm run dev) & \
+		(cd frontend && npm run dev) & \
 		wait
 
 build-all: build ui-build cli-build
@@ -180,7 +180,7 @@ ci: check fmt lint test ui-build cli-build
 
 clean:
 	cargo clean
-	rm -rf ui/dist ui/node_modules/.vite
+	rm -rf frontend/dist frontend/node_modules/.vite
 	rm -rf cli/dist cli/node_modules/.cache
 
 # --- Reports ---
