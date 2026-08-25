@@ -1,819 +1,582 @@
-# Nexor Database Model Guide
+# Database Model Guide (Rust Layer)
 
-21 tables across 3 layers:
+This document explains how the **Rust code models the database** — where row
+types live, how they're wired to Postgres, and the conventions for adding to
+either. It does not enumerate columns, constraints, or migrations; for the
+canonical SQL reference see [`docs/database-schema.md`](./database-schema.md).
+This doc is about the layer between those SQL tables and the rest of the
+application: `src/db/`.
 
-- **Definition** — what the user builds (agents, schemas, workflows, pipelines, documents, prompt templates)
-- **Wiring** — how things connect (steps, edges, stage members, step documents)
-- **Execution** — what happened at runtime (runs, stage executions, agent executions, messages, token ledger)
-
----
-
-## Flow Diagram
-
-```
-DEFINITION LAYER (user creates and reuses)
-===========================================
-
-  agents              output_schemas        prompt_templates       documents        tools
-  (who)               (output shape)        (reusable prompts)     (attachable context) (callable actions)
-    │                                                                                    │
-    └────────────────────────── agent_tools (N tools per agent) ─────────────────────────┘
-    │                      │                      │                      │
-    │                      │                      │                      │
-    ▼                      ▼                      ▼                      ▼
-    └──────────────────────┴──────────────────────┴──────────────────────┘
-                                    │
-                    ┌───────────────┼───────────────┐
-                    ▼                               ▼
-               workflows                       pipelines
-               (execution DAGs)                (stage sequences)
-                    │                               │
-           ┌───────┴───────┐                  pipeline_stages
-     workflow_steps   workflow_step_edges           │
-      (DAG nodes)      (DAG edges)          pipeline_stage_members
-           │                                (N workflows per stage)
-      step_documents
-      (attached docs)
-
-
-EXECUTION LAYER (runtime records)
-==================================
-
-                        pipeline_runs
-                             │
-                      stage_executions
-                             │
-                      agent_executions
-                      /       |       \
-              exec_messages  results  token_ledger
-```
+The database has grown through 67 migrations (`migrations/0001_*.sql` through
+`migrations/0067_chat_message_error.sql`). The old version of this doc was a
+frozen snapshot from well before that growth and never actually named a Rust
+file — this version does.
 
 ---
 
-## Schema
+## 1. Directory layout
 
-> **21 tables** after migration 046 added `tools` and `agent_tools`.
+```
+src/db/
+├── mod.rs           # init_db(), DbPool alias, re-exports
+├── types/            # Row structs — one file per domain area
+│   ├── mod.rs
+│   ├── agent.rs       # AgentRow, AgentGuidanceRow
+│   ├── canvas.rs       # CanvasSnapshotRow, CanvasElementMapRow
+│   ├── collection.rs    # WorkflowCollectionRow, CollectionWorkflowRow, ...
+│   ├── document.rs      # DocumentRow, ContentVersionRow, RunTemplateRow, ...
+│   ├── execution.rs     # WorkflowExecutionRow, AgentExecutionRow, TokenLedgerRow, ...
+│   ├── protocol.rs      # ProtocolRow, ProtocolPortRow, ProtocolExecutionRow, ...
+│   ├── room.rs         # RoomRow, RoomMemberRow, RoomSessionRow, ...
+│   ├── system.rs        # OutputSchemaRow, PromptTemplateRow, SystemConfigRow, ResultRow
+│   ├── system_file.rs    # SystemFileRow
+│   ├── tool.rs         # ToolRow, ToolCapabilityRow, ...
+│   ├── workflow.rs      # WorkflowRow, WorkflowStepRow, WorkflowStepEdgeRow, ...
+│   └── workforce.rs     # TaskMissionBriefRow, TaskAgentRosterRow, BeliefRow, ...
+├── traits/            # Repository trait definitions (one trait ≈ one domain)
+│   ├── mod.rs
+│   ├── agent.rs, collection.rs, content_version.rs, document.rs,
+│   │   execution.rs, protocol.rs, room.rs, session.rs, system.rs,
+│   │   system_file.rs, workflow.rs
+├── pg_repo/           # The one production implementation, split by domain
+│   ├── mod.rs          # PgRepo struct + SERIALIZABLE retry macro
+│   ├── agent.rs, auth.rs, collection.rs, content_version.rs, cost.rs,
+│   │   document.rs, execution.rs, protocol.rs, room.rs, session.rs,
+│   │   system_config.rs, system_file.rs, tool.rs, tool_capability.rs,
+│   │   user.rs, workflow.rs
+│   └── tests.rs         # Integration tests against a real Postgres (TestDb)
+├── queries/            # Legacy free-function layer (see §7)
+│   ├── mod.rs           # ChatMessageRow, SessionRow + raw sqlx functions
+│   └── tests.rs
+├── test_utils/          # TestDb — per-test throwaway Postgres database
+└── fixtures.rs          # `#[cfg(test)]` Default-based row builders
+```
+
+`src/db/types/mod.rs` and `src/db/traits/mod.rs` are flat `pub use` barrels —
+every row type and every trait is available as `crate::db::TypeName`. There's
+no further nesting; "domain area" is purely a file-naming convention, not a
+module hierarchy.
 
 ---
 
-### 1. users
+## 2. The pattern: row type → trait → `PgRepo` impl
 
-```sql
-users (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    email TEXT UNIQUE NOT NULL,
-    password_hash TEXT,
-    github_id BIGINT UNIQUE,
-    github_login TEXT,
-    github_token_encrypted TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-)
--- idx_users_email(email)
--- idx_users_github_id(github_id) WHERE github_id IS NOT NULL
-```
+Every domain in `src/db/` follows the same three-layer shape:
 
-Root of the whole system. Every major entity references `user_id`. Multi-tenant — users only see their own data.
+1. **Row type** (`types/*.rs`) — a plain struct deriving `sqlx::FromRow`,
+   `Clone`, `Debug`, usually `serde::Serialize` (for JSON API responses), and
+   often a hand-written `impl Default` so tests and fixtures can build a row
+   with `..Default::default()`.
+2. **Repository trait** (`traits/*.rs`) — an `#[async_trait]` trait listing
+   the operations available on that domain, e.g. `WorkflowRepo`. Every trait
+   carries `#[cfg_attr(test, mockall::automock)]`, which generates a
+   `MockWorkflowRepo` (etc.) for handler-level unit tests.
+3. **`PgRepo` impl** (`pg_repo/*.rs`) — `sqlx::query_as` calls against
+   Postgres. There is exactly one production struct, `PgRepo` (holds a
+   `PgPool`, `src/db/pg_repo/mod.rs:78`), and it implements *all* of the
+   repository traits — one `impl TraitName for PgRepo` block per domain file,
+   sometimes several per file (e.g. `pg_repo/document.rs` implements
+   `DocumentRepo`, `OutputSchemaRepo`, and `PromptTemplateRepo`).
 
-| Column | Purpose |
-|--------|---------|
-| `id` | Primary key. All foreign keys across the system reference this. |
-| `email` | Login identifier. Unique constraint prevents duplicate accounts. |
-| `password_hash` | Bcrypt/argon2 hash for email+password auth. Nullable because GitHub OAuth users may not have a password. |
-| `github_id` | GitHub's numeric user ID. Used to match OAuth callbacks to existing accounts. |
-| `github_login` | GitHub username. Display only — not used for auth since usernames can change. |
-| `github_token_encrypted` | Encrypted GitHub OAuth token for API calls (repo access, PR creation). Encrypted at rest, decrypted only when making GitHub API calls. |
-| `created_at` | Account creation timestamp. |
-| `updated_at` | Last profile update. Used for cache invalidation. |
+### Worked example: `WorkflowStepRow`
 
----
+**1. The row type** — `src/db/types/workflow.rs:23`:
 
-### 2. sessions
-
-```sql
-sessions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    token_hash TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at TIMESTAMPTZ NOT NULL,
-    last_active TIMESTAMPTZ NOT NULL
-)
--- idx_sessions_user(user_id)
--- idx_sessions_expires(expires_at)
-```
-
-Server-side session store. The client holds a token, the server stores the hash. Stateless per-request auth — hash the incoming token, look it up.
-
-| Column | Purpose |
-|--------|---------|
-| `id` | Session identifier. |
-| `user_id` | Which user this session belongs to. Index supports "list all sessions for user" (device management). |
-| `token_hash` | SHA-256 hash of the bearer token. The raw token is never stored. |
-| `expires_at` | Hard expiry. Index supports cleanup job that deletes expired rows. |
-| `last_active` | Updated on each authenticated request. Used for idle timeout and "last seen" display. |
-
----
-
-### 3. agents
-
-```sql
-agents (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    name TEXT NOT NULL,
-    system_prompt TEXT NOT NULL DEFAULT '',
-    model_provider TEXT NOT NULL DEFAULT 'anthropic',
-    model_id TEXT NOT NULL,
-    model_max_tokens INTEGER NOT NULL DEFAULT 4096,
-    model_temperature REAL NOT NULL DEFAULT 0.7,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-)
--- idx_agents_user(user_id)
-```
-
-A reusable agent template. This is **who the agent is**, not what it's doing right now. No runtime state — no `status`, no `current_task`. The same agent definition can be used in multiple workflows and pipelines simultaneously. Runtime state lives in `agent_executions`.
-
-| Column | Purpose |
-|--------|---------|
-| `id` | Referenced by workflow_steps, pipeline_stage_members, and agent_executions. |
-| `user_id` | Owner. Agents are private to the user who created them. |
-| `name` | Display name shown in the graph UI and execution tree (e.g. "Dave", "Code Reviewer", "Ticket Writer"). |
-| `system_prompt` | The agent's identity and instructions. This is the only thing that makes one agent different from another. Injected as the system message in every LLM call. |
-| `model_provider` | LLM provider identifier (e.g. `'anthropic'`, `'openai'`). Determines which API client to use at runtime. |
-| `model_id` | Specific model (e.g. `'claude-sonnet-4-20250514'`, `'gpt-4o'`). Paired with provider to route the LLM call. |
-| `model_max_tokens` | Max output tokens per LLM call. Controls response length and cost. |
-| `model_temperature` | Sampling temperature. Lower = more deterministic, higher = more creative. |
-
----
-
-### 4. output_schemas
-
-```sql
-output_schemas (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    name TEXT NOT NULL,
-    schema JSONB NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (user_id, name)
-)
--- idx_output_schemas_user(user_id)
-```
-
-Reusable structured output definitions. When assigned to a workflow step, the agent is instructed to return data matching this shape. This is how the system enforces single-in, single-out with predictable types at every node.
-
-The passdown concept lives here — it's just a field in the schema like any other:
-
-```json
-{
-    "name": { "type": "string", "description": "Feature name" },
-    "content": { "type": "array", "description": "List of sub-features" },
-    "passdown": { "type": "string", "description": "Summarize what you did and any issues found" }
+```rust
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+pub struct WorkflowStepRow {
+    pub id: Uuid,
+    pub workflow_id: Uuid,
+    pub agent_id: Option<Uuid>,
+    pub execution_mode: String, // "single", "workforce", "context", "input", "container"
+    // ...
 }
 ```
 
-| Column | Purpose |
-|--------|---------|
-| `id` | Referenced by workflow_steps and pipeline_stage_members. |
-| `user_id` | Owner. |
-| `name` | Human-readable identifier (e.g. `'feature_list'`, `'ticket'`, `'code_review'`). Unique per user so schemas can be referenced by name in the UI. |
-| `schema` | JSONB object defining the expected output shape. Field names, types, and descriptions. Used both to instruct the LLM and to validate/parse the response. |
+with a matching `impl Default for WorkflowStepRow` (`workflow.rs:179`) so
+tests only set the fields they care about.
+
+**2. The trait** — `src/db/traits/workflow.rs:84`, `WorkflowRepo`, declares
+the CRUD surface:
+
+```rust
+#[cfg_attr(test, mockall::automock)]
+#[async_trait]
+pub trait WorkflowRepo: Send + Sync {
+    async fn create_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow>;
+    async fn get_step(&self, id: Uuid) -> Result<Option<WorkflowStepRow>>;
+    async fn list_steps(&self, workflow_id: Uuid) -> Result<Vec<WorkflowStepRow>>;
+    async fn update_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow>;
+    async fn delete_step(&self, id: Uuid) -> Result<()>;
+    // ...80+ more methods — see §6, this trait covers the entire workflow/
+    // workforce/protocol/canvas/versioning surface, not just steps.
+}
+```
+
+**3. The Postgres impl** — `src/db/pg_repo/workflow.rs:20`,
+`impl WorkflowRepo for PgRepo`:
+
+```rust
+async fn create_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow> {
+    let row: WorkflowStepRow = sqlx::query_as(
+        r#"INSERT INTO workflow_steps (id, workflow_id, agent_id, execution_mode, ...)
+           VALUES ($1, $2, $3, $4, ...)
+           RETURNING *"#,
+    )
+    .bind(step.id)
+    .bind(step.workflow_id)
+    // ...
+    .fetch_one(&self.pool)
+    .await?;
+    Ok(row)
+}
+
+async fn get_step(&self, id: Uuid) -> Result<Option<WorkflowStepRow>> {
+    let row: Option<WorkflowStepRow> =
+        sqlx::query_as("SELECT * FROM workflow_steps WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+    Ok(row)
+}
+
+async fn update_step(&self, step: WorkflowStepRow) -> Result<WorkflowStepRow> {
+    let row: WorkflowStepRow = sqlx::query_as(
+        r#"UPDATE workflow_steps SET agent_id = $1, execution_mode = $2, ...,
+               version = version + 1
+           WHERE id = $24
+           RETURNING *"#,
+    )
+    // ...
+    .fetch_one(&self.pool)
+    .await?;
+    Ok(row)
+}
+```
+
+(`create_step` at `pg_repo/workflow.rs:105`, `get_step` at `:142`,
+`update_step` at `:175`, `delete_step` at `:218`.)
+
+Notes on the query style used throughout `pg_repo/`:
+
+- `SELECT *` / `RETURNING *` plus `sqlx::query_as` (not the compile-time
+  checked `query_as!`) — `FromRow` matches columns by **name**, so field
+  order in the struct doesn't need to match column order, but every column
+  must have a struct field (and vice versa) or the row fails to deserialize.
+- Every fallible call ends in `?` against `anyhow::Result` — no `.unwrap()`
+  in a `pg_repo/*.rs` file. This matches the "no panics" rule for
+  application code in `CLAUDE.md`.
+- `update_step` bumps `version = version + 1` in the same statement instead
+  of a separate read-modify-write — this is the general pattern for every
+  row that carries a `version` column (`WorkflowRow`, `WorkflowStepRow`,
+  `AgentRow`, `OutputSchemaRow`, `PromptTemplateRow`, `ToolRow`).
+- Multi-statement operations that must be atomic use the `run_serializable!`
+  macro (`pg_repo/mod.rs:29`): it opens a `SERIALIZABLE` transaction, runs
+  the block, and retries up to `SERIALIZABLE_MAX_RETRIES` (3) times on
+  Postgres error `40001` (serialization failure) before giving up.
+
+**4. Wiring** — `PgRepo` doesn't get injected as itself; each trait is boxed
+separately as `Arc<dyn WorkflowRepo>` and grouped into a `Repos` struct
+(`src/server/state/repos.rs:19`) that hangs off `AppState`
+(`src/server/state/mod.rs:100`). Construction clones the same pool into a
+fresh `PgRepo` per trait slot:
+
+```rust
+let repos = Repos::new(
+    Arc::new(PgRepo::new(db.clone())), // users
+    Arc::new(PgRepo::new(db.clone())), // documents
+    // ...
+    Arc::new(PgRepo::new(db.clone())), // workflows
+    // ...
+);
+```
+
+This is cheap — `PgPool` is itself an `Arc` internally, so `db.clone()` is a
+refcount bump, not a new connection pool. Handlers then call
+`state.repos.workflows.create_step(...)` — they depend on the trait object,
+never on `PgRepo` directly, which is what makes `MockWorkflowRepo`
+substitutable in tests.
+
+Not every trait lives in the central `Repos` registry. `WorkflowCollectionRepo`
+and `WorkflowStepAgentRepo` (both in `traits/collection.rs`) are constructed
+ad hoc at call sites instead — e.g.
+`src/server/api/workflows/execution_handlers.rs:50`:
+`let collection_repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));`.
+Same trait, same `PgRepo`, just not pre-wired into `AppState` — worth knowing
+before assuming everything DB-related hangs off `state.repos`.
 
 ---
 
-### 5. prompt_templates
+## 3. Testing conventions
 
-```sql
-prompt_templates (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    name TEXT NOT NULL,
-    content TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (user_id, name)
-)
--- idx_prompt_templates_user(user_id)
-```
+Two complementary layers, both under `src/db/`:
 
-Reusable prompt text. Instead of rewriting the same task instructions on every workflow step, save it once and reference it. Supports `{variable}` placeholders that get resolved at runtime from prior step outputs.
-
-| Column | Purpose |
-|--------|---------|
-| `id` | Referenced by workflow_steps via `prompt_template_id`. |
-| `user_id` | Owner. |
-| `name` | Human-readable identifier (e.g. `'decompose_features'`, `'write_ticket'`). Unique per user. |
-| `content` | The prompt text with `{variable}` placeholders. Example: `"Review {conventions} and create a component for {features.0.name}"`. |
-
----
-
-### 6. documents
-
-```sql
-documents (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    name TEXT NOT NULL,
-    content TEXT NOT NULL DEFAULT '',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-)
--- idx_documents_user(user_id)
-```
-
-User-created documents that can be attached to workflow steps as additional context. PRDs, specs, coding conventions, architecture docs — anything the agent should read before executing.
-
-| Column | Purpose |
-|--------|---------|
-| `id` | Referenced by step_documents. |
-| `user_id` | Owner. |
-| `name` | Display name (e.g. `'Project Requirements'`, `'TypeScript Conventions'`). |
-| `content` | The full document text. Appended to the agent's prompt at runtime when attached via step_documents. |
+- **`test_utils::TestDb`** (`src/db/test_utils/mod.rs`) — spins up a
+  uniquely-named Postgres database (`nexor_test_{uuid}`), runs every
+  migration against it, and drops it on cleanup. A shared admin pool and a
+  `Semaphore` cap concurrent test databases at 4. `pg_repo/tests.rs` and
+  `queries/tests.rs` use this to exercise real `PgRepo` methods against a
+  real schema — these are integration tests, not mocked.
+- **`fixtures` module** (`src/db/fixtures.rs`, `#[cfg(test)]`) — helper
+  functions like `fixtures::step()` and `fixtures::workforce_step_with(...)`
+  that build row structs via `..Default::default()`. The stated intent
+  (`fixtures.rs:1`) is that adding a new field to a row struct requires zero
+  changes to existing test files, since every fixture falls back to
+  `Default`.
+- **`mockall::automock`** on every trait generates `MockWorkflowRepo`,
+  `MockAgentRepo`, etc. Handler and DAG-execution tests (e.g.
+  `src/server/hub/dag/tests.rs`) construct these directly —
+  `let mut wf_repo = MockWorkflowRepo::new();` then `.expect_get_step()...` —
+  to test orchestration logic without touching Postgres at all.
 
 ---
 
-### 7. tools
+## 4. Adding a new table: the typical recipe
 
-```sql
-tools (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    name TEXT NOT NULL,
-    display_name TEXT NOT NULL,
-    description TEXT NOT NULL,
-    parameters JSONB NOT NULL DEFAULT '{}',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (user_id, name)
-)
--- idx_tools_user(user_id)
-```
+Reverse-engineered from the pattern above, not policy — but this is what
+every recent migration + type + repo triple looks like:
 
-Metadata for hardcoded tool implementations. The `name` field is the machine key used to match against the `execute_execution_tool` dispatch table. The `description` and `parameters` are sent to the LLM in the `tools` array. The `display_name` is shown in the UI.
-
-Tools are optional on agents. If an agent has no tools assigned, the LLM is called once with no tool definitions. If tools are assigned, the DAG executor runs a react loop (up to 15 rounds) — the LLM can call tools and receive results until it produces a final answer.
-
-| Column | Purpose |
-|--------|---------|
-| `id` | Referenced by agent_tools. |
-| `user_id` | Owner. Tools are per-user so descriptions can be customized. |
-| `name` | Machine key matching the hardcoded dispatch (`read_file`, `write_file`, etc.). Unique per user. Immutable in practice — changing it breaks the dispatch. |
-| `display_name` | Human-readable label for the UI (e.g. "Read File", "Git Status"). Editable. |
-| `description` | Sent to the LLM to explain what the tool does. Editable — tweak how the LLM understands the tool without recompiling. |
-| `parameters` | JSON Schema describing the tool's input parameters. Sent to the LLM. |
+1. **Migration** — a new file in `migrations/` (`sqlx::migrate!()` runs them
+   in order at startup, `src/db/mod.rs:38`).
+2. **Row struct** in the matching `types/*.rs` file (or a new file, wired
+   into `types/mod.rs`), deriving `sqlx::FromRow` + `Clone` + `Serialize`,
+   plus `impl Default` if it'll be built in tests/fixtures.
+3. **Trait method(s)** added to an existing domain trait, or a new trait in
+   `traits/*.rs` if it's a genuinely new domain — either way,
+   `#[cfg_attr(test, mockall::automock)]` stays on the trait.
+4. **`PgRepo` impl** in the matching `pg_repo/*.rs` file: `sqlx::query_as`
+   with `RETURNING *` / `SELECT *`, bound positionally, returning
+   `anyhow::Result<T>`.
+5. **Wiring**: if the new trait needs to reach handlers broadly, add a field
+   to `Repos` (`server/state/repos.rs`) and thread it through
+   `Repos::new(...)`; if it's only needed in one or two call sites, construct
+   it ad hoc with `Arc::new(PgRepo::new(pool))` the way `WorkflowCollectionRepo`
+   does.
+6. **Fixtures + mocks**: add a `fixtures::` builder if the row will show up
+   in tests a lot, and rely on the auto-generated `MockXxxRepo` for
+   handler-level tests.
 
 ---
 
-### 8. agent_tools
+## 5. The workforce / workflow node model
 
-```sql
-agent_tools (
-    agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-    tool_id UUID NOT NULL REFERENCES tools(id) ON DELETE CASCADE,
-    PRIMARY KEY (agent_id, tool_id)
-)
--- idx_agent_tools_tool(tool_id)
-```
+This is the core of the "definition" layer, and the part the old doc got
+most wrong: **`workforce` is not a table.** It's one value of
+`WorkflowStepRow.execution_mode`. A `WorkflowStepRow` is a single DAG node
+inside a `WorkflowRow`; what kind of node it is — a plain single-agent step,
+a multi-agent "workforce" crew, a context/input passthrough, a container
+step — is entirely determined by that one string field plus which of the
+step's optional associated rows are populated.
 
-Join table linking agents to their available tools. At execution time, the DAG executor queries this to build the `tools` array for the LLM request.
+Among the node kinds, **`workforce` is the flagship / most actively
+developed archetype.** The dispatcher special-cases it explicitly and even
+has a repair path: any step with a `child_workflow_id` set gets routed
+through the workforce executor even if `execution_mode` is stale, because
+having a mission brief + roster + child workflow is a stronger signal than
+the mode string (`src/server/hub/dag/workshop/dispatch.rs:60-71`).
 
-| Column | Purpose |
-|--------|---------|
-| `agent_id` | Which agent has access to this tool. |
-| `tool_id` | Which tool is available. |
+### `WorkflowRow` — `src/db/types/workflow.rs:6`
 
----
+The workflow itself (a saved graph, reusable, versioned):
 
-### 9. workflows
+| Field | Type | Notes |
+|---|---|---|
+| `id`, `user_id`, `name`, `description`, `created_at` | — | unchanged from the old model |
+| `execution_mode` | `String` | graph-level mode, e.g. `"dag"` (default) |
+| `version` | `i32` | bumped by `PgRepo::update_workflow` |
+| `container_enabled` | `bool` | whether steps in this workflow may run in Docker containers |
+| `target_repo_url` / `target_branch` | `Option<String>` | the GitHub repo/branch this workflow's agents operate against |
+| `vpn_enabled` | `bool` | whether container steps get a WireGuard sidecar (`hub/dag/container/`) |
+| `board_overview_summary` | `String` | Haiku-distilled summary of the whole board, cached for the workflow agent / chat context |
 
-```sql
-workflows (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    name TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-)
--- idx_workflows_user(user_id)
-```
+### `WorkflowStepRow` — `src/db/types/workflow.rs:23`
 
-A reusable execution graph (DAG) of agent steps. This is the core orchestration unit — every pipeline stage runs one or more workflows. Even a single agent is wrapped in a one-step workflow. This keeps the system uniform: one model for execution, one model for the graph UI, one model for context resolution.
+The DAG node. Every field beyond the original `agent_id` / `prompt_template`
+/ `output_schema_id` set exists to support either the visual canvas, the
+workforce archetype, or per-step run-state caching:
 
-| Column | Purpose |
-|--------|---------|
-| `id` | Referenced by pipeline_stage_members and the graph UI. |
-| `user_id` | Owner. |
-| `name` | Display name (e.g. `'Feature Decomposer'`, `'Code Implementation'`). |
-| `description` | Optional notes about what this workflow does. |
+| Field | Purpose |
+|---|---|
+| `execution_mode` | `"single"`, `"workforce"`, `"context"`, `"input"`, `"container"` — see §6 |
+| `agent_execution_mode` | `"sequential"` / `"parallel"` for multi-agent steps, `None` = inherit from the workflow |
+| `room_id` | links to a `RoomRow` when the step is a multi-agent "room" conversation (§8) |
+| `routing_mode` / `routing_field` | label-based agent routing (paired with `StepRoutingRuleRow`) |
+| `reasoning_trace` | whether to persist the agent's reasoning trace for this step |
+| `verification_agent_ids` | JSON array of agent IDs used to verify this step's output |
+| `position_x` / `position_y` / `width` / `height` | canvas layout — the step's own visual geometry |
+| `name`, `description`, `system_prompt_suffix` | step-level display/config, distinct from the agent template's own name/prompt |
+| `visible` | whether the step renders on the board (vs. hidden scaffolding) |
+| `board_context_cache` / `board_context_updated_at` | Haiku-distilled awareness of the surrounding board, cached per step |
+| `goal_summary` / `goal_summary_updated_at` | cached summary of the step's goal |
+| `child_workflow_id` | **the workforce link** — the live child `WorkflowRow` this step spins up and owns (edited at design time, snapshotted at execution) |
+| `ref_id` | stable LLM-facing identifier, e.g. `"workforce-1"`, used so agents can refer to steps by name instead of UUID |
+| `pinned` | freezes the step's output — re-runs replay instead of re-executing |
+| `run_results_summary` | Haiku-generated summary of the step's last run, surfaced to sibling steps via `get_run_context_for_step` |
+| `designer_handoff` | free-text note the step's designer agent leaves for the next step's designer |
 
----
+### Workforce support types — `src/db/types/workforce.rs`
 
-### 8. workflow_steps
+A `workforce` step doesn't carry its configuration inline; it fans out to a
+small cluster of rows keyed by `step_id`:
 
-```sql
-workflow_steps (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    workflow_id UUID NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
-    agent_id UUID NOT NULL REFERENCES agents(id),
-    execution_mode TEXT NOT NULL DEFAULT 'single',
-    for_each_ref TEXT,
-    prompt_template_id UUID REFERENCES prompt_templates(id),
-    prompt_template TEXT NOT NULL DEFAULT '',
-    output_schema_id UUID REFERENCES output_schemas(id),
-    output_variable_name TEXT,
-    interactive_agent_id UUID REFERENCES agents(id),
-    for_each_label_field TEXT,
-    display_order INTEGER NOT NULL DEFAULT 0
-)
--- idx_workflow_steps_workflow(workflow_id)
--- idx_workflow_steps_agent(agent_id)
-```
+- **`TaskMissionBriefRow`** (`workforce.rs:6`) — one per workforce step: the
+  task description, `available_capabilities`, `failure_mode`, and
+  `downstream_context` the roster-design agent works from.
+- **`TaskAgentRosterRow`** (`workforce.rs:19`) — one row per agent the
+  workforce spins up: name, role description, capabilities,
+  `execution_order`, and `child_step_id` linking it to its visual node in the
+  child workflow.
+- **`AgentDesignerRunRow`** / **`AgentDesignerOutputRow`** (`workforce.rs:33`,
+  `:50`) — the audit trail of the LLM call(s) that *designed* the roster's
+  prompts: model, token/cost accounting, and per-agent generated system +
+  task prompts with the designer's reasoning. `AgentDesignerOutputRow` is
+  generic across archetypes (`source_entity_id` / `source_archetype`), not
+  workforce-only.
+- **`BeliefExtractionPlanRow`** / **`BeliefRow`** (`workforce.rs:69`, `:82`) —
+  design-time config for what a step should extract as "beliefs" (tagged,
+  confidence-scored observations) from its output, and the runtime rows the
+  gatekeeper actually extracts, respectively.
 
-Each node in the workflow DAG. This is where all the configuration lives — what agent runs, what it's told to do, what shape its output takes, and how it relates to other steps.
+### Protocol types — `src/db/types/protocol.rs`
 
-| Column | Purpose |
-|--------|---------|
-| `id` | Referenced by workflow_step_edges, step_documents, agent_executions. |
-| `workflow_id` | Which workflow this step belongs to. CASCADE delete — removing a workflow removes all its steps. |
-| `agent_id` | Which agent template to use for this step. The agent's system_prompt becomes the LLM system message. |
-| `execution_mode` | `'single'` — run once. `'for_each'` — run once per element in the array referenced by `for_each_ref`. |
-| `for_each_ref` | Path into a prior step's output array (e.g. `'features.content'`). Only used when `execution_mode = 'for_each'`. The runtime iterates over the array and creates one agent_execution per element. |
-| `prompt_template_id` | Reference to a saved prompt_template. If set, the saved template's content is used. If null, falls back to the inline `prompt_template` field. |
-| `prompt_template` | Inline prompt text with `{variable}` placeholders. Used when the user writes a one-off prompt instead of selecting a saved template. Ignored if `prompt_template_id` is set. |
-| `output_schema_id` | The expected output shape. The agent is instructed to return structured data matching this schema. If null, the agent returns freeform text. |
-| `output_variable_name` | Names this step's output so other steps can reference it via `{variable_name}` in their prompt templates. Example: `'features'`, `'tickets'`, `'review_notes'`. |
-| `interactive_agent_id` | References an agent template that acts as the reviewer. When not null, the step pauses after the main agent completes. The interactive agent receives the main agent's output, responds with its review/feedback (driven by its own system prompt), and the user chats with it to refine the result. On approval, the interactive agent's final output replaces the step output. When null, the step completes with no pause. |
-| `for_each_label_field` | Which field from each array element to use as the display label in the execution tree UI (e.g. `'name'`, `'title'`). Only used when `execution_mode = 'for_each'`. At runtime, `element[for_each_label_field]` populates `for_each_label` in the tree response. If null, falls back to the element index. The workflow editor populates this via a dropdown of the referenced array's element schema fields. |
-| `display_order` | Rendering order within the tree UI. Steps are displayed in ascending order. The DAG edges define execution order; this only controls visual layout. |
-
----
-
-### 9. workflow_step_edges
-
-```sql
-workflow_step_edges (
-    from_step_id UUID NOT NULL REFERENCES workflow_steps(id) ON DELETE CASCADE,
-    to_step_id UUID NOT NULL REFERENCES workflow_steps(id) ON DELETE CASCADE,
-    PRIMARY KEY (from_step_id, to_step_id)
-)
--- idx_workflow_step_edges_from(from_step_id)
--- idx_workflow_step_edges_to(to_step_id)
-```
-
-Directed edges that define execution order and parallelism within a workflow. This is what makes workflows a DAG rather than a linear chain.
-
-| Column | Purpose |
-|--------|---------|
-| `from_step_id` | The step that must complete before `to_step_id` can start. |
-| `to_step_id` | The step that waits for `from_step_id` to finish. |
-
-**Execution rules:**
-- Steps with **no incoming edges** are entry points — they start immediately when the workflow begins.
-- Steps with **multiple incoming edges** wait for **all** parent steps to complete before starting.
-- Steps with **no outgoing edges** are terminal nodes — their outputs become the workflow's final output.
-- Steps with **multiple outgoing edges** fan out — all children start in parallel once the parent completes.
-
-**Example — 4 parallel sub-agents:**
-```
-Step A (entry)
-  ├──→ Step B (parallel)
-  ├──→ Step C (parallel)
-  ├──→ Step D (parallel)
-  └──→ Step E (parallel)
-         all ──→ Step F (merge, waits for B+C+D+E)
-```
+A `ProtocolRow` (`protocol.rs:6`) is a reusable execution recipe —
+`protocol_type` is currently always `"workforce"` in practice, `config` is
+the recipe's JSON parameters. `ProtocolPortRow` assigns agents to named
+slots in the recipe. `ProtocolDocumentDefRow` (`protocol.rs:33`) defines a
+deliverable document a workforce step should produce, optionally tied to a
+specific roster agent via `agent_roster_entry_id`. `ProtocolExecutionRow`
+(`protocol.rs:49`) is the audit trail for a protocol's hidden phases
+(non-agent-visible bookkeeping steps). `WorkflowStepProtocolRow`
+(`protocol.rs:77`) links a step to the protocol it was expanded from.
 
 ---
 
-### 10. step_documents
+## 6. Other execution modes: backend-only vs. actively used
 
-```sql
-step_documents (
-    step_id UUID NOT NULL REFERENCES workflow_steps(id) ON DELETE CASCADE,
-    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    PRIMARY KEY (step_id, document_id)
-)
--- idx_step_documents_step(step_id)
-```
+`WorkflowStepRow.execution_mode` also accepts `"context"`, `"input"`,
+`"container"`, and (per the frontend's `ExecutionMode` type,
+`frontend/src/types/workflow.ts:12`) `"manager"`. These exist in the type
+system on both sides, but they are not all equally exercised in the product
+today:
 
-Attaches documents to a workflow step. At runtime, all attached documents' content is appended to the agent's prompt before execution. This is how static context (PRDs, specs, conventions) gets fed to agents.
+- **`context` / `input`** are trivial passthrough nodes — no LLM call at
+  all. The dispatcher special-cases them before building any execution
+  context: `if step.execution_mode == "context" || step.execution_mode ==
+  "input" { return execute_passthrough(...) }`
+  (`src/server/hub/dag/workshop/dispatch.rs:49`).
+- **`container`** routes through `src/server/hub/dag/container/mod.rs`,
+  which manages Docker container + optional WireGuard VPN sidecar lifecycle
+  for isolated execution environments. It's a real, separate execution path,
+  but a much smaller and less-traveled one than workforce.
+- **`manager`** is checked in a handful of places
+  (`hub/mod.rs:276`, `hub/board/state/fetch.rs:81`,
+  `hub/execution/strategies/chat/tools.rs:40`) for board-level chat routing
+  behavior, rather than having its own dedicated dispatch branch.
 
-| Column | Purpose |
-|--------|---------|
-| `step_id` | The workflow step that receives this document as context. |
-| `document_id` | The document to attach. |
-
----
-
-### 11. pipelines
-
-```sql
-pipelines (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    name TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-)
--- idx_pipelines_user(user_id)
-```
-
-The top-level orchestration unit. A pipeline is a sequence of stages that execute in order. Each stage can contain multiple workflows running in parallel. Pipelines are reusable — run the same pipeline with different initial input.
-
-| Column | Purpose |
-|--------|---------|
-| `id` | Referenced by pipeline_stages and pipeline_runs. |
-| `user_id` | Owner. |
-| `name` | Display name (e.g. `'Feature Implementation Pipeline'`, `'Code Review Pipeline'`). |
-| `description` | Optional notes about the pipeline's purpose. |
+If you're modeling new node behavior, `workforce` is the pattern to study
+(mission brief → roster → designer run → child workflow); the others are
+narrower, backend-only mechanisms that haven't seen the same design
+investment or frontend authoring surface.
 
 ---
 
-### 12. pipeline_stages
+## 7. The "pipeline" naming collision
 
-```sql
-pipeline_stages (
-    pipeline_id UUID NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE,
-    stage_number INTEGER NOT NULL,
-    stage_name TEXT NOT NULL DEFAULT '',
-    PRIMARY KEY (pipeline_id, stage_number)
-)
-```
+**Read this before grepping for "pipeline" in this codebase.** The word
+means two unrelated things depending on which layer you're in:
 
-Sequential stages within a pipeline. Stage 1 must complete entirely before stage 2 begins. The stage itself is just a container — the actual work is defined by its members (workflows).
+1. **Gone from the database.** The old `pipelines` /
+   `pipeline_stages` / `pipeline_stage_members` / `pipeline_runs` tables the
+   previous version of this doc described no longer exist. That whole
+   concept was replaced by the collection types in
+   `src/db/types/collection.rs`: `WorkflowCollectionRow` (a DAG of
+   workflows), `CollectionWorkflowRow` (membership + per-workflow execution
+   mode override), `CollectionWorkflowEdgeRow` (edges between workflows in
+   the collection), and `CollectionRunRow` (one run of a collection). None of
+   these are called "pipeline" anywhere.
+2. **Alive as an unrelated service-layer term.** `src/server/services/pipeline/`
+   uses "pipeline" to mean something else entirely: *the child workflow owned
+   by a workforce step*. Its own doc comment is explicit about the
+   disconnect (`src/server/services/pipeline/types.rs:1-7`):
 
-| Column | Purpose |
-|--------|---------|
-| `pipeline_id` | Which pipeline this stage belongs to. |
-| `stage_number` | Execution order. Stages run in ascending order. Composite PK with pipeline_id. |
-| `stage_name` | Optional display label (e.g. `'Analysis'`, `'Implementation'`, `'Review'`). |
+   ```rust
+   //! Types for the pipeline service layer.
+   //!
+   //! These types define the interface between callers (workforce tools,
+   //! protocol apply, future pipeline creators) and the pipeline service.
+   //! They are deliberately decoupled from DB row types — the service
+   //! handles the mapping internally.
+   ```
 
----
+   Concretely, "pipeline" here is just `WorkflowStepRow.child_workflow_id`
+   plus its steps/edges — the thing a workforce step is building. Types like
+   `PipelineContext { parent_step_id, parent_workflow_id }`,
+   `AddStepInput`, and `PipelineCreated { pipeline_id }` live entirely in the
+   service layer and never touch a row type named `Pipeline*`.
 
-### 13. pipeline_stage_members
+There's also a third, narrower sense: `src/server/hub/dag/pipeline/` is an
+internal DAG-engine module (level scheduling + output composition for agent
+execution) whose own comment calls it "the legacy Pipeline" — this one is
+purely an execution-engine implementation detail, not modeled in the
+database or the service layer above, and shouldn't be confused with either
+of the two meanings above.
 
-```sql
-pipeline_stage_members (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    pipeline_id UUID NOT NULL,
-    stage_number INTEGER NOT NULL,
-    workflow_id UUID NOT NULL REFERENCES workflows(id),
-    display_order INTEGER NOT NULL DEFAULT 0,
-    FOREIGN KEY (pipeline_id, stage_number)
-        REFERENCES pipeline_stages(pipeline_id, stage_number) ON DELETE CASCADE
-)
--- idx_pipeline_stage_members_stage(pipeline_id, stage_number)
--- idx_pipeline_stage_members_workflow(workflow_id)
-```
-
-Which workflows run in each stage. Multiple members per stage = parallel execution. The stage completes when all members complete.
-
-| Column | Purpose |
-|--------|---------|
-| `id` | Unique member identifier. |
-| `pipeline_id` + `stage_number` | Which stage this member belongs to. FK to pipeline_stages. |
-| `workflow_id` | The workflow to execute. Always a workflow — even a single agent is wrapped in a one-step workflow. |
-| `display_order` | Rendering order within the stage in the tree UI. Workflows are displayed in ascending order. |
-
----
-
-### 14. pipeline_runs
-
-```sql
-pipeline_runs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    pipeline_id UUID NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES users(id),
-    status TEXT NOT NULL DEFAULT 'running',
-    initial_input TEXT NOT NULL,
-    current_stage INTEGER NOT NULL DEFAULT 0,
-    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    completed_at TIMESTAMPTZ
-)
--- idx_pipeline_runs_pipeline(pipeline_id)
--- idx_pipeline_runs_user(user_id)
--- idx_pipeline_runs_status(status)
--- idx_pipeline_runs_started(started_at DESC)
-```
-
-One row per execution of a pipeline. Everything below this is the execution tree that the UI renders live.
-
-| Column | Purpose |
-|--------|---------|
-| `id` | Root of the execution tree. The tree UI fetches everything by run_id. |
-| `pipeline_id` | Which pipeline definition this run is executing. |
-| `user_id` | Who triggered the run. |
-| `status` | `'running'` — stages are executing. `'completed'` — all stages done. `'failed'` — a stage failed and wasn't recovered. `'paused'` — waiting on an interactive step. |
-| `initial_input` | The user's prompt, file content, or data that kicks off the pipeline. Fed to stage 1's workflows. |
-| `current_stage` | Which stage is currently executing. Used for progress display and resumption after pause. |
-| `started_at` | Run start time. Index supports "recent runs" query. |
-| `completed_at` | Null while running. Set when the run reaches a terminal state. |
+**Bottom line:** if someone says "pipeline" now, they almost always mean the
+service-layer concept (a workforce step's child workflow), never a database
+table — that table family is `workflow_collections` /
+`collection_workflows` / `collection_runs` now.
 
 ---
 
-### 15. stage_executions
+## 8. Execution records
 
-```sql
-stage_executions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    run_id UUID NOT NULL REFERENCES pipeline_runs(id) ON DELETE CASCADE,
-    pipeline_id UUID NOT NULL,
-    stage_number INTEGER NOT NULL,
-    stage_member_id UUID NOT NULL REFERENCES pipeline_stage_members(id),
-    status TEXT NOT NULL DEFAULT 'running',
-    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    completed_at TIMESTAMPTZ,
-    FOREIGN KEY (pipeline_id, stage_number)
-        REFERENCES pipeline_stages(pipeline_id, stage_number)
-)
--- idx_stage_executions_run(run_id)
--- idx_stage_executions_status(status)
--- idx_stage_executions_stage(pipeline_id, stage_number)
--- idx_stage_executions_member(stage_member_id)
-```
-
-One row per workflow execution within a stage. If a stage has 3 workflow members, there are 3 stage_execution rows. This is a status tracker — the real data lives in agent_executions below.
-
-| Column | Purpose |
-|--------|---------|
-| `id` | Referenced by agent_executions. |
-| `run_id` | Which pipeline run this belongs to. Index supports fetching the full tree for a run. |
-| `pipeline_id` + `stage_number` | Which stage definition this is executing. |
-| `stage_member_id` | Which specific workflow member this execution corresponds to. Links the runtime row back to the design-time configuration. |
-| `status` | `'running'` / `'completed'` / `'failed'`. The stage (as a whole) completes when all its stage_execution rows are `'completed'`. |
-| `started_at` | When this workflow started executing within the stage. |
-| `completed_at` | When this workflow finished. |
+- **`WorkflowExecutionRow`** (`src/db/types/execution.rs:6`) — one row per
+  (sub-)workflow execution. `collection_run_id` links it to the collection
+  run that triggered it (nullable — workflows can run standalone).
+  `root_execution_id` and `depth` implement O(1) tree traversal for nested
+  workflow executions (a workforce step's child workflow execution has the
+  top-level execution as its root, `depth` = nesting level) — a Temporal-style
+  pattern, per the field's doc comment.
+- **`AgentExecutionRow`** (`execution.rs:26`) — one row per actual LLM
+  invocation. Keyed by **`workflow_execution_id`**, not the old
+  `stage_execution_id` (that concept is gone along with `pipelines`).
+  `execution_type` distinguishes what kind of execution this is (e.g.
+  `"dag_step"` is the default). `room_session_id` + `speaker_order` populate
+  when the execution happened inside a room conversation (§9).
+  `is_exemplary` flags an execution as a few-shot exemplar for future
+  prompting. `trace` is a serialized dispatch trace (tokens, tool calls,
+  errors) kept for persistence/debugging.
+- **`ExecutionMessageRow`** / **`TokenLedgerRow`** (`execution.rs:51`, `:64`)
+  — unchanged in spirit from the old doc: the LLM conversation and the cost
+  ledger, respectively.
+- **`TimelineRow`** (`execution.rs:77`) — not a table, a flattened
+  `FromRow` target for a join across `agent_executions` +
+  `execution_messages` + `workflow_steps`, used to serve the execution
+  timeline view in one query instead of N+1 lookups.
 
 ---
 
-### 16. agent_executions
+## 9. Agent model
 
-```sql
-agent_executions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    stage_execution_id UUID NOT NULL REFERENCES stage_executions(id) ON DELETE CASCADE,
-    agent_id UUID NOT NULL REFERENCES agents(id),
-    workflow_step_id UUID REFERENCES workflow_steps(id),
-    is_interactive BOOLEAN NOT NULL DEFAULT FALSE,
-    parent_agent_execution_id UUID REFERENCES agent_executions(id),
-    system_prompt_rendered TEXT NOT NULL,
-    input TEXT NOT NULL,
-    output TEXT,
-    structured_output JSONB,
-    status TEXT NOT NULL DEFAULT 'running',
-    input_tokens BIGINT NOT NULL DEFAULT 0,
-    output_tokens BIGINT NOT NULL DEFAULT 0,
-    cost_usd REAL NOT NULL DEFAULT 0.0,
-    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    completed_at TIMESTAMPTZ
-)
--- idx_agent_executions_stage(stage_execution_id)
--- idx_agent_executions_agent(agent_id)
--- idx_agent_executions_step(workflow_step_id)
--- idx_agent_executions_status(status)
--- idx_agent_executions_started(started_at DESC)
--- idx_agent_executions_parent(parent_agent_execution_id)
-```
+`AgentRow` (`src/db/types/agent.rs:6`) changed shape significantly:
 
-The most important runtime table. One row per actual LLM agent invocation. This is the ground truth for what happened — what the agent saw, what it produced, what it cost.
+- `user_id` is now `Option<Uuid>` — `None` means a **system agent**
+  (paired with `is_system: bool`), not owned by any user.
+- Timestamps (`created_at`/`updated_at`) were dropped from the row entirely.
+- New fields: `tier` (capability/cost tier), `persona_style`, `status`,
+  `output_schema_id` (agents can now declare their own default output
+  shape), `version` (bumped on update, same convention as workflows/steps),
+  and `default_reasoning_trace`.
 
-A workflow step with an `interactive_agent_id` produces **two** agent_execution rows:
-1. The **main agent** executes the step's prompt and produces output. `is_interactive = false`.
-2. The **interactive agent** receives the main agent's output as input. `is_interactive = true`, `parent_agent_execution_id` points to the main agent's row. Status starts as `'awaiting_user'` — the user sees the interactive agent's initial response in chat and refines the output back and forth. On approval, the interactive agent's final `structured_output` replaces the step's output for downstream consumption.
-
-| Column | Purpose |
-|--------|---------|
-| `id` | The node ID in the execution tree UI. WebSocket events reference this. |
-| `stage_execution_id` | Parent stage execution. CASCADE delete — removing a run removes everything. |
-| `agent_id` | Which agent template was used. For main executions, this is `workflow_steps.agent_id`. For interactive executions, this is `workflow_steps.interactive_agent_id`. Join to agents for the name and model config. |
-| `workflow_step_id` | Which workflow step this execution corresponds to. Links runtime back to the DAG node. Both the main and interactive executions reference the same step. |
-| `is_interactive` | `false` = main agent execution. `true` = interactive review agent execution. The UI renders interactive executions with a chat panel instead of a simple status node. |
-| `parent_agent_execution_id` | For interactive executions, points to the main agent execution whose output is being reviewed. Null for main executions. Allows the UI to show the main output alongside the interactive chat. |
-| `system_prompt_rendered` | The **exact** system prompt after all context was composed — the agent's base system_prompt plus any attached document content. Stored for reproducibility. You can re-run this exact prompt to debug or verify behavior. |
-| `input` | For main executions: the resolved prompt template with `{variable}` refs replaced. For interactive executions: the main agent's output that's being reviewed. |
-| `output` | The agent's raw text response. |
-| `structured_output` | The agent's response parsed against the output_schema. JSONB so it's queryable. Contains the passdown field if the schema includes one. **For interactive executions**: null if the user approved without changes, non-null if the user made changes during the review chat. See "Interactive Output Resolution" below for how downstream steps resolve the final output. |
-| `status` | `'running'` — LLM call in progress. `'awaiting_user'` — interactive agent has responded, waiting for user in chat. `'completed'` — done, output available. `'failed'` — LLM error or validation failure. |
-| `input_tokens` | Tokens sent to the LLM. |
-| `output_tokens` | Tokens received from the LLM. |
-| `cost_usd` | Computed cost for this single invocation. |
-| `started_at` | When the LLM call started. |
-| `completed_at` | When the response was received and processed. `completed_at - started_at` = latency. |
-
-#### Interactive Output Resolution
-
-When a workflow step has an `interactive_agent_id`, two agent_executions are created: the main agent and the interactive review agent. Downstream steps need the "final" output for that step. The rule:
-
-- **Approve as-is** — user approves without changes. The interactive execution completes with `structured_output = NULL`. The main agent's output is used.
-- **Approve with changes** — user refined the output during chat. The interactive execution completes with `structured_output` containing the revised data. The revised output is used.
-
-The runtime resolves the final output with:
-
-```sql
-SELECT COALESCE(
-    (SELECT structured_output FROM agent_executions
-     WHERE parent_agent_execution_id = main.id
-       AND status = 'completed'
-       AND structured_output IS NOT NULL),
-    main.structured_output
-)
-FROM agent_executions main
-WHERE main.workflow_step_id = :step_id
-  AND main.stage_execution_id = :stage_exec_id
-  AND main.is_interactive = false
-```
-
-`COALESCE` picks the interactive output if it exists and is non-null, otherwise falls back to the main output.
-
-**UI display:**
-- If the interactive execution has `structured_output IS NOT NULL` → show both outputs with a `⚑ Modified output` flag on the interactive result.
-- If `structured_output IS NULL` → show `✅ Approved (no changes)`, display only the main output.
-
-**Impact on for_each:** If a step's output is an array consumed by a downstream `for_each` step, and the interactive review changes the array length (adds/removes items), the for_each runs over the approved array. The pipeline always waits for interactive approval before starting downstream steps, so there are never stale for_each iterations.
+`AgentGuidanceRow` (`agent.rs:26`) is new and undocumented previously:
+distilled feedback/learned instructions for an agent, optionally scoped to a
+specific `workflow_step_id`, versioned and toggleable via `is_active` — this
+is how the system persists "what this agent learned" across runs without
+mutating the agent's own `system_prompt`.
 
 ---
 
-### 17. execution_messages
+## 10. Domains the old doc never covered
 
-```sql
-execution_messages (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    agent_execution_id UUID NOT NULL REFERENCES agent_executions(id) ON DELETE CASCADE,
-    role TEXT NOT NULL,
-    content TEXT NOT NULL,
-    tool_call_id TEXT,
-    input_tokens BIGINT NOT NULL DEFAULT 0,
-    output_tokens BIGINT NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-)
--- idx_execution_messages_execution(agent_execution_id)
--- idx_execution_messages_role(agent_execution_id, role)
--- idx_execution_messages_created(created_at)
-```
+These all exist in current `src/db/types/`, have no equivalent in the old
+21-table doc, and are fully modeled through the row-type/trait/`PgRepo`
+pattern from §2:
 
-The full LLM conversation for each agent execution. Every message in the thread is a row. For non-interactive steps this captures the single system→user→assistant exchange. For interactive steps this captures the full multi-turn chat between the user and agent.
-
-| Column | Purpose |
-|--------|---------|
-| `id` | Message identifier. |
-| `agent_execution_id` | Which agent execution this message belongs to. Index supports fetching the full conversation. |
-| `role` | `'system'` — the rendered system prompt. `'user'` — the task prompt or user's chat message. `'assistant'` — the agent's response. `'tool'` — a tool call or tool result. |
-| `content` | The message text. |
-| `tool_call_id` | Links a tool result message back to the tool call that produced it. Null for non-tool messages. |
-| `input_tokens` | Tokens consumed by this message when sent to the LLM. |
-| `output_tokens` | Tokens produced by the LLM in response to this message. |
-| `created_at` | Message timestamp. Ordered by this to reconstruct the conversation. |
-
----
-
-### 18. token_ledger
-
-```sql
-token_ledger (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    agent_execution_id UUID NOT NULL REFERENCES agent_executions(id),
-    model_id TEXT NOT NULL,
-    input_tokens BIGINT NOT NULL,
-    output_tokens BIGINT NOT NULL,
-    cost_usd REAL NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-)
--- idx_token_ledger_user(user_id)
--- idx_token_ledger_agent_exec(agent_execution_id)
--- idx_token_ledger_model(model_id)
--- idx_token_ledger_created(created_at DESC)
--- idx_token_ledger_user_created(user_id, created_at DESC)
-```
-
-Single source of truth for all LLM spend. One row per LLM call. Separate from agent_executions so cost queries don't have to touch the large execution table.
-
-| Column | Purpose |
-|--------|---------|
-| `id` | Ledger entry identifier. |
-| `user_id` | Who incurred the cost. Index supports "my total spend" queries without joining through the execution tree. |
-| `agent_execution_id` | Which execution produced this cost. Join through stage_executions → pipeline_runs for per-run and per-pipeline cost rollups. |
-| `model_id` | Which model was used (e.g. `'claude-sonnet-4-20250514'`). Index supports per-model cost breakdown. |
-| `input_tokens` | Tokens sent. |
-| `output_tokens` | Tokens received. |
-| `cost_usd` | Computed dollar cost for this call. |
-| `created_at` | When the cost was incurred. Composite index `(user_id, created_at DESC)` powers time-range queries: "how much did I spend this week." |
-
-#### Token Tracking Rule
-
-**Every LLM request MUST produce a `token_ledger` row.** No exceptions. This includes:
-
-- The initial LLM call for a main agent execution (1 row)
-- The initial LLM call for an interactive agent execution (1 row)
-- Every subsequent LLM round trip during an interactive chat session (1 row per assistant response)
-- Any future LLM calls added to the system (summarizers, validators, etc.)
-
-For interactive sessions with multiple chat turns, there will be **multiple `token_ledger` rows** sharing the same `agent_execution_id`. The per-message token counts on `execution_messages` provide the per-turn breakdown. The `token_ledger` rows provide the cost accounting.
-
-**Summing rules:**
-- Total cost for one agent execution: `SUM(cost_usd) WHERE agent_execution_id = :id`
-- Total cost for one pipeline run: `SUM(cost_usd)` joined through `agent_executions → stage_executions → pipeline_runs`
-- Total cost for a user: `SUM(cost_usd) WHERE user_id = :id`
-
-The `agent_executions.input_tokens`, `output_tokens`, and `cost_usd` fields are **running totals** updated after each LLM call. They must always equal the sum of their corresponding `token_ledger` rows.
+- **Room / chat** (`src/db/types/room.rs`) — `RoomRow` (a reusable
+  multi-agent conversation config, optionally scoped to a
+  `WorkflowCollectionRow` via `collection_id`), `RoomMemberRow` (which
+  agents sit in the room), `RoomSessionRow` (one run of a room's
+  conversation), `RoomTranscriptEntry` (a cross-execution join for
+  rendering transcripts), `RoomExecutionOutputRow` (structured per-speaker
+  output for agent-to-agent data passing), and the design-time pair
+  `RoomStepConfigRow` / `RoomStepMemberRow` used when a workflow step's
+  `room_id` points at a room. A separate, older chat concept —
+  `ChatMessageRow` and `SessionRow` — lives in `src/db/queries/mod.rs`
+  instead; see §11 for why.
+- **Canvas persistence** (`src/db/types/canvas.rs`) — `CanvasSnapshotRow`
+  (one upserted row per workflow, storing the full Excalidraw-style
+  snapshot JSON plus the last board-submit response for debug rehydration)
+  and `CanvasElementMapRow` (maps Excalidraw element IDs to
+  `WorkflowStepRow`/`WorkflowStepEdgeRow` UUIDs — exactly one of `step_id`
+  or `edge_id` is set per row, enforced as an XOR constraint in the DB).
+- **System file store** (`src/db/types/system_file.rs`) —
+  `SystemFileRow`: workflow-scoped file metadata (path, media type, tags,
+  which step/agent produced it, `workflow_run_id` for run-produced vs.
+  design-time files, and a `sealed` flag that goes true when the producing
+  step is pinned — mirroring `WorkflowStepRow.pinned`).
+- **Content versioning** (`src/db/types/document.rs`) —
+  `ContentVersionRow` (immutable, hash-addressed content snapshots),
+  `RunSnapshotRow` (links a run + step to a specific content version),
+  `EnvelopeSnapshotRow` (a lightweight join target for reconstructing
+  execution envelopes from snapshots), and `RunTemplateRow` (a frozen,
+  named workflow snapshot a user can re-launch from).
+- **System config** (`src/db/types/system.rs`) — `SystemConfigRow`
+  (admin-controlled key/value config), plus `OutputSchemaRow`,
+  `PromptTemplateRow`, and `ResultRow`, which existed in the old doc but
+  each gained a `version` field.
 
 ---
 
-### 19. results
+## 11. The `queries/` module: an older, parallel pattern
 
-```sql
-results (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES users(id),
-    agent_execution_id UUID NOT NULL REFERENCES agent_executions(id),
-    output_schema_id UUID REFERENCES output_schemas(id),
-    name TEXT NOT NULL,
-    data JSONB NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-)
--- idx_results_user(user_id)
--- idx_results_execution(agent_execution_id)
--- idx_results_schema(output_schema_id)
+Not everything goes through `traits/` + `pg_repo/`. `src/db/queries/mod.rs`
+is a flatter, older style: free functions taking `&PgPool` directly and
+returning `anyhow::Result<T>`, with row types (`ChatMessageRow`,
+`SessionRow`) defined inline in the same file rather than in `types/`. This
+is where global chat messages, chat sessions (including the L2/L3/L4
+role-tagged sessions used by the builder and workflow-agent flows), and
+basic auth-config lookups (`has_password`, `set_password`, `get_password`)
+live.
+
+It isn't fully outside the trait system, though — a couple of thin trait
+shims wrap subsets of it for mockability: `ChatMessageRepo`
+(`traits/session.rs:127`) and `AuthConfigRepo` are implemented in
+`pg_repo/auth.rs` by simply delegating to the `queries::` free functions,
+e.g.:
+
+```rust
+async fn insert_chat_message(&self, user_id: UserId, id: Uuid, role: String, content: String) -> Result<()> {
+    crate::db::insert_chat_message(&self.pool, user_id, &id, &role, &content).await
+}
 ```
 
-Saved structured outputs from agent executions. Promoted to a standalone entity so results are browsable, selectable, and referenceable in the UI independently of the execution that created them. Can be used as input to future pipeline runs or referenced when configuring new workflows.
-
-| Column | Purpose |
-|--------|---------|
-| `id` | Result identifier. Selectable in the UI. |
-| `user_id` | Owner. Index supports "browse my results" view. |
-| `agent_execution_id` | Which execution produced this result. Traceability back to the full execution context. |
-| `output_schema_id` | Which schema this result conforms to. Index supports "show all results matching this schema" — useful when the user wants to pick a prior result as input. |
-| `name` | User-facing label. Could be auto-generated from the output_variable_name or manually renamed. |
-| `data` | The structured output JSONB. Same data as `agent_executions.structured_output` but saved as an independent, browsable entity. |
+But most of `queries/mod.rs` — session CRUD, `find_session_by_step_id`,
+`find_manager_builder_session`, `find_workflow_agent_session`,
+`check_initial_instructions_sent`, and friends — is called directly against
+`&PgPool`, with no trait or mock in front of it. If you're extending chat/
+session behavior, follow the existing `queries/mod.rs` convention rather
+than introducing a competing pattern; if you're adding a new domain from
+scratch, follow §2/§4 instead.
 
 ---
 
-## Lineage
+## 12. Where the "workflow agent" fits (and doesn't)
 
-```
-users
-  ├── agents                              (reusable LLM agent templates)
-  │     └── agent_tools                  (N tools per agent)
-  ├── tools                               (tool metadata — name, description, parameters)
-  ├── output_schemas                      (reusable structured output shapes)
-  ├── prompt_templates                    (reusable prompt text with {variable} refs)
-  ├── documents                           (attachable context — PRDs, specs, conventions)
-  ├── results                             (saved structured outputs, browsable + selectable)
-  ├── workflows                           (reusable execution DAGs)
-  │     └── workflow_steps                (DAG nodes — agent + config per step)
-  │           ├── workflow_step_edges     (DAG edges — execution order + parallelism)
-  │           └── step_documents          (attached documents per step)
-  ├── pipelines                           (sequential stage orchestration)
-  │     └── pipeline_stages               (ordered stages)
-  │           └── pipeline_stage_members  (N workflows per stage, parallel)
-  └── pipeline_runs                       (one execution of a pipeline)
-        └── stage_executions              (one per workflow member per stage)
-              └── agent_executions        (one per LLM invocation)
-                    ├── execution_messages (full LLM conversation)
-                    └── token_ledger      (cost per call)
-```
+`src/server/services/workflow_agent/` (its own doc comment,
+`workflow_agent/mod.rs:1-11`) is a board-level chat meta-agent that lets an
+LLM edit a workflow by writing files — `topology.json` + `nodes/*.md` — in a
+project-style repo, rather than calling structured tools directly. It
+projects DB state to files before each agent turn, validates the agent's
+file writes, and syncs the result back into `WorkflowRow` /
+`WorkflowStepRow` / edges through the same `WorkflowRepo` described in §2.
+
+That file-based editing loop is its own architecture and is documented
+separately in `docs/backend-architecture.md`. What matters here is just the
+boundary: the workflow agent is a *client* of the model layer described in
+this document, not part of it — it reads and writes the same row types
+through the same repo methods that any other handler would use.
 
 ---
 
-## Variable Resolution
+## 13. Quick reference: where to look
 
-When the runtime encounters a `{variable}` reference in a prompt template, it resolves it by:
-
-1. Walk backwards through completed workflow steps (within the same workflow) and completed stage members (from prior stages).
-2. Find the step/member whose `output_variable_name` matches the variable name.
-3. Pull the `structured_output` JSONB from that step's `agent_execution`.
-4. Dot-path access for nested refs: `{features.content.0.name}` navigates into the JSONB.
-
-**Scope rules:**
-- Within a workflow, steps can reference any ancestor step's output by variable name.
-- Across stages, steps can reference any completed prior stage's member outputs by variable name.
-- Variable names must be unique within their scope (the UI validates this at design time).
-
----
-
-## Table Count: 21
-
-| # | Table | Layer | Purpose |
-|---|-------|-------|---------|
-| 1 | users | Definition | User accounts |
-| 2 | sessions | Definition | Auth sessions |
-| 3 | agents | Definition | Reusable agent templates |
-| 4 | output_schemas | Definition | Reusable output shapes |
-| 5 | prompt_templates | Definition | Reusable prompt text |
-| 6 | documents | Definition | Attachable context documents |
-| 7 | tools | Definition | Tool metadata (name, description, parameters) |
-| 8 | agent_tools | Wiring | Which tools each agent can use |
-| 9 | workflows | Definition | Reusable execution DAGs |
-| 10 | workflow_steps | Wiring | DAG nodes |
-| 11 | workflow_step_edges | Wiring | DAG edges |
-| 12 | step_documents | Wiring | Document attachments per step |
-| 13 | pipelines | Definition | Stage sequences |
-| 14 | pipeline_stages | Wiring | Ordered stages |
-| 15 | pipeline_stage_members | Wiring | Workflows per stage |
-| 16 | pipeline_runs | Execution | Pipeline run instance |
-| 17 | stage_executions | Execution | Workflow execution per stage |
-| 18 | agent_executions | Execution | LLM invocation record |
-| 19 | execution_messages | Execution | Full LLM conversation |
-| 20 | token_ledger | Execution | Cost tracking |
-| 21 | results | Execution | Saved structured outputs |
+| Question | Where |
+|---|---|
+| What columns does table X have, what are its constraints/indexes? | `docs/database-schema.md` |
+| What Rust struct models table X? | `src/db/types/*.rs` — grep the table name |
+| What operations can I perform on domain Y? | `src/db/traits/*.rs` |
+| How is operation Z actually implemented against Postgres? | `src/db/pg_repo/*.rs` |
+| How do I build a row for a test? | `src/db/fixtures.rs`, or `Default::default()` directly |
+| How do I run a real-DB integration test? | `src/db/test_utils::TestDb`, pattern in `pg_repo/tests.rs` |
+| How do I mock a repo in a handler test? | `MockXxxRepo::new()` (generated by `mockall::automock` on the trait) |
+| Is "pipeline" the DB concept or the service concept? | It's not a DB concept anymore — see §7 |

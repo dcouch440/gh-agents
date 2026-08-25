@@ -1,1243 +1,187 @@
-# Nexor Frontend Build Guide
+# Frontend Build Guide
 
-This document covers the full frontend implementation for the pipeline builder and execution system. It maps every database table to API endpoints, UI pages, components, and real-time behavior.
+This document covers the current frontend implementation: routes, the API client, the WebSocket protocol, the canvas/rendering architecture, the node type system, the workflow-agent chat, state management, and the Dispatch system. It reflects the code as it exists today, not the product's earlier design.
+
+For product framing (Phase 0 structural build + async agent design), see `visions/vision-visual-dispatch.md`.
 
 ---
 
 ## Pages Overview
 
+Routes are declared in `frontend/src/constants.ts` (`ROUTES`) and wired in `frontend/src/router.tsx`. Everything below `AuthGuard` renders inside `AppLayout`.
+
 | Page | Route | Purpose |
 |------|-------|---------|
-| Agents | `/agents` | CRUD agent templates |
-| Agent Detail | `/agents/:id` | Edit agent system prompt, model config |
-| Output Schemas | `/schemas` | CRUD reusable output shapes |
-| Schema Detail | `/schemas/:id` | Edit schema fields |
-| Prompt Templates | `/prompts` | CRUD reusable prompt text |
-| Prompt Detail | `/prompts/:id` | Edit prompt content with `{variable}` preview |
-| Documents | `/documents` | CRUD context documents |
-| Document Detail | `/documents/:id` | Edit document content |
-| Workflows | `/workflows` | List user's workflows |
-| Workflow Editor | `/workflows/:id` | Build/edit workflow DAG (tree UI) |
-| Pipelines | `/pipelines` | List user's pipelines |
-| Pipeline Editor | `/pipelines/:id` | Build/edit pipeline stages + members (tree UI) |
-| Pipeline Run | `/pipelines/:pipelineId/runs/:runId` | Live execution tree with status updates |
-| Results | `/results` | Browse saved structured outputs |
-| Cost Dashboard | `/costs` | Token usage and spend breakdown |
+| Dashboard | `/` | Overview of your agents and tasks |
+| Chat | `/chat` (`/chat/:sessionId`) | Start/continue a conversation with an agent |
+| Agents | `/agents` | List and manage agent templates |
+| Agent Workshop | `/agents/workshop/:sessionId?` | Iterate on a single agent's system prompt/config against a live test session (split-pane editor + chat) |
+| Agent Detail | `/agents/:id` | Edit an agent's config and attached context documents |
+| Workflows | `/workflows` | List and manage workflows |
+| Workflow Editor | `/workflows/:id` | The hand-rolled Board canvas + sidebar (tree/chat) — see below |
+| Workflow Runs | `/workflows/:id/runs` | Execution history for a workflow |
+| Workflow Run Detail | `/workflows/:id/runs/:runId` | Per-step results for one run |
+| Review Queue | `/review-queue` | Interactive agent executions awaiting human approval, with inline chat |
+| Documents | `/documents` | Browse and manage context documents |
+| Settings | `/settings` | App/account settings |
+
+`ROUTES` also defines `SCHEMAS`, `SCHEMA_DETAIL`, `PROMPTS`, `PROMPT_DETAIL`, `RESULTS`, `COSTS`, and `SHOWCASE` constants, but **none of these are registered in `router.tsx`** — there is no route that renders them. Output schemas and prompt templates are still real backend/API concepts (steps reference them by ID), but there is currently no page or panel in the live app for browsing or editing them directly; the components that once did (`frontend/src/components/panels/SchemasBrowserPanel.tsx`, `PromptsBrowserPanel.tsx`, `PropertiesPanel.tsx`, and the rest of `components/panels/`) are orphaned — grep confirms nothing outside that directory imports them. They were the properties-panel UI for the legacy React-Flow canvas (see below) and were not ported when the Board replaced it.
 
 ---
 
-## API Endpoints
+## Canvas / Rendering Architecture — `components/board/` vs `components/canvas/`
 
-All endpoints are prefixed with `/api`. All require `Authorization: Bearer <token>` header. All return JSON. All list endpoints support `?page=1&per_page=50`.
+This is the most important thing to get right, and it is **not** "board is the drawing surface, canvas is what's drawn inside it." They are two different generations of the workflow editor's canvas, confirmed by tracing actual imports and git history:
 
-### Auth
+- **`frontend/src/components/board/` is the current, active canvas.** `WorkflowEditorPage` (`frontend/src/pages/Workflows/WorkflowEditorPage.tsx`) imports and renders `<Board workflowId={id} />` from `@/components/board`, nothing else. `Board.tsx` is a hand-rolled, Excalidraw-inspired canvas: raw HTML5 Canvas 2D rendering (`components/board/canvas/Canvas2D.tsx` + `renderer.ts`), a generic element model of `BoxElement` (a rectangle with plain `text`), `ArrowElement`, and `PenElement` (`components/board/elements/types.ts`), pan/zoom/selection/drag interactions (`components/board/interactions/`), and serialization to an Excalidraw-compatible JSON array (`elements/serialize.ts`) that's POSTed to the backend's board endpoints. Steps are not rendered as rich per-type node components on the canvas — they're boxes with text; the backend's Phase 0 processing maps board elements to workflow steps/edges (`boardStore.elementStepMap`) and returns diffs.
+- **`frontend/src/components/canvas/` is a legacy, largely orphaned canvas.** It's a `@xyflow/react` (React Flow) implementation: `WorkflowCanvas.tsx` renders a `ReactFlow` graph with a custom node type `canvasNode` → `CanvasNode` (`components/canvas/nodeTypes.ts`, `CanvasNode/CanvasNode.tsx`), driven by a `NodeVariant` registry (`CanvasNode/registry.ts`) that maps `step.execution_mode` to a variant (`workforce`, `manager`, `room`, `blank`, `agent`, `context`, `input`, `step`) with per-variant layout (`tabbed`, `editor`, `card`), and mappers including `mappers/nodes.ts` and `mappers/agentArtifactNodes.ts` (which spawns roster agents as their own child nodes). **This whole tree was replaced on 2026-02-24** (commit `5c65f73e`, "WorkflowEditorPage now renders Board instead of WorkflowCanvas"). Confirmed by grep: `WorkflowCanvas` and the `@/components/canvas` barrel export are referenced only from within `components/canvas/` itself and its own tests — no page, route, or other component imports them.
 
-| Method | Path | Body | Returns | Notes |
-|--------|------|------|---------|-------|
-| `POST` | `/auth/login` | `{ email, password }` | `{ token, user }` | Returns bearer token |
-| `POST` | `/auth/register` | `{ email, password }` | `{ token, user }` | |
-| `POST` | `/auth/logout` | — | `204` | Invalidates session |
-| `GET` | `/auth/me` | — | `{ user }` | Current user from token |
+**What the current Board actually reuses from the legacy `components/canvas/` tree** — this is why the two directories aren't fully independent:
+- `Board.tsx` and `SubmitBar.tsx` import the `useWorkflowRun` hook from `@/components/canvas/useWorkflowRun` (run-status polling logic, no UI).
+- `board/dispatch/AgentTraceCard.tsx` imports `ToolCallCard` from `@/components/canvas/CanvasNode/tabs/dispatch/ToolCallCard`.
+- `board/dispatch/DispatchAccordionRow.tsx` imports `DispatchTraceView` from `@/components/canvas/CanvasNode/tabs/dispatch/DispatchTraceView`.
 
-### Agents
+Those are narrow, presentational/leaf reuses (a hook and two trace-rendering components) — not evidence that the two systems share a rendering pipeline. Everything else in `components/canvas/` (`WorkflowCanvas`, the placement/auto-layout engine, `CanvasFormNode`, the `NodeVariant` registry, `mappers/agentArtifactNodes.ts`, `OptionTray`, focus mode's use of `canvasStore`) is dead weight from the pre-Board era, still present in the tree and still passing its own tests, but not reachable from the running app.
 
-| Method | Path | Body | Returns |
-|--------|------|------|---------|
-| `GET` | `/agents` | — | `Agent[]` |
-| `POST` | `/agents` | `{ name, system_prompt, model_provider, model_id, model_max_tokens, model_temperature }` | `Agent` |
-| `GET` | `/agents/:id` | — | `Agent` |
-| `PUT` | `/agents/:id` | `{ name?, system_prompt?, model_provider?, model_id?, model_max_tokens?, model_temperature? }` | `Agent` |
-| `DELETE` | `/agents/:id` | — | `204` |
+**Practical implication for anyone reading `execution_mode`-to-UI mapping:** don't look in `CanvasNode/registry.ts` for how the *current* app treats a step type — that registry describes the legacy React-Flow node system. For the current app, execution-mode-aware rendering lives in the sidebar's step tree (`frontend/src/components/sidebar/buildStepTree.ts`, `StepTreeRow.tsx`) and in `Board.tsx` itself (e.g. picking the entry step by `execution_mode === 'input' | 'context'`).
 
-### Output Schemas
+---
 
-| Method | Path | Body | Returns |
-|--------|------|------|---------|
-| `GET` | `/output-schemas` | — | `OutputSchema[]` |
-| `POST` | `/output-schemas` | `{ name, schema }` | `OutputSchema` |
-| `GET` | `/output-schemas/:id` | — | `OutputSchema` |
-| `PUT` | `/output-schemas/:id` | `{ name?, schema? }` | `OutputSchema` |
-| `DELETE` | `/output-schemas/:id` | — | `204` |
+## Node / Execution Mode System
 
-### Prompt Templates
-
-| Method | Path | Body | Returns |
-|--------|------|------|---------|
-| `GET` | `/prompt-templates` | — | `PromptTemplate[]` |
-| `POST` | `/prompt-templates` | `{ name, content }` | `PromptTemplate` |
-| `GET` | `/prompt-templates/:id` | — | `PromptTemplate` |
-| `PUT` | `/prompt-templates/:id` | `{ name?, content? }` | `PromptTemplate` |
-| `DELETE` | `/prompt-templates/:id` | — | `204` |
-
-### Documents
-
-| Method | Path | Body | Returns |
-|--------|------|------|---------|
-| `GET` | `/documents` | — | `Document[]` |
-| `POST` | `/documents` | `{ name, content }` | `Document` |
-| `GET` | `/documents/:id` | — | `Document` |
-| `PUT` | `/documents/:id` | `{ name?, content? }` | `Document` |
-| `DELETE` | `/documents/:id` | — | `204` |
-
-### Workflows
-
-| Method | Path | Body | Returns |
-|--------|------|------|---------|
-| `GET` | `/workflows` | — | `Workflow[]` |
-| `POST` | `/workflows` | `{ name, description }` | `Workflow` |
-| `GET` | `/workflows/:id` | — | `Workflow` (with steps, edges, step_documents) |
-| `PUT` | `/workflows/:id` | `{ name?, description? }` | `Workflow` |
-| `DELETE` | `/workflows/:id` | — | `204` |
-
-### Workflow Steps
-
-| Method | Path | Body | Returns |
-|--------|------|------|---------|
-| `POST` | `/workflows/:id/steps` | `{ agent_id, execution_mode, for_each_ref?, prompt_template_id?, prompt_template?, output_schema_id?, output_variable_name?, interactive_agent_id?, for_each_label_field?, display_order }` | `WorkflowStep` |
-| `PUT` | `/workflows/:wid/steps/:sid` | (any field) | `WorkflowStep` |
-| `DELETE` | `/workflows/:wid/steps/:sid` | — | `204` |
-
-### Workflow Step Edges
-
-| Method | Path | Body | Returns |
-|--------|------|------|---------|
-| `POST` | `/workflows/:id/edges` | `{ from_step_id, to_step_id }` | `WorkflowStepEdge` |
-| `DELETE` | `/workflows/:id/edges` | `{ from_step_id, to_step_id }` | `204` |
-
-### Step Documents
-
-| Method | Path | Body | Returns |
-|--------|------|------|---------|
-| `POST` | `/workflows/:wid/steps/:sid/documents` | `{ document_id }` | `StepDocument` |
-| `DELETE` | `/workflows/:wid/steps/:sid/documents/:did` | — | `204` |
-
-### Pipelines
-
-| Method | Path | Body | Returns |
-|--------|------|------|---------|
-| `GET` | `/pipelines` | — | `Pipeline[]` |
-| `POST` | `/pipelines` | `{ name, description }` | `Pipeline` |
-| `GET` | `/pipelines/:id` | — | `Pipeline` (with stages, members) |
-| `PUT` | `/pipelines/:id` | `{ name?, description? }` | `Pipeline` |
-| `DELETE` | `/pipelines/:id` | — | `204` |
-
-### Pipeline Stages
-
-| Method | Path | Body | Returns |
-|--------|------|------|---------|
-| `POST` | `/pipelines/:id/stages` | `{ stage_number, stage_name }` | `PipelineStage` |
-| `PUT` | `/pipelines/:pid/stages/:num` | `{ stage_name? }` | `PipelineStage` |
-| `DELETE` | `/pipelines/:pid/stages/:num` | — | `204` |
-
-### Pipeline Stage Members
-
-| Method | Path | Body | Returns |
-|--------|------|------|---------|
-| `POST` | `/pipelines/:pid/stages/:num/members` | `{ workflow_id, display_order }` | `PipelineStageMember` |
-| `PUT` | `/pipelines/:pid/stages/:num/members/:mid` | `{ display_order? }` | `PipelineStageMember` |
-| `DELETE` | `/pipelines/:pid/stages/:num/members/:mid` | — | `204` |
-
-### Pipeline Runs
-
-| Method | Path | Body | Returns |
-|--------|------|------|---------|
-| `POST` | `/pipelines/:id/runs` | `{ initial_input }` | `PipelineRun` |
-| `GET` | `/pipelines/:pid/runs` | — | `PipelineRun[]` |
-| `GET` | `/pipelines/:pid/runs/:rid` | — | `PipelineRun` (summary) |
-| `GET` | `/pipelines/:pid/runs/:rid/tree` | — | Full execution tree (see below) |
-
-### Interactive Chat
-
-| Method | Path | Body | Returns |
-|--------|------|------|---------|
-| `GET` | `/agent-executions/:id/messages` | — | `ExecutionMessage[]` |
-| `POST` | `/agent-executions/:id/messages` | `{ content }` | `ExecutionMessage` |
-| `POST` | `/agent-executions/:id/approve` | `{ structured_output? }` | `AgentExecution` |
-
-`approve` with no body or `structured_output: null` = approve as-is. With `structured_output` = approve with changes.
-
-### Variable Intellisense
-
-| Method | Path | Returns |
-|--------|------|---------|
-| `GET` | `/pipelines/:id/stages/:num/available-variables` | `AvailableVariable[]` |
-| `GET` | `/workflows/:id/steps/:sid/available-variables` | `AvailableVariable[]` |
+`ExecutionMode` (`frontend/src/types/workflow.ts`) is the authoritative set:
 
 ```typescript
-type AvailableVariable = {
-    ref: string               // 'stage.1.workflow_name.step_name'
-    variable_name: string     // 'features'
-    schema: Record<string, { type: string; description: string }> | null
-    is_array: boolean
-}
+type ExecutionMode = 'workforce' | 'context' | 'input' | 'manager' | 'single' | 'container'
 ```
 
-### Results
+Note this is **not** the same list as the legacy canvas's `NodeVariant` (`workforce, manager, room, blank, agent, context, input, step`) — there is no `room` execution mode. Rooms are a separate concept: a `WorkflowStep` can carry a `room_id`, backed by their own `rooms`/`roomSessions` API groups and `roomStore`, layered on top of a step rather than being an execution mode of its own.
 
-| Method | Path | Body | Returns |
-|--------|------|------|---------|
-| `GET` | `/results` | — | `Result[]` |
-| `GET` | `/results?schema_id=:id` | — | `Result[]` (filtered by schema) |
-| `GET` | `/results/:id` | — | `Result` |
-| `DELETE` | `/results/:id` | — | `204` |
+Current treatment per mode, as implemented (not as the legacy registry describes it):
 
-### Token Ledger / Cost
-
-| Method | Path | Returns |
-|--------|------|---------|
-| `GET` | `/costs?from=:date&to=:date` | `{ total_input_tokens, total_output_tokens, total_cost_usd, by_model: [...] }` |
-| `GET` | `/costs/runs/:rid` | `{ total_input_tokens, total_output_tokens, total_cost_usd, by_agent: [...] }` |
+- **`workforce`** — the flagship/primary archetype. `StepTreeRow.tsx` special-cases it (`isWorkforce`) to show its roster. Roster agents are not separate canvas nodes in the current system (that was the legacy `mappers/agentArtifactNodes.ts` behavior) — they render as nested `AgentEntry` rows in the sidebar's step tree (`buildStepTree.ts`), fetched via `workflowStore.fetchRoster(stepId)` / `RosterAgent[]`. Workforce steps get the richest treatment: dispatch/stream activity in the `DispatchPanel` (Dispatch and Run tabs), roster progress via `WORKFORCE_DESIGNER_PROGRESS` / `WORKFORCE_AGENT_PROGRESS` / `DESIGNER_AGENT_DESIGNED` WS events.
+- **`context`, `input`** — pass-through/structural steps. Hidden from the step tree entirely (`HIDDEN_MODES` in `buildStepTree.ts`). `Board.tsx` picks the workflow's entry step by checking for an `input` step first, falling back to `context`.
+- **`manager`** — also in `HIDDEN_MODES`; not shown as its own row in the current tree.
+- **`single`** — a plain one-agent step; default icon treatment in the tree.
+- **`container`** — modeled on the backend (`ExecutionMode` includes it, `WorkflowStep`/`RunStepResult` carry it) but has **no dedicated frontend rendering** — no icon, no special tree handling, no canvas treatment found anywhere in `components/`, `pages/`, or `hooks/`. It falls back to whatever generic handling untyped steps get. Backend-only-so-far.
 
 ---
 
-## WebSocket Events
+## The Workflow-Agent Chat
 
-Connect to `ws://<host>/ws?token=<bearer_token>`.
+`frontend/src/hooks/useWorkflowAgentChat.ts` is a current, primary feature with no analog in the old doc. It's a chat assistant that talks to the backend's board-level meta-agent and keeps the hand-drawn Board in sync with what the user asks for.
 
-### Server → Client Events
-
-**Pipeline run status change:**
-```json
-{
-    "event": "pipeline_run_update",
-    "run_id": "uuid",
-    "status": "running",
-    "current_stage": 2
-}
-```
-
-**Stage execution status change:**
-```json
-{
-    "event": "stage_execution_update",
-    "run_id": "uuid",
-    "stage_execution_id": "uuid",
-    "stage_number": 1,
-    "status": "completed"
-}
-```
-
-**Agent execution status change (the main one — powers live tree):**
-```json
-{
-    "event": "agent_execution_update",
-    "run_id": "uuid",
-    "agent_execution_id": "uuid",
-    "workflow_step_id": "uuid",
-    "agent_name": "Dave",
-    "is_interactive": false,
-    "status": "completed",
-    "structured_output": { "name": "features", "content": [...], "passdown": "Found 6 features" },
-    "input_tokens": 1200,
-    "output_tokens": 340,
-    "cost_usd": 0.02
-}
-```
-
-**Interactive chat message (new message from agent in review):**
-```json
-{
-    "event": "execution_message",
-    "agent_execution_id": "uuid",
-    "message": {
-        "id": "uuid",
-        "role": "assistant",
-        "content": "I've reviewed the ticket. The acceptance criteria are missing...",
-        "created_at": "2025-01-15T10:00:00Z"
-    }
-}
-```
-
-**For_each expansion (new agent executions spawned):**
-```json
-{
-    "event": "for_each_spawned",
-    "run_id": "uuid",
-    "stage_execution_id": "uuid",
-    "workflow_step_id": "uuid",
-    "agent_executions": [
-        { "id": "uuid", "agent_name": "Ticket Writer", "status": "pending", "iteration_index": 0 },
-        { "id": "uuid", "agent_name": "Ticket Writer", "status": "pending", "iteration_index": 1 },
-        { "id": "uuid", "agent_name": "Ticket Writer", "status": "pending", "iteration_index": 2 }
-    ]
-}
-```
-
-### Client → Server Events
-
-**Subscribe to a run (start receiving events for this run):**
-```json
-{
-    "action": "subscribe_run",
-    "run_id": "uuid"
-}
-```
-
-**Unsubscribe:**
-```json
-{
-    "action": "unsubscribe_run",
-    "run_id": "uuid"
-}
-```
+- `WorkflowEditorPage` calls `useWorkflowAgentChat(id)` and passes `messages`, `sendMessage`, `streaming`, `cancelChat`, `submitPanel` down into `WorkflowSidebar`'s "Chat" tab (`components/sidebar/WorkflowSidebar.tsx`, rendered via `ChatPanel`).
+- On mount it calls `api.workflows.getOrCreateAgentSession(workflowId)` to get/create a dedicated session, then `api.sessions.getHistory(sessionId)` to hydrate prior messages (reconstructing tool calls and any previously-submitted interactive "panel" messages from stored `source_type: 'tool'` entries).
+- Sending a message streams the response over **SSE** (`useSendSessionMessage`/`SSEEvent`, not the WebSocket topic system) with event types `token`/`message`/`content` (assistant text), `tool_start`/`tool_end` (tool calls, with a special case that suppresses the internal `render_panel` tool from the visible tool log), and `panel_render` (the agent asking the user to pick from an inline set of options — rendered as an interactive panel message; `submitPanel(messageId, selections)` answers it by resending as a normal chat message).
+- Board sync itself happens independently via WebSocket `WORKFLOW_EVENT`s (`board_elements_updated`, `step_created`, `step_deleted`, `edge_created`, `edge_deleted`) consumed by `workflowStore.handleWsEvent` and `useCanvasSync` — the chat's SSE stream and the Board's WS-driven live sync are two separate channels that both end up mutating the same `workflowStore`/`boardElementStore` state.
 
 ---
 
-## Full Execution Tree Response
+## API Client Conventions
 
-`GET /api/pipelines/:pid/runs/:rid/tree`
+Typed endpoints live in `frontend/src/api/api.ts`, wrapping a base client (`baseApi.get/post/patch/put/del`). **Updates use `PATCH`** (`baseApi.patch`) for most resources — `rooms`, `collections`, and `protocols` are the exceptions, using `PUT` for their update methods (`baseApi.put`). Never call `baseApi.get`/`.post` etc. directly from a component — use the typed group.
 
-This is the single most important endpoint. It returns the complete execution state that the tree UI renders.
+The full set of groups on the exported `api` object:
 
-```json
-{
-    "run": {
-        "id": "uuid",
-        "pipeline_id": "uuid",
-        "pipeline_name": "Feature Builder",
-        "status": "running",
-        "initial_input": "Build a component library for the design system",
-        "current_stage": 2,
-        "started_at": "2025-01-15T10:00:00Z",
-        "completed_at": null,
-        "total_input_tokens": 14200,
-        "total_output_tokens": 3800,
-        "total_cost_usd": 0.24
-    },
-    "stages": [
-        {
-            "stage_number": 1,
-            "stage_name": "Analysis",
-            "status": "completed",
-            "stage_executions": [
-                {
-                    "id": "uuid",
-                    "workflow_name": "Project Review",
-                    "status": "completed",
-                    "agent_executions": [
-                        {
-                            "id": "uuid",
-                            "agent_name": "Project Analyst",
-                            "workflow_step_id": "uuid",
-                            "is_interactive": false,
-                            "status": "completed",
-                            "structured_output": {
-                                "conventions": "strict TypeScript, function components...",
-                                "passdown": "Found 12 conventions, strict TS required"
-                            },
-                            "input_tokens": 1200,
-                            "output_tokens": 340,
-                            "cost_usd": 0.02,
-                            "started_at": "2025-01-15T10:00:01Z",
-                            "completed_at": "2025-01-15T10:00:08Z",
-                            "interactive_review": null
-                        }
-                    ]
-                },
-                {
-                    "id": "uuid",
-                    "workflow_name": "Codebase Scan",
-                    "status": "completed",
-                    "agent_executions": [
-                        {
-                            "id": "uuid",
-                            "agent_name": "Scanner",
-                            "workflow_step_id": "uuid",
-                            "is_interactive": false,
-                            "status": "completed",
-                            "structured_output": {
-                                "existing_components": ["Button", "Card", "Modal"],
-                                "passdown": "Scanned 48 files, 3 existing components"
-                            },
-                            "input_tokens": 2100,
-                            "output_tokens": 520,
-                            "cost_usd": 0.04,
-                            "started_at": "2025-01-15T10:00:01Z",
-                            "completed_at": "2025-01-15T10:00:12Z",
-                            "interactive_review": null
-                        }
-                    ]
-                }
-            ]
-        },
-        {
-            "stage_number": 2,
-            "stage_name": "Decomposition",
-            "status": "running",
-            "stage_executions": [
-                {
-                    "id": "uuid",
-                    "workflow_name": "Feature Decomposer",
-                    "status": "running",
-                    "agent_executions": [
-                        {
-                            "id": "uuid",
-                            "agent_name": "Analyst",
-                            "workflow_step_id": "uuid",
-                            "is_interactive": false,
-                            "status": "completed",
-                            "structured_output": {
-                                "features": [
-                                    { "name": "Reusable Button", "language": "React" },
-                                    { "name": "Data Table", "language": "React" },
-                                    { "name": "Form Input", "language": "React" },
-                                    { "name": "Toast Notifications", "language": "React" },
-                                    { "name": "Dropdown Menu", "language": "React" },
-                                    { "name": "Tabs Component", "language": "React" }
-                                ],
-                                "passdown": "Decomposed into 6 features"
-                            },
-                            "input_tokens": 1800,
-                            "output_tokens": 420,
-                            "cost_usd": 0.03,
-                            "started_at": "2025-01-15T10:00:13Z",
-                            "completed_at": "2025-01-15T10:00:20Z",
-                            "interactive_review": {
-                                "id": "uuid",
-                                "agent_name": "Feature Reviewer",
-                                "is_interactive": true,
-                                "status": "completed",
-                                "structured_output": null,
-                                "modified": false,
-                                "input_tokens": 900,
-                                "output_tokens": 180,
-                                "cost_usd": 0.01
-                            }
-                        },
-                        {
-                            "id": "uuid",
-                            "agent_name": "Ticket Writer",
-                            "workflow_step_id": "uuid",
-                            "is_interactive": false,
-                            "status": "completed",
-                            "for_each_index": 0,
-                            "for_each_label": "Reusable Button",
-                            "structured_output": {
-                                "ticket": { "title": "Implement Reusable Button", "description": "..." },
-                                "passdown": "Button component ticket ready"
-                            },
-                            "input_tokens": 800,
-                            "output_tokens": 200,
-                            "cost_usd": 0.01,
-                            "started_at": "2025-01-15T10:00:21Z",
-                            "completed_at": "2025-01-15T10:00:28Z",
-                            "interactive_review": null
-                        },
-                        {
-                            "id": "uuid",
-                            "agent_name": "Ticket Writer",
-                            "workflow_step_id": "uuid",
-                            "is_interactive": false,
-                            "status": "running",
-                            "for_each_index": 1,
-                            "for_each_label": "Data Table",
-                            "structured_output": null,
-                            "input_tokens": 800,
-                            "output_tokens": 0,
-                            "cost_usd": 0.0,
-                            "started_at": "2025-01-15T10:00:21Z",
-                            "completed_at": null,
-                            "interactive_review": null
-                        },
-                        {
-                            "id": "uuid",
-                            "agent_name": "Ticket Writer",
-                            "workflow_step_id": "uuid",
-                            "is_interactive": false,
-                            "status": "running",
-                            "for_each_index": 2,
-                            "for_each_label": "Form Input",
-                            "structured_output": null,
-                            "input_tokens": 800,
-                            "output_tokens": 0,
-                            "cost_usd": 0.0,
-                            "started_at": "2025-01-15T10:00:21Z",
-                            "completed_at": null,
-                            "interactive_review": null
-                        },
-                        {
-                            "id": "uuid",
-                            "agent_name": "Ticket Writer",
-                            "workflow_step_id": "uuid",
-                            "is_interactive": false,
-                            "status": "pending",
-                            "for_each_index": 3,
-                            "for_each_label": "Toast Notifications",
-                            "structured_output": null,
-                            "input_tokens": 0,
-                            "output_tokens": 0,
-                            "cost_usd": 0.0,
-                            "started_at": null,
-                            "completed_at": null,
-                            "interactive_review": null
-                        },
-                        {
-                            "id": "uuid",
-                            "agent_name": "Ticket Writer",
-                            "workflow_step_id": "uuid",
-                            "is_interactive": false,
-                            "status": "pending",
-                            "for_each_index": 4,
-                            "for_each_label": "Dropdown Menu",
-                            "structured_output": null,
-                            "input_tokens": 0,
-                            "output_tokens": 0,
-                            "cost_usd": 0.0,
-                            "started_at": null,
-                            "completed_at": null,
-                            "interactive_review": null
-                        },
-                        {
-                            "id": "uuid",
-                            "agent_name": "Ticket Writer",
-                            "workflow_step_id": "uuid",
-                            "is_interactive": false,
-                            "status": "pending",
-                            "for_each_index": 5,
-                            "for_each_label": "Tabs Component",
-                            "structured_output": null,
-                            "input_tokens": 0,
-                            "output_tokens": 0,
-                            "cost_usd": 0.0,
-                            "started_at": null,
-                            "completed_at": null,
-                            "interactive_review": null
-                        }
-                    ]
-                }
-            ]
-        },
-        {
-            "stage_number": 3,
-            "stage_name": "Implementation",
-            "status": "pending",
-            "stage_executions": []
-        }
-    ]
+```
+auth, agents, tools, documents, sessions, chat, config, stats,
+agentExecutions, outputSchemas, promptTemplates, costs, results,
+workflows, contextResponse, modes, rooms, roomSessions, collections,
+protocols, dispatch
+```
+
+There is no `pipelines` group — there is no pipeline/stage concept in this codebase at all (the earlier version of this doc described a "Pipeline" product that doesn't exist here).
+
+Notes on specific groups:
+
+- **`workflows`** is the largest group — CRUD for workflows/steps/edges/step-documents, roster agents, room step members, run/execution endpoints, `generate` (kick off Phase 0/async agent design), `submitBoard`/`getBoardElements` (the Board's persistence), `getStepDispatchHistory`, `getLiveState` (single source of truth for "what's happening right now," polled by `workflowLiveStore`), `getExecutionTimeline`, `getRunDetail`, `downloadRunFiles` (blob download via `fetch` + auth header, not the typed client), workshop endpoints (`getOrCreateWorkshop`, `executeWorkshopStep`, `getWorkshopStatus` — back the Agent Workshop page), and `rebase`/`listTemplates` (run templates).
+- **`costs`** and **`results`** exist as real API groups with real backing stores (`costStore`, `resultStore`), but **neither store is consumed by any page or component** — verified by grep, the only reference to either store is the `stores/index.ts` barrel export. This is dead scaffolding, not a shipped feature.
+- **`dispatch`** (`trace`, `listForStep`, `send`, `cancel`, `session`) is the API surface for the Dispatch system — see its own section below.
+- **`contextResponse`** and **`modes`** are thin, single-method groups (`get`/`list`) with `unknown` response types — minimal/placeholder surface, not fleshed out.
+
+---
+
+## WebSocket Protocol
+
+Connects via `frontend/src/contexts/WebSocketContext.tsx` (`WebSocketProvider`) to `WS_URL`, gated on having an auth token, with exponential-backoff+jitter reconnect and a 30s ping. It exposes `subscribe(topic, handler)`, `subscribeRun(runId)`, and `send(message)` — no other component talks to the raw socket.
+
+**Wire format** (`frontend/src/types/ws.ts`) — every server broadcast is:
+
+```typescript
+type WsWireMessage<T> = {
+  topic: 'workflow' | 'room' | 'session'
+  event: string
+  ts: string
+  run_id: string | null
+  user_id: string | null
+  seq: number | null
+  data: T
 }
 ```
 
----
+Plus control messages (`subscribed`, `error`, `pong`, `events_missed`) sent directly to the socket rather than broadcast.
 
-## Execution Tree UI
-
-### Tree Layout (Pipeline Run Page)
-
-The run page renders a vertical tree from the `/tree` response. Every node is an `agent_execution`.
+Central routing happens in `frontend/src/stores/ws/WsStoreRouter.tsx`, a headless component mounted once that subscribes each domain store to the topics it cares about:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ Pipeline Run: "Feature Builder"                    ● RUNNING    │
-│ Input: "Build a component library for the design system"        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  Stage 1: Analysis ✅                                           │
-│  │                                                              │
-│  ├─ Workflow: "Project Review"                                  │
-│  │  └─ Project Analyst                    ✅ completed  $0.02   │
-│  │     passdown: Found 12 conventions, strict TS required       │
-│  │                                                              │
-│  └─ Workflow: "Codebase Scan"                                   │
-│     └─ Scanner                            ✅ completed  $0.04   │
-│        passdown: Scanned 48 files, 3 existing components        │
-│                                                                 │
-│  ──────────────────────────────────────────────────────────     │
-│                                                                 │
-│  Stage 2: Decomposition ● running                               │
-│  │                                                              │
-│  └─ Workflow: "Feature Decomposer"                              │
-│     │                                                           │
-│     ├─ Analyst                            ✅ completed  $0.03   │
-│     │  passdown: Decomposed into 6 features                     │
-│     │  ├─ Review: Feature Reviewer        ✅ approved   $0.01   │
-│     │  │  ✅ Approved (no changes)                               │
-│     │                                                           │
-│     └─ for_each features (6 items):                             │
-│        ├─ [0] Ticket Writer: Reusable Button  ✅ done   $0.01   │
-│        │  passdown: Button component ticket ready                │
-│        ├─ [1] Ticket Writer: Data Table       ● running         │
-│        ├─ [2] Ticket Writer: Form Input       ● running         │
-│        ├─ [3] Ticket Writer: Toast            ○ pending         │
-│        ├─ [4] Ticket Writer: Dropdown         ○ pending         │
-│        └─ [5] Ticket Writer: Tabs             ○ pending         │
-│                                                                 │
-│  ──────────────────────────────────────────────────────────     │
-│                                                                 │
-│  Stage 3: Implementation ○ pending                              │
-│  └─ (waiting for stage 2)                                       │
-│                                                                 │
-├─────────────────────────────────────────────────────────────────┤
-│ Tokens: 14,200 in / 3,800 out │ Cost: $0.24 │ Elapsed: 2m 12s │
-└─────────────────────────────────────────────────────────────────┘
+WORKFLOW → workflowExecutionStore, workflowStore, stepStreamStore, agentTraceStore
+SESSION  → sessionStore, dispatchStore
+ROOM     → roomStore
+(all)    → activityStore   — a flight recorder that logs every event regardless of topic
 ```
 
-### Node States
+On `events_missed` (server-side lag notification), it re-fetches from REST rather than trusting the socket to have delivered everything (`sessionStore.fetchAll()`, `workflowStore.fetchIfStale()`, `workflowLiveStore.hydrateActive()`).
 
-| Status | Icon | Color | Behavior |
-|--------|------|-------|----------|
-| `pending` | ○ | gray | Waiting for dependencies |
-| `running` | ● (animated) | blue | LLM call in progress |
-| `awaiting_user` | ⏸ | yellow | Interactive chat open, waiting for user |
-| `completed` | ✅ | green | Done, output available |
-| `failed` | ✗ | red | Error, click to see details |
+Real event names, grouped by topic (`WORKFLOW_EVENT`, `ROOM_EVENT`, `SESSION_EVENT` constants in `types/ws.ts`) — none of these existed in the old doc (`pipeline_run_update`, `stage_execution_update`, `agent_execution_update`, `for_each_spawned` are all fictional):
 
-### Interactive Review Display
+- **`WORKFLOW_EVENT`**: `started`, `step_started`, `step_completed`, `step_failed`, `step_paused`, `for_each_progress`, `completed`, `failed`, `resumed`, `step_config_updated`, `step_name_updated`, `roster_changed`, `room_members_changed`, `plan_updated`, `workforce_designer_progress`, `workforce_agent_progress`, `designer_agent_designed`, `step_pin_changed`, `step_created`, `step_deleted`, `edge_created`, `edge_deleted`, `board_elements_updated`, `step_stream_token`, `step_stream_tool_start`, `step_stream_tool_end`, `step_stream_error`, `debug_system_prompt`, `debug_user_message`, `debug_assistant_message`, `debug_tool_call`, `debug_tool_result`.
+- **`ROOM_EVENT`**: `speaker_start`, `speaker_token`, `speaker_end`, `turn_complete`, `session_complete`.
+- **`SESSION_EVENT`**: `created`, `updated`, `deleted`, `agent_message`, `dispatch_started`, `dispatch_progress`, `dispatch_completed`, `dispatch_failed`, `dispatch_cancelled`, `dispatch_stream_token`, `dispatch_stream_tool_start`, `dispatch_stream_tool_end`, `dispatch_stream_error`, `dispatch_stream_system_prompt`, `dispatch_stream_user_message`.
 
-When a step has an interactive review, it renders nested under the main agent:
-
-**No changes (approved as-is):**
-```
-├─ Analyst                            ✅ completed  $0.03
-│  passdown: Decomposed into 6 features
-│  ├─ Review: Feature Reviewer        ✅ approved   $0.01
-│  │  ✅ Approved (no changes)
-```
-
-**With changes:**
-```
-├─ Analyst                            ✅ completed  $0.03
-│  passdown: Decomposed into 6 features
-│  output: { features: [A, B, C, D, E] }
-│  ├─ Review: Feature Reviewer        ✅ approved   $0.02
-│  │  ⚑ Modified output
-│  │  output: { features: [A, C, E] }
-```
-
-**Awaiting user (chat open):**
-```
-├─ Ticket Writer                      ✅ completed  $0.01
-│  passdown: Button component ticket ready
-│  ├─ Review: Ticket Reviewer         ⏸ awaiting user
-│  │  ┌──────────────────────────────────────────┐
-│  │  │ Agent: The acceptance criteria are        │
-│  │  │ missing edge cases for disabled state...  │
-│  │  │                                           │
-│  │  │ You: Good point, add those.               │
-│  │  │                                           │
-│  │  │ Agent: Updated. Here's the revised...     │
-│  │  │                                           │
-│  │  │ [Type a message...]          [Approve]    │
-│  │  └──────────────────────────────────────────┘
-```
-
-### Clicking a Completed Node
-
-Expands an inspection panel showing:
-
-1. **Agent info** — name, model, system prompt
-2. **Input** — the resolved prompt the agent received
-3. **Output** — raw text response
-4. **Structured output** — parsed JSON with syntax highlighting
-5. **Documents attached** — list of documents that were injected
-6. **Messages** — full LLM conversation (system, user, assistant, tool calls)
-7. **Cost** — input/output tokens, cost USD, latency
+Client → server messages (`WsClientMessage`): `subscribe`/`unsubscribe` (topics), `subscribe_run`/`unsubscribe_run` (run_id), `ping`, and a small set of canvas-sync messages (`canvas_element_moved`, `canvas_text_changed`, `canvas_node_created`, `canvas_edge_created`, `canvas_node_deleted`, `canvas_edge_deleted`) used by the Board's live-sync hook (`components/board/hooks/useCanvasSync.ts`) to push local edits to the backend in real time.
 
 ---
 
-## Pipeline Builder UI (Editor Pages)
+## The Dispatch System
 
-### Workflow Editor (`/workflows/:id`)
+There is no "Tool Router" system anywhere in the current codebase (no router configs, no context-accumulation entries, no `router_request_update`/`context_update` events — none of that exists). The closest real analog is **Dispatch**, and it's shaped differently: it's per-step, ad-hoc agent task tracing, not an LLM-based tool-routing/context-injection layer.
 
-A vertical tree editor. Each step is an expandable row.
-
-```
-Workflow: "Feature Decomposer"                          [Save] [Run Test]
-─────────────────────────────────────────────────────────────────────────
-
-  Step 1                                                    [+ Add Step After]
-  ├─ Agent: [▼ Analyst                    ]
-  ├─ Prompt: [▼ Use saved template  |  Write custom ▼]
-  │  ┌──────────────────────────────────────────────────────────────────┐
-  │  │ Review {conventions} and create a list of stateless components   │
-  │  │ for the front end in React.                                     │ <- intellisense on {
-  │  └──────────────────────────────────────────────────────────────────┘
-  ├─ Output Schema: [▼ feature_list       ]
-  ├─ Output Variable: [ features          ]
-  ├─ Documents: [▼ Project Requirements] [+ Add]
-  ├─ Review Agent: [▼ Feature Reviewer    ]        <- dropdown, "None" to disable
-  ├─ Execution Mode: (● Single) (○ For Each)
-  └─ Depends On: [no dependencies — entry step]
-
-  Step 2                                                    [+ Add Step After]
-  ├─ Agent: [▼ Ticket Writer              ]
-  ├─ Prompt:
-  │  ┌──────────────────────────────────────────────────────────────────┐
-  │  │ Create a comprehensive ticket for {features.content.$.name}     │
-  │  └──────────────────────────────────────────────────────────────────┘
-  ├─ Output Schema: [▼ ticket             ]
-  ├─ Output Variable: [ tickets           ]
-  ├─ Documents: [none]
-  ├─ Review Agent: [▼ Ticket Reviewer     ]
-  ├─ Execution Mode: (○ Single) (● For Each)
-  │  └─ For Each Ref: [▼ features.content ]     <- dropdown of available arrays
-  └─ Depends On: [▼ Step 1 (Analyst)     ]      <- multi-select, defines edges
-
-[+ Add Step]
-```
-
-**Depends On** is how edges are created. Selecting "Step 1" as a dependency creates a `workflow_step_edges` row from step 1 to step 2. Multi-select supports merge nodes (step depends on multiple parents).
-
-**The `$` in for_each prompts** is a placeholder for the current iteration element. `{features.content.$.name}` means "for each element in `features.content`, access its `.name`."
-
-### Pipeline Editor (`/pipelines/:id`)
-
-```
-Pipeline: "Feature Implementation Pipeline"                [Save] [Run]
-──────────────────────────────────────────────────────────────────────
-
-  Stage 1: [ Analysis                     ]         [+ Add Workflow] [✗]
-  │
-  ├─ Workflow: [▼ Project Review          ]                          [✗]
-  └─ Workflow: [▼ Codebase Scan           ]                          [✗]
-
-  Stage 2: [ Decomposition               ]         [+ Add Workflow] [✗]
-  │
-  └─ Workflow: [▼ Feature Decomposer      ]                          [✗]
-
-  Stage 3: [ Implementation              ]         [+ Add Workflow] [✗]
-  │
-  └─ Workflow: [▼ Builder                 ]                          [✗]
-
-[+ Add Stage]
-
-Pipeline Input:
-┌──────────────────────────────────────────────────────────────────┐
-│ Build a component library for the design system                  │
-│                                                                  │
-│                                            [▶ Run Pipeline]      │
-└──────────────────────────────────────────────────────────────────┘
-```
-
-Each stage is a collapsible section. Workflows are selected from a dropdown of the user's saved workflows. Stages are reorderable via drag. Workflows within a stage are reorderable.
-
----
-
-## Intellisense System
-
-When a user types `{` in any prompt template field, the frontend:
-
-1. Calls `GET /api/workflows/:id/steps/:sid/available-variables` (or the pipeline-level equivalent)
-2. Shows a dropdown of available variables with their types
-3. On selecting a variable, continues with `.` for nested access
-4. Schema fields are shown at each level
-
-```
-{                           ← user types {
-┌──────────────────────┐
-│ conventions    Object │    ← from stage 1, step 1
-│ dependencies   Array  │    ← from stage 1, step 2
-│ features       Object │    ← from current workflow, step 1
-└──────────────────────┘
-
-{features.                   ← user selects features, types .
-┌──────────────────────┐
-│ name          String  │
-│ content       Array   │
-│ passdown      String  │
-└──────────────────────┘
-
-{features.content.           ← user selects content, types .
-┌──────────────────────┐
-│ $  (for_each item)   │    ← only shown in for_each steps
-│ 0  (first element)   │
-│ 1  (second element)  │
-└──────────────────────┘
-
-{features.content.$.         ← user selects $
-┌──────────────────────┐
-│ name          String  │
-│ language      String  │
-│ component_name String │
-│ component_path String │
-└──────────────────────┘
-```
+- **Types**: `frontend/src/types/dispatch.ts` — `DispatchTraceResponse` (a step's execution trace: `ApiTraceEvent[]` of `token`/`tool_start`/`tool_end`/`error`/`system_prompt`/`user_message`), `DispatchTaskSummary`/`DispatchTasksResponse` (per-step task list), `DispatchSendRequest`/`DispatchActionResponse`/`DispatchSessionResponse`.
+- **API**: the `dispatch` group — `trace(executionId)`, `listForStep(stepId)`, `send(stepId, { instruction, workflow_id })`, `cancel(executionId)`, `session(stepId)`.
+- **Live events**: the `dispatch_*` and `dispatch_stream_*` `SESSION_EVENT`s above, keyed by `session_id`/`execution_id`/`step_id`, consumed by `dispatchStore.handleWsEvent`.
+- **UI**: the Board's floating `DispatchPanel` (`components/board/dispatch/DispatchPanel.tsx`), a resizable overlay with two tabs — **Dispatch** (`DispatchTab.tsx`: `PhaseZeroSummary` + one `DispatchAccordionRow` per dispatch, sourced from `workflowLiveStore.selectDispatches`, exportable as JSON) and **Run** (`RunTab.tsx`). Individual trace rendering (tool calls, streamed tokens) reuses `ToolCallCard`/`DispatchTraceView` from the legacy `components/canvas/CanvasNode/tabs/dispatch/` tree, per the reuse note above.
 
 ---
 
 ## State Management
 
-Following the existing codebase conventions (vanilla React, no external state libraries):
+State is `stores/` — a lightweight zustand-style pattern (`frontend/src/stores/lib/createStore.ts` + `useStore(store, selector, equalityFn?)`), not React Context. Each store is a plain module exporting `store` (the `StoreApi`) plus named selector/action functions; components read with `useStore(someStore.store, someStore.selectThing)`.
 
-### New Contexts
-
-| Context | State | Purpose |
-|---------|-------|---------|
-| `WorkflowContext` | Workflows list, current workflow with steps/edges | Workflow CRUD + builder state |
-| `PipelineBuilderContext` | Current pipeline with stages/members | Pipeline editor state |
-| `PipelineRunContext` | Current run tree, live updates | Execution tree + WebSocket events |
-| `OutputSchemaContext` | Schemas list | Schema CRUD |
-| `PromptTemplateContext` | Templates list | Template CRUD |
-| `ResultContext` | Results list | Browsing saved outputs |
-
-### New Hooks
-
-| Hook | Purpose |
-|------|---------|
-| `useWorkflowContext` | Access workflow context (throws outside provider) |
-| `useWorkflows` | Fetch workflows list |
-| `useWorkflowMutations` | Create/update/delete workflows, steps, edges |
-| `usePipelineBuilderContext` | Access pipeline builder context |
-| `usePipelineRunContext` | Access run tree + live state |
-| `usePipelineRunTree` | Fetch full tree, subscribe to WebSocket updates |
-| `useOutputSchemaContext` | Access schema context |
-| `useOutputSchemas` | Fetch schemas list |
-| `useOutputSchemaMutations` | Create/update/delete schemas |
-| `usePromptTemplateContext` | Access template context |
-| `usePromptTemplates` | Fetch templates list |
-| `usePromptTemplateMutations` | Create/update/delete templates |
-| `useAvailableVariables` | Fetch available variables for intellisense |
-| `useInteractiveChat` | Fetch messages, send messages, approve for an interactive agent execution |
-| `useResultContext` | Access result context |
-| `useResults` | Fetch results list |
-
-### WebSocket Integration for Live Tree
-
-The `usePipelineRunTree` hook:
-
-1. Fetches the initial tree via `GET /api/pipelines/:pid/runs/:rid/tree`
-2. Subscribes to the run via WebSocket `subscribe_run`
-3. On each `agent_execution_update` event, patches the tree state
-4. On `for_each_spawned`, adds new nodes to the tree
-5. On `stage_execution_update`, updates stage status
-6. On `pipeline_run_update`, updates the run header
-7. On unmount, sends `unsubscribe_run`
-
-```typescript
-const usePipelineRunTree = (pipelineId: string, runId: string) => {
-    const [tree, dispatch] = useReducer(treeReducer, null)
-    const ws = useWebSocket()
-
-    // Initial fetch
-    useEffect(() => { ... fetch tree, dispatch({ type: 'SET_TREE', payload }) }, [runId])
-
-    // WebSocket subscription
-    useEffect(() => {
-        ws.send({ action: 'subscribe_run', run_id: runId })
-        ws.on('agent_execution_update', (data) => dispatch({ type: 'UPDATE_AGENT_EXECUTION', payload: data }))
-        ws.on('for_each_spawned', (data) => dispatch({ type: 'ADD_FOR_EACH_NODES', payload: data }))
-        ws.on('stage_execution_update', (data) => dispatch({ type: 'UPDATE_STAGE_EXECUTION', payload: data }))
-        ws.on('pipeline_run_update', (data) => dispatch({ type: 'UPDATE_RUN', payload: data }))
-        return () => ws.send({ action: 'unsubscribe_run', run_id: runId })
-    }, [runId])
-
-    return tree
-}
-```
-
----
-
-## Component Hierarchy
-
-### Pipeline Run Page
-
-```
-PipelineRunPage
-├── RunHeader (pipeline name, status, input, elapsed time)
-├── StageList
-│   └── StageSection (one per stage)
-│       ├── StageHeader (stage name, status badge)
-│       └── WorkflowExecutionList
-│           └── WorkflowExecution (one per stage_execution)
-│               └── AgentExecutionList
-│                   └── AgentExecutionNode (one per agent_execution)
-│                       ├── NodeStatusIcon
-│                       ├── AgentName
-│                       ├── PassdownText
-│                       ├── TokenCostBadge
-│                       ├── InteractiveReviewSection (if interactive)
-│                       │   ├── ReviewStatusBadge (approved / modified / awaiting)
-│                       │   ├── OutputComparison (original vs modified, if changed)
-│                       │   └── ChatPanel (if awaiting_user)
-│                       │       ├── MessageList
-│                       │       ├── MessageInput
-│                       │       └── ApproveButton
-│                       ├── ForEachGroup (if for_each step)
-│                       │   └── AgentExecutionNode (one per iteration)
-│                       └── ExecutionInspector (expandable on click)
-│                           ├── AgentInfoSection
-│                           ├── InputSection
-│                           ├── OutputSection
-│                           ├── DocumentsSection
-│                           ├── MessagesSection
-│                           └── CostSection
-└── RunFooter (total tokens, total cost, elapsed)
-```
-
-### Workflow Editor Page
-
-```
-WorkflowEditorPage
-├── WorkflowHeader (name, description, save/run buttons)
-└── StepList
-    └── StepEditor (one per workflow_step, expandable)
-        ├── AgentSelector (dropdown of user's agents)
-        ├── PromptEditor
-        │   ├── TemplateSelector (dropdown: saved template or custom)
-        │   └── PromptTextArea (with IntellisenseOverlay)
-        │       └── VariableDropdown (on { keypress)
-        ├── OutputSchemaSelector (dropdown of user's schemas)
-        ├── OutputVariableInput (text field)
-        ├── DocumentSelector (multi-select of user's documents)
-        ├── ReviewAgentSelector (dropdown: None or agent)
-        ├── ExecutionModeToggle (single / for_each)
-        │   └── ForEachRefSelector (dropdown of available array variables)
-        └── DependsOnSelector (multi-select of other steps in this workflow)
-```
-
-### Pipeline Editor Page
-
-```
-PipelineEditorPage
-├── PipelineHeader (name, description, save/run buttons)
-├── StageList
-│   └── StageEditor (one per stage, collapsible)
-│       ├── StageNameInput
-│       ├── MemberList
-│       │   └── MemberRow (workflow selector dropdown, reorderable)
-│       └── AddWorkflowButton
-├── AddStageButton
-└── PipelineInputArea (text area + run button)
-```
-
----
-
-## Flow of Execution (Full Lifecycle)
-
-### 1. User Builds Definitions
-
-```
-User creates agents           → POST /api/agents
-User creates output schemas   → POST /api/output-schemas
-User creates prompt templates  → POST /api/prompt-templates
-User creates documents        → POST /api/documents
-```
-
-### 2. User Builds a Workflow
-
-```
-User creates workflow          → POST /api/workflows
-User adds steps               → POST /api/workflows/:id/steps (for each step)
-User draws edges              → POST /api/workflows/:id/edges (for each dependency)
-User attaches documents       → POST /api/workflows/:wid/steps/:sid/documents
-User saves                    → PUT /api/workflows/:id (updates name/description)
-```
-
-### 3. User Builds a Pipeline
-
-```
-User creates pipeline          → POST /api/pipelines
-User adds stages              → POST /api/pipelines/:id/stages (for each stage)
-User adds workflows to stages → POST /api/pipelines/:pid/stages/:num/members
-```
-
-### 4. User Runs a Pipeline
-
-```
-User enters initial input     → types in the input text area
-User clicks "Run Pipeline"    → POST /api/pipelines/:id/runs { initial_input }
-                              ← returns { run_id }
-Frontend navigates to         → /pipelines/:pid/runs/:rid
-```
-
-### 5. Frontend Loads the Run Page
-
-```
-Fetch initial tree            → GET /api/pipelines/:pid/runs/:rid/tree
-Subscribe to updates          → WS: { action: "subscribe_run", run_id }
-Render tree from response     → StageList → WorkflowExecution → AgentExecutionNode
-```
-
-### 6. Backend Executes the Pipeline
-
-For each stage (sequentially):
-
-```
-Backend creates stage_execution rows for each member
-Backend starts each workflow's DAG:
-  ├─ Find entry steps (no incoming edges)
-  ├─ For each entry step:
-  │   ├─ Resolve prompt template ({variables} → actual data from prior outputs)
-  │   ├─ Append attached document content
-  │   ├─ Create agent_execution row (status: running)
-  │   ├─ → WS: agent_execution_update (running)
-  │   ├─ Call LLM (agent's system_prompt + resolved prompt)
-  │   ├─ Parse structured_output against output_schema
-  │   ├─ Save to agent_execution (status: completed)
-  │   ├─ → WS: agent_execution_update (completed, with structured_output)
-  │   ├─ Create token_ledger row
-  │   │
-  │   ├─ If step has interactive_agent_id:
-  │   │   ├─ Create interactive agent_execution (status: running)
-  │   │   ├─ Send main output to interactive agent
-  │   │   ├─ Save interactive agent's response
-  │   │   ├─ Set status: awaiting_user
-  │   │   ├─ → WS: agent_execution_update (awaiting_user)
-  │   │   ├─ PAUSE — wait for user approval
-  │   │   ├─ ... user chats via POST /agent-executions/:id/messages ...
-  │   │   ├─ ... user approves via POST /agent-executions/:id/approve ...
-  │   │   ├─ Set status: completed
-  │   │   ├─ → WS: agent_execution_update (completed)
-  │   │   └─ Use COALESCE logic for final output
-  │   │
-  │   ├─ Check outgoing edges — find child steps
-  │   ├─ For each child step:
-  │   │   ├─ Check if ALL parents completed
-  │   │   └─ If yes, start the child step (recurse)
-  │   │
-  │   └─ If child step is for_each:
-  │       ├─ Read the for_each_ref array from parent output
-  │       ├─ Create N agent_execution rows (one per element)
-  │       ├─ → WS: for_each_spawned (all N nodes)
-  │       └─ Run all N in parallel
-  │
-  ├─ When all terminal steps complete → stage_execution status: completed
-  ├─ → WS: stage_execution_update (completed)
-  │
-  └─ When all stage_executions for the stage complete → advance to next stage
-      ├─ → WS: pipeline_run_update (current_stage incremented)
-      └─ If no more stages → pipeline_run status: completed
-```
-
-### 7. Frontend Updates in Real Time
-
-```
-On agent_execution_update:
-  └─ Find node in tree by agent_execution_id
-     ├─ Update status icon (○ → ● → ✅)
-     ├─ Show passdown text from structured_output
-     ├─ Update token/cost display
-     └─ If awaiting_user → show chat panel
-
-On for_each_spawned:
-  └─ Find parent step node
-     └─ Insert N new child nodes (with iteration labels)
-
-On stage_execution_update:
-  └─ Update stage header status badge
-
-On pipeline_run_update:
-  └─ Update run header (status, current_stage)
-     └─ If completed → show completion state, final cost
-```
-
----
-
-## Tool Router System (New)
-
-The tool router system adds LLM-based tool routing, per-session context accumulation, and request lifecycle tracking. This section documents everything the frontend needs to integrate with it.
-
-### New Pages
-
-| Page | Route | Purpose |
-|------|-------|---------|
-| Tool Routers | `/tool-routers` | List + create router configurations |
-| Router Detail | `/tool-routers/:id` | Edit router system prompt, model, assign tools |
-| Powered Chat | `/chat/:id` | Chat session backed by a pipeline (activity panel) |
-
-### New API Endpoints
-
-#### Tool Routers
-
-| Method | Path | Body | Returns |
-|--------|------|------|---------|
-| `GET` | `/tool-routers` | — | `ToolRouter[]` |
-| `POST` | `/tool-routers` | `{ name, description?, system_prompt, model_id }` | `ToolRouter` |
-| `GET` | `/tool-routers/:id` | — | `ToolRouter` |
-| `PUT` | `/tool-routers/:id` | `{ name?, description?, system_prompt?, model_id?, is_active? }` | `ToolRouter` |
-| `DELETE` | `/tool-routers/:id` | — | `204` |
-| `GET` | `/tool-routers/:id/tools` | — | `Tool[]` |
-| `PUT` | `/tool-routers/:id/tools` | `{ tool_ids: [uuid] }` | `204` |
-
-#### Session Context & Requests
-
-| Method | Path | Body | Returns |
-|--------|------|------|---------|
-| `GET` | `/sessions/:id/context` | — | `ContextEntry[]` |
-| `GET` | `/sessions/:id/requests` | — | `RouterRequest[]` |
-
-#### Context Response
-
-| Method | Path | Body | Returns |
-|--------|------|------|---------|
-| `POST` | `/context-response` | `{ request_id, response }` | `204` |
-
-### New Types
-
-```typescript
-type ToolRouter = {
-  id: string
-  user_id: string
-  name: string
-  description: string | null
-  system_prompt: string
-  model_id: string
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
-
-type ContextEntry = {
-  id: string
-  session_id: string
-  source: string
-  priority: number
-  content: string
-  metadata: Record<string, unknown> | null
-  status: string           // 'active' | 'expired' | 'dismissed'
-  created_at: string
-  expires_at: string | null
-}
-
-type RouterRequest = {
-  id: string
-  session_id: string
-  agent_execution_id: string | null
-  intent: string
-  priority: string          // 'low' | 'normal' | 'high' | 'critical'
-  callback_hint: string | null
-  routed_tool: string | null
-  routed_args: Record<string, unknown> | null
-  is_async: boolean
-  passdown: string | null
-  chain: ChainStep[] | null
-  status: string            // 'pending' | 'routed' | 'executing' | 'completed' | 'failed' | 'no_action'
-  result: string | null
-  created_at: string
-  completed_at: string | null
-}
-
-type ChainStep = {
-  tool: string
-  args: Record<string, unknown>
-}
-```
-
-### New WS Events
-
-#### Client → Server
-
-| Type | Payload | Purpose |
-|------|---------|---------|
-| `subscribe_run` | `{ run_id: uuid }` | Subscribe to events for a specific pipeline run |
-| `unsubscribe_run` | `{ run_id: uuid }` | Stop receiving events for a run |
-
-#### Server → Client
-
-| Type | Payload | Channel | Purpose |
-|------|---------|---------|---------|
-| `router_request_update` | `RouterRequestEvent` | `routing` | Router request lifecycle (pending → routed → completed) |
-| `context_update` | `ContextUpdateEvent` | `routing` | New context entry arrived for a session |
-
-```typescript
-type RouterRequestEvent = {
-  request_id: string
-  session_id: string
-  run_id: string | null
-  intent: string
-  status: string
-  routed_tool: string | null
-  passdown: string | null
-  result: string | null
-  timestamp: string
-  user_id: string | null
-}
-
-type ContextUpdateEvent = {
-  session_id: string
-  run_id: string | null
-  source: string
-  priority: number
-  content_preview: string
-  timestamp: string
-  user_id: string | null
-}
-```
-
-### Powered Chat UI
-
-When a session has a `pipeline_id`, the chat becomes a "powered chat" with a dual-zone layout:
-
-```
-┌─────────────────────────────────┬──────────────────────────┐
-│                                 │   Activity Panel         │
-│   Conversation                  │                          │
-│                                 │   ⏳ Searching for NVDA  │
-│   User: Analyze NVDA            │      via search_api      │
-│                                 │   ✅ search_api → 12 res │
-│   Assistant: I'll look into     │   ⏳ Reading 10-K filing │
-│   NVDA for you. Searching...    │      via read_file       │
-│                                 │                          │
-│                                 │   ── Costs ──            │
-│                                 │   Input:  12,340 tokens  │
-│                                 │   Output:  2,100 tokens  │
-│   [message input]               │   $0.034                 │
-└─────────────────────────────────┴──────────────────────────┘
-```
-
-**Left zone:** Standard chat interface — messages, streaming responses, input field.
-
-**Right zone:** Activity panel showing:
-- In-flight router requests (⏳ with intent + tool name)
-- Completed requests (✅ with tool + brief result)
-- Failed requests (❌ with error)
-- Token/cost accumulator
-
-**Data flow:**
-1. Subscribe to `routing` channel + `subscribe_run` for the session's active run
-2. `router_request_update` events update the activity panel
-3. `context_update` events can optionally show "new context loaded"
-4. Each request transitions: pending → routed → executing → completed/failed
-
-### New Chat Dialog
-
-When creating a new chat, add an optional pipeline selector:
-
-```
-┌─ New Chat ───────────────────────────────────┐
-│                                               │
-│  Name: [                          ]           │
-│                                               │
-│  Pipeline: [None (plain chat)        ▾]       │
-│            ├── Stock Research Pipeline         │
-│            ├── Code Analysis Pipeline          │
-│            └── None (plain chat)               │
-│                                               │
-│  [Create]                                     │
-└───────────────────────────────────────────────┘
-```
-
-The `POST /sessions` body gains an optional `pipeline_id` field. When set, the session is a powered chat.
-
-### New Contexts / Hooks
+Only three things are actual React Contexts, reserved for genuinely cross-cutting concerns:
 
 | Context | Purpose |
 |---------|---------|
-| `ToolRouterContext` | CRUD for tool router configurations |
+| `CommandPaletteContext` | Global command palette (cmd-K) state |
+| `ThemeModeContext` | Light/dark theme toggle |
+| `WebSocketContext` | The single shared socket connection — `subscribe`/`subscribeRun`/`send` |
 
-| Hook | Purpose |
-|------|---------|
-| `useToolRouterContext` | Access router list, loading state |
-| `useToolRouterMutations` | Create, update, delete routers + set tools |
-| `useSessionActivity` | Load context store + router requests for a session's activity panel |
+Notable stores (non-exhaustive; see `frontend/src/stores/index.ts` for the full barrel):
 
-**`ToolRouterContext` pattern:** Same as other entity contexts — fetch list on mount, CRUD mutations, WS subscription for live updates.
+- `workflowStore` — steps, edges, roster, WS event handling for structural changes.
+- `boardElementStore` / `boardStore` — the Board's own element state and last-submit/Phase-0 response (`elementStepMap`, `elementEdgeMap`).
+- `workflowLiveStore` — polled "what's running right now" snapshot (`getLiveState`), generation flag, dispatches.
+- `workflowExecutionStore`, `stepStreamStore`, `agentTraceStore` — execution/streaming state fed by `WORKFLOW_EVENT`s.
+- `dispatchStore`, `dispatchSessionStore` — Dispatch system state fed by `SESSION_EVENT`s.
+- `sidebarStore` — tree/chat tab, selected step, expand/collapse, panel width.
+- `roomStore`, `collectionStore`, `protocolStore` — their respective domains.
+- `costStore`, `resultStore` — real stores backing real endpoints, but currently unused by any UI (see API Client Conventions above).
+- `wsConnectionStore`, `undoStore`, `activityStore` (the flight recorder), `uiStore`, `layoutStore`, `canvasStore` — the last of these, `canvasStore`, is legacy-canvas state (`PanelKind`, drag/interaction mode for React Flow) and is only consumed inside the orphaned `components/canvas/` and `components/panels/` trees.
 
-**`useSessionActivity` pattern:**
-```typescript
-const useSessionActivity = (sessionId: string) => {
-  // 1. Fetch initial context + requests from REST
-  // 2. Subscribe to routing channel + subscribe_run
-  // 3. Merge WS events into local state
-  // Returns: { requests, context, costs }
-}
-```
+---
 
-### Tool Router Detail Page
+## Build Tooling
 
-The router detail page has:
-
-1. **Config section** — name, description, system prompt (textarea), model selector, active toggle
-2. **Tools section** — multi-select from available tools, save assigns via `PUT /tool-routers/:id/tools`
-3. **Test section** (future) — send a test intent and see the routing decision
-
-Layout follows the same pattern as Agent Detail — form fields with save button, tool assignment panel.
+- **Vite** (`frontend/vite.config.ts`): React plugin, `@` → `src` path alias, dev server on port 5173 proxying `/api` and `/ws` to `http://localhost:3000`. Vitest config is colocated in the same file (`jsdom` environment, `src/test/setup.ts`).
+- **`package.json` scripts**: `dev` (vite), `build` (`tsc -b && vite build`), `lint` (eslint), `preview`, `test`/`test:watch` (vitest), `e2e`/`e2e:ui`/`e2e:headed` (Playwright).
+- **TypeScript**: split config — `tsconfig.json` (references), `tsconfig.app.json` (app source), `tsconfig.node.json` (Vite config itself).
