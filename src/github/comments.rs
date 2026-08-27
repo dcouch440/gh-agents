@@ -635,7 +635,7 @@ mod tests {
             } else {
                 TaskStatus::Pending
             };
-            summary = summary.add_slice(&format!("S{}", i), status, 1, 0);
+            summary = summary.add_slice(format!("S{}", i), status, 1, 0);
         }
 
         let md = summary.generate_markdown();

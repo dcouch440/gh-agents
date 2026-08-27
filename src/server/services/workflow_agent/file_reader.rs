@@ -20,6 +20,9 @@ pub(crate) struct BoardTopology {
     pub nodes: HashMap<String, NodeEntry>,
 }
 
+/// Topology (slug → depends_on) paired with node contents (slug → markdown).
+pub(crate) type Board = (HashMap<String, Vec<String>>, HashMap<String, String>);
+
 /// A single node entry in `topology.json`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct NodeEntry {
@@ -42,15 +45,6 @@ pub(crate) fn read_topology(base_dir: &Path) -> Result<HashMap<String, Vec<Strin
         .into_iter()
         .map(|(slug, entry)| (slug, entry.depends_on))
         .collect())
-}
-
-/// Read a single node's markdown content.
-pub(crate) fn read_node(base_dir: &Path, slug: &str) -> Result<String, String> {
-    let node_path = base_dir.join("nodes").join(format!("{slug}.md"));
-    let content = std::fs::read_to_string(&node_path)
-        .map_err(|e| format!("cannot read nodes/{slug}.md: {e}"))?;
-
-    Ok(content.trim().to_string())
 }
 
 /// Read all node files in the `nodes/` directory.
@@ -84,9 +78,7 @@ pub(crate) fn read_all_nodes(base_dir: &Path) -> Result<HashMap<String, String>,
 /// Read topology + all node contents in one call.
 ///
 /// Returns `(topology_map, nodes_map)`.
-pub(crate) fn read_board(
-    base_dir: &Path,
-) -> Result<(HashMap<String, Vec<String>>, HashMap<String, String>), String> {
+pub(crate) fn read_board(base_dir: &Path) -> Result<Board, String> {
     let topology = read_topology(base_dir)?;
     let nodes = read_all_nodes(base_dir)?;
     Ok((topology, nodes))

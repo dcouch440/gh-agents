@@ -142,7 +142,7 @@ mod tests {
         let task = make_task(step_id, TaskStatus::Running, 0);
         let persisted = make_dispatch(step_id, "completed");
 
-        let merged = merge_dispatches(&[task.clone()], &[persisted]);
+        let merged = merge_dispatches(std::slice::from_ref(&task), &[persisted]);
 
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].execution_id, task.execution_id);
@@ -170,7 +170,7 @@ mod tests {
         let step_id = Uuid::new_v4();
         let persisted = make_dispatch(step_id, "completed");
 
-        let merged = merge_dispatches(&[], &[persisted.clone()]);
+        let merged = merge_dispatches(&[], std::slice::from_ref(&persisted));
 
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].execution_id, persisted.id);

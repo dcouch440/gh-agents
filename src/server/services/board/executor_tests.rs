@@ -109,8 +109,8 @@ mod tests {
             Ok(row)
         });
 
-        mock.expect_update_step().returning(|step| Ok(step));
-        mock.expect_upsert_element_map().returning(|row| Ok(row));
+        mock.expect_update_step().returning(Ok);
+        mock.expect_upsert_element_map().returning(Ok);
 
         let session_mock = MockSessionRepo::new();
 
@@ -189,7 +189,7 @@ mod tests {
             })
         });
 
-        mock.expect_upsert_element_map().returning(|row| Ok(row));
+        mock.expect_upsert_element_map().returning(Ok);
 
         let session_mock = MockSessionRepo::new();
 
@@ -394,7 +394,7 @@ mod tests {
             })
         });
 
-        mock.expect_upsert_element_map().returning(|row| Ok(row));
+        mock.expect_upsert_element_map().returning(Ok);
 
         let session_mock = MockSessionRepo::new();
 
@@ -513,9 +513,9 @@ mod tests {
             })
         });
 
-        mock.expect_update_step().returning(|step| Ok(step));
+        mock.expect_update_step().returning(Ok);
 
-        mock.expect_upsert_element_map().returning(|row| Ok(row));
+        mock.expect_upsert_element_map().returning(Ok);
 
         mock.expect_add_edge().returning(move |wf_id, _from, _to| {
             Ok(WorkflowStepEdgeRow {

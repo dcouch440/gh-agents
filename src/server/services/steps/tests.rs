@@ -57,7 +57,7 @@ mod tests {
         repo.expect_get_workflow()
             .returning(move |_| Ok(Some(wf.clone())));
         repo.expect_list_steps().returning(|_| Ok(vec![]));
-        repo.expect_create_step().returning(|step| Ok(step));
+        repo.expect_create_step().returning(Ok);
 
         let result = create_step(
             &repo,
@@ -106,7 +106,7 @@ mod tests {
         repo.expect_get_workflow()
             .returning(move |_| Ok(Some(wf.clone())));
         repo.expect_list_steps().returning(|_| Ok(vec![]));
-        repo.expect_create_step().returning(|step| Ok(step));
+        repo.expect_create_step().returning(Ok);
 
         let result = create_step(
             &repo,
@@ -199,7 +199,7 @@ mod tests {
         repo.expect_get_workflow()
             .returning(move |_| Ok(Some(wf.clone())));
         repo.expect_list_steps().returning(|_| Ok(vec![]));
-        repo.expect_create_step().returning(|step| Ok(step));
+        repo.expect_create_step().returning(Ok);
 
         let result = create_step(
             &repo,

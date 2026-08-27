@@ -10,6 +10,9 @@ use crate::db::{
     WorkflowStepEdgeRow, WorkflowStepRow, WorkflowVersionRow,
 };
 
+/// A plan row: `(step_id, step_name, execution_mode, plan_content)`.
+pub type WorkflowPlanRow = (Uuid, Option<String>, String, String);
+
 // ============================================================================
 // Workflow Repository
 // ============================================================================
@@ -426,10 +429,7 @@ pub trait WorkflowRepo: Send + Sync {
 
     /// Get all plans across a workflow (for board overview summarizer).
     /// Returns Vec<(step_id, step_name, execution_mode, plan_content)>.
-    async fn get_all_plans_for_workflow(
-        &self,
-        workflow_id: Uuid,
-    ) -> Result<Vec<(Uuid, Option<String>, String, String)>>;
+    async fn get_all_plans_for_workflow(&self, workflow_id: Uuid) -> Result<Vec<WorkflowPlanRow>>;
 
     // --- Board Overview Summary ---
 

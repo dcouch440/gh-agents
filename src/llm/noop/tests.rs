@@ -47,7 +47,7 @@ mod tests {
 
     #[test]
     fn default_creates_provider() {
-        let provider = NoOpProvider::default();
+        let provider = NoOpProvider;
         assert_eq!(provider.provider_name(), "noop");
     }
 }

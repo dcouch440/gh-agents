@@ -538,7 +538,7 @@ mod tests {
             async fn get_all_plans_for_workflow(
                 &self,
                 _: Uuid,
-            ) -> Result<Vec<(Uuid, Option<String>, String, String)>> {
+            ) -> Result<Vec<crate::db::traits::WorkflowPlanRow>> {
                 unimplemented!()
             }
             async fn get_board_overview_summary(&self, _: Uuid) -> Result<String> {

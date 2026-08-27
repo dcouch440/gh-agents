@@ -653,7 +653,7 @@ impl ExecutionEngine {
                     "LLM returned EndTurn without calling terminal tool — re-prompting"
                 );
                 messages.push(Message::assistant(&response.content));
-                messages.push(Message::user(&format!(
+                messages.push(Message::user(format!(
                     "You must call the `{terminal_tool}` tool to complete this task. \
                      Do not end your turn without calling it. Review your work and \
                      call `{terminal_tool}` now."

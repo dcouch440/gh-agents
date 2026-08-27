@@ -3,9 +3,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::db::TaskAgentRosterRow;
-    use crate::server::services::system_node::sync::{
-        diff_agents, diff_edges, DesiredAgent, EdgeDiff,
-    };
+    use crate::server::services::system_node::sync::{diff_agents, diff_edges, DesiredAgent};
 
     fn desired(name: &str, role: &str, caps: &[&str], deps: &[&str]) -> DesiredAgent {
         use crate::server::services::system_node::normalize_agent_name;

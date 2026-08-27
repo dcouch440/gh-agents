@@ -68,7 +68,7 @@ mod tests {
 
     #[test]
     fn build_filtered_outputs_block_with_outputs() {
-        let outputs = vec![
+        let outputs = [
             ("Agent A".to_string(), "output a".to_string()),
             ("Agent B".to_string(), "output b".to_string()),
         ];

@@ -37,7 +37,7 @@ mod tests {
         let history = get_chat_history(&db.pool, test_user_id(), 50, 0)
             .await
             .unwrap();
-        assert!(history.len() >= 1);
+        assert!(!history.is_empty());
 
         db.cleanup().await;
     }

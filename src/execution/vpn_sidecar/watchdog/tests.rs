@@ -1,12 +1,6 @@
 #[cfg(test)]
 mod tests {
     #[test]
-    fn watchdog_constants_are_reasonable() {
-        assert!(crate::constants::VPN_WATCHDOG_INTERVAL_SECS > 0);
-        assert!(crate::constants::VPN_WATCHDOG_MAX_FAILURES > 0);
-    }
-
-    #[test]
     fn watchdog_detection_time_under_command_timeout() {
         let detection_secs = crate::constants::VPN_WATCHDOG_INTERVAL_SECS
             * u64::from(crate::constants::VPN_WATCHDOG_MAX_FAILURES);

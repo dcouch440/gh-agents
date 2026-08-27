@@ -14,6 +14,11 @@ use super::super::vpn::VpnError;
 #[cfg(test)]
 mod tests;
 
+// A zero interval or zero failure budget would make the watchdog either spin or
+// never fire, so hold the floor at build time rather than in a test.
+const _: () = assert!(crate::constants::VPN_WATCHDOG_INTERVAL_SECS > 0);
+const _: () = assert!(crate::constants::VPN_WATCHDOG_MAX_FAILURES > 0);
+
 /// Monitor a VPN sidecar's WireGuard tunnel, returning only when the tunnel
 /// is considered dead.
 ///
