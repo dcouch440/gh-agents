@@ -134,7 +134,9 @@ Your design obligation — the user provides intent, you provide craft:
 
   expected_output — the file contract between this agent and the
   next. What the saved file contains, how it's structured, what
-  the downstream agent needs to find in it.
+  the downstream agent needs to find in it. This reaches the agent
+  as a <deliverable> block: describe the file, never the message
+  you want back. The agent's response is a receipt.
 
   Give agents decision criteria, not rigid procedures.
 

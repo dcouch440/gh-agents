@@ -31,25 +31,20 @@ impl WorkspaceDigest {
             String::new()
         };
 
-        let last = self
-            .last_modified
-            .as_ref()
-            .map(|p| format!(" | last: {}", p.display()))
-            .unwrap_or_default();
-
+        // `last_modified` is deliberately not rendered — the envelope's
+        // `changes:` block already names the paths that just changed.
         format!(
-            "{} files{}, {} dirs{} | {} total",
+            "{} files{}, {} dirs | {} total",
             self.file_count,
             delta,
             self.dir_count,
-            last,
             format_size(self.total_size),
         )
     }
 }
 
-/// Human-readable size formatting.
-fn format_size(bytes: u64) -> String {
+/// Human-readable size formatting. Shared with the agent passdown manifest.
+pub fn format_size(bytes: u64) -> String {
     if bytes < 1024 {
         format!("{}B", bytes)
     } else if bytes < 1024 * 1024 {
@@ -75,8 +70,9 @@ mod tests {
         let rendered = d.render();
         assert!(rendered.contains("14 files (+2)"));
         assert!(rendered.contains("3 dirs"));
-        assert!(rendered.contains("last: reports/analysis.md"));
         assert!(rendered.contains("12KB"));
+        // `last:` is intentionally not rendered — `changes:` already names paths.
+        assert!(!rendered.contains("last:"));
     }
 
     #[test]

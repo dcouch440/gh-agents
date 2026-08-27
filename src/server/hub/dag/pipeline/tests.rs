@@ -393,7 +393,8 @@ mod tests {
 
         assert!(prompt.contains("<previous_step>\nPrior output text\n</previous_step>"));
         assert!(prompt.contains("<assignment>\nDo the thing\n</assignment>"));
-        assert!(prompt.contains("<expected_output>\nDescribe what you did\n</expected_output>"));
+        assert!(prompt.contains("<deliverable>\nDescribe what you did\n</deliverable>"));
+        assert!(prompt.contains("Save this to a file with run_command"));
     }
 
     #[test]
@@ -457,7 +458,7 @@ mod tests {
 
         let prev_pos = prompt.find("<previous_step>").unwrap();
         let assign_pos = prompt.find("<assignment>").unwrap();
-        let expect_pos = prompt.find("<expected_output>").unwrap();
+        let expect_pos = prompt.find("<deliverable>").unwrap();
         assert!(prev_pos < assign_pos);
         assert!(assign_pos < expect_pos);
     }

@@ -16,6 +16,10 @@ pub mod workspace;
 
 mod tests;
 
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+use std::path::PathBuf;
+
 use envelope::CommandEnvelope;
 use loop_detector::LoopDetector;
 use post::noop::NoOpCheck;
@@ -24,6 +28,7 @@ use pre::interactive::InteractiveCheck;
 use pre::shell_compat::ShellCompatCheck;
 use pre::state_persistence::StatePersistenceCheck;
 use pre::PreCheck;
+use types::{ChangeType, FileChange};
 use workspace::snapshot::capture_snapshot;
 use workspace::WorkspaceTracker;
 
@@ -39,6 +44,9 @@ pub struct DiagnosticsEngine {
     workspace: WorkspaceTracker,
     loop_detector: LoopDetector,
     command_index: usize,
+    /// Every file this agent created or modified, keyed by path. First-seen
+    /// change type wins; size tracks the latest write.
+    touched: HashMap<PathBuf, FileChange>,
 }
 
 impl DiagnosticsEngine {
@@ -54,6 +62,7 @@ impl DiagnosticsEngine {
             workspace: WorkspaceTracker::new(),
             loop_detector: LoopDetector::new(),
             command_index: 0,
+            touched: HashMap::new(),
         }
     }
 
@@ -90,6 +99,16 @@ impl DiagnosticsEngine {
         // Phase 3b: Fix suggestions from stderr
         let suggestions = post::suggestions::suggest_fix(&result.stderr);
         post_diagnostics.extend(suggestions);
+
+        // Accumulate this agent's output files for the downstream passdown.
+        for change in &file_changes {
+            match self.touched.entry(change.path.clone()) {
+                Entry::Occupied(mut e) => e.get_mut().size = change.size,
+                Entry::Vacant(e) => {
+                    e.insert(change.clone());
+                }
+            }
+        }
 
         // Phase 4: Loop detection
         let loop_status = self.loop_detector.record(self.command_index, &file_changes);
@@ -130,6 +149,27 @@ impl DiagnosticsEngine {
     /// Current command index (1-based).
     pub fn command_index(&self) -> usize {
         self.command_index
+    }
+
+    /// Files this agent produced, ready for the downstream passdown.
+    ///
+    /// Deletions and workspace machinery are dropped, the largest `limit`
+    /// entries are kept, and the count of anything dropped by the cap is
+    /// returned alongside so the caller can say `(+N more)`.
+    pub fn produced_files(&self, limit: usize) -> (Vec<FileChange>, usize) {
+        let mut files: Vec<FileChange> = self
+            .touched
+            .values()
+            .filter(|c| c.change_type != ChangeType::Deleted && !workspace::is_noise(&c.path))
+            .cloned()
+            .collect();
+
+        // Largest first, path as a tiebreak so output is deterministic.
+        files.sort_by(|a, b| b.size.cmp(&a.size).then_with(|| a.path.cmp(&b.path)));
+
+        let dropped = files.len().saturating_sub(limit);
+        files.truncate(limit);
+        (files, dropped)
     }
 }
 

@@ -6,6 +6,28 @@ mod tests {
     // Registry Completeness Tests
     // ========================================================================
 
+    /// `run_command`'s description was once ~3.4KB of shell tutorial sent to
+    /// every agent on every round. Keep it from silently re-inflating.
+    #[test]
+    fn run_command_description_stays_lean() {
+        let tool = get_tool_definition("run_command").expect("run_command is registered");
+        assert!(
+            tool.description.len() <= 800,
+            "run_command description is {} bytes — budget is 800. Agents already \
+             know how to use a shell; add environment facts, not shell lessons.",
+            tool.description.len()
+        );
+    }
+
+    /// The old description ended with "Do not verify file creation with ls".
+    /// That trained agents away from the file discipline the runtime prompt
+    /// now depends on.
+    #[test]
+    fn run_command_does_not_discourage_file_checks() {
+        let tool = get_tool_definition("run_command").expect("run_command is registered");
+        assert!(!tool.description.contains("Do not verify file creation"));
+    }
+
     #[test]
     fn test_all_execution_tools_mapped() {
         let execution_tools = vec![

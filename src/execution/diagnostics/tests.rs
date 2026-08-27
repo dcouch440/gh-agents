@@ -171,7 +171,82 @@ mod tests {
         assert!(rendered.contains("stderr summary:"));
         assert!(rendered.contains("changes:"));
         assert!(rendered.contains("created: dist/app.js"));
+        // Digest renders because file_delta != 0.
         assert!(rendered.contains("10 files (+1)"));
-        assert!(rendered.contains("last: dist/app.js"));
+        assert!(!rendered.contains("last: dist/app.js"));
+    }
+    #[test]
+    fn digest_is_suppressed_when_workspace_did_not_move() {
+        use crate::execution::diagnostics::workspace::digest::WorkspaceDigest;
+
+        let envelope = CommandEnvelope {
+            command: "cat notes.md".into(),
+            exit_code: 0,
+            stdout: "some notes".into(),
+            stderr: String::new(),
+            duration_ms: 3,
+            severity: Severity::Ok,
+            pre_warnings: vec![],
+            post_diagnostics: vec![],
+            file_changes: vec![],
+            workspace_digest: Some(WorkspaceDigest {
+                file_count: 12,
+                file_delta: 0,
+                dir_count: 3,
+                total_size: 48_000,
+                last_modified: None,
+            }),
+            loop_status: LoopStatus::Clean,
+        };
+
+        let rendered = envelope.render();
+        assert!(rendered.contains("some notes"));
+        // A read-only command should not re-print workspace scaffolding.
+        assert!(!rendered.contains("12 files"));
+    }
+
+    #[test]
+    fn digest_still_renders_when_command_failed() {
+        use crate::execution::diagnostics::workspace::digest::WorkspaceDigest;
+
+        let envelope = CommandEnvelope {
+            command: "python build.py".into(),
+            exit_code: 1,
+            stdout: String::new(),
+            stderr: "Traceback".into(),
+            duration_ms: 40,
+            severity: Severity::Error,
+            pre_warnings: vec![],
+            post_diagnostics: vec![],
+            file_changes: vec![],
+            workspace_digest: Some(WorkspaceDigest {
+                file_count: 12,
+                file_delta: 0,
+                dir_count: 3,
+                total_size: 48_000,
+                last_modified: None,
+            }),
+            loop_status: LoopStatus::Clean,
+        };
+
+        // A failing command is exactly when re-orientation helps.
+        assert!(envelope.render().contains("12 files"));
+    }
+
+    #[test]
+    fn produced_files_drops_noise_and_deletions() {
+        use crate::execution::diagnostics::workspace::is_noise;
+        use std::path::Path;
+
+        assert!(is_noise(Path::new(".git/config")));
+        assert!(is_noise(Path::new(
+            "venv/lib/site-packages/requests/api.py"
+        )));
+        assert!(is_noise(Path::new("src/__pycache__/mod.cpython-311.pyc")));
+        assert!(is_noise(Path::new("node_modules/left-pad/index.js")));
+
+        // Real deliverables survive.
+        assert!(!is_noise(Path::new("pricing_2026.md")));
+        assert!(!is_noise(Path::new("reports/analysis.md")));
     }
 }

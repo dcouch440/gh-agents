@@ -258,63 +258,28 @@ fn run_tests_tool() -> Tool {
 fn run_command_tool() -> Tool {
     Tool {
         name: "run_command".into(),
-        description:
-            "Execute a shell command. Chain with && to do multiple things in one call.\n\n\
-            Create files with heredocs (always single-quote EOF):\n\
-            \x20 mkdir -p my-app && cat > my-app/main.py << 'EOF'\n\
-            \x20 import sys\n\
-            \x20 print(f\"Hello {sys.argv[1]}\")\n\
-            \x20 EOF\n\n\
-            Write multiple files in one call:\n\
-            \x20 cat > config.json << 'EOF'\n\
-            \x20 {\"debug\": true}\n\
-            \x20 EOF\n\
-            \x20 cat > main.py << 'EOF'\n\
-            \x20 import json\n\
-            \x20 config = json.load(open(\"config.json\"))\n\
-            \x20 EOF\n\n\
-            Install and run:\n\
-            \x20 pip install requests && python scraper.py\n\
-            \x20 npm install && node index.js\n\n\
-            Quick inline scripts (no file needed):\n\
-            \x20 python -c \"import json; print(json.dumps({'key': 'value'}, indent=2))\"\n\
-            \x20 node -e \"console.log(JSON.stringify({key: 'value'}, null, 2))\"\n\n\
-            Data processing:\n\
-            \x20 curl -s https://api.example.com/data | jq '.items[] | {name, count}' > results.json\n\
-            \x20 cat data.csv | awk -F',' '{print $2}' | sort | uniq -c | sort -rn | head -10\n\
-            \x20 sqlite3 data.db \"SELECT word, count FROM freq ORDER BY count DESC LIMIT 10\"\n\n\
-            Search and analyze:\n\
-            \x20 grep -rn 'pattern' . | head -20\n\
-            \x20 find . -name '*.py' | xargs wc -l | sort -n | tail -5\n\
-            \x20 diff file1.txt file2.txt\n\n\
-            Capture output for reuse:\n\
-            \x20 result=$(python compute.py) && echo \"Got: $result\" > output.txt\n\n\
-            Batch operations:\n\
-            \x20 for f in *.json; do echo \"Processing $f\"; jq '.name' \"$f\"; done\n\
-            \x20 find . -name '*.txt' | xargs -I{} cp {} backups/\n\n\
-            Git:\n\
-            \x20 git init && git add -A && git commit -m \"initial commit\"\n\
-            \x20 git diff --stat\n\
-            \x20 git log --oneline -10\n\n\
-            Archives:\n\
-            \x20 tar czf project.tar.gz my-app/\n\
-            \x20 zip -r project.zip my-app/\n\n\
-            File operations:\n\
-            - Write: cat > file << 'EOF' ... EOF\n\
-            - Read: cat file.py\n\
-            - Append: echo 'new line' >> file.txt\n\
-            - Edit: sed -i 's/old/new/g' file.py\n\
-            - Test & run: pytest tests/ && python main.py\n\
-            - Silence errors: command 2>/dev/null || true\n\n\
-            Available tools for all agents: python, pip, node, npm, git, curl, wget, jq, grep, sed, awk, find, xargs, sort, uniq, wc, head, tail, tee, tr, cut, zip, unzip, sqlite3, make, gcc.\n\
-            Installed packages persist to the next step. Do not verify file creation with ls — it worked if exit code is 0."
-                .into(),
+        description: r#"Execute a shell command in the workspace. Chain with && to do multiple
+things in one call.
+
+Create files with a heredoc — always single-quote the delimiter so the
+body is not expanded:
+  mkdir -p out && cat > out/report.md << 'EOF'
+  # Report
+  EOF
+
+Available: python, pip, node, npm, git, curl, wget, jq, grep, sed, awk,
+find, xargs, sort, uniq, wc, head, tail, tee, tr, cut, zip, unzip,
+sqlite3, make, gcc. Installed packages persist to the next step.
+
+The result reports which files changed. If a file you meant to write is
+not listed, it was not written."#
+            .into(),
         input_schema: json!({
             "type": "object",
             "properties": {
                 "command": {
                     "type": "string",
-                    "description": "Shell command to execute. Chain with && for efficiency. For multi-line commands (heredocs, for-loops), use real newlines in the JSON string (\\n), NOT literal backslash-n characters (\\\\n). The command is passed directly to sh -c."
+                    "description": "Shell command to execute. Chain with && for efficiency. For multi-line commands (heredocs, for-loops), use real newlines in the JSON string (\n), NOT literal backslash-n characters (\\n). The command is passed directly to sh -c."
                 }
             },
             "required": ["command"]
