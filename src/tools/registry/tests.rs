@@ -6,17 +6,18 @@ mod tests {
     // Registry Completeness Tests
     // ========================================================================
 
-    /// `run_command`'s description was once ~3.4KB of shell tutorial sent to
-    /// every agent on every round. Keep it from silently re-inflating.
+    /// The worked examples are deliberate few-shots — they are what stops an
+    /// agent computing in its head instead of shelling out, so there is no
+    /// size budget here. Two framings are excluded, though: anything selling
+    /// stdout as a destination ("no file needed"), and anything teaching the
+    /// agent to swallow errors, which blinds the diagnostics engine.
     #[test]
-    fn run_command_description_stays_lean() {
+    fn run_command_examples_do_not_teach_against_the_deliverable_model() {
         let tool = get_tool_definition("run_command").expect("run_command is registered");
-        assert!(
-            tool.description.len() <= 800,
-            "run_command description is {} bytes — budget is 800. Agents already \
-             know how to use a shell; add environment facts, not shell lessons.",
-            tool.description.len()
-        );
+        assert!(!tool.description.contains("no file needed"));
+        assert!(!tool.description.contains("2>/dev/null || true"));
+        // Inline interpreters stay — they are the cure for mental arithmetic.
+        assert!(tool.description.contains("python -c"));
     }
 
     /// The old description ended with "Do not verify file creation with ls".

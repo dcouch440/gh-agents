@@ -261,15 +261,67 @@ fn run_command_tool() -> Tool {
         description: r#"Execute a shell command in the workspace. Chain with && to do multiple
 things in one call.
 
-Create files with a heredoc — always single-quote the delimiter so the
-body is not expanded:
-  mkdir -p out && cat > out/report.md << 'EOF'
-  # Report
+Create files with heredocs (always single-quote EOF):
+  mkdir -p my-app && cat > my-app/main.py << 'EOF'
+  import sys
+  print(f"Hello {sys.argv[1]}")
   EOF
 
-Available: python, pip, node, npm, git, curl, wget, jq, grep, sed, awk,
-find, xargs, sort, uniq, wc, head, tail, tee, tr, cut, zip, unzip,
-sqlite3, make, gcc. Installed packages persist to the next step.
+Write multiple files in one call:
+  cat > config.json << 'EOF'
+  {"debug": true}
+  EOF
+  cat > main.py << 'EOF'
+  import json
+  config = json.load(open("config.json"))
+  EOF
+
+Install and run:
+  pip install requests && python scraper.py
+  npm install && node index.js
+
+Compute with the interpreter rather than in your head — inline is fine for
+intermediate steps, deliverables still go to files:
+  python -c "import json; print(json.dumps({'key': 'value'}, indent=2))"
+  node -e "console.log(JSON.stringify({key: 'value'}, null, 2))"
+
+Data processing:
+  curl -s https://api.example.com/data | jq '.items[] | {name, count}' > results.json
+  cat data.csv | awk -F',' '{print $2}' | sort | uniq -c | sort -rn | head -10
+  sqlite3 data.db "SELECT word, count FROM freq ORDER BY count DESC LIMIT 10"
+
+Search and analyze:
+  grep -rn 'pattern' . | head -20
+  find . -name '*.py' | xargs wc -l | sort -n | tail -5
+  diff file1.txt file2.txt
+
+Capture output for reuse:
+  result=$(python compute.py) && echo "Got: $result" > output.txt
+
+Batch operations:
+  for f in *.json; do echo "Processing $f"; jq '.name' "$f"; done
+  find . -name '*.txt' | xargs -I{} cp {} backups/
+
+Git:
+  git init && git add -A && git commit -m "initial commit"
+  git diff --stat
+  git log --oneline -10
+
+Archives:
+  tar czf project.tar.gz my-app/
+  zip -r project.zip my-app/
+
+File operations:
+- Write: cat > file << 'EOF' ... EOF
+- Read: cat file.py
+- Append: echo 'new line' >> file.txt
+- Edit: sed -i 's/old/new/g' file.py
+- Test & run: pytest tests/ && python main.py
+- Check what you wrote: head -20 findings.md
+
+Available tools for all agents: python, pip, node, npm, git, curl, wget, jq,
+grep, sed, awk, find, xargs, sort, uniq, wc, head, tail, tee, tr, cut, zip,
+unzip, sqlite3, make, gcc. Installed packages persist to the next step.
 
 The result reports which files changed. If a file you meant to write is
 not listed, it was not written."#
