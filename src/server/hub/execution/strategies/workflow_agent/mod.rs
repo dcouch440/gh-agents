@@ -7,8 +7,6 @@
 //! Pattern: SystemNodeStrategy's file-based approach + ChatStrategy's streaming +
 //! ManagerDispatchStrategy's session/rebuild patterns.
 
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
@@ -218,10 +216,14 @@ impl ExecutionStrategy for WorkflowAgentStrategy {
             messages.push(Message::user(input));
         }
 
-        // Attach <current_state> to this turn's user message, but only when the
-        // board differs from what was last sent. The system prompt stays static
-        // (and cacheable); the block is never persisted, so history re-read on
-        // the next turn cannot accumulate stale state.
+        // Attach <current_state> to this turn's user message. The system prompt
+        // stays static (and cacheable); the block is never persisted, so the
+        // history re-read above cannot accumulate stale state.
+        //
+        // Sent on every turn, not just when the board changed: the block only
+        // ever rides the *last* user message, so an earlier turn's copy is gone
+        // from the transcript by the time the next turn is built. Skipping it
+        // would leave the agent with no board state at all.
         if let Some(last_user) = messages
             .iter_mut()
             .rev()
@@ -229,15 +231,7 @@ impl ExecutionStrategy for WorkflowAgentStrategy {
         {
             match state::build_current_state(self.workflow_id, &self.state).await {
                 Ok(current_state) => {
-                    let mut hasher = DefaultHasher::new();
-                    current_state.hash(&mut hasher);
-                    if self
-                        .state
-                        .board_state_changed(self.session_id, hasher.finish())
-                    {
-                        *last_user =
-                            Message::user(format!("{current_state}\n\n{}", last_user.text()));
-                    }
+                    *last_user = Message::user(format!("{current_state}\n\n{}", last_user.text()));
                 }
                 Err(e) => {
                     warn!(

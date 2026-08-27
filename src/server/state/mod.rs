@@ -116,10 +116,6 @@ pub(crate) struct AppStateInner {
     pub(crate) response_streams: DashMap<Uuid, BufferedStream>,
     /// Cancellation tokens for running pipelines and agent executions
     pub(crate) cancellation_tokens: DashMap<Uuid, CancellationToken>,
-    /// Last `<current_state>` hash sent to a workflow agent, keyed by session.
-    /// Lets `build_messages` skip re-sending an unchanged board. Ephemeral —
-    /// a restart costs at most one redundant re-send.
-    pub(crate) board_state_hash: DashMap<Uuid, u64>,
     /// Master shutdown token — cancelled on SIGTERM/SIGINT to signal all background tasks.
     pub(crate) shutdown_token: CancellationToken,
     /// Cached result for `is_ollama_enabled()` to avoid per-step DB round-trips.
@@ -221,7 +217,6 @@ impl AppState {
             chat_tx,
             response_streams: DashMap::new(),
             cancellation_tokens: DashMap::new(),
-            board_state_hash: DashMap::new(),
             shutdown_token: CancellationToken::new(),
             ollama_toggle_cache: Arc::new(tokio::sync::RwLock::new((false, Instant::now()))),
             protocol_engine: Arc::new(ProtocolEngine::new()),
@@ -268,7 +263,6 @@ impl AppState {
                 chat_tx,
                 response_streams: DashMap::new(),
                 cancellation_tokens: DashMap::new(),
-                board_state_hash: DashMap::new(),
                 shutdown_token: CancellationToken::new(),
                 ollama_toggle_cache: Arc::new(tokio::sync::RwLock::new((false, Instant::now()))),
                 protocol_engine: Arc::new(ProtocolEngine::new()),
@@ -751,21 +745,6 @@ impl AppState {
     /// Remove a cancellation token after execution completes.
     pub fn remove_cancellation(&self, id: Uuid) {
         self.0.cancellation_tokens.remove(&id);
-    }
-
-    /// Record the latest `<current_state>` hash for a session and report whether
-    /// it differs from the last one sent.
-    ///
-    /// Used by the workflow agent to skip re-sending an unchanged board on every
-    /// turn. Always stores the new hash, so the first call for a session (and the
-    /// first after a restart) reports `true`.
-    pub fn board_state_changed(&self, session_id: Uuid, hash: u64) -> bool {
-        self.0.board_state_hash.insert(session_id, hash) != Some(hash)
-    }
-
-    /// Forget a session's board-state hash (session closed or reset).
-    pub fn forget_board_state(&self, session_id: Uuid) {
-        self.0.board_state_hash.remove(&session_id);
     }
 
     /// Access the master shutdown cancellation token.

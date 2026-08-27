@@ -257,36 +257,4 @@ mod tests {
         state.release_ws_connection(ip);
         assert_eq!(state.ws_connection_count(), 0);
     }
-    #[test]
-    fn board_state_changed_dedupes_unchanged_boards() {
-        let state = make_state();
-        let session = Uuid::new_v4();
-
-        // First send for a session always goes out.
-        assert!(state.board_state_changed(session, 111));
-        // Same board — skip it.
-        assert!(!state.board_state_changed(session, 111));
-        assert!(!state.board_state_changed(session, 111));
-        // Topology changed — send again.
-        assert!(state.board_state_changed(session, 222));
-        assert!(!state.board_state_changed(session, 222));
-        // Reverting to an earlier board still counts as a change.
-        assert!(state.board_state_changed(session, 111));
-    }
-
-    #[test]
-    fn board_state_is_tracked_per_session() {
-        let state = make_state();
-        let a = Uuid::new_v4();
-        let b = Uuid::new_v4();
-
-        assert!(state.board_state_changed(a, 7));
-        // A different session has its own history.
-        assert!(state.board_state_changed(b, 7));
-        assert!(!state.board_state_changed(a, 7));
-
-        state.forget_board_state(a);
-        assert!(state.board_state_changed(a, 7));
-        assert!(!state.board_state_changed(b, 7));
-    }
 }
