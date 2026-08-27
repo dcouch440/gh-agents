@@ -90,10 +90,12 @@ fn contains_unquoted(cmd: &str, pattern: &str) -> bool {
             }
             '\'' if !in_double => in_single = !in_single,
             '"' if !in_single => in_double = !in_double,
-            _ if !in_single && !in_double => {
-                if i + pat_len <= cmd_len && cmd_chars[i..i + pat_len] == pat_chars[..] {
-                    return true;
-                }
+            _ if !in_single
+                && !in_double
+                && i + pat_len <= cmd_len
+                && cmd_chars[i..i + pat_len] == pat_chars[..] =>
+            {
+                return true;
             }
             _ => {}
         }
@@ -124,15 +126,14 @@ fn has_bash_array_assignment(cmd: &str) -> bool {
             }
             '\'' if !in_double => in_single = !in_single,
             '"' if !in_single => in_double = !in_double,
-            '=' if !in_single && !in_double => {
+            '=' if !in_single && !in_double
                 // Check: char before is alphanumeric/underscore, char after is (
-                if i > 0
+                && i > 0
                     && (chars[i - 1].is_alphanumeric() || chars[i - 1] == '_')
                     && i + 1 < len
-                    && chars[i + 1] == '('
-                {
-                    return true;
-                }
+                    && chars[i + 1] == '(' =>
+            {
+                return true;
             }
             _ => {}
         }

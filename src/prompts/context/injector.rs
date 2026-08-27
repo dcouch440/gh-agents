@@ -123,7 +123,7 @@ impl ContextInjector {
     pub fn inject(self, mut builder: PromptBuilder) -> PromptBuilder {
         // Sort by priority (highest first)
         let mut sources = self.sources;
-        sources.sort_by(|a, b| b.priority.cmp(&a.priority));
+        sources.sort_by_key(|s| std::cmp::Reverse(s.priority));
 
         // Calculate budget per category
         let budgets: HashMap<ContextCategory, usize> = ContextCategory::all()
@@ -172,7 +172,7 @@ impl ContextInjector {
     /// Returns a map of category to (used_tokens, budget_tokens, items_included).
     pub fn calculate_usage(&self) -> HashMap<ContextCategory, (usize, usize, usize)> {
         let mut sources = self.sources.clone();
-        sources.sort_by(|a, b| b.priority.cmp(&a.priority));
+        sources.sort_by_key(|s| std::cmp::Reverse(s.priority));
 
         let budgets: HashMap<ContextCategory, usize> = ContextCategory::all()
             .iter()

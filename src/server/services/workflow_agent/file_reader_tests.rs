@@ -5,7 +5,7 @@ mod tests {
     use tempfile::tempdir;
 
     use crate::server::services::workflow_agent::file_reader::{
-        read_all_nodes, read_board, read_node, read_topology,
+        read_all_nodes, read_board, read_topology,
     };
 
     fn write_topology(dir: &std::path::Path, content: &str) {
@@ -61,31 +61,6 @@ mod tests {
         let result = read_topology(dir.path());
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("invalid JSON"));
-    }
-
-    #[test]
-    fn read_node_basic() {
-        let dir = tempdir().unwrap();
-        write_node(dir.path(), "research", "# Research\n\nDo some research.");
-
-        let content = read_node(dir.path(), "research").unwrap();
-        assert_eq!(content, "# Research\n\nDo some research.");
-    }
-
-    #[test]
-    fn read_node_trims_whitespace() {
-        let dir = tempdir().unwrap();
-        write_node(dir.path(), "research", "  content  \n\n");
-
-        let content = read_node(dir.path(), "research").unwrap();
-        assert_eq!(content, "content");
-    }
-
-    #[test]
-    fn read_node_missing() {
-        let dir = tempdir().unwrap();
-        let result = read_node(dir.path(), "missing");
-        assert!(result.is_err());
     }
 
     #[test]

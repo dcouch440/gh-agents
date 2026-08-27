@@ -175,7 +175,7 @@ mod tests {
                 dry_run,
             }) => {
                 assert_eq!(config_dir, PathBuf::from("./config"));
-                assert_eq!(dry_run, false);
+                assert!(!dry_run);
             }
             _ => panic!("Expected SyncConfig command"),
         }

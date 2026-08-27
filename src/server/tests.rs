@@ -146,7 +146,7 @@ mod tests {
     fn create_test_token(state: &AppState) -> String {
         use crate::types::UserId;
         auth::create_token(
-            &state.jwt_secret(),
+            state.jwt_secret(),
             24,
             UserId::new(),
             "test@test.com",
@@ -500,7 +500,7 @@ mod tests {
         let token = encode(
             &Header::default(),
             &expired_claims,
-            &EncodingKey::from_secret(&state.jwt_secret()),
+            &EncodingKey::from_secret(state.jwt_secret()),
         )
         .unwrap();
 

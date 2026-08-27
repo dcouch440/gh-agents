@@ -375,7 +375,7 @@ mod tests {
         assert!(!super::super::is_serialization_failure(&unique_err));
 
         // False for non-database errors
-        let io_err = sqlx::Error::Io(std::io::Error::new(std::io::ErrorKind::Other, "test"));
+        let io_err = sqlx::Error::Io(std::io::Error::other("test"));
         assert!(!super::super::is_serialization_failure(&io_err));
     }
 

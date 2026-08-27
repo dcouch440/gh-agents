@@ -141,14 +141,6 @@ mod tests {
         }
     }
 
-    fn fc_modified(path: &str, size: u64) -> FileChange {
-        FileChange {
-            path: PathBuf::from(path),
-            change_type: ChangeType::Modified,
-            size,
-        }
-    }
-
     #[test]
     fn digest_with_changes() {
         let mut tracker = WorkspaceTracker::new();

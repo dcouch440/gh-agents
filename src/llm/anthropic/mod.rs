@@ -251,13 +251,12 @@ impl SseProviderAdapter for AnthropicAdapter {
                     SSEData::ContentBlockDelta { index, delta } => {
                         if let Some(text) = delta.text {
                             StreamChunk::ContentDelta { text, index }
-                        } else if let Some(partial_json) = delta.partial_json {
+                        } else {
+                            let partial_json = delta.partial_json?;
                             StreamChunk::InputJsonDelta {
                                 index,
                                 partial_json,
                             }
-                        } else {
-                            return None;
                         }
                     }
                     SSEData::ContentBlockStop { index } => StreamChunk::ContentBlockStop { index },

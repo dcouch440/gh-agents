@@ -78,16 +78,13 @@ impl PreCheck for InteractiveCheck {
                     suggestion: None,
                 });
             }
-            "apt-get" => {
-                if trimmed.contains("install") && !has_flag(trimmed, &["-y", "--yes"]) {
-                    return Some(Diagnostic {
-                        severity: Severity::Info,
-                        category: DiagnosticCategory::InteractiveCommand,
-                        message: "apt-get install without -y will prompt for confirmation."
-                            .to_string(),
-                        suggestion: Some("Add -y to auto-confirm.".to_string()),
-                    });
-                }
+            "apt-get" if trimmed.contains("install") && !has_flag(trimmed, &["-y", "--yes"]) => {
+                return Some(Diagnostic {
+                    severity: Severity::Info,
+                    category: DiagnosticCategory::InteractiveCommand,
+                    message: "apt-get install without -y will prompt for confirmation.".to_string(),
+                    suggestion: Some("Add -y to auto-confirm.".to_string()),
+                });
             }
             _ => {}
         }

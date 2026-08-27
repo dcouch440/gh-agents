@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::db::traits::{CreateDesignerOutputGenericInput, CreateDesignerOutputInput};
 use crate::db::traits::{
-    CreateStepInputPort, CreateWorkflowInput, UpdateWorkflowInput, WorkflowRepo,
+    CreateStepInputPort, CreateWorkflowInput, UpdateWorkflowInput, WorkflowPlanRow, WorkflowRepo,
 };
 use crate::db::{
     AgentDesignerOutputRow, AgentDesignerRunRow, BeliefExtractionPlanRow, BeliefRow,
@@ -1228,11 +1228,8 @@ impl WorkflowRepo for PgRepo {
         Ok(())
     }
 
-    async fn get_all_plans_for_workflow(
-        &self,
-        workflow_id: Uuid,
-    ) -> Result<Vec<(Uuid, Option<String>, String, String)>> {
-        let rows = sqlx::query_as::<_, (Uuid, Option<String>, String, String)>(
+    async fn get_all_plans_for_workflow(&self, workflow_id: Uuid) -> Result<Vec<WorkflowPlanRow>> {
+        let rows = sqlx::query_as::<_, WorkflowPlanRow>(
             r#"
             SELECT ws.id, ws.name, ws.execution_mode, sp.content
             FROM workflow_steps ws

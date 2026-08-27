@@ -338,7 +338,7 @@ mod tests {
     #[test]
     fn model_matching_exact_name() {
         // Simulates the logic in validate_model — exact match
-        let model_names = vec!["llama3.1:latest", "mistral:7b"];
+        let model_names = ["llama3.1:latest", "mistral:7b"];
         let target = "mistral:7b";
         let found = model_names
             .iter()
@@ -349,7 +349,7 @@ mod tests {
     #[test]
     fn model_matching_without_tag() {
         // "llama3.1" should match "llama3.1:latest"
-        let model_names = vec!["llama3.1:latest", "mistral:7b"];
+        let model_names = ["llama3.1:latest", "mistral:7b"];
         let target = "llama3.1";
         let found = model_names
             .iter()
@@ -359,7 +359,7 @@ mod tests {
 
     #[test]
     fn model_matching_no_match() {
-        let model_names = vec!["llama3.1:latest", "mistral:7b"];
+        let model_names = ["llama3.1:latest", "mistral:7b"];
         let target = "codellama:13b";
         let found = model_names
             .iter()

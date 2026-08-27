@@ -684,10 +684,7 @@ their version
         let status = git.status().unwrap();
         // File should be staged after soft reset
         assert!(!status.staged.is_empty());
-        assert!(status
-            .staged
-            .iter()
-            .any(|f| f.path == PathBuf::from("second.txt")));
+        assert!(status.staged.iter().any(|f| f.path == *"second.txt"));
     }
 
     #[test]

@@ -73,10 +73,10 @@ mod tests {
         });
 
         // update_step — for board_context_cache
-        mock.expect_update_step().returning(|step| Ok(step));
+        mock.expect_update_step().returning(Ok);
 
         // upsert_element_map — store the mapping
-        mock.expect_upsert_element_map().returning(|row| Ok(row));
+        mock.expect_upsert_element_map().returning(Ok);
 
         // add_edge — for new edges
         mock.expect_add_edge().returning(move |wf_id, from, to| {
@@ -121,8 +121,7 @@ mod tests {
 
         mock.expect_get_canvas_snapshot().returning(|_| Ok(None));
 
-        mock.expect_upsert_canvas_snapshot()
-            .returning(|row| Ok(row));
+        mock.expect_upsert_canvas_snapshot().returning(Ok);
 
         expect_phase_zero_creates(&mut mock, workflow_id);
         let session_mock = empty_session_repo();
@@ -194,8 +193,7 @@ mod tests {
             }))
         });
 
-        mock.expect_upsert_canvas_snapshot()
-            .returning(|row| Ok(row));
+        mock.expect_upsert_canvas_snapshot().returning(Ok);
 
         // r1 already exists from first submit — has an element map entry.
         let existing_step_id = Uuid::new_v4();
@@ -228,8 +226,8 @@ mod tests {
                 ..step
             })
         });
-        mock.expect_update_step().returning(|step| Ok(step));
-        mock.expect_upsert_element_map().returning(|row| Ok(row));
+        mock.expect_update_step().returning(Ok);
+        mock.expect_upsert_element_map().returning(Ok);
 
         let session_mock = empty_session_repo();
 
@@ -336,8 +334,7 @@ mod tests {
 
         mock.expect_get_canvas_snapshot().returning(|_| Ok(None));
 
-        mock.expect_upsert_canvas_snapshot()
-            .returning(|row| Ok(row));
+        mock.expect_upsert_canvas_snapshot().returning(Ok);
 
         // Empty board — Phase 0 has nothing to do, but still loads maps
         mock.expect_list_element_maps().returning(|_| Ok(vec![]));

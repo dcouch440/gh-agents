@@ -378,10 +378,7 @@ mod tests {
         // These macros just call tracing macros, verify they compile
         log_agent_report!("agent-1", "Task completed successfully");
         log_milestone!("Milestone 1 complete");
-        log_error!(
-            std::io::Error::new(std::io::ErrorKind::Other, "test"),
-            "Something failed"
-        );
+        log_error!(std::io::Error::other("test"), "Something failed");
         log_error_chain!(
             anyhow::anyhow!("test error"),
             operation = "test",
