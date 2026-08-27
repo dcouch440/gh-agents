@@ -388,6 +388,7 @@ mod tests {
             previous_step: "Prior output text".to_string(),
             assignment: "Do the thing".to_string(),
             expected_output: Some("Describe what you did".to_string()),
+            has_container: true,
         }
         .build();
 
@@ -405,6 +406,7 @@ mod tests {
             previous_step: String::new(),
             assignment: "Do the thing".to_string(),
             expected_output: None,
+            has_container: true,
         }
         .build();
 
@@ -420,6 +422,7 @@ mod tests {
             previous_step: String::new(),
             assignment: "Do the thing".to_string(),
             expected_output: Some(String::new()),
+            has_container: true,
         }
         .build();
 
@@ -434,6 +437,7 @@ mod tests {
             previous_step: "output".to_string(),
             assignment: "task".to_string(),
             expected_output: Some("result".to_string()),
+            has_container: true,
         }
         .build();
 
@@ -453,6 +457,7 @@ mod tests {
             previous_step: "prev".to_string(),
             assignment: "assign".to_string(),
             expected_output: Some("expect".to_string()),
+            has_container: true,
         }
         .build();
 
@@ -461,5 +466,26 @@ mod tests {
         let expect_pos = prompt.find("<deliverable>").unwrap();
         assert!(prev_pos < assign_pos);
         assert!(assign_pos < expect_pos);
+    }
+
+    /// Without a container there is no `run_command`, and the response is the
+    /// only output downstream steps ever see. Telling the agent to save a file
+    /// and reply with a receipt would throw the deliverable away.
+    #[test]
+    fn task_prompt_builder_omits_save_directive_without_container() {
+        use super::super::agent_executor::TaskPromptBuilder;
+
+        let prompt = TaskPromptBuilder {
+            previous_step: String::new(),
+            assignment: "Do the thing".to_string(),
+            expected_output: Some("A summary of the findings".to_string()),
+            has_container: false,
+        }
+        .build();
+
+        assert!(prompt.contains("<deliverable>\nA summary of the findings\n</deliverable>"));
+        assert!(!prompt.contains("run_command"));
+        assert!(!prompt.contains("receipt"));
+        assert!(prompt.contains("put the deliverable itself in your response"));
     }
 }

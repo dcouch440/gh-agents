@@ -312,6 +312,7 @@ async fn execute_single_agent(
         previous_step,
         assignment: designed.assignment.clone(),
         expected_output: designed.expected_output.clone(),
+        has_container: env.container_handle.is_some(),
     }
     .build();
 
@@ -584,6 +585,9 @@ pub(super) struct TaskPromptBuilder {
     pub(super) previous_step: String,
     pub(super) assignment: String,
     pub(super) expected_output: Option<String>,
+    /// Whether the agent has a workspace container. Without one there is no
+    /// `run_command`, so the deliverable can only be the response itself.
+    pub(super) has_container: bool,
 }
 
 impl TaskPromptBuilder {
@@ -601,12 +605,18 @@ impl TaskPromptBuilder {
 
         if let Some(expected) = &self.expected_output {
             if !expected.is_empty() {
-                prompt.push_str(&format!(
-                    "\n\n<deliverable>\n{}\n</deliverable>\n\n\
-                     Save this to a file with run_command before you reply. Your response \
-                     should be a short receipt naming the file, not the deliverable itself.",
-                    expected
-                ));
+                prompt.push_str(&format!("\n\n<deliverable>\n{}\n</deliverable>", expected));
+
+                // The save directive is only true with a container behind it.
+                // Without one there is no `run_command` and the response is the
+                // only thing downstream steps ever see.
+                prompt.push_str(if self.has_container {
+                    "\n\nSave this to a file with run_command before you reply. Your response \
+                     should be a short receipt naming the file, not the deliverable itself."
+                } else {
+                    "\n\nYou have no workspace in this step — put the deliverable itself in \
+                     your response."
+                });
             }
         }
 
