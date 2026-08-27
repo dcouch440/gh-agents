@@ -1,5 +1,5 @@
 //! Current state builder — reads the system node agent's repository and
-//! produces `<current_state>` XML for injection into the system prompt.
+//! produces `<current_state>` XML prepended to the agent's instruction.
 
 use std::path::Path;
 
@@ -10,10 +10,10 @@ mod tests;
 /// Build the `<current_state>` XML from the repository filesystem.
 ///
 /// Reads topology.json, agents/*.json, and config.json to produce a summary
-/// of what exists, what's valid, and what's missing. Injected into the
-/// system prompt once at the start of execution — it is a snapshot, not
-/// refreshed between turns, so the agent should re-check via `run_command`
-/// (e.g. `cat`/`ls`) if it needs current state mid-task.
+/// of what exists, what's valid, and what's missing. Prepended to the
+/// instruction once per generate — it is a snapshot, not refreshed between
+/// rounds, so the agent should re-check via `run_command` (e.g. `cat`/`ls`)
+/// if it needs current state mid-task.
 pub(crate) fn build_current_state(base_dir: &Path) -> String {
     let topology_path = base_dir.join("topology.json");
     let config_path = base_dir.join("config.json");
@@ -21,7 +21,7 @@ pub(crate) fn build_current_state(base_dir: &Path) -> String {
 
     // Empty state — nothing exists yet
     if !topology_path.exists() && !config_path.exists() {
-        return "<current_state refresh=\"snapshot at execution start — re-check via run_command if you need current state mid-task\">\n  \
+        return "<current_state refresh=\"snapshot taken when this generate started — re-check via run_command if you need current state mid-task\">\n  \
                 <topology status=\"empty\" />\n  \
                 <config status=\"missing\" />\n\
                 </current_state>"
@@ -30,7 +30,7 @@ pub(crate) fn build_current_state(base_dir: &Path) -> String {
 
     let mut lines = Vec::new();
     lines.push(
-        "<current_state refresh=\"snapshot at execution start — re-check via run_command if you need current state mid-task\">".into(),
+        "<current_state refresh=\"snapshot taken when this generate started — re-check via run_command if you need current state mid-task\">".into(),
     );
 
     // Parse topology and render agent statuses

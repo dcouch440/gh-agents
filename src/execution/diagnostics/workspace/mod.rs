@@ -20,6 +20,20 @@ pub struct WorkspaceTracker {
     initialized: bool,
 }
 
+/// Paths that are workspace machinery rather than agent output.
+///
+/// `diff()` reports every file the container touched — pip installs, bytecode
+/// caches, git internals, scratch. None of that belongs in a downstream
+/// agent's orientation block.
+pub fn is_noise(path: &std::path::Path) -> bool {
+    const NOISE_DIRS: [&str; 3] = ["node_modules", "__pycache__", "site-packages"];
+
+    path.components().any(|c| {
+        let part = c.as_os_str().to_string_lossy();
+        part.starts_with('.') || NOISE_DIRS.contains(&part.as_ref())
+    })
+}
+
 impl WorkspaceTracker {
     pub fn new() -> Self {
         Self::default()

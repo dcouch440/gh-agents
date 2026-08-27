@@ -302,7 +302,7 @@ impl ExecutionEngine {
         let mut total_output: u64 = 0;
 
         // ── on_start filters ──
-        let mut system_prompt = if let Some(ref filter_ctx) = self.filter_ctx {
+        let system_prompt = if let Some(ref filter_ctx) = self.filter_ctx {
             let mut sys = strategy.system_prompt().to_string();
             let mut msgs = messages;
             for f in &self.filters {
@@ -335,13 +335,6 @@ impl ExecutionEngine {
             // Check cancellation
             if cancel.is_some_and(|t| t.is_cancelled()) {
                 return Err(HubError::Cancelled);
-            }
-
-            // Refresh system prompt if the strategy needs it (e.g. after tool mutations)
-            if round > 0 {
-                if let Some(fresh) = strategy.rebuild_system_prompt().await? {
-                    system_prompt = fresh;
-                }
             }
 
             // Check context budget

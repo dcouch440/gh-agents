@@ -71,6 +71,9 @@ pub struct CommandEnvelope {
     pub loop_status: LoopStatus,
 }
 
+/// Maximum post-execution diagnostics rendered per command.
+const MAX_POST_DIAGNOSTICS: usize = 2;
+
 impl CommandEnvelope {
     /// Compute the maximum severity from all diagnostics.
     ///
@@ -137,8 +140,11 @@ impl CommandEnvelope {
             }
         }
 
-        // Post diagnostics (no-op warnings, suggestions, etc.)
-        for d in &self.post_diagnostics {
+        // Post diagnostics (no-op warnings, suggestions, etc.) — only the two
+        // most severe, so a noisy command can't bury the actual output.
+        let mut ranked: Vec<&Diagnostic> = self.post_diagnostics.iter().collect();
+        ranked.sort_by_key(|d| std::cmp::Reverse(d.severity));
+        for d in ranked.iter().take(MAX_POST_DIAGNOSTICS) {
             out.push('\n');
             out.push_str(&d.message);
             out.push('\n');
@@ -162,11 +168,15 @@ impl CommandEnvelope {
             out.push('\n');
         }
 
-        // Workspace digest
+        // Workspace digest — only when the workspace actually moved, or when the
+        // command failed and the agent needs to re-orient. Rendering it after
+        // every `cat` was pure noise.
         if let Some(ref digest) = self.workspace_digest {
-            out.push('\n');
-            out.push_str(&digest.render());
-            out.push('\n');
+            if digest.file_delta != 0 || self.severity >= Severity::Warning {
+                out.push('\n');
+                out.push_str(&digest.render());
+                out.push('\n');
+            }
         }
 
         out

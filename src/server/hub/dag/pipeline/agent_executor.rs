@@ -8,8 +8,9 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use tracing::{error, info, warn};
 
-use crate::config::protocols::WORKFORCE;
+use crate::config::protocols::{roles, WORKFORCE};
 use crate::db::traits::CreateAgentExecutionInput;
+use crate::execution::diagnostics::workspace::digest::format_size;
 use crate::execution::diagnostics::DiagnosticsEngine;
 use crate::server::hub::error::HubError;
 use crate::server::hub::protocols::execution_recorder::{
@@ -34,6 +35,48 @@ use super::types::{
     AgentExecutionResult, AgentFailureAction, DesignedAgentPrompt, LevelExecutionResult,
     WorkforceStepEnv,
 };
+
+/// Maximum files named in an agent's passdown manifest.
+const MAX_PASSDOWN_FILES: usize = 10;
+
+/// Append a `files:` line naming what the agent actually wrote to disk.
+///
+/// Objective counterpart to the agent's prose receipt: the agent says which
+/// file is the deliverable and what is in it, this says what landed. Returns
+/// `content` unchanged when there is no container or nothing survived the
+/// noise filter.
+async fn append_files_line(
+    content: String,
+    diagnostics: Option<&tokio::sync::Mutex<DiagnosticsEngine>>,
+) -> String {
+    let Some(diag) = diagnostics else {
+        return content;
+    };
+
+    let (files, dropped) = diag.lock().await.produced_files(MAX_PASSDOWN_FILES);
+    if files.is_empty() {
+        return content;
+    }
+
+    let mut line = files
+        .iter()
+        .map(|f| {
+            format!(
+                "{} ({}, {})",
+                f.path.display(),
+                f.change_type,
+                format_size(f.size)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    if dropped > 0 {
+        line.push_str(&format!(" (+{dropped} more)"));
+    }
+
+    format!("{content}\nfiles: {line}")
+}
 
 /// Decide how to handle an agent failure based on the configured failure mode.
 fn handle_agent_failure(
@@ -241,21 +284,21 @@ async fn execute_single_agent(
         }
     }
 
-    // C2: Workspace grounding + tool guidance for containerized agents
+    // C2: Workspace grounding + file discipline for containerized agents.
+    // Text lives in config/runtime_agent/system.md alongside the other agents'
+    // prompts. Gated on the container: without one there is no run_command and
+    // the guidance would be false.
     let system_prompt = if env.container_handle.is_some() {
         format!(
-            "{}\n\
-             You are in a shared workspace. Files and installed packages from previous steps are available.\n\
-             Save files with run_command — do not put file content in your response.\n\
-             When saving non-code output files (reports, data, text), use specific descriptive names — never generic names like output.txt or result.json. If transforming an upstream file, save to a new name that reflects your contribution.\n\
-             When previous steps mention files they saved, read those files before starting your work — do not assume their contents from the summary alone.",
-            designed.system_prompt
+            "{}\n\n{}",
+            designed.system_prompt,
+            roles::WORKFORCE_AGENT.system
         )
     } else {
         designed.system_prompt.clone()
     };
 
-    // Build task prompt: <previous_step> + <assignment> + <expected_output>
+    // Build task prompt: <previous_step> + <assignment> + <deliverable>
     let filtered = filter_outputs_for_agent(prior_outputs, &designed.receives_from);
     let previous_step = if filtered.is_empty() {
         // First agent (or no receives_from) — use upstream DAG step output
@@ -269,6 +312,7 @@ async fn execute_single_agent(
         previous_step,
         assignment: designed.assignment.clone(),
         expected_output: designed.expected_output.clone(),
+        has_container: env.container_handle.is_some(),
     }
     .build();
 
@@ -309,6 +353,8 @@ async fn execute_single_agent(
     } else {
         None
     };
+    // Retained so the produced-file list can be read back after execution.
+    let diagnostics_ref = diagnostics.clone();
 
     // Build strategy
     let strategy = WorkforceAgentStrategy::new(WorkforceAgentConfig {
@@ -415,6 +461,10 @@ async fn execute_single_agent(
             } else {
                 exec_result.content
             };
+
+            // Attach the objective file manifest. The agent's prose says which
+            // file matters and why; this says what actually landed on disk.
+            let content = append_files_line(content, diagnostics_ref.as_deref()).await;
 
             Ok(AgentExecutionResult {
                 name: designed.agent_name.clone(),
@@ -529,11 +579,15 @@ async fn synthesize_tool_summary(
 /// Block order:
 /// 1. `<previous_step>` — orientation from whoever ran before (omitted if empty)
 /// 2. `<assignment>` — what to do (always present)
-/// 3. `<expected_output>` — what to say when done (optional, from designer)
+/// 3. `<deliverable>` — the file contract: what the saved file must contain
+///    (optional, from designer)
 pub(super) struct TaskPromptBuilder {
     pub(super) previous_step: String,
     pub(super) assignment: String,
     pub(super) expected_output: Option<String>,
+    /// Whether the agent has a workspace container. Without one there is no
+    /// `run_command`, so the deliverable can only be the response itself.
+    pub(super) has_container: bool,
 }
 
 impl TaskPromptBuilder {
@@ -551,10 +605,18 @@ impl TaskPromptBuilder {
 
         if let Some(expected) = &self.expected_output {
             if !expected.is_empty() {
-                prompt.push_str(&format!(
-                    "\n\n<expected_output>\n{}\n</expected_output>",
-                    expected
-                ));
+                prompt.push_str(&format!("\n\n<deliverable>\n{}\n</deliverable>", expected));
+
+                // The save directive is only true with a container behind it.
+                // Without one there is no `run_command` and the response is the
+                // only thing downstream steps ever see.
+                prompt.push_str(if self.has_container {
+                    "\n\nSave this to a file with run_command before you reply. Your response \
+                     should be a short receipt naming the file, not the deliverable itself."
+                } else {
+                    "\n\nYou have no workspace in this step — put the deliverable itself in \
+                     your response."
+                });
             }
         }
 

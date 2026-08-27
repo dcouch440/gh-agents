@@ -1,5 +1,5 @@
-//! Current state builder — produces `<current_state>` XML for injection
-//! into the workflow agent's system prompt between turns.
+//! Current state builder — produces `<current_state>` XML that is attached to
+//! the workflow agent's user message on every turn.
 //!
 //! Reads from the DB (not filesystem) because status and agent info are
 //! DB-derived. The filesystem only has topology and descriptions that the
@@ -31,8 +31,9 @@ mod tests;
 /// Build the `<current_state>` XML from the workflow's DB state.
 ///
 /// Produces a compact summary of the board topology with per-node metadata.
-/// Injected into the system prompt between turns so the agent always sees
-/// fresh board state regardless of conversation history compression.
+/// Attached to every turn's user message, so the agent sees fresh board state
+/// regardless of conversation history compression while the system prompt
+/// stays static and cacheable.
 pub(crate) async fn build_current_state(
     workflow_id: Uuid,
     state: &AppState,
@@ -49,7 +50,7 @@ pub(crate) async fn build_current_state(
 
     if workforce_steps.is_empty() {
         return Ok(
-            "<current_state refresh=\"every turn — always reflects the current board\">\n  \
+            "<current_state refresh=\"sent fresh with every message\">\n  \
              <topology status=\"empty\" />\n\
              </current_state>"
                 .to_string(),
@@ -80,9 +81,7 @@ pub(crate) async fn build_current_state(
 
     // Render XML
     let mut lines = Vec::new();
-    lines.push(
-        "<current_state refresh=\"every turn — always reflects the current board\">".to_string(),
-    );
+    lines.push("<current_state refresh=\"sent fresh with every message\">".to_string());
     lines.push("  <topology>".to_string());
 
     // Sort by display_order for deterministic output

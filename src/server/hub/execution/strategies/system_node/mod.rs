@@ -55,8 +55,9 @@ impl SystemNodeStrategy {
         container_handle: Option<ContainerHandle>,
         base_dir: PathBuf,
     ) -> Self {
-        let current_state = state::build_current_state(&base_dir);
-        let system_prompt = format!("{}\n\n{}", roles::SYSTEM_NODE_AGENT_SYSTEM, current_state);
+        // System prompt is static — <current_state> rides the instruction
+        // instead (see build_messages) so the prompt stays cacheable.
+        let system_prompt = roles::SYSTEM_NODE_AGENT_SYSTEM.to_string();
 
         Self {
             system_prompt,
@@ -155,7 +156,13 @@ impl ExecutionStrategy for SystemNodeStrategy {
             None => self.instruction.clone(),
         };
 
-        Ok(vec![Message::user(&text_instruction)])
+        // One dispatch is one execution, so this is exactly once per generate.
+        // Snapshotting here rather than at construction keeps it marginally fresher.
+        let current_state = state::build_current_state(&self.base_dir);
+
+        Ok(vec![Message::user(format!(
+            "{current_state}\n\n{text_instruction}"
+        ))])
     }
 
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
