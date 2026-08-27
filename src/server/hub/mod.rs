@@ -232,11 +232,10 @@ pub async fn run_workflow_agent_chat(
         );
     }
 
-    // 2. Build system prompt with live <current_state>
-    let current_state = workflow_agent::state::build_current_state(workflow_id, state)
-        .await
-        .map_err(|e| HubError::Internal(anyhow::anyhow!("{e}")))?;
-    let system_prompt = format!("{}\n\n{}", roles::WORKFLOW_AGENT_SYSTEM, current_state);
+    // 2. System prompt is static — <current_state> rides the user message
+    //    instead (see WorkflowAgentStrategy::build_messages) so the prompt
+    //    stays cacheable.
+    let system_prompt = roles::WORKFLOW_AGENT_SYSTEM.to_string();
 
     // 3. Create strategy + engine
     // Note: user message is already persisted by send_session_chat API handler

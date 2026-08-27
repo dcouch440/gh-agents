@@ -151,6 +151,7 @@ impl AppStateBuilder {
             chat_tx,
             response_streams: DashMap::new(),
             cancellation_tokens: DashMap::new(),
+            board_state_hash: DashMap::new(),
             shutdown_token: CancellationToken::new(),
             ollama_toggle_cache: Arc::new(tokio::sync::RwLock::new((false, Instant::now()))),
             protocol_engine: Arc::new(crate::server::hub::protocols::ProtocolEngine::new()),

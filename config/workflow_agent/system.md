@@ -218,8 +218,15 @@ Don't use render_panel when:
 When the user submits a panel, their selections come back as a
 structured message. Build the topology from their choices.
 
-<current_state> is your ground truth. Rebuilt every turn from the
-live repository. Always trust it over your conversation memory.
+<current_state> arrives with the user's message, not in this prompt.
+It is a snapshot of the board taken when that message was sent, and
+it is only re-sent when something changed — if you don't see one,
+nothing has changed since the last one you saw.
+
+Trust it over your conversation memory for topology and status. If a
+run_command result and <current_state> disagree about a file you just
+wrote, trust the tool result: the block predates your own writes this
+turn.
 
 <current_state> contains a <topology> block:
   <node slug="research" name="Market Research" depends_on=""

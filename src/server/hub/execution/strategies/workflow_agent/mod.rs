@@ -7,6 +7,8 @@
 //! Pattern: SystemNodeStrategy's file-based approach + ChatStrategy's streaming +
 //! ManagerDispatchStrategy's session/rebuild patterns.
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 use async_trait::async_trait;
@@ -14,7 +16,6 @@ use serde_json::{json, Value};
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::config::protocols::roles;
 use crate::llm::{Message, TokenUsage, Tool};
 use crate::server::hub::error::HubError;
 use crate::server::hub::strategy::ExecutionStrategy;
@@ -48,7 +49,8 @@ impl WorkflowAgentStrategy {
 
     /// Build a new workflow agent strategy.
     ///
-    /// `system_prompt` should already include the `<current_state>` block.
+    /// `system_prompt` is static and cacheable — `<current_state>` is attached
+    /// to the user message in `build_messages`, not here.
     pub fn new(
         system_prompt: String,
         state: AppState,
@@ -216,6 +218,37 @@ impl ExecutionStrategy for WorkflowAgentStrategy {
             messages.push(Message::user(input));
         }
 
+        // Attach <current_state> to this turn's user message, but only when the
+        // board differs from what was last sent. The system prompt stays static
+        // (and cacheable); the block is never persisted, so history re-read on
+        // the next turn cannot accumulate stale state.
+        if let Some(last_user) = messages
+            .iter_mut()
+            .rev()
+            .find(|m| m.role == crate::llm::Role::User)
+        {
+            match state::build_current_state(self.workflow_id, &self.state).await {
+                Ok(current_state) => {
+                    let mut hasher = DefaultHasher::new();
+                    current_state.hash(&mut hasher);
+                    if self
+                        .state
+                        .board_state_changed(self.session_id, hasher.finish())
+                    {
+                        *last_user =
+                            Message::user(format!("{current_state}\n\n{}", last_user.text()));
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        workflow_id = %self.workflow_id,
+                        error = %e,
+                        "Failed to build <current_state> — proceeding without it"
+                    );
+                }
+            }
+        }
+
         Ok(messages)
     }
 
@@ -275,18 +308,6 @@ impl ExecutionStrategy for WorkflowAgentStrategy {
             .await;
 
         result
-    }
-
-    async fn rebuild_system_prompt(&self) -> Result<Option<String>, HubError> {
-        let current_state = state::build_current_state(self.workflow_id, &self.state)
-            .await
-            .map_err(|e| HubError::Internal(anyhow::anyhow!("{e}")))?;
-
-        Ok(Some(format!(
-            "{}\n\n{}",
-            roles::WORKFLOW_AGENT_SYSTEM,
-            current_state
-        )))
     }
 
     async fn on_complete(&self, response: &str, usage: &TokenUsage) -> Result<(), HubError> {
