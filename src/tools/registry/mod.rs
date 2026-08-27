@@ -279,7 +279,9 @@ not listed, it was not written."#
             "properties": {
                 "command": {
                     "type": "string",
-                    "description": "Shell command to execute. Chain with && for efficiency. For multi-line commands (heredocs, for-loops), use real newlines in the JSON string (\n), NOT literal backslash-n characters (\\n). The command is passed directly to sh -c."
+                    // Raw string: the escape sequences below are the literal text
+                    // the agent must read, not escapes for the Rust compiler.
+                    "description": r"Shell command to execute. Chain with && for efficiency. For multi-line commands (heredocs, for-loops), use real newlines in the JSON string (\n), NOT literal backslash-n characters (\\n). The command is passed directly to sh -c."
                 }
             },
             "required": ["command"]

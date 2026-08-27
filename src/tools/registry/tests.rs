@@ -22,6 +22,25 @@ mod tests {
     /// The old description ended with "Do not verify file creation with ls".
     /// That trained agents away from the file discipline the runtime prompt
     /// now depends on.
+    /// The `command` parameter description talks *about* escape sequences, so
+    /// its literal must stay raw. De-escaping it once turned "use real newlines
+    /// (\\n), NOT literal backslash-n (\\\\n)" into an embedded newline plus the
+    /// opposite advice.
+    #[test]
+    fn run_command_param_description_keeps_its_escapes_literal() {
+        let tool = get_tool_definition("run_command").expect("run_command is registered");
+        let desc = tool.input_schema["properties"]["command"]["description"]
+            .as_str()
+            .expect("command parameter has a description");
+
+        assert!(
+            !desc.contains('\n'),
+            "description must not embed a real newline"
+        );
+        assert!(desc.contains(r"(\n)"));
+        assert!(desc.contains(r"(\\n)"));
+    }
+
     #[test]
     fn run_command_does_not_discourage_file_checks() {
         let tool = get_tool_definition("run_command").expect("run_command is registered");
