@@ -229,14 +229,12 @@ pub async fn run_system_node_task(
     };
 
     match result {
-        Ok(_exec_result) => {
-            // Retrieve captured summary from strategy
-            let summary = strategy
-                .take_summary()
-                .unwrap_or_else(|| "System node agent completed".to_string());
-
-            // Persist summary as assistant message in session
-            persist_outcome(&state, session_id, user_id, &summary).await;
+        Ok(exec_result) => {
+            // `complete_system` sets the summary, and only after validation
+            // passes. `None` means the agent ended its turn without a design
+            // this process would accept — including the case where it called
+            // `complete_system` and validation rejected it.
+            let summary = strategy.take_summary();
 
             // Sync files to DB
             let sync_result = sync::sync_to_db(
@@ -249,41 +247,80 @@ pub async fn run_system_node_task(
             )
             .await;
 
-            match &sync_result {
-                Ok(sr) => {
-                    tracing::info!(
-                        execution_id = %execution_id,
-                        step_id = %step_id,
-                        created = sr.agents_created.len(),
-                        updated = sr.agents_updated.len(),
-                        removed = sr.agents_removed.len(),
-                        description_changed = sr.description_changed,
-                        "System node sync completed"
+            // `sync_to_db` is what creates the child pipeline, so its failure
+            // is exactly the condition that makes the step undispatchable
+            // later (see `orchestration::dispatch::execute_with_agent`).
+            // Reporting that as a completed design is what turned a designer
+            // that declined into a run that died eleven minutes in, at a step
+            // the board showed as ready.
+            let sr = match sync_result {
+                Ok(sr) => sr,
+                Err(sync_err) => {
+                    let error_msg = design_failure_message(
+                        &sync_err.to_string(),
+                        summary.as_deref(),
+                        &exec_result.content,
                     );
-
-                    // Canvas state is managed by canvas_sync — no need to
-                    // regenerate here. Sidebar updates via StepNameUpdated
-                    // and StepConfigUpdated events from sync_to_db.
-                }
-                Err(e) => {
                     tracing::error!(
                         execution_id = %execution_id,
                         step_id = %step_id,
-                        error = %e,
-                        "System node sync failed"
+                        error = %sync_err,
+                        "System node design produced no runnable system"
                     );
+
+                    persist_outcome(&state, session_id, user_id, &error_msg).await;
+                    persist_trace(&state, execution_id, ae_id, "failed", Some(&error_msg)).await;
+                    state
+                        .task_registry()
+                        .mark_failed(execution_id, error_msg.clone());
+                    broadcast_dispatch_event(
+                        &state,
+                        SessionEventKind::DispatchFailed {
+                            execution_id,
+                            step_id,
+                            error: error_msg,
+                        },
+                    );
+                    cleanup_container(&managed_container).await;
+                    return;
                 }
-            }
+            };
+
+            tracing::info!(
+                execution_id = %execution_id,
+                step_id = %step_id,
+                created = sr.agents_created.len(),
+                updated = sr.agents_updated.len(),
+                removed = sr.agents_removed.len(),
+                description_changed = sr.description_changed,
+                "System node sync completed"
+            );
+
+            // Canvas state is managed by canvas_sync — no need to regenerate
+            // here. Sidebar updates via StepNameUpdated and StepConfigUpdated
+            // events from sync_to_db.
+
+            // The files synced, so there is a system to run. The summary can
+            // still be absent — an agent that wrote every file and stopped
+            // short of `complete_system`. Its own last words describe that
+            // better than a fixed string claiming it completed.
+            let summary = summary
+                .filter(|s| !s.trim().is_empty())
+                .or_else(|| non_empty(&exec_result.content))
+                .unwrap_or_else(|| "System node agent completed".to_string());
+
+            // Persist summary as assistant message in session
+            persist_outcome(&state, session_id, user_id, &summary).await;
 
             // Persist trace
             let passdown_json = serde_json::json!({
                 "summary": summary,
-                "sync": sync_result.as_ref().map(|sr| serde_json::json!({
+                "sync": {
                     "agents_created": sr.agents_created,
                     "agents_updated": sr.agents_updated,
                     "agents_removed": sr.agents_removed,
                     "description_changed": sr.description_changed,
-                })).ok(),
+                },
             })
             .to_string();
 
@@ -348,6 +385,53 @@ pub async fn run_system_node_task(
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
+
+/// The trimmed text, or `None` if there was nothing but whitespace.
+fn non_empty(s: &str) -> Option<String> {
+    let t = s.trim();
+    (!t.is_empty()).then(|| t.to_string())
+}
+
+/// Longest agent explanation carried into a dispatch failure message.
+///
+/// The whole point of the message is to carry the agent's own words, so this
+/// is generous. It is a UI string and a session row, not a prompt.
+const DESIGN_FAILURE_REASON_CHARS: usize = 800;
+
+/// Explain a design run that finished without producing a runnable system.
+///
+/// The agent's own account comes first and the machine detail second: when a
+/// designer declines, or writes files that do not validate, its last message
+/// says why in terms the person who drew the node can act on, and
+/// "file does not exist: topology.json" does not.
+pub(super) fn design_failure_message(
+    sync_error: &str,
+    summary: Option<&str>,
+    final_text: &str,
+) -> String {
+    let reason = summary
+        .and_then(non_empty)
+        .or_else(|| non_empty(final_text));
+
+    match reason {
+        Some(reason) => {
+            let truncated: String = reason.chars().take(DESIGN_FAILURE_REASON_CHARS).collect();
+            let ellipsis = if truncated.len() < reason.len() {
+                "…"
+            } else {
+                ""
+            };
+            format!(
+                "The designer did not produce a system for this node, so there is \
+                 nothing to run. It said:\n\n{truncated}{ellipsis}\n\n({sync_error})"
+            )
+        }
+        None => format!(
+            "The designer did not produce a system for this node, so there is \
+             nothing to run, and it gave no reason. ({sync_error})"
+        ),
+    }
+}
 
 /// Build container config for a system node agent.
 ///

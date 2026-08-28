@@ -309,4 +309,46 @@ mod tests {
         assert_eq!(state.total_output_tokens, 295);
         assert!((state.total_cost_usd - 1.6).abs() < f32::EPSILON);
     }
+
+    // ── Missing agent ───────────────────────────────────────────────────────
+
+    /// A workforce step arrives here only when no design was ever synced for
+    /// it, so it has no child pipeline. Naming the null column sent whoever
+    /// read this into the database; the cause is upstream of the run.
+    #[test]
+    fn a_workforce_step_with_no_design_says_so() {
+        use crate::server::hub::dag::dag_state::missing_agent_error;
+
+        let step = crate::db::WorkflowStepRow {
+            id: Uuid::new_v4(),
+            workflow_id: Uuid::new_v4(),
+            execution_mode: "workforce".to_string(),
+            name: Some("Forge Credentials".to_string()),
+            ..Default::default()
+        };
+
+        let msg = missing_agent_error(&step).to_string();
+        assert!(msg.contains("Forge Credentials"), "{msg}");
+        assert!(msg.contains("no designed system"), "{msg}");
+        assert!(msg.contains("re-dispatch"), "{msg}");
+        assert!(!msg.contains("agent_id"), "{msg}");
+    }
+
+    /// Every other mode keeps the original message: for those, a missing
+    /// `agent_id` really is a missing `agent_id`.
+    #[test]
+    fn other_modes_still_report_a_missing_agent_id() {
+        use crate::server::hub::dag::dag_state::missing_agent_error;
+
+        let step = crate::db::WorkflowStepRow {
+            id: Uuid::new_v4(),
+            workflow_id: Uuid::new_v4(),
+            execution_mode: "single".to_string(),
+            name: Some("Summarize".to_string()),
+            ..Default::default()
+        };
+
+        let msg = missing_agent_error(&step).to_string();
+        assert!(msg.contains("has no agent_id for mode 'single'"), "{msg}");
+    }
 }

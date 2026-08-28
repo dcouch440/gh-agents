@@ -328,6 +328,33 @@ pub(crate) fn step_display_name(step: &WorkflowStepRow) -> String {
         .unwrap_or_else(|| step.id.to_string())
 }
 
+/// The error for a step that reached an agent-bearing executor with no agent.
+///
+/// For a `workforce` step this is not a missing column. Dispatch routes on
+/// `child_workflow_id`, which only `system_node::sync::sync_to_db` ever sets,
+/// so arriving here means no design was ever synced for the node — it has no
+/// pipeline and nothing to run. The old message named the null field and the
+/// step's UUID, which sends whoever reads it into the database; the cause is a
+/// design run that did not produce a system, and the fix is to re-dispatch the
+/// node. Both dispatchers raise it, so it is written once.
+pub(crate) fn missing_agent_error(step: &WorkflowStepRow) -> HubError {
+    if step.execution_mode == "workforce" {
+        return HubError::Internal(anyhow::anyhow!(
+            "step '{}' ({}) has no designed system, so there is nothing to run. \
+             Its last design run did not produce one — check the node's dispatch \
+             history and re-dispatch it.",
+            step_display_name(step),
+            step.id,
+        ));
+    }
+    HubError::Internal(anyhow::anyhow!(
+        "step '{}' ({}) has no agent_id for mode '{}'",
+        step_display_name(step),
+        step.id,
+        step.execution_mode
+    ))
+}
+
 /// Resolve port inputs for a step, returning None if no input ports are defined
 /// or if resolution fails.
 ///
