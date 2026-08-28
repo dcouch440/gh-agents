@@ -32,6 +32,20 @@ pub async fn run_serve(args: Args) -> Result<()> {
     // Load environment once — everything reads from this struct
     let env = Arc::new(Env::load());
 
+    // Install the web-egress policy before anything can make a request.
+    // Until this runs the gate refuses everything, so an early failure is a
+    // refused fetch rather than an unprotected one.
+    crate::net::egress::install(crate::net::egress::EgressConfig {
+        mode: env.web_egress_mode,
+        proxy_url: env.vpn_proxy_url.clone(),
+        is_production: env.is_production(),
+    });
+    info!(
+        mode = ?env.web_egress_mode,
+        proxy_configured = env.vpn_proxy_url.is_some(),
+        "web egress policy installed"
+    );
+
     // Load configuration
     let config = load_config().unwrap_or_default();
 

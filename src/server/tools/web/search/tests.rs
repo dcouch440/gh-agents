@@ -190,3 +190,36 @@ Results are search snippets, not sources. Use read_webpage on a URL above before
         assert!(v.get("error").is_some(), "{v}");
     }
 }
+
+#[cfg(test)]
+mod live_tests {
+    use super::super::*;
+    use serde_json::json;
+
+    /// Hits the real Brave API. Requires BRAVE_SEARCH_API_KEY and spends one
+    /// query from the monthly quota, so it is opt-in:
+    ///
+    /// ```text
+    /// NEXOR_WEB_EGRESS_MODE=direct cargo test -- --ignored brave_live
+    /// ```
+    #[tokio::test]
+    #[ignore = "hits the live Brave API and spends quota"]
+    async fn brave_live_search_returns_a_rendered_report() {
+        crate::net::egress::install(crate::net::egress::EgressConfig {
+            mode: crate::net::egress::EgressMode::parse(
+                std::env::var("NEXOR_WEB_EGRESS_MODE").ok().as_deref(),
+            ),
+            proxy_url: std::env::var("NEXOR_VPN_PROXY_URL").ok(),
+            is_production: false,
+        });
+
+        let v = execute(&json!({"query": "rust async runtime comparison"})).await;
+        let s = v
+            .as_str()
+            .unwrap_or_else(|| panic!("expected a rendered report, got {v}"));
+        assert!(s.starts_with("result: success\n"), "{s}");
+        assert!(s.contains("results:"), "{s}");
+        assert!(s.contains("https://"), "no URLs in report:\n{s}");
+        println!("\n{s}");
+    }
+}

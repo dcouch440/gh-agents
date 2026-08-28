@@ -28,6 +28,12 @@ pub struct Env {
     pub ollama_model: Option<String>,
     pub ollama_base_url: String,
 
+    // ── Web Tools ────────────────────────────────────────────────────────
+    /// How agent-driven web traffic leaves: `vpn` (default) or `direct`.
+    pub web_egress_mode: crate::net::egress::EgressMode,
+    /// URL of the VPN egress proxy. Required in `vpn` mode.
+    pub vpn_proxy_url: Option<String>,
+
     // ── Server ───────────────────────────────────────────────────────────
     pub cors_origins: Option<String>,
     pub static_dir: String,
@@ -72,6 +78,16 @@ impl Env {
 
         let deepinfra_model = std::env::var(constants::ENV_DEEPINFRA_MODEL)
             .unwrap_or_else(|_| constants::DEEPINFRA_DEFAULT_MODEL.to_string());
+
+        let web_egress_mode = crate::net::egress::EgressMode::parse(
+            std::env::var(constants::ENV_WEB_EGRESS_MODE)
+                .ok()
+                .as_deref(),
+        );
+
+        let vpn_proxy_url = std::env::var(constants::ENV_VPN_PROXY_URL)
+            .ok()
+            .filter(|s| !s.is_empty());
 
         let anthropic_api_key = std::env::var(constants::ENV_ANTHROPIC_API_KEY)
             .ok()
@@ -133,6 +149,8 @@ impl Env {
             db_max_connections,
             jwt_secret: jwt_secret_raw,
             rust_env,
+            web_egress_mode,
+            vpn_proxy_url,
             deepinfra_api_key,
             deepinfra_model,
             anthropic_api_key,
@@ -167,6 +185,8 @@ impl Env {
             db_max_connections: 5,
             jwt_secret: None,
             rust_env: "test".to_string(),
+            web_egress_mode: crate::net::egress::EgressMode::Vpn,
+            vpn_proxy_url: None,
             deepinfra_api_key: None,
             deepinfra_model: constants::DEEPINFRA_DEFAULT_MODEL.to_string(),
             anthropic_api_key: None,
