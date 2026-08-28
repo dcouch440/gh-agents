@@ -236,7 +236,7 @@ describe('AgentWorkshopPage', () => {
     fireEvent.keyDown(chatTextarea, { key: 'Enter' })
 
     await waitFor(() => {
-      expect(mockSend).toHaveBeenCalledWith('session-001', { message: 'Hello agent' }, expect.any(Function), expect.any(Function))
+      expect(mockSend).toHaveBeenCalledWith('session-001', { message: 'Hello agent' }, expect.any(Function), expect.any(Function), expect.any(Function))
     })
   })
 })

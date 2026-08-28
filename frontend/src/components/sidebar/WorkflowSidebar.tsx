@@ -150,6 +150,7 @@ function WorkflowSidebar({ messages, onSend, onCancel, streaming, onPanelSubmit 
             onSend={onSend}
             onCancel={onCancel}
             streaming={streaming}
+            disabled={streaming}
             emptyMessage="Describe your workflow and I'll build it."
             onPanelSubmit={onPanelSubmit}
           />

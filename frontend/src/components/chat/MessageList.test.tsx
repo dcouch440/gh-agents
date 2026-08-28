@@ -32,6 +32,40 @@ describe('MessageList', () => {
     expect(onRetry).toHaveBeenCalledWith('Turn a random node into a dual agent workflow')
   })
 
+  it('shows a working indicator while the reply is still empty', () => {
+    const messages: ChatMessageData[] = [
+      { id: 'msg-1', role: 'user', content: 'Build me a workflow' },
+      { id: 'msg-2', role: 'assistant', content: '' },
+    ]
+    render(<MessageList messages={messages} streaming />)
+    expect(screen.getByRole('status', { name: 'Working' })).toBeInTheDocument()
+  })
+
+  it('drops the working indicator once tokens arrive', () => {
+    const messages: ChatMessageData[] = [
+      { id: 'msg-1', role: 'user', content: 'Build me a workflow' },
+      { id: 'msg-2', role: 'assistant', content: 'On it' },
+    ]
+    render(<MessageList messages={messages} streaming />)
+    expect(screen.queryByRole('status', { name: 'Working' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the working indicator up between tool rounds', () => {
+    const messages: ChatMessageData[] = [
+      { id: 'msg-1', role: 'user', content: 'Build me a workflow' },
+      { id: 'tool-1', role: 'tool', content: 'ls', toolName: 'run_command' },
+    ]
+    render(<MessageList messages={messages} streaming />)
+    expect(screen.getByRole('status', { name: 'Working' })).toBeInTheDocument()
+    expect(screen.getByText(/running…/)).toBeInTheDocument()
+  })
+
+  it('defers to streamingContent when the caller renders its own stream', () => {
+    const messages: ChatMessageData[] = [{ id: 'msg-1', role: 'user', content: 'Hi' }]
+    render(<MessageList messages={messages} streaming streamingContent={<div>segments</div>} />)
+    expect(screen.queryByRole('status', { name: 'Working' })).not.toBeInTheDocument()
+  })
+
   it('shows no error notice for a healthy message', () => {
     const messages: ChatMessageData[] = [{ id: 'msg-2', role: 'user', content: 'Hi' }]
     render(<MessageList messages={messages} />)
