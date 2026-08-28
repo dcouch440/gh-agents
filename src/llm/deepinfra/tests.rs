@@ -681,3 +681,39 @@ fn truncated_json_is_reported_not_invented() {
     let v = super::parse_tool_arguments(r#"{"command": "cat > big.md << 'EOF"#);
     assert!(v.get(crate::llm::types::UNPARSED_ARGUMENTS_KEY).is_some());
 }
+
+/// Unquoted values are where the two dialects collide: a shell command runs
+/// past a comma, a discrete argument does not. Whitespace tells them apart.
+#[test]
+fn an_unquoted_shell_command_keeps_everything_after_its_comma() {
+    let v = super::parse_tool_arguments("command=ls -la, then look in src");
+    assert_eq!(v["command"], "ls -la, then look in src");
+    assert!(v.get("then").is_none());
+}
+
+/// A comma inside a quoted shell argument must not split the command. The
+/// value has whitespace, so it is a command, `b=2` inside the quotes
+/// notwithstanding.
+#[test]
+fn a_comma_inside_a_shell_argument_does_not_split_it() {
+    let v = super::parse_tool_arguments("command=curl -d 'a=1, b=2' http://x");
+    assert_eq!(v["command"], "curl -d 'a=1, b=2' http://x");
+    assert!(v.get("b").is_none());
+}
+
+/// Two unquoted arguments, neither with whitespace in it. This used to be
+/// swallowed whole as `{"path": "a.rs, offset=10"}` — an invented value the
+/// model never sent.
+#[test]
+fn unquoted_multiple_keyword_arguments_are_split() {
+    let v = super::parse_tool_arguments("path=a.rs, offset=10");
+    assert_eq!(v["path"], "a.rs");
+    assert_eq!(v["offset"], 10);
+}
+
+/// Prose after a comma is not a second argument.
+#[test]
+fn prose_after_a_comma_stays_in_the_value() {
+    let v = super::parse_tool_arguments("summary=done, nothing else to report");
+    assert_eq!(v["summary"], "done, nothing else to report");
+}

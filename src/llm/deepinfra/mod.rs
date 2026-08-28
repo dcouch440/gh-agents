@@ -475,6 +475,61 @@ fn recover_tool_arguments(raw: &str) -> Option<serde_json::Value> {
     parse_keyword_arguments(s)
 }
 
+/// Whether an unquoted value should swallow the rest of the argument string.
+///
+/// The two shapes that arrive here read identically up to the first comma:
+/// `command=ls -la, and more` is one shell command, and `path=a.rs, offset=10`
+/// is two arguments. What separates them is whitespace. A shell command is
+/// several words; a discrete argument — a path, a number, an identifier — is
+/// one. So the rest is taken verbatim unless the value before the first comma
+/// is a single word *and* another `key=` pair follows it.
+///
+/// `command=curl -d 'a=1, b=2'` stays one command on the whitespace test,
+/// which is why that test comes first. Genuinely ambiguous input is still
+/// ambiguous — `command=ls, x=1` splits — but a wrong split here costs one
+/// tool error that quotes the value back, not a silent `{}`.
+fn takes_rest_verbatim(rest: &[char]) -> bool {
+    let first_segment_end = rest.iter().position(|&c| c == ',').unwrap_or(rest.len());
+    let first_segment: String = rest[..first_segment_end].iter().collect();
+    if first_segment.trim().contains(char::is_whitespace) {
+        return true;
+    }
+    !continues_with_keyword_pair(&rest[first_segment_end..])
+}
+
+/// Does what is left continue with another `key=` pair?
+///
+/// Only a comma followed by an identifier and an `=` counts. Prose after a
+/// comma does not, which is the case that has to keep working.
+fn continues_with_keyword_pair(rest: &[char]) -> bool {
+    let mut i = 0;
+    while i < rest.len() {
+        if rest[i] != ',' {
+            i += 1;
+            continue;
+        }
+        let mut j = i + 1;
+        while j < rest.len() && rest[j].is_whitespace() {
+            j += 1;
+        }
+        let ident_start = j;
+        while j < rest.len() && (rest[j].is_alphanumeric() || rest[j] == '_') {
+            j += 1;
+        }
+        if j > ident_start {
+            let mut k = j;
+            while k < rest.len() && rest[k].is_whitespace() {
+                k += 1;
+            }
+            if k < rest.len() && rest[k] == '=' {
+                return true;
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
 /// Parse `key="value", key2=123` into an object.
 ///
 /// Values may be double- or single-quoted (escapes honoured inside double
@@ -546,7 +601,7 @@ fn parse_keyword_arguments(s: &str) -> Option<serde_json::Value> {
                 return None;
             }
             serde_json::Value::String(buf)
-        } else if out.is_empty() && !s[..].contains("\",") {
+        } else if out.is_empty() && !s.contains("\",") && takes_rest_verbatim(&bytes[i..]) {
             // Unquoted and nothing already parsed: take the rest verbatim.
             let rest: String = bytes[i..].iter().collect();
             i = bytes.len();
