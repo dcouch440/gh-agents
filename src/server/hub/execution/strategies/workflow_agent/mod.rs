@@ -177,6 +177,14 @@ impl ExecutionStrategy for WorkflowAgentStrategy {
         self.config().temperature
     }
 
+    fn max_tokens(&self) -> u32 {
+        self.config().max_tokens
+    }
+
+    fn effort(&self) -> Option<crate::llm::ReasoningEffort> {
+        self.config().effort
+    }
+
     fn state(&self) -> Option<&AppState> {
         Some(&self.state)
     }

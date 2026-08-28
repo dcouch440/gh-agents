@@ -331,6 +331,46 @@ impl AppState {
         let active = crate::constants::ACTIVE_PROVIDER;
         let mut registry = ProviderRegistry::new(active);
 
+        // Initialize DeepInfra provider (the active default profile).
+        if let Some(ref api_key) = env.deepinfra_api_key {
+            let config = crate::llm::DeepInfraConfig {
+                api_key: api_key.clone(),
+                base_url: crate::constants::DEEPINFRA_DEFAULT_BASE_URL.to_string(),
+                model: env.deepinfra_model.clone(),
+                timeout_secs: crate::constants::DEEPINFRA_CHAT_TIMEOUT_SECS,
+                read_timeout_secs: crate::constants::DEEPINFRA_READ_TIMEOUT_SECS,
+                // Per-request effort comes from the agent's config.yaml; a
+                // request that carries none should not silently get a
+                // deliberation level it did not ask for.
+                default_effort: None,
+            };
+            match crate::llm::DeepInfraClient::with_config(config) {
+                Ok(p) => {
+                    tracing::info!("Initialized DeepInfra provider: {}", p.model_id());
+                    let provider: Arc<dyn LLMProvider + Send + Sync> =
+                        Arc::new(crate::llm::SafeStreamProvider::new(
+                            crate::llm::RetryingProvider::with_defaults(
+                                crate::llm::RateLimitedProvider::with_defaults(p),
+                            ),
+                        ));
+                    registry.register("deepinfra", provider);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "DeepInfra provider not initialized: {}. Set {}.",
+                        e,
+                        crate::constants::ENV_DEEPINFRA_API_KEY
+                    );
+                }
+            }
+        } else {
+            tracing::warn!(
+                "DeepInfra provider not initialized: {} not set. It is the active provider, \
+                 so agent execution will fail until it is configured.",
+                crate::constants::ENV_DEEPINFRA_API_KEY
+            );
+        }
+
         // Initialize Anthropic provider
         if let Some(ref api_key) = env.anthropic_api_key {
             let config = crate::llm::AnthropicConfig::new(api_key.clone())
@@ -425,13 +465,18 @@ impl AppState {
                 base_url: crate::constants::XAI_DEFAULT_BASE_URL.to_string(),
                 model: env.xai_model.clone(),
                 timeout_secs: crate::constants::XAI_CHAT_TIMEOUT_SECS,
-                web_search: true,
-                x_search: true,
+                // Server-side search is an xAI feature the active DeepInfra
+                // profile has no equivalent for. Agents get the explicit
+                // brave_search / read_webpage tools instead, so leaving these
+                // on would make behaviour depend on which provider an agent
+                // happened to be routed to.
+                web_search: false,
+                x_search: false,
             };
             match crate::llm::XaiClient::with_config(config) {
                 Ok(client) => {
                     tracing::info!(
-                        "Initialized xAI provider: {} ({}) [web_search + x_search enabled]",
+                        "Initialized xAI provider: {} ({})",
                         client.model_id(),
                         crate::constants::XAI_DEFAULT_BASE_URL
                     );

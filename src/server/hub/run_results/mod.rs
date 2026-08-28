@@ -96,7 +96,10 @@ async fn summarize_step_output(
         vec![LlmMessage::user(truncated.to_string())],
     )
     .with_system(roles::RUN_RESULTS_SUMMARIZER)
-    .with_max_tokens(MAX_TOKENS_RUN_SUMMARY);
+    .with_max_tokens(MAX_TOKENS_RUN_SUMMARY)
+    // A short factual summary. This goes through the registered provider
+    // rather than the utility client, so the tier-3 effort has to be stated.
+    .with_effort(crate::llm::ReasoningEffort::None);
 
     let response = provider.send_message(request).await?;
     let summary = response.content.trim().to_string();

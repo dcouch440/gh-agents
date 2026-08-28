@@ -53,7 +53,10 @@ mod tests {
         .await;
         let agent = result.unwrap();
         assert_eq!(agent.name, "My Agent");
-        assert_eq!(agent.model_provider, "anthropic");
+        // Follows the active provider profile rather than a hardcoded name,
+        // so switching profiles does not strand new agents on a provider the
+        // registry no longer holds.
+        assert_eq!(agent.model_provider, crate::constants::ACTIVE_PROVIDER);
         assert_eq!(agent.persona_style, Some("casual".to_string()));
         assert_eq!(agent.model_max_tokens, 4096);
         assert!((agent.model_temperature - 0.7).abs() < f32::EPSILON);

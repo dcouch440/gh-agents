@@ -129,6 +129,14 @@ impl ExecutionStrategy for ChatStrategy {
         self.config.temperature
     }
 
+    fn max_tokens(&self) -> u32 {
+        self.config.max_tokens
+    }
+
+    fn effort(&self) -> Option<crate::llm::ReasoningEffort> {
+        self.config.effort
+    }
+
     async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError> {
         messages::build_chat_messages(&self.state, self.session_id, self.config.max_history, input)
             .await

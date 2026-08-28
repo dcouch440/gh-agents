@@ -39,6 +39,7 @@ mod tests {
                 usage: super::super::super::types::TokenUsage {
                     input_tokens: 1,
                     output_tokens: 1,
+                    ..Default::default()
                 },
             })
         }
@@ -105,6 +106,7 @@ mod tests {
                     usage: super::super::super::types::TokenUsage {
                         input_tokens: 1,
                         output_tokens: 1,
+                        ..Default::default()
                     },
                 })
             }

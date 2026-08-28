@@ -17,7 +17,6 @@ use crate::server::hub::protocols::execution_recorder::{
     PhaseCompletion, ProtocolExecutionRecorder,
 };
 use crate::server::hub::recorder::ExecutionRecorder;
-use crate::server::hub::strategies::compute_cost;
 use crate::server::hub::strategies::workforce_agent::{
     WorkforceAgentConfig, WorkforceAgentStrategy,
 };
@@ -361,6 +360,8 @@ async fn execute_single_agent(
         system_prompt,
         model_id: agent_cfg.model_id.clone(),
         temperature: agent_cfg.temperature,
+        max_tokens: agent_cfg.max_tokens,
+        effort: agent_cfg.effort,
         max_rounds: agent_cfg.max_rounds,
         context_budget: agent_cfg.context_budget,
         tools,
@@ -406,9 +407,10 @@ async fn execute_single_agent(
 
     match result {
         Ok(exec_result) => {
-            let cost = compute_cost(
+            let cost = crate::server::hub::pricing::compute_cost_cached(
                 &agent_cfg.model_id,
                 exec_result.input_tokens as i64,
+                exec_result.cached_input_tokens as i64,
                 exec_result.output_tokens as i64,
             );
 

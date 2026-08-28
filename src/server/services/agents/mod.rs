@@ -71,7 +71,7 @@ pub async fn create_agent(
         persona_style: Some(input.persona_style.unwrap_or_else(|| "casual".to_string())),
         model_provider: input
             .model_provider
-            .unwrap_or_else(|| "anthropic".to_string()),
+            .unwrap_or_else(|| crate::constants::ACTIVE_PROVIDER.to_string()),
         model_id: input.model_id.trim().to_string(),
         model_max_tokens: input.model_max_tokens.unwrap_or(4096),
         model_temperature: input.model_temperature.unwrap_or(0.7),

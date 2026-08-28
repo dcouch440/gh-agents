@@ -39,6 +39,9 @@ pub struct ExecutionResult {
     pub input_tokens: u64,
     /// Total output tokens across all rounds.
     pub output_tokens: u64,
+    /// Portion of `input_tokens` served from the provider's prompt cache.
+    /// A subset of `input_tokens`, billed at a lower rate.
+    pub cached_input_tokens: u64,
     /// Estimated cost in USD.
     pub cost_usd: f32,
     /// Number of tool-use rounds executed.
@@ -300,6 +303,7 @@ impl ExecutionEngine {
         let budget = strategy.context_budget();
         let mut total_input: u64 = 0;
         let mut total_output: u64 = 0;
+        let mut total_cached: u64 = 0;
 
         // ── on_start filters ──
         let system_prompt = if let Some(ref filter_ctx) = self.filter_ctx {
@@ -349,8 +353,9 @@ impl ExecutionEngine {
             // Build LLM request
             let mut request = LLMRequest::new(strategy.model_id(), messages.clone())
                 .with_system(&system_prompt)
-                .with_max_tokens(crate::constants::DEFAULT_MAX_TOKENS_WORKER);
+                .with_max_tokens(strategy.max_tokens());
             request.temperature = strategy.temperature();
+            request.effort = strategy.effort();
             let tools = strategy.tools();
             if !tools.is_empty() {
                 request = request.with_tools(tools);
@@ -380,6 +385,7 @@ impl ExecutionEngine {
 
             total_input += response.usage.input_tokens as u64;
             total_output += response.usage.output_tokens as u64;
+            total_cached += response.usage.cached_input_tokens as u64;
 
             // Check stop reason
             match response.stop_reason {
@@ -405,6 +411,7 @@ impl ExecutionEngine {
                             &mut messages,
                             total_input,
                             total_output,
+                            total_cached,
                             &mut consecutive_failures,
                         )
                         .await?
@@ -421,6 +428,7 @@ impl ExecutionEngine {
                             &mut messages,
                             total_input,
                             total_output,
+                            total_cached,
                             &mut filter_retried,
                             &mut end_turn_retries,
                         )
@@ -450,6 +458,7 @@ impl ExecutionEngine {
         messages: &mut Vec<Message>,
         total_input: u64,
         total_output: u64,
+        total_cached: u64,
         consecutive_failures: &mut HashMap<u64, u32>,
     ) -> Result<Option<ExecutionResult>, HubError> {
         let LoopContext {
@@ -598,8 +607,9 @@ impl ExecutionEngine {
         // Check if strategy wants to stop (e.g. complete_task was called)
         if strategy.should_stop() {
             let usage = TokenUsage {
-                input_tokens: total_input as u32,
-                output_tokens: total_output as u32,
+                input_tokens: total_input.min(u32::MAX as u64) as u32,
+                output_tokens: total_output.min(u32::MAX as u64) as u32,
+                cached_input_tokens: total_cached.min(u32::MAX as u64) as u32,
             };
             strategy.on_complete("", &usage).await?;
             sink.done().await;
@@ -608,6 +618,7 @@ impl ExecutionEngine {
                 content_blocks: response.content_blocks.clone(),
                 input_tokens: total_input,
                 output_tokens: total_output,
+                cached_input_tokens: total_cached,
                 cost_usd: 0.0,
                 rounds_used: round + 1,
             }));
@@ -630,6 +641,7 @@ impl ExecutionEngine {
         messages: &mut Vec<Message>,
         total_input: u64,
         total_output: u64,
+        total_cached: u64,
         filter_retried: &mut [bool],
         end_turn_retries: &mut u32,
     ) -> Result<Option<ExecutionResult>, HubError> {
@@ -714,8 +726,9 @@ impl ExecutionEngine {
 
         // Execution complete
         let usage = TokenUsage {
-            input_tokens: total_input as u32,
-            output_tokens: total_output as u32,
+            input_tokens: total_input.min(u32::MAX as u64) as u32,
+            output_tokens: total_output.min(u32::MAX as u64) as u32,
+            cached_input_tokens: total_cached.min(u32::MAX as u64) as u32,
         };
 
         // Let strategy do post-processing
@@ -728,6 +741,7 @@ impl ExecutionEngine {
             content_blocks: response.content_blocks.clone(),
             input_tokens: total_input,
             output_tokens: total_output,
+            cached_input_tokens: total_cached,
             cost_usd: 0.0, // Strategies compute cost in on_complete
             rounds_used: round + 1,
         }))

@@ -26,7 +26,6 @@ use crate::db::traits::{
     AgentExecutionRepo, AgentRepo, CreateAgentExecutionInput, TokenLedgerRepo,
 };
 use crate::llm::{LLMProvider, LLMRequest, LLMResponse, Message, Role};
-use crate::server::hub::strategies::compute_cost;
 use crate::types::ExecutionType;
 
 use super::{ExecutionFilter, FilterContext, HubError, ResponseAction};
@@ -354,6 +353,7 @@ impl ExecutionFilter for DebateVerificationFilter {
                     temperature: agent.model_temperature,
                     tools: vec![],
                     stream: false,
+                    effort: None,
                 };
 
                 // Execute with timeout.
@@ -367,9 +367,10 @@ impl ExecutionFilter for DebateVerificationFilter {
                     Ok(Ok(llm_response)) => {
                         // Record token usage (best-effort).
                         if let (Some(ref tl_repo), Some(uid)) = (&tl_repo, user_id) {
-                            let cost = compute_cost(
+                            let cost = crate::server::hub::pricing::compute_cost_cached(
                                 &agent.model_id,
                                 llm_response.usage.input_tokens as i64,
+                                llm_response.usage.cached_input_tokens as i64,
                                 llm_response.usage.output_tokens as i64,
                             );
                             let _ = tl_repo

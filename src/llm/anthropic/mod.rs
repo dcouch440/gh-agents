@@ -209,6 +209,7 @@ impl SseProviderAdapter for AnthropicAdapter {
             usage: TokenUsage {
                 input_tokens: api_response.usage.input_tokens,
                 output_tokens: api_response.usage.output_tokens,
+                cached_input_tokens: 0,
             },
         })
     }

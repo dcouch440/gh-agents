@@ -239,6 +239,7 @@ impl OllamaClient {
             usage: TokenUsage {
                 input_tokens: response.prompt_eval_count.unwrap_or(0),
                 output_tokens: response.eval_count.unwrap_or(0),
+                cached_input_tokens: 0,
             },
         })
     }

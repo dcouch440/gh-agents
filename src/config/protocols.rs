@@ -38,6 +38,14 @@ pub struct AgentConfig {
     pub max_rounds: u32,
     #[serde(default = "default_context_budget")]
     pub context_budget: usize,
+    /// Reasoning effort for providers that support it.
+    ///
+    /// Omitted means "send no `reasoning_effort`", so the provider applies its
+    /// own default. On the DeepInfra profile all three tiers resolve to the
+    /// same model, so this is what actually separates an orchestrator agent
+    /// from a utility one.
+    #[serde(default)]
+    pub effort: Option<crate::llm::ReasoningEffort>,
 }
 
 fn default_max_rounds() -> u32 {
@@ -632,5 +640,88 @@ mod tests {
                 }
             }
         }
+    }
+    // Effort is what separates the tiers on the DeepInfra profile, where all
+    // three tier markers resolve to the same model id. If a shipped config
+    // ever declares a tier without a matching effort, the distinction is lost
+    // silently — the request simply omits the parameter.
+    #[test]
+    fn every_shipped_agent_declares_an_effort_matching_its_tier() {
+        use crate::llm::ReasoningEffort;
+
+        let expected = |tier: &str| match tier {
+            "tier:1" => Some(ReasoningEffort::XHigh),
+            "tier:2" => Some(ReasoningEffort::High),
+            "tier:3" => Some(ReasoningEffort::None),
+            _ => None,
+        };
+
+        // (raw yaml, label) for every config the binary embeds.
+        let configs: Vec<(&str, &str)> = vec![
+            (
+                include_str!("../../config/assistant/config.yaml"),
+                "assistant",
+            ),
+            (
+                include_str!("../../config/workflow_agent/config.yaml"),
+                "workflow_agent",
+            ),
+            (
+                include_str!("../../config/runtime_agent/config.yaml"),
+                "runtime_agent",
+            ),
+            (
+                include_str!("../../config/system_agent/config.yaml"),
+                "system_agent",
+            ),
+            (
+                include_str!("../../config/manager/assistant/config.yaml"),
+                "manager/assistant",
+            ),
+            (
+                include_str!("../../config/manager/builder/config.yaml"),
+                "manager/builder",
+            ),
+            (
+                include_str!("../../config/services/merge/config.yaml"),
+                "services/merge",
+            ),
+        ];
+
+        for (raw, label) in configs {
+            let parsed: ProtocolConfig =
+                serde_yaml::from_str(raw).unwrap_or_else(|e| panic!("{label}: {e}"));
+            for (role, agent) in &parsed.agents {
+                let want = expected(&agent.model_id);
+                assert!(
+                    want.is_some(),
+                    "{label}/{role}: unexpected model_id {}",
+                    agent.model_id
+                );
+                assert_eq!(
+                    agent.effort, want,
+                    "{label}/{role} declares {} but effort {:?}",
+                    agent.model_id, agent.effort
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_omitted_effort_parses_as_none_rather_than_failing() {
+        let raw =
+            "agents:\n  a:\n    model_id: \"tier:1\"\n    max_tokens: 10\n    temperature: 0.1\n";
+        let parsed: ProtocolConfig = serde_yaml::from_str(raw).unwrap();
+        assert_eq!(parsed.agents["a"].effort, None);
+    }
+
+    #[test]
+    fn effort_parses_from_its_wire_spelling() {
+        let raw = "agents:\n  a:\n    model_id: \"tier:1\"\n    max_tokens: 10\n    temperature: 0.1\n    effort: xhigh\n";
+        let parsed: ProtocolConfig = serde_yaml::from_str(raw).unwrap();
+        assert_eq!(
+            parsed.agents["a"].effort,
+            Some(crate::llm::ReasoningEffort::XHigh)
+        );
     }
 }

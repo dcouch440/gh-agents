@@ -11,6 +11,8 @@ pub struct ChatConfig {
     pub context_budget: usize,
     pub temperature: f32,
     pub max_history: u32,
+    pub max_tokens: u32,
+    pub effort: Option<crate::llm::ReasoningEffort>,
 }
 
 impl Default for ChatConfig {
@@ -23,6 +25,11 @@ impl Default for ChatConfig {
             context_budget: 480_000,
             temperature: crate::constants::DEFAULT_TEMPERATURE,
             max_history: 50,
+            // The worker budget, not the utility one: this is what the engine
+            // hardcoded before max_tokens was configurable, and dropping to
+            // the utility default would halve every chat response.
+            max_tokens: crate::constants::DEFAULT_MAX_TOKENS_WORKER,
+            effort: None,
         }
     }
 }

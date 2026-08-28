@@ -31,6 +31,10 @@ pub struct WorkforceAgentConfig {
     pub model_id: String,
     /// LLM temperature.
     pub temperature: f32,
+    /// Maximum output tokens for one call.
+    pub max_tokens: u32,
+    /// Reasoning effort, for providers that support it.
+    pub effort: Option<crate::llm::ReasoningEffort>,
     /// Maximum execution rounds.
     pub max_rounds: u32,
     /// Maximum context size in characters.
@@ -105,6 +109,14 @@ impl ExecutionStrategy for WorkforceAgentStrategy {
 
     fn temperature(&self) -> f32 {
         self.config.temperature
+    }
+
+    fn max_tokens(&self) -> u32 {
+        self.config.max_tokens
+    }
+
+    fn effort(&self) -> Option<crate::llm::ReasoningEffort> {
+        self.config.effort
     }
 
     async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError> {

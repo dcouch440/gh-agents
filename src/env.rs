@@ -18,6 +18,8 @@ pub struct Env {
     pub rust_env: String,
 
     // ── LLM Providers ────────────────────────────────────────────────────
+    pub deepinfra_api_key: Option<String>,
+    pub deepinfra_model: String,
     pub anthropic_api_key: Option<String>,
     pub anthropic_model: String,
     pub xai_api_key: Option<String>,
@@ -63,6 +65,13 @@ impl Env {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(50);
+
+        let deepinfra_api_key = std::env::var(constants::ENV_DEEPINFRA_API_KEY)
+            .ok()
+            .filter(|s| !s.is_empty());
+
+        let deepinfra_model = std::env::var(constants::ENV_DEEPINFRA_MODEL)
+            .unwrap_or_else(|_| constants::DEEPINFRA_DEFAULT_MODEL.to_string());
 
         let anthropic_api_key = std::env::var(constants::ENV_ANTHROPIC_API_KEY)
             .ok()
@@ -124,6 +133,8 @@ impl Env {
             db_max_connections,
             jwt_secret: jwt_secret_raw,
             rust_env,
+            deepinfra_api_key,
+            deepinfra_model,
             anthropic_api_key,
             anthropic_model,
             xai_api_key,
@@ -156,6 +167,8 @@ impl Env {
             db_max_connections: 5,
             jwt_secret: None,
             rust_env: "test".to_string(),
+            deepinfra_api_key: None,
+            deepinfra_model: constants::DEEPINFRA_DEFAULT_MODEL.to_string(),
             anthropic_api_key: None,
             anthropic_model: constants::ANTHROPIC_DEFAULT_MODEL.to_string(),
             xai_api_key: None,

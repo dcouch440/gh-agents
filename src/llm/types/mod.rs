@@ -160,6 +160,48 @@ impl Message {
     }
 }
 
+/// How much deliberation a reasoning model spends before answering.
+///
+/// Serializes to the exact strings DeepInfra's `reasoning_effort` parameter
+/// accepts. Providers that have no equivalent ignore the field.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReasoningEffort {
+    /// Reasoning disabled entirely, where the model supports it.
+    None,
+    Minimal,
+    Low,
+    Medium,
+    High,
+    #[serde(rename = "xhigh")]
+    XHigh,
+    Max,
+}
+
+impl ReasoningEffort {
+    /// The wire value for this effort level.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use nexor::llm::ReasoningEffort;
+    ///
+    /// assert_eq!(ReasoningEffort::XHigh.as_str(), "xhigh");
+    /// assert_eq!(ReasoningEffort::None.as_str(), "none");
+    /// ```
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ReasoningEffort::None => "none",
+            ReasoningEffort::Minimal => "minimal",
+            ReasoningEffort::Low => "low",
+            ReasoningEffort::Medium => "medium",
+            ReasoningEffort::High => "high",
+            ReasoningEffort::XHigh => "xhigh",
+            ReasoningEffort::Max => "max",
+        }
+    }
+}
+
 /// Request to send to an LLM
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LLMRequest {
@@ -187,6 +229,13 @@ pub struct LLMRequest {
     /// Tool definitions available for the model to call
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tools: Vec<Tool>,
+
+    /// Reasoning effort, for providers that support it.
+    ///
+    /// `None` leaves the parameter off the wire entirely, so the provider
+    /// applies its own default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<ReasoningEffort>,
 }
 
 impl Default for LLMRequest {
@@ -199,6 +248,7 @@ impl Default for LLMRequest {
             temperature: default_temperature(),
             stream: false,
             tools: vec![],
+            effort: None,
         }
     }
 }
@@ -218,6 +268,7 @@ impl LLMRequest {
             temperature: default_temperature(),
             stream: false,
             tools: vec![],
+            effort: None,
         }
     }
 
@@ -242,6 +293,12 @@ impl LLMRequest {
     /// Set tool definitions
     pub fn with_tools(mut self, tools: Vec<Tool>) -> Self {
         self.tools = tools;
+        self
+    }
+
+    /// Set the reasoning effort.
+    pub fn with_effort(mut self, effort: ReasoningEffort) -> Self {
+        self.effort = Some(effort);
         self
     }
 }
@@ -345,11 +402,27 @@ pub enum StopReason {
 pub struct TokenUsage {
     pub input_tokens: u32,
     pub output_tokens: u32,
+    /// Portion of `input_tokens` served from the provider's prompt cache.
+    ///
+    /// A SUBSET of `input_tokens`, not an addition to it — OpenAI-compatible
+    /// APIs report `prompt_tokens` inclusive of cached tokens. Billing must
+    /// therefore charge `input_tokens - cached_input_tokens` at the uncached
+    /// rate. Providers without prompt caching leave this zero.
+    #[serde(default)]
+    pub cached_input_tokens: u32,
 }
 
 impl TokenUsage {
     pub fn total(&self) -> u32 {
         self.input_tokens + self.output_tokens
+    }
+
+    /// Input tokens billed at the full (uncached) rate.
+    ///
+    /// Saturating: a provider reporting more cached than total input must not
+    /// wrap into an enormous charge.
+    pub fn uncached_input_tokens(&self) -> u32 {
+        self.input_tokens.saturating_sub(self.cached_input_tokens)
     }
 }
 
@@ -430,6 +503,20 @@ pub enum StreamChunk {
         partial_json: String,
     },
 
+    /// Usage totals reported in a dedicated frame.
+    ///
+    /// OpenAI-compatible providers deliver usage in a final chunk rather than
+    /// on the message-delta event, and only they report cached prompt tokens.
+    /// Additive so providers that have no such frame never emit it.
+    UsageUpdate {
+        /// Prompt tokens, inclusive of any cached portion.
+        input_tokens: Option<u32>,
+        /// Completion tokens, inclusive of reasoning tokens.
+        output_tokens: Option<u32>,
+        /// Portion of `input_tokens` served from the prompt cache.
+        cached_input_tokens: Option<u32>,
+    },
+
     /// Final message stop event
     MessageStop,
 
@@ -457,6 +544,20 @@ struct ToolUseAccumulator {
     input_json: String,
 }
 
+/// Convert a completed tool-use accumulator into a content block.
+///
+/// Malformed or empty JSON becomes an empty object rather than an error: the
+/// model gets a tool call it can see failed, instead of the call vanishing.
+fn finish_tool_use(tool: ToolUseAccumulator) -> ContentBlock {
+    let input = serde_json::from_str(&tool.input_json)
+        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
+    ContentBlock::ToolUse {
+        id: tool.id,
+        name: tool.name,
+        input,
+    }
+}
+
 /// Accumulated stream state for building final response
 #[derive(Debug, Default)]
 pub struct StreamAccumulator {
@@ -466,8 +567,15 @@ pub struct StreamAccumulator {
     pub stop_reason: Option<StopReason>,
     pub input_tokens: Option<u32>,
     pub output_tokens: Option<u32>,
-    /// In-progress tool use block being assembled from streaming chunks
-    current_tool_use: Option<ToolUseAccumulator>,
+    pub cached_input_tokens: Option<u32>,
+    /// In-progress tool use blocks, keyed by content-block index.
+    ///
+    /// Keyed rather than a single slot because OpenAI-compatible streams may
+    /// interleave argument deltas for several tool calls: `open 0, open 1,
+    /// args 0, args 1`. A single slot would finalize call 0 with empty
+    /// arguments and then feed its arguments into call 1. `BTreeMap` also
+    /// keeps the finalization order deterministic.
+    tool_uses: std::collections::BTreeMap<usize, ToolUseAccumulator>,
 }
 
 impl StreamAccumulator {
@@ -485,7 +593,13 @@ impl StreamAccumulator {
                 model,
                 input_tokens,
             } => {
-                self.model = Some(model.clone());
+                // Only overwrite with a real name. A later frame that omits
+                // the model would otherwise blank it, and an empty model id
+                // falls through every pricing branch to the generic fallback
+                // and lands empty in the token ledger.
+                if !model.is_empty() {
+                    self.model = Some(model.clone());
+                }
                 self.input_tokens = Some(*input_tokens);
             }
             StreamChunk::MessageDelta {
@@ -499,28 +613,44 @@ impl StreamAccumulator {
                     self.output_tokens = Some(*tokens);
                 }
             }
-            StreamChunk::ToolUseStart { id, name, .. } => {
-                self.current_tool_use = Some(ToolUseAccumulator {
-                    id: id.clone(),
-                    name: name.clone(),
-                    input_json: String::new(),
-                });
+            StreamChunk::UsageUpdate {
+                input_tokens,
+                output_tokens,
+                cached_input_tokens,
+            } => {
+                if let Some(t) = input_tokens {
+                    self.input_tokens = Some(*t);
+                }
+                if let Some(t) = output_tokens {
+                    self.output_tokens = Some(*t);
+                }
+                if let Some(t) = cached_input_tokens {
+                    self.cached_input_tokens = Some(*t);
+                }
             }
-            StreamChunk::InputJsonDelta { partial_json, .. } => {
-                if let Some(ref mut tool) = self.current_tool_use {
+            StreamChunk::ToolUseStart { index, id, name } => {
+                self.tool_uses.insert(
+                    *index,
+                    ToolUseAccumulator {
+                        id: id.clone(),
+                        name: name.clone(),
+                        input_json: String::new(),
+                    },
+                );
+            }
+            StreamChunk::InputJsonDelta {
+                index,
+                partial_json,
+            } => {
+                if let Some(tool) = self.tool_uses.get_mut(index) {
                     tool.input_json.push_str(partial_json);
                 }
             }
-            StreamChunk::ContentBlockStop { .. } => {
-                // Finalize any in-progress tool use block
-                if let Some(tool) = self.current_tool_use.take() {
-                    let input = serde_json::from_str(&tool.input_json)
-                        .unwrap_or(serde_json::Value::Object(serde_json::Map::new()));
-                    self.content_blocks.push(ContentBlock::ToolUse {
-                        id: tool.id,
-                        name: tool.name,
-                        input,
-                    });
+            StreamChunk::ContentBlockStop { index } => {
+                // Finalize the tool use at this index, if there is one. Text
+                // blocks also emit a stop and are simply absent from the map.
+                if let Some(tool) = self.tool_uses.remove(index) {
+                    self.content_blocks.push(finish_tool_use(tool));
                 }
             }
             _ => {}
@@ -528,9 +658,18 @@ impl StreamAccumulator {
     }
 
     /// Build the final response (returns None if incomplete)
-    pub fn build(self) -> Option<LLMResponse> {
+    pub fn build(mut self) -> Option<LLMResponse> {
+        // Drain tool uses that never received a stop event. Not every
+        // provider emits one per block, and dropping them here would lose
+        // the tool call entirely.
+        let leftovers: Vec<_> = std::mem::take(&mut self.tool_uses)
+            .into_values()
+            .map(finish_tool_use)
+            .collect();
+
         // Add any accumulated text as a content block
         let mut blocks = self.content_blocks;
+        blocks.extend(leftovers);
         if !self.content.is_empty() {
             blocks.insert(
                 0,
@@ -561,6 +700,7 @@ impl StreamAccumulator {
             usage: TokenUsage {
                 input_tokens: self.input_tokens.unwrap_or(0),
                 output_tokens: self.output_tokens.unwrap_or(0),
+                cached_input_tokens: self.cached_input_tokens.unwrap_or(0),
             },
         })
     }
