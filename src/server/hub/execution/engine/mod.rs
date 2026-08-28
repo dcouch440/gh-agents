@@ -9,14 +9,14 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
 use futures::StreamExt;
-use serde_json::Value;
+use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
 use crate::llm::{
     BackoffConfig, ContentBlock, ExponentialBackoff, LLMError, LLMProvider, LLMRequest,
     LLMResponse, Message, RetryPolicy, StopReason, StreamAccumulator,
-    StreamChunk as LLMStreamChunk, TokenUsage,
+    StreamChunk as LLMStreamChunk, TokenUsage, UNPARSED_ARGUMENTS_KEY,
 };
 
 use super::recorder::ExecutionRecorder;
@@ -93,6 +93,15 @@ fn is_tool_failure(result: &Value) -> Option<String> {
         }
     }
     None
+}
+
+/// The raw text of a tool call whose arguments the provider could not parse.
+///
+/// `None` for a normal call. `Some(raw)` means the model sent something that
+/// was neither JSON nor any recoverable dialect, and the provider preserved it
+/// under [`UNPARSED_ARGUMENTS_KEY`] rather than discarding it.
+fn unparsed_arguments(input: &Value) -> Option<&str> {
+    input.get(UNPARSED_ARGUMENTS_KEY)?.as_str()
 }
 
 /// Hash a tool call (name + serialized input) for deduplication.
@@ -527,7 +536,28 @@ impl ExecutionEngine {
             }
             debug!(round, tool = %tool_name, "executing tool");
             sink.tool_start(tool_name, tool_id, tool_input).await;
-            let result = strategy.execute_tool(tool_name, tool_input).await;
+
+            // Arguments the provider could not parse never reach the tool.
+            // Dispatching them would run the tool with `{}` and report the
+            // first required parameter missing — which is not the model's
+            // actual mistake, gives it nothing to correct, and had agents
+            // re-sending the same broken form until the round budget ran out.
+            // Quote the raw text back instead and name the shape wanted.
+            let result = match unparsed_arguments(tool_input) {
+                Some(raw) => {
+                    warn!(round, tool = %tool_name, "tool call had unparsable arguments");
+                    json!({
+                        "error": format!(
+                            "Could not parse the arguments to `{tool_name}`. Received: {raw}\n\
+                             Arguments must be a JSON object, for example \
+                             {{\"command\": \"ls -la\"}} — not keyword arguments and not \
+                             a bare string. Send the call again in that form."
+                        )
+                    })
+                }
+                None => strategy.execute_tool(tool_name, tool_input).await,
+            };
+
             sink.tool_end(tool_name, tool_id, &result).await;
 
             // Track consecutive identical failures
