@@ -164,12 +164,56 @@ mod tests {
         assert!(validate_hop(&good).is_ok());
     }
 
+    // Names that always mean "this machine" or "this cluster" never reach an
+    // address check, because they never look like a literal IP.
     #[test]
-    fn hostnames_are_left_to_the_tunnel() {
-        // Resolution happens at the proxy, so a name is not judged here; the
-        // network it resolves on is the boundary. Documented in the module.
-        assert!(validate("http://localhost/").is_ok());
-        assert!(validate("http://internal.corp/").is_ok());
+    fn locally_meaningful_hostnames_are_refused() {
+        for u in [
+            "http://localhost/",
+            "http://LOCALHOST/",
+            // The DNS root dot is a bypass if the name is compared raw.
+            "http://localhost./",
+            "http://db.localhost/",
+            "http://metadata.google.internal/computeMetadata/v1/",
+            "http://svc.internal/",
+            "http://printer.local/",
+            "http://box.localdomain/",
+        ] {
+            assert!(validate(u).is_err(), "should have been refused: {u}");
+        }
+    }
+
+    // Suffix matching has to respect label boundaries, or ordinary public
+    // names that merely end in the same letters get caught.
+    #[test]
+    fn ordinary_hostnames_that_merely_look_local_are_allowed() {
+        for u in [
+            "http://notlocalhost.com/",
+            "http://mylocal.com/",
+            "http://internal.example.com/",
+            "https://example.com/",
+        ] {
+            assert!(validate(u).is_ok(), "should have been allowed: {u}");
+        }
+    }
+
+    // Every non-mapped form that embeds a v4 address has to be unwrapped and
+    // checked, or the deprecated spellings become a clean bypass.
+    #[test]
+    fn ipv6_forms_embedding_a_private_v4_are_refused() {
+        for u in [
+            // IPv4-compatible ::a.b.c.d
+            "http://[::127.0.0.1]/",
+            "http://[::169.254.169.254]/",
+            "http://[::10.0.0.1]/",
+            // NAT64 64:ff9b::/96
+            "http://[64:ff9b::7f00:1]/",
+            "http://[64:ff9b::a9fe:a9fe]/",
+        ] {
+            assert!(validate(u).is_err(), "should have been refused: {u}");
+        }
+        // The same forms wrapping a public address stay reachable.
+        assert!(validate("http://[64:ff9b::5db8:d822]/").is_ok());
     }
 
     #[test]

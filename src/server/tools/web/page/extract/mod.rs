@@ -40,6 +40,12 @@ pub enum Method {
     Readability,
     /// Readability declined or failed; the whole body was converted instead.
     WholePage,
+    /// The parser panicked or its thread was cancelled; nothing was extracted.
+    ///
+    /// Distinct from the two success paths so a crash is never reported as an
+    /// empty article, and so the caller can skip the JS-shell heuristic — which
+    /// would otherwise diagnose a crashed parser as "renders with JavaScript".
+    Failed,
 }
 
 impl Method {
@@ -47,6 +53,7 @@ impl Method {
         match self {
             Method::Readability => "article",
             Method::WholePage => "whole page (no article structure found)",
+            Method::Failed => "nothing (the extractor failed on this page)",
         }
     }
 }
@@ -58,8 +65,13 @@ pub async fn html_to_markdown(html: String, url: String) -> Extracted {
     tokio::task::spawn_blocking(move || extract_blocking(&html, &url))
         .await
         // A panic inside the parser must degrade to empty content, not take
-        // the request down with it.
-        .unwrap_or_default()
+        // the request down with it. It is reported as `Failed` rather than as
+        // the default (`Readability`), so the empty result reads as a failure
+        // instead of as an article that genuinely had no text.
+        .unwrap_or(Extracted {
+            method: Method::Failed,
+            ..Default::default()
+        })
 }
 
 /// The blocking body. Nothing `!Send` escapes this function.

@@ -497,11 +497,19 @@ pub const DEEPINFRA_DEFAULT_MODEL: &str = MODEL_DEEPSEEK_V4_FLASH;
 /// Whole-request timeout for DeepInfra chat completions (seconds).
 ///
 /// Generous because DeepInfra queues requests when a model is at capacity,
-/// and `xhigh` reasoning on a long context is legitimately slow. A stalled
-/// connection is caught by `DEEPINFRA_READ_TIMEOUT_SECS` instead.
+/// and `xhigh` reasoning on a long context is legitimately slow.
 pub const DEEPINFRA_CHAT_TIMEOUT_SECS: u64 = 900;
-/// Per-read timeout for DeepInfra streams (seconds).
-pub const DEEPINFRA_READ_TIMEOUT_SECS: u64 = 120;
+/// Read timeout for DeepInfra streams (seconds).
+///
+/// This bounds *both* time-to-first-byte and the gap between body frames:
+/// reqwest arms the timer at dispatch and polls it before headers arrive, so
+/// it is not a body-only timer (see `SseProviderAdapter::read_timeout_secs`).
+///
+/// It must therefore exceed the longest legitimate queue wait, or
+/// `DEEPINFRA_CHAT_TIMEOUT_SECS` can never be reached by the queued request it
+/// exists for. Five minutes is the ceiling on a wait at capacity; a genuinely
+/// stalled connection still fails well inside the 15-minute budget.
+pub const DEEPINFRA_READ_TIMEOUT_SECS: u64 = 300;
 /// Whole-request timeout for one-off utility calls (seconds).
 ///
 /// Utility calls (titles, summaries, the distiller) sit on the chat hot path

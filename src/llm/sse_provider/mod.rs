@@ -66,19 +66,30 @@ pub trait SseProviderAdapter: Send + Sync + Clone + 'static {
     ///
     /// The default delegates to [`Self::parse_sse_line`], so existing adapters
     /// are unaffected. Override for wire formats where a single event yields
-    /// several internal events — an OpenAI-compatible stream opening tool call
-    /// *n* implicitly closes call *n-1*, and both the close and the open have
-    /// to reach `StreamAccumulator` or the earlier call is dropped.
+    /// several internal events — an OpenAI-compatible frame carries the tool
+    /// call's `id`/`name` and a slice of its arguments at once, which is a
+    /// `ToolUseStart` plus an `InputJsonDelta`, and `parse_sse_line` can only
+    /// return one of them.
+    ///
+    /// Note that no `ContentBlockStop` is emitted for tool calls in this
+    /// format; open blocks are finalized by the leftover drain in
+    /// `StreamAccumulator::build`.
     fn parse_sse_events(&self, line: &str) -> Vec<LLMResult<StreamChunk>> {
         self.parse_sse_line(line).into_iter().collect()
     }
 
-    /// Optional per-read timeout, distinct from the whole-request timeout.
+    /// Optional read timeout, distinct from the whole-request timeout.
     ///
-    /// `None` keeps the previous behaviour of relying on the request timeout
-    /// alone. Providers that queue requests need this: time-to-first-byte can
-    /// legitimately be minutes, so the overall timeout must stay generous
-    /// while a stalled connection is still detected promptly.
+    /// `None` relies on the request timeout alone.
+    ///
+    /// Note what reqwest actually does with this, because it is not only a
+    /// per-frame timer: the sleep is armed when the request is dispatched and
+    /// polled in `PendingRequest::poll`, which runs *before response headers
+    /// arrive*. So this bounds time-to-first-byte too, and only then becomes
+    /// the per-frame timer for the body. It therefore has to be at least as
+    /// long as the slowest acceptable first byte — for a provider that queues
+    /// at capacity, that is minutes, not seconds — or the generous overall
+    /// timeout is unreachable and queued requests fail early.
     fn read_timeout_secs(&self) -> Option<u64> {
         None
     }

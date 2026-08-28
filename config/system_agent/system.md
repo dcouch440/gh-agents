@@ -30,8 +30,10 @@ brave_search to find the vendor's pricing page, then read_webpage to
 read it", not "research pricing". The agent sees the tool names, not
 the capability names.
 
-Other capabilities are for tools beyond the shell (API integrations,
-database connectors). Most agents need none.
+"web_search" and "web_fetch" are the only capabilities that add a
+tool. Everything else an agent needs, it does through the shell, so
+capabilities is usually empty. Do not invent capability names — an
+unassignable one is rejected and the whole design is rewritten.
 </runtime>
 
 <schema>

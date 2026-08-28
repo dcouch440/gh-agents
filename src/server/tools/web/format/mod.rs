@@ -47,15 +47,23 @@ impl Envelope {
     }
 
     /// Append a `key: value` field line.
+    ///
+    /// The value is whitespace-collapsed. Field values carry page-controlled
+    /// text — `<title>`, `og:site_name`, bylines, result URLs — and the header
+    /// region sits *above* the untrusted-content fence and is not indented. A
+    /// newline in a value would let a page emit its own unindented lines there,
+    /// forging envelope framing that the fence is supposed to contain.
     pub fn field(&mut self, key: &str, value: impl AsRef<str>) -> &mut Self {
-        let _ = writeln!(self.out, "{}: {}", key, value.as_ref());
+        let _ = writeln!(self.out, "{}: {}", key, squeeze_ws(value.as_ref()));
         self
     }
 
     /// Append a `key: value` line only when the value is present and non-empty.
     pub fn field_opt(&mut self, key: &str, value: Option<impl AsRef<str>>) -> &mut Self {
         if let Some(v) = value {
-            let v = v.as_ref();
+            // Emptiness is judged after collapsing: a metadata value that is
+            // only whitespace would otherwise emit a bare `key:` line.
+            let v = squeeze_ws(v.as_ref());
             if !v.is_empty() {
                 self.field(key, v);
             }
@@ -70,8 +78,24 @@ impl Envelope {
     }
 
     /// Append one indented body line.
+    ///
+    /// Embedded newlines are flattened to spaces. Only the first line of the
+    /// argument would receive [`INDENT`], so a value containing a newline —
+    /// a scraped result URL, a date field — could otherwise emit unindented
+    /// text that mimics the envelope's own framing. [`block`] has already split
+    /// on newlines before it gets here, so this never disturbs a body.
+    ///
+    /// [`block`]: Self::block
     pub fn line(&mut self, line: &str) -> &mut Self {
-        let _ = writeln!(self.out, "{}{}", INDENT, line);
+        if line.contains(['\n', '\r']) {
+            let flat: String = line
+                .chars()
+                .map(|c| if c == '\n' || c == '\r' { ' ' } else { c })
+                .collect();
+            let _ = writeln!(self.out, "{}{}", INDENT, flat);
+        } else {
+            let _ = writeln!(self.out, "{}{}", INDENT, line);
+        }
         self
     }
 
@@ -111,6 +135,19 @@ pub struct Truncated {
 }
 
 impl Truncated {
+    /// The text, with an ellipsis when it was cut.
+    ///
+    /// Without the marker a description clipped mid-sentence reads as a
+    /// complete one that simply stops, and the model quotes the fragment as
+    /// the page's whole claim.
+    pub fn with_ellipsis(&self) -> String {
+        if self.truncated {
+            format!("{}…", self.text)
+        } else {
+            self.text.clone()
+        }
+    }
+
     /// A short human summary suitable for a `key: value` field.
     pub fn summary(&self) -> String {
         if self.truncated {

@@ -5,7 +5,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Result;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::cli::Args;
 use crate::config::load_config;
@@ -35,16 +35,26 @@ pub async fn run_serve(args: Args) -> Result<()> {
     // Install the web-egress policy before anything can make a request.
     // Until this runs the gate refuses everything, so an early failure is a
     // refused fetch rather than an unprotected one.
-    crate::net::egress::install(crate::net::egress::EgressConfig {
+    let installed = crate::net::egress::install(crate::net::egress::EgressConfig {
         mode: env.web_egress_mode,
         proxy_url: env.vpn_proxy_url.clone(),
         is_production: env.is_production(),
     });
-    info!(
-        mode = ?env.web_egress_mode,
-        proxy_configured = env.vpn_proxy_url.is_some(),
-        "web egress policy installed"
-    );
+    if installed {
+        info!(
+            mode = ?env.web_egress_mode,
+            proxy_configured = env.vpn_proxy_url.is_some(),
+            "web egress policy installed"
+        );
+    } else {
+        // First writer wins. Logging the intended policy as though it were
+        // live would leave the operator's log asserting a rule that is not in
+        // effect — which, for an egress gate, is worse than saying nothing.
+        warn!(
+            mode = ?env.web_egress_mode,
+            "web egress policy was already installed; this configuration was NOT applied"
+        );
+    }
 
     // Load configuration
     let config = load_config().unwrap_or_default();

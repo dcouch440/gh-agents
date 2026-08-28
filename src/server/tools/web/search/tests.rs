@@ -49,7 +49,7 @@ mod tests {
     // Golden test: pins the exact text the model reads.
     #[test]
     fn the_rendered_report_is_labeled_and_scannable() {
-        let out = render("rust async", &parse(one_result()), None);
+        let out = render("rust async", &parse(one_result()), None, None);
         let expected = "\
 result: success
 query: rust async
@@ -70,7 +70,7 @@ Results are search snippets, not sources. Use read_webpage on a URL above before
 
     #[test]
     fn brave_highlight_markup_is_stripped_from_titles() {
-        let out = render("rust async", &parse(one_result()), None);
+        let out = render("rust async", &parse(one_result()), None, None);
         assert!(!out.contains("<strong>"), "{out}");
     }
 
@@ -78,13 +78,13 @@ Results are search snippets, not sources. Use read_webpage on a URL above before
     // would break the indented layout.
     #[test]
     fn whitespace_in_descriptions_is_collapsed() {
-        let out = render("rust async", &parse(one_result()), None);
+        let out = render("rust async", &parse(one_result()), None, None);
         assert!(out.contains("The suggested replacement is smol, which is lightweight."));
     }
 
     #[test]
     fn only_the_first_two_snippets_are_rendered() {
-        let out = render("rust async", &parse(one_result()), None);
+        let out = render("rust async", &parse(one_result()), None, None);
         assert!(out.contains("first snippet"));
         assert!(out.contains("second snippet"));
         assert!(!out.contains("third snippet"), "snippets should be capped");
@@ -94,8 +94,27 @@ Results are search snippets, not sources. Use read_webpage on a URL above before
     // would count toward the engine's repeated-failure breaker.
     #[test]
     fn no_results_is_a_successful_report_not_an_error() {
-        let out = render("obscure", &parse(json!({"web": {"results": []}})), None);
+        let out = render(
+            "obscure",
+            &parse(json!({"web": {"results": []}})),
+            None,
+            None,
+        );
         assert!(out.starts_with("result: success\n"), "{out}");
+        assert!(out.contains("No results"), "{out}");
+    }
+
+    // A quota that has run out is exactly when results stop coming back, so
+    // the warning has to survive the empty-results early return.
+    #[test]
+    fn a_low_quota_is_reported_even_when_there_are_no_results() {
+        let out = render(
+            "obscure",
+            &parse(json!({"web": {"results": []}})),
+            Some(3),
+            None,
+        );
+        assert!(out.contains("3 searches left this month"), "{out}");
         assert!(out.contains("No results"), "{out}");
     }
 
@@ -103,26 +122,26 @@ Results are search snippets, not sources. Use read_webpage on a URL above before
     fn brave_flagging_weak_results_is_surfaced() {
         let mut v = one_result();
         v["query"]["bad_results"] = json!(true);
-        let out = render("q", &parse(v), None);
+        let out = render("q", &parse(v), None, None);
         assert!(out.contains("quality: low"), "{out}");
     }
 
     #[test]
     fn a_healthy_quota_is_not_mentioned() {
-        let out = render("q", &parse(one_result()), Some(1500));
+        let out = render("q", &parse(one_result()), Some(1500), None);
         assert!(!out.contains("quota"), "{out}");
     }
 
     #[test]
     fn a_nearly_exhausted_quota_is_warned_about() {
-        let out = render("q", &parse(one_result()), Some(12));
+        let out = render("q", &parse(one_result()), Some(12), None);
         assert!(out.contains("12 searches left this month"), "{out}");
     }
 
     #[test]
     fn a_result_without_a_hostname_or_age_still_renders() {
         let v = json!({"web": {"results": [{"title": "t", "url": "https://e.com"}]}});
-        let out = render("q", &parse(v), None);
+        let out = render("q", &parse(v), None, None);
         assert!(out.contains("[1] t"), "{out}");
         assert!(out.contains("https://e.com"), "{out}");
     }
@@ -133,7 +152,7 @@ Results are search snippets, not sources. Use read_webpage on a URL above before
         let v = json!({"web": {"results": [{
             "title": "t", "url": "u", "description": long
         }]}});
-        let out = render("q", &parse(v), None);
+        let out = render("q", &parse(v), None, None);
         assert!(
             out.len() < 900,
             "description was not truncated: {}",
@@ -182,6 +201,24 @@ Results are search snippets, not sources. Use read_webpage on a URL above before
 
     // ── guards ─────────────────────────────────────────────────────────────
 
+    // An unrecognised freshness must not be dropped: an unfiltered search
+    // rendered without comment reads as a recency-filtered one.
+    #[tokio::test]
+    async fn an_invalid_freshness_is_refused_rather_than_ignored() {
+        let v = execute(&json!({"query": "rust", "freshness": "2026-01-01to2026-06-01"})).await;
+        let err = v
+            .get("error")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default();
+        assert!(err.contains("Invalid freshness"), "{v}");
+    }
+
+    #[test]
+    fn an_accepted_freshness_is_echoed_in_the_report() {
+        let out = render("q", &parse(one_result()), None, Some("pw"));
+        assert!(out.contains("freshness: pw"), "{out}");
+    }
+
     #[tokio::test]
     async fn a_missing_query_is_a_tool_error() {
         let v = execute(&json!({})).await;
@@ -205,13 +242,21 @@ mod live_tests {
     #[tokio::test]
     #[ignore = "hits the live Brave API and spends quota"]
     async fn brave_live_search_returns_a_rendered_report() {
-        crate::net::egress::install(crate::net::egress::EgressConfig {
+        // This is the one test that installs the process-wide policy, which is
+        // why it is `#[ignore]`d: it is opt-in and runs alone. `install` is
+        // first-writer-wins, so if anything else got there first this test
+        // would silently exercise that policy instead of the one below.
+        let installed = crate::net::egress::install(crate::net::egress::EgressConfig {
             mode: crate::net::egress::EgressMode::parse(
                 std::env::var("NEXOR_WEB_EGRESS_MODE").ok().as_deref(),
             ),
             proxy_url: std::env::var("NEXOR_VPN_PROXY_URL").ok(),
             is_production: false,
         });
+        assert!(
+            installed,
+            "an egress policy was already installed; run this test on its own"
+        );
 
         let v = execute(&json!({"query": "rust async runtime comparison"})).await;
         let s = v

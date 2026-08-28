@@ -96,6 +96,15 @@ pub async fn run_chat(
         tool_names,
         model_id: agent.model_id.clone(),
         temperature: agent.model_temperature,
+        // The per-agent column, as `dag::single` already does. Falling back to
+        // the default here gave a chat turn a different budget than the same
+        // agent got in a DAG step.
+        max_tokens: agent.model_max_tokens.max(1) as u32,
+        // Chat runs the same workforce agents as a DAG step, so it follows the
+        // same protocol config. Leaving this `None` meant the highest-traffic
+        // path silently ignored the tier→effort mapping the rest of the system
+        // is built around.
+        effort: crate::config::protocols::WORKFORCE.agent("agent").effort,
         max_history: 50,
         ..Default::default()
     };
@@ -170,6 +179,11 @@ pub async fn run_step_chat(
         tool_names: vec![],
         model_id: crate::constants::DEFAULT_MODEL.to_string(),
         temperature: crate::constants::DEFAULT_TEMPERATURE,
+        // A step-scoped chat is the assistant talking about a step, so it
+        // follows the assistant protocol rather than defaulting to no effort.
+        effort: crate::config::protocols::ASSISTANT
+            .agent("assistant")
+            .effort,
         max_history: 50,
         ..Default::default()
     };

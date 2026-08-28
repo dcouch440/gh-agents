@@ -543,4 +543,116 @@ mod accumulator_tests {
         let v = serde_json::to_value(&req).unwrap();
         assert_eq!(v["effort"], serde_json::json!("xhigh"));
     }
+
+    // ── tool-call accumulation across odd frame shapes ─────────────────────
+    //
+    // These are the shapes real OpenAI-compatible backends emit that the
+    // strict reading of the protocol does not.
+
+    #[test]
+    fn repeating_the_open_frame_does_not_discard_accumulated_arguments() {
+        let mut acc = StreamAccumulator::new();
+        acc.apply(&StreamChunk::MessageStart {
+            model: "m".into(),
+            input_tokens: 1,
+        });
+        // Some backends resend id+name on every frame of the call.
+        acc.apply(&StreamChunk::ToolUseStart {
+            index: 0,
+            id: "c1".into(),
+            name: "f".into(),
+        });
+        acc.apply(&StreamChunk::InputJsonDelta {
+            index: 0,
+            partial_json: r#"{"a":"#.into(),
+        });
+        acc.apply(&StreamChunk::ToolUseStart {
+            index: 0,
+            id: "c1".into(),
+            name: "f".into(),
+        });
+        acc.apply(&StreamChunk::InputJsonDelta {
+            index: 0,
+            partial_json: "1}".into(),
+        });
+        acc.apply(&StreamChunk::MessageDelta {
+            stop_reason: Some(StopReason::ToolUse),
+            output_tokens: Some(2),
+        });
+
+        let r = acc.build().expect("response");
+        match r.content_blocks.first().expect("a tool block") {
+            ContentBlock::ToolUse { name, input, .. } => {
+                assert_eq!(name, "f");
+                assert_eq!(input, &serde_json::json!({"a": 1}));
+            }
+            other => panic!("expected a tool use, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn arguments_arriving_before_the_name_are_not_dropped() {
+        let mut acc = StreamAccumulator::new();
+        acc.apply(&StreamChunk::MessageStart {
+            model: "m".into(),
+            input_tokens: 1,
+        });
+        // id first, arguments next, name only in a later frame.
+        acc.apply(&StreamChunk::ToolUseStart {
+            index: 0,
+            id: "c1".into(),
+            name: String::new(),
+        });
+        acc.apply(&StreamChunk::InputJsonDelta {
+            index: 0,
+            partial_json: r#"{"a":1}"#.into(),
+        });
+        acc.apply(&StreamChunk::ToolUseStart {
+            index: 0,
+            id: String::new(),
+            name: "f".into(),
+        });
+        acc.apply(&StreamChunk::MessageDelta {
+            stop_reason: Some(StopReason::ToolUse),
+            output_tokens: Some(2),
+        });
+
+        let r = acc.build().expect("response");
+        match r.content_blocks.first().expect("a tool block") {
+            ContentBlock::ToolUse { id, name, input } => {
+                assert_eq!(id, "c1");
+                assert_eq!(name, "f");
+                assert_eq!(input, &serde_json::json!({"a": 1}));
+            }
+            other => panic!("expected a tool use, got {other:?}"),
+        }
+    }
+
+    // A delta for an index that was never opened must still accumulate, or the
+    // call disappears while `finish_reason` still reports `tool_calls`.
+    #[test]
+    fn a_delta_for_an_unopened_index_opens_the_block() {
+        let mut acc = StreamAccumulator::new();
+        acc.apply(&StreamChunk::MessageStart {
+            model: "m".into(),
+            input_tokens: 1,
+        });
+        acc.apply(&StreamChunk::InputJsonDelta {
+            index: 0,
+            partial_json: r#"{"a":1}"#.into(),
+        });
+        acc.apply(&StreamChunk::MessageDelta {
+            stop_reason: Some(StopReason::ToolUse),
+            output_tokens: Some(1),
+        });
+
+        let r = acc.build().expect("response");
+        assert!(
+            r.content_blocks
+                .iter()
+                .any(|b| matches!(b, ContentBlock::ToolUse { .. })),
+            "the tool call was dropped: {:?}",
+            r.content_blocks
+        );
+    }
 }

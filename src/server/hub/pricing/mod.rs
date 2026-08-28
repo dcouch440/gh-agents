@@ -108,6 +108,14 @@ fn rates_for(model_id: &str) -> Option<Rates> {
 /// Substring matching is deliberate: Ollama model ids are free-form (they come
 /// straight from `OLLAMA_MODEL`) and may be namespaced, tagged, or both —
 /// `llama3`, `library/llama3`, `hf.co/org/qwen2:7b`.
+///
+/// The family name alone is *not* enough, because hosted providers serve the
+/// same families: `meta-llama/Meta-Llama-3.1-405B-Instruct` and
+/// `mistralai/Mistral-Small-24B` both contain a local pattern while costing
+/// real money. So a namespaced id counts as local only under a namespace that
+/// is itself local. The default direction is deliberate — an unrecognised id
+/// falls through to a non-zero rate, because under-billing is silent and
+/// over-billing is not.
 fn is_local_model(model_id: &str) -> bool {
     const LOCAL_PATTERNS: [&str; 8] = [
         "llama",
@@ -119,7 +127,25 @@ fn is_local_model(model_id: &str) -> bool {
         "deepseek",
         "vicuna",
     ];
-    LOCAL_PATTERNS.iter().any(|p| model_id.contains(p))
+    /// Namespaces Ollama ids actually carry. Anything else before a `/` is a
+    /// hosting org (`meta-llama/`, `mistralai/`, `Qwen/`, `google/`).
+    const LOCAL_NAMESPACES: [&str; 2] = ["library", "hf.co"];
+
+    // Ids are free-form and inconsistently cased (`Qwen/Qwen3`, `meta-llama/`).
+    let id = model_id.to_ascii_lowercase();
+
+    if !LOCAL_PATTERNS.iter().any(|p| id.contains(p)) {
+        return false;
+    }
+    match id.split_once('/') {
+        // A bare family name (`llama3`, `deepseek-r1:7b`) is an Ollama id.
+        None => true,
+        // Namespaced: local only under a local namespace, or when the id
+        // carries an Ollama-style `:tag`, which hosted ids do not use. That
+        // keeps a custom Ollama namespace (`myorg/mistral:latest`) free while
+        // billing `meta-llama/Meta-Llama-3.1-405B-Instruct`.
+        Some((namespace, rest)) => LOCAL_NAMESPACES.contains(&namespace) || rest.contains(':'),
+    }
 }
 
 #[cfg(test)]

@@ -21,44 +21,51 @@
 //! private network. This module blocks the literal-address path and the
 //! non-HTTP schemes; the network topology blocks the rest.
 
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::net::{Ipv4Addr, Ipv6Addr};
 
+use thiserror::Error;
 use url::{Host, Url};
 
 #[cfg(test)]
 mod tests;
 
-/// Why a URL may not be fetched.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum UrlRejection {
-    NotAbsolute,
-    UnsupportedScheme(String),
-    EmbeddedCredentials,
-    PrivateAddress(String),
-    NoHost,
-}
+/// Hostnames that always name the local machine or a well-known internal
+/// service, regardless of what DNS says.
+///
+/// Matched exactly or as a parent suffix, after the trailing root dot is
+/// stripped. These are the names that reach an internal address without ever
+/// looking like a literal IP, so the address checks below never see them.
+const BLOCKED_SUFFIXES: &[&str] = &[
+    "localhost",
+    "local",
+    "internal",
+    "localdomain",
+    "metadata.google.internal",
+];
 
-impl std::fmt::Display for UrlRejection {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            UrlRejection::NotAbsolute => {
-                write!(f, "not an absolute URL — include http:// or https://")
-            }
-            UrlRejection::UnsupportedScheme(s) => {
-                write!(
-                    f,
-                    "unsupported scheme '{s}' — only http and https are fetched"
-                )
-            }
-            UrlRejection::EmbeddedCredentials => {
-                write!(f, "URLs containing credentials are not fetched")
-            }
-            UrlRejection::PrivateAddress(a) => {
-                write!(f, "'{a}' is a private or reserved address")
-            }
-            UrlRejection::NoHost => write!(f, "URL has no host"),
-        }
-    }
+/// Why a URL may not be fetched.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum UrlRejection {
+    #[error("not an absolute URL — include http:// or https://")]
+    NotAbsolute,
+
+    #[error("unsupported scheme '{0}' — only http and https are fetched")]
+    UnsupportedScheme(String),
+
+    #[error("URLs containing credentials are not fetched")]
+    EmbeddedCredentials,
+
+    #[error("'{0}' is a private or reserved address")]
+    PrivateAddress(String),
+
+    #[error("'{0}' names the local machine or an internal service")]
+    InternalHostname(String),
+
+    #[error("URL has no host")]
+    NoHost,
+
+    #[error("'{0}' could not be resolved")]
+    Unresolvable(String),
 }
 
 /// Validate an agent-supplied URL, returning the normalized form.
@@ -91,7 +98,11 @@ pub fn validate(raw: &str) -> Result<Url, UrlRejection> {
                 return Err(UrlRejection::PrivateAddress(ip.to_string()));
             }
         }
-        Some(Host::Domain(_)) => {}
+        Some(Host::Domain(name)) => {
+            if let Some(blocked) = blocked_hostname(name) {
+                return Err(UrlRejection::InternalHostname(blocked));
+            }
+        }
     }
 
     url.set_fragment(None);
@@ -104,6 +115,67 @@ pub fn validate(raw: &str) -> Result<Url, UrlRejection> {
 /// standard way to turn an allowed fetch into an internal one.
 pub fn validate_hop(url: &Url) -> Result<(), UrlRejection> {
     validate(url.as_str()).map(|_| ())
+}
+
+/// Check the addresses a hostname actually resolves to.
+///
+/// Only meaningful when this process does its own DNS — see
+/// [`crate::net::egress::resolves_locally`]. In that mode the name checks in
+/// [`validate`] are not enough: `127.0.0.1.nip.io` and any attacker-controlled
+/// name pointing at an internal address are ordinary domains that resolve
+/// straight back to the host's own network.
+///
+/// A literal-address host has already been checked by [`validate`], so those
+/// return early. This narrows but does not close DNS rebinding: the connection
+/// resolves again afterwards, and nothing here pins the address.
+pub async fn validate_addresses(url: &Url) -> Result<(), UrlRejection> {
+    let name = match url.host() {
+        Some(Host::Domain(d)) => d.to_string(),
+        _ => return Ok(()),
+    };
+    let port = url.port_or_known_default().unwrap_or(80);
+
+    let resolved = tokio::net::lookup_host((name.as_str(), port))
+        .await
+        .map_err(|_| UrlRejection::Unresolvable(name.clone()))?;
+
+    let mut saw_any = false;
+    for addr in resolved {
+        saw_any = true;
+        let public = match addr.ip() {
+            std::net::IpAddr::V4(v4) => is_public_v4(v4),
+            std::net::IpAddr::V6(v6) => is_public_v6(v6),
+        };
+        // Every address must pass: a name with one public and one loopback
+        // record would otherwise be a coin flip at connect time.
+        if !public {
+            return Err(UrlRejection::PrivateAddress(format!(
+                "{name} resolves to {}, which",
+                addr.ip()
+            )));
+        }
+    }
+    if !saw_any {
+        return Err(UrlRejection::Unresolvable(name));
+    }
+    Ok(())
+}
+
+/// Whether a hostname is one that always names something local.
+///
+/// Returns the offending name when it is. The comparison is case-insensitive
+/// and ignores the DNS root dot, so `LocalHost.` is caught alongside
+/// `localhost`. Suffix matching is on label boundaries: `notlocalhost` is a
+/// perfectly ordinary name and is not blocked.
+fn blocked_hostname(name: &str) -> Option<String> {
+    let host = name.trim_end_matches('.').to_ascii_lowercase();
+    if host.is_empty() {
+        return None;
+    }
+    BLOCKED_SUFFIXES
+        .iter()
+        .any(|s| host == *s || host.ends_with(&format!(".{s}")))
+        .then_some(host)
 }
 
 /// Whether an IPv4 address is routable public space.
@@ -147,11 +219,28 @@ fn is_public_v6(ip: Ipv6Addr) -> bool {
     if let Some(v4) = ip.to_ipv4_mapped() {
         return is_public_v4(v4);
     }
-    // ::a.b.c.d IPv4-compatible (deprecated, still parsed)
-    if seg[..6] == [0, 0, 0, 0, 0, 0] {
-        if let IpAddr::V4(v4) = IpAddr::from(ip).to_canonical() {
-            return is_public_v4(v4);
-        }
+    // 64:ff9b::/96 NAT64 — the embedded v4 is the address actually reached.
+    if seg[0] == 0x0064 && seg[1] == 0xff9b && seg[2..6] == [0, 0, 0, 0] {
+        return is_public_v4(embedded_v4(seg));
+    }
+    // ::a.b.c.d IPv4-compatible (deprecated, still parsed).
+    //
+    // Built from the segments directly: `to_canonical` only unwraps the
+    // `::ffff:` *mapped* form, which the branch above has already handled, so
+    // routing this through it would never match and the address would fall
+    // through as public.
+    if seg[..6] == [0, 0, 0, 0, 0, 0] && !ip.is_loopback() && !ip.is_unspecified() {
+        return is_public_v4(embedded_v4(seg));
     }
     true
+}
+
+/// The IPv4 address embedded in the last two segments of an IPv6 address.
+fn embedded_v4(seg: [u16; 8]) -> Ipv4Addr {
+    Ipv4Addr::new(
+        (seg[6] >> 8) as u8,
+        (seg[6] & 0xff) as u8,
+        (seg[7] >> 8) as u8,
+        (seg[7] & 0xff) as u8,
+    )
 }

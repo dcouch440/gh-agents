@@ -19,6 +19,23 @@ use crate::server::tools::shared::error_json;
 #[cfg(test)]
 mod tests;
 
+/// A short, non-leaking description of a transport failure.
+///
+/// `reqwest::Error`'s own `Display` appends `for url (...)`, which would put
+/// the configured proxy endpoint — or a redirect target — into the model's
+/// context. Both web tools classify errors through here instead.
+pub(crate) fn brief(e: &reqwest::Error) -> String {
+    if e.is_timeout() {
+        "timed out".to_string()
+    } else if e.is_connect() {
+        "could not connect".to_string()
+    } else if e.is_decode() {
+        "the response could not be decoded".to_string()
+    } else {
+        "network error".to_string()
+    }
+}
+
 /// Every tool handled by this module.
 ///
 /// Keep in sync with the arms in [`crate::tools::registry::get_tool_definition`]

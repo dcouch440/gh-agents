@@ -108,9 +108,12 @@ mod tests {
             "remove_node",
             "wire_edge",
             "remove_edge",
+            // Web tools
+            "brave_search",
+            "read_webpage",
         ];
 
-        assert_eq!(all_names.len(), 22);
+        assert_eq!(all_names.len(), 24);
 
         // Verify all map to tools
         for name in all_names {
@@ -152,6 +155,9 @@ mod tests {
             "remove_node",
             "wire_edge",
             "remove_edge",
+            // Web tools
+            "brave_search",
+            "read_webpage",
         ];
 
         for tool_name in all_tools {

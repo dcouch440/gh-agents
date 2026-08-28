@@ -6,9 +6,11 @@
 
 use std::time::Duration;
 
+use futures::StreamExt;
 use serde::Deserialize;
 use serde_json::Value;
 
+use super::brief;
 use super::format::{squeeze_ws, strip_highlight_tags, truncate_chars, Envelope, RESULT_SUCCESS};
 use crate::net::egress;
 use crate::server::tools::shared::error_json;
@@ -28,6 +30,12 @@ const SNIPPET_CHARS: usize = 200;
 const SNIPPETS_PER_RESULT: usize = 2;
 /// Whole-request timeout.
 const TIMEOUT_SECS: u64 = 20;
+/// Hard cap on bytes read from the search API, enforced while streaming.
+///
+/// A ten-result response is a few tens of KiB; this is slack, not a budget.
+/// Without it a misbehaving upstream (or anything interposed on the tunnel)
+/// could stream unbounded JSON straight into memory.
+const MAX_BYTES: usize = 4 * 1024 * 1024;
 /// Below this remaining monthly quota the report carries a warning, so the
 /// agent (and whoever reads the transcript) learns before the tool goes dead.
 const LOW_QUOTA_THRESHOLD: u64 = 100;
@@ -39,6 +47,17 @@ pub async fn execute(input: &Value) -> Value {
         _ => return error_json("Missing required parameter: query"),
     };
 
+    let freshness = input.get("freshness").and_then(Value::as_str);
+    // An unrecognised value is refused rather than dropped: silently running
+    // an unfiltered search would have the model read stale results as though
+    // they had been recency-filtered.
+    if let Some(f) = freshness.filter(|f| !is_valid_freshness(f)) {
+        return error_json(format!(
+            "Invalid freshness '{f}'. Use pd (past day), pw (past week), \
+             pm (past month) or py (past year), or omit it."
+        ));
+    }
+
     let api_key = match std::env::var(crate::constants::ENV_BRAVE_SEARCH_API_KEY) {
         Ok(k) if !k.is_empty() => k,
         _ => {
@@ -49,20 +68,22 @@ pub async fn execute(input: &Value) -> Value {
         }
     };
 
-    let client = match egress::client(Duration::from_secs(TIMEOUT_SECS)) {
+    // No redirects: `X-Subscription-Token` is a custom header, and reqwest
+    // strips only the standard credential headers on a cross-host hop. A 3xx
+    // away from the Brave endpoint would forward the API key verbatim.
+    let client = match egress::client_no_redirect(Duration::from_secs(TIMEOUT_SECS)) {
         Ok(c) => c,
         // Fail closed: the query itself is sensitive, so a search that cannot
         // use the tunnel must not be retried without it.
         Err(e) => return error_json(e.to_string()),
     };
 
-    let freshness = input.get("freshness").and_then(Value::as_str);
     let mut params: Vec<(&str, String)> = vec![
         ("q", query.to_string()),
         ("count", RESULT_COUNT.to_string()),
         ("extra_snippets", "true".to_string()),
     ];
-    if let Some(f) = freshness.filter(|f| is_valid_freshness(f)) {
+    if let Some(f) = freshness {
         params.push(("freshness", f.to_string()));
     }
 
@@ -90,16 +111,25 @@ pub async fn execute(input: &Value) -> Value {
         });
     }
 
-    let body: BraveResponse = match response.json().await {
+    let raw = match read_capped(response).await {
         Ok(b) => b,
-        Err(e) => return error_json(format!("Could not read web search results: {}", brief(&e))),
+        Err(e) => return error_json(e),
+    };
+    let body: BraveResponse = match serde_json::from_slice(&raw) {
+        Ok(b) => b,
+        Err(_) => return error_json("Could not read web search results: malformed response"),
     };
 
-    Value::String(render(query, &body, quota))
+    Value::String(render(query, &body, quota, freshness))
 }
 
 /// Render the report the model reads.
-fn render(query: &str, body: &BraveResponse, quota: Option<u64>) -> String {
+fn render(
+    query: &str,
+    body: &BraveResponse,
+    quota: Option<u64>,
+    freshness: Option<&str>,
+) -> String {
     let results = body
         .web
         .as_ref()
@@ -108,7 +138,14 @@ fn render(query: &str, body: &BraveResponse, quota: Option<u64>) -> String {
 
     let mut env = Envelope::new(RESULT_SUCCESS);
     env.field("query", query);
+    env.field_opt("freshness", freshness);
     env.field("results", results.len().to_string());
+
+    if let Some(remaining) = quota {
+        if remaining <= LOW_QUOTA_THRESHOLD {
+            env.field("quota", format!("{remaining} searches left this month"));
+        }
+    }
 
     if results.is_empty() {
         // Not an error: a search that legitimately finds nothing is a fact the
@@ -124,12 +161,6 @@ fn render(query: &str, body: &BraveResponse, quota: Option<u64>) -> String {
         .unwrap_or(false)
     {
         env.field("quality", "low — Brave flagged these results as weak");
-    }
-
-    if let Some(remaining) = quota {
-        if remaining <= LOW_QUOTA_THRESHOLD {
-            env.field("quota", format!("{remaining} searches left this month"));
-        }
     }
 
     env.section("results");
@@ -148,11 +179,11 @@ fn render(query: &str, body: &BraveResponse, quota: Option<u64>) -> String {
 
         if let Some(d) = &r.description {
             let d = truncate_chars(&squeeze_ws(&strip_highlight_tags(d)), DESCRIPTION_CHARS);
-            env.line(&format!("    {}", d.text));
+            env.line(&format!("    {}", d.with_ellipsis()));
         }
         for snip in r.extra_snippets.iter().flatten().take(SNIPPETS_PER_RESULT) {
             let s = truncate_chars(&squeeze_ws(&strip_highlight_tags(snip)), SNIPPET_CHARS);
-            env.line(&format!("    - {}", s.text));
+            env.line(&format!("    - {}", s.with_ellipsis()));
         }
         if i + 1 < results.len() {
             env.line("");
@@ -174,6 +205,25 @@ fn is_valid_freshness(v: &str) -> bool {
     matches!(v, "pd" | "pw" | "pm" | "py")
 }
 
+/// Read the response body with a cap enforced *while* streaming.
+///
+/// Content-Length is not trusted: it is absent on chunked responses and
+/// reported as `None` once reqwest transparently decompresses.
+async fn read_capped(response: reqwest::Response) -> Result<Vec<u8>, String> {
+    let mut buf: Vec<u8> = Vec::with_capacity(64 * 1024);
+    let mut stream = response.bytes_stream();
+
+    while let Some(chunk) = stream.next().await {
+        let chunk =
+            chunk.map_err(|e| format!("Could not read web search results: {}", brief(&e)))?;
+        if buf.len() + chunk.len() > MAX_BYTES {
+            return Err("Web search returned an oversized response".to_string());
+        }
+        buf.extend_from_slice(&chunk);
+    }
+    Ok(buf)
+}
+
 /// Remaining monthly quota from `x-ratelimit-remaining`.
 ///
 /// Brave reports two comma-separated windows, per-second then per-month; the
@@ -188,17 +238,6 @@ fn remaining_month_quota(headers: &reqwest::header::HeaderMap) -> Option<u64> {
         .trim()
         .parse()
         .ok()
-}
-
-/// A short, non-leaking description of a transport error.
-fn brief(e: &reqwest::Error) -> String {
-    if e.is_timeout() {
-        "timed out".to_string()
-    } else if e.is_connect() {
-        "could not connect".to_string()
-    } else {
-        "network error".to_string()
-    }
 }
 
 // ── Wire types ──────────────────────────────────────────────────────────────

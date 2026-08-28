@@ -419,7 +419,20 @@ impl ExecutionEngine {
                         return Ok(result);
                     }
                 }
-                StopReason::EndTurn | StopReason::MaxTokens | StopReason::StopSequence => {
+                // A filtered completion terminates the turn like any other
+                // terminal reason; it is warned about rather than treated as a
+                // clean finish, because the text is truncated by policy.
+                StopReason::ContentFiltered
+                | StopReason::EndTurn
+                | StopReason::MaxTokens
+                | StopReason::StopSequence => {
+                    if response.stop_reason == StopReason::ContentFiltered {
+                        tracing::warn!(
+                            round,
+                            "provider blocked the completion on its content policy; \
+                             the assistant message is truncated"
+                        );
+                    }
                     if let Some(result) = self
                         .handle_end_turn(
                             &ctx,

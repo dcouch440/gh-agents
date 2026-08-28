@@ -395,6 +395,12 @@ pub enum StopReason {
     StopSequence,
     /// Tool use requested (for future)
     ToolUse,
+    /// The provider blocked the completion on its own content policy.
+    ///
+    /// Distinct from `EndTurn`: the text is truncated or absent because it was
+    /// filtered, not because the model finished. Collapsing the two persists a
+    /// blocked turn as a successful one.
+    ContentFiltered,
 }
 
 /// Token usage information
@@ -537,7 +543,7 @@ pub struct SSEEvent {
 }
 
 /// State for accumulating a single tool use block during streaming
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct ToolUseAccumulator {
     id: String,
     name: String,
@@ -629,22 +635,37 @@ impl StreamAccumulator {
                 }
             }
             StreamChunk::ToolUseStart { index, id, name } => {
-                self.tool_uses.insert(
-                    *index,
-                    ToolUseAccumulator {
+                // Idempotent: some OpenAI-compatible backends repeat `id` and
+                // `name` on every frame of a call. Re-inserting would reset
+                // `input_json` and throw away the arguments accumulated so far,
+                // leaving the tool to run on a fragment of its own input.
+                let entry = self
+                    .tool_uses
+                    .entry(*index)
+                    .or_insert_with(|| ToolUseAccumulator {
                         id: id.clone(),
                         name: name.clone(),
                         input_json: String::new(),
-                    },
-                );
+                    });
+                // A later frame may be the one that carries the real id/name;
+                // fill them in without disturbing accumulated arguments.
+                if entry.id.is_empty() {
+                    entry.id = id.clone();
+                }
+                if entry.name.is_empty() {
+                    entry.name = name.clone();
+                }
             }
             StreamChunk::InputJsonDelta {
                 index,
                 partial_json,
             } => {
-                if let Some(tool) = self.tool_uses.get_mut(index) {
-                    tool.input_json.push_str(partial_json);
-                }
+                // Open the block if it has not been opened yet. A backend that
+                // sends arguments before the frame carrying `id`+`name` would
+                // otherwise have every delta silently dropped, and the call
+                // would vanish while `finish_reason` still said `tool_calls`.
+                let tool = self.tool_uses.entry(*index).or_default();
+                tool.input_json.push_str(partial_json);
             }
             StreamChunk::ContentBlockStop { index } => {
                 // Finalize the tool use at this index, if there is one. Text
@@ -691,6 +712,19 @@ impl StreamAccumulator {
         } else {
             self.stop_reason?
         };
+
+        // Streamed spend depends entirely on the provider's final usage frame.
+        // If it never arrives — `stream_options.include_usage` ignored, a proxy
+        // dropping the frame — every token in this response is billed at zero
+        // and the ledger is quietly wrong. Say so; a warning in the log is the
+        // only way this is ever noticed.
+        if self.output_tokens.is_none() {
+            tracing::warn!(
+                model = self.model.as_deref().unwrap_or("unknown"),
+                "stream ended without a usage frame; token spend for this \
+                 response is recorded as zero"
+            );
+        }
 
         Some(LLMResponse {
             content: self.content,

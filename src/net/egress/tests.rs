@@ -28,7 +28,7 @@ mod tests {
     #[test]
     fn an_unparseable_proxy_url_refuses() {
         let err = client_from(&vpn(Some("not a url")), T).unwrap_err();
-        assert!(matches!(err, EgressError::ClientBuild(_)), "{err:?}");
+        assert!(matches!(err, EgressError::ClientBuild), "{err:?}");
     }
 
     #[test]

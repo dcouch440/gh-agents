@@ -77,7 +77,8 @@ mod tests {
     #[test]
     fn namespaced_ollama_ids_are_still_free() {
         // A `/` in the id does not by itself mean a hosted model — Ollama ids
-        // are free-form and routinely namespaced.
+        // are free-form and routinely namespaced. A known local namespace or
+        // an Ollama-style `:tag` is what marks them.
         for m in [
             "hf.co/org/qwen2:7b",
             "library/llama3",
@@ -87,6 +88,26 @@ mod tests {
                 compute_cost(m, 1_000_000, 1_000_000),
                 0.0,
                 "{m} should be free"
+            );
+        }
+    }
+
+    // Hosted models from families that are also runnable locally must not
+    // fall into the free path: the family name appears in both, so the
+    // namespace is the only thing that separates them. Under-billing is
+    // silent, which is why the ambiguous case bills rather than zeroes.
+    #[test]
+    fn hosted_models_from_locally_runnable_families_are_billed() {
+        for m in [
+            "meta-llama/Meta-Llama-3.1-405B-Instruct",
+            "mistralai/Mistral-Small-24B-Instruct-2501",
+            "google/gemma-3-27b-it",
+            "microsoft/phi-4",
+            "Qwen/Qwen3-235B-A22B",
+        ] {
+            assert!(
+                compute_cost(m, 1_000_000, 1_000_000) > 0.0,
+                "{m} should be billed, not free"
             );
         }
     }

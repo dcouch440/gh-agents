@@ -98,6 +98,17 @@ pub(crate) fn validate_agent(content: &str) -> Result<(), String> {
                 known_capabilities().join(", ")
             ));
         }
+        if !is_assignable_capability(key) {
+            // Existing in the taxonomy is not enough. Several keys are declared
+            // but claimed by no tool, so they resolve to an empty tool list —
+            // the exact silent failure the check above exists to prevent, just
+            // reached by a different route.
+            return Err(format!(
+                "capability \"{key}\" exists but no tool provides it, so it would \
+                 resolve to zero tools. Assignable capabilities: {}",
+                assignable_capabilities().join(", ")
+            ));
+        }
     }
 
     Ok(())
@@ -105,8 +116,11 @@ pub(crate) fn validate_agent(content: &str) -> Result<(), String> {
 
 /// Capability keys declared by the shipped taxonomy.
 ///
-/// Parsed from the same `capabilities.yaml` the runtime registry loads, so the
-/// two cannot disagree about what exists.
+/// Parsed from `capabilities.yaml` at *build* time via `include_str!`, while
+/// `CapabilityRegistry::load` reads `config/` from the working directory at
+/// runtime. They agree for a normal build, and diverge if `config/` is edited
+/// or volume-mounted after the binary is built — the same reason a prompt
+/// change needs a rebuild.
 fn known_capabilities() -> &'static [String] {
     static KEYS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
     KEYS.get_or_init(|| {
@@ -125,6 +139,43 @@ fn known_capabilities() -> &'static [String] {
             })
             .unwrap_or_default()
     })
+}
+
+/// Capability keys that at least one tool actually claims.
+///
+/// Parsed from `tool_assignments.yaml`, which is what `CapabilityRegistry`
+/// resolves against. A key present in the taxonomy but absent here is a
+/// capability an agent can be given that yields no tools.
+fn assignable_capabilities() -> &'static [String] {
+    static KEYS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    KEYS.get_or_init(|| {
+        const YAML: &str = include_str!("../../../../config/system/tool_assignments.yaml");
+        let parsed: serde_yaml::Value = match serde_yaml::from_str(YAML) {
+            Ok(v) => v,
+            Err(_) => return Vec::new(),
+        };
+        let Some(map) = parsed.get("tool_assignments").and_then(|t| t.as_mapping()) else {
+            return Vec::new();
+        };
+        let mut keys: Vec<String> = map
+            .values()
+            .filter_map(|tool| tool.get("capabilities")?.as_sequence())
+            .flatten()
+            .filter_map(|c| c.as_str().map(str::to_string))
+            .collect();
+        keys.sort();
+        keys.dedup();
+        keys
+    })
+}
+
+/// Whether a capability resolves to at least one tool.
+///
+/// Fails open on an empty list for the same reason as
+/// [`is_known_capability`]: an unparseable file must not reject every design.
+fn is_assignable_capability(key: &str) -> bool {
+    let assignable = assignable_capabilities();
+    assignable.is_empty() || assignable.iter().any(|k| k == key)
 }
 
 /// Whether a capability key exists in the taxonomy.

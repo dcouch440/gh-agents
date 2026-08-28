@@ -157,6 +157,52 @@ mod tests {
         );
     }
 
+    fn agent_with(caps: &str) -> String {
+        format!(
+            r#"{{
+            "name": "Researcher",
+            "system_prompt": "Researches things.",
+            "assignment": "Find the vendor's pricing.",
+            "expected_output": "A price.",
+            "capabilities": {caps}
+        }}"#
+        )
+    }
+
+    #[test]
+    fn validate_agent_accepts_the_web_capabilities() {
+        assert!(validate_agent(&agent_with(r#"["web_search", "web_fetch"]"#)).is_ok());
+        assert!(validate_agent(&agent_with("[]")).is_ok());
+    }
+
+    #[test]
+    fn validate_agent_rejects_an_unknown_capability() {
+        let err = validate_agent(&agent_with(r#"["brave_search"]"#)).unwrap_err();
+        assert!(err.contains("unknown capability"), "{err}");
+        // Capabilities are not tool names; the message has to say so, because
+        // reaching for the tool name is the mistake being made.
+        assert!(err.contains("web_search"), "{err}");
+    }
+
+    // Declared in capabilities.yaml but claimed by no tool in
+    // tool_assignments.yaml, so it resolves to an empty tool list — the same
+    // silent failure as an unknown key, reached a different way.
+    #[test]
+    fn validate_agent_rejects_a_capability_no_tool_provides() {
+        for cap in [
+            "api_call",
+            "database_query",
+            "code_analysis",
+            "build_execution",
+        ] {
+            let err = validate_agent(&agent_with(&format!(r#"["{cap}"]"#))).unwrap_err();
+            assert!(
+                err.contains("no tool provides it"),
+                "{cap} should be refused as unassignable: {err}"
+            );
+        }
+    }
+
     // ── cross-reference ──────────────────────────────────────────────────
 
     #[test]

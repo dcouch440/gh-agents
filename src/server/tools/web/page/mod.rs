@@ -7,6 +7,7 @@ use reqwest::{Client, StatusCode};
 use serde_json::Value;
 use url::Url;
 
+use super::brief;
 use super::format::{truncate_chars, Envelope, RESULT_SUCCESS, RESULT_WARNING};
 use crate::net::egress;
 use crate::server::tools::shared::error_json;
@@ -17,9 +18,18 @@ pub mod guard;
 #[cfg(test)]
 mod tests;
 
-/// Whole-request budget. Generous enough to cover the redirect chain and a
-/// slow origin without the per-hop timeouts ever exceeding it.
+/// Budget for a single hop: connect, headers, and body.
+///
+/// `reqwest`'s `timeout` is per request, and the redirect chain is followed
+/// manually, so this alone would let `MAX_HOPS` slow hops stack up. The whole
+/// call is separately bounded by [`TOTAL_TIMEOUT_SECS`].
 const TIMEOUT_SECS: u64 = 45;
+/// Budget for the whole `read_webpage` call, across every redirect hop.
+///
+/// Without this a chain of eight hosts that each stall just under the per-hop
+/// limit holds a worker for six minutes, and the engine puts no timeout of its
+/// own around a tool call.
+const TOTAL_TIMEOUT_SECS: u64 = 60;
 /// Redirect hops followed before giving up.
 const MAX_HOPS: usize = 8;
 /// Hard cap on bytes read from the network, enforced while streaming so a
@@ -34,7 +44,20 @@ pub async fn execute(input: &Value) -> Value {
         Some(u) if !u.trim().is_empty() => u.trim(),
         _ => return error_json("Missing required parameter: url"),
     };
-    let offset = input.get("offset").and_then(Value::as_u64).unwrap_or(0) as usize;
+    // A malformed offset is refused rather than coerced to 0: silently
+    // returning page 1 alongside a "call again with offset=N" note is a loop
+    // the engine's breaker cannot see, because every call succeeds.
+    let offset = match input.get("offset") {
+        None | Some(Value::Null) => 0usize,
+        Some(v) => match v.as_u64() {
+            Some(n) => n as usize,
+            None => {
+                return error_json(format!(
+                    "Invalid offset {v}: expected a whole number of characters, 0 or greater"
+                ))
+            }
+        },
+    };
 
     let start = match guard::validate(raw) {
         Ok(u) => u,
@@ -46,9 +69,18 @@ pub async fn execute(input: &Value) -> Value {
         Err(e) => return error_json(e.to_string()),
     };
 
-    match fetch(&client, start).await {
-        Ok(page) => render(&page, offset).await,
-        Err(e) => error_json(e.to_string()),
+    let fetched = tokio::time::timeout(
+        Duration::from_secs(TOTAL_TIMEOUT_SECS),
+        fetch(&client, start),
+    )
+    .await;
+
+    match fetched {
+        Ok(Ok(page)) => render(&page, offset).await,
+        Ok(Err(e)) => error_json(e.to_string()),
+        Err(_) => error_json(format!(
+            "Could not fetch the page: the request did not complete within {TOTAL_TIMEOUT_SECS}s"
+        )),
     }
 }
 
@@ -108,8 +140,17 @@ impl std::fmt::Display for FetchError {
 /// Fetch a URL, following redirects manually so each hop is re-validated.
 pub(crate) async fn fetch(client: &Client, start: Url) -> Result<Page, FetchError> {
     let mut url = start;
+    // Only when this process resolves names itself; under the proxy the
+    // lookup happens on the far side and checking here would prove nothing.
+    let check_dns = egress::resolves_locally();
 
     for _ in 0..MAX_HOPS {
+        if check_dns {
+            guard::validate_addresses(&url)
+                .await
+                .map_err(|e| FetchError::Rejected(format!("Cannot fetch '{url}': {e}")))?;
+        }
+
         let response = client
             .get(url.clone())
             .send()
@@ -122,17 +163,8 @@ pub(crate) async fn fetch(client: &Client, start: Url) -> Result<Page, FetchErro
             let location = response
                 .headers()
                 .get(reqwest::header::LOCATION)
-                .and_then(|v| v.to_str().ok())
-                .ok_or_else(|| {
-                    FetchError::Rejected("Redirect without a destination".to_string())
-                })?;
-            // Relative Location headers are legal and common.
-            let next = url.join(location).map_err(|_| {
-                FetchError::Rejected(format!("Invalid redirect target: {location}"))
-            })?;
-            guard::validate_hop(&next)
-                .map_err(|e| FetchError::Rejected(format!("Refused redirect to '{next}': {e}")))?;
-            url = next;
+                .and_then(|v| v.to_str().ok());
+            url = next_hop(&url, location)?;
             continue;
         }
 
@@ -173,6 +205,26 @@ pub(crate) async fn fetch(client: &Client, start: Url) -> Result<Page, FetchErro
     Err(FetchError::TooManyHops)
 }
 
+/// Resolve and validate the next hop of a redirect chain.
+///
+/// Split out from [`fetch`] because it is the security-relevant half of the
+/// loop and the only half that can be tested without a network: a mock server
+/// binds to loopback, which this function is required to refuse.
+fn next_hop(current: &Url, location: Option<&str>) -> Result<Url, FetchError> {
+    let location = location
+        .ok_or_else(|| FetchError::Rejected("Redirect without a destination".to_string()))?;
+
+    // Relative Location headers are legal and common.
+    let next = current
+        .join(location)
+        .map_err(|_| FetchError::Rejected(format!("Invalid redirect target: {location}")))?;
+
+    guard::validate_hop(&next)
+        .map_err(|e| FetchError::Rejected(format!("Refused redirect to '{next}': {e}")))?;
+
+    Ok(next)
+}
+
 /// Read the body with a cap enforced *while* streaming.
 ///
 /// Content-Length is not trusted: it is absent on chunked responses, reported
@@ -185,7 +237,7 @@ async fn read_capped(response: reqwest::Response) -> Result<(Vec<u8>, bool), Fet
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| FetchError::Transport(brief(&e)))?;
         let remaining = MAX_BYTES.saturating_sub(buf.len());
-        if chunk.len() >= remaining {
+        if chunk.len() > remaining {
             buf.extend_from_slice(&chunk[..remaining]);
             truncated = true;
             break;
@@ -237,14 +289,24 @@ pub(crate) fn classify(content_type: &str) -> Kind {
 /// Falls back to UTF-8 with replacement rather than failing: a page with a
 /// mis-declared encoding is still worth reading.
 pub(crate) fn decode(bytes: &[u8], content_type: &str) -> String {
-    let label = content_type
-        .split(';')
-        .find_map(|p| p.trim().strip_prefix("charset="))
-        .map(|c| c.trim().trim_matches('"'));
+    // HTTP parameter names are case-insensitive; `Charset=` is legal.
+    let label = content_type.split(';').find_map(|p| {
+        let p = p.trim();
+        let (name, value) = p.split_once('=')?;
+        name.trim()
+            .eq_ignore_ascii_case("charset")
+            .then(|| value.trim().trim_matches(['"', '\'']))
+    });
 
     let encoding = label
         .and_then(|l| encoding_rs::Encoding::for_label(l.as_bytes()))
-        .or_else(|| sniff_meta_charset(bytes))
+        // Sniffing is an HTML rule. Applying it to JSON or plain text
+        // mis-decodes any document that merely mentions `charset=` in its
+        // first 2 KiB.
+        .or_else(|| match classify(content_type) {
+            Kind::Html => sniff_meta_charset(bytes),
+            _ => None,
+        })
         .unwrap_or(encoding_rs::UTF_8);
 
     let (text, _, _) = encoding.decode(bytes);
@@ -266,19 +328,6 @@ fn sniff_meta_charset(bytes: &[u8]) -> Option<&'static encoding_rs::Encoding> {
     encoding_rs::Encoding::for_label(rest[..end].trim().as_bytes())
 }
 
-/// A short, non-leaking description of a transport failure.
-fn brief(e: &reqwest::Error) -> String {
-    if e.is_timeout() {
-        "timed out".to_string()
-    } else if e.is_connect() {
-        "could not connect".to_string()
-    } else if e.is_decode() {
-        "the response could not be decoded".to_string()
-    } else {
-        "network error".to_string()
-    }
-}
-
 /// Render the report the model reads.
 pub(crate) async fn render(page: &Page, offset: usize) -> Value {
     let kind = classify(&page.content_type);
@@ -297,13 +346,21 @@ pub(crate) async fn render(page: &Page, offset: usize) -> Value {
         ),
     };
 
-    let js_shell = is_html && extract::looks_like_js_shell(&extracted, page.body.len());
+    let failed = extracted.method == extract::Method::Failed;
+    // A crashed parser also returns almost no text, so the JS-shell heuristic
+    // would fire and confidently misdiagnose it as a page that needs a browser.
+    let js_shell = is_html && !failed && extract::looks_like_js_shell(&extracted, page.body.len());
 
-    let mut env = Envelope::new(if js_shell || page.truncated_download {
-        RESULT_WARNING
-    } else {
-        RESULT_SUCCESS
-    });
+    let total: usize = extracted.markdown.chars().count();
+    let past_end = offset > 0 && offset >= total;
+
+    let mut env = Envelope::new(
+        if js_shell || failed || past_end || page.truncated_download {
+            RESULT_WARNING
+        } else {
+            RESULT_SUCCESS
+        },
+    );
 
     env.field("url", page.final_url.as_str());
     env.field_opt("title", extracted.title.as_deref());
@@ -314,16 +371,28 @@ pub(crate) async fn render(page: &Page, offset: usize) -> Value {
         env.field("extracted", extracted.method.label());
     }
 
-    let total: usize = extracted.markdown.chars().count();
     let body: String = extracted.markdown.chars().skip(offset).collect();
     let shown = truncate_chars(&body, MAX_CONTENT_CHARS);
-    let end = offset + shown.text.chars().count();
+    let start = offset.min(total);
+    // Clamped against `total`, not derived from `offset`: an offset past the
+    // end would otherwise report `chars 5-9999 of 5`.
+    let end = (start + shown.text.chars().count()).min(total);
 
-    env.field(
-        "content",
-        format!("chars {}-{} of {}", offset.min(total), end, total),
-    );
+    env.field("content", format!("chars {start}-{end} of {total}"));
 
+    if past_end {
+        env.note(&format!(
+            "The offset {offset} is past the end of this page, which is {total} \
+             characters long. Nothing follows."
+        ));
+    }
+    if failed {
+        env.note(
+            "The extractor could not process this page, so no text was \
+             recovered. This is a failure on our side, not an empty page — \
+             the content below, if any, is not the article.",
+        );
+    }
     if js_shell {
         env.note(
             "This page returned almost no readable content for its size, which \

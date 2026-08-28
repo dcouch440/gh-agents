@@ -42,6 +42,10 @@ pub struct DeepInfraConfig {
 
 impl DeepInfraConfig {
     /// Build from `DEEPINFRA_API_KEY` (required) and `DEEPINFRA_MODEL` (optional).
+    ///
+    /// `model` is only a fallback for a request that names no model. Every
+    /// production path sets `LLMRequest::model` from the tier constants, so
+    /// this is not a global override.
     pub fn from_env() -> Result<Self, LLMError> {
         let api_key = std::env::var(crate::constants::ENV_DEEPINFRA_API_KEY).map_err(|_| {
             LLMError::AuthError(format!(
@@ -396,6 +400,7 @@ fn map_finish_reason(reason: Option<&str>) -> StopReason {
         Some("tool_calls") | Some("function_call") => StopReason::ToolUse,
         Some("length") => StopReason::MaxTokens,
         Some("stop") => StopReason::EndTurn,
+        Some("content_filter") => StopReason::ContentFiltered,
         _ => StopReason::EndTurn,
     }
 }
@@ -465,11 +470,19 @@ pub(crate) fn parse_openai_sse_line(line: &str) -> Vec<LLMResult<StreamChunk>> {
             // it were the answer.
             for call in delta.tool_calls.unwrap_or_default() {
                 let index = call.index.unwrap_or(0);
-                if let (Some(id), Some(name)) = (
-                    call.id.clone(),
-                    call.function.as_ref().and_then(|f| f.name.clone()),
-                ) {
-                    out.push(Ok(StreamChunk::ToolUseStart { index, id, name }));
+                let id = call.id.clone();
+                let name = call.function.as_ref().and_then(|f| f.name.clone());
+                // Opened when *either* field appears, not only when both do in
+                // the same frame. Some OpenAI-compatible backends send the id
+                // first and the name in a later frame; requiring both together
+                // dropped the call and every argument delta with it, while
+                // `finish_reason` still reported `tool_calls`.
+                if id.is_some() || name.is_some() {
+                    out.push(Ok(StreamChunk::ToolUseStart {
+                        index,
+                        id: id.unwrap_or_default(),
+                        name: name.unwrap_or_default(),
+                    }));
                 }
                 if let Some(args) = call.function.and_then(|f| f.arguments) {
                     if !args.is_empty() {
