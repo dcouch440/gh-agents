@@ -468,6 +468,26 @@ pub const OLLAMA_DEFAULT_BASE_URL: &str = "http://localhost:11434";
 /// Default timeout for Ollama requests (local models are slower).
 pub const OLLAMA_DEFAULT_TIMEOUT_SECS: u64 = 300;
 
+// ── Web Tools ───────────────────────────────────────────────────────────────
+
+/// Env var selecting how web-tool traffic leaves: `vpn` (default) or `direct`.
+pub const ENV_WEB_EGRESS_MODE: &str = "NEXOR_WEB_EGRESS_MODE";
+/// Env var holding the VPN egress proxy URL.
+pub const ENV_VPN_PROXY_URL: &str = "NEXOR_VPN_PROXY_URL";
+/// Brave Web Search API key.
+pub const ENV_BRAVE_SEARCH_API_KEY: &str = "BRAVE_SEARCH_API_KEY";
+
+/// Brave Web Search API endpoint.
+pub const BRAVE_SEARCH_ENDPOINT: &str = "https://api.search.brave.com/res/v1/web/search";
+
+/// Connect timeout for outbound web requests (seconds).
+pub const WEB_CONNECT_TIMEOUT_SECS: u64 = 10;
+/// User-Agent sent by the web tools.
+///
+/// Identifies the client honestly rather than impersonating a browser: sites
+/// that wish to refuse automated traffic are entitled to recognise it.
+pub const WEB_USER_AGENT: &str = concat!("nexor-agent/", env!("CARGO_PKG_VERSION"));
+
 // ── DeepInfra ───────────────────────────────────────────────────────────────
 
 /// Base URL for DeepInfra's OpenAI-compatible API.

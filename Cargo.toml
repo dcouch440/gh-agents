@@ -69,8 +69,20 @@ async-stream = "0.3"
 # Concurrent collections
 dashmap = "6"
 
-# HTTP client (for LLM APIs)
-reqwest = { version = "0.12", features = ["rustls-tls", "json", "stream", "cookies"] }
+# HTTP client (for LLM APIs and the web tools)
+# gzip/brotli/deflate: servers negotiate these by default, and without the
+# features enabled reqwest advertises them and then cannot decode the body.
+reqwest = { version = "0.12", features = [
+    "rustls-tls", "json", "stream", "cookies", "gzip", "brotli", "deflate",
+] }
+
+# Web page extraction (read_webpage)
+# dom_smoothie: Mozilla Readability port; TextMode::Markdown yields markdown
+# directly. fast_html2md: fallback for pages readability cannot resolve.
+dom_smoothie = "0.18"
+fast_html2md = "0.0.62"
+encoding_rs = "0.8"
+url = "2"
 
 # S3-compatible object storage (MinIO in dev, real S3 in prod)
 aws-sdk-s3 = "1"

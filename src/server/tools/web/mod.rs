@@ -8,6 +8,8 @@
 //! silent misroute if one is missed.
 
 pub mod format;
+pub mod page;
+pub mod search;
 
 use serde_json::Value;
 
@@ -55,9 +57,8 @@ pub async fn dispatch(name: &str, _input: &Value, _state: Option<&AppState>) -> 
         // Handlers land in the web-tools slice; the routing above is what
         // needed to exist first, because getting it wrong sends a web tool
         // into the container where it can never run.
-        "brave_search" | "read_webpage" => {
-            error_json(format!("Tool '{}' is not available yet", name))
-        }
+        "brave_search" => search::execute(_input).await,
+        "read_webpage" => page::execute(_input).await,
         other => error_json(format!("Unknown web tool: {}", other)),
     }
 }
