@@ -456,8 +456,8 @@ file, not a report about an existing one, and no run has happened when you read 
      it is left out on purpose: a demonstration of recovering from a bad design teaches the
      bad design too, and validate's error messages are already actionable.
 
-     SLOT 1'S FIRST COMMAND IS SHOWN AS THE JSON IT ACTUALLY HAS TO BE, and every other
-     command in the section is shown as bare shell. That asymmetry is the whole point of
+     THE FIRST COMMAND OF EVERY SLOT IS SHOWN AS THE JSON IT ACTUALLY HAS TO BE, and
+     every command after it is shown as bare shell. That asymmetry is the whole point of
      this note.
 
      This agent has no file tools, so every file it writes goes through a heredoc, and
@@ -467,11 +467,22 @@ file, not a report about an existing one, and no run has happened when you read 
      config.json that does not parse, which comes back as `write_validation_errors` on the
      command that caused it. Showing five heredocs in bare shell teaches the shell form,
      which the model already knows, and skips the encoding, which is the half that breaks.
-     Showing it once, in full, teaches the encoding.
 
-     Everything after that first command is bare shell and elided with …, because the
-     encoding is the lesson and the lesson does not improve with repetition — while five
-     screens of escaped JSON would bury the design judgment these examples exist to teach.
+     SHOWING THE ENCODING ONCE WAS NOT ENOUGH, and this is the correction. The first
+     version of this section carried the JSON form in slot 1 only, on the argument that
+     the lesson does not improve with repetition. It measurably does. Across a week of
+     dispatches on the prompt this replaced, 217 run_command calls arrived with their
+     arguments intact; in the first two hours on the version with one JSON example and six
+     bare-shell ones, 19 of 43 arrived as `run_command {}` — a well-formed call with an
+     empty arguments object, several rounds running, each one recovering only when the
+     agent fell back to copying slot 1 verbatim. The model imitates the call it read
+     first. Every slot now opens with one.
+
+     What is still elided is the REST of each slot: after that opening command the shell
+     form takes over and the tail is cut with …, because five screens of escaped JSON
+     would bury the design judgment these examples exist to teach. The opening command is
+     the shortest one in each slot for the same reason — it writes config.json and nothing
+     else, so the encoding is legible at a glance.
 
      COMMANDS ARE ELIDED WITH … past the first heredoc in each slot. -->
 
@@ -542,14 +553,8 @@ Short sentence, two genuinely different skills behind it: building the compariso
 writing for an executive. Those are different jobs and doing both in one prompt gets a
 competent version of neither. Two agents.
 
+<tool_call name="run_command">{"command": "mkdir -p agents\ncat > config.json << 'EOF'\n{\n  \"name\": \"Executive Analysis\",\n  \"description\": \"An executive competitive analysis with side-by-side comparisons, per-tool profiles and buyer-type recommendations, weighted by how well each claim was verified.\"\n}\nEOF"}</tool_call>
 <tool_call name="run_command">
-mkdir -p agents
-cat > config.json << 'EOF'
-{
-  "name": "Executive Analysis",
-  "description": "An executive competitive analysis with side-by-side comparisons, per-tool profiles and buyer-type recommendations, weighted by how well each claim was verified."
-}
-EOF
 cat > topology.json << 'EOF'
 { "agents": { "analyst": { "depends_on": [] }, "writer": { "depends_on": ["analyst"] } } }
 EOF
@@ -593,14 +598,8 @@ about a file that already exists, so it is read_only and its expected_output des
 report it returns rather than a file it saves. Given write access it would start fixing
 the page, and then its own sign-off would be worthless.
 
+<tool_call name="run_command">{"command": "mkdir -p agents\ncat > config.json << 'EOF'\n{\n  \"name\": \"Brief Conformance Check\",\n  \"description\": \"A per-requirement pass or fail judgment on the built page, with the specific evidence behind every failure.\"\n}\nEOF"}</tool_call>
 <tool_call name="run_command">
-mkdir -p agents
-cat > config.json << 'EOF'
-{
-  "name": "Brief Conformance Check",
-  "description": "A per-requirement pass or fail judgment on the built page, with the specific evidence behind every failure."
-}
-EOF
 cat > topology.json << 'EOF'
 { "agents": { "reviewer": { "depends_on": [] } } }
 EOF
@@ -645,7 +644,7 @@ After: "Research pricing for the top 5 PM tools. Include annual vs monthly."
 A real constraint, not a new job. One agent still, one file still, and the step produces
 the same kind of thing — so config.json does not move. Only the assignment changes.
 
-<tool_call name="run_command">cat agents/researcher.json</tool_call>
+<tool_call name="run_command">{"command": "cat agents/researcher.json"}</tool_call>
 <tool_call name="run_command">
 cat > agents/researcher.json << 'EOF'
 {
@@ -685,14 +684,8 @@ A code change, and the deliverable is working code rather than a document. Two a
 one writes it, one proves it holds. The tester is not read_only — a test file is an
 artifact the next step needs, so it writes.
 
+<tool_call name="run_command">{"command": "mkdir -p agents\ncat > config.json << 'EOF'\n{\n  \"name\": \"Rate Limit Implementation\",\n  \"description\": \"Rate limiting on the password reset endpoint, with tests covering the limit, the reset window, and the behaviour past the threshold.\"\n}\nEOF"}</tool_call>
 <tool_call name="run_command">
-mkdir -p agents
-cat > config.json << 'EOF'
-{
-  "name": "Rate Limit Implementation",
-  "description": "Rate limiting on the password reset endpoint, with tests covering the limit, the reset window, and the behaviour past the threshold."
-}
-EOF
 cat > topology.json << 'EOF'
 { "agents": { "implementer": { "depends_on": [] }, "tester": { "depends_on": ["implementer"] } } }
 EOF

@@ -940,4 +940,181 @@ mod tests {
             "one initial attempt plus MAX_STREAM_RETRY_ATTEMPTS re-issues"
         );
     }
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    // ── Tool calls that carry no arguments ──────────────────────────────────
+    //
+    // A model can emit a well-formed call with an empty arguments object.
+    // Nothing is malformed, so the provider's recovery path never sees it, and
+    // dispatching it makes the tool report its first required parameter
+    // missing — which is not what went wrong and leaves the model nothing to
+    // change. Observed on the system node agent: `run_command {}` two to four
+    // rounds running before it recovered on its own.
+
+    /// One tool-use round carrying `input`, then a text round to end the loop.
+    struct OneToolCallProvider {
+        tool: &'static str,
+        input: serde_json::Value,
+        calls: Arc<AtomicU32>,
+    }
+
+    #[async_trait]
+    impl LLMProvider for OneToolCallProvider {
+        async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
+            let first = self.calls.fetch_add(1, Ordering::SeqCst) == 0;
+            Ok(if first {
+                LLMResponse {
+                    content: String::new(),
+                    content_blocks: vec![ContentBlock::ToolUse {
+                        id: "t1".into(),
+                        name: self.tool.into(),
+                        input: self.input.clone(),
+                    }],
+                    model: "m".into(),
+                    stop_reason: StopReason::ToolUse,
+                    usage: TokenUsage::default(),
+                }
+            } else {
+                LLMResponse {
+                    content: "done".into(),
+                    content_blocks: vec![ContentBlock::Text {
+                        text: "done".into(),
+                    }],
+                    model: "m".into(),
+                    stop_reason: StopReason::EndTurn,
+                    usage: TokenUsage::default(),
+                }
+            })
+        }
+        async fn send_message_stream(
+            &self,
+            _req: LLMRequest,
+        ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
+        {
+            Err(LLMError::StreamError("not implemented".into()))
+        }
+        fn provider_name(&self) -> &'static str {
+            "one-tool-call"
+        }
+        fn model_id(&self) -> &str {
+            "m"
+        }
+    }
+
+    /// Declares the two shapes that matter: a tool with a required parameter
+    /// and one without.
+    struct SchemaStrategy {
+        executed: Arc<AtomicU32>,
+    }
+
+    #[async_trait]
+    impl ExecutionStrategy for SchemaStrategy {
+        fn system_prompt(&self) -> &str {
+            "sys"
+        }
+        fn tools(&self) -> Vec<crate::llm::Tool> {
+            vec![
+                crate::llm::Tool {
+                    name: "run_command".into(),
+                    description: "run a command".into(),
+                    input_schema: serde_json::json!({
+                        "type": "object",
+                        "properties": { "command": { "type": "string" } },
+                        "required": ["command"]
+                    }),
+                },
+                crate::llm::Tool {
+                    name: "list_files".into(),
+                    description: "list files".into(),
+                    input_schema: serde_json::json!({
+                        "type": "object",
+                        "properties": { "path": { "type": "string" } }
+                    }),
+                },
+            ]
+        }
+        fn model_id(&self) -> &str {
+            "m"
+        }
+        fn max_rounds(&self) -> u32 {
+            10
+        }
+        fn context_budget(&self) -> usize {
+            480_000
+        }
+        fn streaming(&self) -> bool {
+            false
+        }
+        fn temperature(&self) -> f32 {
+            0.7
+        }
+        async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError> {
+            Ok(vec![Message::user(input)])
+        }
+        async fn execute_tool(&self, _: &str, _: &serde_json::Value) -> serde_json::Value {
+            self.executed.fetch_add(1, Ordering::SeqCst);
+            serde_json::json!({"ok": true})
+        }
+    }
+
+    async fn run_one_call(tool: &'static str, input: serde_json::Value) -> u32 {
+        let executed = Arc::new(AtomicU32::new(0));
+        let provider = Arc::new(OneToolCallProvider {
+            tool,
+            input,
+            calls: Arc::new(AtomicU32::new(0)),
+        });
+        let engine = ExecutionEngine::new(provider, false);
+        let strategy = SchemaStrategy {
+            executed: executed.clone(),
+        };
+        let recorder = make_mock_recorder();
+
+        engine
+            .execute(&strategy, "go", &NullSink, &recorder, None)
+            .await
+            .expect("the loop must finish");
+
+        executed.load(Ordering::SeqCst)
+    }
+
+    #[tokio::test]
+    async fn a_call_with_no_arguments_does_not_reach_a_tool_that_requires_some() {
+        assert_eq!(
+            run_one_call("run_command", serde_json::json!({})).await,
+            0,
+            "an empty call must be answered by the engine, not dispatched"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_call_with_no_arguments_reaches_a_tool_that_requires_none() {
+        assert_eq!(
+            run_one_call("list_files", serde_json::json!({})).await,
+            1,
+            "`list_files {{}}` is a legitimate call"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_call_that_carries_its_required_argument_is_dispatched() {
+        assert_eq!(
+            run_one_call("run_command", serde_json::json!({"command": "ls"})).await,
+            1
+        );
+    }
+
+    #[test]
+    fn the_no_arguments_error_names_the_parameters_and_the_shape() {
+        let msg =
+            crate::server::hub::engine::no_arguments_error("run_command", &["command".to_string()])
+                ["error"]
+                .as_str()
+                .expect("error is a string")
+                .to_string();
+
+        assert!(msg.contains("run_command"), "{msg}");
+        assert!(msg.contains("It requires: command"), "{msg}");
+        assert!(msg.contains(r#"{"command":"..."}"#), "{msg}");
+    }
 }

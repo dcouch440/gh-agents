@@ -104,6 +104,57 @@ fn unparsed_arguments(input: &Value) -> Option<&str> {
     input.get(UNPARSED_ARGUMENTS_KEY)?.as_str()
 }
 
+/// The required parameters of `tool_name`, when the call carried no arguments
+/// at all.
+///
+/// A model can emit a syntactically perfect tool call with an empty arguments
+/// object — the system node agent does it in bursts, several rounds running.
+/// Nothing is malformed, so [`unparsed_arguments`] does not see it, and the
+/// tool answers "Missing required parameter: command": true, useless, and
+/// indistinguishable from the message it would get for sending the wrong
+/// parameter. It has nothing to correct, so it re-sends the same empty call.
+///
+/// `None` when the call carried arguments, when the tool is not in this
+/// strategy's set, or when the tool has no required parameters — `list_files
+/// {}` is a legitimate call and must reach the tool.
+fn missing_all_arguments(
+    strategy: &dyn ExecutionStrategy,
+    tool_name: &str,
+    input: &Value,
+) -> Option<Vec<String>> {
+    if !input.as_object().is_some_and(|o| o.is_empty()) {
+        return None;
+    }
+    let tools = strategy.tools();
+    let tool = tools.iter().find(|t| t.name == tool_name)?;
+    let required: Vec<String> = tool
+        .input_schema
+        .get("required")?
+        .as_array()?
+        .iter()
+        .filter_map(|v| v.as_str().map(str::to_string))
+        .collect();
+    (!required.is_empty()).then_some(required)
+}
+
+/// The corrective answer for a call that arrived with no arguments: name the
+/// parameters and show the object shape, so the next attempt has somewhere to
+/// go that the previous one did not.
+fn no_arguments_error(tool_name: &str, required: &[String]) -> Value {
+    let shape: serde_json::Map<String, Value> = required
+        .iter()
+        .map(|name| (name.clone(), json!("...")))
+        .collect();
+    json!({
+        "error": format!(
+            "Called `{tool_name}` with no arguments. It requires: {}. Send the \
+             call again with a JSON object holding them, for example {}.",
+            required.join(", "),
+            Value::Object(shape)
+        )
+    })
+}
+
 /// Hash a tool call (name + serialized input) for deduplication.
 fn tool_call_hash(name: &str, input: &Value) -> u64 {
     let mut hasher = DefaultHasher::new();
@@ -555,7 +606,17 @@ impl ExecutionEngine {
                         )
                     })
                 }
-                None => strategy.execute_tool(tool_name, tool_input).await,
+                // The same dead end from the other direction: nothing arrived
+                // rather than something unreadable. Answer it here for the
+                // same reason — the tool's own "missing parameter" error
+                // cannot tell the model that it sent no arguments at all.
+                None => match missing_all_arguments(*strategy, tool_name, tool_input) {
+                    Some(required) => {
+                        warn!(round, tool = %tool_name, "tool call arrived with no arguments");
+                        no_arguments_error(tool_name, &required)
+                    }
+                    None => strategy.execute_tool(tool_name, tool_input).await,
+                },
             };
 
             sink.tool_end(tool_name, tool_id, &result).await;
