@@ -2,17 +2,21 @@ import { createContext, useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { WS_URL, WS_RECONNECT_BASE_MS, WS_RECONNECT_MAX_MS } from '@/constants'
 import { WS_STATUS, WS_MSG, WS_CONTROL } from '@/types/ws'
-import type { WsTopic, WsWireMessage, WsClientMessage, WsEventHandler } from '@/types/ws'
+import type { WsTopic, WsWireMessage, WsClientMessage, WsEventHandler, CanvasAckMsg } from '@/types/ws'
 import { useStore } from '@/stores/lib'
 import { authStore } from '@/stores/authStore'
 import { wsConnectionStore } from '@/stores/wsConnectionStore'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+type CanvasAckHandler = (ack: CanvasAckMsg) => void
+
 type WebSocketContextValue = {
   subscribe: (topic: WsTopic, handler: WsEventHandler) => () => void
   subscribeRun: (runId: string) => () => void
   send: (message: WsClientMessage) => void
+  /** Canvas mutation acks arrive on the control channel, not on a topic. */
+  subscribeCanvasAck: (handler: CanvasAckHandler) => () => void
 }
 
 // ── Context ──────────────────────────────────────────────────────────────────
@@ -22,6 +26,8 @@ const WebSocketContext = createContext<WebSocketContextValue | null>(null)
 // ── Provider ─────────────────────────────────────────────────────────────────
 
 const PING_INTERVAL_MS = 30_000
+/** Cap on messages buffered while the socket is down, oldest dropped first. */
+const PENDING_SEND_LIMIT = 200
 
 function WebSocketProvider({ children }: { children: ReactNode }) {
   const socketRef = useRef<WebSocket | null>(null)
@@ -30,6 +36,9 @@ function WebSocketProvider({ children }: { children: ReactNode }) {
   const reconnectAttemptRef = useRef(0)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Messages written while the socket was down, replayed in order on reconnect.
+  const pendingRef = useRef<string[]>([])
+  const canvasAckHandlersRef = useRef(new Set<CanvasAckHandler>())
 
   const token = useStore(authStore.store, (s) => s.token)
 
@@ -39,6 +48,16 @@ function WebSocketProvider({ children }: { children: ReactNode }) {
     const ws = socketRef.current
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(data))
+      return
+    }
+    // Queue rather than drop. Canvas mutations are the user's work — silently
+    // losing a node created during a reconnect leaves the board and the server
+    // permanently disagreeing, with nothing to retry from.
+    const queue = pendingRef.current
+    queue.push(JSON.stringify(data))
+    if (queue.length > PENDING_SEND_LIMIT) {
+      queue.splice(0, queue.length - PENDING_SEND_LIMIT)
+      console.warn('[ws] outbound queue full, dropped oldest messages')
     }
   }, [])
 
@@ -87,6 +106,20 @@ function WebSocketProvider({ children }: { children: ReactNode }) {
         const count = typeof msg.missed_count === 'number' ? msg.missed_count : 0
         console.warn(`[ws] Missed ${count} events. Triggering data re-fetch.`)
         window.dispatchEvent(new CustomEvent('ws:events-missed', { detail: { missed_count: count } }))
+      } else if (msg.type === WS_CONTROL.CANVAS_ACK && typeof msg.seq === 'number') {
+        const ack: CanvasAckMsg = {
+          type: WS_CONTROL.CANVAS_ACK,
+          seq: msg.seq,
+          element_id: typeof msg.element_id === 'string' ? msg.element_id : '',
+          error: typeof msg.error === 'string' ? msg.error : null,
+        }
+        for (const handler of canvasAckHandlersRef.current) {
+          try {
+            handler(ack)
+          } catch (err) {
+            console.error('[ws] canvas ack handler error:', err)
+          }
+        }
       }
     }
 
@@ -128,6 +161,16 @@ function WebSocketProvider({ children }: { children: ReactNode }) {
         // Re-subscribe to active runs
         for (const runId of activeRunsRef.current) {
           ws.send(JSON.stringify({ type: WS_MSG.SUBSCRIBE_RUN, run_id: runId }))
+        }
+
+        // Replay anything written while we were down, in order and after the
+        // resubscribes so the server has our topics first.
+        const pending = pendingRef.current
+        if (pending.length > 0) {
+          pendingRef.current = []
+          for (const payload of pending) {
+            ws.send(payload)
+          }
         }
 
         startPingTimer()
@@ -254,7 +297,17 @@ function WebSocketProvider({ children }: { children: ReactNode }) {
     [sendRaw],
   )
 
-  const value = useMemo(() => ({ subscribe, subscribeRun, send }), [subscribe, subscribeRun, send])
+  const subscribeCanvasAck = useCallback((handler: CanvasAckHandler): (() => void) => {
+    canvasAckHandlersRef.current.add(handler)
+    return () => {
+      canvasAckHandlersRef.current.delete(handler)
+    }
+  }, [])
+
+  const value = useMemo(
+    () => ({ subscribe, subscribeRun, send, subscribeCanvasAck }),
+    [subscribe, subscribeRun, send, subscribeCanvasAck],
+  )
 
   return <WebSocketContext.Provider value={value}>{children}</WebSocketContext.Provider>
 }

@@ -15,7 +15,7 @@ type BoardElementState = {
 // ── Store ────────────────────────────────────────────────────────────────────
 
 const store = createStore<BoardElementState>(() => ({
-  elements: emptyBoard,
+  elements: emptyBoard(),
 }))
 
 // ── Selectors ────────────────────────────────────────────────────────────────

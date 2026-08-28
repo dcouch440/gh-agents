@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect } from 'react'
 import { undoStore } from '@/stores/undoStore'
+import { isEditableTarget } from '@/utils/dom'
 import type { ActiveTool, BoardElements } from '../elements'
 import { removeElements, selectAllIds } from '../elements'
 import { EMPTY_SELECTION } from './useSelection'
@@ -21,6 +22,11 @@ const useKeyboard = (
   onCanvasChange?: CanvasChangeCallback,
 ) => {
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // This listener is on `window`, so it also sees keystrokes aimed at the
+    // sidebar chat and any other input on the page. Typing must never reach
+    // the board's shortcuts.
+    if (isEditableTarget(e.target)) return
+
     // Don't intercept when editing text
     if (interaction.type === 'editing') return
 
@@ -32,23 +38,6 @@ const useKeyboard = (
       setElements((s) => removeElements(s, selection.selectedIds))
       onDelete?.(selection.selectedIds)
       setSelection(() => EMPTY_SELECTION)
-      return
-    }
-
-    // Undo
-    if (e.key === 'z' && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
-      e.preventDefault()
-      undoStore.undo()
-      return
-    }
-
-    // Redo
-    if (
-      (e.key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey) ||
-      (e.key === 'y' && (e.ctrlKey || e.metaKey))
-    ) {
-      e.preventDefault()
-      undoStore.redo()
       return
     }
 

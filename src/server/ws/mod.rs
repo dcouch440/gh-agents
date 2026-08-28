@@ -33,6 +33,8 @@ pub use events::*;
 const PING_INTERVAL: Duration = Duration::from_secs(30);
 /// Duration without a pong before a connection is considered dead.
 const PONG_TIMEOUT: Duration = Duration::from_secs(crate::constants::WS_PONG_TIMEOUT_SECS);
+/// Depth of a connection's pending canvas-mutation and ack queues.
+const CANVAS_QUEUE_CAPACITY: usize = 256;
 
 /// Shared topic subscriptions for a client.
 type TopicSubscriptions = Arc<Mutex<HashSet<Topic>>>;
@@ -93,6 +95,51 @@ async fn handle_socket(
     let mut ping_interval = interval(PING_INTERVAL);
     let mut last_pong = Instant::now();
 
+    // Canvas mutations are applied by a single worker per connection so they
+    // land in the order the client sent them. Spawning each message
+    // independently let a text edit or an edge overtake the node it belonged
+    // to, whereupon it found no element map and was silently dropped — and let
+    // two concurrent creates mint the same slug.
+    let (canvas_tx, mut canvas_rx) =
+        tokio::sync::mpsc::channel::<ClientMessage>(CANVAS_QUEUE_CAPACITY);
+    let (ack_tx, mut ack_rx) = tokio::sync::mpsc::channel::<ControlMessage>(CANVAS_QUEUE_CAPACITY);
+
+    let canvas_worker = {
+        let state = state.clone();
+        let ack_tx = ack_tx.clone();
+        tokio::spawn(async move {
+            while let Some(msg) = canvas_rx.recv().await {
+                let seq = msg.canvas_seq();
+                let element_id = msg.canvas_element_id().unwrap_or_default().to_string();
+                let error = match crate::server::services::canvas_sync::handle_canvas_message(
+                    msg, &state, user_id,
+                )
+                .await
+                {
+                    Ok(()) => None,
+                    Err(e) => {
+                        warn!(error = %e, "Canvas sync failed");
+                        Some(e.to_string())
+                    }
+                };
+                // Only acked when the client asked to be — older clients send no seq.
+                if let Some(seq) = seq {
+                    let ack = ControlMessage::CanvasAck {
+                        seq,
+                        element_id,
+                        error,
+                    };
+                    if ack_tx.send(ack).await.is_err() {
+                        break;
+                    }
+                }
+            }
+        })
+    };
+    // Drop our sender so that once the worker finishes and drops its clone,
+    // `ack_rx.recv()` resolves to `None` and its `select!` arm goes quiet.
+    drop(ack_tx);
+
     debug!("WebSocket client connected");
 
     loop {
@@ -118,15 +165,33 @@ async fn handle_socket(
                         match serde_json::from_str::<ClientMessage>(&text) {
                             Ok(client_msg) => {
                                 if client_msg.is_canvas_mutation() {
-                                    let state_clone = state.clone();
-                                    let uid = user_id;
-                                    tokio::spawn(async move {
-                                        if let Err(e) = crate::server::services::canvas_sync::handle_canvas_message(
-                                            client_msg, &state_clone, uid,
-                                        ).await {
-                                            warn!(error = %e, "Canvas sync failed");
+                                    // `try_send`, not `send().await`: blocking on a
+                                    // full queue would stall this loop and stop it
+                                    // answering pings.
+                                    let seq = client_msg.canvas_seq();
+                                    let element_id = client_msg
+                                        .canvas_element_id()
+                                        .unwrap_or_default()
+                                        .to_string();
+                                    if canvas_tx.try_send(client_msg).is_err() {
+                                        warn!("Canvas queue full, dropping mutation");
+                                        // Tell the client rather than let it wait out
+                                        // its flush timeout on an ack that never comes.
+                                        if let Some(seq) = seq {
+                                            let ctrl = ControlMessage::CanvasAck {
+                                                seq,
+                                                element_id,
+                                                error: Some(
+                                                    "Canvas sync queue full".to_string(),
+                                                ),
+                                            };
+                                            if let Ok(json) = serde_json::to_string(&ctrl) {
+                                                if sender.send(Message::Text(json)).await.is_err() {
+                                                    break;
+                                                }
+                                            }
                                         }
-                                    });
+                                    }
                                 } else {
                                     let response = handle_client_message(
                                         client_msg, &topics, &run_subs,
@@ -177,6 +242,15 @@ async fn handle_socket(
                         break;
                     }
                     _ => {}
+                }
+            }
+
+            // Canvas mutation acks from the sequential worker
+            Some(ack) = ack_rx.recv() => {
+                if let Ok(json) = serde_json::to_string(&ack) {
+                    if sender.send(Message::Text(json)).await.is_err() {
+                        break;
+                    }
                 }
             }
 
@@ -231,7 +305,15 @@ async fn handle_socket(
         }
     }
 
-    // Clean up on disconnect
+    // Clean up on disconnect. Dropping the sender ends the worker's loop once it
+    // has drained whatever is already queued — mutations the client sent before
+    // going away still get persisted. Drop the ack receiver first: nothing is
+    // draining it now, and a worker blocked on a full ack channel would never
+    // finish, hanging this await forever.
+    drop(ack_rx);
+    drop(canvas_tx);
+    let _ = canvas_worker.await;
+
     state.release_ws_connection(ip);
     let subs = topics.lock().expect("topic lock poisoned");
     debug!(

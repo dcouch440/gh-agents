@@ -27,6 +27,7 @@ export const WS_CONTROL = {
   ERROR: 'error',
   PONG: 'pong',
   EVENTS_MISSED: 'events_missed',
+  CANVAS_ACK: 'canvas_ack',
 } as const
 
 // Control messages (direct socket responses, not broadcast)
@@ -35,6 +36,7 @@ export type WsControlMessage =
   | { type: typeof WS_CONTROL.ERROR; message: string }
   | { type: typeof WS_CONTROL.PONG; client_ts: string; server_ts: string }
   | { type: typeof WS_CONTROL.EVENTS_MISSED; missed_count: number; message: string }
+  | CanvasAckMsg
 
 // Client message types
 export const WS_MSG = {
@@ -52,7 +54,22 @@ export const WS_MSG = {
   CANVAS_EDGE_DELETED: 'canvas_edge_deleted',
 } as const
 
-// Canvas sync payload types
+/**
+ * Server confirmation that a canvas mutation has been persisted.
+ *
+ * The server applies a connection's mutations in send order, so an ack for
+ * `seq` implies every lower `seq` has already landed. `error` is non-null when
+ * the mutation was rejected; the client stops waiting either way.
+ */
+export type CanvasAckMsg = {
+  type: typeof WS_CONTROL.CANVAS_ACK
+  seq: number
+  element_id: string
+  error: string | null
+}
+
+// Canvas sync payload types. `seq` lets the client tell when a mutation has
+// been durably applied — see CanvasAckMsg.
 export type CanvasElementMovedMsg = {
   type: typeof WS_MSG.CANVAS_ELEMENT_MOVED
   workflow_id: string
@@ -61,6 +78,7 @@ export type CanvasElementMovedMsg = {
   y: number
   width: number
   height: number
+  seq: number
 }
 
 export type CanvasTextChangedMsg = {
@@ -68,6 +86,7 @@ export type CanvasTextChangedMsg = {
   workflow_id: string
   element_id: string
   text: string
+  seq: number
 }
 
 export type CanvasNodeCreatedMsg = {
@@ -79,6 +98,7 @@ export type CanvasNodeCreatedMsg = {
   width: number
   height: number
   text: string
+  seq: number
 }
 
 export type CanvasEdgeCreatedMsg = {
@@ -87,18 +107,21 @@ export type CanvasEdgeCreatedMsg = {
   element_id: string
   source_element_id: string
   target_element_id: string
+  seq: number
 }
 
 export type CanvasNodeDeletedMsg = {
   type: typeof WS_MSG.CANVAS_NODE_DELETED
   workflow_id: string
   element_id: string
+  seq: number
 }
 
 export type CanvasEdgeDeletedMsg = {
   type: typeof WS_MSG.CANVAS_EDGE_DELETED
   workflow_id: string
   element_id: string
+  seq: number
 }
 
 // Client messages (sent from client to server)

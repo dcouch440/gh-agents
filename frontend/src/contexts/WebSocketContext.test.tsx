@@ -385,4 +385,124 @@ describe('WebSocketContext', () => {
 
     errorSpy.mockRestore()
   })
+
+  // ── Outbound queue ──────────────────────────────────────────────────────
+  //
+  // Canvas mutations are the user's work. Dropping one because the socket
+  // happened to be reconnecting left the board and the server permanently
+  // disagreeing, with nothing to retry from.
+
+  describe('outbound queue', () => {
+    it('queues sends while the socket is not open and replays them on open', () => {
+      mockToken.current = 'test-jwt'
+      const { result } = renderProvider()
+      const ws = lastWs!
+      ws.readyState = FakeWebSocket.CONNECTING
+
+      act(() => {
+        result.current!.send({ type: 'ping', ts: 'first' })
+        result.current!.send({ type: 'ping', ts: 'second' })
+      })
+
+      expect(ws.send).not.toHaveBeenCalled()
+
+      ws.readyState = FakeWebSocket.OPEN
+      act(() => {
+        ws.onopen!(new Event('open'))
+      })
+
+      const sent = ws.send.mock.calls.map((c) => String(c[0]))
+      expect(sent.some((p) => p.includes('"ts":"first"'))).toBe(true)
+      expect(sent.some((p) => p.includes('"ts":"second"'))).toBe(true)
+      // Order is preserved.
+      expect(sent.findIndex((p) => p.includes('first'))).toBeLessThan(
+        sent.findIndex((p) => p.includes('second')),
+      )
+    })
+
+    it('does not replay the same message twice', () => {
+      mockToken.current = 'test-jwt'
+      const { result } = renderProvider()
+      const ws = lastWs!
+      ws.readyState = FakeWebSocket.CLOSED
+
+      act(() => {
+        result.current!.send({ type: 'ping', ts: 'once' })
+      })
+
+      ws.readyState = FakeWebSocket.OPEN
+      act(() => { ws.onopen!(new Event('open')) })
+      act(() => { ws.onopen!(new Event('open')) })
+
+      const replays = ws.send.mock.calls.filter((c) => String(c[0]).includes('"ts":"once"'))
+      expect(replays).toHaveLength(1)
+    })
+
+    it('drops the oldest messages once the queue is full', () => {
+      mockToken.current = 'test-jwt'
+      const { result } = renderProvider()
+      const ws = lastWs!
+      ws.readyState = FakeWebSocket.CLOSED
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      act(() => {
+        for (let i = 0; i < 205; i++) {
+          result.current!.send({ type: 'ping', ts: `msg-${i}` })
+        }
+      })
+
+      ws.readyState = FakeWebSocket.OPEN
+      act(() => { ws.onopen!(new Event('open')) })
+
+      const sent = ws.send.mock.calls.map((c) => String(c[0]))
+      expect(sent.some((p) => p.includes('"ts":"msg-0"'))).toBe(false)
+      expect(sent.some((p) => p.includes('"ts":"msg-204"'))).toBe(true)
+      expect(warnSpy).toHaveBeenCalled()
+      warnSpy.mockRestore()
+    })
+  })
+
+  // ── Canvas acks ─────────────────────────────────────────────────────────
+
+  describe('canvas acks', () => {
+    it('dispatches canvas_ack control messages to subscribers', () => {
+      mockToken.current = 'test-jwt'
+      const { result } = renderProvider()
+      const handler = vi.fn()
+
+      act(() => {
+        result.current!.subscribeCanvasAck(handler)
+      })
+
+      act(() => {
+        lastWs!.onmessage!(new MessageEvent('message', {
+          data: JSON.stringify({ type: 'canvas_ack', seq: 7, element_id: 'box-1', error: null }),
+        }))
+      })
+
+      expect(handler).toHaveBeenCalledWith({
+        type: 'canvas_ack', seq: 7, element_id: 'box-1', error: null,
+      })
+    })
+
+    it('stops dispatching after unsubscribe', () => {
+      mockToken.current = 'test-jwt'
+      const { result } = renderProvider()
+      const handler = vi.fn()
+      let unsubscribe = () => {}
+
+      act(() => {
+        unsubscribe = result.current!.subscribeCanvasAck(handler)
+      })
+      act(() => { unsubscribe() })
+
+      act(() => {
+        lastWs!.onmessage!(new MessageEvent('message', {
+          data: JSON.stringify({ type: 'canvas_ack', seq: 1, element_id: 'b', error: null }),
+        }))
+      })
+
+      expect(handler).not.toHaveBeenCalled()
+    })
+  })
 })
