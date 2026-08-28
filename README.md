@@ -27,47 +27,15 @@ I also used it to practise three things directly: orchestrating parallel agent p
 
 ## How It Works
 
-The walkthrough below follows one real run end-to-end: a request to research the current state of multi-agent orchestration and produce an executive brief. Five steps, six agents, 74 seconds. Every prompt behind it is reproduced verbatim in [The Workforce Model](#the-workforce-model) further down.
+You describe what you want in the chat panel. The workflow agent decides the shape of the work — how many steps it takes, what each one is responsible for, and which ones depend on which — and draws it onto the board as nodes and arrows. You can also draw and edit nodes by hand; either way, the shape on the canvas *is* the dependency graph. There is no orchestration code and no config to write.
 
-### 1. Tell the workflow agent what you want
+It builds that structure as files, not database rows: a `topology.json` plus one markdown file per node, projected out to a repo, edited, and synced back. The chat panel streams the whole thing as it happens, including the failures — a bad shell command shows up in the log the same way a successful one does.
 
-One message to the chat panel, describing the research goal. You can also draw or edit nodes by hand, but the primary flow is telling the workflow agent what to write — it decides the shape. Here it comes back with five boxes and four arrows: three research angles fan out — architectures, production failures, economics — converge on a verification gate, and end in an executive brief. No orchestration code, no config: the shape on the canvas *is* the dependency graph.
+![The workflow agent builds the board](docs/images/run-1-draw-the-board.png)
 
-The chat panel shows the workflow agent creating that structure, writing `topology.json` and one markdown file per node, then rendering it onto the board. The first attempt hits a shell syntax error, visible in the log; it recovers on the next call and reports the topology back in plain language.
+Structure lands immediately; nothing is staffed yet. Hit **Generate** and each node is dispatched to its own **designer agent**, which decides what agents that node needs, writes their system prompts and tool assignments, and records the dependency graph between them. That runs asynchronously across the whole board. The designer is told *what* the node must accomplish and never *how* to staff it, so a single sentence on the board routinely becomes a team — a step that reads "write the brief" can come back as an analyst feeding a writer.
 
-![The workflow agent builds the board from one message](docs/images/run-1-draw-the-board.png)
-
-### 2. Dispatch designs the agents
-
-Before anything executes, each node is handed to its own **designer agent** — the Dispatch tab tracks them completing one by one, with the tool count each used.
-
-The expanded node shows what a designer actually produces. It writes `config.json`, `topology.json`, and `agents/researcher.json`, and the system prompt it composes is not a restatement of the box text — it names coordination protocols, race conditions in agent handoffs, prompt injection propagation, and which source types to prioritise. That expertise was chosen by the designer, not supplied in the instruction.
-
-![Dispatch designs the agents](docs/images/run-2-dispatch-designs-agents.png)
-
-### 3. Agents execute in parallel
-
-Hit **Run** and the Run tab streams the execution. The workflow starts with five steps; the three research nodes have no dependencies between them, so all three are dispatched in the same instant and the first returns in 26.3 seconds.
-
-The left pane shows exactly what an agent received — its system prompt, and an input framed as `<assignment>` and `<expected_output>` blocks. The tree on the right tracks each step's agent live.
-
-![Agents execute in parallel](docs/images/run-3-parallel-execution.png)
-
-### 4. Verification gates the research
-
-The research steps finish about three seconds apart, and their combined output — just over 9,000 characters — fans into the verification step as `<previous_step>` blocks.
-
-The Verifier's brief is narrower than "check this": independent corroboration requires a source with its own primary observation, not a re-publication of the same claim. It returns a per-finding confidence classification, and reports that the quantitative claims held up against primary papers while the case studies came back weaker.
-
-![Verification gates the research](docs/images/run-4-verification.png)
-
-### 5. The brief is written and saved
-
-The final step runs two agents in sequence, which nothing in the original instruction asked for: an **Analyst** to synthesize the verified findings, then a **Writer** to compress them under 800 words for a named audience.
-
-Both agents write to the shared workspace under descriptive filenames, and the tree shows the finished chain — research report, verified findings, synthesis, executive brief.
-
-![The brief is written and saved](docs/images/run-5-brief-saved.png)
+Then you hit **Run**. Steps with no dependencies between them dispatch together; each level waits on the one before it. Inside a step, the agents that node was given run the same way, in parallel wherever their own graph allows. Agents in a step share one container, so they hand work off through files rather than through prose, and every file change is captured as a diff.
 
 ## The Workforce Model
 
@@ -75,26 +43,14 @@ The core primitive is the **workforce step** — a single node in the canvas tha
 
 ### Two-Phase Design
 
-Every workforce is designed before it executes. When you modify a node, a **designer agent** runs first: it receives your instruction, reasons about what agents are needed, writes their system prompts and tool assignments, and defines the dependency graph between them. The executor reads that design and resolves the topology before the first agent runs.
+Every workforce is designed before it executes, and the two phases are separate artifacts.
 
-This separation means the design of a workforce is inspectable and editable — it exists as a structured artifact, not just an implicit LLM call.
+**Dispatch** runs first, once per step, when you hit Generate. The designer agent receives one sentence from the board and answers *how*: which agents exist, what each one knows, and what file each produces. It designs by writing config files to disk — `config.json`, `topology.json`, `agents/*.json` — then calls `complete_system`, attesting against its own checklist (`prompts_not_trivial`, `assignments_expanded`, `no_filenames_prescribed`) before the execution engine reads those files back. The design is therefore inspectable and editable: a structured artifact, not an implicit LLM call.
 
-### The actual prompts
-
-Here is that two-phase split in the run from [How It Works](#how-it-works), with every prompt reproduced verbatim from the database. Nothing below is illustrative.
-
-**Dispatch** runs first, once per step. A designer agent receives one sentence from the board and answers *how*: which agents exist, what each one knows, and what file each produces. It designs by writing config files to disk — `config.json`, `topology.json`, `agents/*.json` — then calls `complete_system`, attesting against its own checklist (`prompts_not_trivial`, `assignments_expanded`, `no_filenames_prescribed`) before the execution engine reads those files back.
-
-![Dispatch — the designer agent's prompts](docs/images/dispatch-prompts.svg)
-
-**Runtime** is what those config files produced. Every system prompt is a designer-written role plus one shared preamble; every input is an `<assignment>` and an `<expected_output>` block. The three researchers were dispatched in the same millisecond.
-
-![Runtime — the designed agents' prompts](docs/images/runtime-prompts.svg)
-
-Two details worth pulling out. The designer gave the brief step **two** agents in sequence — an Analyst to synthesize and a Writer to compress under 800 words — which nothing in the original instruction asked for. And the shared-workspace contract held for four of six agents: two researchers returned their reports inline instead of writing files, despite being told not to.
+**Runtime** is what those config files produced. Every system prompt is a designer-written role plus one shared preamble; every input is an `<assignment>` block and a `<deliverable>` block, with upstream results arriving as `<previous_step>` blocks.
 
 <details>
-<summary>The shared preamble, in full — byte-identical in all six runtime prompts</summary>
+<summary>The shared preamble, in full — appended byte-identical to every runtime prompt</summary>
 
 ```
 You are in a shared workspace. Files and installed packages from previous steps are available.
@@ -108,19 +64,19 @@ assume their contents from the summary alone.
 
 </details>
 
-Both diagrams are generated from the run record by [`docs/diagrams/gen_prompt_diagrams.py`](docs/diagrams/gen_prompt_diagrams.py).
+The contract is not always honoured. Agents told to write files sometimes return their output inline instead, which is one of the reasons the handoff is file-based rather than conversational — a missing file is a visible failure.
 
 ### Dependency-Based Parallelism
 
 Agents within a workforce declare which upstream agents they depend on. The executor resolves this into execution levels via topological sort. Agents in the same level run in parallel; each level waits for the previous to complete.
 
-This means a workforce automatically exploits concurrency wherever the dependency graph allows it — without any manual configuration. Both halves are visible in the runtime diagram above: the three research steps carry the same dispatch timestamp to the millisecond, while the Analyst and Writer inside the brief step are ordered `agent_order 0 → 1`.
+This means a workforce automatically exploits concurrency wherever the dependency graph allows it — without any manual configuration.
 
 ### Shared Workspace
 
 All agents in a step share one container — files written by one are visible to the next, which is what makes file-based handoff possible. The container is created once at the start of the step and torn down after all agents complete. A filesystem diff is captured and stored, so every file change across the entire workforce is tracked.
 
-The handoff contract itself is carried in the preamble appended to every agent's system prompt, shown in full in the runtime diagram above.
+The handoff contract itself is carried in the preamble appended to every agent's system prompt, shown in full above.
 
 ## Architecture Overview
 
