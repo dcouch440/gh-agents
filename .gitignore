@@ -18,8 +18,9 @@ Thumbs.db
 .env.local
 .env.*.local
 
-# Claude Code
-.claude/
+# Claude Code (personal/local settings only — rules are shared via git)
+.claude/*
+!.claude/rules/
 
 # Runtime data
 .nexor/state.db
@@ -44,3 +45,6 @@ Hey
 
 /frontend-freehand/
 /perfect-freehand/
+
+# Local tickets / postmortems
+tickets/

@@ -39,13 +39,9 @@ docker exec nexor-postgres-1 psql -U nexor -d nexor -c "SQL"
 - Commit format: `type(scope): description` (feat, fix, docs, refactor, test, chore)
 - Branch naming: `type/short-description` (same `type` values as commits, e.g. `docs/public-repo-cleanup`, `feat/agent-pool`)
 
-## Rust Conventions
+## Conventions
 
-- `thiserror` for library errors, `anyhow` for application code
-- Handlers return `Result<Json<T>, AppError>` — never unwrap or panic in handlers
-- Handlers are thin: parse request, call service, return response. Business logic lives in `src/server/services/`
-- Always timeout external calls
-- Folder-based modules with separate test files:
+Folder-based modules with separate test files (never inline `#[cfg(test)]` in `mod.rs`):
 
 ```
 feature/
@@ -53,19 +49,10 @@ feature/
 └── tests.rs    # #[cfg(test)] mod tests { ... }
 ```
 
-Never inline `#[cfg(test)]` blocks in `mod.rs`.
+Everything else is path-scoped and loads automatically when Claude touches matching files:
 
-## Frontend Conventions
-
-- Strict TypeScript — no `any`, no `as` casts (unless commented why), no `@ts-ignore`
-- Components use `function` declarations; everything else uses arrow functions
-- `type` over `interface`. `null` over `undefined`. Named exports only. One component per file.
-- No `React.FC`, no `forwardRef`, no external state libraries — vanilla React only
-- Components are stateless and pure. Pages own data and state.
-- Use `Collections` (`@/utils/collections`) for array operations — never raw `.filter().map()` chains or `.find()` inside loops
-- Use typed endpoints from `frontend/src/api/api.ts` — never raw `api.get`/`api.post`
-- Colocated tests: `Foo.test.tsx` next to `Foo.tsx`. Shared fixtures in `src/test/fixtures.ts`
-- ESLint is strict (React 19): no eslint-disable, fix the code instead
+- Rust (`src/**/*.rs`): `.claude/rules/rust.md` — error-handling layers, DI/trait patterns, async/testing conventions.
+- Frontend (`frontend/**/*.{ts,tsx}`): `.claude/rules/typescript.md` — style rules, API layer, state system, tests.
 
 ## Reusability
 
