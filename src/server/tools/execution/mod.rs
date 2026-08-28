@@ -25,6 +25,40 @@ const TOOLS_NS: Uuid = Uuid::from_bytes([
     0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8,
 ]);
 
+/// Depth `list_files` walks when the caller does not ask for one. Shared by
+/// both backends so a listing does not change shape with where it ran.
+///
+/// Three levels reaches `src/server/handlers/` from the workspace root — deep
+/// enough to see the shape of a decomposed deliverable in one call, shallow
+/// enough that a repository does not flood the result.
+const DEFAULT_LIST_DEPTH: u32 = 3;
+
+/// Build the `list_files` result both execution backends return.
+///
+/// Both list relative to the requested `path`; the prefix is put back here so
+/// every entry is a workspace-relative path that `read_file` and `edit_file`
+/// accept unchanged. Without it an agent that lists a subdirectory and then
+/// reads a name out of that listing gets a not-found for a file that is
+/// there.
+///
+/// `dropped` is reported rather than swallowed: a silently truncated listing
+/// reads as a complete one, and an agent looking for a file that is not in it
+/// concludes the file does not exist.
+fn list_files_response(path: &str, files: Vec<String>, dropped: usize, depth: u32) -> Value {
+    let prefix = path.trim_end_matches('/');
+    let files: Vec<String> = if prefix.is_empty() || prefix == "." {
+        files
+    } else {
+        files.into_iter().map(|f| format!("{prefix}/{f}")).collect()
+    };
+
+    let mut out = json!({ "files": files, "depth": depth });
+    if dropped > 0 {
+        out["truncated"] = json!(dropped);
+    }
+    out
+}
+
 /// Convert a snake_case tool name to a human-readable display name.
 fn tool_display_name(name: &str) -> String {
     name.split('_')

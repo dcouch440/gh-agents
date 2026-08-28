@@ -279,6 +279,14 @@ pub fn shell_escape_path(path: &str) -> String {
     format!("'{}'", escaped)
 }
 
+/// Deepest `list_files` will walk. A workspace holding an installed dependency
+/// tree is mostly noise below this, and the noise is pruned by name rather than
+/// by depth, so this is a bound on pathological nesting rather than a budget.
+pub const LIST_FILES_MAX_DEPTH: u32 = 6;
+
+/// Most entries `list_files` returns before it starts dropping them.
+pub const LIST_FILES_MAX_ENTRIES: usize = 500;
+
 /// Validate that a container path is safe (no absolute paths, no `..` traversal).
 pub fn validate_container_path(path: &str) -> Result<(), ContainerError> {
     if path.starts_with('/') {
@@ -571,9 +579,59 @@ impl ContainerHandle {
         Ok(())
     }
 
-    /// List files in a directory inside the container.
-    pub async fn list_files(&self, path: &str) -> Result<Vec<String>, ContainerError> {
-        let result = self.exec(&["ls", "-1a", path]).await?;
+    /// List files under a directory inside the container, walking down to
+    /// `max_depth` levels.
+    ///
+    /// Returns paths relative to `path`, sorted, with a trailing `/` on every
+    /// directory. Skips the same things the passdown manifest skips — any
+    /// component starting with `.`, plus node_modules, __pycache__ and
+    /// site-packages — so a workspace with an installed dependency tree in it
+    /// still returns a readable listing.
+    ///
+    /// Recursive because a deliverable can be a directory. `ls -1a`, which this
+    /// replaces, returned one level with no way to tell a directory from a
+    /// file, so an agent handed a tree needed one call per level and could not
+    /// tell which entries were worth descending into.
+    ///
+    /// Caps at `LIST_FILES_MAX_ENTRIES`; the count of what was dropped comes
+    /// back alongside so the caller can say so rather than silently truncating.
+    ///
+    /// Errors when `path` is not a directory, rather than reporting it as
+    /// empty — telling the two apart is most of what the caller wants this
+    /// for.
+    pub async fn list_files(
+        &self,
+        path: &str,
+        max_depth: u32,
+    ) -> Result<(Vec<String>, usize), ContainerError> {
+        let quoted = shell_escape_path(path);
+        let depth = max_depth.clamp(1, LIST_FILES_MAX_DEPTH);
+
+        // The `-d` guard runs first because a pipeline's exit status is its
+        // last stage's: without it a `find` on a path that does not exist
+        // writes to stderr, `sort` exits 0, and the caller gets an empty
+        // listing indistinguishable from an empty directory. `pipefail` is
+        // not portable to `sh`, so the check is explicit.
+        //
+        // One `find`, because the alternative is a call per directory level.
+        // `-mindepth 1` keeps the start directory itself from being tested
+        // against the `.*` prune pattern, which would prune the whole search.
+        // The `while` loop is what marks directories: `find` has no portable
+        // way to print a type suffix, and knowing which entries are worth
+        // descending into is the point of the listing.
+        let cmd = format!(
+            "if [ ! -d {quoted} ]; then echo 'list_files: not a directory: '{quoted} >&2; \
+             exit 1; fi; \
+             find {quoted} -mindepth 1 -maxdepth {depth} \
+             \\( -name '.*' -o -name node_modules -o -name __pycache__ \
+             -o -name site-packages \\) -prune -o -print \
+             | while IFS= read -r p; do \
+             if [ -d \"$p\" ]; then printf '%s/\\n' \"$p\"; \
+             else printf '%s\\n' \"$p\"; fi; done \
+             | LC_ALL=C sort"
+        );
+
+        let result = self.exec_shell(&cmd).await?;
         if !result.success {
             return Err(ContainerError::CommandFailed {
                 container: self.container_name.clone(),
@@ -581,12 +639,19 @@ impl ContainerHandle {
                 stderr: result.stderr,
             });
         }
-        Ok(result
+
+        let prefix = format!("{}/", path.trim_end_matches('/'));
+        let mut entries: Vec<String> = result
             .stdout
             .lines()
-            .filter(|l| !l.is_empty() && *l != "." && *l != "..")
-            .map(|l| l.to_string())
-            .collect())
+            .filter(|l| !l.is_empty())
+            .map(|l| l.strip_prefix(&prefix).unwrap_or(l).to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+
+        let dropped = entries.len().saturating_sub(LIST_FILES_MAX_ENTRIES);
+        entries.truncate(LIST_FILES_MAX_ENTRIES);
+        Ok((entries, dropped))
     }
 
     /// Run a git command inside the container.

@@ -5,9 +5,12 @@
 
 use serde_json::{json, Value};
 
-use crate::execution::{parse_porcelain_status, validate_container_path, ContainerHandle};
+use crate::execution::{
+    parse_porcelain_status, validate_container_path, ContainerHandle, LIST_FILES_MAX_DEPTH,
+};
 
 use super::file_io::{edit_file_core, ContainerFileIO};
+use super::{list_files_response, DEFAULT_LIST_DEPTH};
 use crate::server::tools::shared::{is_tool_allowed, tool_not_allowed_error};
 
 /// Execute a tool inside a persistent Docker container.
@@ -197,8 +200,16 @@ async fn container_list_files(input: &Value, handle: &ContainerHandle) -> Value 
             return json!({ "error": e.to_string() });
         }
     }
-    match handle.list_files(path).await {
-        Ok(files) => json!({ "files": files }),
+    // Clamped here rather than only inside `list_files` so the depth the
+    // response reports is the depth the listing was actually taken at.
+    let depth = input["depth"]
+        .as_u64()
+        .map(|d| d as u32)
+        .unwrap_or(DEFAULT_LIST_DEPTH)
+        .clamp(1, LIST_FILES_MAX_DEPTH);
+
+    match handle.list_files(path, depth).await {
+        Ok((files, dropped)) => list_files_response(path, files, dropped, depth),
         Err(e) => json!({ "error": e.to_string() }),
     }
 }

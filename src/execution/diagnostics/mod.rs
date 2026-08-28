@@ -209,10 +209,16 @@ impl DiagnosticsEngine {
 
     /// Files this agent produced, ready for the downstream passdown.
     ///
-    /// Deletions and workspace machinery are dropped, the largest `limit`
-    /// entries are kept, and the count of anything dropped by the cap is
-    /// returned alongside so the caller can say `(+N more)`.
-    pub fn produced_files(&self, limit: usize) -> (Vec<FileChange>, usize) {
+    /// Deletions and workspace machinery are dropped; the rest come back
+    /// largest first with path as a tiebreak, so the order is deterministic.
+    ///
+    /// No cap here. Capping before the caller can group by directory is what
+    /// made this useless for a deliverable that is a tree: thirty small source
+    /// files under one directory would spend the whole budget looking like
+    /// thirty unrelated files, and the ones that survived would be whichever
+    /// happened to be biggest. `passdown_entries` does the grouping and the
+    /// caller caps after it.
+    pub fn produced_files(&self) -> Vec<FileChange> {
         let mut files: Vec<FileChange> = self
             .touched
             .values()
@@ -222,10 +228,7 @@ impl DiagnosticsEngine {
 
         // Largest first, path as a tiebreak so output is deterministic.
         files.sort_by(|a, b| b.size.cmp(&a.size).then_with(|| a.path.cmp(&b.path)));
-
-        let dropped = files.len().saturating_sub(limit);
-        files.truncate(limit);
-        (files, dropped)
+        files
     }
 }
 

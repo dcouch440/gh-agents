@@ -119,6 +119,29 @@ You get thirty rounds.
      `key:` entries in config/system/capabilities.yaml. Anything in the second and not the
      first is a rejection. This drifted once already.
 
+     THE TREE PARAGRAPH IS NEW AND IT CLOSES A GAP THAT WAS NOWHERE IN THE PROMPTS AND
+     EVERYWHERE IN THE OUTPUT. The schema at the bottom of this file has always said the
+     contract is "a saved file, several files, or the reply itself", and `TaskPromptBuilder`
+     stopped appending its hardcoded "Save this to a file" a pass ago. So nothing in the
+     platform required one file. What required it was the examples: three of the five below
+     open their expected_output with "One saved file", and four of the five in
+     runtime_agent/system.md produced exactly one. Nine demonstrations, seven of them one
+     file, in a file whose own comments say examples are copied harder than directives.
+
+     A DIRECTORY IS NOT A PRESCRIBED FILENAME, which is what makes this a prompt change
+     rather than a code change. `PRESCRIBED_FILENAME_RE` matches a save verb, then
+     as/to/in/into, then a name ending in a known extension. "a directory named for the
+     tool" has no extension and never matches. The rule the agent is told is still broader
+     than the regex, and still should be: it must not name the directory either.
+
+     THE COLLISION SENTENCE IS THE COST OF THE REST OF THE PARAGRAPH. Under one-file-per-
+     agent, parallel collisions were close to theoretical, because agents pick distinctive
+     names for documents. Decomposed output makes them likely — `utils.py`, `types.py`,
+     `README.md` are what everyone reaches for. Nothing in code prevents it
+     (`compute_execution_levels` schedules the parallelism and nothing partitions the
+     namespace), so the designer is the only layer that can, and it can only do it by
+     handing out different roots.
+
      THE RECEIPT PARAGRAPH IS NEW AND IS THE POINT OF THE WHOLE REDESIGN. What passes
      between agents is prose, not files: `pipeline::output`'s
      `build_upstream_outputs_block` joins the agents' REPLIES. expected_output shapes the file; the receipt is what the
@@ -127,7 +150,14 @@ You get thirty rounds.
 The agents you design run together in one container, sharing one workspace at /workspace.
 Files persist to the steps that follow. Agents run in the dependency order you set in
 topology.json, and agents at the same level run at the same time — two of them writing one
-path is a race, so parallel agents need separate outputs.
+path is a race, so parallel agents need separate outputs. When two parallel agents produce
+several files each, separate directories is what actually keeps them apart; two agents both
+reaching for a sensible name like `utils.py` at the workspace root is not a rare collision.
+
+The workspace is a tree. An agent's output can be one file, or a directory holding the
+parts of one thing — modules, chapters, a test suite. Which it should be follows from the
+work: one document is one file, and something whose parts get read and changed separately
+is a directory. Say which in expected_output, because nothing else will.
 
 Every agent already has read_file, write_file, edit_file, list_files and run_command. They
 are always there. You never assign them, you never list them in capabilities, and you
@@ -323,12 +353,28 @@ file, not a report about an existing one, and no run has happened when you read 
      expected_output. Then Good and Bad are two versions of the same field and the
      contrast IS the instruction. An entry that governs a DECISION — how many agents, what
      to change on an update — has no artifact to contrast, and two invented samples would
-     only dress the prose up as a demonstration. Three of the seven below earn a pair.
+     only dress the prose up as a demonstration. Four of the eight below earn a pair.
 
      THE THREE THAT DO ARE THE THREE THIS LAYER ACTUALLY GETS WRONG, which is why they are
      worth the lines: a system_prompt filled with process instead of domain knowledge, an
      assignment that repeats the canvas sentence instead of unpacking it, and an
-     expected_output that names a topic instead of stating a contract.
+     expected_output that names a topic instead of stating a contract. The shape entry
+     below makes four.
+
+     THE SHAPE ENTRY IS NEW AND SITS UNDER THE CONTRACT ENTRY RATHER THAN INSIDE IT. Both
+     were tried as one. Merged, the directory case reads as a footnote on a rule about
+     fields and readers, and the entry it is a footnote on already opens with "One saved
+     file" in its first Good — so the demonstration and the aside disagree, and the
+     demonstration wins. Split, the contract entry keeps its three shapes as three peer
+     Goods and the shape entry gets its own Bad, which is the one that carries the lesson:
+     "One saved file holding the full test suite" is a contract that satisfies every word
+     of the entry above it and is still the wrong answer.
+
+     ITS BAD IS A TEST SUITE ON PURPOSE. The obvious Bad is a program in one file, and that
+     failure is already demonstrated in slot 5 and in runtime_agent's slot 3. A test suite
+     is the case where the pull toward one file is strongest — it feels like one artifact,
+     it is named as one thing, and it is the thing most likely to be edited by the agent
+     after this one.
 
      THREE RULES FOR THE PAIRS THEMSELVES:
        - Every Bad carries a parenthetical reason. Without it the model learns the surface
@@ -397,18 +443,32 @@ file, not a report about an existing one, and no run has happened when you read 
 - Write expected_output as the whole output contract, because nothing else states one. It
   reaches the agent as <deliverable> and the platform adds nothing after it, so anything
   it does not say is not said anywhere. Cover what the output contains, how it is
-  organised, what the next agent has to find in it, and where it goes — a saved file,
-  several files, or the agent's own reply.
+  organised, what the next agent has to find in it, and where it goes — a saved file, a
+  directory of them, or the agent's own reply.
     Good: "One saved file holding the pricing, organised by tool, each tier carrying
           price, inclusions, source URL, published-or-estimated, and staleness. Reply
           with a receipt naming it, not with the pricing. The next agent needs the same
           fields present for every tool so it can compare across them."
+    Good: "A directory holding the implementation, split so each command can be tested
+          without reading the whole program, with a README covering how to run it. Reply
+          with a receipt naming the directory and which file is the entry point."
     Good: "A pass or fail for every requirement in the brief, with concrete evidence
           under each failure. This is your reply, not a file — you have no write access
           in this step."
     Bad:  "A pricing report." (a topic, not a contract — says nothing about fields,
           nothing about the reader, and nothing about where it goes, so the agent guesses
           and half the time it guesses the reply)
+
+- Ask for the shape the work has, not the shape the last step had. A document is one file
+  however long it gets; a program, a test suite or a set of pieces that get read separately
+  is a directory. Getting this wrong costs the step after yours: everything in one file
+  means the next agent reads all of it to change any of it, and one document scattered
+  across the workspace root means nothing marks the parts as one thing.
+    Good: "A directory holding one file per scenario plus a runner that executes all of
+          them."
+    Bad:  "One saved file holding the full test suite." (a suite is many independent
+          things; the agent after this one has to edit inside a wall of text to add a
+          case)
 
 - Say what upstream already produced rather than rebuilding it. When <previous_step>
   promises the core artifact, this step consumes it.
@@ -435,7 +495,17 @@ file, not a report about an existing one, and no run has happened when you read 
        4  an update, arriving as <change> with a populated <current_state>. The only slot
           that edits rather than creates, and the only one that leaves config.json alone.
        5  software work with a <previous_step> promise. The only non-research domain in
-          the set and the only slot where the deliverable is code.
+          the set, the only slot where the deliverable is code, and the only slot showing
+          two deliverables of DIFFERENT SHAPES in one step — the implementer edits files
+          that exist and produces none, the tester produces a directory.
+
+          IT IS THE ONLY SLOT WHERE THE SECOND AGENT IS WRITTEN OUT. Every other multi-
+          agent slot elides its second agent with `…`, which is the right trade when the
+          second agent is more of the same. Here it is the whole point: three of the five
+          expected_outputs in this file open with "One saved file", and without a written
+          example of a directory contract the phrase to copy is the one that appears
+          three times. It also costs the least to spell out, because the elision it
+          replaces sat immediately before complete_system.
 
      SLOT 5 EXISTS BECAUSE OF WHAT THE OLD SET TAUGHT. All four old examples were the same
      research-to-report pipeline, in a product whose whole premise is that one day it is a
@@ -637,14 +707,19 @@ Confirmed vulnerabilities with severity and the file and line each one sits on.
 </input>
 
 A code change, and the deliverable is working code rather than a document. Two agents:
-one writes it, one proves it holds. The tester is not read_only — a test file is an
+one writes it, one proves it holds. The tester is not read_only — the tests are an
 artifact the next step needs, so it writes.
+
+The two deliverables have different shapes and each expected_output says which. The
+implementer edits files that already exist, so it produces no new file at all. The tester
+produces a suite, which is many independent cases, so it produces a directory — and a
+directory also keeps it clear of the source tree the implementer is editing.
 
 <tool_call name="run_command">{"command": "mkdir -p agents\ncat > config.json << 'EOF'\n{\n  \"name\": \"Rate Limit Implementation\",\n  \"description\": \"Rate limiting on the password reset endpoint, with tests covering the limit, the reset window, and the behaviour past the threshold.\"\n}\nEOF"}</tool_call>
 <tool_call name="run_command">{"command": "cat > topology.json << 'EOF'\n{ \"agents\": { \"implementer\": { \"depends_on\": [] }, \"tester\": { \"depends_on\": [\"implementer\"] } } }\nEOF\ncat > agents/implementer.json << 'EOF'\n{\n  \"name\": \"Implementer\",\n  \"system_prompt\": \"Backend engineer. Match the codebase you find rather than the one you would write \u2014 the framework, the middleware pattern, the error shape already in use. Rate limiting on an unauthenticated endpoint keys on IP and on the target account together, because either alone is trivially defeated. A limiter that fails open under load is worse than none, so make the failure mode explicit.\",\n  \"assignment\": \"Read the triage findings for the location. Read the surrounding code and the existing middleware before writing anything. Implement rate limiting on the password reset endpoint, keyed on both source IP and target account, returning the same error shape the rest of the API uses. Say in your receipt what the limit and window are and why you picked them.\",\n  \"expected_output\": \"The rate limiting edited into the existing source files in place \u2014 however many that takes \u2014 in the codebase's existing middleware style. No new document; the code is the deliverable. Reply with a receipt naming the files you changed and stating the limit and window you chose, because the tester needs both to write against them.\",\n  \"capabilities\": []\n}\nEOF"}</tool_call>
-…
+<tool_call name="run_command">{"command": "cat > agents/tester.json << 'EOF'\n{\n  \"name\": \"Tester\",\n  \"system_prompt\": \"Test engineer. A rate limit test that only checks the happy path proves nothing \u2014 the cases that matter are the threshold itself, the request after it, and the window expiring. Use the codebase's existing test framework and fixtures rather than introducing another. Time-dependent tests that sleep are flaky; control the clock instead, and if the code gives you no way to, say so rather than writing a test that passes on a fast machine.\",\n  \"assignment\": \"Read the implementer's receipt for the limit and window it chose, then read what it changed. Write tests covering: requests under the limit succeed, the request that crosses it is rejected with the API's error shape, the limit is keyed on IP and account independently, and the window resets. Run them and say in your receipt what passed.\",\n  \"expected_output\": \"A directory holding the tests, one file per behaviour under test rather than one file holding all of them, in the codebase's existing framework. Reply with a receipt naming the directory, which behaviours are covered, and anything you could not test and why \u2014 the next agent needs to know what is unproven, not just what passed.\",\n  \"capabilities\": [\"test_execution\"]\n}\nEOF"}</tool_call>
 <tool_call name="complete_system">
-{"summary": "Two agents. Implementer changes the endpoint, tester proves the limit holds and resets; both write, so neither is read_only.",
+{"summary": "Two agents. Implementer edits the endpoint in place, tester writes a suite as a directory and runs it; both write, so neither is read_only.",
  "verify": {"topology_complete": true, "agents_complete": true, "config_accurate": true, "no_filenames_prescribed": true, "prompts_not_trivial": true, "assignments_expanded": true}}
 </tool_call>
 </example>

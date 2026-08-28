@@ -5,9 +5,10 @@ mod tests {
     use uuid::Uuid;
 
     use crate::db::fixtures::fixtures::*;
+    use crate::execution::diagnostics::types::{ChangeType, FileChange};
     use crate::server::hub::dag::pipeline::{
         build_filtered_outputs_block, build_upstream_outputs_block, compose_workforce_output,
-        compute_execution_levels, filter_outputs_for_agent, DesignedAgentPrompt,
+        compute_execution_levels, filter_outputs_for_agent, passdown_entries, DesignedAgentPrompt,
     };
 
     // ── Output Composition ────────────────────────────────────────────────────
@@ -782,5 +783,93 @@ mod tests {
         fail_agent_execution(&repo, None, "boom").await;
 
         db.cleanup().await;
+    }
+
+    // ── passdown manifest ───────────────────────────────────────────────
+    //
+    // The `files:` line is the only objective half of the handoff. Before
+    // directories were rolled up it was sorted by size and capped at ten, so a
+    // deliverable that is a tree arrived as whichever ten of its files were
+    // biggest — the shape the agent chose was the one thing it could not say.
+
+    fn change(path: &str, size: u64) -> FileChange {
+        FileChange {
+            path: std::path::PathBuf::from(path),
+            change_type: ChangeType::Created,
+            size,
+        }
+    }
+
+    #[test]
+    fn passdown_names_root_files_individually() {
+        let (entries, dropped) =
+            passdown_entries(&[change("pricing.md", 4_000), change("notes.md", 900)]);
+
+        assert_eq!(dropped, 0);
+        assert_eq!(
+            entries,
+            vec![
+                "pricing.md (created, 3KB)".to_string(),
+                "notes.md (created, 900B)".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn passdown_rolls_a_directory_into_one_entry() {
+        let files: Vec<FileChange> = (0..12)
+            .map(|i| change(&format!("tally/src/mod_{i}.py"), 1_000))
+            .collect();
+
+        let (entries, dropped) = passdown_entries(&files);
+
+        // Twelve files, one deliverable, one line — and nothing dropped.
+        assert_eq!(dropped, 0);
+        assert_eq!(entries.len(), 1);
+        assert!(
+            entries[0].starts_with("tally/ (12 files,"),
+            "{:?}",
+            entries[0]
+        );
+    }
+
+    #[test]
+    fn passdown_keeps_a_small_deliverable_beside_a_large_tree() {
+        // The exact case the old size-sorted cap dropped: one small file that
+        // matters, written next to a directory of larger ones.
+        let mut files: Vec<FileChange> = (0..30)
+            .map(|i| change(&format!("build/asset_{i}.bin"), 500_000))
+            .collect();
+        files.push(change("README.md", 800));
+
+        let (entries, dropped) = passdown_entries(&files);
+
+        assert_eq!(dropped, 0);
+        assert_eq!(entries.len(), 2);
+        assert!(
+            entries[0].starts_with("build/ (30 files,"),
+            "{:?}",
+            entries[0]
+        );
+        assert_eq!(entries[1], "README.md (created, 800B)");
+    }
+
+    #[test]
+    fn passdown_names_the_file_when_a_directory_holds_one() {
+        // `docs/ (1 file, …)` would be strictly less information than the path.
+        let (entries, _) = passdown_entries(&[change("docs/design.md", 2_048)]);
+        assert_eq!(entries, vec!["docs/design.md (created, 2KB)".to_string()]);
+    }
+
+    #[test]
+    fn passdown_caps_after_grouping_and_reports_the_remainder() {
+        let files: Vec<FileChange> = (0..14)
+            .map(|i| change(&format!("dir_{i:02}/a.txt"), (14 - i) as u64 * 1_000))
+            .collect();
+
+        let (entries, dropped) = passdown_entries(&files);
+
+        assert_eq!(entries.len(), 10);
+        assert_eq!(dropped, 4);
     }
 }

@@ -158,6 +158,42 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn list_files_paths_round_trip_into_read_file() {
+        // The walk lists relative to `path`; the response puts the prefix
+        // back. Without that, a name taken from a subdirectory listing is not
+        // a path read_file can resolve.
+        let tmp = TempDir::new().unwrap();
+        std::fs::create_dir(tmp.path().join("reports")).unwrap();
+        std::fs::write(tmp.path().join("reports/summary.md"), "body").unwrap();
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+
+        let listing =
+            execute_execution_tool("list_files", &json!({ "path": "reports" }), &ctx, None).await;
+        let files = listing["files"].as_array().unwrap();
+        assert_eq!(files, &vec![json!("reports/summary.md")]);
+
+        let read = execute_execution_tool(
+            "read_file",
+            &json!({ "path": files[0].as_str().unwrap() }),
+            &ctx,
+            None,
+        )
+        .await;
+        assert_eq!(read["content"], json!("body"));
+    }
+
+    #[tokio::test]
+    async fn list_files_reports_a_missing_path_as_an_error() {
+        let tmp = TempDir::new().unwrap();
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+
+        let result =
+            execute_execution_tool("list_files", &json!({ "path": "nope" }), &ctx, None).await;
+        assert!(result["files"].is_null(), "{result}");
+        assert!(result["error"].is_string(), "{result}");
+    }
+
+    #[tokio::test]
     async fn tool_allowlist_blocks_disallowed() {
         let tmp = TempDir::new().unwrap();
         let ctx = ExecutionContext::new(tmp.path().to_path_buf());

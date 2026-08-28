@@ -147,10 +147,14 @@ a heredoc puts the whole file inside a shell command string, where quoting,
 backticks and `$` are live and one wrong character silently corrupts it.
 
 Size: `content` travels inside your response, so a single call is bounded by
-your output limit — roughly 8,000 tokens, or 400-600 lines of prose. A longer
-file is cut off mid-sentence and written that way. Build long files in pieces:
-write_file for the first section, then edit_file with an empty old_string to
-append each following section.
+your output limit — roughly 30,000 tokens. A longer file is cut off
+mid-sentence and written that way.
+
+Two ways past that, and the first one is usually right. If the deliverable is
+naturally several things — modules, chapters, one file per subject — write it
+as several files under a directory. If it is genuinely one document, write the
+first section with write_file and append each following section with edit_file
+using an empty old_string.
 
 The result reports the bytes and lines that landed and says whether the path
 already existed. If the byte count is far below what you intended, your
@@ -218,12 +222,26 @@ matches nothing, and cannot tell you a match was ambiguous."#
 fn list_files_tool() -> Tool {
     Tool {
         name: "list_files".into(),
-        description: r#"List the files and directories at a path in the
-workspace. Omit `path` for the workspace root.
+        description: r#"List what is under a path in the workspace, walking
+down through subdirectories. Omit `path` for the workspace root.
+
+Directories come back with a trailing `/`, so one call shows you the shape of
+what is there — a step that produced a directory of source files reads as a
+tree, not as one opaque name.
+
+Every entry comes back as a path from the workspace root, so you can pass one
+straight to read_file or edit_file without joining it back onto `path`.
 
 Run it once at the start to see what previous steps left you, and again when a
 file you expected is missing. More reliable than `ls` for that: you get a list
-rather than shell output that may be truncated."#
+rather than shell output that may be truncated, and a `path` that does not
+exist comes back as an error rather than as an empty listing you would read as
+"the step produced nothing".
+
+Depth defaults to 3 levels. Raise it to see deeper, lower it to skim a large
+tree. Dotted directories, node_modules, __pycache__ and site-packages are never
+listed. If `truncated` comes back, that many entries were dropped — narrow
+`path` rather than re-running the same call."#
             .into(),
         input_schema: json!({
             "type": "object",
@@ -231,6 +249,10 @@ rather than shell output that may be truncated."#
                 "path": {
                     "type": "string",
                     "description": "Relative path from project root (empty = root)"
+                },
+                "depth": {
+                    "type": "integer",
+                    "description": "How many levels to walk (default 3, max 6). 1 lists only the immediate contents."
                 }
             },
             "required": []

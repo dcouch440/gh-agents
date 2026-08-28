@@ -152,6 +152,76 @@ impl FileOps {
         Ok(entries)
     }
 
+    /// Walk a directory to `max_depth` levels, returning paths relative to it
+    /// with a trailing `/` on every directory.
+    ///
+    /// The local counterpart to `ContainerHandle::list_files`, and it filters
+    /// on the same rule — `diagnostics::workspace::is_noise` — so a listing
+    /// looks the same whichever side of the container boundary it came from.
+    /// Returns the entries and how many were dropped by the cap.
+    pub async fn list_tree(
+        &self,
+        path: impl AsRef<Path>,
+        max_depth: u32,
+        max_entries: usize,
+    ) -> Result<(Vec<String>, usize), FileError> {
+        let root = self.resolve_path(path.as_ref())?;
+
+        // The root is checked up front because everything below it is
+        // skipped on error: a missing path, or one that is not a directory,
+        // has to come back as an error rather than as an empty listing, which
+        // the caller cannot tell from a directory that really is empty.
+        match fs::metadata(&root).await {
+            Ok(m) if m.is_dir() => {}
+            Ok(_) => {
+                return Err(FileError::IoError(std::io::Error::other(format!(
+                    "not a directory: {}",
+                    root.display()
+                ))))
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return Err(FileError::NotFound { path: root })
+            }
+            Err(e) => return Err(FileError::IoError(e)),
+        }
+
+        let mut out = Vec::new();
+        let mut queue = vec![(root.clone(), 1u32)];
+
+        while let Some((dir, depth)) = queue.pop() {
+            // A directory that cannot be read is skipped rather than failing
+            // the walk. `find` on the container side writes to stderr and
+            // keeps going, and at a depth of up to six one unreadable
+            // subdirectory should not cost the caller the whole listing.
+            let Ok(mut entries) = fs::read_dir(&dir).await else {
+                continue;
+            };
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                let full = entry.path();
+                let Ok(rel) = full.strip_prefix(&root) else {
+                    continue;
+                };
+                if crate::execution::diagnostics::workspace::is_noise(rel) {
+                    continue;
+                }
+                let is_dir = entry.file_type().await.map(|t| t.is_dir()).unwrap_or(false);
+                let mut name = rel.to_string_lossy().to_string();
+                if is_dir {
+                    name.push('/');
+                    if depth < max_depth {
+                        queue.push((full, depth + 1));
+                    }
+                }
+                out.push(name);
+            }
+        }
+
+        out.sort();
+        let dropped = out.len().saturating_sub(max_entries);
+        out.truncate(max_entries);
+        Ok((out, dropped))
+    }
+
     /// Resolve a path relative to project root and validate it
     fn resolve_path(&self, path: &Path) -> Result<PathBuf, FileError> {
         let full_path = if path.is_absolute() {

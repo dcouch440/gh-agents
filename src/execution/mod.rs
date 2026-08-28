@@ -18,7 +18,7 @@ pub use approval::{
 pub use container::{
     sanitize_git_output, shell_escape_path, validate_container_path, CommandOutput,
     ContainerConfig, ContainerError, ContainerExecResult, ContainerHandle, ContainerManager,
-    DockerCli, RealDockerCli, RedactedString,
+    DockerCli, RealDockerCli, RedactedString, LIST_FILES_MAX_DEPTH, LIST_FILES_MAX_ENTRIES,
 };
 pub use files::{FileError, FileOps};
 pub use git::{

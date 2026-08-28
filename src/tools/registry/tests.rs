@@ -86,13 +86,30 @@ mod tests {
         }
 
         let write = get_tool_definition("write_file").unwrap();
+
+        // Derived from the config rather than hardcoded. This assertion used to
+        // pin the literal "8,000 tokens" and went stale the moment the runtime
+        // agent's cap was raised to 32k — the description then understated the
+        // real ceiling by 4x, which is the direction that makes an agent chunk a
+        // file it could have written in one call.
+        let cap = crate::config::protocols::WORKFORCE
+            .agents
+            .get("agent")
+            .expect("runtime agent config")
+            .max_tokens;
+        let rounded = format!("{},000 tokens", cap / 1000 / 10 * 10);
         assert!(
-            write.description.contains("8,000 tokens"),
-            "write_file must surface the max_tokens ceiling that truncated the design spec"
+            write.description.contains(&rounded),
+            "write_file must surface the max_tokens ceiling ({cap}); expected {rounded:?}"
         );
         assert!(
             write.description.contains("edit_file"),
             "write_file must name the chunked-append escape hatch"
+        );
+        assert!(
+            write.description.contains("several files"),
+            "write_file must offer splitting, not only appending — appending is what \
+             produces one enormous file"
         );
 
         let edit = get_tool_definition("edit_file").unwrap();
