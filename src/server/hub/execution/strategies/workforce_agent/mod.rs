@@ -138,7 +138,10 @@ impl ExecutionStrategy for WorkforceAgentStrategy {
                 };
                 let mut engine = diag.lock().await;
                 return match engine.execute(&command, handle).await {
-                    Ok(rendered) => json!({ "output": rendered }),
+                    // A bare string reaches the model verbatim; wrapping the
+                    // rendered envelope in an object would deliver it as JSON
+                    // with escaped newlines and undo the formatting.
+                    Ok(rendered) => Value::String(rendered),
                     Err(e) => json!({ "error": e.to_string() }),
                 };
             }

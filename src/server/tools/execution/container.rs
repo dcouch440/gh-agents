@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 use crate::execution::{parse_porcelain_status, validate_container_path, ContainerHandle};
 
 use super::file_io::{edit_file_core, ContainerFileIO};
+use crate::server::tools::shared::{is_tool_allowed, tool_not_allowed_error};
 
 /// Execute a tool inside a persistent Docker container.
 ///
@@ -19,10 +20,8 @@ pub async fn execute_tool_in_container(
     handle: &ContainerHandle,
     allowed_tools: Option<&[String]>,
 ) -> Value {
-    if let Some(allowed) = allowed_tools {
-        if !allowed.iter().any(|t| t == name) {
-            return json!({ "error": format!("Tool '{}' is not allowed for this agent", name) });
-        }
+    if !is_tool_allowed(name, allowed_tools) {
+        return tool_not_allowed_error(name);
     }
 
     match name {

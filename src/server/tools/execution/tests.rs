@@ -191,3 +191,93 @@ mod tests {
         assert!(result["error"].as_str().unwrap().contains("Unknown tool"));
     }
 }
+
+#[cfg(test)]
+mod routing_tests {
+    use super::super::{route_for, Route};
+
+    // The bug this guards: the container and local branches are catch-alls, so
+    // a web tool matched after them gets shelled into a container that has no
+    // handler for it. Every combination must still route Web.
+    #[test]
+    fn web_tools_never_reach_the_container() {
+        for name in ["brave_search", "read_webpage"] {
+            for &has_ctx in &[true, false] {
+                for &has_state in &[true, false] {
+                    for &has_user in &[true, false] {
+                        assert_eq!(
+                            route_for(name, true, has_ctx, has_state, has_user),
+                            Route::Web,
+                            "{name} misrouted with container present"
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn web_tools_route_web_with_nothing_available() {
+        // Notably NOT ContextFree: a web tool needs no context, so it must not
+        // be told it requires one.
+        assert_eq!(
+            route_for("brave_search", false, false, false, false),
+            Route::Web
+        );
+    }
+
+    #[test]
+    fn document_tools_take_precedence_over_the_container() {
+        assert_eq!(
+            route_for("read_document", true, true, true, true),
+            Route::Document
+        );
+        assert_eq!(
+            route_for("search_docs", true, true, true, true),
+            Route::Document
+        );
+    }
+
+    #[test]
+    fn document_tools_fall_through_without_their_dependencies() {
+        // read_document needs state; without it the call falls to the
+        // container, preserving the pre-existing behaviour.
+        assert_eq!(
+            route_for("read_document", true, false, false, false),
+            Route::Container
+        );
+        // create_doc needs a user as well as state.
+        assert_eq!(
+            route_for("create_doc", false, true, true, false),
+            Route::Local
+        );
+        assert_eq!(
+            route_for("create_doc", false, false, true, false),
+            Route::ContextFree
+        );
+    }
+
+    #[test]
+    fn ordinary_tools_prefer_container_then_local_then_context_free() {
+        assert_eq!(
+            route_for("run_command", true, true, false, false),
+            Route::Container
+        );
+        assert_eq!(
+            route_for("run_command", false, true, false, false),
+            Route::Local
+        );
+        assert_eq!(
+            route_for("run_command", false, false, false, false),
+            Route::ContextFree
+        );
+    }
+
+    #[test]
+    fn an_unknown_tool_still_reaches_a_branch_that_can_report_it() {
+        assert_eq!(
+            route_for("nonexistent_tool", false, false, true, true),
+            Route::ContextFree
+        );
+    }
+}
