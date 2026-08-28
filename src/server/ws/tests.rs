@@ -908,4 +908,124 @@ mod tests {
         // None run_id skips the run filter entirely → passes
         assert!(event_passes_filters(&evt, &topics, None, &run_subs));
     }
+
+    // ============================================================================
+    // Canvas sync wire contract
+    // ============================================================================
+    //
+    // The frontend blocks Generate until it has seen an ack for its newest
+    // `seq`. A rename or shape change on either side of this contract would not
+    // fail to compile — it would just make every Generate wait out its timeout
+    // and then read a board the server had not finished writing.
+
+    #[test]
+    fn canvas_node_created_carries_seq() {
+        let json = r#"{
+            "type": "canvas_node_created",
+            "workflow_id": "550e8400-e29b-41d4-a716-446655440000",
+            "element_id": "box-1",
+            "x": 1.0, "y": 2.0, "width": 3.0, "height": 4.0,
+            "text": "do the thing",
+            "seq": 7
+        }"#;
+
+        let msg: ClientMessage = serde_json::from_str(json).unwrap();
+        assert!(msg.is_canvas_mutation());
+        assert_eq!(msg.canvas_seq(), Some(7));
+        assert_eq!(msg.canvas_element_id(), Some("box-1"));
+    }
+
+    #[test]
+    fn canvas_message_without_seq_still_deserializes() {
+        // A client that predates acks must keep working — it simply is not acked.
+        let json = r#"{
+            "type": "canvas_text_changed",
+            "workflow_id": "550e8400-e29b-41d4-a716-446655440000",
+            "element_id": "box-1",
+            "text": "hello"
+        }"#;
+
+        let msg: ClientMessage = serde_json::from_str(json).unwrap();
+        assert!(msg.is_canvas_mutation());
+        assert_eq!(msg.canvas_seq(), None);
+        assert_eq!(msg.canvas_element_id(), Some("box-1"));
+    }
+
+    #[test]
+    fn every_canvas_variant_round_trips_seq_and_element_id() {
+        let wf = "550e8400-e29b-41d4-a716-446655440000";
+        let cases = [
+            format!(
+                r#"{{"type":"canvas_element_moved","workflow_id":"{wf}","element_id":"e1","x":0.0,"y":0.0,"width":1.0,"height":1.0,"seq":1}}"#
+            ),
+            format!(
+                r#"{{"type":"canvas_text_changed","workflow_id":"{wf}","element_id":"e2","text":"t","seq":2}}"#
+            ),
+            format!(
+                r#"{{"type":"canvas_node_created","workflow_id":"{wf}","element_id":"e3","x":0.0,"y":0.0,"width":1.0,"height":1.0,"text":"t","seq":3}}"#
+            ),
+            format!(
+                r#"{{"type":"canvas_edge_created","workflow_id":"{wf}","element_id":"e4","source_element_id":"a","target_element_id":"b","seq":4}}"#
+            ),
+            format!(
+                r#"{{"type":"canvas_node_deleted","workflow_id":"{wf}","element_id":"e5","seq":5}}"#
+            ),
+            format!(
+                r#"{{"type":"canvas_edge_deleted","workflow_id":"{wf}","element_id":"e6","seq":6}}"#
+            ),
+        ];
+
+        for (i, json) in cases.iter().enumerate() {
+            let msg: ClientMessage = serde_json::from_str(json).unwrap();
+            let expected_seq = (i + 1) as u64;
+            assert!(
+                msg.is_canvas_mutation(),
+                "case {i} is not a canvas mutation"
+            );
+            assert_eq!(msg.canvas_seq(), Some(expected_seq), "case {i} seq");
+            assert_eq!(
+                msg.canvas_element_id(),
+                Some(format!("e{expected_seq}").as_str()),
+                "case {i} element_id"
+            );
+        }
+    }
+
+    #[test]
+    fn non_canvas_message_has_no_seq_or_element_id() {
+        let msg = ClientMessage::Ping {
+            ts: "2025-01-01T00:00:00Z".to_string(),
+        };
+        assert!(!msg.is_canvas_mutation());
+        assert_eq!(msg.canvas_seq(), None);
+        assert_eq!(msg.canvas_element_id(), None);
+    }
+
+    #[test]
+    fn canvas_ack_serializes_to_the_shape_the_client_matches_on() {
+        let ack = ControlMessage::CanvasAck {
+            seq: 12,
+            element_id: "box-9".to_string(),
+            error: None,
+        };
+        let value: serde_json::Value = serde_json::to_value(&ack).unwrap();
+
+        assert_eq!(value["type"], "canvas_ack");
+        assert_eq!(value["seq"], 12);
+        assert_eq!(value["element_id"], "box-9");
+        assert!(value["error"].is_null());
+    }
+
+    #[test]
+    fn canvas_ack_carries_the_rejection_reason() {
+        let ack = ControlMessage::CanvasAck {
+            seq: 3,
+            element_id: "box-1".to_string(),
+            error: Some("Canvas sync queue full".to_string()),
+        };
+        let value: serde_json::Value = serde_json::to_value(&ack).unwrap();
+
+        assert_eq!(value["type"], "canvas_ack");
+        assert_eq!(value["error"], "Canvas sync queue full");
+    }
 }

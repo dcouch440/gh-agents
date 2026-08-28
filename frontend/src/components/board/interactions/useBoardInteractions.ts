@@ -282,7 +282,12 @@ const useBoardInteractions = (
 
   const onBoxTextChange = useCallback((boxId: string, text: string, width: number, height: number) => {
     setElements((s) => updateBoxText(s, boxId, text, width, height))
-  }, [setElements])
+    // Sync as the user types, not only on blur. Text stranded in local state
+    // until a blur that may never come (navigating away, or clicking Generate
+    // straight after typing) is text the server never sees — and a step with an
+    // empty description is skipped by generate.
+    onCanvasChange({ kind: 'text_changed', elementId: boxId, text, width, height })
+  }, [onCanvasChange, setElements])
 
   const onAnchorPointerDown = useCallback((boxId: string, anchor: AnchorPoint, e: React.PointerEvent) => {
     arrowDraw.onArrowStart(boxId, anchor, e)

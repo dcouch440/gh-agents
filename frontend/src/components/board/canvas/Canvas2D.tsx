@@ -79,6 +79,13 @@ function Canvas2D({
   const [fontGeneration, setFontGeneration] = useState(0)
   const renderRef = useRef<() => void>(() => {})
 
+  // Latest elements, readable from effects and handlers that must not re-run
+  // when they change. Kept current in an effect declared ahead of every reader.
+  const elementsRef = useRef(elements)
+  useEffect(() => {
+    elementsRef.current = elements
+  }, [elements])
+
   // Keep renderRef pointing at the latest render closure so the
   // ResizeObserver can repaint synchronously with current state.
   useEffect(() => {
@@ -131,18 +138,26 @@ function Canvas2D({
     renderRef.current()
   }, [elements, selection, editingBoxId, viewport, previews, edgeHover, theme, fontGeneration])
 
-  // ── Focus textarea when editing starts ────────────────────────────────
+  // ── Seed and focus the textarea when editing starts ───────────────────
+  //
+  // Keyed on `editingBoxId` alone. The overlay is uncontrolled, so this is the
+  // only place its value is written — and it must not re-run while the user
+  // types. `updateBoxText` allocates a fresh `boxes` Map per keystroke, so
+  // depending on `elements` here would re-seed the value and slam the caret to
+  // the end on every character (and would overwrite in-progress text whenever a
+  // BOARD_ELEMENTS_UPDATED broadcast landed mid-edit). The ref keeps the read
+  // current without making the effect reactive.
   useEffect(() => {
-    if (editingBoxId !== null && textareaRef.current !== null) {
-      const box = elements.boxes.get(editingBoxId)
-      if (box !== undefined) {
-        textareaRef.current.value = box.text
-      }
-      textareaRef.current.focus()
-      const len = textareaRef.current.value.length
-      textareaRef.current.setSelectionRange(len, len)
-    }
-  }, [editingBoxId, elements.boxes])
+    if (editingBoxId === null) return
+    const el = textareaRef.current
+    if (el === null) return
+
+    const box = elementsRef.current.boxes.get(editingBoxId)
+    el.value = box?.text ?? ''
+    el.focus()
+    const len = el.value.length
+    el.setSelectionRange(len, len)
+  }, [editingBoxId])
 
   // ── Pointer Event Handlers ────────────────────────────────────────────
 
@@ -270,14 +285,14 @@ function Canvas2D({
     const contentHeight = el.scrollHeight
     el.style.height = `${contentHeight}px`
 
-    const currentBox = elements.boxes.get(editingBoxId)
+    const currentBox = elementsRef.current.boxes.get(editingBoxId)
     if (currentBox === undefined) return
 
     const width = currentBox.width
     const height = Math.max(BOARD.MIN_BOX_HEIGHT, contentHeight + BOARD.BOX_PADDING_Y * 2)
 
     onBoxTextChange(editingBoxId, text, width, height)
-  }, [editingBoxId, elements.boxes, onBoxTextChange])
+  }, [editingBoxId, onBoxTextChange])
 
   const handleTextareaKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Escape') {

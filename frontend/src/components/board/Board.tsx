@@ -40,13 +40,30 @@ function Board({ workflowId }: BoardProps) {
   // Server truth, not local state — a refresh mid-generation still reads as
   // generating, and the flag clears when the server says the work is done.
   const isGenerating = useStore(workflowLiveStore.store, workflowLiveStore.selectIsGenerating)
+
+  // ── Live sync ──────────────────────────────────────────────────────────
+  // Declared before `handleGenerate`, which waits on `flushAndWait`.
+  const { handleCanvasChange, flushAndWait } = useCanvasSync(workflowId)
+
   const handleGenerate = useCallback(() => {
     // Optimistic until the sync tick confirms it. Deliberately no re-fetch on
     // success: `POST /generate` returns before its pipeline has registered
     // anything, so reading straight back reports "not generating" for work that
     // is about to start. The poll, re-armed by `setGenerating`, settles it.
     workflowLiveStore.setGenerating(true)
-    void api.workflows.generate(workflowId)
+    // The server builds its work list from persisted steps, so the board has to
+    // be durable first. Canvas edits travel over the WebSocket and are
+    // debounced; without this wait a node drawn and described moments ago still
+    // has an empty description server-side and is skipped — the "nothing
+    // happens until you click Generate twice" bug.
+    void flushAndWait()
+      .then(() => api.workflows.generate(workflowId))
+      .then((resp) => {
+        // Nothing matched. Don't spin against work that was never queued.
+        if (resp.generating === 0) {
+          workflowLiveStore.setGenerating(false)
+        }
+      })
       .catch((err: unknown) => {
         console.error('Generate failed:', err)
         // Nothing is going to start, so drop the spinner now rather than making
@@ -54,7 +71,7 @@ function Board({ workflowId }: BoardProps) {
         workflowLiveStore.setGenerating(false)
         void workflowLiveStore.hydrateActive()
       })
-  }, [workflowId])
+  }, [workflowId, flushAndWait])
 
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
   const entryStep = useMemo(() => {
@@ -88,9 +105,6 @@ function Board({ workflowId }: BoardProps) {
   const handleContextMenuOpen = useCallback((x: number, y: number, elementId: string | null) => {
     setContextMenu({ x, y, elementId })
   }, [])
-
-  // ── Live sync ──────────────────────────────────────────────────────────
-  const handleCanvasChange = useCanvasSync(workflowId)
 
   // ── Interactions ─────────────────────────────────────────────────────────
 

@@ -33,6 +33,7 @@ pub async fn handle_canvas_message(
             y,
             width,
             height,
+            ..
         } => {
             process_element_moved(state, uid.0, workflow_id, &element_id, x, y, width, height).await
         }
@@ -40,6 +41,7 @@ pub async fn handle_canvas_message(
             workflow_id,
             element_id,
             text,
+            ..
         } => process_text_changed(state, uid.0, workflow_id, &element_id, &text).await,
         ClientMessage::CanvasNodeCreated {
             workflow_id,
@@ -49,6 +51,7 @@ pub async fn handle_canvas_message(
             width,
             height,
             text,
+            ..
         } => {
             process_node_created(
                 state,
@@ -68,6 +71,7 @@ pub async fn handle_canvas_message(
             element_id,
             source_element_id,
             target_element_id,
+            ..
         } => {
             process_edge_created(
                 state,
@@ -82,10 +86,12 @@ pub async fn handle_canvas_message(
         ClientMessage::CanvasNodeDeleted {
             workflow_id,
             element_id,
+            ..
         } => process_node_deleted(state, uid.0, workflow_id, &element_id).await,
         ClientMessage::CanvasEdgeDeleted {
             workflow_id,
             element_id,
+            ..
         } => process_edge_deleted(state, uid.0, workflow_id, &element_id).await,
         _ => Ok(()), // Non-canvas messages — should never reach here
     }

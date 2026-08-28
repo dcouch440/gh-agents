@@ -12,11 +12,7 @@ import GestureIcon from '@mui/icons-material/Gesture'
 import ZoomInIcon from '@mui/icons-material/ZoomIn'
 import ZoomOutIcon from '@mui/icons-material/ZoomOut'
 import CenterFocusStrongIcon from '@mui/icons-material/CenterFocusStrong'
-import UndoIcon from '@mui/icons-material/Undo'
-import RedoIcon from '@mui/icons-material/Redo'
 import Divider from '@mui/material/Divider'
-import { useStore } from '@/stores'
-import { undoStore } from '@/stores/undoStore'
 import type { ActiveTool } from '../elements'
 
 type ToolbarProps = {
@@ -28,9 +24,6 @@ type ToolbarProps = {
 }
 
 function Toolbar({ activeTool, onToolChange, onZoomIn, onZoomOut, onResetZoom }: ToolbarProps) {
-  const canUndo = useStore(undoStore.store, undoStore.selectCanUndo)
-  const canRedo = useStore(undoStore.store, undoStore.selectCanRedo)
-
   return (
     <Paper
       elevation={2}
@@ -72,11 +65,6 @@ function Toolbar({ activeTool, onToolChange, onZoomIn, onZoomOut, onResetZoom }:
         active={activeTool === 'pen'}
         onClick={() => onToolChange('pen')}
       />
-
-      <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-
-      <ToolButton icon={<UndoIcon fontSize="small" />} tooltip="Undo (Cmd+Z)" onClick={undoStore.undo} disabled={!canUndo} />
-      <ToolButton icon={<RedoIcon fontSize="small" />} tooltip="Redo (Cmd+Shift+Z)" onClick={undoStore.redo} disabled={!canRedo} />
 
       <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
 

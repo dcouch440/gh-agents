@@ -75,6 +75,18 @@ pub enum ControlMessage {
     /// Client should re-fetch relevant state via REST API.
     #[serde(rename = "events_missed")]
     EventsMissed { missed_count: u64, message: String },
+    /// Acknowledges that a canvas mutation has been fully processed.
+    ///
+    /// Canvas mutations are applied in the order the client sent them, so an
+    /// ack for `seq` implies every lower `seq` on this connection has already
+    /// been applied. The client uses this to know its board is durable before
+    /// triggering work that reads the persisted state (e.g. generate).
+    #[serde(rename = "canvas_ack")]
+    CanvasAck {
+        seq: u64,
+        element_id: String,
+        error: Option<String>,
+    },
 }
 
 // ============================================================================
@@ -109,6 +121,8 @@ pub enum ClientMessage {
         y: f64,
         width: f64,
         height: f64,
+        #[serde(default)]
+        seq: Option<u64>,
     },
     /// Canvas node text was changed by the user.
     #[serde(rename = "canvas_text_changed")]
@@ -116,6 +130,8 @@ pub enum ClientMessage {
         workflow_id: Uuid,
         element_id: String,
         text: String,
+        #[serde(default)]
+        seq: Option<u64>,
     },
     /// User created a new node on the canvas.
     #[serde(rename = "canvas_node_created")]
@@ -127,6 +143,8 @@ pub enum ClientMessage {
         width: f64,
         height: f64,
         text: String,
+        #[serde(default)]
+        seq: Option<u64>,
     },
     /// User created a new edge on the canvas.
     #[serde(rename = "canvas_edge_created")]
@@ -135,18 +153,24 @@ pub enum ClientMessage {
         element_id: String,
         source_element_id: String,
         target_element_id: String,
+        #[serde(default)]
+        seq: Option<u64>,
     },
     /// User deleted a node from the canvas.
     #[serde(rename = "canvas_node_deleted")]
     CanvasNodeDeleted {
         workflow_id: Uuid,
         element_id: String,
+        #[serde(default)]
+        seq: Option<u64>,
     },
     /// User deleted an edge from the canvas.
     #[serde(rename = "canvas_edge_deleted")]
     CanvasEdgeDeleted {
         workflow_id: Uuid,
         element_id: String,
+        #[serde(default)]
+        seq: Option<u64>,
     },
 }
 
@@ -162,6 +186,32 @@ impl ClientMessage {
                 | Self::CanvasNodeDeleted { .. }
                 | Self::CanvasEdgeDeleted { .. }
         )
+    }
+
+    /// Client-assigned sequence number for a canvas mutation, if it sent one.
+    pub fn canvas_seq(&self) -> Option<u64> {
+        match self {
+            Self::CanvasElementMoved { seq, .. }
+            | Self::CanvasTextChanged { seq, .. }
+            | Self::CanvasNodeCreated { seq, .. }
+            | Self::CanvasEdgeCreated { seq, .. }
+            | Self::CanvasNodeDeleted { seq, .. }
+            | Self::CanvasEdgeDeleted { seq, .. } => *seq,
+            _ => None,
+        }
+    }
+
+    /// Element a canvas mutation targets, used to address its ack.
+    pub fn canvas_element_id(&self) -> Option<&str> {
+        match self {
+            Self::CanvasElementMoved { element_id, .. }
+            | Self::CanvasTextChanged { element_id, .. }
+            | Self::CanvasNodeCreated { element_id, .. }
+            | Self::CanvasEdgeCreated { element_id, .. }
+            | Self::CanvasNodeDeleted { element_id, .. }
+            | Self::CanvasEdgeDeleted { element_id, .. } => Some(element_id),
+            _ => None,
+        }
     }
 }
 
