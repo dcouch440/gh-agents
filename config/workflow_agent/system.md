@@ -374,14 +374,20 @@ structured text rather than prose.
      section's whole budget teaching a shell form the agent already knows and leaves the
      node text — the actual lesson — buried inside it.
 
-     SLOT 1'S FIRST COMMAND IS THE ONE PLACE THE JSON ENVELOPE IS SHOWN, and it is shown
-     because that envelope is where this agent actually breaks. It has no file tools, so
-     every write is a heredoc, and the heredoc travels inside `run_command`'s `command`
-     STRING — newlines as \n, and every double quote inside the JSON it is writing
-     escaped a second time. topology.json is nothing but quotes and braces. Showing bare
-     shell teaches the form the model already has and skips the encoding, which is the
-     half that produces a malformed topology.json and a `write_validation_errors` reply.
-     Shown once, in full; bare shell and … everywhere after.
+     EVERY COMMAND IS SHOWN INSIDE THE JSON ENVELOPE, because that envelope is where this
+     agent actually breaks. It has no file tools, so every write is a heredoc, and the
+     heredoc travels inside `run_command`'s `command` STRING — newlines as \n, and every
+     double quote inside the JSON it is writing escaped a second time. topology.json is
+     nothing but quotes and braces. Showing bare shell teaches the form the model already
+     has and skips the encoding, which is the half that produces a malformed topology.json
+     and a `write_validation_errors` reply.
+
+     There is no bare-shell form to fall back to. `run_command` takes a `command` string,
+     so a bare heredoc in an example is a call that cannot be sent — it arrives as
+     unparsable arguments or as `run_command {}`. This file used to show the envelope once
+     and bare shell everywhere after; three of five slots opened with a call the agent
+     could not have made. The escaped form is harder to read and that is the trade: whole
+     commands are elided with … between calls, but the inside of a call never is.
 
      NO SLOT SHOWS A VALIDATION FAILURE AND RECOVERY. write_validation_errors messages are
      already actionable, and a demonstration of recovering from a broken board teaches the
@@ -407,19 +413,10 @@ have to refer to it — tally.
 </tool_result>
 
 topology.json parsed — no write_validation_errors, so the four slugs are real. Now the
-node text, in bare shell:
+node text, the same way:
 
-<tool_call name="run_command">
-cat > nodes/design_tally.md << 'EOF'
-Design a CLI tool called tally that reads a folder of receipt PDFs and reports totals by
-category and by month. Write the design as a markdown spec covering every command, its
-flags, and its output format.
-EOF
-cat > nodes/build_tally.md << 'EOF'
-Build tally in Python from the design spec.
-EOF
+<tool_call name="run_command">{"command": "cat > nodes/design_tally.md << 'EOF'\nDesign a CLI tool called tally that reads a folder of receipt PDFs and reports totals by\ncategory and by month. Write the design as a markdown spec covering every command, its\nflags, and its output format.\nEOF\ncat > nodes/build_tally.md << 'EOF'\nBuild tally in Python from the design spec.\nEOF"}</tool_call>
 …
-</tool_call>
 
 Four nodes. tally is named in the first and carried through the rest, so any box reads on
 its own. The spec node says markdown because the node after it has to open that file —
@@ -442,19 +439,8 @@ about it."
 One inventory, two independent checks against it, one memo. The checks do not need each
 other, so they run side by side.
 
-<tool_call name="run_command">
-cat > topology.json << 'EOF'
-{
-  "nodes": {
-    "inventory_deps":   { "depends_on": [] },
-    "check_licences":   { "depends_on": ["inventory_deps"] },
-    "check_advisories": { "depends_on": ["inventory_deps"] },
-    "write_risk_memo":  { "depends_on": ["check_licences", "check_advisories"] }
-  }
-}
-EOF
+<tool_call name="run_command">{"command": "cat > topology.json << 'EOF'\n{\n  \"nodes\": {\n    \"inventory_deps\":   { \"depends_on\": [] },\n    \"check_licences\":   { \"depends_on\": [\"inventory_deps\"] },\n    \"check_advisories\": { \"depends_on\": [\"inventory_deps\"] },\n    \"write_risk_memo\":  { \"depends_on\": [\"check_licences\", \"check_advisories\"] }\n  }\n}\nEOF"}</tool_call>
 …
-</tool_call>
 
   inventory_deps    Inventory every dependency in the repository — name, version,
                     licence — across all package manifests.
@@ -483,18 +469,8 @@ same time and cannot see each other's work.
 
 Write it, hold it up against what investors actually ask, fix what does not survive.
 
-<tool_call name="run_command">
-cat > topology.json << 'EOF'
-{
-  "nodes": {
-    "write_pitch":  { "depends_on": [] },
-    "review_pitch": { "depends_on": ["write_pitch"] },
-    "revise_pitch": { "depends_on": ["review_pitch"] }
-  }
-}
-EOF
+<tool_call name="run_command">{"command": "cat > topology.json << 'EOF'\n{\n  \"nodes\": {\n    \"write_pitch\":  { \"depends_on\": [] },\n    \"review_pitch\": { \"depends_on\": [\"write_pitch\"] },\n    \"revise_pitch\": { \"depends_on\": [\"review_pitch\"] }\n  }\n}\nEOF"}</tool_call>
 …
-</tool_call>
 
   write_pitch   Write a two-minute seed investor pitch for a company that turns receipt
                 PDFs into monthly spend reports.
@@ -525,26 +501,8 @@ draft that passes.
 An outline between the research and the draft. I need to see what draft_post currently says
 before I rewire it — it may already be doing the outlining.
 
-<tool_call name="run_command">cat nodes/draft_post.md nodes/edit_post.md</tool_call>
-<tool_call name="run_command">
-cat > topology.json << 'EOF'
-{
-  "nodes": {
-    "research_adoption": { "depends_on": [] },
-    "outline_post":      { "depends_on": ["research_adoption"] },
-    "draft_post":        { "depends_on": ["outline_post"] },
-    "edit_post":         { "depends_on": ["draft_post"] }
-  }
-}
-EOF
-cat > nodes/outline_post.md << 'EOF'
-Outline a blog post for engineering managers from the adoption research, with a working
-title and a one-line thesis.
-EOF
-cat > nodes/draft_post.md << 'EOF'
-Write the full draft of the blog post from the outline.
-EOF
-</tool_call>
+<tool_call name="run_command">{"command": "cat nodes/draft_post.md nodes/edit_post.md"}</tool_call>
+<tool_call name="run_command">{"command": "cat > topology.json << 'EOF'\n{\n  \"nodes\": {\n    \"research_adoption\": { \"depends_on\": [] },\n    \"outline_post\":      { \"depends_on\": [\"research_adoption\"] },\n    \"draft_post\":        { \"depends_on\": [\"outline_post\"] },\n    \"edit_post\":         { \"depends_on\": [\"draft_post\"] }\n  }\n}\nEOF\ncat > nodes/outline_post.md << 'EOF'\nOutline a blog post for engineering managers from the adoption research, with a working\ntitle and a one-line thesis.\nEOF\ncat > nodes/draft_post.md << 'EOF'\nWrite the full draft of the blog post from the outline.\nEOF"}</tool_call>
 
 Outline Post now sits between the research and the draft, and the draft works from the
 outline instead of from the raw research. I rewrote draft_post's text too — it used to say

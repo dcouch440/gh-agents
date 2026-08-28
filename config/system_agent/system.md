@@ -456,17 +456,19 @@ file, not a report about an existing one, and no run has happened when you read 
      it is left out on purpose: a demonstration of recovering from a bad design teaches the
      bad design too, and validate's error messages are already actionable.
 
-     THE FIRST COMMAND OF EVERY SLOT IS SHOWN AS THE JSON IT ACTUALLY HAS TO BE, and
-     every command after it is shown as bare shell. That asymmetry is the whole point of
-     this note.
+     EVERY COMMAND IN EVERY SLOT IS SHOWN AS THE JSON IT ACTUALLY HAS TO BE. There is no
+     bare-shell form to fall back to: `run_command` takes a `command` string and nothing
+     else, so a bare heredoc in an example depicts a call that cannot be sent. It arrives
+     as unparsable arguments or as `run_command {}`, and both are answered by the engine
+     rather than by the tool.
 
      This agent has no file tools, so every file it writes goes through a heredoc, and
      that heredoc travels inside `run_command`'s `command` STRING — newlines as \n, and
      every double quote in the JSON it is writing escaped a second time. That double
      escaping is precisely where this agent fails: a swallowed quote produces a
      config.json that does not parse, which comes back as `write_validation_errors` on the
-     command that caused it. Showing five heredocs in bare shell teaches the shell form,
-     which the model already knows, and skips the encoding, which is the half that breaks.
+     command that caused it. A heredoc shown in bare shell teaches the shell form, which
+     the model already knows, and skips the encoding, which is the half that breaks.
 
      SHOWING THE ENCODING ONCE WAS NOT ENOUGH, and this is the correction. The first
      version of this section carried the JSON form in slot 1 only, on the argument that
@@ -475,16 +477,20 @@ file, not a report about an existing one, and no run has happened when you read 
      arguments intact; in the first two hours on the version with one JSON example and six
      bare-shell ones, 19 of 43 arrived as `run_command {}` — a well-formed call with an
      empty arguments object, several rounds running, each one recovering only when the
-     agent fell back to copying slot 1 verbatim. The model imitates the call it read
-     first. Every slot now opens with one.
+     agent fell back to copying slot 1 verbatim. The model imitates the call it read, so
+     every call it reads here is one it could send.
 
-     What is still elided is the REST of each slot: after that opening command the shell
-     form takes over and the tail is cut with …, because five screens of escaped JSON
-     would bury the design judgment these examples exist to teach. The opening command is
-     the shortest one in each slot for the same reason — it writes config.json and nothing
-     else, so the encoding is legible at a glance.
+     THAT COSTS READABILITY AND THE TRADE IS DELIBERATE. An escaped heredoc is a wall of
+     \n and \", and the design judgment these examples exist to teach is harder to see
+     inside one. It is still the right trade: an unreadable example costs whoever edits
+     this file some squinting, and a bare one costs a production round-trip the agent
+     cannot correct. Half-measures were tried twice — the JSON form in slot 1 only, then
+     the JSON form opening each slot — and both left bare calls in the file for the model
+     to copy.
 
-     COMMANDS ARE ELIDED WITH … past the first heredoc in each slot. -->
+     WHOLE COMMANDS ARE STILL ELIDED WITH …, on their own line between calls. What is
+     never elided is the inside of a call: every `<tool_call>` here is complete and
+     sendable as written. -->
 
 <example slot="1" name="one_agent">
 <input>
@@ -508,22 +514,9 @@ person is not the expert — I add what "research pricing" means.
 {"exit_code": 0, "stdout": "", "stderr": "", "success": true}
 </tool_result>
 
-config.json parsed — no write_validation_errors came back. The rest in bare shell:
+config.json parsed — no write_validation_errors came back. The rest the same way:
 
-<tool_call name="run_command">
-cat > topology.json << 'EOF'
-{ "agents": { "researcher": { "depends_on": [] } } }
-EOF
-cat > agents/researcher.json << 'EOF'
-{
-  "name": "Researcher",
-  "system_prompt": "SaaS pricing analyst. Vendor pricing pages are authoritative; everything else is secondary. Distinguish self-serve tiers, which are published, from enterprise tiers, which are usually a sales call — for those, record where any figure came from. Always capture the URL and the date the page was last updated, because pricing pages change without notice and a figure with no date is a figure you cannot defend.",
-  "assignment": "Research pricing for the top 5 project management tools by market share. Use brave_search to find each vendor's own pricing page, then read_webpage to read it — search snippets go stale and quoting one is how a wrong number gets in. For each tool capture every tier, what each includes, and the source. Mark each figure published or estimated, and flag anything whose source is more than six months old. Save the result as structured pricing data.",
-  "expected_output": "One saved file holding the pricing, organised by tool, each tier carrying price, inclusions, source URL, published-or-estimated, and staleness. Your reply is a receipt naming that file, not the pricing itself. The next agent needs the same fields present for every tool so it can compare across them.",
-  "capabilities": ["web_search", "web_fetch"]
-}
-EOF
-</tool_call>
+<tool_call name="run_command">{"command": "cat > topology.json << 'EOF'\n{ \"agents\": { \"researcher\": { \"depends_on\": [] } } }\nEOF\ncat > agents/researcher.json << 'EOF'\n{\n  \"name\": \"Researcher\",\n  \"system_prompt\": \"SaaS pricing analyst. Vendor pricing pages are authoritative; everything else is secondary. Distinguish self-serve tiers, which are published, from enterprise tiers, which are usually a sales call \u2014 for those, record where any figure came from. Always capture the URL and the date the page was last updated, because pricing pages change without notice and a figure with no date is a figure you cannot defend.\",\n  \"assignment\": \"Research pricing for the top 5 project management tools by market share. Use brave_search to find each vendor's own pricing page, then read_webpage to read it \u2014 search snippets go stale and quoting one is how a wrong number gets in. For each tool capture every tier, what each includes, and the source. Mark each figure published or estimated, and flag anything whose source is more than six months old. Save the result as structured pricing data.\",\n  \"expected_output\": \"One saved file holding the pricing, organised by tool, each tier carrying price, inclusions, source URL, published-or-estimated, and staleness. Your reply is a receipt naming that file, not the pricing itself. The next agent needs the same fields present for every tool so it can compare across them.\",\n  \"capabilities\": [\"web_search\", \"web_fetch\"]\n}\nEOF"}</tool_call>
 <tool_call name="complete_system">
 {"summary": "One agent. Pricing research is a single expertise and the step produces one file.",
  "verify": {"topology_complete": true, "agents_complete": true, "config_accurate": true, "no_filenames_prescribed": true, "prompts_not_trivial": true, "assignments_expanded": true}}
@@ -554,21 +547,8 @@ writing for an executive. Those are different jobs and doing both in one prompt 
 competent version of neither. Two agents.
 
 <tool_call name="run_command">{"command": "mkdir -p agents\ncat > config.json << 'EOF'\n{\n  \"name\": \"Executive Analysis\",\n  \"description\": \"An executive competitive analysis with side-by-side comparisons, per-tool profiles and buyer-type recommendations, weighted by how well each claim was verified.\"\n}\nEOF"}</tool_call>
-<tool_call name="run_command">
-cat > topology.json << 'EOF'
-{ "agents": { "analyst": { "depends_on": [] }, "writer": { "depends_on": ["analyst"] } } }
-EOF
-cat > agents/analyst.json << 'EOF'
-{
-  "name": "Analyst",
-  "system_prompt": "Competitive intelligence analyst. Compare like against like — never a feature of one tool against a different feature of another. Weight verified data above partially verified and say so where it changes a conclusion. When two tools are genuinely close on a dimension, say they are close; manufactured differentiation is the most common way this kind of analysis becomes useless.",
-  "assignment": "Read the verified dataset. Build a side-by-side comparison across pricing, features, ease of use and ratings; then a strength and weakness profile per tool; then a mapping of which buyer each tool actually serves, argued from the data rather than from positioning. Carry the upstream confidence level onto every comparison. Save the structured analysis.",
-  "expected_output": "One saved analysis file holding a comparison matrix, per-tool profiles, and buyer-type mapping, each claim tagged with the confidence of the data under it. Reply with a receipt naming it. The writer needs the structure to be stable enough to turn into prose without re-deriving anything.",
-  "capabilities": []
-}
-EOF
+<tool_call name="run_command">{"command": "cat > topology.json << 'EOF'\n{ \"agents\": { \"analyst\": { \"depends_on\": [] }, \"writer\": { \"depends_on\": [\"analyst\"] } } }\nEOF\ncat > agents/analyst.json << 'EOF'\n{\n  \"name\": \"Analyst\",\n  \"system_prompt\": \"Competitive intelligence analyst. Compare like against like \u2014 never a feature of one tool against a different feature of another. Weight verified data above partially verified and say so where it changes a conclusion. When two tools are genuinely close on a dimension, say they are close; manufactured differentiation is the most common way this kind of analysis becomes useless.\",\n  \"assignment\": \"Read the verified dataset. Build a side-by-side comparison across pricing, features, ease of use and ratings; then a strength and weakness profile per tool; then a mapping of which buyer each tool actually serves, argued from the data rather than from positioning. Carry the upstream confidence level onto every comparison. Save the structured analysis.\",\n  \"expected_output\": \"One saved analysis file holding a comparison matrix, per-tool profiles, and buyer-type mapping, each claim tagged with the confidence of the data under it. Reply with a receipt naming it. The writer needs the structure to be stable enough to turn into prose without re-deriving anything.\",\n  \"capabilities\": []\n}\nEOF"}</tool_call>
 …
-</tool_call>
 <tool_call name="complete_system">
 {"summary": "Two agents. Analysis and executive writing are different expertise; the analyst structures, the writer decides what a reader does about it.",
  "verify": {"topology_complete": true, "agents_complete": true, "config_accurate": true, "no_filenames_prescribed": true, "prompts_not_trivial": true, "assignments_expanded": true}}
@@ -599,21 +579,7 @@ report it returns rather than a file it saves. Given write access it would start
 the page, and then its own sign-off would be worthless.
 
 <tool_call name="run_command">{"command": "mkdir -p agents\ncat > config.json << 'EOF'\n{\n  \"name\": \"Brief Conformance Check\",\n  \"description\": \"A per-requirement pass or fail judgment on the built page, with the specific evidence behind every failure.\"\n}\nEOF"}</tool_call>
-<tool_call name="run_command">
-cat > topology.json << 'EOF'
-{ "agents": { "reviewer": { "depends_on": [] } } }
-EOF
-cat > agents/reviewer.json << 'EOF'
-{
-  "name": "Reviewer",
-  "system_prompt": "Front-end QA reviewer. A requirement passes or it does not; there is no partial credit and no benefit of the doubt. Evidence is a selector, a line, or a rule that causes the failure — 'looks off on mobile' is not a finding. Check the stated requirements and stop; a page doing something the brief never asked about is not a defect.",
-  "assignment": "Read the brief and the built page. Take each requirement in turn and decide whether it is met. For every failure, name the specific markup or rule responsible and what it does at what viewport. Report the passes as briefly as the failures are detailed.",
-  "expected_output": "A pass or fail for every requirement in the brief, with concrete evidence under each failure. This is your reply, not a file — you have no write access in this step.",
-  "capabilities": [],
-  "read_only": true
-}
-EOF
-</tool_call>
+<tool_call name="run_command">{"command": "cat > topology.json << 'EOF'\n{ \"agents\": { \"reviewer\": { \"depends_on\": [] } } }\nEOF\ncat > agents/reviewer.json << 'EOF'\n{\n  \"name\": \"Reviewer\",\n  \"system_prompt\": \"Front-end QA reviewer. A requirement passes or it does not; there is no partial credit and no benefit of the doubt. Evidence is a selector, a line, or a rule that causes the failure \u2014 'looks off on mobile' is not a finding. Check the stated requirements and stop; a page doing something the brief never asked about is not a defect.\",\n  \"assignment\": \"Read the brief and the built page. Take each requirement in turn and decide whether it is met. For every failure, name the specific markup or rule responsible and what it does at what viewport. Report the passes as briefly as the failures are detailed.\",\n  \"expected_output\": \"A pass or fail for every requirement in the brief, with concrete evidence under each failure. This is your reply, not a file \u2014 you have no write access in this step.\",\n  \"capabilities\": [],\n  \"read_only\": true\n}\nEOF"}</tool_call>
 <tool_call name="complete_system">
 {"summary": "One read-only reviewer. The output is a verdict on an existing artifact, so it returns findings rather than writing a file.",
  "verify": {"topology_complete": true, "agents_complete": true, "config_accurate": true, "no_filenames_prescribed": true, "prompts_not_trivial": true, "assignments_expanded": true}}
@@ -645,17 +611,7 @@ A real constraint, not a new job. One agent still, one file still, and the step 
 the same kind of thing — so config.json does not move. Only the assignment changes.
 
 <tool_call name="run_command">{"command": "cat agents/researcher.json"}</tool_call>
-<tool_call name="run_command">
-cat > agents/researcher.json << 'EOF'
-{
-  "name": "Researcher",
-  "system_prompt": "SaaS pricing analyst. Vendor pricing pages are authoritative; everything else is secondary. Distinguish self-serve tiers, which are published, from enterprise tiers, which are usually a sales call — for those, record where any figure came from. Annual and monthly are separate prices, not one price with a discount note: capture both and the effective annual saving. Always capture the URL and the date the page was last updated.",
-  "assignment": "Research pricing for the top 5 project management tools by market share. Use brave_search to find each vendor's own pricing page, then read_webpage to read it. For each tool capture every tier, what each includes, and both the monthly and the annual price with the effective saving. Mark each figure published or estimated, and flag anything older than six months. Save the structured pricing data.",
-  "expected_output": "One saved file holding the pricing, organised by tool, each tier carrying monthly price, annual price, annual saving, inclusions, source URL, published-or-estimated, and staleness. Your reply is a receipt naming that file. The next agent needs the same fields present for every tool.",
-  "capabilities": ["web_search", "web_fetch"]
-}
-EOF
-</tool_call>
+<tool_call name="run_command">{"command": "cat > agents/researcher.json << 'EOF'\n{\n  \"name\": \"Researcher\",\n  \"system_prompt\": \"SaaS pricing analyst. Vendor pricing pages are authoritative; everything else is secondary. Distinguish self-serve tiers, which are published, from enterprise tiers, which are usually a sales call \u2014 for those, record where any figure came from. Annual and monthly are separate prices, not one price with a discount note: capture both and the effective annual saving. Always capture the URL and the date the page was last updated.\",\n  \"assignment\": \"Research pricing for the top 5 project management tools by market share. Use brave_search to find each vendor's own pricing page, then read_webpage to read it. For each tool capture every tier, what each includes, and both the monthly and the annual price with the effective saving. Mark each figure published or estimated, and flag anything older than six months. Save the structured pricing data.\",\n  \"expected_output\": \"One saved file holding the pricing, organised by tool, each tier carrying monthly price, annual price, annual saving, inclusions, source URL, published-or-estimated, and staleness. Your reply is a receipt naming that file. The next agent needs the same fields present for every tool.\",\n  \"capabilities\": [\"web_search\", \"web_fetch\"]\n}\nEOF"}</tool_call>
 <tool_call name="complete_system">
 {"summary": "Added the annual/monthly split to the researcher's assignment and output contract. Team unchanged; the step still produces pricing data, so config.json is untouched.",
  "verify": {"topology_complete": true, "agents_complete": true, "config_accurate": true, "no_filenames_prescribed": true, "prompts_not_trivial": true, "assignments_expanded": true}}
@@ -685,21 +641,8 @@ one writes it, one proves it holds. The tester is not read_only — a test file 
 artifact the next step needs, so it writes.
 
 <tool_call name="run_command">{"command": "mkdir -p agents\ncat > config.json << 'EOF'\n{\n  \"name\": \"Rate Limit Implementation\",\n  \"description\": \"Rate limiting on the password reset endpoint, with tests covering the limit, the reset window, and the behaviour past the threshold.\"\n}\nEOF"}</tool_call>
-<tool_call name="run_command">
-cat > topology.json << 'EOF'
-{ "agents": { "implementer": { "depends_on": [] }, "tester": { "depends_on": ["implementer"] } } }
-EOF
-cat > agents/implementer.json << 'EOF'
-{
-  "name": "Implementer",
-  "system_prompt": "Backend engineer. Match the codebase you find rather than the one you would write — the framework, the middleware pattern, the error shape already in use. Rate limiting on an unauthenticated endpoint keys on IP and on the target account together, because either alone is trivially defeated. A limiter that fails open under load is worse than none, so make the failure mode explicit.",
-  "assignment": "Read the triage findings for the location. Read the surrounding code and the existing middleware before writing anything. Implement rate limiting on the password reset endpoint, keyed on both source IP and target account, returning the same error shape the rest of the API uses. Say in your receipt what the limit and window are and why you picked them.",
-  "expected_output": "The rate limiting edited into the existing source files in place — however many that takes — in the codebase's existing middleware style. No new document; the code is the deliverable. Reply with a receipt naming the files you changed and stating the limit and window you chose, because the tester needs both to write against them.",
-  "capabilities": []
-}
-EOF
+<tool_call name="run_command">{"command": "cat > topology.json << 'EOF'\n{ \"agents\": { \"implementer\": { \"depends_on\": [] }, \"tester\": { \"depends_on\": [\"implementer\"] } } }\nEOF\ncat > agents/implementer.json << 'EOF'\n{\n  \"name\": \"Implementer\",\n  \"system_prompt\": \"Backend engineer. Match the codebase you find rather than the one you would write \u2014 the framework, the middleware pattern, the error shape already in use. Rate limiting on an unauthenticated endpoint keys on IP and on the target account together, because either alone is trivially defeated. A limiter that fails open under load is worse than none, so make the failure mode explicit.\",\n  \"assignment\": \"Read the triage findings for the location. Read the surrounding code and the existing middleware before writing anything. Implement rate limiting on the password reset endpoint, keyed on both source IP and target account, returning the same error shape the rest of the API uses. Say in your receipt what the limit and window are and why you picked them.\",\n  \"expected_output\": \"The rate limiting edited into the existing source files in place \u2014 however many that takes \u2014 in the codebase's existing middleware style. No new document; the code is the deliverable. Reply with a receipt naming the files you changed and stating the limit and window you chose, because the tester needs both to write against them.\",\n  \"capabilities\": []\n}\nEOF"}</tool_call>
 …
-</tool_call>
 <tool_call name="complete_system">
 {"summary": "Two agents. Implementer changes the endpoint, tester proves the limit holds and resets; both write, so neither is read_only.",
  "verify": {"topology_complete": true, "agents_complete": true, "config_accurate": true, "no_filenames_prescribed": true, "prompts_not_trivial": true, "assignments_expanded": true}}
