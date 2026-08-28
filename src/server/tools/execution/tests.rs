@@ -67,6 +67,68 @@ mod tests {
         assert_eq!(result["content"], "hello world");
     }
 
+    // ── read_file windowing ───────────────────────────────────────────────
+
+    use crate::server::tools::execution::container::read_file_window;
+
+    /// An empty file skipped the past-the-end guard, so `lines[5..0]` panicked.
+    /// The panic surfaces as `Agent task panicked` and fails the whole step, and
+    /// a model retrying a read with an offset is all it takes to reach it.
+    #[test]
+    fn read_file_window_rejects_an_offset_into_an_empty_file() {
+        let out = read_file_window("empty.txt", "", 5, 100);
+        assert!(out["error"].as_str().unwrap().contains("past the end"));
+    }
+
+    /// Offset 0 into an empty file is a legitimate empty read, not an error.
+    #[test]
+    fn read_file_window_reads_an_empty_file_from_the_start() {
+        let out = read_file_window("empty.txt", "", 0, 100);
+        assert!(out.get("error").is_none());
+        assert_eq!(out["content"], "");
+        assert_eq!(out["total_lines"], 0);
+    }
+
+    /// A zero limit returned nothing while advertising `next_offset` equal to
+    /// the offset just asked for — a read loop with no termination.
+    #[test]
+    fn read_file_window_treats_a_zero_limit_as_the_default() {
+        let out = read_file_window("a.txt", "one\ntwo\nthree\n", 0, 0);
+        assert_eq!(out["content"], "one\ntwo\nthree\n");
+        assert!(out.get("next_offset").is_none());
+    }
+
+    /// The window must concatenate back to the exact bytes. `lines()` stripped
+    /// the `\r` of a CRLF file and the trailing newline, so the read/modify/
+    /// write_file round trip the tool descriptions teach silently rewrote every
+    /// line ending in the file.
+    #[test]
+    fn read_file_window_preserves_crlf_and_the_trailing_newline() {
+        let crlf = "alpha\r\nbeta\r\n";
+        assert_eq!(read_file_window("w.txt", crlf, 0, 100)["content"], crlf);
+
+        let trailing = "alpha\nbeta\n";
+        assert_eq!(
+            read_file_window("u.txt", trailing, 0, 100)["content"],
+            trailing
+        );
+
+        let no_trailing = "alpha\nbeta";
+        assert_eq!(
+            read_file_window("n.txt", no_trailing, 0, 100)["content"],
+            no_trailing
+        );
+    }
+
+    /// A bounded window still reports the full line count and where to resume.
+    #[test]
+    fn read_file_window_paginates_and_reports_the_next_offset() {
+        let out = read_file_window("a.txt", "one\ntwo\nthree\nfour\n", 1, 2);
+        assert_eq!(out["content"], "two\nthree\n");
+        assert_eq!(out["total_lines"], 4);
+        assert_eq!(out["next_offset"], 3);
+    }
+
     #[tokio::test]
     async fn write_file_tool_works() {
         let tmp = TempDir::new().unwrap();
@@ -131,6 +193,51 @@ mod tests {
         let content = std::fs::read_to_string(tmp.path().join("code.rs")).unwrap();
         assert!(content.contains("println!(\"new\")"));
         assert!(!content.contains("println!(\"old\")"));
+    }
+
+    /// The diagnostics recorder reads `bytes` off the tool result and
+    /// *overwrites* the manifest entry with it. `edit_file` never reported the
+    /// field, so the chunked-append pattern the prompts prescribe — write_file
+    /// the first chunk, edit_file the rest — filed the finished deliverable at
+    /// 0 bytes, which sorts last in `produced_files` and is the first thing
+    /// dropped from the downstream `files:` line.
+    #[tokio::test]
+    async fn edit_file_reports_the_resulting_file_size() {
+        let tmp = TempDir::new().unwrap();
+        let ctx = ExecutionContext::new(tmp.path().to_path_buf());
+
+        let written = execute_execution_tool(
+            "write_file",
+            &json!({ "path": "doc.md", "content": "# Spec\n" }),
+            &ctx,
+            None,
+        )
+        .await;
+        assert_eq!(written["bytes"], 7);
+
+        // Append mode: empty old_string.
+        let appended = execute_execution_tool(
+            "edit_file",
+            &json!({ "path": "doc.md", "old_string": "", "new_string": "body\n" }),
+            &ctx,
+            None,
+        )
+        .await;
+        assert_eq!(appended["success"], true);
+        let on_disk = std::fs::read_to_string(tmp.path().join("doc.md")).unwrap();
+        assert_eq!(appended["bytes"], on_disk.len());
+        assert!(appended["bytes"].as_u64().unwrap() > 0);
+
+        // Replacement mode reports the resulting size too, not the edit's size.
+        let replaced = execute_execution_tool(
+            "edit_file",
+            &json!({ "path": "doc.md", "old_string": "body", "new_string": "much longer body" }),
+            &ctx,
+            None,
+        )
+        .await;
+        let on_disk = std::fs::read_to_string(tmp.path().join("doc.md")).unwrap();
+        assert_eq!(replaced["bytes"], on_disk.len());
     }
 
     #[tokio::test]

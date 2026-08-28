@@ -373,6 +373,45 @@ mod tests {
         assert!(d.suggestion.unwrap().contains("write_file"));
     }
 
+    /// A `<<` inside the body is file content, not another opener. Scanning the
+    /// flat command string made each one a phantom heredoc that never closed,
+    /// so any agent writing a stream insert, a shift, or shell arithmetic got a
+    /// false "your command was cut off" and could not proceed.
+    #[test]
+    fn a_shift_inside_a_heredoc_body_is_not_an_opener() {
+        let cpp = "cat > main.cpp << 'EOF'\n#include <iostream>\n                   int main(){ std::cout << \"hi\" << std::endl; }\nEOF";
+        assert!(unterminated_heredocs(cpp).is_empty());
+
+        let py = "cat > m.py << 'EOF'\nMASK = 1 << 8\nEOF";
+        assert!(unterminated_heredocs(py).is_empty());
+
+        let arith = "cat > f.sh << 'EOF'\necho $((1 << 3))\nEOF";
+        assert!(unterminated_heredocs(arith).is_empty());
+    }
+
+    /// The body of a genuinely truncated heredoc may itself contain `<<`. Only
+    /// the real delimiter is reported, not the phantoms.
+    #[test]
+    fn a_truncated_heredoc_whose_body_shifts_reports_only_the_real_delimiter() {
+        let cmd = "cat > main.cpp << 'EOF'\nstd::cout << \"partial\"";
+        assert_eq!(unterminated_heredocs(cmd), vec!["EOF".to_string()]);
+    }
+
+    /// A quoted string may span lines, and a `<<` inside one is still a shift.
+    /// Line-by-line scanning must carry the quote state across the newline.
+    #[test]
+    fn a_shift_inside_a_multiline_quoted_string_is_not_a_heredoc() {
+        assert!(unterminated_heredocs("python -c \"\nx = 1 << 2\nprint(x)\n\"").is_empty());
+    }
+
+    /// A command that follows a closed heredoc is command text again, and can
+    /// open a heredoc of its own.
+    #[test]
+    fn a_heredoc_after_a_closed_heredoc_is_still_detected() {
+        let cmd = "cat > a.txt << 'EOF'\nx << y\nEOF\ncat > b.txt << 'END'\npartial";
+        assert_eq!(unterminated_heredocs(cmd), vec!["END".to_string()]);
+    }
+
     /// An ordinary command with no heredoc at all must not fire.
     #[test]
     fn a_plain_command_is_not_a_heredoc() {

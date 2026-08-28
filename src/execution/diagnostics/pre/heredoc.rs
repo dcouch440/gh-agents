@@ -7,17 +7,18 @@
 //! the shell, and left an 816-line deliverable corrupt on disk for two minutes.
 
 use super::super::envelope::{Diagnostic, DiagnosticCategory, Severity};
-use super::{find_unquoted, PreCheck};
+use super::{find_unquoted_from, PreCheck};
 
-/// Names of heredoc delimiters opened but never closed, in the order opened.
+/// Heredoc openers on a single command line, in the order they appear.
 ///
-/// Pure and side-effect free — safe to call from any tool path, including the
-/// container dispatcher, which has no diagnostics engine.
-pub fn unterminated_heredocs(command: &str) -> Vec<String> {
-    let chars: Vec<char> = command.chars().collect();
-    let mut open: Vec<(String, bool)> = Vec::new();
+/// `in_single`/`in_double` carry the quote state in from the previous command
+/// line and out to the next, so a `<<` inside a multi-line quoted string stays
+/// a shift operator.
+fn openers_in_line(line: &str, in_single: &mut bool, in_double: &mut bool) -> Vec<(String, bool)> {
+    let chars: Vec<char> = line.chars().collect();
+    let mut found = Vec::new();
 
-    for &pos in &find_unquoted(command, "<<") {
+    for pos in find_unquoted_from(line, "<<", in_single, in_double) {
         let mut i = pos + 2;
 
         // `<<<` is a here-string: no terminator, no body.
@@ -58,34 +59,64 @@ pub fn unterminated_heredocs(command: &str) -> Vec<String> {
         };
 
         if !delimiter.is_empty() {
-            open.push((delimiter, dash));
+            found.push((delimiter, dash));
         }
     }
 
-    if open.is_empty() {
-        return Vec::new();
-    }
+    found
+}
 
-    // Walk the body lines in order, closing delimiters as their terminator
-    // appears. A terminator line is the delimiter alone, tabs stripped for
-    // `<<-`.
-    let mut remaining = open;
+/// Whether `line` is the terminator closing `delimiter`.
+fn closes(line: &str, delimiter: &str, dash: bool) -> bool {
+    let candidate = if dash {
+        line.trim_start_matches('\t')
+    } else {
+        line
+    };
+    candidate.trim_end() == delimiter
+}
 
-    for line in command.lines().skip(1) {
-        let Some((delimiter, dash)) = remaining.first() else {
-            break;
-        };
-        let candidate = if *dash {
-            line.trim_start_matches('\t')
-        } else {
-            line
-        };
-        if candidate.trim_end() == delimiter {
-            remaining.remove(0);
+/// Names of heredoc delimiters opened but never closed, in the order opened.
+///
+/// Scans line by line rather than over the whole command, because the two roles
+/// a line can play are mutually exclusive: a command line can open a heredoc, a
+/// body line cannot. Scanning the flat string made every `<<` in a body a
+/// phantom opener that never closed, so `std::cout << x`, `MASK = 1 << 8` and
+/// `$((1 << 3))` inside an otherwise well-formed heredoc were all hard-rejected
+/// as truncated.
+///
+/// Pure and side-effect free — safe to call from any tool path, including the
+/// container dispatcher, which has no diagnostics engine.
+pub fn unterminated_heredocs(command: &str) -> Vec<String> {
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut lines = command.lines();
+
+    while let Some(line) = lines.next() {
+        let mut open = openers_in_line(line, &mut in_single, &mut in_double);
+        if open.is_empty() {
+            continue;
         }
+
+        // Bodies begin on the next line and run in the order the delimiters
+        // were opened. Everything until the last terminator is file content.
+        while let Some((delimiter, dash)) = open.first() {
+            let Some(body) = lines.next() else {
+                // Input ran out mid-body: what remains is what was cut off.
+                return open.into_iter().map(|(d, _)| d).collect();
+            };
+            if closes(body, delimiter, *dash) {
+                open.remove(0);
+            }
+        }
+
+        // All closed. The next line is command text again, and a heredoc body
+        // cannot leave a quote open, so the scanner resumes unquoted.
+        in_single = false;
+        in_double = false;
     }
 
-    remaining.into_iter().map(|(d, _)| d).collect()
+    Vec::new()
 }
 
 /// Blocks a command whose heredoc was cut off before its terminator.

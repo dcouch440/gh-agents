@@ -59,21 +59,42 @@ pub(crate) fn persist_step_overlay(
                 // used to be a silent last-write-wins, which is how run
                 // dd27d008's Visual Direction deliverable ceased to exist when
                 // a later step wrote the same filename.
+                // The snapshot is best-effort. Propagating an error from it
+                // would abandon every remaining entry in the loop — including
+                // `Created` files that are nobody else's copy — to save a
+                // backup of one, which inverts the point of this function.
                 if !path.starts_with(".nexor") {
-                    if let Some(prior) = workspace.read_file(workflow_id, run_id, path)? {
-                        if prior != *bytes {
+                    match workspace.read_file(workflow_id, run_id, path) {
+                        Ok(Some(prior)) if prior != *bytes => {
                             let snap = superseded_path(overlay.step_id, path);
-                            workspace.write_file(workflow_id, run_id, &snap, &prior)?;
-                            superseded += 1;
-                            warn!(
-                                step_id = %overlay.step_id,
-                                path = %path.display(),
-                                snapshot = %snap.display(),
-                                prior_bytes = prior.len(),
-                                new_bytes = bytes.len(),
-                                "Step replaced an upstream file; prior version preserved"
-                            );
+                            match workspace.write_file(workflow_id, run_id, &snap, &prior) {
+                                Ok(()) => {
+                                    superseded += 1;
+                                    warn!(
+                                        step_id = %overlay.step_id,
+                                        path = %path.display(),
+                                        snapshot = %snap.display(),
+                                        prior_bytes = prior.len(),
+                                        new_bytes = bytes.len(),
+                                        "Step replaced an upstream file; prior version preserved"
+                                    );
+                                }
+                                Err(e) => warn!(
+                                    step_id = %overlay.step_id,
+                                    path = %path.display(),
+                                    error = %e,
+                                    "Could not snapshot the file this step replaces; \
+                                     overwriting anyway"
+                                ),
+                            }
                         }
+                        Ok(_) => {}
+                        Err(e) => warn!(
+                            step_id = %overlay.step_id,
+                            path = %path.display(),
+                            error = %e,
+                            "Could not read the file this step replaces; overwriting anyway"
+                        ),
                     }
                 }
                 workspace.write_file(workflow_id, run_id, path, bytes)?;

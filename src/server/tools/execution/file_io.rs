@@ -77,7 +77,17 @@ pub(super) async fn edit_file_core(
             format!("{}\n{}", existing, new_string)
         };
         return match io.write(path, &new_content).await {
-            Ok(()) => json!({ "success": true, "path": path, "action": "appended" }),
+            // `bytes` is the resulting file size, not the size of the edit. The
+            // diagnostics recorder overwrites the manifest entry with whatever
+            // this reports, so omitting it filed the chunked-append deliverable
+            // — write_file, then edit_file for each further chunk — at 0 bytes,
+            // which sorted it last and dropped it from the passdown.
+            Ok(()) => json!({
+                "success": true,
+                "path": path,
+                "action": "appended",
+                "bytes": new_content.len(),
+            }),
             Err(e) => json!({ "error": e }),
         };
     }
@@ -133,6 +143,7 @@ pub(super) async fn edit_file_core(
                 "path": path,
                 "line_start": line_start,
                 "line_end": line_end,
+                "bytes": new_content.len(),
                 "preview": preview.join("\n")
             })
         }

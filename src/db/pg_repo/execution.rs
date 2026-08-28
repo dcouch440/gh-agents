@@ -66,6 +66,17 @@ impl AgentExecutionRepo for PgRepo {
         Ok(row)
     }
 
+    async fn fail_orphaned_workflow_executions(&self) -> Result<u64> {
+        let result = sqlx::query(
+            "UPDATE workflow_executions SET status = 'failed', completed_at = NOW(), \
+             error = COALESCE(error, 'orphaned by server restart') \
+             WHERE status IN ('pending', 'running')",
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
     async fn fail_orphaned_agent_executions(&self) -> Result<u64> {
         let result = sqlx::query(
             "UPDATE agent_executions SET status = 'failed', completed_at = NOW(), \

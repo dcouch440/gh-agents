@@ -537,6 +537,57 @@ mod tests {
         );
     }
 
+    /// The snapshot is a backup; the deliverable is the work. When the backup
+    /// cannot be taken, the loop must still write everything else — propagating
+    /// the error abandoned every remaining entry in the diff, including
+    /// `Created` files that are nobody else's copy, which is the opposite of
+    /// what this function is for.
+    #[test]
+    fn a_failed_snapshot_does_not_abandon_the_rest_of_the_overlay() {
+        let (ws, _tmp, wf, run) = workspace();
+        let step = Uuid::new_v4();
+        ws.write_file(wf, run, &PathBuf::from("spec.md"), b"visual direction")
+            .unwrap();
+
+        // A regular file where the snapshot directory needs to go: creating the
+        // snapshot's parent fails, so the snapshot write fails.
+        ws.write_file(
+            wf,
+            run,
+            &PathBuf::from(".nexor/superseded").join(step.to_string()),
+            b"in the way",
+        )
+        .unwrap();
+
+        let mut overlay = overlay_with(
+            step,
+            "spec.md",
+            OverlayChange::Modified(b"design spec".to_vec()),
+        );
+        overlay.diff.insert(
+            PathBuf::from("report.md"),
+            OverlayChange::Created(b"the other deliverable".to_vec()),
+        );
+
+        persist_step_overlay(&ws, wf, run, &mut overlay)
+            .expect("a snapshot that cannot be written must not fail the persist");
+
+        assert_eq!(
+            ws.read_file(wf, run, &PathBuf::from("spec.md"))
+                .unwrap()
+                .unwrap(),
+            b"design spec",
+            "the step's own write must still land"
+        );
+        assert_eq!(
+            ws.read_file(wf, run, &PathBuf::from("report.md"))
+                .unwrap()
+                .unwrap(),
+            b"the other deliverable",
+            "an unrelated entry must not be collateral damage"
+        );
+    }
+
     /// A file the step created itself is `Created`, not `Modified`, and must
     /// not produce a snapshot — otherwise every run doubles its own output.
     #[test]

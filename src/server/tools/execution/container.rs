@@ -45,6 +45,65 @@ pub async fn execute_tool_in_container(
 
 // ── Container tool implementations ────────────────────────────────────────
 
+/// Default line budget for `read_file`. It bypasses the stdout truncation that
+/// wraps `run_command`, so an unbounded read of a large file lands whole in the
+/// context budget — and `ContextBudgetExceeded` is a hard error, not a
+/// skippable one.
+const DEFAULT_READ_LIMIT: usize = 2000;
+
+/// Line-bounded window over a file's contents, as `read_file` returns it.
+///
+/// Split out from the tool body so the boundary cases are testable without a
+/// container: an empty file, an offset past the end, a zero limit, and the
+/// byte-exactness the read/modify/write round trip depends on.
+pub(super) fn read_file_window(path: &str, content: &str, offset: usize, limit: usize) -> Value {
+    // A zero limit would return nothing while still advertising `next_offset`
+    // equal to the offset just asked for — a read loop that never terminates.
+    let limit = if limit == 0 {
+        DEFAULT_READ_LIMIT
+    } else {
+        limit
+    };
+    // `split_inclusive` keeps each line's terminator, so the window
+    // concatenates back to the exact bytes read. `lines()` dropped the `\r` of
+    // a CRLF file and the file's trailing newline, which turned the
+    // read/modify/write_file round trip the tool descriptions encourage into a
+    // silent rewrite of the whole file.
+    let lines: Vec<&str> = content.split_inclusive('\n').collect();
+    let total = lines.len();
+
+    // Offset 0 into an empty file is a legitimate empty read; any other offset
+    // past the end is not. Guarding on `total` alone let `offset > 0` reach the
+    // slice below with `end == 0` and panic, which the workforce executor turns
+    // into `Agent task panicked` and fails the whole step.
+    if offset > 0 && offset >= total {
+        return json!({
+            "error": format!(
+                "offset {} is past the end of {} ({} lines)",
+                offset, path, total
+            )
+        });
+    }
+
+    let end = offset.saturating_add(limit).min(total);
+    let mut out = json!({
+        "content": lines[offset..end].concat(),
+        "total_lines": total,
+        "line_range": [offset + 1, end],
+    });
+
+    if end < total {
+        out["next_offset"] = json!(end);
+        out["note"] = json!(format!(
+            "{} of {} lines shown. Continue with offset={}.",
+            end - offset,
+            total,
+            end
+        ));
+    }
+    out
+}
+
 async fn container_read_file(input: &Value, handle: &ContainerHandle) -> Value {
     let path = match input["path"].as_str() {
         Some(p) => p,
@@ -53,46 +112,11 @@ async fn container_read_file(input: &Value, handle: &ContainerHandle) -> Value {
     if let Err(e) = validate_container_path(path) {
         return json!({ "error": e.to_string() });
     }
-    // Line-bounded by default. `read_file` bypasses the stdout truncation that
-    // wraps `run_command`, so an unbounded read of a large file lands whole in
-    // the context budget — and `ContextBudgetExceeded` is a hard error, not a
-    // skippable one.
-    const DEFAULT_LIMIT: usize = 2000;
     let offset = input["offset"].as_u64().unwrap_or(0) as usize;
-    let limit = input["limit"].as_u64().unwrap_or(DEFAULT_LIMIT as u64) as usize;
+    let limit = input["limit"].as_u64().unwrap_or(DEFAULT_READ_LIMIT as u64) as usize;
 
     match handle.read_file(path).await {
-        Ok(content) => {
-            let lines: Vec<&str> = content.lines().collect();
-            let total = lines.len();
-
-            if total > 0 && offset >= total {
-                return json!({
-                    "error": format!(
-                        "offset {} is past the end of {} ({} lines)",
-                        offset, path, total
-                    )
-                });
-            }
-
-            let end = offset.saturating_add(limit).min(total);
-            let mut out = json!({
-                "content": lines[offset..end].join("\n"),
-                "total_lines": total,
-                "line_range": [offset + 1, end],
-            });
-
-            if end < total {
-                out["next_offset"] = json!(end);
-                out["note"] = json!(format!(
-                    "{} of {} lines shown. Continue with offset={}.",
-                    end - offset,
-                    total,
-                    end
-                ));
-            }
-            out
-        }
+        Ok(content) => read_file_window(path, &content, offset, limit),
         Err(e) => json!({ "error": e.to_string() }),
     }
 }

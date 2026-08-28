@@ -67,6 +67,13 @@ pub async fn run_serve(args: Args) -> Result<()> {
     {
         use crate::db::traits::AgentExecutionRepo;
         let repo = crate::db::pg_repo::PgRepo::new(pool.clone());
+        // Runs first: the agent-level repair below is scoped to rows whose
+        // parent run is already terminal, and a crash leaves no one to mark it.
+        match repo.fail_orphaned_workflow_executions().await {
+            Ok(n) if n > 0 => info!("Marked {} orphaned workflow execution(s) as failed", n),
+            Ok(_) => {}
+            Err(e) => warn!("Failed to reconcile orphaned workflow executions: {}", e),
+        }
         match repo.fail_orphaned_agent_executions().await {
             Ok(n) if n > 0 => info!("Marked {} orphaned agent execution(s) as failed", n),
             Ok(_) => {}
