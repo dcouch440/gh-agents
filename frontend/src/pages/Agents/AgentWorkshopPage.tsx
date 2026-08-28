@@ -276,7 +276,7 @@ function AgentWorkshopPage() {
     min: 25,
     max: 75,
   })
-  const { send, streaming: sseStreaming } = useSendSessionMessage()
+  const { send, cancelChat, streaming: sseStreaming } = useSendSessionMessage()
   const schemas = useStore(outputSchemaStore.store, outputSchemaStore.selectAll)
   const [showDocumentSelector, setShowDocumentSelector] = useState(false)
   const [showSchemaDialog, setShowSchemaDialog] = useState(false)
@@ -485,7 +485,9 @@ function AgentWorkshopPage() {
         dispatch({ type: 'SET_STREAMING', value: false })
       }
 
-      void send(state.sessionId, { message }, onEvent, onDone)
+      // A stream that fails (or a send that never starts) has to end the turn
+      // too, or the composer stays disabled with no way out.
+      send(state.sessionId, { message }, onEvent, onDone, onDone).catch(onDone)
     },
     [state.sessionId, send],
   )
@@ -584,6 +586,17 @@ function AgentWorkshopPage() {
 
   const chatDisabled = state.saving || state.sessionLoading || !state.sessionId || sseStreaming
 
+  // Aborting the stream never fires onDone, so end the turn here as well.
+  const handleCancelChat = useCallback(() => {
+    cancelChat()
+    if (pendingFrameRef.current !== null) {
+      cancelAnimationFrame(pendingFrameRef.current)
+      pendingFrameRef.current = null
+      dispatch({ type: 'UPDATE_LAST_ASSISTANT', content: contentRef.current })
+    }
+    dispatch({ type: 'SET_STREAMING', value: false })
+  }, [cancelChat])
+
   const isSaved = state.agentId !== null
 
   return (
@@ -649,7 +662,13 @@ function AgentWorkshopPage() {
                 </Tooltip>
               </Box>
               <Box sx={{ flex: 1, minHeight: 0 }}>
-                <ChatPanel messages={state.messages} onSend={handleSend} streaming={state.streaming} disabled={chatDisabled} />
+                <ChatPanel
+                  messages={state.messages}
+                  onSend={handleSend}
+                  onCancel={state.streaming ? handleCancelChat : undefined}
+                  streaming={state.streaming}
+                  disabled={chatDisabled}
+                />
               </Box>
             </Box>
           }

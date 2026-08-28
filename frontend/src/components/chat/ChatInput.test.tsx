@@ -55,4 +55,25 @@ describe('ChatInput', () => {
     const { textarea } = setup({ disabled: true })
     expect(textarea).toBeDisabled()
   })
+
+  it('shows no stop button when idle', () => {
+    setup({ onCancel: vi.fn() })
+    expect(screen.queryByRole('button', { name: /stop generation/i })).not.toBeInTheDocument()
+  })
+
+  it('stops the in-flight turn from the stop button', () => {
+    const onCancel = vi.fn()
+    setup({ disabled: true, onCancel })
+
+    fireEvent.click(screen.getByRole('button', { name: /stop generation/i }))
+    expect(onCancel).toHaveBeenCalled()
+  })
+
+  it('stops the in-flight turn on Escape, which the disabled textarea never sees', () => {
+    const onCancel = vi.fn()
+    setup({ disabled: true, onCancel })
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(onCancel).toHaveBeenCalled()
+  })
 })

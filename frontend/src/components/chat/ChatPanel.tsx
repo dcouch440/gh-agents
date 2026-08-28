@@ -49,7 +49,7 @@ function ChatPanel({ messages, onSend, onCancel, streaming, disabled, emptyMessa
       {stepId ? (
         <RichChatInput onSend={onSend} onCancel={onCancel} stepId={stepId} disabled={disabled} focusMode={focusMode} />
       ) : (
-        <ChatInput onSend={onSend} disabled={disabled} inputRef={inputRef} />
+        <ChatInput onSend={onSend} onCancel={onCancel} disabled={disabled} inputRef={inputRef} />
       )}
     </Box>
   )

@@ -2,7 +2,7 @@ import Box from '@mui/material/Box'
 
 function ThinkingIndicator() {
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 1, px: 0.25 }}>
+    <Box role="status" aria-label="Working" sx={{ display: 'flex', alignItems: 'center', gap: 0.5, py: 1, px: 0.25 }}>
       {[0, 1, 2].map((i) => (
         <Box
           key={i}

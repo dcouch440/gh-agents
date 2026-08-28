@@ -2,6 +2,7 @@ import { useRef, useEffect, type ReactNode } from 'react'
 import { Box, Typography } from '@mui/material'
 import { ChatMessage } from './ChatMessage'
 import { MessageErrorNotice } from './MessageErrorNotice'
+import { ThinkingIndicator } from './ThinkingIndicator'
 
 export type PanelMessageMetadata = {
   submitLabel: string
@@ -34,6 +35,14 @@ export type MessageListProps = {
 function MessageList({ messages, emptyMessage, streamingContent, streaming, focusMode, onPanelSubmit, onRetry }: MessageListProps) {
   const messagesRef = useRef<HTMLDivElement>(null)
 
+  // Callers that stream into the message list itself (rather than passing
+  // `streamingContent`) leave an empty assistant message on screen until the
+  // first token lands, and show nothing at all between tool rounds. Fill that
+  // gap so a turn in flight is never a blank panel.
+  const lastMessage = messages[messages.length - 1]
+  const hasVisibleReply = lastMessage?.role === 'assistant' && lastMessage.content.trim() !== ''
+  const showThinking = Boolean(streaming) && !streamingContent && !hasVisibleReply
+
   useEffect(() => {
     const el = messagesRef.current
     if (!el) return
@@ -42,7 +51,7 @@ function MessageList({ messages, emptyMessage, streamingContent, streaming, focu
     if (isNearBottom) {
       el.scrollTop = el.scrollHeight
     }
-  }, [messages, streamingContent])
+  }, [messages, streamingContent, showThinking])
 
   return (
     <Box
@@ -65,7 +74,7 @@ function MessageList({ messages, emptyMessage, streamingContent, streaming, focu
           'linear-gradient(to bottom, transparent 0%, black 12px, black calc(100% - 8px), transparent 100%)',
       }}
     >
-      {messages.length === 0 && !streamingContent ? (
+      {messages.length === 0 && !streamingContent && !showThinking ? (
         <Box
           sx={{
             flex: 1,
@@ -84,6 +93,7 @@ function MessageList({ messages, emptyMessage, streamingContent, streaming, focu
             const isLastAssistant = message.role === 'assistant' && index === messages.length - 1
             if (isLastAssistant && streamingContent) return null
             if (message.role === 'tool') {
+              const toolRunning = Boolean(streaming) && message.toolResult === undefined
               return (
                 <Box
                   key={message.id}
@@ -95,13 +105,22 @@ function MessageList({ messages, emptyMessage, streamingContent, streaming, focu
                     py: 0.5,
                     borderRadius: 1,
                     backgroundColor: 'action.hover',
+                    borderLeft: 2,
+                    borderColor: toolRunning ? 'primary.main' : 'success.main',
+                    ...(toolRunning && {
+                      animation: 'toolRowPulse 2s ease-in-out infinite',
+                      '@keyframes toolRowPulse': {
+                        '0%, 100%': { opacity: 1 },
+                        '50%': { opacity: 0.6 },
+                      },
+                    }),
                     fontSize: 12,
                     fontFamily: 'monospace',
                     '& summary': { cursor: 'pointer', color: 'text.secondary', userSelect: 'none' },
                     '& pre': { whiteSpace: 'pre-wrap', wordBreak: 'break-all', m: 0, mt: 0.5, fontSize: 11 },
                   }}
                 >
-                  <summary>{message.toolName ?? 'tool'}: {message.content.slice(0, 80)}{message.content.length > 80 ? '…' : ''}</summary>
+                  <summary>{message.toolName ?? 'tool'}: {message.content.slice(0, 80)}{message.content.length > 80 ? '…' : ''}{toolRunning ? ' — running…' : ''}</summary>
                   <pre>{message.content}</pre>
                   {message.toolResult !== undefined && message.toolResult !== '' && (
                     <pre style={{ color: '#888', marginTop: 4 }}>{message.toolResult}</pre>
@@ -131,6 +150,7 @@ function MessageList({ messages, emptyMessage, streamingContent, streaming, focu
             )
           })}
           {streamingContent}
+          {showThinking ? <ThinkingIndicator /> : null}
         </>
       )}
     </Box>

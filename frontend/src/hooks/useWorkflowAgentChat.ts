@@ -5,6 +5,30 @@ import type { ChatMessageData } from '@/components/chat/ChatPanel'
 import { useSendSessionMessage } from './useChatMutations'
 
 /**
+ * Write streamed content into the assistant message for the current round.
+ *
+ * Tool messages are inserted between LLM rounds, so the assistant message
+ * being written to is always the last one after the last tool message.
+ */
+const applyAssistantContent = (msgs: ChatMessageData[], content: string): ChatMessageData[] => {
+  const next = [...msgs]
+  let lastToolIdx = -1
+  for (let i = next.length - 1; i >= 0; i--) {
+    if (next[i].role === 'tool') { lastToolIdx = i; break }
+  }
+  let assistantIdx = -1
+  for (let i = next.length - 1; i > lastToolIdx; i--) {
+    if (next[i].role === 'assistant') { assistantIdx = i; break }
+  }
+  if (assistantIdx >= 0) {
+    next[assistantIdx] = { ...next[assistantIdx], content }
+  } else {
+    next.push({ id: `msg-${Date.now()}`, role: 'assistant', content })
+  }
+  return next
+}
+
+/**
  * Hook for the workflow agent chat. Manages session creation, message history,
  * and SSE token streaming. Drop-in for ChatPanel.
  */
@@ -14,6 +38,10 @@ const useWorkflowAgentChat = (workflowId: string | null) => {
   const [streaming, setStreaming] = useState(false)
   const contentRef = useRef('')
   const pendingFrameRef = useRef<number | null>(null)
+  // Ends the in-flight turn. Held in a ref so cancelling can settle the turn
+  // the same way a normal completion does — aborting the SSE stream never
+  // fires onDone, so without this the UI would stay "streaming" forever.
+  const settleRef = useRef<((errorMessage?: string) => void) | null>(null)
   const { send, cancelChat } = useSendSessionMessage()
 
   // Create/get session on mount
@@ -147,61 +175,36 @@ const useWorkflowAgentChat = (workflowId: string | null) => {
           pendingFrameRef.current ??= requestAnimationFrame(() => {
             pendingFrameRef.current = null
             const content = contentRef.current
-            setMessages((prev) => {
-              const msgs = [...prev]
-              // Find the last assistant message AFTER the last tool message.
-              // Tool messages get inserted between LLM rounds, so the
-              // "current" assistant response is always after the last tool.
-              let lastToolIdx = -1
-              for (let i = msgs.length - 1; i >= 0; i--) {
-                if (msgs[i].role === 'tool') { lastToolIdx = i; break }
-              }
-              let assistantIdx = -1
-              for (let i = msgs.length - 1; i > lastToolIdx; i--) {
-                if (msgs[i].role === 'assistant') { assistantIdx = i; break }
-              }
-              if (assistantIdx >= 0) {
-                msgs[assistantIdx] = { ...msgs[assistantIdx], content }
-              } else {
-                // No assistant message after tools — create one
-                msgs.push({ id: `msg-${Date.now()}`, role: 'assistant', content })
-              }
-              return msgs
-            })
+            setMessages((prev) => applyAssistantContent(prev, content))
           })
         }
       }
 
-      const onDone = () => {
+      // Single exit for the turn: flush whatever was streamed, drop the
+      // placeholder if nothing arrived, and record a failure on the message
+      // that started the turn so it survives a reload.
+      const settle = (errorMessage?: string) => {
         if (pendingFrameRef.current !== null) {
           cancelAnimationFrame(pendingFrameRef.current)
           pendingFrameRef.current = null
         }
-        // Final flush — ensure the last assistant content is rendered
         const content = contentRef.current
-        if (content) {
-          setMessages((prev) => {
-            const msgs = [...prev]
-            let lastToolIdx = -1
-            for (let i = msgs.length - 1; i >= 0; i--) {
-              if (msgs[i].role === 'tool') { lastToolIdx = i; break }
-            }
-            let assistantIdx = -1
-            for (let i = msgs.length - 1; i > lastToolIdx; i--) {
-              if (msgs[i].role === 'assistant') { assistantIdx = i; break }
-            }
-            if (assistantIdx >= 0) {
-              msgs[assistantIdx] = { ...msgs[assistantIdx], content }
-            } else {
-              msgs.push({ id: `msg-${Date.now()}`, role: 'assistant', content })
-            }
-            return msgs
-          })
-        }
+        setMessages((prev) => {
+          const flushed = content ? applyAssistantContent(prev, content) : prev
+          const pruned = flushed.filter((m) => !(m.role === 'assistant' && m.content === ''))
+          return errorMessage
+            ? pruned.map((m) => (m.id === userMsgId ? { ...m, error: errorMessage } : m))
+            : pruned
+        })
+        settleRef.current = null
         setStreaming(false)
       }
+      settleRef.current = settle
 
-      void send(sessionId, { message }, onEvent, onDone)
+      send(sessionId, { message }, onEvent, () => { settle() }, (err) => { settle(err.message) })
+        .catch((err: unknown) => {
+          settle(err instanceof Error ? err.message : 'Failed to send message')
+        })
     },
     [sessionId, send],
   )
@@ -220,7 +223,12 @@ const useWorkflowAgentChat = (workflowId: string | null) => {
     [sendMessage],
   )
 
-  return { messages, sendMessage, streaming, cancelChat, sessionId, submitPanel }
+  const cancelGeneration = useCallback(() => {
+    cancelChat()
+    settleRef.current?.()
+  }, [cancelChat])
+
+  return { messages, sendMessage, streaming, cancelChat: cancelGeneration, sessionId, submitPanel }
 }
 
 export { useWorkflowAgentChat }
