@@ -6,6 +6,8 @@ pub const ENV_ANTHROPIC_API_KEY: &str = "ANTHROPIC_API_KEY";
 pub const ENV_ANTHROPIC_MODEL: &str = "ANTHROPIC_MODEL";
 pub const ENV_XAI_API_KEY: &str = "XAI_API_KEY";
 pub const ENV_XAI_MODEL: &str = "XAI_MODEL";
+pub const ENV_DEEPINFRA_API_KEY: &str = "DEEPINFRA_API_KEY";
+pub const ENV_DEEPINFRA_MODEL: &str = "DEEPINFRA_MODEL";
 pub const ENV_GITHUB_TOKEN: &str = "GITHUB_TOKEN";
 pub const ENV_DATABASE_URL: &str = "DATABASE_URL";
 pub const ENV_DB_MAX_CONNECTIONS: &str = "DB_MAX_CONNECTIONS";
@@ -21,13 +23,27 @@ pub const ENV_NEXOR_STATIC_DIR: &str = "NEXOR_STATIC_DIR";
 // Tier 3 = fast non-reasoning
 
 /// The default LLM provider name used by the registry and all internal callers.
-pub const ACTIVE_PROVIDER: &str = "xai";
+pub const ACTIVE_PROVIDER: &str = "deepinfra";
 /// Orchestrator tier — highest capability.
-pub const MODEL_TIER1: &str = "grok-4.20-0309-reasoning";
+pub const MODEL_TIER1: &str = MODEL_DEEPSEEK_V4_FLASH;
 /// Worker tier — fast reasoning.
-pub const MODEL_TIER2: &str = "grok-4-1-fast-reasoning";
+pub const MODEL_TIER2: &str = MODEL_DEEPSEEK_V4_FLASH;
 /// Utility tier — fast non-reasoning.
-pub const MODEL_TIER3: &str = "grok-4-1-fast-non-reasoning";
+pub const MODEL_TIER3: &str = MODEL_DEEPSEEK_V4_FLASH;
+
+// All three DeepInfra tiers are the same model. The tiers differ only by
+// reasoning effort, so `EFFORT_TIER*` below — not the model id — is what
+// separates an orchestrator call from a utility one.
+
+// Reasoning effort is per-agent configuration, not a constant: it lives in
+// each `config/**/config.yaml` beside `model_id`, `temperature` and
+// `max_tokens`. See `AgentConfig` in `src/config/protocols.rs`.
+
+// ── xAI Profile (uncomment to switch back) ──────────────────────────────
+// pub const ACTIVE_PROVIDER: &str = "xai";
+// pub const MODEL_TIER1: &str = "grok-4.20-0309-reasoning";
+// pub const MODEL_TIER2: &str = "grok-4-1-fast-reasoning";
+// pub const MODEL_TIER3: &str = "grok-4-1-fast-non-reasoning";
 
 // ── Anthropic Profile (uncomment to switch back) ────────────────────────
 // pub const ACTIVE_PROVIDER: &str = "anthropic";
@@ -41,6 +57,13 @@ pub const MODEL_TIER3: &str = "grok-4-1-fast-non-reasoning";
 
 /// Default Anthropic model (used by AnthropicClient when no model specified).
 pub const ANTHROPIC_DEFAULT_MODEL: &str = "claude-sonnet-4-20250514";
+
+/// The DeepSeek model served by DeepInfra.
+///
+/// A literal, deliberately not an alias of `MODEL_TIER1`: the tier constants
+/// change when the active profile is switched, and a provider's own default
+/// model must not follow them to another vendor's id.
+pub const MODEL_DEEPSEEK_V4_FLASH: &str = "deepseek-ai/DeepSeek-V4-Flash-0731";
 
 // ── Well-known IDs ────────────────────────────────────────────────────────
 
@@ -445,12 +468,64 @@ pub const OLLAMA_DEFAULT_BASE_URL: &str = "http://localhost:11434";
 /// Default timeout for Ollama requests (local models are slower).
 pub const OLLAMA_DEFAULT_TIMEOUT_SECS: u64 = 300;
 
+// ── Web Tools ───────────────────────────────────────────────────────────────
+
+/// Env var selecting how web-tool traffic leaves: `vpn` (default) or `direct`.
+pub const ENV_WEB_EGRESS_MODE: &str = "NEXOR_WEB_EGRESS_MODE";
+/// Env var holding the VPN egress proxy URL.
+pub const ENV_VPN_PROXY_URL: &str = "NEXOR_VPN_PROXY_URL";
+/// Brave Web Search API key.
+pub const ENV_BRAVE_SEARCH_API_KEY: &str = "BRAVE_SEARCH_API_KEY";
+
+/// Brave Web Search API endpoint.
+pub const BRAVE_SEARCH_ENDPOINT: &str = "https://api.search.brave.com/res/v1/web/search";
+
+/// Connect timeout for outbound web requests (seconds).
+pub const WEB_CONNECT_TIMEOUT_SECS: u64 = 10;
+/// User-Agent sent by the web tools.
+///
+/// Identifies the client honestly rather than impersonating a browser: sites
+/// that wish to refuse automated traffic are entitled to recognise it.
+pub const WEB_USER_AGENT: &str = concat!("nexor-agent/", env!("CARGO_PKG_VERSION"));
+
+// ── DeepInfra ───────────────────────────────────────────────────────────────
+
+/// Base URL for DeepInfra's OpenAI-compatible API.
+pub const DEEPINFRA_DEFAULT_BASE_URL: &str = "https://api.deepinfra.com/v1/openai";
+/// Default model for DeepInfra chat completions.
+pub const DEEPINFRA_DEFAULT_MODEL: &str = MODEL_DEEPSEEK_V4_FLASH;
+/// Whole-request timeout for DeepInfra chat completions (seconds).
+///
+/// Generous because DeepInfra queues requests when a model is at capacity,
+/// and `xhigh` reasoning on a long context is legitimately slow.
+pub const DEEPINFRA_CHAT_TIMEOUT_SECS: u64 = 900;
+/// Read timeout for DeepInfra streams (seconds).
+///
+/// This bounds *both* time-to-first-byte and the gap between body frames:
+/// reqwest arms the timer at dispatch and polls it before headers arrive, so
+/// it is not a body-only timer (see `SseProviderAdapter::read_timeout_secs`).
+///
+/// It must therefore exceed the longest legitimate queue wait, or
+/// `DEEPINFRA_CHAT_TIMEOUT_SECS` can never be reached by the queued request it
+/// exists for. Five minutes is the ceiling on a wait at capacity; a genuinely
+/// stalled connection still fails well inside the 15-minute budget.
+pub const DEEPINFRA_READ_TIMEOUT_SECS: u64 = 300;
+/// Whole-request timeout for one-off utility calls (seconds).
+///
+/// Utility calls (titles, summaries, the distiller) sit on the chat hot path
+/// and several have no `tokio::time::timeout` wrapper of their own, so they
+/// must not inherit the 15-minute chat budget.
+pub const DEEPINFRA_UTILITY_TIMEOUT_SECS: u64 = 120;
+
 // ── Grok / xAI ──────────────────────────────────────────────────────────────
 
 /// Base URL for the xAI API.
 pub const XAI_DEFAULT_BASE_URL: &str = "https://api.x.ai";
 /// Default model for xAI Responses API (general-purpose).
-pub const XAI_DEFAULT_CHAT_MODEL: &str = MODEL_TIER1;
+///
+/// A literal, not `MODEL_TIER1`: that alias sent a DeepSeek id to xAI the
+/// moment the active profile changed.
+pub const XAI_DEFAULT_CHAT_MODEL: &str = "grok-4.20-0309-reasoning";
 /// Timeout for xAI chat completions (seconds).
 pub const XAI_CHAT_TIMEOUT_SECS: u64 = 120;
 /// Model optimized for agentic search with server-side tool use.

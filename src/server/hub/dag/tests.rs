@@ -256,6 +256,7 @@ mod tests {
             usage: TokenUsage {
                 input_tokens,
                 output_tokens,
+                ..Default::default()
             },
         }
     }

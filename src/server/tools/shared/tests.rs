@@ -109,3 +109,50 @@ mod tests {
         assert_eq!(err["error"], "Invalid UUID: not-a-uuid");
     }
 }
+
+#[cfg(test)]
+mod allowlist_tests {
+    use super::super::*;
+
+    #[test]
+    fn none_allows_everything() {
+        assert!(is_tool_allowed("run_command", None));
+        assert!(is_tool_allowed("anything_at_all", None));
+    }
+
+    #[test]
+    fn listed_tools_are_allowed() {
+        let allowed = vec!["read_file".to_string(), "brave_search".to_string()];
+        assert!(is_tool_allowed("read_file", Some(&allowed)));
+        assert!(is_tool_allowed("brave_search", Some(&allowed)));
+    }
+
+    #[test]
+    fn unlisted_tools_are_denied() {
+        let allowed = vec!["read_file".to_string()];
+        assert!(!is_tool_allowed("run_command", Some(&allowed)));
+    }
+
+    #[test]
+    fn an_empty_allow_list_denies_everything() {
+        // Distinct from None: an explicit empty list means "no tools".
+        let allowed: Vec<String> = vec![];
+        assert!(!is_tool_allowed("read_file", Some(&allowed)));
+    }
+
+    #[test]
+    fn matching_is_exact_not_prefix() {
+        let allowed = vec!["read_file".to_string()];
+        assert!(!is_tool_allowed("read_file_secret", Some(&allowed)));
+        assert!(!is_tool_allowed("read", Some(&allowed)));
+    }
+
+    #[test]
+    fn not_allowed_error_is_a_tool_failure() {
+        // The engine treats a non-null "error" key as a failure; the refusal
+        // must keep that shape or the failure breaker never sees it.
+        let v = tool_not_allowed_error("brave_search");
+        assert!(v.get("error").is_some());
+        assert!(v["error"].as_str().unwrap().contains("brave_search"));
+    }
+}

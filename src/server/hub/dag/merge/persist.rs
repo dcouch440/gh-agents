@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use tracing::info;
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::server::services::workspace::{WorkspaceError, WorkspaceManager};
@@ -15,6 +15,16 @@ use crate::server::services::workspace::{WorkspaceError, WorkspaceManager};
 use super::denylist;
 use super::types::{OverlayChange, StepOverlay};
 use super::MergeOutcome;
+
+/// Where a superseded version is kept: `.nexor/superseded/{step_id}/{path}`.
+///
+/// Sits beside `.nexor/step-manifests/`, out of the agents' way but inside the
+/// run workspace, so it survives in the run download.
+fn superseded_path(step_id: Uuid, path: &std::path::Path) -> PathBuf {
+    PathBuf::from(".nexor/superseded")
+        .join(step_id.to_string())
+        .join(path)
+}
 
 /// Persist a single step's overlay to JuiceFS. Applies denylist first.
 ///
@@ -36,9 +46,57 @@ pub(crate) fn persist_step_overlay(
     }
 
     let mut count = 0;
+    let mut superseded = 0;
     for (path, change) in &overlay.diff {
         match change {
-            OverlayChange::Created(bytes) | OverlayChange::Modified(bytes) => {
+            OverlayChange::Created(bytes) => {
+                workspace.write_file(workflow_id, run_id, path, bytes)?;
+                count += 1;
+            }
+            OverlayChange::Modified(bytes) => {
+                // `Modified` means the path existed in base before this step
+                // ran — the step is replacing someone else's file. This loop
+                // used to be a silent last-write-wins, which is how run
+                // dd27d008's Visual Direction deliverable ceased to exist when
+                // a later step wrote the same filename.
+                // The snapshot is best-effort. Propagating an error from it
+                // would abandon every remaining entry in the loop — including
+                // `Created` files that are nobody else's copy — to save a
+                // backup of one, which inverts the point of this function.
+                if !path.starts_with(".nexor") {
+                    match workspace.read_file(workflow_id, run_id, path) {
+                        Ok(Some(prior)) if prior != *bytes => {
+                            let snap = superseded_path(overlay.step_id, path);
+                            match workspace.write_file(workflow_id, run_id, &snap, &prior) {
+                                Ok(()) => {
+                                    superseded += 1;
+                                    warn!(
+                                        step_id = %overlay.step_id,
+                                        path = %path.display(),
+                                        snapshot = %snap.display(),
+                                        prior_bytes = prior.len(),
+                                        new_bytes = bytes.len(),
+                                        "Step replaced an upstream file; prior version preserved"
+                                    );
+                                }
+                                Err(e) => warn!(
+                                    step_id = %overlay.step_id,
+                                    path = %path.display(),
+                                    error = %e,
+                                    "Could not snapshot the file this step replaces; \
+                                     overwriting anyway"
+                                ),
+                            }
+                        }
+                        Ok(_) => {}
+                        Err(e) => warn!(
+                            step_id = %overlay.step_id,
+                            path = %path.display(),
+                            error = %e,
+                            "Could not read the file this step replaces; overwriting anyway"
+                        ),
+                    }
+                }
                 workspace.write_file(workflow_id, run_id, path, bytes)?;
                 count += 1;
             }
@@ -66,6 +124,7 @@ pub(crate) fn persist_step_overlay(
     info!(
         step_id = %overlay.step_id,
         files = count,
+        superseded,
         "Overlay persisted to workspace"
     );
     Ok(count)

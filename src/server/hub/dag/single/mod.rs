@@ -21,7 +21,7 @@ use crate::server::hub::engine::filters::{
 };
 use crate::server::hub::error::HubError;
 use crate::server::hub::recorder::ExecutionRecorder;
-use crate::server::hub::strategies::dag_step::{compute_cost, DagStepConfig, DagStepStrategy};
+use crate::server::hub::strategies::dag_step::{DagStepConfig, DagStepStrategy};
 use crate::server::hub::streaming::DagStreamSink;
 use crate::server::ws::events::WorkflowEventKind;
 use crate::types::ExecutionType;
@@ -278,6 +278,12 @@ pub(crate) async fn run_step_via_engine(
         tools,
         tool_names,
         temperature: agent.model_temperature,
+        // The per-agent column, which the engine previously ignored in favour
+        // of a hardcoded default.
+        max_tokens: agent.model_max_tokens.max(1) as u32,
+        // There is no per-agent effort column; DAG steps are workforce agents,
+        // so they follow the workforce protocol config.
+        effort: crate::config::protocols::WORKFORCE.agent("agent").effort,
         execution_context: dag.ctx.execution_context.clone(),
         container_handle: container_handle.cloned(),
         run_id: dag.ctx.run_id,
@@ -374,9 +380,10 @@ pub(crate) async fn run_step_via_engine(
         .execute(&strategy, prompt, &sink, &recorder, dag.cancel)
         .await?;
 
-    let cost = compute_cost(
+    let cost = crate::server::hub::pricing::compute_cost_cached(
         &agent.model_id,
         result.input_tokens as i64,
+        result.cached_input_tokens as i64,
         result.output_tokens as i64,
     );
 

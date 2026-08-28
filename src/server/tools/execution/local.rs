@@ -34,7 +34,7 @@ pub(super) async fn exec_write_file(input: &Value, ctx: &ExecutionContext) -> Va
     let file_ops = FileOps::new(ctx.clone());
     let full_path = ctx.project_root.join(path);
     match file_ops.write_file(&full_path, content).await {
-        Ok(()) => json!({ "success": true, "path": path }),
+        Ok(()) => json!({ "success": true, "path": path, "bytes": content.len() }),
         Err(e) => json!({ "error": e.to_string() }),
     }
 }

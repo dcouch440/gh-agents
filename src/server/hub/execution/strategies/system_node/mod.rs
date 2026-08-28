@@ -120,6 +120,14 @@ impl ExecutionStrategy for SystemNodeStrategy {
         self.config().temperature
     }
 
+    fn max_tokens(&self) -> u32 {
+        self.config().max_tokens
+    }
+
+    fn effort(&self) -> Option<crate::llm::ReasoningEffort> {
+        self.config().effort
+    }
+
     fn state(&self) -> Option<&AppState> {
         Some(&self.state)
     }
@@ -211,7 +219,23 @@ impl SystemNodeStrategy {
 
         let errors = validate_written_files(&self.base_dir);
         if !errors.is_empty() {
-            result["write_validation_errors"] = json!(errors);
+            // `Value`'s IndexMut panics on anything but an object, and the
+            // cascade can now return a bare string. Attach the errors in
+            // whichever form the result actually has.
+            match &mut result {
+                Value::Object(map) => {
+                    map.insert("write_validation_errors".to_string(), json!(errors));
+                }
+                Value::String(text) => {
+                    text.push_str("\n\nwrite_validation_errors:\n");
+                    for e in &errors {
+                        text.push_str("  ");
+                        text.push_str(e);
+                        text.push('\n');
+                    }
+                }
+                _ => {}
+            }
         }
 
         result

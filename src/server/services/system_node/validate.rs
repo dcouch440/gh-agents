@@ -83,12 +83,118 @@ pub(crate) fn validate_agent(content: &str) -> Result<(), String> {
         .ok_or("missing or invalid \"capabilities\" array")?;
 
     for cap in caps {
-        if !cap.is_string() {
+        let Some(key) = cap.as_str() else {
             return Err("capabilities must be an array of strings".to_string());
+        };
+        if !is_known_capability(key) {
+            // An unknown key resolves to zero tools with no error, no log and
+            // no failing request — the agent simply runs without the tool it
+            // was designed around. Catching it here, at file-write time, gives
+            // the designer something it can correct.
+            return Err(format!(
+                "unknown capability \"{key}\". Capabilities are not tool names — \
+                 use \"web_search\" for brave_search and \"web_fetch\" for read_webpage. \
+                 Known capabilities: {}",
+                known_capabilities().join(", ")
+            ));
+        }
+        if !is_assignable_capability(key) {
+            // Existing in the taxonomy is not enough. Several keys are declared
+            // but claimed by no tool, so they resolve to an empty tool list —
+            // the exact silent failure the check above exists to prevent, just
+            // reached by a different route.
+            return Err(format!(
+                "capability \"{key}\" exists but no tool provides it, so it would \
+                 resolve to zero tools. Assignable capabilities: {}",
+                assignable_capabilities().join(", ")
+            ));
+        }
+    }
+
+    // Optional, defaults to false. Rejected when present-but-wrong: a
+    // non-boolean deserializes to false, which silently hands a QA agent full
+    // write access — the drift that let run dd27d008's verifier start editing.
+    if let Some(v) = obj.get("read_only") {
+        if !v.is_boolean() {
+            return Err("\"read_only\" must be a boolean (true or false)".to_string());
         }
     }
 
     Ok(())
+}
+
+/// Capability keys declared by the shipped taxonomy.
+///
+/// Parsed from `capabilities.yaml` at *build* time via `include_str!`, while
+/// `CapabilityRegistry::load` reads `config/` from the working directory at
+/// runtime. They agree for a normal build, and diverge if `config/` is edited
+/// or volume-mounted after the binary is built — the same reason a prompt
+/// change needs a rebuild.
+fn known_capabilities() -> &'static [String] {
+    static KEYS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    KEYS.get_or_init(|| {
+        const YAML: &str = include_str!("../../../../config/system/capabilities.yaml");
+        let parsed: serde_yaml::Value = match serde_yaml::from_str(YAML) {
+            Ok(v) => v,
+            Err(_) => return Vec::new(),
+        };
+        parsed
+            .get("capabilities")
+            .and_then(|c| c.as_sequence())
+            .map(|seq| {
+                seq.iter()
+                    .filter_map(|c| c.get("key").and_then(|k| k.as_str()).map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default()
+    })
+}
+
+/// Capability keys that at least one tool actually claims.
+///
+/// Parsed from `tool_assignments.yaml`, which is what `CapabilityRegistry`
+/// resolves against. A key present in the taxonomy but absent here is a
+/// capability an agent can be given that yields no tools.
+fn assignable_capabilities() -> &'static [String] {
+    static KEYS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    KEYS.get_or_init(|| {
+        const YAML: &str = include_str!("../../../../config/system/tool_assignments.yaml");
+        let parsed: serde_yaml::Value = match serde_yaml::from_str(YAML) {
+            Ok(v) => v,
+            Err(_) => return Vec::new(),
+        };
+        let Some(map) = parsed.get("tool_assignments").and_then(|t| t.as_mapping()) else {
+            return Vec::new();
+        };
+        let mut keys: Vec<String> = map
+            .values()
+            .filter_map(|tool| tool.get("capabilities")?.as_sequence())
+            .flatten()
+            .filter_map(|c| c.as_str().map(str::to_string))
+            .collect();
+        keys.sort();
+        keys.dedup();
+        keys
+    })
+}
+
+/// Whether a capability resolves to at least one tool.
+///
+/// Fails open on an empty list for the same reason as
+/// [`is_known_capability`]: an unparseable file must not reject every design.
+fn is_assignable_capability(key: &str) -> bool {
+    let assignable = assignable_capabilities();
+    assignable.is_empty() || assignable.iter().any(|k| k == key)
+}
+
+/// Whether a capability key exists in the taxonomy.
+///
+/// An empty taxonomy (an unparseable file) accepts everything rather than
+/// rejecting every design: failing open here degrades to today's behaviour,
+/// while failing closed would break every system build.
+fn is_known_capability(key: &str) -> bool {
+    let known = known_capabilities();
+    known.is_empty() || known.iter().any(|k| k == key)
 }
 
 fn require_non_empty_string(

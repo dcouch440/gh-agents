@@ -189,6 +189,63 @@ mod tests {
         assert!(!result.content.contains("line 199"));
     }
 
+    /// `Strategy::Default` keeps the FIRST 100 lines, but the label said
+    /// "last". This is what burned ~20 of the QA agent's 60 rounds in run
+    /// dd27d008: it `cat`-ed an 816-line spec, was told it had seen the tail,
+    /// and spent seven consecutive rounds `sed`-ing for content it already had.
+    #[test]
+    fn default_truncation_says_first_not_last() {
+        let lines: Vec<String> = (0..200).map(|i| format!("line {}", i)).collect();
+        let result = truncate_stdout("cat spec.md", &lines.join("\n"));
+        let summary = result.summary();
+        assert!(summary.contains("lines 1-100 of 200"), "got: {}", summary);
+        assert!(!summary.contains("last"), "got: {}", summary);
+    }
+
+    /// Tail-first strategies genuinely keep the tail — the label must not flip
+    /// with them.
+    #[test]
+    fn tail_first_truncation_still_says_last() {
+        let lines: Vec<String> = (0..200).map(|i| format!("Downloading pkg-{}", i)).collect();
+        let result = truncate_stdout("pip install flask", &lines.join("\n"));
+        let summary = result.summary();
+        assert!(summary.contains("last"), "got: {}", summary);
+    }
+
+    /// The test parser returns a distillation, not a contiguous window.
+    /// Claiming "first N" or "last N" of it would be a third wrong answer.
+    #[test]
+    fn test_parser_summary_claims_no_window() {
+        let mut lines: Vec<String> = (0..500)
+            .map(|i| format!("test test_{} ... ok", i))
+            .collect();
+        lines.push("test result: ok. 500 passed; 0 failed".to_string());
+        let result = truncate_stdout("cargo test", &lines.join("\n"));
+        let summary = result.summary();
+        assert!(
+            summary.contains("summarized from 501 lines"),
+            "got: {}",
+            summary
+        );
+    }
+
+    /// Head truncation must hand back a resumable offset, not just report that
+    /// it cut. Without one the agent guesses at ranges — the non-monotonic
+    /// `sed -n` zig-zag in the dd27d008 trace.
+    #[test]
+    fn head_truncation_offers_a_continuation() {
+        let lines: Vec<String> = (0..816).map(|i| format!("line {}", i)).collect();
+        let summary = truncate_stdout("cat spec.md", &lines.join("\n")).summary();
+        assert!(summary.contains("101,200p"), "got: {}", summary);
+    }
+
+    /// Untruncated output reports a plain line count with no window claim.
+    #[test]
+    fn untruncated_output_makes_no_window_claim() {
+        let summary = truncate_stdout("echo hi", "a\nb\nc").summary();
+        assert_eq!(summary, "3 lines");
+    }
+
     #[test]
     fn pip_output_tail_truncated() {
         let lines: Vec<String> = (0..200).map(|i| format!("Downloading pkg-{}", i)).collect();

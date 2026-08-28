@@ -63,9 +63,10 @@ pub async fn log_token_usage(
     model_id: &str,
     usage: &TokenUsage,
 ) {
-    let cost = compute_cost(
+    let cost = crate::server::hub::pricing::compute_cost_cached(
         model_id,
         usage.input_tokens as i64,
+        usage.cached_input_tokens as i64,
         usage.output_tokens as i64,
     );
     let _ = state

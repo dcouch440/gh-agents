@@ -5,7 +5,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Result;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::cli::Args;
 use crate::config::load_config;
@@ -32,11 +32,54 @@ pub async fn run_serve(args: Args) -> Result<()> {
     // Load environment once — everything reads from this struct
     let env = Arc::new(Env::load());
 
+    // Install the web-egress policy before anything can make a request.
+    // Until this runs the gate refuses everything, so an early failure is a
+    // refused fetch rather than an unprotected one.
+    let installed = crate::net::egress::install(crate::net::egress::EgressConfig {
+        mode: env.web_egress_mode,
+        proxy_url: env.vpn_proxy_url.clone(),
+        is_production: env.is_production(),
+    });
+    if installed {
+        info!(
+            mode = ?env.web_egress_mode,
+            proxy_configured = env.vpn_proxy_url.is_some(),
+            "web egress policy installed"
+        );
+    } else {
+        // First writer wins. Logging the intended policy as though it were
+        // live would leave the operator's log asserting a rule that is not in
+        // effect — which, for an egress gate, is worse than saying nothing.
+        warn!(
+            mode = ?env.web_egress_mode,
+            "web egress policy was already installed; this configuration was NOT applied"
+        );
+    }
+
     // Load configuration
     let config = load_config().unwrap_or_default();
 
     // Initialize database
     let pool = init_db(&env).await?;
+
+    // Repair agent executions orphaned by a crash or a panicking agent task.
+    // They read as in-flight forever and spin a node in the UI.
+    {
+        use crate::db::traits::AgentExecutionRepo;
+        let repo = crate::db::pg_repo::PgRepo::new(pool.clone());
+        // Runs first: the agent-level repair below is scoped to rows whose
+        // parent run is already terminal, and a crash leaves no one to mark it.
+        match repo.fail_orphaned_workflow_executions().await {
+            Ok(n) if n > 0 => info!("Marked {} orphaned workflow execution(s) as failed", n),
+            Ok(_) => {}
+            Err(e) => warn!("Failed to reconcile orphaned workflow executions: {}", e),
+        }
+        match repo.fail_orphaned_agent_executions().await {
+            Ok(n) if n > 0 => info!("Marked {} orphaned agent execution(s) as failed", n),
+            Ok(_) => {}
+            Err(e) => warn!("Failed to reconcile orphaned agent executions: {}", e),
+        }
+    }
 
     // Reap orphaned containers from previous crashes
     let reaped = crate::execution::ContainerManager::real()

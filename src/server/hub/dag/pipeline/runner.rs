@@ -113,14 +113,12 @@ pub(crate) async fn run_agent_execution(
         upstream_step_output: input.upstream_step_output,
     };
 
-    let level_result = execute_agent_levels(
-        &env,
-        dag,
-        &input.designed_prompts,
-        &input.failure_mode,
-        &managed_container,
-    )
-    .await?;
+    // The result is bound, not `?`-ed. A step that wrote files and then failed
+    // still has them in its overlay, and the container has to survive long
+    // enough to hand them over — the `?` moves below extraction and teardown,
+    // matching the ordering `single::execute_single_step` already uses.
+    let level_result =
+        execute_agent_levels(&env, dag, &input.designed_prompts, &input.failure_mode).await;
 
     // 3. Extract overlay diff before destroying container
     if let (Some(workspace), Some(cc)) = (dag.state.workspace(), dag.ctx.container_config.as_ref())
@@ -153,7 +151,11 @@ pub(crate) async fn run_agent_execution(
     // 4. Destroy optional container
     destroy_optional_container(&managed_container, dag.ctx.wg_client.as_deref()).await;
 
-    // 5. Compose combined output + store results
+    // 5. Only now propagate a level failure. The overlay is extracted and the
+    //    container is gone; whatever the step managed to write survives.
+    let level_result = level_result?;
+
+    // 6. Compose combined output + store results
     let step_in_tokens = input.phase_tokens_in + level_result.input_tokens;
     let step_out_tokens = input.phase_tokens_out + level_result.output_tokens;
     let step_cost = input.phase_cost + level_result.cost_usd;

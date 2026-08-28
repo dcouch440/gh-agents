@@ -15,6 +15,7 @@ mod tests {
             expected_output: Some(format!("{name} expected output")),
             execution_order: 0,
             receives_from: receives_from.into_iter().map(String::from).collect(),
+            read_only: false,
         }
     }
 

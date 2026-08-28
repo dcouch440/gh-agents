@@ -4,7 +4,7 @@
 //! like `[[`, arrays, and process substitution will fail silently or error.
 
 use super::super::envelope::{Diagnostic, DiagnosticCategory, Severity};
-use super::PreCheck;
+use super::{contains_unquoted, PreCheck};
 
 pub struct ShellCompatCheck;
 
@@ -64,44 +64,6 @@ impl PreCheck for ShellCompatCheck {
 
         None
     }
-}
-
-/// Check if a pattern appears outside of single/double quotes.
-fn contains_unquoted(cmd: &str, pattern: &str) -> bool {
-    let pat_chars: Vec<char> = pattern.chars().collect();
-    let cmd_chars: Vec<char> = cmd.chars().collect();
-    let pat_len = pat_chars.len();
-    let cmd_len = cmd_chars.len();
-
-    if cmd_len < pat_len {
-        return false;
-    }
-
-    let mut in_single = false;
-    let mut in_double = false;
-    let mut i = 0;
-
-    while i < cmd_len {
-        let c = cmd_chars[i];
-        match c {
-            '\\' if !in_single && i + 1 < cmd_len => {
-                i += 2;
-                continue;
-            }
-            '\'' if !in_double => in_single = !in_single,
-            '"' if !in_single => in_double = !in_double,
-            _ if !in_single
-                && !in_double
-                && i + pat_len <= cmd_len
-                && cmd_chars[i..i + pat_len] == pat_chars[..] =>
-            {
-                return true;
-            }
-            _ => {}
-        }
-        i += 1;
-    }
-    false
 }
 
 /// Detect bash-style array assignment: `var=(...)`.

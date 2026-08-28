@@ -46,6 +46,21 @@ pub trait ExecutionStrategy: Send + Sync {
     /// Sampling temperature.
     fn temperature(&self) -> f32;
 
+    /// Maximum output tokens for one call.
+    ///
+    /// Defaulted so existing strategies keep their current behaviour; override
+    /// to honour a per-agent limit.
+    fn max_tokens(&self) -> u32 {
+        crate::constants::DEFAULT_MAX_TOKENS_WORKER
+    }
+
+    /// Reasoning effort, for providers that support it.
+    ///
+    /// `None` omits the parameter so the provider applies its own default.
+    fn effort(&self) -> Option<crate::llm::ReasoningEffort> {
+        None
+    }
+
     /// App state for token ledger and DB access. Return `None` to skip ledger logging.
     fn state(&self) -> Option<&AppState> {
         None

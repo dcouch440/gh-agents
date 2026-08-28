@@ -297,6 +297,9 @@ async fn call_merge_llm(
         messages: vec![Message::user(user_prompt)],
         max_tokens: cfg.max_tokens,
         temperature: cfg.temperature,
+        // The two merge roles sit on different tiers, so the effort must come
+        // from the role's own config rather than the utility client default.
+        effort: cfg.effort,
         ..Default::default()
     };
 

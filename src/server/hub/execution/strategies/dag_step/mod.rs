@@ -35,6 +35,10 @@ pub struct DagStepConfig {
     pub tool_names: Vec<String>,
     /// Temperature for sampling (from mode resolution or agent default).
     pub temperature: f32,
+    /// Maximum output tokens for one call.
+    pub max_tokens: u32,
+    /// Reasoning effort, for providers that support it.
+    pub effort: Option<crate::llm::ReasoningEffort>,
     /// Execution context for file/git/test tool calls (local mode).
     pub execution_context: Option<ExecutionContext>,
     /// Container handle for containerized execution (overrides local context).
@@ -107,6 +111,14 @@ impl ExecutionStrategy for DagStepStrategy {
 
     fn temperature(&self) -> f32 {
         self.config.temperature // Use mode-resolved temperature
+    }
+
+    fn max_tokens(&self) -> u32 {
+        self.config.max_tokens
+    }
+
+    fn effort(&self) -> Option<crate::llm::ReasoningEffort> {
+        self.config.effort
     }
 
     async fn build_messages(&self, _input: &str) -> Result<Vec<Message>, HubError> {

@@ -31,6 +31,10 @@ pub struct WorkforceAgentConfig {
     pub model_id: String,
     /// LLM temperature.
     pub temperature: f32,
+    /// Maximum output tokens for one call.
+    pub max_tokens: u32,
+    /// Reasoning effort, for providers that support it.
+    pub effort: Option<crate::llm::ReasoningEffort>,
     /// Maximum execution rounds.
     pub max_rounds: u32,
     /// Maximum context size in characters.
@@ -107,6 +111,14 @@ impl ExecutionStrategy for WorkforceAgentStrategy {
         self.config.temperature
     }
 
+    fn max_tokens(&self) -> u32 {
+        self.config.max_tokens
+    }
+
+    fn effort(&self) -> Option<crate::llm::ReasoningEffort> {
+        self.config.effort
+    }
+
     async fn build_messages(&self, input: &str) -> Result<Vec<Message>, HubError> {
         if let Some(ref image_data) = self.config.stroke_image {
             let blocks = vec![
@@ -124,6 +136,53 @@ impl ExecutionStrategy for WorkforceAgentStrategy {
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
         info!(tool = %name, "Workforce agent tool call");
 
+        // The allow-list is the only thing that makes `read_only` real, and
+        // both intercepts below bypass the cascade that normally checks it.
+        // Check once, here, before any branch.
+        if !crate::server::tools::shared::is_tool_allowed(name, Some(&self.config.tool_names)) {
+            return crate::server::tools::shared::tool_not_allowed_error(name);
+        }
+
+        // File-tool intercept: dispatch normally, then feed the write back into
+        // diagnostics so the passdown manifest and loop detector still see it.
+        if matches!(name, "write_file" | "edit_file") {
+            let result = execution_tools::dispatch_tool_cascade(
+                name,
+                input,
+                self.config.container_handle.as_ref(),
+                self.config.execution_context.as_ref(),
+                Some(&self.config.tool_names),
+                self.config.state.as_ref(),
+                self.config.user_id,
+            )
+            .await;
+
+            if let (Some(diag), Some(path)) = (&self.config.diagnostics, input["path"].as_str()) {
+                if result.get("error").is_none() {
+                    // write_file reports `overwrote`; edit_file only ever
+                    // touches a file that already exists.
+                    let change_type =
+                        if name == "edit_file" || result["overwrote"].as_bool().unwrap_or(false) {
+                            crate::execution::diagnostics::types::ChangeType::Modified
+                        } else {
+                            crate::execution::diagnostics::types::ChangeType::Created
+                        };
+                    let size = result["bytes"].as_u64().unwrap_or(0);
+                    let status = diag.lock().await.record_file_write(
+                        std::path::PathBuf::from(path),
+                        change_type,
+                        size,
+                    );
+                    if status.should_render() {
+                        let mut result = result;
+                        result["loop_warning"] = Value::String(status.render());
+                        return result;
+                    }
+                }
+            }
+            return result;
+        }
+
         // Diagnostics intercept: enrich run_command with pre-checks,
         // filesystem observation, and structured feedback.
         if name == "run_command" {
@@ -138,7 +197,10 @@ impl ExecutionStrategy for WorkforceAgentStrategy {
                 };
                 let mut engine = diag.lock().await;
                 return match engine.execute(&command, handle).await {
-                    Ok(rendered) => json!({ "output": rendered }),
+                    // A bare string reaches the model verbatim; wrapping the
+                    // rendered envelope in an object would deliver it as JSON
+                    // with escaped newlines and undo the formatting.
+                    Ok(rendered) => Value::String(rendered),
                     Err(e) => json!({ "error": e.to_string() }),
                 };
             }

@@ -7,6 +7,22 @@
 /// Maximum lines of output to show (SWE-Agent empirical: ~100).
 const MAX_OUTPUT_LINES: usize = 100;
 
+/// Which end of the output survived truncation.
+///
+/// `summary()` used to say "last" unconditionally, but `Strategy::Default` —
+/// what every `cat`, `sed`, `ls` and `grep` gets — keeps the *first* N lines.
+/// An agent told it had seen the tail of a file it had actually seen the head
+/// of will hunt for content already in its context.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Kept {
+    /// The first N lines.
+    Head,
+    /// The last N lines.
+    Tail,
+    /// A distillation, not a contiguous window (test-runner summaries).
+    Summary,
+}
+
 /// Result of truncation.
 pub struct TruncatedOutput {
     /// The (possibly truncated) content.
@@ -15,18 +31,30 @@ pub struct TruncatedOutput {
     pub original_lines: usize,
     /// Number of lines shown.
     pub shown_lines: usize,
+    /// Which end of the original output `content` came from.
+    pub kept: Kept,
 }
 
 impl TruncatedOutput {
     /// Summary string for the stdout header.
     pub fn summary(&self) -> String {
         if self.original_lines <= self.shown_lines {
-            format!("{} lines", self.original_lines)
-        } else {
-            format!(
+            return format!("{} lines", self.original_lines);
+        }
+        match self.kept {
+            Kept::Head => format!(
+                "showing lines 1-{} of {}; read_file returns the whole file, \
+                 or continue with sed -n '{},{}p'",
+                self.shown_lines,
+                self.original_lines,
+                self.shown_lines + 1,
+                (self.shown_lines * 2).min(self.original_lines),
+            ),
+            Kept::Tail => format!(
                 "showing last {} of {} lines",
                 self.shown_lines, self.original_lines
-            )
+            ),
+            Kept::Summary => format!("summarized from {} lines", self.original_lines),
         }
     }
 }
@@ -42,6 +70,7 @@ pub fn truncate_stdout(command: &str, stdout: &str) -> TruncatedOutput {
             content: stripped,
             original_lines,
             shown_lines: original_lines,
+            kept: Kept::Head,
         };
     }
 
@@ -54,6 +83,7 @@ pub fn truncate_stdout(command: &str, stdout: &str) -> TruncatedOutput {
                 content: format!("...\n{}", kept.join("\n")),
                 original_lines,
                 shown_lines: keep,
+                kept: Kept::Tail,
             }
         }
         Strategy::TestParser(runner) => parse_test_output(&stripped, runner, original_lines),
@@ -64,6 +94,7 @@ pub fn truncate_stdout(command: &str, stdout: &str) -> TruncatedOutput {
                 content: format!("{}\n...", kept.join("\n")),
                 original_lines,
                 shown_lines: keep,
+                kept: Kept::Head,
             }
         }
     }
@@ -140,6 +171,7 @@ fn parse_test_output(output: &str, runner: TestRunner, original_lines: usize) ->
             content: format!("...\n{}", lines[lines.len() - keep..].join("\n")),
             original_lines,
             shown_lines: keep,
+            kept: Kept::Tail,
         };
     }
 
@@ -148,6 +180,7 @@ fn parse_test_output(output: &str, runner: TestRunner, original_lines: usize) ->
         content,
         original_lines,
         shown_lines: shown,
+        kept: Kept::Summary,
     }
 }
 

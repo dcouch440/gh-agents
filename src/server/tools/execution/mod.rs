@@ -15,6 +15,7 @@ use crate::execution::{ContainerHandle, ExecutionContext};
 use crate::llm::Tool;
 use crate::server::state::AppState;
 use crate::server::tools::documents;
+use crate::server::tools::shared::{error_json, is_tool_allowed, tool_not_allowed_error};
 use crate::types::UserId;
 
 pub use container::execute_tool_in_container;
@@ -63,53 +64,14 @@ pub fn builtin_tool_rows() -> Vec<ToolRow> {
 /// Return all execution tool definitions for the Anthropic API.
 pub fn execution_tools() -> Vec<Tool> {
     vec![
-        Tool {
-            name: "read_file".into(),
-            description: "Read the contents of a file.".into(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "path": { "type": "string", "description": "Relative path from project root" }
-                },
-                "required": ["path"]
-            }),
-        },
-        Tool {
-            name: "write_file".into(),
-            description: "Write content to a file. Creates parent directories if needed.".into(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "path": { "type": "string", "description": "Relative path from project root" },
-                    "content": { "type": "string", "description": "File content to write" }
-                },
-                "required": ["path", "content"]
-            }),
-        },
-        Tool {
-            name: "edit_file".into(),
-            description: "Edit a file by replacing an exact string match. Provide old_string (the existing code) and new_string (the replacement). old_string must match exactly one location in the file. Prefer this over write_file for modifying existing files.".into(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "path": { "type": "string", "description": "Relative path from project root" },
-                    "old_string": { "type": "string", "description": "Exact existing text to find and replace. Must be unique in the file." },
-                    "new_string": { "type": "string", "description": "Replacement text" }
-                },
-                "required": ["path", "old_string", "new_string"]
-            }),
-        },
-        Tool {
-            name: "list_files".into(),
-            description: "List files and directories at a path.".into(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "path": { "type": "string", "description": "Relative path from project root (default: root)" }
-                },
-                "required": []
-            }),
-        },
+        // Single source of truth: the registry owns these definitions, as it
+        // already does for `run_command` below. They used to be duplicated here
+        // with different text, so the description an agent saw depended on
+        // which path assembled its tool set.
+        crate::tools::registry::get_tool_definition("read_file").unwrap(),
+        crate::tools::registry::get_tool_definition("write_file").unwrap(),
+        crate::tools::registry::get_tool_definition("edit_file").unwrap(),
+        crate::tools::registry::get_tool_definition("list_files").unwrap(),
         Tool {
             name: "git_status".into(),
             description: "Show the working tree status (staged, modified, untracked files).".into(),
@@ -256,10 +218,8 @@ pub async fn execute_execution_tool(
     ctx: &ExecutionContext,
     allowed_tools: Option<&[String]>,
 ) -> Value {
-    if let Some(allowed) = allowed_tools {
-        if !allowed.iter().any(|t| t == name) {
-            return json!({ "error": format!("Tool '{}' is not allowed for this agent", name) });
-        }
+    if !is_tool_allowed(name, allowed_tools) {
+        return tool_not_allowed_error(name);
     }
 
     match name {
@@ -285,10 +245,8 @@ pub async fn execute_context_free_tool(
     _input: &Value,
     allowed_tools: Option<&[String]>,
 ) -> Value {
-    if let Some(allowed) = allowed_tools {
-        if !allowed.iter().any(|t| t == name) {
-            return json!({ "error": format!("Tool '{}' is not allowed for this agent", name) });
-        }
+    if !is_tool_allowed(name, allowed_tools) {
+        return tool_not_allowed_error(name);
     }
 
     json!({ "error": format!("Tool '{}' requires an execution context", name) })
@@ -297,7 +255,8 @@ pub async fn execute_context_free_tool(
 /// Dispatch a tool call through the unified cascade.
 ///
 /// Document tools (read_document, create_doc, update_doc, search_docs) are
-/// handled first when `state` is provided. Then tries container execution
+/// handled first when `state` is provided, then web tools (network only).
+/// Then tries container execution
 /// (if a handle is provided), then local execution via the host execution
 /// context, then context-free tools (external APIs only).
 pub async fn dispatch_tool_cascade(
@@ -309,38 +268,104 @@ pub async fn dispatch_tool_cascade(
     state: Option<&AppState>,
     user_id: Option<UserId>,
 ) -> Value {
-    // Document tools need DB access (AppState), not filesystem.
-    match name {
-        "read_document" => {
-            if let Some(state) = state {
-                return documents::execute_read_document(input, state).await;
-            }
-        }
-        "create_doc" => {
-            if let (Some(state), Some(uid)) = (state, user_id) {
-                return documents::execute_create_doc(input, state, uid).await;
-            }
-        }
-        "update_doc" => {
-            if let Some(state) = state {
-                return documents::execute_update_doc(input, state).await;
-            }
-        }
-        "search_docs" => {
-            if let (Some(state), Some(uid)) = (state, user_id) {
-                return documents::execute_search_docs(input, state, uid).await;
-            }
-        }
-        _ => {}
-    }
+    let route = route_for(
+        name,
+        container_handle.is_some(),
+        execution_context.is_some(),
+        state.is_some(),
+        user_id.is_some(),
+    );
 
-    if let Some(handle) = container_handle {
-        return execute_tool_in_container(name, input, handle, allowed_tools).await;
+    match route {
+        Route::Document => {
+            // The only cascade branch that used to skip the allow-list. Every
+            // workforce agent has state and a user, so `route_for` sends all
+            // four document tools here — they ran for agents that were never
+            // granted them, including read-only ones.
+            if !is_tool_allowed(name, allowed_tools) {
+                return tool_not_allowed_error(name);
+            }
+            // Guarded by `route_for`, which only returns Document when the
+            // dependencies each tool needs are present.
+            let state = state.expect("route_for guarantees state for Document");
+            match name {
+                "read_document" => documents::execute_read_document(input, state).await,
+                "update_doc" => documents::execute_update_doc(input, state).await,
+                "create_doc" => {
+                    let uid = user_id.expect("route_for guarantees user for create_doc");
+                    documents::execute_create_doc(input, state, uid).await
+                }
+                "search_docs" => {
+                    let uid = user_id.expect("route_for guarantees user for search_docs");
+                    documents::execute_search_docs(input, state, uid).await
+                }
+                other => error_json(format!("Unknown document tool: {}", other)),
+            }
+        }
+        Route::Web => {
+            if !is_tool_allowed(name, allowed_tools) {
+                return tool_not_allowed_error(name);
+            }
+            crate::server::tools::web::dispatch(name, input, state).await
+        }
+        Route::Container => {
+            let handle = container_handle.expect("route_for guarantees a container");
+            execute_tool_in_container(name, input, handle, allowed_tools).await
+        }
+        Route::Local => {
+            let ctx = execution_context.expect("route_for guarantees a context");
+            execute_execution_tool(name, input, ctx, allowed_tools).await
+        }
+        Route::ContextFree => execute_context_free_tool(name, input, allowed_tools).await,
     }
-    if let Some(ctx) = execution_context {
-        return execute_execution_tool(name, input, ctx, allowed_tools).await;
+}
+
+/// Which branch of the cascade handles a tool call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Route {
+    /// Knowledge-base tools. Need `AppState`, and some need a user.
+    Document,
+    /// Network-only tools. Need neither a workspace nor a container.
+    Web,
+    /// Runs inside the agent's container.
+    Container,
+    /// Runs against the host execution context.
+    Local,
+    /// Nothing here can run it; the caller gets an explanatory error.
+    ContextFree,
+}
+
+/// Decide where a tool call goes.
+///
+/// Order matters and is load-bearing. Document and web tools are matched
+/// first because the container and local branches are catch-alls: a web tool
+/// reaching `Route::Container` would be handed to a container that has no
+/// handler for it, and the agent would see an opaque failure.
+pub(crate) fn route_for(
+    name: &str,
+    has_container: bool,
+    has_execution_context: bool,
+    has_state: bool,
+    has_user: bool,
+) -> Route {
+    let is_document = match name {
+        "read_document" | "update_doc" => has_state,
+        "create_doc" | "search_docs" => has_state && has_user,
+        _ => false,
+    };
+    if is_document {
+        return Route::Document;
     }
-    execute_context_free_tool(name, input, allowed_tools).await
+    if crate::server::tools::web::is_web_tool(name) {
+        return Route::Web;
+    }
+    if has_container {
+        return Route::Container;
+    }
+    if has_execution_context {
+        return Route::Local;
+    }
+    Route::ContextFree
 }
 
 mod tests;

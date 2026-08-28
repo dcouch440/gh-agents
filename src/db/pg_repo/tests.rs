@@ -1603,4 +1603,98 @@ mod tests {
 
         db.cleanup().await;
     }
+
+    /// The failure path closes out the row it knows about, but a panicking
+    /// agent task never reaches it, and a process that dies mid-run never
+    /// reaches anything. Both leave `running` rows under a terminal run, which
+    /// `get_running_step_ids_for_run` reports as a live step forever.
+    #[tokio::test]
+    #[ignore = "requires running Postgres"]
+    async fn startup_reconciler_fails_rows_orphaned_under_a_terminal_run() {
+        let db = TestDb::new().await;
+        let repo = PgRepo::new(db.pool.clone());
+        let user = create_test_user(&repo).await;
+        let agent = create_test_agent(&repo, user).await;
+        let (we_id, _) = create_execution_chain(&repo, user).await;
+
+        let orphan = repo
+            .create_agent_execution(CreateAgentExecutionInput {
+                execution_type: ExecutionType::PipelineAgent,
+                agent_id: Some(agent.id),
+                workflow_step_id: None,
+                parent_agent_execution_id: None,
+                system_prompt_rendered: "qa".to_string(),
+                input: "verify".to_string(),
+                room_session_id: None,
+                speaker_order: None,
+                workflow_execution_id: Some(we_id),
+            })
+            .await
+            .unwrap();
+        assert_eq!(orphan.status, "running");
+
+        // Parent run reaches a terminal state without the row being closed.
+        repo.update_workflow_execution_status(we_id, "failed", None, Some("boom".to_string()))
+            .await
+            .unwrap();
+
+        let repaired = repo.fail_orphaned_agent_executions().await.unwrap();
+        assert!(repaired >= 1, "the orphaned row should have been repaired");
+
+        let after = repo.get_agent_execution(orphan.id).await.unwrap().unwrap();
+        assert_eq!(after.status, "failed");
+        assert!(after.completed_at.is_some());
+
+        db.cleanup().await;
+    }
+
+    /// The crash case: the process dies mid-run, so nothing marks the parent
+    /// run terminal and the agent-level reconciler's subquery excludes every
+    /// row under it. Reconciling the run first is what makes the documented
+    /// scenario actually reachable.
+    #[tokio::test]
+    #[ignore = "requires running Postgres"]
+    async fn startup_reconciler_repairs_rows_under_a_run_left_running_by_a_crash() {
+        let db = TestDb::new().await;
+        let repo = PgRepo::new(db.pool.clone());
+        let user = create_test_user(&repo).await;
+        let agent = create_test_agent(&repo, user).await;
+        let (we_id, _) = create_execution_chain(&repo, user).await;
+
+        let orphan = repo
+            .create_agent_execution(CreateAgentExecutionInput {
+                execution_type: ExecutionType::PipelineAgent,
+                agent_id: Some(agent.id),
+                workflow_step_id: None,
+                parent_agent_execution_id: None,
+                system_prompt_rendered: "qa".to_string(),
+                input: "verify".to_string(),
+                room_session_id: None,
+                speaker_order: None,
+                workflow_execution_id: Some(we_id),
+            })
+            .await
+            .unwrap();
+        assert_eq!(orphan.status, "running");
+
+        // No terminal update: this is the process dying mid-run. On its own the
+        // agent-level repair cannot see the row.
+        let repaired = repo.fail_orphaned_agent_executions().await.unwrap();
+        assert_eq!(
+            repaired, 0,
+            "the parent run is still running, so nothing is in scope yet"
+        );
+
+        let runs = repo.fail_orphaned_workflow_executions().await.unwrap();
+        assert!(runs >= 1, "the in-flight run should have been repaired");
+
+        let repaired = repo.fail_orphaned_agent_executions().await.unwrap();
+        assert!(repaired >= 1, "now the orphaned row is in scope");
+
+        let after = repo.get_agent_execution(orphan.id).await.unwrap().unwrap();
+        assert_eq!(after.status, "failed");
+        assert!(after.completed_at.is_some());
+
+        db.cleanup().await;
+    }
 }

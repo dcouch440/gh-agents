@@ -56,7 +56,43 @@ pub trait SseProviderAdapter: Send + Sync + Clone + 'static {
     /// Parse one SSE `data: ...` line into a `StreamChunk`.
     ///
     /// Return `None` to skip the line (empty, unknown event type, etc.).
+    ///
+    /// Implement this when one wire event maps to at most one internal chunk.
+    /// When it can map to several, implement [`Self::parse_sse_events`] instead
+    /// and leave this returning `None`.
     fn parse_sse_line(&self, line: &str) -> Option<LLMResult<StreamChunk>>;
+
+    /// Parse one SSE `data: ...` line into zero or more `StreamChunk`s.
+    ///
+    /// The default delegates to [`Self::parse_sse_line`], so existing adapters
+    /// are unaffected. Override for wire formats where a single event yields
+    /// several internal events — an OpenAI-compatible frame carries the tool
+    /// call's `id`/`name` and a slice of its arguments at once, which is a
+    /// `ToolUseStart` plus an `InputJsonDelta`, and `parse_sse_line` can only
+    /// return one of them.
+    ///
+    /// Note that no `ContentBlockStop` is emitted for tool calls in this
+    /// format; open blocks are finalized by the leftover drain in
+    /// `StreamAccumulator::build`.
+    fn parse_sse_events(&self, line: &str) -> Vec<LLMResult<StreamChunk>> {
+        self.parse_sse_line(line).into_iter().collect()
+    }
+
+    /// Optional read timeout, distinct from the whole-request timeout.
+    ///
+    /// `None` relies on the request timeout alone.
+    ///
+    /// Note what reqwest actually does with this, because it is not only a
+    /// per-frame timer: the sleep is armed when the request is dispatched and
+    /// polled in `PendingRequest::poll`, which runs *before response headers
+    /// arrive*. So this bounds time-to-first-byte too, and only then becomes
+    /// the per-frame timer for the body. It therefore has to be at least as
+    /// long as the slowest acceptable first byte — for a provider that queues
+    /// at capacity, that is minutes, not seconds — or the generous overall
+    /// timeout is unreachable and queued requests fail early.
+    fn read_timeout_secs(&self) -> Option<u64> {
+        None
+    }
 
     /// Map an HTTP error status + body to `LLMError`.
     fn handle_error(&self, status: u16, body: &str, retry_after_ms: Option<u64>) -> LLMError;
@@ -91,11 +127,13 @@ impl<A: SseProviderAdapter> SseHttpProvider<A> {
     pub fn new(adapter: A) -> Result<Self, LLMError> {
         let headers = adapter.default_headers()?;
 
-        let client = Client::builder()
+        let mut builder = Client::builder()
             .default_headers(headers)
-            .timeout(Duration::from_secs(adapter.timeout_secs()))
-            .build()
-            .map_err(LLMError::HttpError)?;
+            .timeout(Duration::from_secs(adapter.timeout_secs()));
+        if let Some(read_secs) = adapter.read_timeout_secs() {
+            builder = builder.read_timeout(Duration::from_secs(read_secs));
+        }
+        let client = builder.build().map_err(LLMError::HttpError)?;
 
         Ok(Self { client, adapter })
     }
@@ -175,7 +213,7 @@ impl<A: SseProviderAdapter> LLMProvider for SseHttpProvider<A> {
                             continue;
                         }
 
-                        if let Some(result) = adapter.parse_sse_line(&line) {
+                        for result in adapter.parse_sse_events(&line) {
                             yield result;
                         }
                     }

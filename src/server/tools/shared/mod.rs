@@ -37,6 +37,29 @@ pub(crate) fn error_json(message: impl Into<String>) -> Value {
     json!({ "error": message.into() })
 }
 
+// =========================================================================
+// Allow-list enforcement
+// =========================================================================
+
+/// Whether `name` is permitted for this agent.
+///
+/// `None` means no allow-list was supplied and every tool is permitted; the
+/// caller has already narrowed the tool set some other way.
+///
+/// This is the single definition of a security check that was previously
+/// copy-pasted into each dispatch branch, where the copies could drift.
+pub(crate) fn is_tool_allowed(name: &str, allowed: Option<&[String]>) -> bool {
+    match allowed {
+        Some(list) => list.iter().any(|t| t == name),
+        None => true,
+    }
+}
+
+/// The standard refusal returned when a tool is outside the agent's allow-list.
+pub(crate) fn tool_not_allowed_error(name: &str) -> Value {
+    error_json(format!("Tool '{}' is not allowed for this agent", name))
+}
+
 /// Load a workflow step by ID, returning a JSON error if not found.
 pub(crate) async fn load_step_or_error(
     repo: &dyn WorkflowRepo,

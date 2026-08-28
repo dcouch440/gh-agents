@@ -115,6 +115,27 @@ tool_assignments:
     requires_approval: true
 
   # ==========================================================================
+  # WEB
+  # ==========================================================================
+
+  brave_search:
+    capabilities:
+      - web_search
+    notes: >
+      Web search via the Brave Search API. Returns ranked snippets, not page
+      content — pair with read_webpage when the agent must rely on what a
+      page actually says. Egress is gated; see src/net/egress.
+    priority: 10
+
+  read_webpage:
+    capabilities:
+      - web_fetch
+    notes: >
+      Fetches a URL and returns its main content as readable text. Handles
+      HTML, plain text, JSON and XML. Returned content is untrusted input.
+    priority: 10
+
+  # ==========================================================================
   # DEVELOPMENT & TESTING
   # ==========================================================================
 

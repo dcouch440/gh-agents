@@ -42,6 +42,86 @@ mod tests {
         assert!(desc.contains(r"(\\n)"));
     }
 
+    /// The description's first worked example used to be a heredoc, and its
+    /// "File operations" list led with `cat > file << 'EOF'`. That made the
+    /// shell the strongest signal for file creation even after the file tools
+    /// became default, which is how an 816-line spec ended up written three
+    /// times through a channel bounded by max_tokens.
+    #[test]
+    fn run_command_points_at_the_file_tools_before_it_shows_a_heredoc() {
+        let tool = get_tool_definition("run_command").expect("run_command is registered");
+        let desc = &tool.description;
+
+        let pointer = desc
+            .find("write_file")
+            .expect("run_command must name write_file");
+        let heredoc = desc
+            .find("<< 'EOF'")
+            .expect("the heredoc fallback example is still wanted");
+        assert!(
+            pointer < heredoc,
+            "the file tools must be named before the first heredoc"
+        );
+        assert!(
+            !desc.contains("sed -i 's/old/new/g'"),
+            "sed -i must not be presented as the way to edit a file"
+        );
+        assert!(
+            desc.contains("always close it"),
+            "the unterminated-heredoc guard needs a matching line in the description"
+        );
+    }
+
+    /// These four carry usage doctrine now, not one-line labels.
+    /// `run_command`'s ~67-line description was the only thing an agent had to
+    /// reason from, so it won every time.
+    #[test]
+    fn the_file_tools_carry_usage_doctrine() {
+        for name in ["read_file", "write_file", "edit_file", "list_files"] {
+            let tool = get_tool_definition(name).expect("registered");
+            assert!(
+                tool.description.len() > 200,
+                "{name} description is still a label"
+            );
+        }
+
+        let write = get_tool_definition("write_file").unwrap();
+        assert!(
+            write.description.contains("8,000 tokens"),
+            "write_file must surface the max_tokens ceiling that truncated the design spec"
+        );
+        assert!(
+            write.description.contains("edit_file"),
+            "write_file must name the chunked-append escape hatch"
+        );
+
+        let edit = get_tool_definition("edit_file").unwrap();
+        assert!(edit.description.contains("empty old_string"));
+    }
+
+    /// `read_only` is only as real as this list. A denylist would silently
+    /// admit every tool added after it was written.
+    #[test]
+    fn the_read_only_set_excludes_every_writing_tool() {
+        use crate::tools::registry::is_read_only_tool;
+
+        for writer in [
+            "write_file",
+            "edit_file",
+            "run_command",
+            "run_tests",
+            "git_add",
+            "git_commit",
+            "create_doc",
+            "update_doc",
+        ] {
+            assert!(!is_read_only_tool(writer), "{writer} must not be read-only");
+        }
+        for reader in ["read_file", "list_files", "git_status", "brave_search"] {
+            assert!(is_read_only_tool(reader), "{reader} should be read-only");
+        }
+    }
+
     #[test]
     fn run_command_does_not_discourage_file_checks() {
         let tool = get_tool_definition("run_command").expect("run_command is registered");
@@ -108,9 +188,12 @@ mod tests {
             "remove_node",
             "wire_edge",
             "remove_edge",
+            // Web tools
+            "brave_search",
+            "read_webpage",
         ];
 
-        assert_eq!(all_names.len(), 22);
+        assert_eq!(all_names.len(), 24);
 
         // Verify all map to tools
         for name in all_names {
@@ -152,6 +235,9 @@ mod tests {
             "remove_node",
             "wire_edge",
             "remove_edge",
+            // Web tools
+            "brave_search",
+            "read_webpage",
         ];
 
         for tool_name in all_tools {
