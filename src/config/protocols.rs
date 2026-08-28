@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
 use crate::server::hub::protocols::template_resolve::resolve_template;
-use crate::server::hub::protocols::text_utils::strip_comments;
+use crate::server::hub::protocols::text_utils::{collapse_blank_lines, strip_comments};
 
 // ---------------------------------------------------------------------------
 // Config types (from config.yaml)
@@ -148,13 +148,29 @@ impl RoleDefinition {
         prompt_text(self.system)
     }
 
+    /// The user-message template as the model receives it — comments stripped.
+    ///
+    /// Same contract as [`system_text`](Self::system_text), for `prompt.md`.
+    pub fn prompt_text(&self) -> &'static str {
+        prompt_text(self.prompt)
+    }
+
     /// Resolve all `{{.var}}` template variables and produce a ready-to-use context.
     ///
     /// Empty variable values produce blank lines that are collapsed automatically.
     /// Unknown variables are left as-is.
+    ///
+    /// Comments are stripped from the template, before substitution, and never
+    /// from the resolved text. Variable values carry content this process did
+    /// not write — chat messages, board state, the file hunks handed to
+    /// `MERGE_HUNK` — and stripping after substitution treats an `<!--` in one
+    /// of those as a prompt comment: its content is deleted from the prompt
+    /// silently, or, with no `-->` after it, `strip_comments` panics the
+    /// request. A hunk is a slice of lines, so an HTML comment split across the
+    /// slice boundary is unterminated by construction.
     pub fn resolve(&self, vars: &HashMap<String, String>) -> ProtocolContext {
-        let system_prompt = strip_comments(&resolve_template(self.system, vars));
-        let user_prompt = strip_comments(&resolve_template(self.prompt, vars));
+        let system_prompt = collapse_blank_lines(&resolve_template(self.system_text(), vars));
+        let user_prompt = collapse_blank_lines(&resolve_template(self.prompt_text(), vars));
         let response_schema = self.response.map(|r| {
             let resolved = resolve_template(r, vars);
             serde_json::from_str(&resolved)
@@ -490,7 +506,6 @@ mod tests {
         assert!(ctx.response_schema.is_none());
     }
 
-    #[test]
     /// Every prompt reaches the model through the stripper.
     ///
     /// The failure this exists to catch is additive, not a regression: three
@@ -521,6 +536,33 @@ mod tests {
             );
             assert!(!text.is_empty(), "{name} stripped down to nothing");
         }
+    }
+
+    /// Variable values are content this process did not write — chat messages,
+    /// board state, the file hunks handed to `MERGE_HUNK`. A `<!--` in one is
+    /// not a prompt comment: it must survive substitution intact, and an
+    /// unterminated one must not panic the request.
+    #[test]
+    fn resolve_leaves_comment_markers_in_variable_values_alone() {
+        let role = RoleDefinition {
+            system: "<!-- why this exists -->\nYou merge files.",
+            prompt: "Hunk:\n{{.Merge.base_hunk}}",
+            response: None,
+        };
+        let mut vars = HashMap::new();
+        vars.insert(
+            "Merge.base_hunk".to_string(),
+            "<!-- section opener with no closer\n<div>kept</div>".to_string(),
+        );
+
+        let ctx = role.resolve(&vars);
+
+        assert!(!ctx.system_prompt.contains("<!--"), "{}", ctx.system_prompt);
+        assert!(ctx.system_prompt.contains("You merge files."));
+        assert!(ctx
+            .user_prompt
+            .contains("<!-- section opener with no closer"));
+        assert!(ctx.user_prompt.contains("<div>kept</div>"));
     }
 
     /// `prompt_text` keys on the raw string's address, which only holds
