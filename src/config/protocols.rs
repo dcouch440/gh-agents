@@ -585,7 +585,7 @@ mod tests {
         let agent = cfg.agent("agent");
         assert_eq!(agent.temperature, 0.3);
         assert_eq!(agent.max_rounds, 60);
-        assert_eq!(agent.context_budget, 480_000);
+        assert_eq!(agent.context_budget, 950_000);
     }
 
     #[test]
