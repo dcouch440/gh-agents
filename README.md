@@ -47,7 +47,7 @@ Every workforce is designed before it executes, and the two phases are separate 
 
 **Dispatch** runs first, once per step, when you hit Generate. The designer agent receives one sentence from the board and answers *how*: which agents exist, what each one knows, and what file each produces. It designs by writing config files to disk — `config.json`, `topology.json`, `agents/*.json` — then calls `complete_system`, attesting against its own checklist (`prompts_not_trivial`, `assignments_expanded`, `no_filenames_prescribed`) before the execution engine reads those files back. The design is therefore inspectable and editable: a structured artifact, not an implicit LLM call.
 
-**Runtime** is what those config files produced. Every system prompt is a designer-written role plus one shared preamble; every input is an `<assignment>` block and an `<expected_output>` block, with upstream results arriving as `<previous_step>` blocks.
+**Runtime** is what those config files produced. Every system prompt is a designer-written role plus one shared preamble; every input is an `<assignment>` block and a `<deliverable>` block, with upstream results arriving as `<previous_step>` blocks.
 
 <details>
 <summary>The shared preamble, in full — appended byte-identical to every runtime prompt</summary>
