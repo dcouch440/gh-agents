@@ -19,7 +19,7 @@ use crate::server::hub::strategy::ExecutionStrategy;
 use crate::server::services::system_node::{file_reader, state, validate};
 use crate::server::state::AppState;
 use crate::server::tools::system_node::complete_system_tool;
-use crate::tools::registry::get_tool_definition;
+use crate::tools::registry::run_command_tool_shell_only;
 
 mod tests;
 
@@ -57,7 +57,7 @@ impl SystemNodeStrategy {
     ) -> Self {
         // System prompt is static — <current_state> rides the instruction
         // instead (see build_messages) so the prompt stays cacheable.
-        let system_prompt = roles::SYSTEM_NODE_AGENT_SYSTEM.to_string();
+        let system_prompt = roles::system_node_agent_system().to_string();
 
         Self {
             system_prompt,
@@ -88,16 +88,12 @@ impl ExecutionStrategy for SystemNodeStrategy {
         &self.system_prompt
     }
 
+    /// No `think` tool. This agent runs at `effort: high`
+    /// (config/system_agent/config.yaml), so it reasons natively — a `think`
+    /// call spends one of its thirty rounds and a request round-trip to return
+    /// `{"status": "ok"}`.
     fn tools(&self) -> Vec<Tool> {
-        let mut tools = Vec::with_capacity(3);
-        if let Some(t) = get_tool_definition("run_command") {
-            tools.push(t);
-        }
-        tools.push(complete_system_tool());
-        if let Some(t) = get_tool_definition("think") {
-            tools.push(t);
-        }
-        tools
+        vec![run_command_tool_shell_only(), complete_system_tool()]
     }
 
     fn model_id(&self) -> &str {
@@ -177,7 +173,6 @@ impl ExecutionStrategy for SystemNodeStrategy {
         match name {
             "complete_system" => self.handle_complete_system(input).await,
             "run_command" => self.handle_run_command(input).await,
-            "think" => json!({ "status": "ok" }),
             _ => json!({ "error": format!("Unknown tool: {}", name) }),
         }
     }

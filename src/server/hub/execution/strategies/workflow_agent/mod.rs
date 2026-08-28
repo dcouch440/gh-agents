@@ -19,7 +19,7 @@ use crate::server::hub::error::HubError;
 use crate::server::hub::strategy::ExecutionStrategy;
 use crate::server::services::workflow_agent::{state, validate};
 use crate::server::state::AppState;
-use crate::tools::registry::get_tool_definition;
+use crate::tools::registry::{get_tool_definition, run_command_tool_shell_only};
 
 #[cfg(test)]
 #[path = "tests.rs"]
@@ -143,14 +143,13 @@ impl ExecutionStrategy for WorkflowAgentStrategy {
         &self.system_prompt
     }
 
+    /// No `think` tool. This agent runs at `effort: xhigh`
+    /// (config/workflow_agent/config.yaml), so it reasons natively — a `think`
+    /// call spends a streaming round-trip to return `{"status": "ok"}`, and on
+    /// this strategy it also persists a junk `tool` row to the session.
     fn tools(&self) -> Vec<Tool> {
-        let mut tools = Vec::with_capacity(3);
-        if let Some(t) = get_tool_definition("run_command") {
-            tools.push(t);
-        }
-        if let Some(t) = get_tool_definition("think") {
-            tools.push(t);
-        }
+        let mut tools = Vec::with_capacity(2);
+        tools.push(run_command_tool_shell_only());
         if let Some(t) = get_tool_definition("render_panel") {
             tools.push(t);
         }
@@ -257,7 +256,6 @@ impl ExecutionStrategy for WorkflowAgentStrategy {
     async fn execute_tool(&self, name: &str, input: &Value) -> Value {
         let result = match name {
             "run_command" => self.host_run_command(input).await,
-            "think" => json!({ "status": "ok" }),
             "render_panel" => {
                 let content = input["content"].as_str().unwrap_or("");
                 let submit_label = input["submit_label"].as_str().unwrap_or("Submit");
@@ -277,11 +275,6 @@ impl ExecutionStrategy for WorkflowAgentStrategy {
         let tool_input = match name {
             "run_command" => input
                 .get("command")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string(),
-            "think" => input
-                .get("thought")
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string(),

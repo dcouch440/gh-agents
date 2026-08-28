@@ -340,11 +340,40 @@ fn run_tests_tool() -> Tool {
     }
 }
 
+/// `run_command` for an agent that has no file tools.
+///
+/// The system node agent and the workflow agent have `run_command` and one
+/// completion tool, and nothing else. Handed the full description they are
+/// told every turn that the correct way to write a file is four tools they do
+/// not have, and that their only write path — the heredoc — is for the
+/// narrower case "when the shell itself is producing the content". Both write
+/// every file they produce through a heredoc.
+///
+/// This was patched in prose in all three prompt files before it was fixed
+/// here. Fixing it here deletes the patch from two of them.
+pub fn run_command_tool_shell_only() -> Tool {
+    let mut tool = build_run_command_tool(false);
+    tool.description = tool.description.replacen(
+        "Execute a shell command in the workspace.",
+        "Execute a shell command. This is your only way to read or write a \
+         file — there are no file tools in this step.",
+        1,
+    );
+    tool
+}
+
 fn run_command_tool() -> Tool {
-    Tool {
-        name: "run_command".into(),
-        description: r#"Execute a shell command in the workspace. Chain with && to do multiple
-things in one call.
+    build_run_command_tool(true)
+}
+
+/// Shared body of both `run_command` descriptions.
+///
+/// `has_file_tools` drops the two paragraphs that point at `write_file` /
+/// `edit_file` / `read_file` / `list_files`, and promotes the heredoc from a
+/// fallback to the primary form.
+fn build_run_command_tool(has_file_tools: bool) -> Tool {
+    let file_tool_preamble = if has_file_tools {
+        r#"
 
 For files, use the file tools rather than the shell: write_file to create,
 edit_file to change or append, read_file to read, list_files to look around.
@@ -353,7 +382,35 @@ shell quoting. Use run_command for everything else — installing, running,
 inspecting, transforming, testing.
 
 Heredocs still work, and are the right tool when the shell itself is producing
-the content:
+the content:"#
+    } else {
+        r#"
+
+Read with cat, write with heredocs, look around with ls:"#
+    };
+
+    let file_tool_coda = if has_file_tools {
+        r#"
+
+File operations — use the file tools:
+- Create or replace: write_file
+- Change or append:  edit_file
+- Read:              read_file
+- Look around:       list_files
+Reach for the shell when the operation is bulk or generated:
+- Test & run: pytest tests/ && python main.py
+- Bulk copy:  for f in *.md; do cp "$f" archive/; done
+- Generate:   python build.py > site/index.html"#
+    } else {
+        ""
+    };
+
+    // Concatenated rather than `format!`ed: the body is full of shell examples
+    // with literal braces, which a format string would try to interpolate.
+    let head = r#"Execute a shell command in the workspace. Chain with && to do multiple
+things in one call."#;
+
+    let middle = r#"
   python generate_report.py > report.md
   cat > .env << 'EOF'
   API_URL=http://localhost:8080
@@ -394,25 +451,24 @@ Git:
 
 Archives:
   tar czf project.tar.gz my-app/
-  zip -r project.zip my-app/
+  zip -r project.zip my-app/"#;
 
-File operations — use the file tools:
-- Create or replace: write_file
-- Change or append:  edit_file
-- Read:              read_file
-- Look around:       list_files
-Reach for the shell when the operation is bulk or generated:
-- Test & run: pytest tests/ && python main.py
-- Bulk copy:  for f in *.md; do cp "$f" archive/; done
-- Generate:   python build.py > site/index.html
+    let tail = r#"
 
 Available tools for all agents: python, pip, node, npm, git, curl, wget, jq,
 grep, sed, awk, find, xargs, sort, uniq, wc, head, tail, tee, tr, cut, zip,
-unzip, sqlite3, make, gcc. Installed packages persist to the next step.
+unzip, sqlite3, make, gcc.
+
+Anything installed outside /workspace is gone when the step ends. `npm install
+-g` and cargo installs are redirected into /workspace and stay on PATH for the
+steps that follow; apt and pip packages do not.
 
 The result reports which files changed. If a file you meant to write is
-not listed, it was not written."#
-            .into(),
+not listed, it was not written."#;
+
+    Tool {
+        name: "run_command".into(),
+        description: [head, file_tool_preamble, middle, file_tool_coda, tail].concat(),
         input_schema: json!({
             "type": "object",
             "properties": {

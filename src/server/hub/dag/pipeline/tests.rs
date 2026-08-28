@@ -390,14 +390,15 @@ mod tests {
             assignment: "Do the thing".to_string(),
             expected_output: Some("Describe what you did".to_string()),
             has_container: true,
-            read_only: false,
         }
         .build();
 
         assert!(prompt.contains("<previous_step>\nPrior output text\n</previous_step>"));
         assert!(prompt.contains("<assignment>\nDo the thing\n</assignment>"));
         assert!(prompt.contains("<deliverable>\nDescribe what you did\n</deliverable>"));
-        assert!(prompt.contains("Save this to a file with write_file"));
+        // The builder appends no directive about where output goes — that is
+        // the designer's `expected_output`, which is the <deliverable> body.
+        assert!(prompt.trim_end().ends_with("</deliverable>"));
     }
 
     #[test]
@@ -409,7 +410,6 @@ mod tests {
             assignment: "Do the thing".to_string(),
             expected_output: None,
             has_container: true,
-            read_only: false,
         }
         .build();
 
@@ -426,7 +426,6 @@ mod tests {
             assignment: "Do the thing".to_string(),
             expected_output: Some(String::new()),
             has_container: true,
-            read_only: false,
         }
         .build();
 
@@ -442,7 +441,6 @@ mod tests {
             assignment: "task".to_string(),
             expected_output: Some("result".to_string()),
             has_container: true,
-            read_only: false,
         }
         .build();
 
@@ -463,7 +461,6 @@ mod tests {
             assignment: "assign".to_string(),
             expected_output: Some("expect".to_string()),
             has_container: true,
-            read_only: false,
         }
         .build();
 
@@ -474,11 +471,12 @@ mod tests {
         assert!(assign_pos < expect_pos);
     }
 
-    /// Without a container there is no `run_command`, and the response is the
-    /// only output downstream steps ever see. Telling the agent to save a file
-    /// and reply with a receipt would throw the deliverable away.
+    /// The container is the one fact the designer cannot know, so it is the one
+    /// fact the builder still states. Without a container there are no workspace
+    /// tools at all, which makes a `<deliverable>` describing a saved file
+    /// unachievable — the agent has to be told before it tries.
     #[test]
-    fn task_prompt_builder_omits_save_directive_without_container() {
+    fn task_prompt_builder_states_missing_workspace() {
         use super::super::agent_executor::TaskPromptBuilder;
 
         let prompt = TaskPromptBuilder {
@@ -486,14 +484,32 @@ mod tests {
             assignment: "Do the thing".to_string(),
             expected_output: Some("A summary of the findings".to_string()),
             has_container: false,
-            read_only: false,
         }
         .build();
 
         assert!(prompt.contains("<deliverable>\nA summary of the findings\n</deliverable>"));
+        assert!(prompt.contains("has to be in your response"));
+    }
+
+    /// With a container the builder appends nothing after `</deliverable>`.
+    /// Where the output goes is `expected_output`'s job — the designer knows
+    /// whether it is one file, several, or a report from a read_only agent, and
+    /// a hardcoded "save this to a file" contradicted it every time.
+    #[test]
+    fn task_prompt_builder_appends_no_directive_with_container() {
+        use super::super::agent_executor::TaskPromptBuilder;
+
+        let prompt = TaskPromptBuilder {
+            previous_step: String::new(),
+            assignment: "Do the thing".to_string(),
+            expected_output: Some("A summary of the findings".to_string()),
+            has_container: true,
+        }
+        .build();
+
+        assert!(prompt.trim_end().ends_with("</deliverable>"));
         assert!(!prompt.contains("write_file"));
         assert!(!prompt.contains("receipt"));
-        assert!(prompt.contains("put the deliverable itself in your response"));
     }
 
     // ── Failure handling ──────────────────────────────────────────────────────
@@ -678,23 +694,29 @@ mod tests {
         );
     }
 
-    /// A read_only agent's output IS its deliverable. Telling it to save a file
-    /// with a tool it does not have produces a guaranteed dead end.
+    /// A read_only agent's output IS its deliverable, and saying so is now the
+    /// designer's job — it sets the flag, so it is the layer that knows. The
+    /// builder's part of the contract is to carry `expected_output` through
+    /// untouched and add nothing that could contradict it.
     #[test]
-    fn read_only_task_prompt_does_not_ask_for_a_saved_file() {
+    fn read_only_deliverable_reaches_the_agent_verbatim() {
         use super::super::agent_executor::TaskPromptBuilder;
+
+        let designed = "A pass or fail for every requirement in the brief, with concrete \
+                        evidence under each failure. This is your reply, not a file — you \
+                        have no write access in this step.";
 
         let prompt = TaskPromptBuilder {
             previous_step: String::new(),
             assignment: "Verify the build against the spec".to_string(),
-            expected_output: Some("A conformance report".to_string()),
+            expected_output: Some(designed.to_string()),
             has_container: true,
-            read_only: true,
         }
         .build();
 
+        assert!(prompt.contains(designed));
+        assert!(prompt.trim_end().ends_with("</deliverable>"));
         assert!(!prompt.contains("write_file"));
-        assert!(prompt.contains("findings in your response"));
     }
 
     // ── Failed-agent row termination ──────────────────────────────────────

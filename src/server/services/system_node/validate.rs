@@ -386,6 +386,20 @@ pub(crate) fn cross_reference(base_dir: &Path) -> Vec<CrossRefError> {
 // complete_system verify validation
 // ---------------------------------------------------------------------------
 
+/// The six flags `complete_system` requires in its `verify` object.
+///
+/// Three of them (`topology_complete`, `agents_complete`, `config_accurate`)
+/// name checks that run in the mandatory block above and have no separate
+/// implementation; they are here so an explicit `false` on one is still caught.
+pub(crate) const VERIFY_FLAGS: [&str; 6] = [
+    "topology_complete",
+    "agents_complete",
+    "config_accurate",
+    "no_filenames_prescribed",
+    "prompts_not_trivial",
+    "assignments_expanded",
+];
+
 /// Validate the `verify` claims from `complete_system` against the filesystem.
 ///
 /// Returns `Ok(success_json)` if all claims hold, or `Err(error_json)` with
@@ -393,6 +407,11 @@ pub(crate) fn cross_reference(base_dir: &Path) -> Vec<CrossRefError> {
 ///
 /// `user_text_words` is the word count from the `<user_text>` instruction block,
 /// used by `assignments_expanded`. Pass `None` for update/propagation scenarios.
+///
+/// Every check runs regardless of what `verify` claims. The flags are the
+/// agent's attestation, not a switch controlling which checks execute — an
+/// explicit `false` is reported as its own failure rather than quietly
+/// skipping the work.
 pub(crate) fn validate_verify(
     base_dir: &Path,
     verify: &Value,
@@ -466,12 +485,40 @@ pub(crate) fn validate_verify(
         }));
     }
 
-    // ── Quality checks (flag-gated) ──
+    // ── Attestation ──
+    // A flag set false is an admission that something was not done. Answering
+    // it with "then the check is skipped" is exactly backwards, so it is
+    // reported instead — with the point spelled out, because the agent that
+    // set it false is the one reading this.
+    for flag in VERIFY_FLAGS {
+        if verify[flag].as_bool() == Some(false) {
+            errors.push(serde_json::json!({
+                "verify": flag,
+                "error": format!(
+                    "you set {flag} to false. Every check runs either way, so \
+                     setting a flag false does not skip it — fix the design it \
+                     refers to, then call complete_system again with it true."
+                ),
+            }));
+        }
+    }
+
+    // ── Quality checks ──
+    //
+    // These used to be gated on their own flag being `Some(true)`, which meant
+    // an agent could skip a check by asserting `false` rather than fail it —
+    // the flags were the only thing standing between a design and the checks,
+    // and the design under test was the thing setting them. They run
+    // unconditionally now. The flags survive as an attestation the agent makes
+    // and the code then verifies; `verify_flags_do_not_gate_the_checks` covers
+    // it.
+    //
     // topology_complete: cross_reference already ran above, skip the duplicate.
     // agents_complete: structural validity already ran above, skip the duplicate.
+    // config_accurate: validate_config already ran above, skip the duplicate.
 
     // no_filenames_prescribed
-    if verify["no_filenames_prescribed"].as_bool() == Some(true) {
+    {
         let agents_dir = base_dir.join("agents");
         if let Ok(entries) = std::fs::read_dir(&agents_dir) {
             for entry in entries.flatten() {
@@ -498,7 +545,7 @@ pub(crate) fn validate_verify(
     }
 
     // prompts_not_trivial
-    if verify["prompts_not_trivial"].as_bool() == Some(true) {
+    {
         let agent_count = count_topology_agents(base_dir);
         let min_words = if agent_count > 1 { 20 } else { 10 };
         let agents_dir = base_dir.join("agents");
@@ -526,7 +573,7 @@ pub(crate) fn validate_verify(
     }
 
     // assignments_expanded
-    if verify["assignments_expanded"].as_bool() == Some(true) {
+    {
         if let Some(user_words) = user_text_words {
             let agents_dir = base_dir.join("agents");
             if let Ok(entries) = std::fs::read_dir(&agents_dir) {

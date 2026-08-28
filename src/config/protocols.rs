@@ -14,9 +14,10 @@
 use once_cell::sync::Lazy;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
 
 use crate::server::hub::protocols::template_resolve::resolve_template;
-use crate::server::hub::protocols::text_utils::collapse_blank_lines;
+use crate::server::hub::protocols::text_utils::strip_comments;
 
 // ---------------------------------------------------------------------------
 // Config types (from config.yaml)
@@ -99,6 +100,32 @@ pub struct RoleDefinition {
     pub response: Option<&'static str>,
 }
 
+/// Strip comments from an embedded prompt, once per distinct file.
+///
+/// The one chokepoint every prompt is sent through. Prompt files carry their
+/// own reasoning inline and it is billed on every call unless it is removed
+/// here — `config/runtime_agent/system.md` goes out once per agent per step.
+///
+/// Keyed by the raw text's address, which is stable because every caller
+/// passes a `&'static str` from `include_str!`. `stripped_prompts_are_cached`
+/// covers that assumption.
+fn prompt_text(raw: &'static str) -> &'static str {
+    static CACHE: OnceLock<Mutex<HashMap<usize, &'static str>>> = OnceLock::new();
+
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let key = raw.as_ptr() as usize;
+
+    let mut guard = cache.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(text) = guard.get(&key) {
+        return text;
+    }
+    // Leaked deliberately: prompts are `include_str!` constants, so there is
+    // one per file for the life of the process and nothing to reclaim.
+    let text: &'static str = Box::leak(strip_comments(raw).into_boxed_str());
+    guard.insert(key, text);
+    text
+}
+
 /// Fully resolved LLM context for a protocol role.
 ///
 /// Produced by [`RoleDefinition::resolve`] after template variable substitution.
@@ -112,13 +139,22 @@ pub struct ProtocolContext {
 }
 
 impl RoleDefinition {
+    /// The system prompt as the model receives it — comments stripped.
+    ///
+    /// Use this, never `.system`, anywhere text is about to be sent. The raw
+    /// field stays public because the template-variable audit has to scan what
+    /// is actually written in the file, comments included.
+    pub fn system_text(&self) -> &'static str {
+        prompt_text(self.system)
+    }
+
     /// Resolve all `{{.var}}` template variables and produce a ready-to-use context.
     ///
     /// Empty variable values produce blank lines that are collapsed automatically.
     /// Unknown variables are left as-is.
     pub fn resolve(&self, vars: &HashMap<String, String>) -> ProtocolContext {
-        let system_prompt = collapse_blank_lines(&resolve_template(self.system, vars));
-        let user_prompt = collapse_blank_lines(&resolve_template(self.prompt, vars));
+        let system_prompt = strip_comments(&resolve_template(self.system, vars));
+        let user_prompt = strip_comments(&resolve_template(self.prompt, vars));
         let response_schema = self.response.map(|r| {
             let resolved = resolve_template(r, vars);
             serde_json::from_str(&resolved)
@@ -284,11 +320,30 @@ pub mod roles {
     /// Workforce archetype block, injected via `{{.System.archetype_block}}`.
     pub const WORKFORCE_ARCHETYPE: &str = include_str!("../../config/archetype.md");
 
+    /// Raw prompt files for the two roles that are a bare system prompt with
+    /// no `prompt.md` and no template variables, so they have no
+    /// `RoleDefinition` to hang `system_text()` off.
+    ///
+    /// Private on purpose. Both used to be `pub const` read straight into a
+    /// request, which is how they shipped their own comments to the model on
+    /// every call. The accessors below are the only way to reach them, so a
+    /// fourth prompt added here cannot repeat it.
+    mod raw {
+        pub(super) const SYSTEM_NODE_AGENT_SYSTEM: &str =
+            include_str!("../../config/system_agent/system.md");
+        pub(super) const WORKFLOW_AGENT_SYSTEM: &str =
+            include_str!("../../config/workflow_agent/system.md");
+    }
+
     /// System node agent system prompt (designs runtime agent teams).
-    pub const SYSTEM_NODE_AGENT_SYSTEM: &str = include_str!("../../config/system_agent/system.md");
+    pub fn system_node_agent_system() -> &'static str {
+        super::prompt_text(raw::SYSTEM_NODE_AGENT_SYSTEM)
+    }
 
     /// Workflow agent system prompt (designs workflow topology via conversation).
-    pub const WORKFLOW_AGENT_SYSTEM: &str = include_str!("../../config/workflow_agent/system.md");
+    pub fn workflow_agent_system() -> &'static str {
+        super::prompt_text(raw::WORKFLOW_AGENT_SYSTEM)
+    }
 
     /// Workforce runtime agent prompt template.
     pub static WORKFORCE_AGENT: RoleDefinition = RoleDefinition {
@@ -436,13 +491,59 @@ mod tests {
     }
 
     #[test]
+    /// Every prompt reaches the model through the stripper.
+    ///
+    /// The failure this exists to catch is additive, not a regression: three
+    /// prompts once bypassed processing entirely and shipped their own
+    /// reasoning to the model on every call. Nothing structurally prevents a
+    /// fourth from being added the same way, so the guarantee is asserted
+    /// rather than assumed. A prompt added to `roles` and not listed here is
+    /// the case this misses — keep the list complete.
+    #[test]
+    fn no_prompt_reaches_the_model_with_comments_in_it() {
+        let sent: Vec<(&str, &str)> = vec![
+            ("system_agent", roles::system_node_agent_system()),
+            ("workflow_agent", roles::workflow_agent_system()),
+            ("runtime_agent", roles::WORKFORCE_AGENT.system_text()),
+            ("assistant", roles::ASSISTANT_BASE.system_text()),
+            ("belief_extractor", roles::BELIEF_EXTRACTOR.system_text()),
+            (
+                "manager_assistant",
+                roles::MANAGER_ASSISTANT_BASE.system_text(),
+            ),
+            ("merge_hunk", roles::MERGE_HUNK.system_text()),
+        ];
+
+        for (name, text) in sent {
+            assert!(
+                !text.contains("<!--"),
+                "{name} ships an unstripped comment to the model"
+            );
+            assert!(!text.is_empty(), "{name} stripped down to nothing");
+        }
+    }
+
+    /// `prompt_text` keys on the raw string's address, which only holds
+    /// because every caller passes an `include_str!` constant.
+    #[test]
+    fn stripped_prompts_are_cached() {
+        let first = roles::WORKFORCE_AGENT.system_text();
+        let second = roles::WORKFORCE_AGENT.system_text();
+        assert!(
+            std::ptr::eq(first, second),
+            "system_text re-stripped instead of hitting the cache"
+        );
+    }
+
+    #[test]
     fn all_role_statics_load() {
         assert!(!roles::ASSISTANT_BASE.system.is_empty());
         assert!(!roles::ASSISTANT_BASE.prompt.is_empty());
         assert!(roles::ASSISTANT_BASE.response.is_none());
 
         assert!(!roles::WORKFORCE_ARCHETYPE.is_empty());
-        assert!(!roles::SYSTEM_NODE_AGENT_SYSTEM.is_empty());
+        assert!(!roles::system_node_agent_system().is_empty());
+        assert!(!roles::workflow_agent_system().is_empty());
 
         assert!(!roles::WORKFORCE_AGENT.system.is_empty());
         assert!(!roles::WORKFORCE_AGENT.prompt.is_empty());
