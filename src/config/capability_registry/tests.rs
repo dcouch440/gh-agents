@@ -78,3 +78,81 @@ mod tests {
         assert!(names.is_empty());
     }
 }
+
+#[cfg(test)]
+mod web_capability_tests {
+    use super::super::*;
+    use std::path::Path;
+
+    fn registry() -> CapabilityRegistry {
+        CapabilityRegistry::load(Path::new("config")).expect("shipped config should load")
+    }
+
+    #[test]
+    fn web_search_resolves_to_brave_search() {
+        let (tools, names) = registry().resolve_tools(&["web_search".to_string()]);
+        assert_eq!(names, vec!["brave_search"], "{names:?}");
+        assert_eq!(tools.len(), 1);
+    }
+
+    #[test]
+    fn web_fetch_resolves_to_read_webpage() {
+        let (_, names) = registry().resolve_tools(&["web_fetch".to_string()]);
+        assert_eq!(names, vec!["read_webpage"], "{names:?}");
+    }
+
+    #[test]
+    fn a_research_agent_gets_exactly_the_two_web_tools() {
+        let (_, mut names) =
+            registry().resolve_tools(&["web_search".to_string(), "web_fetch".to_string()]);
+        names.sort();
+        assert_eq!(names, vec!["brave_search", "read_webpage"]);
+    }
+
+    // resolve_tools silently drops a name with no registry definition, so a
+    // typo in the YAML would leave an agent toolless with nothing logged.
+    #[test]
+    fn every_assigned_tool_has_a_static_definition() {
+        let yaml = std::fs::read_to_string("config/system/tool_assignments.yaml").unwrap();
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
+        let assignments = parsed["tool_assignments"].as_mapping().unwrap();
+        for (name, _) in assignments {
+            let name = name.as_str().unwrap();
+            assert!(
+                crate::tools::registry::get_tool_definition(name).is_some(),
+                "{name} is assigned a capability but has no registry definition"
+            );
+        }
+    }
+
+    // Every capability a tool claims must exist in the taxonomy, or the
+    // reverse index points at a key nothing can ever request.
+    #[test]
+    fn every_claimed_capability_exists_in_the_taxonomy() {
+        let caps: serde_yaml::Value = serde_yaml::from_str(
+            &std::fs::read_to_string("config/system/capabilities.yaml").unwrap(),
+        )
+        .unwrap();
+        let known: Vec<String> = caps["capabilities"]
+            .as_sequence()
+            .unwrap()
+            .iter()
+            .map(|c| c["key"].as_str().unwrap().to_string())
+            .collect();
+
+        let assign: serde_yaml::Value = serde_yaml::from_str(
+            &std::fs::read_to_string("config/system/tool_assignments.yaml").unwrap(),
+        )
+        .unwrap();
+        for (tool, body) in assign["tool_assignments"].as_mapping().unwrap() {
+            for cap in body["capabilities"].as_sequence().unwrap() {
+                let cap = cap.as_str().unwrap();
+                assert!(
+                    known.contains(&cap.to_string()),
+                    "{} claims unknown capability {cap}",
+                    tool.as_str().unwrap()
+                );
+            }
+        }
+    }
+}

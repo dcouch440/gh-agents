@@ -83,12 +83,58 @@ pub(crate) fn validate_agent(content: &str) -> Result<(), String> {
         .ok_or("missing or invalid \"capabilities\" array")?;
 
     for cap in caps {
-        if !cap.is_string() {
+        let Some(key) = cap.as_str() else {
             return Err("capabilities must be an array of strings".to_string());
+        };
+        if !is_known_capability(key) {
+            // An unknown key resolves to zero tools with no error, no log and
+            // no failing request — the agent simply runs without the tool it
+            // was designed around. Catching it here, at file-write time, gives
+            // the designer something it can correct.
+            return Err(format!(
+                "unknown capability \"{key}\". Capabilities are not tool names — \
+                 use \"web_search\" for brave_search and \"web_fetch\" for read_webpage. \
+                 Known capabilities: {}",
+                known_capabilities().join(", ")
+            ));
         }
     }
 
     Ok(())
+}
+
+/// Capability keys declared by the shipped taxonomy.
+///
+/// Parsed from the same `capabilities.yaml` the runtime registry loads, so the
+/// two cannot disagree about what exists.
+fn known_capabilities() -> &'static [String] {
+    static KEYS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    KEYS.get_or_init(|| {
+        const YAML: &str = include_str!("../../../../config/system/capabilities.yaml");
+        let parsed: serde_yaml::Value = match serde_yaml::from_str(YAML) {
+            Ok(v) => v,
+            Err(_) => return Vec::new(),
+        };
+        parsed
+            .get("capabilities")
+            .and_then(|c| c.as_sequence())
+            .map(|seq| {
+                seq.iter()
+                    .filter_map(|c| c.get("key").and_then(|k| k.as_str()).map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default()
+    })
+}
+
+/// Whether a capability key exists in the taxonomy.
+///
+/// An empty taxonomy (an unparseable file) accepts everything rather than
+/// rejecting every design: failing open here degrades to today's behaviour,
+/// while failing closed would break every system build.
+fn is_known_capability(key: &str) -> bool {
+    let known = known_capabilities();
+    known.is_empty() || known.iter().any(|k| k == key)
 }
 
 fn require_non_empty_string(

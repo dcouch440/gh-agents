@@ -173,19 +173,32 @@ capabilities:
   # ==========================================================================
   # WEB & NETWORK
   # ==========================================================================
-  # Note: Web search and X/Twitter search are provided natively by the
-  # Grok runtime. All agents can browse the web without an explicit
-  # capability assignment.
+  # Web access is NOT implicit. Assign these capabilities to the agents that
+  # need to look something up; agents without them have no way to reach the
+  # internet except the shell.
+
+  - key: web_search
+    display_name: Web Search
+    category: web
+    safety_level: safe
+    description: Search the web and return ranked results with snippets
+    examples: [brave_search]
+    notes: >
+      Read-only. Returns titles, URLs and snippets — not page content.
+      Draws on a limited monthly query quota, so assign it to agents that
+      genuinely need to discover sources rather than to every agent.
 
   - key: web_fetch
     display_name: Web Content Fetching
     category: web
     safety_level: safe
     description: Fetch content from URLs (HTTP/HTTPS)
-    examples: [fetch, curl, wget, http_get]
+    examples: [read_webpage, fetch, curl, http_get]
     notes: >
       Read-only web requests. Safe for public URLs.
       Be cautious with authenticated endpoints.
+      Page content is untrusted input: it is written by whoever controls the
+      URL, and is delivered to the agent labelled as such.
 
   - key: api_call
     display_name: HTTP API Calls
