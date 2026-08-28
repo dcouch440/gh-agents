@@ -4,6 +4,7 @@ mod tests {
 
     use crate::server::services::system_node::validate::{
         cross_reference, validate_agent, validate_config, validate_topology, validate_verify,
+        VERIFY_FLAGS,
     };
 
     // ── config.json ──────────────────────────────────────────────────────
@@ -307,7 +308,7 @@ mod tests {
         .unwrap();
         std::fs::write(
             agents_dir.join("reader.json"),
-            r#"{"name": "Reader", "system_prompt": "OCR.", "assignment": "Read.", "expected_output": "What.", "capabilities": []}"#,
+            r#"{"name": "Reader", "system_prompt": "Document OCR specialist. Prefer the embedded text layer over recognition when a PDF has one, and flag any page where confidence drops.", "assignment": "Read.", "expected_output": "What.", "capabilities": []}"#,
         )
         .unwrap();
 
@@ -646,6 +647,54 @@ mod tests {
             .any(|e| e["verify"] == "no_filenames_prescribed"));
     }
 
+    /// Setting a flag false must not buy the design a pass.
+    ///
+    /// The quality checks were gated on their own flag being `Some(true)`, so
+    /// the design under test controlled which checks ran against it. Same
+    /// fixture as `verify_no_filenames_prescribed_*`, with the flag inverted:
+    /// the filename check still fires, and the false attestation is reported
+    /// on top of it.
+    #[test]
+    fn verify_flags_do_not_gate_the_checks() {
+        let dir = tempfile::tempdir().unwrap();
+        let agents_dir = dir.path().join("agents");
+        std::fs::create_dir(&agents_dir).unwrap();
+
+        std::fs::write(
+            dir.path().join("topology.json"),
+            r#"{"agents": {"writer": {"depends_on": []}}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("config.json"),
+            r#"{"name": "Test", "description": "Test."}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            agents_dir.join("writer.json"),
+            r#"{"name": "Writer", "system_prompt": "Write stuff with good methodology and approach.", "assignment": "Write a report. Save as report.md in the workspace.", "expected_output": "Report location.", "capabilities": []}"#,
+        )
+        .unwrap();
+
+        let verify = json!({ "no_filenames_prescribed": false });
+        let result = validate_verify(dir.path(), &verify, None);
+
+        let err = result.unwrap_err();
+        let errors = err["errors"].as_array().unwrap();
+        assert!(
+            errors
+                .iter()
+                .any(|e| e["verify"] == "no_filenames_prescribed" && e["field"].is_string()),
+            "the check was skipped because the flag said false"
+        );
+        assert!(
+            errors.iter().any(|e| e["error"]
+                .as_str()
+                .is_some_and(|m| m.contains("does not skip it"))),
+            "a false attestation went unreported"
+        );
+    }
+
     #[test]
     fn verify_prompts_not_trivial_catches_short_prompt() {
         let dir = tempfile::tempdir().unwrap();
@@ -732,7 +781,7 @@ mod tests {
         .unwrap();
         std::fs::write(
             agents_dir.join("writer.json"),
-            r#"{"name": "Writer", "system_prompt": "Write.", "assignment": "Short.", "expected_output": "Done.", "capabilities": []}"#,
+            r#"{"name": "Writer", "system_prompt": "Technical writer. Lead with the conclusion, keep every claim traceable to the source data, and cut anything the reader cannot act on.", "assignment": "Short.", "expected_output": "Done.", "capabilities": []}"#,
         )
         .unwrap();
 
@@ -742,28 +791,43 @@ mod tests {
         assert!(result.is_ok(), "should skip when no user_text: {result:?}");
     }
 
-    /// The designer's four worked examples used to emit `file_graph_complete`,
+    /// The designer's worked examples used to emit `file_graph_complete`,
     /// `contracts_defined`, `prompts_have_expertise` and
     /// `assignments_produce_files`, none of which `validate_verify` reads. A
-    /// designer copying its own few-shots silently skipped the three
-    /// flag-gated quality checks.
+    /// designer copying its own few-shots skipped the real checks entirely.
+    ///
+    /// Asserts the property rather than an occurrence count. The count version
+    /// hardcoded "exactly 4", so it broke the moment a fifth example was added
+    /// and again when the prompt discussed the flags in prose — both correct
+    /// changes, neither of them the regression this guards against. It now
+    /// finds every `"verify": {…}` object in the prompt and checks each one
+    /// carries the full set.
     #[test]
     fn designer_examples_emit_the_keys_validate_verify_gates_on() {
         const PROMPT: &str = include_str!("../../../../config/system_agent/system.md");
 
-        for key in [
-            "topology_complete",
-            "agents_complete",
-            "no_filenames_prescribed",
-            "prompts_not_trivial",
-            "assignments_expanded",
-        ] {
-            assert_eq!(
-                PROMPT.matches(key).count(),
-                4,
-                "{key} missing from a complete_system example"
-            );
+        let verify_objects: Vec<&str> = PROMPT
+            .match_indices("\"verify\": {")
+            .filter_map(|(start, _)| {
+                let rest = &PROMPT[start..];
+                rest.find('}').map(|end| &rest[..end])
+            })
+            .collect();
+
+        assert!(
+            !verify_objects.is_empty(),
+            "no complete_system verify object in the prompt at all"
+        );
+
+        for (i, obj) in verify_objects.iter().enumerate() {
+            for key in VERIFY_FLAGS {
+                assert!(
+                    obj.contains(key),
+                    "verify object {i} is missing {key}: {obj}"
+                );
+            }
         }
+
         for stale in [
             "file_graph_complete",
             "contracts_defined",

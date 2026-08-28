@@ -9,14 +9,14 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::Arc;
 
 use futures::StreamExt;
-use serde_json::Value;
+use serde_json::{json, Value};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
 use crate::llm::{
     BackoffConfig, ContentBlock, ExponentialBackoff, LLMError, LLMProvider, LLMRequest,
     LLMResponse, Message, RetryPolicy, StopReason, StreamAccumulator,
-    StreamChunk as LLMStreamChunk, TokenUsage,
+    StreamChunk as LLMStreamChunk, TokenUsage, UNPARSED_ARGUMENTS_KEY,
 };
 
 use super::recorder::ExecutionRecorder;
@@ -93,6 +93,66 @@ fn is_tool_failure(result: &Value) -> Option<String> {
         }
     }
     None
+}
+
+/// The raw text of a tool call whose arguments the provider could not parse.
+///
+/// `None` for a normal call. `Some(raw)` means the model sent something that
+/// was neither JSON nor any recoverable dialect, and the provider preserved it
+/// under [`UNPARSED_ARGUMENTS_KEY`] rather than discarding it.
+fn unparsed_arguments(input: &Value) -> Option<&str> {
+    input.get(UNPARSED_ARGUMENTS_KEY)?.as_str()
+}
+
+/// The required parameters of `tool_name`, when the call carried no arguments
+/// at all.
+///
+/// A model can emit a syntactically perfect tool call with an empty arguments
+/// object — the system node agent does it in bursts, several rounds running.
+/// Nothing is malformed, so [`unparsed_arguments`] does not see it, and the
+/// tool answers "Missing required parameter: command": true, useless, and
+/// indistinguishable from the message it would get for sending the wrong
+/// parameter. It has nothing to correct, so it re-sends the same empty call.
+///
+/// `None` when the call carried arguments, when the tool is not in this
+/// strategy's set, or when the tool has no required parameters — `list_files
+/// {}` is a legitimate call and must reach the tool.
+fn missing_all_arguments(
+    strategy: &dyn ExecutionStrategy,
+    tool_name: &str,
+    input: &Value,
+) -> Option<Vec<String>> {
+    if !input.as_object().is_some_and(|o| o.is_empty()) {
+        return None;
+    }
+    let tools = strategy.tools();
+    let tool = tools.iter().find(|t| t.name == tool_name)?;
+    let required: Vec<String> = tool
+        .input_schema
+        .get("required")?
+        .as_array()?
+        .iter()
+        .filter_map(|v| v.as_str().map(str::to_string))
+        .collect();
+    (!required.is_empty()).then_some(required)
+}
+
+/// The corrective answer for a call that arrived with no arguments: name the
+/// parameters and show the object shape, so the next attempt has somewhere to
+/// go that the previous one did not.
+fn no_arguments_error(tool_name: &str, required: &[String]) -> Value {
+    let shape: serde_json::Map<String, Value> = required
+        .iter()
+        .map(|name| (name.clone(), json!("...")))
+        .collect();
+    json!({
+        "error": format!(
+            "Called `{tool_name}` with no arguments. It requires: {}. Send the \
+             call again with a JSON object holding them, for example {}.",
+            required.join(", "),
+            Value::Object(shape)
+        )
+    })
 }
 
 /// Hash a tool call (name + serialized input) for deduplication.
@@ -527,7 +587,38 @@ impl ExecutionEngine {
             }
             debug!(round, tool = %tool_name, "executing tool");
             sink.tool_start(tool_name, tool_id, tool_input).await;
-            let result = strategy.execute_tool(tool_name, tool_input).await;
+
+            // Arguments the provider could not parse never reach the tool.
+            // Dispatching them would run the tool with `{}` and report the
+            // first required parameter missing — which is not the model's
+            // actual mistake, gives it nothing to correct, and had agents
+            // re-sending the same broken form until the round budget ran out.
+            // Quote the raw text back instead and name the shape wanted.
+            let result = match unparsed_arguments(tool_input) {
+                Some(raw) => {
+                    warn!(round, tool = %tool_name, "tool call had unparsable arguments");
+                    json!({
+                        "error": format!(
+                            "Could not parse the arguments to `{tool_name}`. Received: {raw}\n\
+                             Arguments must be a JSON object, for example \
+                             {{\"command\": \"ls -la\"}} — not keyword arguments and not \
+                             a bare string. Send the call again in that form."
+                        )
+                    })
+                }
+                // The same dead end from the other direction: nothing arrived
+                // rather than something unreadable. Answer it here for the
+                // same reason — the tool's own "missing parameter" error
+                // cannot tell the model that it sent no arguments at all.
+                None => match missing_all_arguments(*strategy, tool_name, tool_input) {
+                    Some(required) => {
+                        warn!(round, tool = %tool_name, "tool call arrived with no arguments");
+                        no_arguments_error(tool_name, &required)
+                    }
+                    None => strategy.execute_tool(tool_name, tool_input).await,
+                },
+            };
+
             sink.tool_end(tool_name, tool_id, &result).await;
 
             // Track consecutive identical failures

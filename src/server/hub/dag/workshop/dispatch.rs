@@ -14,7 +14,8 @@ use crate::server::hub::error::HubError;
 use crate::server::state::AppState;
 
 use super::super::dag_state::{
-    resolve_output_key, wrap_in_agentless_envelope, DagContext, DagExecutionState, PortMetadata,
+    missing_agent_error, resolve_output_key, wrap_in_agentless_envelope, DagContext,
+    DagExecutionState, PortMetadata,
 };
 use super::super::single::execute_single_step;
 use super::super::utils::{StepOutput, WorkflowExecutionContext};
@@ -169,13 +170,7 @@ async fn execute_agent(
     default_engine: &ExecutionEngine,
     step_start: Instant,
 ) -> Result<WorkshopStepResult, HubError> {
-    let agent_id = step.agent_id.ok_or_else(|| {
-        HubError::Internal(anyhow::anyhow!(
-            "step {} has no agent_id for mode '{}'",
-            step.id,
-            step.execution_mode
-        ))
-    })?;
+    let agent_id = step.agent_id.ok_or_else(|| missing_agent_error(step))?;
 
     let agent = state
         .repos()

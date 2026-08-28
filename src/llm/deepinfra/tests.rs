@@ -295,7 +295,14 @@ mod tests {
         .to_string();
         let r = adapter().parse_response(body.as_bytes()).unwrap();
         match &r.content_blocks[0] {
-            ContentBlock::ToolUse { input, .. } => assert_eq!(input, &json!({})),
+            // The response still parses — that is what this test is named for.
+            // The input now carries the raw text rather than `{}`: collapsing
+            // to an empty object made the tool report its first required
+            // parameter missing, which told the model nothing about the
+            // malformed arguments it had actually sent.
+            ContentBlock::ToolUse { input, .. } => {
+                assert_eq!(input[crate::llm::types::UNPARSED_ARGUMENTS_KEY], "{oops");
+            }
             other => panic!("expected tool use, got {other:?}"),
         }
     }
@@ -583,4 +590,130 @@ mod tests {
             }
         ));
     }
+}
+
+// ── Tool-argument recovery ──────────────────────────────────────────────────
+//
+// A model that sends arguments in a dialect we do not accept must either be
+// understood or told precisely what it sent. Silently substituting `{}` — the
+// old behaviour — makes every tool report its first required parameter
+// missing, which is not the mistake the model made, so it cannot correct it.
+
+#[test]
+fn well_formed_json_arguments_pass_through() {
+    let v = super::parse_tool_arguments(r#"{"command": "ls -la"}"#);
+    assert_eq!(v["command"], "ls -la");
+}
+
+#[test]
+fn empty_arguments_are_an_empty_object() {
+    assert_eq!(super::parse_tool_arguments(""), serde_json::json!({}));
+    assert_eq!(super::parse_tool_arguments("   "), serde_json::json!({}));
+}
+
+/// The exact shape observed in the wild: Python keyword arguments with a
+/// stray closing paren, carrying a shell command full of quotes, semicolons
+/// and redirections.
+#[test]
+fn python_keyword_arguments_are_recovered() {
+    let raw = r#"command="ls -la && cat config.json 2>/dev/null; cat topology.json 2>/dev/null; ls agents 2>/dev/null")"#;
+    let v = super::parse_tool_arguments(raw);
+    assert_eq!(
+        v["command"],
+        "ls -la && cat config.json 2>/dev/null; cat topology.json 2>/dev/null; ls agents 2>/dev/null"
+    );
+}
+
+#[test]
+fn a_wrapping_function_call_is_unwrapped() {
+    let v = super::parse_tool_arguments(r#"run_command({"command": "pwd"})"#);
+    assert_eq!(v["command"], "pwd");
+
+    let v = super::parse_tool_arguments(r#"run_command(command="pwd")"#);
+    assert_eq!(v["command"], "pwd");
+}
+
+#[test]
+fn a_fenced_json_object_is_unwrapped() {
+    let v = super::parse_tool_arguments("```json\n{\"command\": \"pwd\"}\n```");
+    assert_eq!(v["command"], "pwd");
+}
+
+#[test]
+fn single_quoted_keyword_values_are_recovered() {
+    let v = super::parse_tool_arguments("path='src/main.rs'");
+    assert_eq!(v["path"], "src/main.rs");
+}
+
+#[test]
+fn multiple_keyword_arguments_are_recovered() {
+    let v = super::parse_tool_arguments(r#"path="a.rs", offset=10, limit=20"#);
+    assert_eq!(v["path"], "a.rs");
+    assert_eq!(v["offset"], 10);
+    assert_eq!(v["limit"], 20);
+}
+
+/// Escapes inside a double-quoted value survive, because a recovered heredoc
+/// is mostly newlines and quotes.
+#[test]
+fn escapes_inside_a_recovered_value_are_decoded() {
+    let v = super::parse_tool_arguments(r#"command="cat > a.json << 'EOF'\n{\"k\": 1}\nEOF""#);
+    assert_eq!(v["command"], "cat > a.json << 'EOF'\n{\"k\": 1}\nEOF");
+}
+
+/// Unrecoverable input keeps the raw text so the engine can quote it back,
+/// instead of collapsing to `{}` and provoking a misleading "missing
+/// parameter" reply.
+#[test]
+fn unrecoverable_arguments_keep_the_raw_text() {
+    let v = super::parse_tool_arguments("just some prose the model wrote");
+    assert_eq!(
+        v[crate::llm::types::UNPARSED_ARGUMENTS_KEY],
+        "just some prose the model wrote"
+    );
+    assert!(v.get("command").is_none());
+}
+
+/// A truncated tool call — the max_tokens case — is not recoverable and must
+/// not be guessed at.
+#[test]
+fn truncated_json_is_reported_not_invented() {
+    let v = super::parse_tool_arguments(r#"{"command": "cat > big.md << 'EOF"#);
+    assert!(v.get(crate::llm::types::UNPARSED_ARGUMENTS_KEY).is_some());
+}
+
+/// Unquoted values are where the two dialects collide: a shell command runs
+/// past a comma, a discrete argument does not. Whitespace tells them apart.
+#[test]
+fn an_unquoted_shell_command_keeps_everything_after_its_comma() {
+    let v = super::parse_tool_arguments("command=ls -la, then look in src");
+    assert_eq!(v["command"], "ls -la, then look in src");
+    assert!(v.get("then").is_none());
+}
+
+/// A comma inside a quoted shell argument must not split the command. The
+/// value has whitespace, so it is a command, `b=2` inside the quotes
+/// notwithstanding.
+#[test]
+fn a_comma_inside_a_shell_argument_does_not_split_it() {
+    let v = super::parse_tool_arguments("command=curl -d 'a=1, b=2' http://x");
+    assert_eq!(v["command"], "curl -d 'a=1, b=2' http://x");
+    assert!(v.get("b").is_none());
+}
+
+/// Two unquoted arguments, neither with whitespace in it. This used to be
+/// swallowed whole as `{"path": "a.rs, offset=10"}` — an invented value the
+/// model never sent.
+#[test]
+fn unquoted_multiple_keyword_arguments_are_split() {
+    let v = super::parse_tool_arguments("path=a.rs, offset=10");
+    assert_eq!(v["path"], "a.rs");
+    assert_eq!(v["offset"], 10);
+}
+
+/// Prose after a comma is not a second argument.
+#[test]
+fn prose_after_a_comma_stays_in_the_value() {
+    let v = super::parse_tool_arguments("summary=done, nothing else to report");
+    assert_eq!(v["summary"], "done, nothing else to report");
 }

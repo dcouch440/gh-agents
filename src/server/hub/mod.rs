@@ -249,7 +249,7 @@ pub async fn run_workflow_agent_chat(
     // 2. System prompt is static — <current_state> rides the user message
     //    instead (see WorkflowAgentStrategy::build_messages) so the prompt
     //    stays cacheable.
-    let system_prompt = roles::WORKFLOW_AGENT_SYSTEM.to_string();
+    let system_prompt = roles::workflow_agent_system().to_string();
 
     // 3. Create strategy + engine
     // Note: user message is already persisted by send_session_chat API handler

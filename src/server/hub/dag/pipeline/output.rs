@@ -12,6 +12,25 @@ use super::super::DagContext;
 use super::types::DesignedAgentPrompt;
 use crate::server::services::system_node::normalize_agent_name;
 
+/// Per-step cap on the upstream outputs block.
+const MAX_UPSTREAM_SECTION_BYTES: usize = 4000;
+
+/// Truncate to at most `max_bytes`, never mid-character.
+///
+/// `&s[..n]` panics when `n` lands inside a multi-byte character, so a single
+/// non-ASCII byte straddling the cap used to take down the whole step. Walks
+/// back to the nearest boundary instead.
+fn truncate_at_char_boundary(s: &str, max_bytes: usize) -> String {
+    if s.len() <= max_bytes {
+        return s.to_string();
+    }
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}... [truncated]", &s[..end])
+}
+
 /// Compose workforce output: agent results keyed by normalized name.
 pub(crate) fn compose_workforce_output(agent_outputs: &[(String, String)]) -> JsonValue {
     let mut composite = serde_json::Map::new();
@@ -136,7 +155,19 @@ pub(crate) fn build_upstream_outputs_block(
 
     let mut sections: Vec<String> = Vec::new();
 
-    for (step_id, env) in envelopes {
+    // Iterate in board order, not `HashMap` order. The agent reads these as
+    // "the steps upstream of you"; a set of sections that reshuffles between
+    // runs is unreproducible for anyone debugging a run, and puts the steps in
+    // an order that contradicts the board the person drew.
+    let mut ordered: Vec<(&Uuid, &StepExecutionEnvelope)> = envelopes.iter().collect();
+    ordered.sort_by_key(|(step_id, _)| {
+        step_map
+            .get(*step_id)
+            .map(|s| (s.display_order, s.id))
+            .unwrap_or((i32::MAX, **step_id))
+    });
+
+    for (step_id, env) in ordered {
         // Skip context and input steps — already handled by user_notes_block
         if let Some(step) = step_map.get(step_id) {
             if step.execution_mode == "context" || step.execution_mode == "input" {
@@ -160,11 +191,7 @@ pub(crate) fn build_upstream_outputs_block(
             continue;
         }
 
-        let truncated = if content.len() > 4000 {
-            format!("{}... [truncated]", &content[..4000])
-        } else {
-            content.clone()
-        };
+        let truncated = truncate_at_char_boundary(&content, MAX_UPSTREAM_SECTION_BYTES);
         sections.push(format!("### {}\n{}", name, truncated));
     }
 

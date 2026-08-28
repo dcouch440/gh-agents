@@ -29,9 +29,9 @@ pub use broadcast::broadcast_workflow_event;
 pub use orchestration::execute_workflow_via_engine;
 
 pub(crate) use dag_state::{
-    broadcast_step_failure_if_real, build_incoming_edge_index, prefetch_port_metadata,
-    resolve_output_key, resolve_step_port_inputs, step_display_name, wrap_in_agentless_envelope,
-    wrap_in_envelope, DagContext, DagExecutionState, PortMetadata,
+    broadcast_step_failure_if_real, build_incoming_edge_index, missing_agent_error,
+    prefetch_port_metadata, resolve_output_key, resolve_step_port_inputs, step_display_name,
+    wrap_in_agentless_envelope, wrap_in_envelope, DagContext, DagExecutionState, PortMetadata,
 };
 
 pub(crate) use orchestration::run_dag_loop;

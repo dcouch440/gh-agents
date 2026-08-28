@@ -632,6 +632,13 @@ static CONTAINER_CREATE_SEMAPHORE: Lazy<Arc<Semaphore>> = Lazy::new(|| {
 
 /// Environment variables injected when a workspace mount is active.
 /// Download caches go to /tmp/ to avoid polluting the overlay.
+///
+/// `PATH` carries the two install prefixes that are redirected into the
+/// workspace. Without it the redirect only half works: `npm install -g foo`
+/// puts the binary at `/workspace/.npm/bin/foo`, it survives into the next
+/// step because the workspace does — and the next step's agent types `foo`
+/// and gets "command not found". The prompts tell agents these installs
+/// persist; this is what makes that true.
 const WORKSPACE_ENV_VARS: &[(&str, &str)] = &[
     ("PIP_CACHE_DIR", "/tmp/pip-cache"),
     ("PYTHONDONTWRITEBYTECODE", "1"),
@@ -639,6 +646,10 @@ const WORKSPACE_ENV_VARS: &[(&str, &str)] = &[
     ("npm_config_cache", "/tmp/npm-cache"),
     ("CARGO_HOME", "/workspace/.cargo"),
     ("XDG_CACHE_HOME", "/tmp/cache"),
+    (
+        "PATH",
+        "/workspace/.npm/bin:/workspace/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    ),
 ];
 
 /// Build the `docker create` arguments for a container.

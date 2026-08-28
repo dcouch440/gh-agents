@@ -314,6 +314,17 @@ pub struct Tool {
     pub input_schema: serde_json::Value,
 }
 
+/// Key a provider sets on `ToolUse.input` when the model's arguments could not
+/// be parsed and could not be recovered.
+///
+/// Carries the raw text the model actually sent. The execution engine checks
+/// for it before dispatching and answers with the raw text quoted back, so the
+/// model is told what was wrong with what it sent. Without it a mangled call
+/// arrives as `{}` and every tool reports its first required parameter
+/// missing — which is a different problem from the one the model has, and it
+/// retries the same broken form until the round budget runs out.
+pub const UNPARSED_ARGUMENTS_KEY: &str = "__unparsed_arguments";
+
 /// A content block in an LLM message (text, tool use, tool result, or image).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]

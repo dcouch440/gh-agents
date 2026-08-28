@@ -388,14 +388,23 @@ async fn execute_single_agent(
     // Text lives in config/runtime_agent/system.md alongside the other agents'
     // prompts. Gated on the container: without one there is no run_command and
     // the guidance would be false.
+    //
+    // The designed prompt is wrapped rather than merely concatenated. Two
+    // prompts joined by a blank line read as one document, and the agent
+    // treats the operational half as part of its persona — which is how a
+    // pricing analyst ends up describing itself as a workspace. The tag is
+    // also what lets the two halves be reordered later: static-first is the
+    // cacheable order (this file is byte-identical for every agent in every
+    // step; the designed prompt is unique per agent), and with a named seam
+    // that flip is a one-line change instead of a prompt rewrite.
+    //
+    // Both branches wrap, so the agent sees one shape whether or not the run
+    // has a container.
+    let expertise = format!("<expertise>\n{}\n</expertise>", designed.system_prompt);
     let system_prompt = if env.container_handle.is_some() {
-        format!(
-            "{}\n\n{}",
-            designed.system_prompt,
-            roles::WORKFORCE_AGENT.system
-        )
+        format!("{}\n\n{}", expertise, roles::WORKFORCE_AGENT.system_text())
     } else {
-        designed.system_prompt.clone()
+        expertise
     };
 
     // Build task prompt: <previous_step> + <assignment> + <deliverable>
@@ -413,7 +422,6 @@ async fn execute_single_agent(
         assignment: designed.assignment.clone(),
         expected_output: designed.expected_output.clone(),
         has_container: env.container_handle.is_some(),
-        read_only: designed.read_only,
     }
     .build();
 
@@ -688,19 +696,26 @@ async fn synthesize_tool_summary(
 /// Block order:
 /// 1. `<previous_step>` — orientation from whoever ran before (omitted if empty)
 /// 2. `<assignment>` — what to do (always present)
-/// 3. `<deliverable>` — the file contract: what the saved file must contain
-///    (optional, from designer)
+/// 3. `<deliverable>` — the output contract, written by the designer: what to
+///    produce and where it goes (optional)
+///
+/// The builder does not append a directive about where output belongs. That is
+/// `expected_output`'s job, and the designer is the only layer that knows the
+/// answer: whether the deliverable is one file, several, or — for a `read_only`
+/// agent, a flag the designer itself sets — a report returned in the reply. A
+/// hardcoded "save this to a file" contradicted the designed contract every
+/// time an agent legitimately produced more than one file, or none.
 pub(super) struct TaskPromptBuilder {
     pub(super) previous_step: String,
     pub(super) assignment: String,
     pub(super) expected_output: Option<String>,
-    /// Whether the agent has a workspace container. Without one there are no
-    /// workspace tools, so the deliverable can only be the response itself.
+    /// Whether the agent has a workspace container.
+    ///
+    /// The one fact here the designer cannot know — it depends on the run's
+    /// container config, not the design. Without a container there are no
+    /// workspace tools at all, so a `<deliverable>` describing a saved file is
+    /// unachievable and the agent is told so.
     pub(super) has_container: bool,
-    /// Whether the designer marked this agent read-only. Its findings are the
-    /// deliverable; telling it to save a file with a tool it does not have
-    /// produces a guaranteed dead end.
-    pub(super) read_only: bool,
 }
 
 impl TaskPromptBuilder {
@@ -720,23 +735,15 @@ impl TaskPromptBuilder {
             if !expected.is_empty() {
                 prompt.push_str(&format!("\n\n<deliverable>\n{}\n</deliverable>", expected));
 
-                // The save directive is only true with a container behind it
-                // and write access to use. Without either, the response is the
-                // only thing downstream steps ever see.
-                prompt.push_str(match (self.has_container, self.read_only) {
-                    (_, true) => {
-                        "\n\nYou have no write access in this step. Put your findings in your \
-                         response — they are the deliverable."
-                    }
-                    (true, false) => {
-                        "\n\nSave this to a file with write_file before you reply. Your response \
-                         should be a short receipt naming the file, not the deliverable itself."
-                    }
-                    (false, false) => {
-                        "\n\nYou have no workspace in this step — put the deliverable itself in \
-                         your response."
-                    }
-                });
+                // Only the container fact is stated here, and only when it
+                // makes the designed contract impossible. Everything else about
+                // where output goes belongs to `expected_output`.
+                if !self.has_container {
+                    prompt.push_str(
+                        "\n\nThere is no workspace in this step and no tools to write one, \
+                         so whatever the deliverable describes has to be in your response.",
+                    );
+                }
             }
         }
 

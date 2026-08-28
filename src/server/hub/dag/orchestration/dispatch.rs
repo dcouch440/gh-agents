@@ -13,8 +13,8 @@ use super::super::broadcast::broadcast_workflow_event;
 use super::super::single::execute_single_step;
 use super::super::utils;
 use super::super::{
-    resolve_output_key, step_display_name, wrap_in_agentless_envelope, DagContext,
-    DagExecutionState, StepOutput,
+    missing_agent_error, resolve_output_key, step_display_name, wrap_in_agentless_envelope,
+    DagContext, DagExecutionState, StepOutput,
 };
 
 /// Route a step to the correct executor based on its execution mode.
@@ -82,13 +82,7 @@ async fn execute_with_agent(
     dag_state: &mut DagExecutionState,
     step: &WorkflowStepRow,
 ) -> Result<(), HubError> {
-    let agent_id = step.agent_id.ok_or_else(|| {
-        HubError::Internal(anyhow::anyhow!(
-            "step {} has no agent_id for mode '{}'",
-            step.id,
-            step.execution_mode
-        ))
-    })?;
+    let agent_id = step.agent_id.ok_or_else(|| missing_agent_error(step))?;
 
     let agent = load_agent(dag, step.id, agent_id).await?;
     let step_engine = resolve_provider(dag, step.id, &agent).await?;
