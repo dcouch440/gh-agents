@@ -5,9 +5,17 @@
 
 use serde_json::{json, Value};
 
-use crate::execution::{ExecutionContext, FileOps, GitOps, Sandbox, TestRunner};
+use crate::execution::{
+    ExecutionContext, FileOps, GitOps, Sandbox, TestRunner, LIST_FILES_MAX_DEPTH,
+    LIST_FILES_MAX_ENTRIES,
+};
 
 use super::file_io::{edit_file_core, LocalFileIO};
+
+/// Depth `list_files` walks when the caller does not ask for one. Matches the
+/// container path's default so a listing does not change shape with the
+/// execution backend.
+const DEFAULT_LIST_DEPTH: u32 = 3;
 
 pub(super) async fn exec_read_file(input: &Value, ctx: &ExecutionContext) -> Value {
     let path = match input["path"].as_str() {
@@ -62,19 +70,24 @@ pub(super) async fn exec_edit_file(input: &Value, ctx: &ExecutionContext) -> Val
 
 pub(super) async fn exec_list_files(input: &Value, ctx: &ExecutionContext) -> Value {
     let path = input["path"].as_str().unwrap_or(".");
+    let depth = input["depth"]
+        .as_u64()
+        .map(|d| d as u32)
+        .unwrap_or(DEFAULT_LIST_DEPTH)
+        .clamp(1, LIST_FILES_MAX_DEPTH);
+
     let file_ops = FileOps::new(ctx.clone());
     let full_path = ctx.project_root.join(path);
-    match file_ops.list_dir(&full_path).await {
-        Ok(entries) => {
-            let names: Vec<String> = entries
-                .iter()
-                .filter_map(|p| {
-                    p.strip_prefix(&ctx.project_root)
-                        .ok()
-                        .map(|rel| rel.to_string_lossy().to_string())
-                })
-                .collect();
-            json!({ "files": names })
+    match file_ops
+        .list_tree(&full_path, depth, LIST_FILES_MAX_ENTRIES)
+        .await
+    {
+        Ok((files, dropped)) => {
+            let mut out = json!({ "files": files, "depth": depth });
+            if dropped > 0 {
+                out["truncated"] = json!(dropped);
+            }
+            out
         }
         Err(e) => json!({ "error": e.to_string() }),
     }

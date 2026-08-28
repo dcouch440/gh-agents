@@ -15,8 +15,7 @@ mod tests {
         let mut engine = DiagnosticsEngine::new();
         engine.record_file_write("nexor/index.html".into(), ChangeType::Created, 4096);
 
-        let (files, dropped) = engine.produced_files(10);
-        assert_eq!(dropped, 0);
+        let files = engine.produced_files();
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].path, PathBuf::from("nexor/index.html"));
         assert_eq!(files[0].size, 4096);
@@ -61,7 +60,7 @@ mod tests {
         engine.record_file_write("spec.md".into(), ChangeType::Created, 100);
         engine.record_file_write("spec.md".into(), ChangeType::Modified, 8000);
 
-        let (files, _) = engine.produced_files(10);
+        let files = engine.produced_files();
         assert_eq!(files.len(), 1);
         assert_eq!(files[0].size, 8000);
     }

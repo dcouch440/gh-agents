@@ -430,6 +430,8 @@ pub mod roles {
 
 #[cfg(test)]
 mod tests {
+    use regex::Regex;
+
     use super::*;
 
     // ── Config tests ─────────────────────────────────────────────────────
@@ -535,6 +537,62 @@ mod tests {
                 "{name} ships an unstripped comment to the model"
             );
             assert!(!text.is_empty(), "{name} stripped down to nothing");
+        }
+    }
+
+    /// Every `<tool_call>` in every example is a call the agent could actually
+    /// send.
+    ///
+    /// The three agent prompts argue this at length in their own comments and
+    /// have twice regressed to bare-shell examples: `run_command` takes a
+    /// `command` STRING, so a heredoc shown outside the JSON envelope depicts a
+    /// call that arrives as unparsable arguments or as `run_command {}`. The
+    /// examples are the part of a prompt a model copies hardest, so a malformed
+    /// one costs a production round-trip the agent cannot correct.
+    ///
+    /// The nested assertion is the one that actually catches things: the system
+    /// node agent has no file tools, so every agent definition it writes goes
+    /// through a heredoc inside that JSON string, double-escaped. A swallowed
+    /// quote there is invisible on the page and is exactly what
+    /// `write_validation_errors` fires on in production.
+    #[test]
+    fn every_example_tool_call_is_sendable_json() {
+        let call_re = Regex::new(r#"(?s)<tool_call name="[^"]+">\s*(\{.*?\})\s*</tool_call>"#)
+            .expect("tool_call regex");
+        let heredoc_re = Regex::new(r"(?s)<< 'EOF'\n(.*?)\nEOF").expect("heredoc regex");
+
+        let prompts: Vec<(&str, &str)> = vec![
+            ("system_agent", roles::system_node_agent_system()),
+            ("workflow_agent", roles::workflow_agent_system()),
+            ("runtime_agent", roles::WORKFORCE_AGENT.system_text()),
+        ];
+
+        for (name, text) in prompts {
+            let calls: Vec<_> = call_re.captures_iter(text).collect();
+            assert!(
+                calls.len() >= 5,
+                "{name} has {} example tool calls — the regex stopped matching",
+                calls.len()
+            );
+
+            for cap in calls {
+                let raw = &cap[1];
+                let parsed: serde_json::Value = serde_json::from_str(raw)
+                    .unwrap_or_else(|e| panic!("{name} has an unsendable tool_call: {e}\n{raw}"));
+
+                let Some(command) = parsed.get("command").and_then(|c| c.as_str()) else {
+                    continue;
+                };
+                for h in heredoc_re.captures_iter(command) {
+                    let body = h[1].trim();
+                    if !body.starts_with('{') {
+                        continue;
+                    }
+                    serde_json::from_str::<serde_json::Value>(body).unwrap_or_else(|e| {
+                        panic!("{name} writes a malformed JSON file in a heredoc: {e}\n{body}")
+                    });
+                }
+            }
         }
     }
 

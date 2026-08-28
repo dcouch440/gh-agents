@@ -677,14 +677,50 @@ mod tests {
     // ── list_files ──────────────────────────────────────────────────────
 
     #[tokio::test]
-    async fn list_files_filters_dots() {
+    async fn list_files_returns_a_tree_with_directories_marked() {
+        // `find` prints paths under the start directory; the shell loop adds the
+        // trailing slash. Both are stripped back to paths relative to `path`.
         let mut mock = MockDockerCli::new();
         mock.expect_run()
-            .returning(|_| Ok(success_output(".\n..\nfoo\nbar\n")));
+            .returning(|_| Ok(success_output("./README.md\n./src/\n./src/main.rs\n")));
 
         let handle = make_handle(Arc::new(mock));
-        let files = handle.list_files(".").await.unwrap();
-        assert_eq!(files, vec!["foo", "bar"]);
+        let (files, dropped) = handle.list_files(".", 3).await.unwrap();
+        assert_eq!(files, vec!["README.md", "src/", "src/main.rs"]);
+        assert_eq!(dropped, 0);
+    }
+
+    #[tokio::test]
+    async fn list_files_caps_entries_and_reports_the_remainder() {
+        // A silently truncated listing reads as a complete one, so the count of
+        // what was dropped has to come back with it.
+        let over = LIST_FILES_MAX_ENTRIES + 25;
+        let stdout: String = (0..over).map(|i| format!("./f{i}\n")).collect();
+        let mut mock = MockDockerCli::new();
+        mock.expect_run()
+            .returning(move |_| Ok(success_output(&stdout)));
+
+        let handle = make_handle(Arc::new(mock));
+        let (files, dropped) = handle.list_files(".", 3).await.unwrap();
+        assert_eq!(files.len(), LIST_FILES_MAX_ENTRIES);
+        assert_eq!(dropped, 25);
+    }
+
+    #[tokio::test]
+    async fn list_files_clamps_depth_to_the_maximum() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run().returning(|args| {
+            let joined = args.join(" ");
+            assert!(
+                joined.contains(&format!("-maxdepth {LIST_FILES_MAX_DEPTH}")),
+                "{joined}"
+            );
+            Ok(success_output(""))
+        });
+
+        let handle = make_handle(Arc::new(mock));
+        let (files, _) = handle.list_files(".", 99).await.unwrap();
+        assert!(files.is_empty());
     }
 
     // ── git ─────────────────────────────────────────────────────────────

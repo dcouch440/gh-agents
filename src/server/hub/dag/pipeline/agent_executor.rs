@@ -10,6 +10,9 @@ use tracing::{error, info, warn};
 
 use crate::config::protocols::{roles, WORKFORCE};
 use crate::db::traits::CreateAgentExecutionInput;
+use std::collections::HashMap;
+
+use crate::execution::diagnostics::types::FileChange;
 use crate::execution::diagnostics::workspace::digest::format_size;
 use crate::execution::diagnostics::DiagnosticsEngine;
 use crate::server::hub::error::HubError;
@@ -34,8 +37,92 @@ use super::types::{
     WorkforceStepEnv,
 };
 
-/// Maximum files named in an agent's passdown manifest.
+/// Maximum entries named in an agent's passdown manifest, after directories
+/// have been rolled up.
 const MAX_PASSDOWN_FILES: usize = 10;
+
+/// Collapse a list of changed files into manifest entries, rolling any
+/// directory holding more than one file into a single line.
+///
+/// A deliverable can be a directory, and a flat list of its contents is the
+/// wrong shape for the passdown twice over: it spends the whole cap on one
+/// deliverable, and it says nothing about the deliverable being one thing.
+/// `tally/ (12 files, 38.4 KB)` is both shorter and more true than twelve
+/// paths, ten of which fit.
+///
+/// Grouping is on the first path component only. Deeper nesting stays inside
+/// its top-level group, so a source tree is one entry however deep it goes.
+/// Files at the root are never grouped — each one is its own entry, which is
+/// what keeps the single-file case reading exactly as it did before.
+pub(crate) fn passdown_entries(files: &[FileChange]) -> (Vec<String>, usize) {
+    /// One top-level path component's worth of changes.
+    struct Group<'a> {
+        size: u64,
+        count: usize,
+        /// Kept so a group that turns out to hold one file can name that file
+        /// rather than reporting `dir/ (1 file, …)`, which is strictly less
+        /// information than the path it replaced.
+        first: &'a FileChange,
+    }
+
+    let mut order: Vec<String> = Vec::new();
+    let mut groups: HashMap<String, Group> = HashMap::new();
+
+    for f in files {
+        let mut components = f.path.components();
+        let Some(first) = components.next() else {
+            continue;
+        };
+        // Files at the workspace root are their own group of one and stay
+        // individually named — the single-file case reads exactly as before.
+        let key = if components.next().is_some() {
+            format!("{}/", first.as_os_str().to_string_lossy())
+        } else {
+            f.path.display().to_string()
+        };
+
+        groups
+            .entry(key.clone())
+            .and_modify(|g| {
+                g.size += f.size;
+                g.count += 1;
+            })
+            .or_insert_with(|| {
+                order.push(key);
+                Group {
+                    size: f.size,
+                    count: 1,
+                    first: f,
+                }
+            });
+    }
+
+    let mut entries: Vec<(String, u64)> = order
+        .into_iter()
+        .map(|key| {
+            let g = &groups[&key];
+            let label = if g.count == 1 {
+                format!(
+                    "{} ({}, {})",
+                    g.first.path.display(),
+                    g.first.change_type,
+                    format_size(g.first.size)
+                )
+            } else {
+                format!("{key} ({} files, {})", g.count, format_size(g.size))
+            };
+            (label, g.size)
+        })
+        .collect();
+
+    // Largest first so the deliverable leads, label as a tiebreak so the line
+    // is deterministic.
+    entries.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+
+    let dropped = entries.len().saturating_sub(MAX_PASSDOWN_FILES);
+    entries.truncate(MAX_PASSDOWN_FILES);
+    (entries.into_iter().map(|(l, _)| l).collect(), dropped)
+}
 
 /// Append a `files:` line naming what the agent actually wrote to disk.
 ///
@@ -51,23 +138,13 @@ async fn append_files_line(
         return content;
     };
 
-    let (files, dropped) = diag.lock().await.produced_files(MAX_PASSDOWN_FILES);
+    let files = diag.lock().await.produced_files();
     if files.is_empty() {
         return content;
     }
 
-    let mut line = files
-        .iter()
-        .map(|f| {
-            format!(
-                "{} ({}, {})",
-                f.path.display(),
-                f.change_type,
-                format_size(f.size)
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
+    let (entries, dropped) = passdown_entries(&files);
+    let mut line = entries.join(", ");
 
     if dropped > 0 {
         line.push_str(&format!(" (+{dropped} more)"));

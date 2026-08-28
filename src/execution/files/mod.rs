@@ -152,6 +152,51 @@ impl FileOps {
         Ok(entries)
     }
 
+    /// Walk a directory to `max_depth` levels, returning paths relative to it
+    /// with a trailing `/` on every directory.
+    ///
+    /// The local counterpart to `ContainerHandle::list_files`, and it filters
+    /// on the same rule — `diagnostics::workspace::is_noise` — so a listing
+    /// looks the same whichever side of the container boundary it came from.
+    /// Returns the entries and how many were dropped by the cap.
+    pub async fn list_tree(
+        &self,
+        path: impl AsRef<Path>,
+        max_depth: u32,
+        max_entries: usize,
+    ) -> Result<(Vec<String>, usize), FileError> {
+        let root = self.resolve_path(path.as_ref())?;
+        let mut out = Vec::new();
+        let mut queue = vec![(root.clone(), 1u32)];
+
+        while let Some((dir, depth)) = queue.pop() {
+            let mut entries = fs::read_dir(&dir).await?;
+            while let Some(entry) = entries.next_entry().await? {
+                let full = entry.path();
+                let Ok(rel) = full.strip_prefix(&root) else {
+                    continue;
+                };
+                if crate::execution::diagnostics::workspace::is_noise(rel) {
+                    continue;
+                }
+                let is_dir = entry.file_type().await.map(|t| t.is_dir()).unwrap_or(false);
+                let mut name = rel.to_string_lossy().to_string();
+                if is_dir {
+                    name.push('/');
+                    if depth < max_depth {
+                        queue.push((full, depth + 1));
+                    }
+                }
+                out.push(name);
+            }
+        }
+
+        out.sort();
+        let dropped = out.len().saturating_sub(max_entries);
+        out.truncate(max_entries);
+        Ok((out, dropped))
+    }
+
     /// Resolve a path relative to project root and validate it
     fn resolve_path(&self, path: &Path) -> Result<PathBuf, FileError> {
         let full_path = if path.is_absolute() {

@@ -19,6 +19,8 @@ pub(crate) use runner::{run_agent_execution, AgentExecutionInput};
 
 // Re-exports for test access (tests.rs imports via crate path)
 #[cfg(test)]
+pub(crate) use agent_executor::passdown_entries;
+#[cfg(test)]
 pub(crate) use output::{
     build_filtered_outputs_block, build_upstream_outputs_block, compose_workforce_output,
     compute_execution_levels, filter_outputs_for_agent,
