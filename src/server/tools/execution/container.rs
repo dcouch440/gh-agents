@@ -10,14 +10,8 @@ use crate::execution::{
 };
 
 use super::file_io::{edit_file_core, ContainerFileIO};
+use super::{list_files_response, DEFAULT_LIST_DEPTH};
 use crate::server::tools::shared::{is_tool_allowed, tool_not_allowed_error};
-
-/// Depth `list_files` walks when the caller does not ask for one.
-///
-/// Three levels reaches `src/server/handlers/` from the workspace root — deep
-/// enough to see the shape of a decomposed deliverable in one call, shallow
-/// enough that a repository does not flood the result.
-const DEFAULT_LIST_DEPTH: u32 = 3;
 
 /// Execute a tool inside a persistent Docker container.
 ///
@@ -206,22 +200,16 @@ async fn container_list_files(input: &Value, handle: &ContainerHandle) -> Value 
             return json!({ "error": e.to_string() });
         }
     }
+    // Clamped here rather than only inside `list_files` so the depth the
+    // response reports is the depth the listing was actually taken at.
     let depth = input["depth"]
         .as_u64()
         .map(|d| d as u32)
-        .unwrap_or(DEFAULT_LIST_DEPTH);
+        .unwrap_or(DEFAULT_LIST_DEPTH)
+        .clamp(1, LIST_FILES_MAX_DEPTH);
 
     match handle.list_files(path, depth).await {
-        // `dropped` is reported rather than swallowed: a silently truncated
-        // listing reads as a complete one, and an agent looking for a file
-        // that is not in it concludes the file does not exist.
-        Ok((files, dropped)) => {
-            let mut out = json!({ "files": files, "depth": depth.min(LIST_FILES_MAX_DEPTH) });
-            if dropped > 0 {
-                out["truncated"] = json!(dropped);
-            }
-            out
-        }
+        Ok((files, dropped)) => list_files_response(path, files, dropped, depth),
         Err(e) => json!({ "error": e.to_string() }),
     }
 }

@@ -707,6 +707,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn list_files_guards_the_directory_before_the_pipeline() {
+        // A pipeline exits with its last stage's status, so `sort` would
+        // report success for a `find` that failed. The guard is what makes a
+        // missing path an error instead of an empty listing.
+        let mut mock = MockDockerCli::new();
+        mock.expect_run().returning(|args| {
+            let joined = args.join(" ");
+            assert!(joined.contains("if [ ! -d 'reports' ]"), "{joined}");
+            assert!(joined.contains("exit 1"), "{joined}");
+            Ok(success_output(""))
+        });
+
+        let handle = make_handle(Arc::new(mock));
+        handle.list_files("reports", 3).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn list_files_errors_when_the_path_is_not_a_directory() {
+        let mut mock = MockDockerCli::new();
+        mock.expect_run()
+            .returning(|_| Ok(failure_output(1, "list_files: not a directory: nope")));
+
+        let handle = make_handle(Arc::new(mock));
+        let err = handle.list_files("nope", 3).await.unwrap_err();
+        assert!(matches!(err, ContainerError::CommandFailed { .. }), "{err}");
+    }
+
+    #[tokio::test]
     async fn list_files_clamps_depth_to_the_maximum() {
         let mut mock = MockDockerCli::new();
         mock.expect_run().returning(|args| {

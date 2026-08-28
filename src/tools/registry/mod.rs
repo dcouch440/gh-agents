@@ -229,9 +229,14 @@ Directories come back with a trailing `/`, so one call shows you the shape of
 what is there — a step that produced a directory of source files reads as a
 tree, not as one opaque name.
 
+Every entry comes back as a path from the workspace root, so you can pass one
+straight to read_file or edit_file without joining it back onto `path`.
+
 Run it once at the start to see what previous steps left you, and again when a
 file you expected is missing. More reliable than `ls` for that: you get a list
-rather than shell output that may be truncated.
+rather than shell output that may be truncated, and a `path` that does not
+exist comes back as an error rather than as an empty listing you would read as
+"the step produced nothing".
 
 Depth defaults to 3 levels. Raise it to see deeper, lower it to skim a large
 tree. Dotted directories, node_modules, __pycache__ and site-packages are never

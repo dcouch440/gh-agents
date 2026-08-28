@@ -11,11 +11,7 @@ use crate::execution::{
 };
 
 use super::file_io::{edit_file_core, LocalFileIO};
-
-/// Depth `list_files` walks when the caller does not ask for one. Matches the
-/// container path's default so a listing does not change shape with the
-/// execution backend.
-const DEFAULT_LIST_DEPTH: u32 = 3;
+use super::{list_files_response, DEFAULT_LIST_DEPTH};
 
 pub(super) async fn exec_read_file(input: &Value, ctx: &ExecutionContext) -> Value {
     let path = match input["path"].as_str() {
@@ -82,13 +78,7 @@ pub(super) async fn exec_list_files(input: &Value, ctx: &ExecutionContext) -> Va
         .list_tree(&full_path, depth, LIST_FILES_MAX_ENTRIES)
         .await
     {
-        Ok((files, dropped)) => {
-            let mut out = json!({ "files": files, "depth": depth });
-            if dropped > 0 {
-                out["truncated"] = json!(dropped);
-            }
-            out
-        }
+        Ok((files, dropped)) => list_files_response(path, files, dropped, depth),
         Err(e) => json!({ "error": e.to_string() }),
     }
 }
