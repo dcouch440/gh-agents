@@ -40,6 +40,14 @@ pub trait AgentExecutionRepo: Send + Sync {
         output: Option<String>,
         structured_output: Option<serde_json::Value>,
     ) -> Result<AgentExecutionRow>;
+    /// Mark every in-flight agent execution whose parent run is already
+    /// terminal as failed. Returns how many rows were repaired.
+    ///
+    /// Run at startup. Two paths leak a permanent `running` row: a panicking
+    /// agent task, which never reaches the failure arm at all, and any process
+    /// that dies mid-run. Both leave the UI spinning a node forever, because
+    /// `get_running_step_ids_for_run` reads exactly this state.
+    async fn fail_orphaned_agent_executions(&self) -> Result<u64>;
 
     // --- Execution Messages ---
     async fn create_execution_message(

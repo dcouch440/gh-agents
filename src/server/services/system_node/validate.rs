@@ -111,6 +111,15 @@ pub(crate) fn validate_agent(content: &str) -> Result<(), String> {
         }
     }
 
+    // Optional, defaults to false. Rejected when present-but-wrong: a
+    // non-boolean deserializes to false, which silently hands a QA agent full
+    // write access — the drift that let run dd27d008's verifier start editing.
+    if let Some(v) = obj.get("read_only") {
+        if !v.is_boolean() {
+            return Err("\"read_only\" must be a boolean (true or false)".to_string());
+        }
+    }
+
     Ok(())
 }
 

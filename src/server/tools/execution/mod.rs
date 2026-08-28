@@ -64,53 +64,14 @@ pub fn builtin_tool_rows() -> Vec<ToolRow> {
 /// Return all execution tool definitions for the Anthropic API.
 pub fn execution_tools() -> Vec<Tool> {
     vec![
-        Tool {
-            name: "read_file".into(),
-            description: "Read the contents of a file.".into(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "path": { "type": "string", "description": "Relative path from project root" }
-                },
-                "required": ["path"]
-            }),
-        },
-        Tool {
-            name: "write_file".into(),
-            description: "Write content to a file. Creates parent directories if needed.".into(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "path": { "type": "string", "description": "Relative path from project root" },
-                    "content": { "type": "string", "description": "File content to write" }
-                },
-                "required": ["path", "content"]
-            }),
-        },
-        Tool {
-            name: "edit_file".into(),
-            description: "Edit a file by replacing an exact string match. Provide old_string (the existing code) and new_string (the replacement). old_string must match exactly one location in the file. Prefer this over write_file for modifying existing files.".into(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "path": { "type": "string", "description": "Relative path from project root" },
-                    "old_string": { "type": "string", "description": "Exact existing text to find and replace. Must be unique in the file." },
-                    "new_string": { "type": "string", "description": "Replacement text" }
-                },
-                "required": ["path", "old_string", "new_string"]
-            }),
-        },
-        Tool {
-            name: "list_files".into(),
-            description: "List files and directories at a path.".into(),
-            input_schema: json!({
-                "type": "object",
-                "properties": {
-                    "path": { "type": "string", "description": "Relative path from project root (default: root)" }
-                },
-                "required": []
-            }),
-        },
+        // Single source of truth: the registry owns these definitions, as it
+        // already does for `run_command` below. They used to be duplicated here
+        // with different text, so the description an agent saw depended on
+        // which path assembled its tool set.
+        crate::tools::registry::get_tool_definition("read_file").unwrap(),
+        crate::tools::registry::get_tool_definition("write_file").unwrap(),
+        crate::tools::registry::get_tool_definition("edit_file").unwrap(),
+        crate::tools::registry::get_tool_definition("list_files").unwrap(),
         Tool {
             name: "git_status".into(),
             description: "Show the working tree status (staged, modified, untracked files).".into(),
@@ -317,6 +278,13 @@ pub async fn dispatch_tool_cascade(
 
     match route {
         Route::Document => {
+            // The only cascade branch that used to skip the allow-list. Every
+            // workforce agent has state and a user, so `route_for` sends all
+            // four document tools here — they ran for agents that were never
+            // granted them, including read-only ones.
+            if !is_tool_allowed(name, allowed_tools) {
+                return tool_not_allowed_error(name);
+            }
             // Guarded by `route_for`, which only returns Document when the
             // dependencies each tool needs are present.
             let state = state.expect("route_for guarantees state for Document");

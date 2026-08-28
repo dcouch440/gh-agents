@@ -20,7 +20,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use envelope::CommandEnvelope;
+use envelope::{CommandEnvelope, Severity};
 use loop_detector::LoopDetector;
 use post::noop::NoOpCheck;
 use post::PostCheck;
@@ -57,6 +57,7 @@ impl DiagnosticsEngine {
                 Box::new(StatePersistenceCheck),
                 Box::new(InteractiveCheck),
                 Box::new(ShellCompatCheck),
+                Box::new(pre::heredoc::HeredocCheck),
             ],
             post_checks: vec![Box::new(NoOpCheck)],
             workspace: WorkspaceTracker::new(),
@@ -78,6 +79,28 @@ impl DiagnosticsEngine {
 
         // Phase 1: Pre-execution analysis
         let pre_warnings = pre::run_pre_checks(&self.pre_checks, command);
+
+        // Phase 1b: The one blocking pre-check. A command cut mid-heredoc is
+        // guaranteed to corrupt a file, so it is reported rather than run —
+        // the shell would otherwise write the fragment and report success.
+        if let Some(blocker) = pre_warnings.iter().find(|d| {
+            d.severity == Severity::Error && d.category == envelope::DiagnosticCategory::Truncation
+        }) {
+            let envelope = CommandEnvelope {
+                command: command.to_string(),
+                exit_code: -1,
+                stdout: String::new(),
+                stderr: String::new(),
+                duration_ms: 0,
+                severity: Severity::Error,
+                pre_warnings: vec![blocker.clone()],
+                post_diagnostics: Vec::new(),
+                file_changes: Vec::new(),
+                workspace_digest: None,
+                loop_status: loop_detector::LoopStatus::Clean,
+            };
+            return Ok(envelope.render());
+        }
 
         // Phase 2: Snapshot → Execute → Diff
         let before = capture_snapshot(handle).await;
@@ -149,6 +172,39 @@ impl DiagnosticsEngine {
     /// Current command index (1-based).
     pub fn command_index(&self) -> usize {
         self.command_index
+    }
+
+    /// Record a write made by a first-class file tool.
+    ///
+    /// `write_file` and `edit_file` never touch the shell, so the
+    /// snapshot → exec → snapshot path in `execute()` never sees them. Without
+    /// this bridge, the moment agents stop writing through heredocs the
+    /// passdown `files:` line goes empty, `synthesize_tool_summary` degrades to
+    /// a bare tool count, and the loop detector goes blind — including the
+    /// repeat-edit nudge that fired in run dd27d008.
+    ///
+    /// Returns the loop status so the caller can surface a nudge on the tool
+    /// result, exactly as the `run_command` envelope does.
+    pub fn record_file_write(
+        &mut self,
+        path: PathBuf,
+        change_type: ChangeType,
+        size: u64,
+    ) -> loop_detector::LoopStatus {
+        self.command_index += 1;
+        let change = FileChange {
+            path,
+            change_type,
+            size,
+        };
+        match self.touched.entry(change.path.clone()) {
+            Entry::Occupied(mut e) => e.get_mut().size = change.size,
+            Entry::Vacant(e) => {
+                e.insert(change.clone());
+            }
+        }
+        self.loop_detector
+            .record(self.command_index, std::slice::from_ref(&change))
     }
 
     /// Files this agent produced, ready for the downstream passdown.

@@ -17,6 +17,9 @@ pub(crate) struct DesignedAgentPrompt {
     pub expected_output: Option<String>,
     pub execution_order: i32,
     pub receives_from: Vec<String>,
+    /// Designer-declared: this agent judges rather than produces, so it loses
+    /// every writing tool. See `restrict_to_read_only`.
+    pub read_only: bool,
 }
 
 /// Result from executing a single agent — returned by `execute_single_agent`.

@@ -62,6 +62,18 @@ pub async fn run_serve(args: Args) -> Result<()> {
     // Initialize database
     let pool = init_db(&env).await?;
 
+    // Repair agent executions orphaned by a crash or a panicking agent task.
+    // They read as in-flight forever and spin a node in the UI.
+    {
+        use crate::db::traits::AgentExecutionRepo;
+        let repo = crate::db::pg_repo::PgRepo::new(pool.clone());
+        match repo.fail_orphaned_agent_executions().await {
+            Ok(n) if n > 0 => info!("Marked {} orphaned agent execution(s) as failed", n),
+            Ok(_) => {}
+            Err(e) => warn!("Failed to reconcile orphaned agent executions: {}", e),
+        }
+    }
+
     // Reap orphaned containers from previous crashes
     let reaped = crate::execution::ContainerManager::real()
         .reap_orphaned_containers(std::time::Duration::from_secs(

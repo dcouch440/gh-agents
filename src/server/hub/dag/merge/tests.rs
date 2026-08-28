@@ -475,4 +475,129 @@ mod tests {
         );
         assert!(matches!(result, VerifyOutcome::Failed(_)));
     }
+
+    // ── Supersession snapshots ────────────────────────────────────────────
+
+    use crate::server::hub::dag::merge::persist::persist_step_overlay;
+    use crate::server::services::workspace::WorkspaceManager;
+
+    fn workspace() -> (WorkspaceManager, tempfile::TempDir, Uuid, Uuid) {
+        let tmp = tempfile::tempdir().expect("create tempdir");
+        let ws = WorkspaceManager::new(tmp.path()).expect("create manager");
+        let (wf, run) = (Uuid::new_v4(), Uuid::new_v4());
+        ws.create_run_workspace(wf, run)
+            .expect("create run workspace");
+        (ws, tmp, wf, run)
+    }
+
+    fn overlay_with(step_id: Uuid, path: &str, change: OverlayChange) -> StepOverlay {
+        let mut diff = OverlayDiff::new();
+        diff.insert(PathBuf::from(path), change);
+        StepOverlay {
+            step_id,
+            step_name: "s".to_string(),
+            step_description: "d".to_string(),
+            display_order: 0,
+            diff,
+        }
+    }
+
+    /// Run dd27d008: agent 8e990aa5 wrote nexor_homepage_design_spec.md, then
+    /// agent 9900efa7 wrote the same path. The persist loop was a bare
+    /// `workspace.write_file` and the first deliverable ceased to exist.
+    /// `Modified` already carries the signal — it means the path was in base
+    /// before the step ran.
+    #[test]
+    fn a_modified_path_snapshots_the_version_it_replaces() {
+        let (ws, _tmp, wf, run) = workspace();
+        let step = Uuid::new_v4();
+        ws.write_file(wf, run, &PathBuf::from("spec.md"), b"visual direction")
+            .unwrap();
+
+        let mut overlay = overlay_with(
+            step,
+            "spec.md",
+            OverlayChange::Modified(b"design spec".to_vec()),
+        );
+        persist_step_overlay(&ws, wf, run, &mut overlay).unwrap();
+
+        assert_eq!(
+            ws.read_file(wf, run, &PathBuf::from("spec.md"))
+                .unwrap()
+                .unwrap(),
+            b"design spec"
+        );
+        let snap = PathBuf::from(".nexor/superseded")
+            .join(step.to_string())
+            .join("spec.md");
+        assert_eq!(
+            ws.read_file(wf, run, &snap).unwrap().unwrap(),
+            b"visual direction",
+            "the replaced version must survive somewhere"
+        );
+    }
+
+    /// A file the step created itself is `Created`, not `Modified`, and must
+    /// not produce a snapshot — otherwise every run doubles its own output.
+    #[test]
+    fn a_created_path_snapshots_nothing() {
+        let (ws, _tmp, wf, run) = workspace();
+        let step = Uuid::new_v4();
+        let mut overlay = overlay_with(
+            step,
+            "fresh.md",
+            OverlayChange::Created(b"brand new".to_vec()),
+        );
+        persist_step_overlay(&ws, wf, run, &mut overlay).unwrap();
+
+        let snap = PathBuf::from(".nexor/superseded")
+            .join(step.to_string())
+            .join("fresh.md");
+        assert!(ws.read_file(wf, run, &snap).unwrap().is_none());
+    }
+
+    /// Writing identical bytes is not a supersession. Snapshotting it would
+    /// fill the workspace with duplicates of unchanged files.
+    #[test]
+    fn an_identical_rewrite_snapshots_nothing() {
+        let (ws, _tmp, wf, run) = workspace();
+        let step = Uuid::new_v4();
+        ws.write_file(wf, run, &PathBuf::from("same.md"), b"unchanged")
+            .unwrap();
+
+        let mut overlay = overlay_with(
+            step,
+            "same.md",
+            OverlayChange::Modified(b"unchanged".to_vec()),
+        );
+        persist_step_overlay(&ws, wf, run, &mut overlay).unwrap();
+
+        let snap = PathBuf::from(".nexor/superseded")
+            .join(step.to_string())
+            .join("same.md");
+        assert!(ws.read_file(wf, run, &snap).unwrap().is_none());
+    }
+
+    /// Snapshotting the manifest would have every step archive the previous
+    /// step's bookkeeping, and recurse into its own snapshot directory.
+    #[test]
+    fn nexor_internal_paths_are_never_snapshotted() {
+        let (ws, _tmp, wf, run) = workspace();
+        let step = Uuid::new_v4();
+        let manifest = ".nexor/step-manifests/prior.json";
+        ws.write_file(wf, run, &PathBuf::from(manifest), b"[\"old\"]")
+            .unwrap();
+
+        let mut overlay = overlay_with(
+            step,
+            manifest,
+            OverlayChange::Modified(b"[\"new\"]".to_vec()),
+        );
+        persist_step_overlay(&ws, wf, run, &mut overlay).unwrap();
+
+        let snap = PathBuf::from(".nexor/superseded")
+            .join(step.to_string())
+            .join(manifest);
+        assert!(ws.read_file(wf, run, &snap).unwrap().is_none());
+    }
 }

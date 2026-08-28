@@ -741,4 +741,85 @@ mod tests {
         let result = validate_verify(dir.path(), &verify, None);
         assert!(result.is_ok(), "should skip when no user_text: {result:?}");
     }
+
+    /// The designer's four worked examples used to emit `file_graph_complete`,
+    /// `contracts_defined`, `prompts_have_expertise` and
+    /// `assignments_produce_files`, none of which `validate_verify` reads. A
+    /// designer copying its own few-shots silently skipped the three
+    /// flag-gated quality checks.
+    #[test]
+    fn designer_examples_emit_the_keys_validate_verify_gates_on() {
+        const PROMPT: &str = include_str!("../../../../config/system_agent/system.md");
+
+        for key in [
+            "topology_complete",
+            "agents_complete",
+            "no_filenames_prescribed",
+            "prompts_not_trivial",
+            "assignments_expanded",
+        ] {
+            assert_eq!(
+                PROMPT.matches(key).count(),
+                4,
+                "{key} missing from a complete_system example"
+            );
+        }
+        for stale in [
+            "file_graph_complete",
+            "contracts_defined",
+            "prompts_have_expertise",
+            "assignments_produce_files",
+        ] {
+            assert!(
+                !PROMPT.contains(stale),
+                "stale verify key {stale} still in the prompt"
+            );
+        }
+    }
+
+    /// A non-boolean deserializes to false, which silently hands a QA agent
+    /// full write access — the drift that let run dd27d008's verifier edit the
+    /// code it had just signed off.
+    #[test]
+    fn validate_agent_rejects_a_non_boolean_read_only() {
+        let content = r#"{
+            "name": "QA",
+            "system_prompt": "Frontend QA engineer verifying against a spec.",
+            "assignment": "Check the built page against the design spec.",
+            "expected_output": "A conformance report.",
+            "capabilities": [],
+            "read_only": "true"
+        }"#;
+        let err = validate_agent(content).unwrap_err();
+        assert!(
+            err.contains("read_only"),
+            "expected read_only in error: {err}"
+        );
+    }
+
+    /// The flag is optional — every existing agent config must keep validating.
+    #[test]
+    fn validate_agent_accepts_an_absent_read_only() {
+        let content = r#"{
+            "name": "Builder",
+            "system_prompt": "Frontend developer implementing a design spec.",
+            "assignment": "Build the homepage from the spec and save it.",
+            "expected_output": "The built homepage files.",
+            "capabilities": []
+        }"#;
+        assert!(validate_agent(content).is_ok());
+    }
+
+    #[test]
+    fn validate_agent_accepts_a_boolean_read_only() {
+        let content = r#"{
+            "name": "QA",
+            "system_prompt": "Frontend QA engineer verifying against a spec.",
+            "assignment": "Check the built page against the design spec.",
+            "expected_output": "A conformance report.",
+            "capabilities": [],
+            "read_only": true
+        }"#;
+        assert!(validate_agent(content).is_ok());
+    }
 }

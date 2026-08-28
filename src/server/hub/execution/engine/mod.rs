@@ -396,11 +396,32 @@ impl ExecutionEngine {
                         .any(|b| matches!(b, ContentBlock::ToolUse { .. }));
 
                     if !has_tool_blocks {
+                        // Providers occasionally report ToolUse with no blocks.
+                        // The turn is over either way, so treat it exactly like
+                        // EndTurn. This used to `break`, falling through to
+                        // MaxRoundsExhausted below — labelling a clean finish as
+                        // a budget failure and discarding the response text.
                         warn!(
                             "StopReason::ToolUse but no tool_use blocks at round {}",
                             round
                         );
-                        break;
+                        if let Some(result) = self
+                            .handle_end_turn(
+                                &ctx,
+                                round,
+                                &response,
+                                &mut messages,
+                                total_input,
+                                total_output,
+                                total_cached,
+                                &mut filter_retried,
+                                &mut end_turn_retries,
+                            )
+                            .await?
+                        {
+                            return Ok(result);
+                        }
+                        continue;
                     }
 
                     if let Some(result) = self

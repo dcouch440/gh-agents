@@ -53,8 +53,46 @@ async fn container_read_file(input: &Value, handle: &ContainerHandle) -> Value {
     if let Err(e) = validate_container_path(path) {
         return json!({ "error": e.to_string() });
     }
+    // Line-bounded by default. `read_file` bypasses the stdout truncation that
+    // wraps `run_command`, so an unbounded read of a large file lands whole in
+    // the context budget — and `ContextBudgetExceeded` is a hard error, not a
+    // skippable one.
+    const DEFAULT_LIMIT: usize = 2000;
+    let offset = input["offset"].as_u64().unwrap_or(0) as usize;
+    let limit = input["limit"].as_u64().unwrap_or(DEFAULT_LIMIT as u64) as usize;
+
     match handle.read_file(path).await {
-        Ok(content) => json!({ "content": content }),
+        Ok(content) => {
+            let lines: Vec<&str> = content.lines().collect();
+            let total = lines.len();
+
+            if total > 0 && offset >= total {
+                return json!({
+                    "error": format!(
+                        "offset {} is past the end of {} ({} lines)",
+                        offset, path, total
+                    )
+                });
+            }
+
+            let end = offset.saturating_add(limit).min(total);
+            let mut out = json!({
+                "content": lines[offset..end].join("\n"),
+                "total_lines": total,
+                "line_range": [offset + 1, end],
+            });
+
+            if end < total {
+                out["next_offset"] = json!(end);
+                out["note"] = json!(format!(
+                    "{} of {} lines shown. Continue with offset={}.",
+                    end - offset,
+                    total,
+                    end
+                ));
+            }
+            out
+        }
         Err(e) => json!({ "error": e.to_string() }),
     }
 }
@@ -71,8 +109,38 @@ async fn container_write_file(input: &Value, handle: &ContainerHandle) -> Value 
         Some(c) => c,
         None => return json!({ "error": "Missing required parameter: content" }),
     };
+    // One cheap `test -f` before the write. Two things depend on it: the
+    // Created/Modified classification the diagnostics bridge needs (write_file
+    // never touches the shell, so the snapshot diff never sees it), and the
+    // overwrite signal the agent needs — `cat >` said nothing about clobbering
+    // an upstream deliverable, which is how run dd27d008 destroyed one.
+    let existed = handle
+        .exec_shell(&format!(
+            "test -f {}",
+            crate::execution::container::shell_escape_path(path)
+        ))
+        .await
+        .map(|r| r.success)
+        .unwrap_or(false);
+
     match handle.write_file(path, content).await {
-        Ok(()) => json!({ "success": true, "path": path }),
+        Ok(()) => {
+            let mut out = json!({
+                "success": true,
+                "path": path,
+                "bytes": content.len(),
+                "lines": content.lines().count(),
+                "overwrote": existed,
+            });
+            if existed {
+                out["warning"] = json!(format!(
+                    "{} already existed and was replaced. If it came from an upstream \
+                     agent, save under a new name instead.",
+                    path
+                ));
+            }
+            out
+        }
         Err(e) => json!({ "error": e.to_string() }),
     }
 }
@@ -216,6 +284,23 @@ async fn container_run_command(input: &Value, handle: &ContainerHandle) -> Value
     // Some models emit HTML-encoded shell operators in tool inputs.
     // Unescape via shared helper so all entity handling stays in one place.
     let command = crate::execution::diagnostics::html_unescape(command);
+
+    // The system-node designer writes its JSON through this path, which has no
+    // diagnostics engine behind it. Same guard, same reason: a fragment whose
+    // heredoc never closed writes a truncated file and reports success.
+    let open = crate::execution::diagnostics::pre::heredoc::unterminated_heredocs(&command);
+    if !open.is_empty() {
+        return json!({
+            "error": format!(
+                "Command was cut off before its heredoc closed ({}). Not executed — running \
+                 it would have written a truncated file that reported success.",
+                open.join(", ")
+            ),
+            "hint": "The heredoc body is bounded by your output limit. Write the file in \
+                     smaller pieces."
+        });
+    }
+
     match handle.exec_shell(&command).await {
         Ok(result) => json!({
             "exit_code": result.exit_code,

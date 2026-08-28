@@ -22,6 +22,7 @@ mod tests {
             expected_output: None,
             execution_order: 0,
             receives_from: receives_from.iter().map(|s| s.to_string()).collect(),
+            read_only: false,
         }
     }
 
@@ -389,13 +390,14 @@ mod tests {
             assignment: "Do the thing".to_string(),
             expected_output: Some("Describe what you did".to_string()),
             has_container: true,
+            read_only: false,
         }
         .build();
 
         assert!(prompt.contains("<previous_step>\nPrior output text\n</previous_step>"));
         assert!(prompt.contains("<assignment>\nDo the thing\n</assignment>"));
         assert!(prompt.contains("<deliverable>\nDescribe what you did\n</deliverable>"));
-        assert!(prompt.contains("Save this to a file with run_command"));
+        assert!(prompt.contains("Save this to a file with write_file"));
     }
 
     #[test]
@@ -407,6 +409,7 @@ mod tests {
             assignment: "Do the thing".to_string(),
             expected_output: None,
             has_container: true,
+            read_only: false,
         }
         .build();
 
@@ -423,6 +426,7 @@ mod tests {
             assignment: "Do the thing".to_string(),
             expected_output: Some(String::new()),
             has_container: true,
+            read_only: false,
         }
         .build();
 
@@ -438,6 +442,7 @@ mod tests {
             assignment: "task".to_string(),
             expected_output: Some("result".to_string()),
             has_container: true,
+            read_only: false,
         }
         .build();
 
@@ -458,6 +463,7 @@ mod tests {
             assignment: "assign".to_string(),
             expected_output: Some("expect".to_string()),
             has_container: true,
+            read_only: false,
         }
         .build();
 
@@ -480,12 +486,279 @@ mod tests {
             assignment: "Do the thing".to_string(),
             expected_output: Some("A summary of the findings".to_string()),
             has_container: false,
+            read_only: false,
         }
         .build();
 
         assert!(prompt.contains("<deliverable>\nA summary of the findings\n</deliverable>"));
-        assert!(!prompt.contains("run_command"));
+        assert!(!prompt.contains("write_file"));
         assert!(!prompt.contains("receipt"));
         assert!(prompt.contains("put the deliverable itself in your response"));
+    }
+
+    // ── Failure handling ──────────────────────────────────────────────────────
+
+    /// Run dd27d008: the QA agent had finished its verification pass 67/67 green
+    /// and was doing unprompted refactoring when round 60 hit. `fail_fast`
+    /// turned that into an Abort that killed a five-step run and discarded seven
+    /// successful agents' deliverable.
+    #[test]
+    fn round_exhaustion_skips_even_under_fail_fast() {
+        use crate::server::hub::dag::pipeline::agent_executor::handle_agent_failure;
+        use crate::server::hub::dag::pipeline::types::AgentFailureAction;
+        use crate::server::hub::error::HubError;
+
+        let action = handle_agent_failure(
+            HubError::MaxRoundsExhausted { max: 60 },
+            "Frontend QA engineer",
+            "fail_fast",
+        );
+
+        match action {
+            AgentFailureAction::Skip { name, error_output } => {
+                assert_eq!(name, "Frontend QA engineer");
+                assert!(error_output.contains("60"));
+                assert!(
+                    error_output.contains("on disk"),
+                    "downstream agents must be told the work is partial, not just that it failed"
+                );
+            }
+            AgentFailureAction::Abort(_) => panic!("exhaustion must not abort the step"),
+        }
+    }
+
+    /// A targeted exception, not a blanket downgrade — every other failure under
+    /// `fail_fast` still aborts.
+    #[test]
+    fn other_failures_still_abort_under_fail_fast() {
+        use crate::server::hub::dag::pipeline::agent_executor::handle_agent_failure;
+        use crate::server::hub::dag::pipeline::types::AgentFailureAction;
+        use crate::server::hub::error::HubError;
+
+        let action = handle_agent_failure(
+            HubError::ToolFailed {
+                tool_name: "write_file".to_string(),
+                reason: "disk full".to_string(),
+            },
+            "Builder",
+            "fail_fast",
+        );
+
+        assert!(matches!(action, AgentFailureAction::Abort(_)));
+    }
+
+    /// `skip_failed` behaviour is unchanged for ordinary failures.
+    #[test]
+    fn skip_failed_mode_still_skips_ordinary_failures() {
+        use crate::server::hub::dag::pipeline::agent_executor::handle_agent_failure;
+        use crate::server::hub::dag::pipeline::types::AgentFailureAction;
+        use crate::server::hub::error::HubError;
+
+        let action = handle_agent_failure(
+            HubError::ToolFailed {
+                tool_name: "run_command".to_string(),
+                reason: "boom".to_string(),
+            },
+            "Builder",
+            "skip_failed",
+        );
+
+        match action {
+            AgentFailureAction::Skip { error_output, .. } => {
+                assert!(error_output.contains("AGENT FAILED"));
+            }
+            AgentFailureAction::Abort(_) => panic!("skip_failed must not abort"),
+        }
+    }
+
+    // ── Tool assembly ─────────────────────────────────────────────────────
+
+    /// `let baseline = ["run_command"];` was the entire implicit tool set.
+    /// Shell execution is `safety_level: unsafe, default_enabled: false` in
+    /// capabilities.yaml and was the only tool injected; file_read (safe) and
+    /// file_write (caution) required an opt-in the designer prompt discouraged.
+    #[test]
+    fn containerized_agents_get_the_file_tools_without_being_assigned_them() {
+        use crate::server::hub::dag::pipeline::agent_executor::{
+            inject_baseline_tools, CONTAINER_BASELINE_TOOLS,
+        };
+
+        let (mut tools, mut names) = (Vec::new(), Vec::new());
+        inject_baseline_tools(&mut tools, &mut names, CONTAINER_BASELINE_TOOLS);
+
+        for expected in [
+            "read_file",
+            "write_file",
+            "edit_file",
+            "list_files",
+            "run_command",
+        ] {
+            assert!(
+                names.iter().any(|n| n == expected),
+                "{expected} missing from the baseline"
+            );
+        }
+        assert_eq!(tools.len(), names.len());
+    }
+
+    /// A designer that explicitly resolved a baseline tool through a capability
+    /// must not end up with it twice — duplicate tool names are a provider
+    /// error, not a warning.
+    #[test]
+    fn baseline_injection_does_not_duplicate_an_already_resolved_tool() {
+        use crate::server::hub::dag::pipeline::agent_executor::{
+            inject_baseline_tools, CONTAINER_BASELINE_TOOLS,
+        };
+
+        let mut names = vec!["read_file".to_string()];
+        let mut tools = vec![crate::tools::registry::get_tool_definition("read_file").unwrap()];
+        inject_baseline_tools(&mut tools, &mut names, CONTAINER_BASELINE_TOOLS);
+
+        assert_eq!(names.iter().filter(|n| *n == "read_file").count(), 1);
+        assert_eq!(names.len(), 5);
+    }
+
+    /// The QA agent in run dd27d008 finished verification 67/67 green, then
+    /// spent its remaining rounds `sed -i`-ing styles.css and rewriting
+    /// script.js. A verifier that can write stops verifying — the read_only
+    /// flag has to actually remove the tools, not just say so in a prompt.
+    #[test]
+    fn a_read_only_agent_gets_no_writing_tools() {
+        use crate::server::hub::dag::pipeline::agent_executor::{
+            inject_baseline_tools, restrict_to_read_only, READ_ONLY_BASELINE_TOOLS,
+        };
+
+        let (mut tools, mut names) = (Vec::new(), Vec::new());
+        inject_baseline_tools(&mut tools, &mut names, READ_ONLY_BASELINE_TOOLS);
+
+        for banned in [
+            "write_file",
+            "edit_file",
+            "run_command",
+            "git_add",
+            "git_commit",
+        ] {
+            assert!(
+                !names.iter().any(|n| n == banned),
+                "{banned} reached a read_only agent"
+            );
+        }
+        assert!(names.iter().any(|n| n == "read_file"));
+        assert!(names.iter().any(|n| n == "list_files"));
+
+        restrict_to_read_only(&mut tools, &mut names);
+        assert_eq!(
+            names.len(),
+            2,
+            "restriction must be idempotent over the read-only baseline"
+        );
+    }
+
+    /// The designer can still hand a read_only agent a writing capability by
+    /// mistake. Restriction runs before baseline injection so both routes are
+    /// covered — and web tools it legitimately assigned must survive.
+    #[test]
+    fn read_only_restriction_strips_write_tools_but_keeps_web() {
+        use crate::server::hub::dag::pipeline::agent_executor::restrict_to_read_only;
+
+        let mut names: Vec<String> = ["brave_search", "read_webpage", "write_file", "run_command"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let mut tools: Vec<_> = names
+            .iter()
+            .filter_map(|n| crate::tools::registry::get_tool_definition(n))
+            .collect();
+
+        restrict_to_read_only(&mut tools, &mut names);
+
+        assert_eq!(
+            names,
+            vec!["brave_search".to_string(), "read_webpage".to_string()]
+        );
+    }
+
+    /// A read_only agent's output IS its deliverable. Telling it to save a file
+    /// with a tool it does not have produces a guaranteed dead end.
+    #[test]
+    fn read_only_task_prompt_does_not_ask_for_a_saved_file() {
+        use super::super::agent_executor::TaskPromptBuilder;
+
+        let prompt = TaskPromptBuilder {
+            previous_step: String::new(),
+            assignment: "Verify the build against the spec".to_string(),
+            expected_output: Some("A conformance report".to_string()),
+            has_container: true,
+            read_only: true,
+        }
+        .build();
+
+        assert!(!prompt.contains("write_file"));
+        assert!(prompt.contains("findings in your response"));
+    }
+
+    // ── Failed-agent row termination ──────────────────────────────────────
+
+    /// `agent_executions.5734fed9-…` sat at `status = 'running'`,
+    /// `completed_at = NULL` under a `workflow_executions` row that had been
+    /// `failed` for hours, because the workforce failure path wrote
+    /// `protocol_executions` instead. The UI reads `agent_executions` via
+    /// `get_running_step_ids_for_run`, so the node spun forever.
+    #[tokio::test]
+    #[ignore = "requires running Postgres"]
+    async fn failed_agent_leaves_a_terminal_row_not_a_running_one() {
+        use crate::db::pg_repo::PgRepo;
+        use crate::db::test_utils::TestDb;
+        use crate::db::traits::{AgentExecutionRepo, CreateAgentExecutionInput};
+        use crate::server::hub::dag::pipeline::agent_executor::fail_agent_execution;
+        use crate::types::ExecutionType;
+
+        let db = TestDb::new().await;
+        let repo = PgRepo::new(db.pool.clone());
+
+        let row = repo
+            .create_agent_execution(CreateAgentExecutionInput {
+                execution_type: ExecutionType::PipelineAgent,
+                agent_id: None,
+                workflow_step_id: None,
+                parent_agent_execution_id: None,
+                system_prompt_rendered: "Frontend QA engineer".to_string(),
+                input: "Verify the build against the spec".to_string(),
+                room_session_id: None,
+                speaker_order: None,
+                workflow_execution_id: None,
+            })
+            .await
+            .unwrap();
+        assert_eq!(row.status, "running");
+
+        fail_agent_execution(&repo, Some(row.id), "max tool rounds (60) exhausted").await;
+
+        let after = repo.get_agent_execution(row.id).await.unwrap().unwrap();
+        assert_eq!(after.status, "failed");
+        assert!(
+            after.completed_at.is_some(),
+            "completed_at must be stamped so the row reads as terminal"
+        );
+        assert!(after.output.unwrap().contains("max tool rounds"));
+
+        db.cleanup().await;
+    }
+
+    /// Row creation can itself fail, leaving `ae_id` as None. That must be a
+    /// no-op rather than a panic on an already-failing path.
+    #[tokio::test]
+    #[ignore = "requires running Postgres"]
+    async fn fail_agent_execution_tolerates_a_missing_row_id() {
+        use crate::db::pg_repo::PgRepo;
+        use crate::db::test_utils::TestDb;
+        use crate::server::hub::dag::pipeline::agent_executor::fail_agent_execution;
+
+        let db = TestDb::new().await;
+        let repo = PgRepo::new(db.pool.clone());
+
+        fail_agent_execution(&repo, None, "boom").await;
+
+        db.cleanup().await;
     }
 }

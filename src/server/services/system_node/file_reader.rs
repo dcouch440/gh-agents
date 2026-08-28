@@ -28,6 +28,11 @@ struct AgentConfig {
     expected_output: String,
     #[serde(default)]
     capabilities: Vec<String>,
+    /// Verification/QA roles the designer marked as judges rather than
+    /// producers. Defaults to false so every existing agent config keeps
+    /// working unchanged.
+    #[serde(default)]
+    read_only: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -109,6 +114,7 @@ pub(crate) fn read_agent_configs(base_dir: &Path) -> Result<Vec<DesignedAgentPro
             expected_output: Some(config.expected_output),
             execution_order: i as i32,
             receives_from: resolved_receives,
+            read_only: config.read_only,
         });
     }
 

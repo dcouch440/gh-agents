@@ -327,8 +327,10 @@ pub async fn download_run_files(
 
     let mut count = 0usize;
     for rel_path in &files {
-        // Skip internal metadata
-        if rel_path.starts_with(".nexor") {
+        // Skip internal metadata, but not `.nexor/superseded` — when a later
+        // step overwrote an upstream deliverable, that snapshot is the only
+        // surviving copy, and the download is where a user goes to find it.
+        if rel_path.starts_with(".nexor") && !rel_path.starts_with(".nexor/superseded") {
             continue;
         }
 

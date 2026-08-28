@@ -197,15 +197,20 @@ pub(crate) async fn run_dag_loop(
             let step = step_map[&executable_steps[0]];
             let step_result = dispatch_step(dag, dag_state, step).await;
 
+            // Persist before propagating. The executor populates
+            // `dag_state.step_overlay` whether or not the step succeeded, and a
+            // partial deliverable beats no deliverable — this `?` sitting above
+            // the persist call is the second of the three places run dd27d008's
+            // homepage was discarded.
+            persist_step_overlay_if_present(dag, dag_state).await;
+
             if let Err(ref e) = step_result {
                 broadcast_step_failure_if_real(dag.state, dag.ctx, workflow_id, step, e);
             }
             step_result?;
 
-            // Persist overlay for sequential step
-            persist_step_overlay_if_present(dag, dag_state).await;
-
-            // Capture pinned step files after overlay persistence
+            // Pinning stays below the `?`: pinning a failed step's files would
+            // preload broken state into every future run.
             if step.pinned {
                 capture_pinned_step_files(dag, step.id).await;
             }
@@ -333,8 +338,14 @@ async fn execute_level_parallel(
         });
     }
 
-    // Collect results and overlay diffs
+    // Collect results and overlay diffs.
+    //
+    // The error arm used to bind `_overlay`, drop it, and return immediately —
+    // so a level where one step failed lost every step's files, including the
+    // failing step's own partial work. Record the first real error instead,
+    // drain the set fully, persist what survived, and propagate afterwards.
     let mut overlays: Vec<super::merge::types::StepOverlay> = Vec::new();
+    let mut first_error: Option<HubError> = None;
 
     while let Some(join_result) = join_set.join_next().await {
         match join_result {
@@ -345,26 +356,43 @@ async fn execute_level_parallel(
                 }
                 spawn_summarizer_if_completed(dag.state, step_id, dag_state);
             }
-            Ok((_step_id, step, Err(e), _task_state, _overlay)) => {
+            Ok((_step_id, step, Err(e), _task_state, overlay)) => {
+                // Keep the failing step's overlay: it may hold most of the work.
+                if let Some(ov) = overlay {
+                    overlays.push(ov);
+                }
                 broadcast_step_failure_if_real(dag.state, dag.ctx, workflow_id, &step, &e);
+                if first_error.is_none() {
+                    first_error = Some(e);
+                }
                 join_set.abort_all();
-                return Err(e);
             }
             Err(join_err) => {
+                // After `abort_all()` every remaining sibling yields
+                // `JoinError::Cancelled`. Those must not overwrite the real
+                // error, nor invent one when the level was otherwise fine.
+                if join_err.is_cancelled() {
+                    continue;
+                }
                 error!("DAG step task panicked: {}", join_err);
+                if first_error.is_none() {
+                    first_error = Some(HubError::Internal(anyhow::anyhow!(
+                        "DAG step task panicked: {}",
+                        join_err
+                    )));
+                }
                 join_set.abort_all();
-                return Err(HubError::Internal(anyhow::anyhow!(
-                    "DAG step task panicked: {}",
-                    join_err
-                )));
             }
         }
     }
 
-    // Merge and persist parallel overlays
+    // Merge and persist parallel overlays — on the failure path too.
     if !overlays.is_empty() {
         merge_and_persist_overlays(dag, &mut overlays).await;
     }
 
-    Ok(())
+    match first_error {
+        Some(e) => Err(e),
+        None => Ok(()),
+    }
 }
