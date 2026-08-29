@@ -66,7 +66,8 @@ fn rates_for(model_id: &str) -> Option<Rates> {
         });
     }
 
-    // Hosted GLM (Z.ai) — the active DeepInfra tier model.
+    // Hosted GLM (Z.ai). Not the active tier model, but priced so runs
+    // made while it was active still cost out correctly.
     //
     // These are DeepInfra's promotional rates: 50% off the $0.15 / $0.50 /
     // $0.03 list price, in effect as of 2026-08-29. When the promotion ends

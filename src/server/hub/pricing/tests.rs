@@ -44,15 +44,25 @@ mod tests {
         assert!((cost - want).abs() < 1e-6, "got {cost}, want {want}");
     }
 
-    /// The active tier model must never fall through to the generic
-    /// $1.00/$3.00 default — that silently over-bills every run by >13x.
+    /// Whichever profile is active, its tiers must never fall through to the
+    /// generic $1.00/$3.00 default — that silently over-bills by more than 13x.
+    ///
+    /// Deliberately asserts *against the fallback* rather than for a specific
+    /// number: pinning the rate would mean every model switch also had to edit
+    /// this test, and the point is to catch a model nobody priced.
     #[test]
-    fn the_active_tier_model_has_explicit_rates() {
-        let (input, _) = per_million(crate::constants::MODEL_TIER1);
-        assert!(
-            (input - 0.075).abs() < 1e-6,
-            "tier 1 input rate was {input}"
-        );
+    fn no_active_tier_model_falls_through_to_the_generic_default() {
+        for (tier, model) in [
+            ("tier 1", crate::constants::MODEL_TIER1),
+            ("tier 2", crate::constants::MODEL_TIER2),
+            ("tier 3", crate::constants::MODEL_TIER3),
+        ] {
+            let (input, output) = per_million(model);
+            assert!(
+                (input - 1.0).abs() > 1e-6 || (output - 3.0).abs() > 1e-6,
+                "{tier} ({model}) is priced at the generic fallback — add it to rates_for"
+            );
+        }
     }
 
     #[test]
