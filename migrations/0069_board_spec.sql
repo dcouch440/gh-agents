@@ -1,0 +1,20 @@
+-- Board-level specification: the fixed detail every node's designer must obey.
+--
+-- The board had exactly one channel from a person's brief to the layer that
+-- designs the agents: the node's own sentence. `board::instruction` hands the
+-- designer `<user_text>{node text}</user_text>` and nothing else, and the
+-- workflow agent prompt caps that at one sentence ("Never put methodology in a
+-- node"), on the theory that the designer would supply the rest because it
+-- "knows the domain better than the sentence does".
+--
+-- It does not know the domain — it never sees the brief. So a 6KB spec with a
+-- JSON schema, four category definitions and an exit-code table came out as
+-- five sentences totalling 1.6KB, and every fixed contract in it was gone
+-- before any agent was designed.
+--
+-- This column is where that fixed detail lives instead: written once by the
+-- workflow agent as `board.md`, broadcast verbatim into every node's design
+-- instruction. It holds contracts, not plans — schemas, formats, invariants,
+-- acceptance tests. The nodes stay one sentence; the spec stops being retyped
+-- into each of them and stops being lost.
+ALTER TABLE workflows ADD COLUMN board_spec TEXT NOT NULL DEFAULT '';

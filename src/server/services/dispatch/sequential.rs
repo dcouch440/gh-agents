@@ -299,9 +299,13 @@ async fn run_system_node_dispatch(
     previous_step_handoff: Vec<PreviousStepHandoff>,
     cancel: &CancellationToken,
 ) {
-    // Enrich instruction with previous step context
+    // Enrich instruction with previous step context, then the board contracts
     let enriched_instruction =
         enrich_with_previous_step(&instruction.instruction, &previous_step_handoff);
+    let enriched_instruction = append_board_spec(
+        &enriched_instruction,
+        &load_board_spec(state, workflow_id).await,
+    );
 
     let session_id =
         super::find_or_create_builder_session(state, step_id, workflow_id, user_id, "system_agent")
@@ -387,6 +391,10 @@ async fn run_system_node_propagation(
         task_text
     );
     let instruction_text = enrich_with_previous_step(&base_instruction, &previous_step_handoff);
+    let instruction_text = append_board_spec(
+        &instruction_text,
+        &load_board_spec(state, workflow_id).await,
+    );
 
     let session_id =
         super::find_or_create_builder_session(state, step_id, workflow_id, user_id, "system_agent")
@@ -442,4 +450,41 @@ fn enrich_with_previous_step(
         .collect();
 
     format!("{}\n\n{}", instruction, blocks.join("\n\n"))
+}
+
+/// Append the board spec — the contracts every node on this board must obey.
+///
+/// Last, not first: it is reference material the designer reads while making
+/// decisions the node text drives, and the node text is what the turn is about.
+/// Prepending it buried "Configure this new workflow node" under a page of
+/// schema.
+///
+/// A node sentence names what it emits ("the result object"); the definition of
+/// that object lives here and nowhere else. Without this block the reference
+/// resolves to nothing, which is how a 6KB brief became five vague nodes.
+pub(super) fn append_board_spec(instruction: &str, spec: &str) -> String {
+    let spec = spec.trim();
+    if spec.is_empty() {
+        return instruction.to_string();
+    }
+    format!("{instruction}\n\n<board_spec>\n{spec}\n</board_spec>")
+}
+
+/// Read the board spec, treating a lookup failure as "no spec".
+///
+/// A design run with no spec is worse than one with it, but it is a design run.
+/// Failing the dispatch over an unreadable column would take the board down for
+/// a reason the person cannot act on.
+async fn load_board_spec(state: &AppState, workflow_id: Uuid) -> String {
+    match state.repos().workflows.get_board_spec(workflow_id).await {
+        Ok(spec) => spec,
+        Err(e) => {
+            tracing::warn!(
+                workflow_id = %workflow_id,
+                error = %e,
+                "Failed to read board spec — designing without it"
+            );
+            String::new()
+        }
+    }
 }

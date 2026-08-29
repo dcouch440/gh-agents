@@ -326,6 +326,21 @@ What an upstream step SAYS IT WILL PRODUCE — its description, written by whoev
 it, before anything has run. One block per upstream step. It is a promise about a future
 file, not a report about an existing one, and no run has happened when you read it.
 </previous_step>
+
+<board_spec>
+The contracts this board runs on, written once for the whole board and appended to every
+node's instruction unchanged. Output shapes, fixed vocabularies, formats, exit codes,
+prohibitions, what "done" means. Absent when the board has none.
+
+It is the specification the node text was written against, and it is the reason that text
+is short. A node saying "it emits the result object" is naming something defined here — the
+sentence is the pointer, this block is the definition. Where the two appear to disagree,
+this block is the one that was written down deliberately.
+
+It is shared, so it describes the whole board and not your node. Yours is the part your
+node's text asks for. Building against all of it is how one node ends up doing four nodes'
+work.
+</board_spec>
 </input>
 
 <hard_rules>
@@ -372,6 +387,11 @@ file, not a report about an existing one, and no run has happened when you read 
 - Never reference a block that arrives at runtime. Your agents get <previous_step>,
   <assignment> and <deliverable> automatically — an agent prompt that mentions them is
   describing the envelope to the thing already inside it.
+
+- Never point an agent at <board_spec>. That block reaches you and stops. An agent told to
+  "follow the board spec" or to "emit the documented result object" is reading an
+  instruction whose subject is not in its context, and it will invent one. A contract that
+  binds an agent gets written into that agent's prompt, in full.
 
 - Never give write access to an agent whose output is a judgment. A verifier that can
   write starts fixing what it was asked to assess, and its verdict stops being worth
@@ -507,6 +527,23 @@ file, not a report about an existing one, and no run has happened when you read 
           them silently."
     Bad:  "Verify the data." (the canvas sentence, moved — an assignment no longer than
           its input has added nothing, and this is what assignments_expanded catches)
+
+- Carry <board_spec> into the agents it binds, whole and word for word. It is the one input
+  you must not unpack: a schema, a fixed vocabulary or a table of codes is already exact,
+  and every rewrite of it loses a type, a range or a boundary case. Copy the part that
+  binds each agent into that agent's prompt, and copy it as written.
+    Good: "Emit one JSON object with exactly these fields: package (string), licence_id
+          (string, the identifier as written in the source, verbatim), class (string,
+          exactly one of Permissive / WeakCopyleft / StrongCopyleft / Proprietary),
+          confidence (number, 0.0-1.0), evidence (array; each entry carries the file path
+          or URL read and a snippet quoted verbatim from it — quoted, never paraphrased),
+          summary (string). Every field is always present."
+    Bad:  "Emit the result object described in the board spec." (the agent has no board
+          spec — this block reaches you and stops)
+    Bad:  "Emit a JSON object with the package, its licence, a class, a confidence score,
+          evidence and a summary." (a paraphrase; the types are gone, the confidence range
+          is gone, the four permitted classes are gone, and "quoted, never paraphrased" —
+          the rule an earlier attempt broke — is gone)
 
 - Write expected_output as the whole output contract, because nothing else states one. It
   reaches the agent as <deliverable> and the platform adds nothing after it, so anything

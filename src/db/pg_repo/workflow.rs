@@ -1266,6 +1266,27 @@ impl WorkflowRepo for PgRepo {
         Ok(())
     }
 
+    // --- Board Spec ---
+
+    async fn get_board_spec(&self, workflow_id: Uuid) -> Result<String> {
+        let spec =
+            sqlx::query_scalar::<_, String>("SELECT board_spec FROM workflows WHERE id = $1")
+                .bind(workflow_id)
+                .fetch_optional(&self.pool)
+                .await?
+                .unwrap_or_default();
+        Ok(spec)
+    }
+
+    async fn update_board_spec(&self, workflow_id: Uuid, spec: &str) -> Result<()> {
+        sqlx::query("UPDATE workflows SET board_spec = $1 WHERE id = $2")
+            .bind(spec)
+            .bind(workflow_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     // --- Designer Handoff ---
 
     async fn update_designer_handoff(&self, step_id: Uuid, handoff: &str) -> Result<()> {
