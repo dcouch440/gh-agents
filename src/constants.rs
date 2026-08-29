@@ -511,7 +511,15 @@ pub const BRAVE_SEARCH_ENDPOINT: &str = "https://api.search.brave.com/res/v1/web
 
 /// Env var overriding [`BRAVE_SEARCH_MAX_RPS`], so a key on a paid tier can be
 /// let loose without a rebuild. Parsed as a float; ignored if unparseable.
+///
+/// Raising it alone only removes the bucket wait: throughput stays capped at
+/// one request per round trip until [`ENV_BRAVE_SEARCH_MAX_CONCURRENT`] is
+/// raised to match.
 pub const ENV_BRAVE_SEARCH_MAX_RPS: &str = "BRAVE_SEARCH_MAX_RPS";
+
+/// Env var overriding [`BRAVE_SEARCH_MAX_CONCURRENT`], the other half of the
+/// paid-tier release valve. Parsed as an integer; ignored if unparseable.
+pub const ENV_BRAVE_SEARCH_MAX_CONCURRENT: &str = "BRAVE_SEARCH_MAX_CONCURRENT";
 
 /// Brave searches allowed per second across the whole process.
 ///
@@ -523,14 +531,22 @@ pub const BRAVE_SEARCH_MAX_RPS: f64 = 1.0;
 /// Brave searches allowed to be in flight at once.
 ///
 /// One, to match the rate: overlapping requests would arrive within the same
-/// second regardless of the bucket and defeat it.
+/// second regardless of the bucket and defeat it. Because it gates throughput
+/// as hard as the rate does, a paid tier needs both this and
+/// [`BRAVE_SEARCH_MAX_RPS`] raised — see [`ENV_BRAVE_SEARCH_MAX_CONCURRENT`].
 pub const BRAVE_SEARCH_MAX_CONCURRENT: usize = 1;
 
 /// How long a search may wait for its turn before giving up.
 ///
 /// Bounds the queue: a long backlog should surface as a failed search the agent
 /// can react to, not a request that outlives the run.
-pub const BRAVE_SEARCH_QUEUE_TIMEOUT_SECS: u64 = 60;
+///
+/// It has to exceed the longest a single search can hold a concurrency slot,
+/// or the holder alone times out everyone behind it: 20s for the first
+/// request, up to [`BRAVE_SEARCH_RETRY_AFTER_MAX_SECS`] waiting out a 429, and
+/// 20s for the retry — 70s worst case. At 60s a single rate-limited search
+/// failed every other search queued behind it.
+pub const BRAVE_SEARCH_QUEUE_TIMEOUT_SECS: u64 = 120;
 
 /// Fallback wait after a 429 that carried no `Retry-After` header.
 pub const BRAVE_SEARCH_RETRY_AFTER_FALLBACK_SECS: u64 = 2;

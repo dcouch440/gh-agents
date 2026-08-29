@@ -270,10 +270,9 @@ Results are search snippets, not sources. Use read_webpage on a URL above before
     /// `set_var` is process-global, so these tests must not run concurrently.
     static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-    /// Run `f` with the rate override set, restoring the environment after.
-    fn with_rps_override(value: &str, f: impl FnOnce()) {
+    /// Run `f` with `key` set to `value`, restoring the environment after.
+    fn with_env_override(key: &str, value: &str, f: impl FnOnce()) {
         let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
-        let key = crate::constants::ENV_BRAVE_SEARCH_MAX_RPS;
         let previous = std::env::var(key).ok();
         std::env::set_var(key, value);
         f();
@@ -281,6 +280,16 @@ Results are search snippets, not sources. Use read_webpage on a URL above before
             Some(v) => std::env::set_var(key, v),
             None => std::env::remove_var(key),
         }
+    }
+
+    /// Run `f` with the rate override set, restoring the environment after.
+    fn with_rps_override(value: &str, f: impl FnOnce()) {
+        with_env_override(crate::constants::ENV_BRAVE_SEARCH_MAX_RPS, value, f);
+    }
+
+    /// Run `f` with the concurrency override set, restoring it after.
+    fn with_concurrency_override(value: &str, f: impl FnOnce()) {
+        with_env_override(crate::constants::ENV_BRAVE_SEARCH_MAX_CONCURRENT, value, f);
     }
 
     /// The tool must never be taken offline by a typo in an env var.
@@ -302,6 +311,34 @@ Results are search snippets, not sources. Use read_webpage on a URL above before
     fn a_valid_rate_override_is_used() {
         with_rps_override("20", || {
             assert!((configured_rps() - 20.0).abs() < f64::EPSILON);
+        });
+    }
+
+    #[test]
+    fn a_malformed_concurrency_override_falls_back_to_the_compiled_default() {
+        with_concurrency_override("lots", || {
+            assert_eq!(
+                configured_concurrency(),
+                crate::constants::BRAVE_SEARCH_MAX_CONCURRENT
+            );
+        });
+    }
+
+    /// A zero would wedge the semaphore shut: no search could ever get a slot.
+    #[test]
+    fn a_zero_concurrency_override_is_ignored() {
+        with_concurrency_override("0", || {
+            assert_eq!(
+                configured_concurrency(),
+                crate::constants::BRAVE_SEARCH_MAX_CONCURRENT
+            );
+        });
+    }
+
+    #[test]
+    fn a_valid_concurrency_override_is_used() {
+        with_concurrency_override("8", || {
+            assert_eq!(configured_concurrency(), 8);
         });
     }
 }

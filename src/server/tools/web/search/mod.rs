@@ -58,21 +58,40 @@ struct Throttle {
 fn throttle() -> &'static Throttle {
     static THROTTLE: OnceLock<Throttle> = OnceLock::new();
     THROTTLE.get_or_init(|| Throttle {
-        slots: Semaphore::new(crate::constants::BRAVE_SEARCH_MAX_CONCURRENT),
+        slots: Semaphore::new(configured_concurrency()),
         bucket: Mutex::new(TokenBucket::per_second(configured_rps())),
     })
 }
 
 /// Requests per second to allow, from the environment if it says so.
-///
-/// A malformed value falls back to the compiled default rather than failing:
-/// a typo in an env var should not take web search offline.
 fn configured_rps() -> f64 {
-    std::env::var(crate::constants::ENV_BRAVE_SEARCH_MAX_RPS)
-        .ok()
-        .and_then(|v| v.trim().parse::<f64>().ok())
-        .filter(|v| *v > 0.0)
+    env_override(crate::constants::ENV_BRAVE_SEARCH_MAX_RPS)
         .unwrap_or(crate::constants::BRAVE_SEARCH_MAX_RPS)
+}
+
+/// Searches to allow in flight at once, from the environment if it says so.
+///
+/// Paired with [`configured_rps`]: raising the rate alone leaves throughput
+/// pinned at one request per round trip, since the next search cannot start
+/// until the last one releases its slot.
+fn configured_concurrency() -> usize {
+    env_override(crate::constants::ENV_BRAVE_SEARCH_MAX_CONCURRENT)
+        .unwrap_or(crate::constants::BRAVE_SEARCH_MAX_CONCURRENT)
+}
+
+/// Read a positive numeric override from the environment.
+///
+/// A malformed or non-positive value yields `None` so the caller falls back to
+/// the compiled default rather than failing: a typo in an env var should not
+/// take web search offline, and a zero would wedge it shut.
+fn env_override<T>(key: &str) -> Option<T>
+where
+    T: std::str::FromStr + PartialOrd + Default,
+{
+    std::env::var(key)
+        .ok()
+        .and_then(|v| v.trim().parse::<T>().ok())
+        .filter(|v| *v > T::default())
 }
 
 /// Seconds to wait after a 429, from `Retry-After` when the server sent one.
