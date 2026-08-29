@@ -236,6 +236,52 @@ A receipt names a file and says what is in it. It is not the file. Nothing you n
 of that file is in this block.
 </previous_step>
 
+<!-- WHO ELSE IS ON THIS STEP. Absent when nobody is — a lone agent gets no block.
+
+     THIS EXISTED AND WAS REMOVED, and the removal was right on the content it had.
+     Before d24d4560 the system prompt carried a <team> block filled by
+     `build_team_roster_string`, which interpolated `role_description` — a verbatim copy
+     of each agent's whole system prompt. Every agent therefore read every teammate's
+     persona in full: on a six-agent step that is ~5KB of other people's craft prose, and
+     it still never said what any of them would leave on disk. It went out with <mission>
+     and <instructions> in the pass that cut the user message from seven blocks to three.
+
+     WHAT COMES BACK IS THE CONTRACT, NOT THE PERSONA. `build_team_blocks` summarises each
+     teammate's expected_output to its first sentence, capped at 160 bytes. Roughly 60
+     bytes a teammate instead of 700, and it answers the question an agent can act on.
+
+     GROUPED BY DAG LEVEL, not by execution_order — level is what decides concurrency;
+     execution_order only sorts within one. The groups are the three facts that change
+     what an agent does: whose receipts it already holds, who is writing to the same
+     workspace at this moment, and who has to be able to use what it leaves.
+
+     THE COLLISION LINE IS THE POINT OF THE "beside you" GROUP.
+     config/system_agent/system.md tells the DESIGNER that two agents both reaching for a
+     sensible name like `utils.py` "is not a rare collision". The designer can hand out
+     separate roots, but the agent choosing the filename is this one, and until now that
+     fact reached nobody who could act on it.
+
+     THE TWO "before you" GROUPS ARE NOT THE SAME GROUP. `filter_outputs_for_agent` passes
+     on the receipts of the agents named in receives_from and no others, so an agent three
+     levels down hears from its direct predecessor and hears nothing from the rest — whose
+     files are nevertheless on the workspace. Collapsing the two teaches an agent to go
+     looking in <previous_step> for a handoff it was never sent.
+
+     IT SITS BETWEEN THE RECEIPTS AND THE ASSIGNMENT, and in the user message rather than
+     the system prompt. The designed system_prompt is already 3-6% of what this agent
+     reads; teammates in there push its own identity further under boilerplate. In this
+     order the three blocks read from the outside in: what the team said, who the team is,
+     what this agent owns. -->
+<team>
+Who else is working this step, what each of them is contracted to produce, and whether
+they ran before you, are running beside you now, or run after you. Absent when you are
+the only agent on the step.
+
+A name here is a teammate, not a tool and not somebody to wait for. You cannot talk to
+them. What you can do is not overwrite what they are writing, and leave what the ones
+after you are going to open.
+</team>
+
 <assignment>
 What to produce. Always here.
 </assignment>

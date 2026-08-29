@@ -253,3 +253,182 @@ fn format_envelope_data(data: &JsonValue) -> String {
         other => serde_json::to_string_pretty(other).unwrap_or_default(),
     }
 }
+
+/// Per-teammate cap on the deliverable summary in a `<team>` block.
+const MAX_TEAM_DELIVERABLE_BYTES: usize = 160;
+
+/// Reduce an `expected_output` contract to a single roster line.
+///
+/// The roster answers "what is this teammate producing", not "how does it
+/// think" — so it summarises `expected_output` and never `system_prompt`. The
+/// block this feeds used to exist (`build_team_roster_string`, removed in
+/// d24d4560) and interpolated `role_description`, which is a verbatim copy of
+/// the agent's whole system prompt. On a six-agent step that put ~5KB of other
+/// agents' persona prose into every agent's context and still did not say what
+/// any of them would leave on disk.
+fn summarize_deliverable(expected: &str) -> String {
+    let flat = expected.split_whitespace().collect::<Vec<_>>().join(" ");
+    if flat.is_empty() {
+        return String::new();
+    }
+
+    // First sentence, when one ends inside the cap. A contract's opening
+    // sentence is the shape of the artifact; what follows is usually the
+    // handoff note, which is the next agent's business and not the roster's.
+    let sentence_end = flat
+        .char_indices()
+        .find(|&(i, c)| c == '.' && flat[i + 1..].starts_with(' '))
+        .map(|(i, _)| i + 1);
+    if let Some(end) = sentence_end {
+        if end <= MAX_TEAM_DELIVERABLE_BYTES {
+            return flat[..end].to_string();
+        }
+    }
+
+    if flat.len() <= MAX_TEAM_DELIVERABLE_BYTES {
+        return flat;
+    }
+    let mut end = MAX_TEAM_DELIVERABLE_BYTES;
+    while end > 0 && !flat.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}…", flat[..end].trim_end())
+}
+
+/// One roster line: name, and what that agent is contracted to leave behind.
+fn team_line(prompt: &DesignedAgentPrompt) -> String {
+    let deliverable = prompt
+        .expected_output
+        .as_deref()
+        .map(summarize_deliverable)
+        .unwrap_or_default();
+
+    if deliverable.is_empty() {
+        format!("  - {}", prompt.agent_name)
+    } else {
+        format!("  - {} — {}", prompt.agent_name, deliverable)
+    }
+}
+
+/// Build the per-agent `<team>` block for every agent in a step.
+///
+/// Returns one entry per prompt, parallel to `prompts`. A step with fewer than
+/// two agents gets empty strings: "you are one of one" is noise, and the
+/// builder omits the block when it is empty.
+///
+/// Grouping is by DAG level rather than by `execution_order`, because level is
+/// what actually decides concurrency — `execution_order` only sorts within a
+/// level. The three groups are the three facts an agent can act on: whose
+/// receipts it already has, who is writing to the same workspace at the same
+/// moment, and who has to be able to use what it leaves.
+///
+/// The collision warning is here because the workers are the ones choosing
+/// filenames. `config/system_agent/system.md` warns the *designer* that two
+/// agents reaching for `utils.py` "is not a rare collision", and until now that
+/// fact reached no one who could avoid it.
+pub(crate) fn build_team_blocks(prompts: &[DesignedAgentPrompt]) -> Vec<String> {
+    if prompts.len() < 2 {
+        return vec![String::new(); prompts.len()];
+    }
+
+    let levels = compute_execution_levels(prompts);
+    let mut level_of = vec![usize::MAX; prompts.len()];
+    for (level, indices) in levels.iter().enumerate() {
+        for &i in indices {
+            level_of[i] = level;
+        }
+    }
+
+    prompts
+        .iter()
+        .enumerate()
+        .map(|(i, me)| build_one_team_block(prompts, &level_of, i, me))
+        .collect()
+}
+
+fn build_one_team_block(
+    prompts: &[DesignedAgentPrompt],
+    level_of: &[usize],
+    me_idx: usize,
+    me: &DesignedAgentPrompt,
+) -> String {
+    // An empty receives_from means `filter_outputs_for_agent` hands this agent
+    // every prior output, so the roster must say "all of them", not "none".
+    let receives: HashSet<String> = me
+        .receives_from
+        .iter()
+        .map(|n| normalize_agent_name(n))
+        .collect();
+    let receives_all = receives.is_empty();
+
+    let mut received: Vec<String> = Vec::new();
+    let mut earlier_unseen: Vec<String> = Vec::new();
+    let mut beside: Vec<String> = Vec::new();
+    let mut after: Vec<String> = Vec::new();
+    let mut unscheduled: Vec<String> = Vec::new();
+
+    for (j, other) in prompts.iter().enumerate() {
+        if j == me_idx {
+            continue;
+        }
+        let line = team_line(other);
+
+        // A cycle leaves an agent out of Kahn's levels entirely. Validation
+        // should reject that upstream; listing them plainly beats dropping a
+        // teammate out of the roster without a word.
+        if level_of[j] == usize::MAX || level_of[me_idx] == usize::MAX {
+            unscheduled.push(line);
+            continue;
+        }
+
+        match level_of[j].cmp(&level_of[me_idx]) {
+            std::cmp::Ordering::Less => {
+                if receives_all || receives.contains(&normalize_agent_name(&other.agent_name)) {
+                    received.push(line);
+                } else {
+                    earlier_unseen.push(line);
+                }
+            }
+            std::cmp::Ordering::Equal => beside.push(line),
+            std::cmp::Ordering::Greater => after.push(line),
+        }
+    }
+
+    let mut block = format!(
+        "You are {}, one of {} agents on this step. All of you share one workspace \
+         at /workspace.",
+        me.agent_name,
+        prompts.len()
+    );
+
+    let mut section = |heading: &str, lines: &[String]| {
+        if !lines.is_empty() {
+            block.push_str("\n\n");
+            block.push_str(heading);
+            block.push('\n');
+            block.push_str(&lines.join("\n"));
+        }
+    };
+
+    section(
+        "Ran before you — their receipts are in <previous_step> above:",
+        &received,
+    );
+    section(
+        "Also ran before you — their receipts are not passed to you, but their files are \
+         on the workspace:",
+        &earlier_unseen,
+    );
+    section(
+        "Running beside you right now — you cannot see their work, and two agents writing \
+         one path is a collision:",
+        &beside,
+    );
+    section(
+        "Runs after you — they have to be able to use what you leave:",
+        &after,
+    );
+    section("Also on this step:", &unscheduled);
+
+    block
+}

@@ -7,8 +7,9 @@ mod tests {
     use crate::db::fixtures::fixtures::*;
     use crate::execution::diagnostics::types::{ChangeType, FileChange};
     use crate::server::hub::dag::pipeline::{
-        build_filtered_outputs_block, build_upstream_outputs_block, compose_workforce_output,
-        compute_execution_levels, filter_outputs_for_agent, passdown_entries, DesignedAgentPrompt,
+        build_filtered_outputs_block, build_team_blocks, build_upstream_outputs_block,
+        compose_workforce_output, compute_execution_levels, filter_outputs_for_agent,
+        passdown_entries, DesignedAgentPrompt,
     };
 
     // ── Output Composition ────────────────────────────────────────────────────
@@ -387,6 +388,7 @@ mod tests {
         use super::super::agent_executor::TaskPromptBuilder;
 
         let prompt = TaskPromptBuilder {
+            team: String::new(),
             previous_step: "Prior output text".to_string(),
             assignment: "Do the thing".to_string(),
             expected_output: Some("Describe what you did".to_string()),
@@ -407,6 +409,7 @@ mod tests {
         use super::super::agent_executor::TaskPromptBuilder;
 
         let prompt = TaskPromptBuilder {
+            team: String::new(),
             previous_step: String::new(),
             assignment: "Do the thing".to_string(),
             expected_output: None,
@@ -423,6 +426,7 @@ mod tests {
         use super::super::agent_executor::TaskPromptBuilder;
 
         let prompt = TaskPromptBuilder {
+            team: String::new(),
             previous_step: String::new(),
             assignment: "Do the thing".to_string(),
             expected_output: Some(String::new()),
@@ -438,6 +442,7 @@ mod tests {
         use super::super::agent_executor::TaskPromptBuilder;
 
         let prompt = TaskPromptBuilder {
+            team: String::new(),
             previous_step: "output".to_string(),
             assignment: "task".to_string(),
             expected_output: Some("result".to_string()),
@@ -458,6 +463,7 @@ mod tests {
         use super::super::agent_executor::TaskPromptBuilder;
 
         let prompt = TaskPromptBuilder {
+            team: String::new(),
             previous_step: "prev".to_string(),
             assignment: "assign".to_string(),
             expected_output: Some("expect".to_string()),
@@ -481,6 +487,7 @@ mod tests {
         use super::super::agent_executor::TaskPromptBuilder;
 
         let prompt = TaskPromptBuilder {
+            team: String::new(),
             previous_step: String::new(),
             assignment: "Do the thing".to_string(),
             expected_output: Some("A summary of the findings".to_string()),
@@ -501,6 +508,7 @@ mod tests {
         use super::super::agent_executor::TaskPromptBuilder;
 
         let prompt = TaskPromptBuilder {
+            team: String::new(),
             previous_step: String::new(),
             assignment: "Do the thing".to_string(),
             expected_output: Some("A summary of the findings".to_string()),
@@ -708,6 +716,7 @@ mod tests {
                         have no write access in this step.";
 
         let prompt = TaskPromptBuilder {
+            team: String::new(),
             previous_step: String::new(),
             assignment: "Verify the build against the spec".to_string(),
             expected_output: Some(designed.to_string()),
@@ -871,5 +880,211 @@ mod tests {
 
         assert_eq!(entries.len(), 10);
         assert_eq!(dropped, 4);
+    }
+
+    // ── Team roster (<team> block) ────────────────────────────────────────────
+
+    fn with_deliverable(
+        name: &str,
+        receives_from: &[&str],
+        deliverable: &str,
+    ) -> DesignedAgentPrompt {
+        let mut p = make_designed_prompt(name, receives_from);
+        p.expected_output = Some(deliverable.to_string());
+        p.system_prompt = format!("{name} persona prose that must never reach the roster.");
+        p
+    }
+
+    /// A step's whole team is one agent — there is nobody to introduce.
+    #[test]
+    fn team_block_is_empty_for_a_lone_agent() {
+        let prompts = vec![with_deliverable(
+            "Implementer",
+            &[],
+            "A directory holding the app.",
+        )];
+
+        let blocks = build_team_blocks(&prompts);
+
+        assert_eq!(blocks.len(), 1);
+        assert!(blocks[0].is_empty());
+    }
+
+    /// The decomposition this block exists to support: four builders working
+    /// the same level against named interfaces, then a tester downstream.
+    #[test]
+    fn team_block_groups_teammates_by_execution_level() {
+        let prompts = vec![
+            with_deliverable("Search Client", &[], "search.py, exposing search(domain)."),
+            with_deliverable(
+                "Schema Validator",
+                &[],
+                "schema.py, exposing validate(obj).",
+            ),
+            with_deliverable(
+                "Prompt Builder",
+                &[],
+                "prompt.py, exposing build_prompt(findings).",
+            ),
+            with_deliverable(
+                "Tester",
+                &["Search Client", "Schema Validator", "Prompt Builder"],
+                "A tests/ directory exercising every module seam.",
+            ),
+        ];
+
+        let blocks = build_team_blocks(&prompts);
+
+        // A level-0 builder sees the other two builders beside it and the
+        // tester after it, and nothing before it.
+        let searcher = &blocks[0];
+        assert!(searcher.starts_with("You are Search Client, one of 4 agents on this step."));
+        assert!(searcher.contains("Running beside you right now"));
+        assert!(searcher.contains("  - Schema Validator — schema.py, exposing validate(obj)."));
+        assert!(
+            searcher.contains("  - Prompt Builder — prompt.py, exposing build_prompt(findings).")
+        );
+        assert!(searcher.contains("Runs after you"));
+        assert!(searcher.contains("  - Tester — A tests/ directory exercising every module seam."));
+        assert!(!searcher.contains("Ran before you"));
+        // It never lists itself.
+        assert!(!searcher.contains("  - Search Client"));
+
+        // The tester sees all three upstream, none beside it.
+        let tester = &blocks[3];
+        assert!(tester.contains("Ran before you — their receipts are in <previous_step> above:"));
+        assert!(tester.contains("  - Search Client"));
+        assert!(tester.contains("  - Schema Validator"));
+        assert!(tester.contains("  - Prompt Builder"));
+        assert!(!tester.contains("Running beside you"));
+        assert!(!tester.contains("Runs after you"));
+    }
+
+    /// The old `build_team_roster_string` interpolated `role_description` — a
+    /// verbatim copy of the whole system prompt. The roster carries contracts.
+    #[test]
+    fn team_block_carries_deliverables_never_system_prompts() {
+        let prompts = vec![
+            with_deliverable("Implementer", &[], "A directory holding the application."),
+            with_deliverable("Tester", &["Implementer"], "A tests/ directory."),
+        ];
+
+        let blocks = build_team_blocks(&prompts);
+
+        for block in &blocks {
+            assert!(!block.contains("persona prose"));
+        }
+        assert!(blocks[1].contains("  - Implementer — A directory holding the application."));
+    }
+
+    /// An explicit `receives_from` that skips an earlier agent: its files are
+    /// on the workspace but its receipt never arrives, and conflating the two
+    /// is how an agent goes looking for a handoff it was never sent.
+    #[test]
+    fn team_block_separates_predecessors_whose_receipts_do_not_arrive() {
+        let prompts = vec![
+            with_deliverable("Scanner", &[], "findings.json holding the raw scan."),
+            with_deliverable("Archivist", &[], "an archive/ directory of source pages."),
+            with_deliverable("Writer", &["Scanner"], "report.md summarising the scan."),
+        ];
+
+        let blocks = build_team_blocks(&prompts);
+        let writer = &blocks[2];
+
+        assert!(writer.contains("Ran before you — their receipts are in <previous_step> above:"));
+        assert!(writer.contains("  - Scanner — findings.json holding the raw scan."));
+        assert!(writer.contains("Also ran before you — their receipts are not passed to you"));
+        assert!(writer.contains("  - Archivist — an archive/ directory of source pages."));
+    }
+
+    /// Down a three-level chain, an agent names only its direct predecessor.
+    /// Everything else that already ran is on the workspace but silent, and
+    /// the roster has to say which is which without dropping anyone.
+    #[test]
+    fn team_block_lists_unnamed_predecessors_as_unreceived() {
+        let prompts = vec![
+            with_deliverable("Scanner", &[], "findings.json."),
+            with_deliverable("Archivist", &[], "an archive/ directory."),
+            with_deliverable("Writer", &["Scanner"], "report.md."),
+            with_deliverable("Editor", &["Writer"], "final.md."),
+        ];
+
+        let blocks = build_team_blocks(&prompts);
+        let editor = &blocks[3];
+
+        assert!(editor.contains("  - Writer — report.md."));
+        assert!(editor.contains("Also ran before you"));
+        assert!(editor.contains("  - Scanner"));
+        assert!(editor.contains("  - Archivist"));
+    }
+
+    /// A long contract is cut to its first sentence; a very long first
+    /// sentence is cut on a character boundary, not mid-codepoint.
+    #[test]
+    fn team_block_summarizes_long_deliverables_safely() {
+        let long_first_sentence = format!("Une livraison — {} — terminée", "é".repeat(300));
+        let prompts = vec![
+            with_deliverable(
+                "Implementer",
+                &[],
+                "A directory holding the application. It also carries a README covering install \
+                 and configuration, plus notes for whoever picks this up next.",
+            ),
+            with_deliverable("Tester", &["Implementer"], &long_first_sentence),
+            with_deliverable("Reviewer", &["Tester"], ""),
+        ];
+
+        let blocks = build_team_blocks(&prompts);
+
+        // First sentence only — the handoff note is the next agent's business.
+        assert!(blocks[1].contains("  - Implementer — A directory holding the application."));
+        assert!(!blocks[1].contains("README covering install"));
+
+        // Truncated, on a boundary, and marked.
+        let reviewer = &blocks[2];
+        assert!(reviewer.contains('…'));
+        assert!(reviewer.contains("  - Tester — Une livraison"));
+
+        // An agent with no stated contract is still named.
+        assert!(blocks[0].contains("  - Reviewer"));
+        assert!(!blocks[0].contains("Reviewer — "));
+    }
+
+    #[test]
+    fn task_prompt_builder_places_team_between_receipts_and_assignment() {
+        use super::super::agent_executor::TaskPromptBuilder;
+
+        let prompt = TaskPromptBuilder {
+            previous_step: "Prior output text".to_string(),
+            team: "You are Tester, one of 2 agents on this step.".to_string(),
+            assignment: "Do the thing".to_string(),
+            expected_output: Some("Describe what you did".to_string()),
+            has_container: true,
+        }
+        .build();
+
+        assert!(prompt.contains("<team>\nYou are Tester, one of 2 agents on this step.\n</team>"));
+
+        let previous = prompt.find("<previous_step>").unwrap();
+        let team = prompt.find("<team>").unwrap();
+        let assignment = prompt.find("<assignment>").unwrap();
+        assert!(previous < team && team < assignment);
+    }
+
+    #[test]
+    fn task_prompt_builder_omits_an_empty_team_block() {
+        use super::super::agent_executor::TaskPromptBuilder;
+
+        let prompt = TaskPromptBuilder {
+            previous_step: String::new(),
+            team: String::new(),
+            assignment: "Do the thing".to_string(),
+            expected_output: None,
+            has_container: true,
+        }
+        .build();
+
+        assert!(!prompt.contains("<team>"));
+        assert!(prompt.starts_with("<assignment>"));
     }
 }
