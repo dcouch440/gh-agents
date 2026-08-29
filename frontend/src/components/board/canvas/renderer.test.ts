@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { renderBoard, resolveBoxStroke } from './renderer'
 import type { DrawTheme } from './renderer'
 import { addBox, createBox, emptyBoard } from '../elements'
-import type { StatusRing } from '@/utils/statusRing'
+import type { StatusRing } from './statusRing'
 
 /**
  * These assert that a ring reaches the canvas at all.

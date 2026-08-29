@@ -34,16 +34,9 @@
   transition: background-color 200ms ease, border-color 200ms ease;
 }
 
-/* Node status ring — declared once globally rather than re-injected by MUI
-   per component instance. Only the ::after pseudo-element's opacity animates,
-   which stays on the compositor and leaves node content untouched.
-   The reduced-motion opt-out lives in getStatusRingSx, next to the animation. */
-@keyframes nodeRingPulse {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
-}
-
-/* Sidebar status dot spinner — likewise declared once instead of per instance. */
+/* Sidebar status dot spinner — declared once instead of re-injected by MUI per
+   component instance. The board's own ring pulse is not here: it animates
+   imperatively in Canvas2D's rAF loop, because it paints to a canvas. */
 @keyframes statusDotSpin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }

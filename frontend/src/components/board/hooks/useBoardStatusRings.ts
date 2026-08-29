@@ -3,8 +3,8 @@ import { useTheme } from '@mui/material/styles'
 import { useStore, boardStore, workflowLiveStore, workflowExecutionStore } from '@/stores'
 import { Collections } from '@/utils/collections'
 import { resolveNodeStatus } from '@/utils/resolveNodeStatus'
-import { resolveStatusRing } from '@/utils/statusRing'
-import type { StatusRing } from '@/utils/statusRing'
+import { resolveStatusRing } from '../canvas/statusRing'
+import type { StatusRing } from '../canvas/statusRing'
 import { BOARD_RING } from '../constants'
 
 /**

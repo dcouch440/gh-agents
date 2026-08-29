@@ -12,7 +12,7 @@ import type { ActiveTool, AnchorPoint, BoardElements, DrawingArrow, DrawingBox, 
 import { detectEdgeHover, eventToCanvas, hitTestArrow, hitTestBox, hitTestPen, hitTestResizeHandles, RESIZE_CURSORS } from '../elements'
 import { renderBoard } from './renderer'
 import type { DrawTheme } from './renderer'
-import type { StatusRing } from '@/utils/statusRing'
+import type { StatusRing } from './statusRing'
 import { computeTextareaStyle } from './textareaStyle'
 
 // ── Props ─────────────────────────────────────────────────────────────────

@@ -19,7 +19,7 @@ import type { EdgeHover } from '../elements'
 import { getStrokeOutline } from '../pen'
 import { fillOutlinePath } from '../pen'
 import { wrapText } from './textMeasure'
-import type { StatusRing } from '@/utils/statusRing'
+import type { StatusRing } from './statusRing'
 
 type DrawTheme = {
   readonly canvasBg: string
