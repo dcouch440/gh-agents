@@ -118,6 +118,15 @@ function StepTree() {
           dispatch,
         })
 
+        // While designing, the live phase marker; once it has failed, the
+        // reason. The live-state dispatch is the fallback because its `result`
+        // carries the failure text across a refresh, when the socket event
+        // that first delivered it is long gone.
+        const dispatchEntry = dispatchEntries[entry.step.id]
+        const designMessage = resolved.designStatus === 'failed'
+          ? dispatchEntry?.error ?? dispatch?.result ?? 'design failed'
+          : dispatchEntry?.message ?? null
+
         return (
           <StepTreeRow
             key={entry.step.id}
@@ -133,7 +142,7 @@ function StepTree() {
             onToggle={() => { sidebarStore.toggleStep(entry.step.id) }}
             onToggleOutputExpand={() => { sidebarStore.toggleOutputExpand(entry.step.id) }}
             designStatus={resolved.designStatus}
-            designProgress={dispatchEntries[entry.step.id]?.message ?? null}
+            designProgress={designMessage}
             pinned={resolved.pinned || entry.step.pinned}
             onTogglePin={() => { void workflowStore.togglePin(entry.step.id, !entry.step.pinned) }}
           />

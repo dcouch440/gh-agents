@@ -53,6 +53,30 @@ describe('hydrateFromApi', () => {
     expect(dispatchStore.store.getState().byStep['step-1']?.status).toBe('completed')
   })
 
+  it('reads a failed dispatch result as the error, not a summary', () => {
+    // mark_failed stores the failure text in the task's `result`, so filing it
+    // as a summary lost the reason a design failed on every refresh.
+    dispatchStore.hydrateFromApi(makeTrace({
+      status: 'failed',
+      result: 'System node agent timed out after 120s',
+    }))
+
+    const entry = dispatchStore.store.getState().byStep['step-1']
+    expect(entry?.error).toBe('System node agent timed out after 120s')
+    expect(entry?.summary).toBeNull()
+  })
+
+  it('keeps an error delivered over the socket when REST has no result', () => {
+    dispatchStore.handleWsEvent(makeMsg(SESSION_EVENT.DISPATCH_FAILED, {
+      step_id: 'step-1',
+      error: 'container create failed',
+    }))
+
+    dispatchStore.hydrateFromApi(makeTrace({ status: 'failed', result: null }))
+
+    expect(dispatchStore.store.getState().byStep['step-1']?.error).toBe('container create failed')
+  })
+
   it('keeps the longer local trace when WebSocket is ahead of REST', () => {
     dispatchStore.handleWsEvent(makeMsg(SESSION_EVENT.DISPATCH_STARTED, {
       step_id: 'step-1', execution_id: 'exec-1', instruction: 'i',

@@ -69,6 +69,31 @@ describe('DispatchAccordionRow', () => {
     expect(screen.getByText('Configured single-agent team')).toBeInTheDocument()
   })
 
+  it('shows the failure reason on a failed row without expanding it', () => {
+    render(
+      <DispatchAccordionRow
+        stepName="Research"
+        instruction="Configure this node"
+        entry={makeEntry({ status: 'failed', summary: null, error: 'System node agent timed out after 120s' })}
+      />,
+    )
+    expect(screen.getByText('System node agent timed out after 120s')).toBeInTheDocument()
+  })
+
+  it('shows the failure reason in full when expanded', () => {
+    render(
+      <DispatchAccordionRow
+        stepName="Research"
+        instruction="Configure this node"
+        entry={makeEntry({ status: 'failed', summary: null, error: 'boom' })}
+      />,
+    )
+
+    fireEvent.click(screen.getByText('Research'))
+
+    expect(screen.getByText('boom')).toBeInTheDocument()
+  })
+
   it('shows waiting message when expanded with null entry', () => {
     render(
       <DispatchAccordionRow stepName="Research" instruction="Configure" entry={null} />,

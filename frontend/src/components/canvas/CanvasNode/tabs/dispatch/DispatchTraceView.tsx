@@ -1,6 +1,7 @@
 import { useMemo, useRef, useEffect, useState } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
+import { alpha } from '@mui/material/styles'
 import { TerminalBlock } from '@/components/primitives'
 import { ToolCallCard } from './ToolCallCard'
 import { buildDispatchSegments } from './traceSegments'
@@ -81,9 +82,17 @@ function DispatchTraceView({ entry }: DispatchTraceViewProps) {
             return (
               <Box
                 key={`error-${i}`}
-                sx={{ bgcolor: '#f8514920', px: 1.5, py: 0.5, borderRadius: 1, my: 0.5 }}
+                sx={{
+                  bgcolor: (t) => alpha(t.palette.statusPalette.failed, 0.13),
+                  px: 1.5,
+                  py: 0.5,
+                  borderRadius: 1,
+                  my: 0.5,
+                }}
               >
-                <Typography sx={{ color: '#f85149', fontSize: 10, fontFamily: 'monospace' }}>
+                <Typography
+                  sx={{ color: (t) => t.palette.statusPalette.failed, fontSize: 10, fontFamily: 'monospace' }}
+                >
                   {segment.error}
                 </Typography>
               </Box>

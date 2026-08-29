@@ -5,6 +5,7 @@ import { useTheme } from '@mui/material/styles'
 import PushPinIcon from '@mui/icons-material/PushPin'
 import PushPinOutlinedIcon from '@mui/icons-material/PushPinOutlined'
 import { TerminalBlock } from '@/components/primitives/terminal-renderer'
+import { designStatusColor } from '@/utils/statusColor'
 import { StatusDot } from './StatusDot'
 import { SkeletonLines } from './SkeletonLines'
 import { CELL_WIDTH, LINE_X, STROKE, HEADER_CENTER, computeLines } from './gutterLines'
@@ -27,6 +28,7 @@ type StepTreeRowProps = {
   readonly onToggle: () => void
   readonly onToggleOutputExpand: () => void
   readonly designStatus?: SourceStreamStatus | null
+  /** Design-phase line: the live phase marker, or the reason a design failed. */
   readonly designProgress?: string | null
   readonly pinned: boolean
   readonly onTogglePin: () => void
@@ -122,7 +124,13 @@ function StepTreeRow({
   onTogglePin,
 }: StepTreeRowProps) {
   const theme = useTheme()
+  const statusPalette = theme.palette.statusPalette
   const resolved = status ?? 'idle'
+  // Only the two design states with something to say get a line of their own.
+  const designMessageColor =
+    designStatus === 'running' || designStatus === 'failed'
+      ? designStatusColor(designStatus, statusPalette)
+      : null
   const isWorkforce = executionMode === 'workforce'
   const lines = computeLines(gutter)
   const lineColor = theme.palette.text.disabled
@@ -240,12 +248,14 @@ function StepTreeRow({
             {name || 'Untitled'}
           </Typography>
 
-          {/* Latest dispatch phase marker (e.g. "designing agents") */}
-          {designStatus === 'running' && designProgress !== null && (
+          {/* Latest dispatch phase marker (e.g. "designing agents"), or, once a
+              design has failed, why — otherwise the row went red in silence. */}
+          {designMessageColor !== null && designProgress !== null && designProgress !== '' && (
             <Typography
+              title={designProgress}
               sx={{
                 fontSize: 10,
-                color: '#58a6ff',
+                color: designMessageColor,
                 fontFamily: 'monospace',
                 flexShrink: 0,
                 ml: 0.5,
@@ -295,7 +305,7 @@ function StepTreeRow({
               <Typography
                 variant="body2"
                 sx={{
-                  color: '#f85149',
+                  color: statusPalette.failed,
                   fontSize: '0.75rem',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',

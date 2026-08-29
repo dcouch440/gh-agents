@@ -24,6 +24,10 @@ function DispatchAccordionRow({ stepName, instruction, entry }: DispatchAccordio
     ? entry.trace.filter((e) => e.type === 'tool_start').length
     : 0
 
+  // A failed dispatch's reason is the one thing worth reading on the row: the
+  // chip says `failed`, and without this the instruction was all it showed.
+  const failure = entry?.status === 'failed' ? entry.error : null
+
   return (
     <Box
       sx={{
@@ -100,9 +104,9 @@ function DispatchAccordionRow({ stepName, instruction, entry }: DispatchAccordio
           <Typography
             sx={{
               fontSize: 10,
-              color: 'text.disabled',
-              fontStyle: 'italic',
-  
+              color: failure !== null ? (t) => t.palette.statusPalette.failed : 'text.disabled',
+              fontStyle: failure !== null ? 'normal' : 'italic',
+              fontFamily: failure !== null ? 'monospace' : undefined,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -110,7 +114,7 @@ function DispatchAccordionRow({ stepName, instruction, entry }: DispatchAccordio
               minWidth: 0,
             }}
           >
-            {instruction.slice(0, 80)}{instruction.length > 80 ? '...' : ''}
+            {failure ?? `${instruction.slice(0, 80)}${instruction.length > 80 ? '...' : ''}`}
           </Typography>
           {toolCount > 0 && (
             <Typography sx={{ fontSize: 10, color: 'text.disabled', fontFamily: 'monospace', flexShrink: 0 }}>
@@ -135,6 +139,22 @@ function DispatchAccordionRow({ stepName, instruction, entry }: DispatchAccordio
             <Box sx={{ px: 1.5, py: 0.5 }}>
               <Typography sx={{ fontFamily: 'monospace', fontSize: 11, color: 'success.main' }}>
                 {entry.summary}
+              </Typography>
+            </Box>
+          )}
+
+          {failure !== null && (
+            <Box sx={{ px: 1.5, py: 0.5 }}>
+              <Typography
+                sx={{
+                  fontFamily: 'monospace',
+                  fontSize: 11,
+                  color: (t) => t.palette.statusPalette.failed,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {failure}
               </Typography>
             </Box>
           )}
