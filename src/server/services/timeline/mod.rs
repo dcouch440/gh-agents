@@ -86,7 +86,7 @@ pub async fn get_execution_timeline(
     // Reverse to chronological order (oldest first)
     rows.reverse();
 
-    let entries = rows.into_iter().map(map_row_to_entry).collect();
+    let entries = rows.into_iter().flat_map(map_row_to_entries).collect();
 
     Ok(TimelineResponse {
         entries,
@@ -95,46 +95,138 @@ pub async fn get_execution_timeline(
     })
 }
 
-fn map_row_to_entry(row: TimelineRow) -> TimelineEntry {
-    let (kind, tool_name, tool_call_id) = classify_message(&row);
+/// Marker the engine writes ahead of each tool call in an assistant row.
+const TOOL_USE_PREFIX: &str = "tool_use: ";
 
-    TimelineEntry {
-        id: row.id,
-        ts: row.ts,
-        kind,
-        step_id: row.step_id,
-        step_name: row.step_name,
-        agent_name: row.agent_name,
-        agent_execution_id: row.agent_execution_id,
-        content: row.content,
-        reasoning: row.reasoning,
-        tool_name,
-        tool_call_id: row.tool_call_id.clone().or(tool_call_id),
-        input_tokens: row.input_tokens,
-        output_tokens: row.output_tokens,
+/// One timeline entry's worth of an `execution_messages` row, before it is
+/// given an id and the row's shared metadata.
+struct Segment {
+    kind: TimelineEntryKind,
+    content: String,
+    tool_name: Option<String>,
+}
+
+/// Split one row into the entries it actually represents.
+///
+/// An assistant row can hold a text block *and* several `tool_use:` lines: the
+/// engine joins every content block of a turn into a single row. The frontend
+/// pairs calls against results, so a row holding N calls has to yield N call
+/// entries — when it yielded one, the call counter fell behind the result
+/// counter and every later card rendered a different call's result.
+fn map_row_to_entries(row: TimelineRow) -> Vec<TimelineEntry> {
+    let segments = split_row(&row);
+
+    // A row with several calls has no id to give any one of them, so the
+    // frontend falls back to positional pairing — which is correct once the
+    // counts agree. Only a row carrying exactly one call can hand its id over.
+    let call_count = segments
+        .iter()
+        .filter(|s| matches!(s.kind, TimelineEntryKind::ToolCall))
+        .count();
+
+    segments
+        .into_iter()
+        .enumerate()
+        .map(|(i, seg)| {
+            let tool_call_id = match seg.kind {
+                TimelineEntryKind::ToolResult => row.tool_call_id.clone(),
+                TimelineEntryKind::ToolCall if call_count == 1 => row.tool_call_id.clone(),
+                _ => None,
+            };
+
+            TimelineEntry {
+                // Derived rather than random so the id is stable across
+                // refetches — the frontend uses it as a list key, and a fresh
+                // uuid per poll would remount every card.
+                id: if i == 0 {
+                    row.id
+                } else {
+                    Uuid::new_v5(&row.id, i.to_string().as_bytes())
+                },
+                ts: row.ts,
+                kind: seg.kind,
+                step_id: row.step_id,
+                step_name: row.step_name.clone(),
+                agent_name: row.agent_name.clone(),
+                agent_execution_id: row.agent_execution_id,
+                content: seg.content,
+                reasoning: row.reasoning.clone(),
+                tool_name: seg.tool_name,
+                tool_call_id,
+                input_tokens: row.input_tokens,
+                output_tokens: row.output_tokens,
+            }
+        })
+        .collect()
+}
+
+/// Break a row into segments by role, splitting assistant rows on `tool_use:`.
+fn split_row(row: &TimelineRow) -> Vec<Segment> {
+    let whole = |kind| {
+        vec![Segment {
+            kind,
+            content: row.content.clone(),
+            tool_name: None,
+        }]
+    };
+
+    match row.role.as_str() {
+        "system" => whole(TimelineEntryKind::SystemPrompt),
+        "user" => whole(TimelineEntryKind::UserMessage),
+        "tool" => whole(TimelineEntryKind::ToolResult),
+        "assistant" => {
+            let segments = split_assistant(&row.content);
+            // An empty assistant row still deserves to be visible.
+            if segments.is_empty() {
+                whole(TimelineEntryKind::AssistantMessage)
+            } else {
+                segments
+            }
+        }
+        _ => whole(TimelineEntryKind::AssistantMessage),
     }
 }
 
-/// Classify message role into timeline entry kind.
-/// Tool calls are detected from assistant messages containing "tool_use:" prefix.
-fn classify_message(row: &TimelineRow) -> (TimelineEntryKind, Option<String>, Option<String>) {
-    match row.role.as_str() {
-        "system" => (TimelineEntryKind::SystemPrompt, None, None),
-        "user" => (TimelineEntryKind::UserMessage, None, None),
-        "assistant" => {
-            // Check if this is a tool call message (format: "tool_use: name {json}")
-            if row.content.starts_with("tool_use: ") {
-                let rest = &row.content["tool_use: ".len()..];
-                let tool_name = rest.split_whitespace().next().map(|s| s.to_string());
-                (TimelineEntryKind::ToolCall, tool_name, None)
-            } else {
-                (TimelineEntryKind::AssistantMessage, None, None)
+/// Split an assistant row into prose and one segment per tool call.
+///
+/// Each call is one line, because the engine formats the input with `Display`
+/// on a `serde_json::Value` and JSON escapes any newline inside a string. The
+/// marker is matched per line rather than at the start of the row: a turn that
+/// opens with prose and then calls tools was previously classified as plain
+/// text, contributing zero call entries against several results.
+fn split_assistant(content: &str) -> Vec<Segment> {
+    let mut segments = Vec::new();
+    let mut prose: Vec<&str> = Vec::new();
+
+    let flush = |prose: &mut Vec<&str>, out: &mut Vec<Segment>| {
+        let text = prose.join("\n");
+        prose.clear();
+        if !text.trim().is_empty() {
+            out.push(Segment {
+                kind: TimelineEntryKind::AssistantMessage,
+                content: text,
+                tool_name: None,
+            });
+        }
+    };
+
+    for line in content.lines() {
+        match line.strip_prefix(TOOL_USE_PREFIX) {
+            Some(rest) => {
+                flush(&mut prose, &mut segments);
+                let (name, payload) = rest.split_once(' ').unwrap_or((rest, ""));
+                segments.push(Segment {
+                    kind: TimelineEntryKind::ToolCall,
+                    // The payload alone, so the frontend can parse it as JSON
+                    // instead of falling back to showing the raw line.
+                    content: payload.to_string(),
+                    tool_name: Some(name.to_string()),
+                });
             }
+            None => prose.push(line),
         }
-        "tool" => {
-            // tool_call_id is already on the row
-            (TimelineEntryKind::ToolResult, None, None)
-        }
-        _ => (TimelineEntryKind::AssistantMessage, None, None),
     }
+    flush(&mut prose, &mut segments);
+
+    segments
 }
