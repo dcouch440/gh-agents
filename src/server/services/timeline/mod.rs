@@ -153,8 +153,12 @@ fn map_row_to_entries(row: TimelineRow) -> Vec<TimelineEntry> {
                 reasoning: row.reasoning.clone(),
                 tool_name: seg.tool_name,
                 tool_call_id,
-                input_tokens: row.input_tokens,
-                output_tokens: row.output_tokens,
+                // Usage belongs to the turn, not to any one segment of it.
+                // Repeating it would multiply a legacy row's tokens by its
+                // block count everywhere entries are summed — the same trap
+                // the engine's per-block writer avoids on the write side.
+                input_tokens: if i == 0 { row.input_tokens } else { 0 },
+                output_tokens: if i == 0 { row.output_tokens } else { 0 },
             }
         })
         .collect()

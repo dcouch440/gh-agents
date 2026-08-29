@@ -103,7 +103,7 @@ const hydrateFromTimeline = async (executionId: string): Promise<void> => {
   // nothing at all.
   const pairsById = new Set(
     Collections.filterMap(entries, (e) =>
-      e.kind === 'tool_call' && e.tool_call_id !== null ? e.agent_execution_id : undefined,
+      e.kind === 'tool_call' && e.tool_call_id !== null ? e.agent_execution_id : null,
     ),
   )
 
