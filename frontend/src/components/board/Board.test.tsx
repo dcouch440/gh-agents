@@ -58,7 +58,7 @@ describe('Board', () => {
   it('renders Canvas and SubmitBar', () => {
     render(<Board workflowId="wf-1" />)
 
-    expect(screen.getByRole('button', { name: /generate/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^design$/i })).toBeInTheDocument()
   })
 
   it('renders toolbar with select, box, and arrow tools', () => {
@@ -99,7 +99,7 @@ describe('Board', () => {
       })
 
       render(<Board workflowId="wf-1" />)
-      await userEvent.click(screen.getByRole('button', { name: /generate/i }))
+      await userEvent.click(screen.getByRole('button', { name: /^design$/i }))
 
       await waitFor(() => { expect(mockGenerate).toHaveBeenCalledWith('wf-1') })
       expect(flushOrder).toEqual(['flush', 'generate'])
@@ -109,7 +109,7 @@ describe('Board', () => {
       mockGenerate.mockResolvedValue({ generating: 0 })
 
       render(<Board workflowId="wf-1" />)
-      await userEvent.click(screen.getByRole('button', { name: /generate/i }))
+      await userEvent.click(screen.getByRole('button', { name: /^design$/i }))
 
       await waitFor(() => {
         expect(workflowLiveStore.selectIsGenerating(workflowLiveStore.store.getState())).toBe(false)
@@ -120,7 +120,7 @@ describe('Board', () => {
       mockGenerate.mockResolvedValue({ generating: 3 })
 
       render(<Board workflowId="wf-1" />)
-      await userEvent.click(screen.getByRole('button', { name: /generate/i }))
+      await userEvent.click(screen.getByRole('button', { name: /^design$/i }))
 
       await waitFor(() => { expect(mockGenerate).toHaveBeenCalled() })
       expect(workflowLiveStore.selectIsGenerating(workflowLiveStore.store.getState())).toBe(true)

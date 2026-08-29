@@ -10,6 +10,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::db::{WorkflowStepEdgeRow, WorkflowStepRow};
@@ -35,6 +36,7 @@ pub async fn run_sequential_design_pipeline(
     instructions: Vec<NodeDispatchInstruction>,
     steps: Vec<WorkflowStepRow>,
     edges: Vec<WorkflowStepEdgeRow>,
+    cancel: CancellationToken,
 ) {
     // Auto-checkpoint before destructive design pipeline
     if let Err(e) = crate::server::services::workflow_agent::versions::save_version(
@@ -81,6 +83,11 @@ pub async fn run_sequential_design_pipeline(
     let mut propagated_count: usize = 0;
 
     for level in &levels {
+        if cancel.is_cancelled() {
+            tracing::info!(workflow_id = %workflow_id, "Design pipeline cancelled");
+            break;
+        }
+
         // Partition level steps into dispatch vs propagate vs skip.
         // Capture old handoffs before any tasks run.
         let mut level_tasks: Vec<(Uuid, Option<NodeDispatchInstruction>, String)> = Vec::new();
@@ -130,6 +137,7 @@ pub async fn run_sequential_design_pipeline(
                     user_id,
                     instr,
                     previous_step_handoff,
+                    &cancel,
                 )
                 .await;
                 dispatched_count += 1;
@@ -140,6 +148,7 @@ pub async fn run_sequential_design_pipeline(
                     workflow_id,
                     user_id,
                     previous_step_handoff,
+                    &cancel,
                 )
                 .await;
                 propagated_count += 1;
@@ -153,6 +162,7 @@ pub async fn run_sequential_design_pipeline(
                 let task_step_id = *step_id;
                 let task_workflow_id = workflow_id;
                 let task_user_id = user_id;
+                let task_cancel = cancel.clone();
                 let parent_ids = crate::server::hub::dag::get_parent_steps(*step_id, &edges);
                 let task_handoff = lookup_previous_handoff(&parent_ids, &step_map);
 
@@ -165,6 +175,7 @@ pub async fn run_sequential_design_pipeline(
                             task_user_id,
                             &instr,
                             task_handoff,
+                            &task_cancel,
                         )
                         .await;
                         (task_step_id, true)
@@ -177,6 +188,7 @@ pub async fn run_sequential_design_pipeline(
                             task_workflow_id,
                             task_user_id,
                             task_handoff,
+                            &task_cancel,
                         )
                         .await;
                         (task_step_id, false)
@@ -285,6 +297,7 @@ async fn run_system_node_dispatch(
     user_id: UserId,
     instruction: &NodeDispatchInstruction,
     previous_step_handoff: Vec<PreviousStepHandoff>,
+    cancel: &CancellationToken,
 ) {
     // Enrich instruction with previous step context
     let enriched_instruction =
@@ -294,11 +307,12 @@ async fn run_system_node_dispatch(
         super::find_or_create_builder_session(state, step_id, workflow_id, user_id, "system_agent")
             .await;
 
-    let (execution_id, _cancel_token) = state.task_registry().spawn_task(
+    let (execution_id, _cancel_token) = state.task_registry().spawn_child_task(
         step_id,
         workflow_id,
         session_id,
         enriched_instruction.clone(),
+        cancel,
     );
 
     state.broadcast_session(SessionEvent {
@@ -333,6 +347,7 @@ async fn run_system_node_propagation(
     workflow_id: Uuid,
     user_id: UserId,
     previous_step_handoff: Vec<PreviousStepHandoff>,
+    cancel: &CancellationToken,
 ) {
     // Use the step's box text (prompt_template) as context for the re-run.
     // prompt_template is the user's raw canvas text; description may be empty.
@@ -377,11 +392,12 @@ async fn run_system_node_propagation(
         super::find_or_create_builder_session(state, step_id, workflow_id, user_id, "system_agent")
             .await;
 
-    let (execution_id, _cancel_token) = state.task_registry().spawn_task(
+    let (execution_id, _cancel_token) = state.task_registry().spawn_child_task(
         step_id,
         workflow_id,
         session_id,
         instruction_text.clone(),
+        cancel,
     );
 
     state.broadcast_session(SessionEvent {

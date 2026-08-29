@@ -42,6 +42,8 @@ const renderCanvas = (elements: BoardElements, onBoxTextChange = vi.fn()) =>
       interaction={{ type: 'editing', boxId: BOX_ID }}
       viewport={{ panX: 0, panY: 0, zoom: 1 }}
       theme={theme}
+      statusRings={new Map()}
+      pulsing={false}
       previews={{ arrow: null, box: null, pen: null }}
       onPointerDown={noop}
       onPointerMove={noop}

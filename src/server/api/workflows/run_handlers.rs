@@ -65,6 +65,7 @@ pub async fn run_workflow(
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     let execution_id = execution.id;
+    let cancel_token = state.register_cancellation(execution_id);
 
     // Extract template_id and initial_input from body before consuming
     let (body_input, template_id) = match body {
@@ -181,7 +182,18 @@ pub async fn run_workflow(
             .update_workflow_execution_status(execution_id, "running", None, None)
             .await;
 
-        match execute_workflow_via_engine(&engine, &bg_state, &ctx, &steps, &edges, None).await {
+        let result = execute_workflow_via_engine(
+            &engine,
+            &bg_state,
+            &ctx,
+            &steps,
+            &edges,
+            Some(&cancel_token),
+        )
+        .await;
+        bg_state.remove_cancellation(execution_id);
+
+        match result {
             Ok(result) => {
                 // Aggregate outputs
                 let mut aggregated = serde_json::Map::new();
@@ -213,6 +225,12 @@ pub async fn run_workflow(
                         duration_ms: Some(result.duration_ms),
                     },
                 );
+            }
+            Err(crate::server::hub::HubError::Cancelled) => {
+                let _ = bg_collection_repo
+                    .update_workflow_execution_status(execution_id, "cancelled", None, None)
+                    .await;
+                broadcast_workflow_event(&bg_state, &ctx, id, WorkflowEventKind::Cancelled);
             }
             Err(e) => {
                 let error_msg = e.to_string();

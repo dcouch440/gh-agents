@@ -110,8 +110,37 @@ impl TaskRegistry {
         session_id: Uuid,
         instruction: String,
     ) -> (Uuid, CancellationToken) {
+        self.insert_task(step_id, workflow_id, session_id, instruction, None)
+    }
+
+    /// Register a new dispatch task whose cancel token is a child of `parent`.
+    ///
+    /// Cancelling `parent` cooperatively cancels this task too, so a pipeline-level
+    /// token can stop an in-flight node dispatch, not just future ones.
+    pub fn spawn_child_task(
+        &self,
+        step_id: Uuid,
+        workflow_id: Uuid,
+        session_id: Uuid,
+        instruction: String,
+        parent: &CancellationToken,
+    ) -> (Uuid, CancellationToken) {
+        self.insert_task(step_id, workflow_id, session_id, instruction, Some(parent))
+    }
+
+    fn insert_task(
+        &self,
+        step_id: Uuid,
+        workflow_id: Uuid,
+        session_id: Uuid,
+        instruction: String,
+        parent: Option<&CancellationToken>,
+    ) -> (Uuid, CancellationToken) {
         let execution_id = Uuid::new_v4();
-        let cancel_token = CancellationToken::new();
+        let cancel_token = match parent {
+            Some(parent) => parent.child_token(),
+            None => CancellationToken::new(),
+        };
 
         self.tasks.insert(
             execution_id,

@@ -15,6 +15,18 @@ const selectBaselineForStep = memoFactory(
 
 const selectDispatches = (s: WorkflowLiveState): readonly LiveDispatch[] => s.dispatches
 
+/**
+ * The most recent dispatch for one step, or null.
+ *
+ * `dispatches` is server-ordered newest-first with at most one row per step, so
+ * the first match is the current one.
+ */
+const selectDispatchForStep = memoFactory(
+  (stepId: string) =>
+  (s: WorkflowLiveState): LiveDispatch | null =>
+    s.dispatches.find((d) => d.stepId === stepId) ?? null,
+)
+
 const selectRunSteps = (s: WorkflowLiveState): readonly RunStepResult[] => s.runSteps
 
 const selectIsGenerating = (s: WorkflowLiveState): boolean => s.isGenerating
@@ -32,6 +44,7 @@ export {
   selectBaselineByStep,
   selectBaselineForStep,
   selectDispatches,
+  selectDispatchForStep,
   selectRunSteps,
   selectIsGenerating,
   selectLoading,

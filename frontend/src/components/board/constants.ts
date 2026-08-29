@@ -75,4 +75,17 @@ const BOARD = {
   HISTORY_MAX_DEPTH: 100,
 } as const
 
-export { BOARD }
+/**
+ * Status ring tuning, kept apart from BOARD because these govern an animation
+ * budget rather than board geometry.
+ */
+const BOARD_RING = {
+  /** Below this zoom, rings still draw but stop breathing. */
+  ANIMATE_MIN_ZOOM: 0.45,
+  /** One full breath, in ms. */
+  PULSE_PERIOD_MS: 1800,
+  /** Minimum ms between pulse repaints — well under display refresh on purpose. */
+  PULSE_FRAME_MS: 50,
+} as const
+
+export { BOARD, BOARD_RING }

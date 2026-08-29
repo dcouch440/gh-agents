@@ -7,11 +7,12 @@
 // positioned over the box being edited — the same approach as Excalidraw.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { BOARD } from '../constants'
+import { BOARD, BOARD_RING } from '../constants'
 import type { ActiveTool, AnchorPoint, BoardElements, DrawingArrow, DrawingBox, DrawingPen, EdgeHover, InteractionMode, ResizeHandle, SelectionState, ViewportState } from '../elements'
 import { detectEdgeHover, eventToCanvas, hitTestArrow, hitTestBox, hitTestPen, hitTestResizeHandles, RESIZE_CURSORS } from '../elements'
 import { renderBoard } from './renderer'
 import type { DrawTheme } from './renderer'
+import type { StatusRing } from '@/utils/statusRing'
 import { computeTextareaStyle } from './textareaStyle'
 
 // ── Props ─────────────────────────────────────────────────────────────────
@@ -31,6 +32,10 @@ type Canvas2DProps = {
   readonly interaction: InteractionMode
   readonly viewport: ViewportState
   readonly theme: DrawTheme
+  /** Run/design status ring per box id. */
+  readonly statusRings: ReadonlyMap<string, StatusRing>
+  /** Whether any ring is currently breathing — drives the repaint loop. */
+  readonly pulsing: boolean
   readonly previews: DrawingPreviews
   readonly onPointerDown: (e: React.PointerEvent) => void
   readonly onPointerMove: (e: React.PointerEvent) => void
@@ -57,6 +62,8 @@ function Canvas2D({
   interaction,
   viewport,
   theme,
+  statusRings,
+  pulsing,
   previews,
   onPointerDown,
   onPointerMove,
@@ -78,6 +85,8 @@ function Canvas2D({
   const [cursor, setCursor] = useState('default')
   const [fontGeneration, setFontGeneration] = useState(0)
   const renderRef = useRef<() => void>(() => {})
+  /** Current breathing value 0..1. A ref so a frame never re-renders React. */
+  const pulseRef = useRef(1)
 
   // Latest elements, readable from effects and handlers that must not re-run
   // when they change. Kept current in an effect declared ahead of every reader.
@@ -93,7 +102,7 @@ function Canvas2D({
       const cvs = canvasRef.current
       if (cvs === null) return
       const { width, height } = sizeRef.current
-      renderBoard(cvs, width, height, elements, selection, editingBoxId, viewport, previews.arrow, previews.box, previews.pen, edgeHover, theme)
+      renderBoard(cvs, width, height, elements, selection, editingBoxId, viewport, previews.arrow, previews.box, previews.pen, edgeHover, theme, statusRings, pulseRef.current)
     }
   })
 
@@ -136,7 +145,42 @@ function Canvas2D({
   // ── Canvas Render Pipeline ────────────────────────────────────────────
   useEffect(() => {
     renderRef.current()
-  }, [elements, selection, editingBoxId, viewport, previews, edgeHover, theme, fontGeneration])
+  }, [elements, selection, editingBoxId, viewport, previews, edgeHover, theme, statusRings, fontGeneration])
+
+  // ── Ring pulse ────────────────────────────────────────────────────────────
+  //
+  // Repaints imperatively through `renderRef` rather than driving a state
+  // update per frame — the same escape hatch the ResizeObserver uses. A
+  // breathing ring is a canvas concern, and routing it through React would
+  // re-render the whole board tree ~20 times a second to change one alpha.
+  //
+  // Runs only while something actually pulses, is throttled well under display
+  // refresh (a breath is slow; nobody can tell), and holds steady at full
+  // strength under `prefers-reduced-motion`.
+  useEffect(() => {
+    const reduced = typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+    if (!pulsing || reduced) {
+      pulseRef.current = 1
+      renderRef.current()
+      return
+    }
+
+    let frame = 0
+    let last = 0
+    const tick = (now: number) => {
+      if (now - last >= BOARD_RING.PULSE_FRAME_MS) {
+        last = now
+        pulseRef.current = 0.5 + 0.5 * Math.sin((now / BOARD_RING.PULSE_PERIOD_MS) * Math.PI * 2)
+        renderRef.current()
+      }
+      frame = requestAnimationFrame(tick)
+    }
+
+    frame = requestAnimationFrame(tick)
+    return () => { cancelAnimationFrame(frame) }
+  }, [pulsing])
 
   // ── Seed and focus the textarea when editing starts ───────────────────
   //

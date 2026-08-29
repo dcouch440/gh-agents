@@ -27,6 +27,65 @@ type NodePalette = {
 }
 
 // ---------------------------------------------------------------------------
+// Status palette — run/design state, drawn as a ring around a node
+// ---------------------------------------------------------------------------
+
+/**
+ * State colors, kept deliberately separate from `NodePalette`.
+ *
+ * `NodePalette` is identity — what kind of node this is — and never changes.
+ * `StatusPalette` is state, and owns only the ring. Recoloring a whole node by
+ * status would destroy the identity read, so the two never share a surface.
+ *
+ * `running`/`finished` are one hue at two energies (one lifecycle, not two
+ * unrelated states); `designing`/`designed` are a separate axis and hold blue
+ * so they can never collide with the green/red run colors.
+ *
+ * There is no `idle` key on purpose — idle is the absence of a ring.
+ */
+type StatusPalette = {
+  pending: string
+  running: string
+  finished: string
+  failed: string
+  paused: string
+  skipped: string
+  designing: string
+  designed: string
+}
+
+/** Tuned against dark node surfaces (#0a0a0a — #1e2433). */
+const DARK_STATUS_PALETTE: StatusPalette = {
+  pending: '#7d8590',
+  running: '#3fb950',
+  finished: '#2f8047',
+  failed: '#f85149',
+  paused: '#e3b341',
+  skipped: '#57606a',
+  designing: '#58a6ff',
+  designed: '#2f5d8a',
+}
+
+/**
+ * Tuned against light node surfaces (#f0ebe3, #f0f0f0) — darker and more
+ * saturated than the dark set, which washes out on warm light backgrounds.
+ *
+ * `finished` is deliberately deeper than a natural muted green: linen's accent
+ * is sage #5a8a6e and paints the border on selection, so a selected+finished
+ * node needs the two to stay apart.
+ */
+const LIGHT_STATUS_PALETTE: StatusPalette = {
+  pending: '#8b949e',
+  running: '#12a150',
+  finished: '#2c6e49',
+  failed: '#cf222e',
+  paused: '#bf8700',
+  skipped: '#adb5bd',
+  designing: '#0969da',
+  designed: '#6d9dc5',
+}
+
+// ---------------------------------------------------------------------------
 // Theme definition
 // ---------------------------------------------------------------------------
 
@@ -38,6 +97,7 @@ type ThemeDefinition = {
   custom: CustomTokens
   shadows: Shadows
   nodePalette: NodePalette
+  statusPalette: StatusPalette
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -555,6 +615,7 @@ const THEMES: Record<ThemeId, ThemeDefinition> = {
     custom: linenCustom,
     shadows: linenShadows,
     nodePalette: linenNodePalette,
+    statusPalette: LIGHT_STATUS_PALETTE,
   },
   paper: {
     id: 'paper',
@@ -564,6 +625,7 @@ const THEMES: Record<ThemeId, ThemeDefinition> = {
     custom: paperCustom,
     shadows: paperShadows,
     nodePalette: paperNodePalette,
+    statusPalette: LIGHT_STATUS_PALETTE,
   },
   obsidian: {
     id: 'obsidian',
@@ -573,6 +635,7 @@ const THEMES: Record<ThemeId, ThemeDefinition> = {
     custom: obsidianCustom,
     shadows: obsidianShadows,
     nodePalette: obsidianNodePalette,
+    statusPalette: DARK_STATUS_PALETTE,
   },
   midnight: {
     id: 'midnight',
@@ -582,6 +645,7 @@ const THEMES: Record<ThemeId, ThemeDefinition> = {
     custom: midnightCustom,
     shadows: midnightShadows,
     nodePalette: midnightNodePalette,
+    statusPalette: DARK_STATUS_PALETTE,
   },
   slate: {
     id: 'slate',
@@ -591,6 +655,7 @@ const THEMES: Record<ThemeId, ThemeDefinition> = {
     custom: slateCustom,
     shadows: slateShadows,
     nodePalette: slateNodePalette,
+    statusPalette: DARK_STATUS_PALETTE,
   },
 }
 
@@ -604,4 +669,4 @@ const isValidThemeId = (value: string): value is ThemeId =>
   value === 'linen' || value === 'paper' || value === 'obsidian' || value === 'midnight' || value === 'slate'
 
 export { THEMES, THEME_LIST, THEME_IDS, DEFAULT_THEME_ID, isValidThemeId }
-export type { ThemeId, ThemeDefinition, NodePalette }
+export type { ThemeId, ThemeDefinition, NodePalette, StatusPalette }

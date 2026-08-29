@@ -235,6 +235,7 @@ async fn dispatch_board_changes(
             instructions,
             steps,
             edges,
+            tokio_util::sync::CancellationToken::new(),
         )
         .await;
     });

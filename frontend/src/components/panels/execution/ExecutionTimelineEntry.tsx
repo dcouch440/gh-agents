@@ -2,11 +2,13 @@ import { useState, useCallback } from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import Collapse from '@mui/material/Collapse'
+import { useTheme } from '@mui/material/styles'
 import ExpandMoreOutlined from '@mui/icons-material/ExpandMoreOutlined'
 import ExpandLessOutlined from '@mui/icons-material/ExpandLessOutlined'
 import { StatusBadge } from '@/components/primitives'
+import { statusColor } from '@/utils/statusColor'
 import { ExecutionStepOutput } from './ExecutionStepOutput'
-import { STATUS_COLORS, STATUS_LABELS, STATUS_BADGE_VARIANTS } from './constants'
+import { STATUS_LABELS, STATUS_BADGE_VARIANTS } from './constants'
 import type { StepExecutionState } from '@/stores'
 
 type ExecutionTimelineEntryProps = {
@@ -27,11 +29,14 @@ const formatDuration = (ms: number | null): string | null => {
 }
 
 function ExecutionTimelineEntry({ stepId, stepState, isLast }: ExecutionTimelineEntryProps) {
+  const theme = useTheme()
   const [expanded, setExpanded] = useState(false)
   const toggle = useCallback(() => setExpanded((prev) => !prev), [])
 
   const { status, stepName, output, error, inputTokens, outputTokens, durationMs, forEachProgress } = stepState
-  const color = STATUS_COLORS[status]
+  // Idle has no status color by design; the timeline still needs an ink for its
+  // rail, so it borrows the neutral `pending` grey.
+  const color = statusColor(status, theme.palette.statusPalette) ?? theme.palette.statusPalette.pending
   const hasOutput = output !== null || error !== null
   const isRunning = status === 'running'
 

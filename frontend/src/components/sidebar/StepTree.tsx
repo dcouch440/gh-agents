@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/primitives'
 import { StepTreeRow } from './StepTreeRow'
 import { AgentTreeRow } from './AgentTreeRow'
 import { buildStepTree, toAgentSlug } from './buildStepTree'
-import { resolveNodeStatus } from './resolveNodeStatus'
+import { resolveNodeStatus } from '@/utils/resolveNodeStatus'
 import type { SourceStreamStatus } from '@/stores/stepStreamStore'
 
 // ── Output Parsing ──────────────────────────────────────────────────────────
