@@ -32,6 +32,7 @@ mod tests {
                 return Err(LLMError::RateLimited { retry_after_ms: 10 });
             }
             Ok(LLMResponse {
+                reasoning: None,
                 content: "ok".into(),
                 content_blocks: vec![],
                 model: "mock".into(),
@@ -99,6 +100,7 @@ mod tests {
                 tokio::time::sleep(Duration::from_millis(50)).await;
                 self.in_flight.fetch_sub(1, Ordering::SeqCst);
                 Ok(LLMResponse {
+                    reasoning: None,
                     content: "ok".into(),
                     content_blocks: vec![],
                     model: "mock".into(),

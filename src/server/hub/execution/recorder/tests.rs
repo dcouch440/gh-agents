@@ -120,4 +120,47 @@ mod tests {
             .await;
         assert!(result.is_err());
     }
+
+    #[tokio::test]
+    async fn record_execution_message_forwards_reasoning() {
+        use crate::db::fixtures::fixtures::execution_message;
+        use crate::db::traits::MockAgentExecutionRepo;
+
+        let session_mock = MockSessionRepo::new();
+        let chat_mock = MockChatMessageRepo::new();
+        let mut ae_mock = MockAgentExecutionRepo::new();
+        ae_mock
+            .expect_create_execution_message()
+            .withf(|_id, role, content, reasoning, _tool_call_id, _in, _out| {
+                role == "assistant"
+                    && content == "the answer"
+                    && reasoning.as_deref() == Some("the deliberation")
+            })
+            .returning(|id, _, _, _, _, _, _| Ok(execution_message(id)));
+
+        let recorder = ExecutionRecorder::new(&session_mock, &chat_mock, Some(&ae_mock), None);
+        recorder
+            .record_execution_message(
+                Uuid::new_v4(),
+                "assistant",
+                "the answer",
+                Some("the deliberation".to_string()),
+                None,
+                10,
+                5,
+            )
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn record_execution_message_without_repo_fails() {
+        let session_mock = MockSessionRepo::new();
+        let chat_mock = MockChatMessageRepo::new();
+        let recorder = ExecutionRecorder::new(&session_mock, &chat_mock, None, None);
+        let result = recorder
+            .record_execution_message(Uuid::new_v4(), "assistant", "hi", None, None, 0, 0)
+            .await;
+        assert!(result.is_err());
+    }
 }

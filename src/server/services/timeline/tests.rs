@@ -12,6 +12,7 @@ mod tests {
             ts: Utc::now(),
             role: role.to_string(),
             content: content.to_string(),
+            reasoning: None,
             tool_call_id: None,
             input_tokens: 0,
             output_tokens: 0,

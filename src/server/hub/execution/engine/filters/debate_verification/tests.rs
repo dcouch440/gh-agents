@@ -50,6 +50,7 @@ mod tests {
                 .cloned()
                 .unwrap_or_else(|| r#"{"approved": true, "issues": []}"#.to_string());
             Ok(LLMResponse {
+                reasoning: None,
                 content,
                 content_blocks: vec![],
                 model: "test-model".to_string(),
@@ -95,6 +96,7 @@ mod tests {
             // The filter's tokio::time::timeout will fire first.
             tokio::time::sleep(std::time::Duration::from_secs(120)).await;
             Ok(LLMResponse {
+                reasoning: None,
                 content: r#"{"approved": false, "issues": [{"severity": "high", "description": "too slow"}]}"#.to_string(),
                 content_blocks: vec![],
                 model: "test-model".to_string(),
@@ -156,6 +158,7 @@ mod tests {
 
     fn mock_response() -> LLMResponse {
         LLMResponse {
+            reasoning: None,
             content: "Some response from primary agent".to_string(),
             content_blocks: vec![],
             model: "claude-3".to_string(),

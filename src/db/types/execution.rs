@@ -53,6 +53,9 @@ pub struct ExecutionMessageRow {
     pub agent_execution_id: Uuid,
     pub role: String,
     pub content: String,
+    /// The model's private deliberation, when the provider surfaces one
+    /// separately from `content` (e.g. DeepInfra's `reasoning_content`).
+    pub reasoning: Option<String>,
     pub tool_call_id: Option<String>,
     pub input_tokens: i64,
     pub output_tokens: i64,
@@ -79,6 +82,7 @@ pub struct TimelineRow {
     pub ts: DateTime<Utc>,
     pub role: String,
     pub content: String,
+    pub reasoning: Option<String>,
     pub tool_call_id: Option<String>,
     pub input_tokens: i64,
     pub output_tokens: i64,
@@ -142,6 +146,7 @@ impl Default for ExecutionMessageRow {
             agent_execution_id: Uuid::nil(),
             role: "user".to_string(),
             content: String::new(),
+            reasoning: None,
             tool_call_id: None,
             input_tokens: 0,
             output_tokens: 0,

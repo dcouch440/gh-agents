@@ -46,6 +46,8 @@ pub struct TimelineEntryResponse {
     pub agent_execution_id: Uuid,
     pub content: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_name: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
@@ -70,6 +72,7 @@ impl From<svc::TimelineEntry> for TimelineEntryResponse {
             agent_name: e.agent_name,
             agent_execution_id: e.agent_execution_id,
             content: e.content,
+            reasoning: e.reasoning,
             tool_name: e.tool_name,
             tool_call_id: e.tool_call_id,
             input_tokens: e.input_tokens,

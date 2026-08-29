@@ -395,6 +395,7 @@ pub(crate) fn parse_xai_response(api_response: XaiResponse) -> LLMResponse {
     LLMResponse {
         content: text_parts.join(""),
         content_blocks,
+        reasoning: None,
         model: api_response.model,
         stop_reason,
         usage: TokenUsage {

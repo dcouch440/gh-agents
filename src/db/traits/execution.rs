@@ -63,11 +63,13 @@ pub trait AgentExecutionRepo: Send + Sync {
     async fn fail_orphaned_agent_executions(&self) -> Result<u64>;
 
     // --- Execution Messages ---
+    #[allow(clippy::too_many_arguments)]
     async fn create_execution_message(
         &self,
         agent_execution_id: Uuid,
         role: &str,
         content: &str,
+        reasoning: Option<String>,
         tool_call_id: Option<String>,
         input_tokens: i64,
         output_tokens: i64,

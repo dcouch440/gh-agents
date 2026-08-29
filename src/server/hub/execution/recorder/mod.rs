@@ -103,11 +103,13 @@ impl<'a> ExecutionRecorder<'a> {
     }
 
     /// Record an execution message (tool call, result, text) within a DAG step.
+    #[allow(clippy::too_many_arguments)]
     pub async fn record_execution_message(
         &self,
         agent_execution_id: Uuid,
         role: &str,
         content: &str,
+        reasoning: Option<String>,
         tool_call_id: Option<String>,
         input_tokens: i64,
         output_tokens: i64,
@@ -119,6 +121,7 @@ impl<'a> ExecutionRecorder<'a> {
             agent_execution_id,
             role,
             content,
+            reasoning,
             tool_call_id,
             input_tokens,
             output_tokens,

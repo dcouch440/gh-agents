@@ -77,6 +77,56 @@ mod tests {
     }
 
     #[test]
+    fn accumulator_keeps_reasoning_separate_from_content() {
+        let mut acc = StreamAccumulator::new();
+        acc.apply(&StreamChunk::MessageStart {
+            model: "deepseek".to_string(),
+            input_tokens: 10,
+        });
+        acc.apply(&StreamChunk::ReasoningDelta {
+            text: "let me think... ".to_string(),
+        });
+        acc.apply(&StreamChunk::ReasoningDelta {
+            text: "done thinking.".to_string(),
+        });
+        acc.apply(&StreamChunk::ContentDelta {
+            text: "42".to_string(),
+            index: 0,
+        });
+        acc.apply(&StreamChunk::MessageDelta {
+            stop_reason: Some(StopReason::EndTurn),
+            output_tokens: Some(5),
+        });
+
+        let response = acc.build().unwrap();
+        assert_eq!(response.content, "42");
+        assert_eq!(
+            response.reasoning.as_deref(),
+            Some("let me think... done thinking.")
+        );
+    }
+
+    #[test]
+    fn accumulator_reports_no_reasoning_when_none_streamed() {
+        let mut acc = StreamAccumulator::new();
+        acc.apply(&StreamChunk::MessageStart {
+            model: "claude-3".to_string(),
+            input_tokens: 10,
+        });
+        acc.apply(&StreamChunk::ContentDelta {
+            text: "hi".to_string(),
+            index: 0,
+        });
+        acc.apply(&StreamChunk::MessageDelta {
+            stop_reason: Some(StopReason::EndTurn),
+            output_tokens: Some(5),
+        });
+
+        let response = acc.build().unwrap();
+        assert_eq!(response.reasoning, None);
+    }
+
+    #[test]
     fn accumulator_returns_none_if_incomplete() {
         let acc = StreamAccumulator::new();
         assert!(acc.build().is_none());

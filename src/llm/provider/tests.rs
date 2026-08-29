@@ -26,6 +26,7 @@ mod tests {
     impl LLMProvider for MockProvider {
         async fn send_message(&self, _request: LLMRequest) -> LLMResult<LLMResponse> {
             Ok(LLMResponse {
+                reasoning: None,
                 content: self.response_content.clone(),
                 content_blocks: vec![],
                 model: self.model.clone(),

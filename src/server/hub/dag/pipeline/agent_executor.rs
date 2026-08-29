@@ -535,10 +535,10 @@ async fn execute_single_agent(
     {
         Ok(row) => {
             let _ = ae_repo
-                .create_execution_message(row.id, "system", &system_prompt, None, 0, 0)
+                .create_execution_message(row.id, "system", &system_prompt, None, None, 0, 0)
                 .await;
             let _ = ae_repo
-                .create_execution_message(row.id, "user", &task_prompt, None, 0, 0)
+                .create_execution_message(row.id, "user", &task_prompt, None, None, 0, 0)
                 .await;
             Some(row.id)
         }

@@ -221,6 +221,7 @@ impl SseProviderAdapter for DeepInfraAdapter {
         Ok(LLMResponse {
             content: text,
             content_blocks: blocks,
+            reasoning: choice.message.reasoning_content.filter(|s| !s.is_empty()),
             model: parsed.model.unwrap_or_else(|| self.config.model.clone()),
             stop_reason,
             usage: parsed.usage.map(to_token_usage).unwrap_or_default(),
@@ -702,9 +703,14 @@ pub(crate) fn parse_openai_sse_line(line: &str) -> Vec<LLMResult<StreamChunk>> {
                 }
             }
             // `reasoning_content` is the model's private deliberation. It is
-            // deliberately NOT surfaced as a ContentDelta: it would be
-            // concatenated into `content` and returned to the user as though
-            // it were the answer.
+            // surfaced as a separate `ReasoningDelta`, never as a
+            // `ContentDelta`: concatenating it into `content` would return it
+            // to the user as though it were the answer.
+            if let Some(text) = delta.reasoning_content {
+                if !text.is_empty() {
+                    out.push(Ok(StreamChunk::ReasoningDelta { text }));
+                }
+            }
             for call in delta.tool_calls.unwrap_or_default() {
                 let index = call.index.unwrap_or(0);
                 let id = call.id.clone();
@@ -791,6 +797,8 @@ struct OaiMessage {
     #[serde(default)]
     content: Option<String>,
     #[serde(default)]
+    reasoning_content: Option<String>,
+    #[serde(default)]
     tool_calls: Option<Vec<OaiToolCall>>,
 }
 
@@ -843,6 +851,8 @@ struct OaiStreamChoice {
 struct OaiDelta {
     #[serde(default)]
     content: Option<String>,
+    #[serde(default)]
+    reasoning_content: Option<String>,
     #[serde(default)]
     tool_calls: Option<Vec<OaiDeltaToolCall>>,
 }

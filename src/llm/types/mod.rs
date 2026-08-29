@@ -453,6 +453,11 @@ pub struct LLMResponse {
     #[serde(default)]
     pub content_blocks: Vec<ContentBlock>,
 
+    /// The model's private deliberation, when the provider surfaces one
+    /// separately from `content` (e.g. DeepInfra's `reasoning_content`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<String>,
+
     /// Model that generated the response
     pub model: String,
 
@@ -472,6 +477,14 @@ pub enum StreamChunk {
         text: String,
         /// Index of the content block (for multi-block responses)
         index: usize,
+    },
+
+    /// Reasoning/thinking content delta — the model's private deliberation,
+    /// kept separate from `ContentDelta` so it is never concatenated into
+    /// the answer returned to the user.
+    ReasoningDelta {
+        /// The reasoning text fragment
+        text: String,
     },
 
     /// Message started event
@@ -579,6 +592,7 @@ fn finish_tool_use(tool: ToolUseAccumulator) -> ContentBlock {
 #[derive(Debug, Default)]
 pub struct StreamAccumulator {
     pub content: String,
+    pub reasoning: String,
     pub content_blocks: Vec<ContentBlock>,
     pub model: Option<String>,
     pub stop_reason: Option<StopReason>,
@@ -605,6 +619,9 @@ impl StreamAccumulator {
         match chunk {
             StreamChunk::ContentDelta { text, .. } => {
                 self.content.push_str(text);
+            }
+            StreamChunk::ReasoningDelta { text } => {
+                self.reasoning.push_str(text);
             }
             StreamChunk::MessageStart {
                 model,
@@ -740,6 +757,7 @@ impl StreamAccumulator {
         Some(LLMResponse {
             content: self.content,
             content_blocks: blocks,
+            reasoning: (!self.reasoning.is_empty()).then_some(self.reasoning),
             model: self.model?,
             stop_reason,
             usage: TokenUsage {

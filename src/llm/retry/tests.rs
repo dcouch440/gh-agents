@@ -657,6 +657,7 @@ mod tests {
 
         fn make_response() -> LLMResponse {
             LLMResponse {
+                reasoning: None,
                 content: "ok".to_string(),
                 content_blocks: vec![ContentBlock::Text {
                     text: "ok".to_string(),

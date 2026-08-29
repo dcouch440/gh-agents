@@ -32,6 +32,7 @@ type ExecutionMessage = {
   agent_execution_id: string
   role: 'system' | 'user' | 'assistant' | 'tool'
   content: string
+  reasoning: string | null
   tool_call_id: string | null
   input_tokens: number
   output_tokens: number
