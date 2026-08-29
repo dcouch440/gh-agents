@@ -127,6 +127,22 @@ pub const DEFAULT_TIMEOUT_SECS: u64 = 300;
 /// Per-verification-agent LLM call timeout (60s). On timeout, treat as approved.
 pub const VERIFICATION_AGENT_TIMEOUT_SECS: u64 = 60;
 
+/// Wall-clock ceiling for one system node design (30 min).
+///
+/// This is a runaway guard, not a schedule. It must exceed the longest design
+/// the configuration can legitimately produce, and that product moved three
+/// times while the old 120s ceiling did not:
+///
+///   `config/system_agent/config.yaml`  max_rounds 30, max_tokens 32768, effort high
+///   `DEEPINFRA_CHAT_TIMEOUT_SECS`      900s for a SINGLE call
+///
+/// 120s could not cover one slow round, let alone thirty, so the guard was
+/// firing on healthy designs and discarding them — see `dispatch::system_node`.
+/// Decomposing a step into a team of agents is the expensive case this budget
+/// exists for: it reads the board spec, plans the split, and writes one file
+/// per agent. Anything still running at 30 minutes is stuck, not thinking.
+pub const SYSTEM_NODE_TIMEOUT_SECS: u64 = 1800;
+
 // ── Retry / Backoff ─────────────────────────────────────────────────────────
 
 /// Initial retry backoff delay.
