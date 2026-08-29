@@ -115,7 +115,14 @@ pub(crate) struct AppStateInner {
     /// Map of message IDs to buffered response streams (DashMap for concurrent access)
     pub(crate) response_streams: DashMap<Uuid, BufferedStream>,
     /// Cancellation tokens for running pipelines and agent executions
-    pub(crate) cancellation_tokens: DashMap<Uuid, CancellationToken>,
+    /// Live cancellation tokens, keyed by the id a cancel request arrives with.
+    ///
+    /// A key is not unique to one piece of work: runs are keyed by execution id
+    /// (unique), but design pipelines are keyed by workflow id, and a workflow
+    /// can have two in flight at once. Each key therefore holds a *list* of
+    /// registrations, each tagged with its own id so a finishing task can retire
+    /// its own entry without silently retiring a later task's.
+    pub(crate) cancellation_tokens: DashMap<Uuid, Vec<(Uuid, CancellationToken)>>,
     /// Master shutdown token — cancelled on SIGTERM/SIGINT to signal all background tasks.
     pub(crate) shutdown_token: CancellationToken,
     /// Cached result for `is_ollama_enabled()` to avoid per-step DB round-trips.
@@ -758,11 +765,14 @@ impl AppState {
     // =========================================================================
 
     /// Register a cancellation token for a running execution (pipeline run or agent execution).
-    /// Returns a clone of the token to pass through the execution chain.
-    pub fn register_cancellation(&self, id: Uuid) -> CancellationToken {
-        let token = CancellationToken::new();
-        self.0.cancellation_tokens.insert(id, token.clone());
-        token
+    ///
+    /// Returns the registration id alongside the token. Hand the token to the
+    /// work and keep the registration id for `remove_cancellation`: it is what
+    /// makes cleanup retire this registration and no other one filed under the
+    /// same key. Registering does not displace a token already filed under
+    /// `id` — both stay cancellable.
+    pub fn register_cancellation(&self, id: Uuid) -> (Uuid, CancellationToken) {
+        self.insert_cancellation(id, CancellationToken::new())
     }
 
     /// Create a child cancellation token linked to a parent.
@@ -771,25 +781,57 @@ impl AppState {
         &self,
         id: Uuid,
         parent: &CancellationToken,
-    ) -> CancellationToken {
-        let child = parent.child_token();
-        self.0.cancellation_tokens.insert(id, child.clone());
-        child
+    ) -> (Uuid, CancellationToken) {
+        self.insert_cancellation(id, parent.child_token())
     }
 
-    /// Cancel a running execution by its ID. Returns true if the token existed.
+    fn insert_cancellation(&self, id: Uuid, token: CancellationToken) -> (Uuid, CancellationToken) {
+        let registration = Uuid::new_v4();
+        self.0
+            .cancellation_tokens
+            .entry(id)
+            .or_default()
+            .push((registration, token.clone()));
+        (registration, token)
+    }
+
+    /// Cancel every execution registered under `id`. Returns true if any existed.
+    ///
+    /// All of them, because the caller asked to stop "the design for this
+    /// workflow" and cannot know that two are in flight; leaving one running
+    /// would report success while the work continued.
     pub fn cancel_execution(&self, id: Uuid) -> bool {
-        if let Some(entry) = self.0.cancellation_tokens.get(&id) {
-            entry.cancel();
-            true
-        } else {
-            false
+        match self.0.cancellation_tokens.get(&id) {
+            Some(entry) => {
+                for (_, token) in entry.iter() {
+                    token.cancel();
+                }
+                !entry.is_empty()
+            }
+            None => false,
         }
     }
 
-    /// Remove a cancellation token after execution completes.
-    pub fn remove_cancellation(&self, id: Uuid) {
-        self.0.cancellation_tokens.remove(&id);
+    /// Remove one registration after its execution completes.
+    ///
+    /// Scoped to `registration` so a pipeline that finishes late cannot unregister
+    /// the one that replaced it — that is how a still-running design used to end
+    /// up uncancellable, with its own Cancel button answering `not_generating`.
+    pub fn remove_cancellation(&self, id: Uuid, registration: Uuid) {
+        let emptied = match self.0.cancellation_tokens.get_mut(&id) {
+            Some(mut entry) => {
+                entry.retain(|(reg, _)| *reg != registration);
+                entry.is_empty()
+            }
+            None => false,
+        };
+        if emptied {
+            // `remove_if` re-checks under the write lock: another thread may have
+            // registered against this key since the read above.
+            self.0
+                .cancellation_tokens
+                .remove_if(&id, |_, entry| entry.is_empty());
+        }
     }
 
     /// Access the master shutdown cancellation token.
@@ -802,15 +844,24 @@ impl AppState {
     pub fn cancel_all_executions(&self) -> usize {
         let mut cancelled = 0;
         for entry in self.0.cancellation_tokens.iter() {
-            entry.cancel();
-            cancelled += 1;
+            for (_, token) in entry.iter() {
+                token.cancel();
+                cancelled += 1;
+            }
         }
         cancelled
     }
 
     /// Return the number of active execution tokens.
+    ///
+    /// Counts registrations, not keys — the shutdown drain waits on this, and two
+    /// designs for one workflow are two things to wait for.
     pub fn active_execution_count(&self) -> usize {
-        self.0.cancellation_tokens.len()
+        self.0
+            .cancellation_tokens
+            .iter()
+            .map(|entry| entry.len())
+            .sum()
     }
 
     // =========================================================================

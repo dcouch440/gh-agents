@@ -350,7 +350,7 @@ impl WorkflowCollectionRepo for PgRepo {
                  outputs = COALESCE($3, outputs), \
                  error = $4, \
                  started_at = COALESCE(started_at, CASE WHEN $2 = 'running' THEN NOW() ELSE started_at END), \
-                 completed_at = CASE WHEN $2 IN ('completed', 'failed') THEN NOW() ELSE completed_at END \
+                 completed_at = CASE WHEN $2 IN ('completed', 'failed', 'cancelled') THEN NOW() ELSE completed_at END \
              WHERE id = $1 \
              RETURNING *",
         )

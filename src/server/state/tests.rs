@@ -183,8 +183,8 @@ mod tests {
         let state = make_state();
         let id1 = Uuid::new_v4();
         let id2 = Uuid::new_v4();
-        let token1 = state.register_cancellation(id1);
-        let token2 = state.register_cancellation(id2);
+        let (_, token1) = state.register_cancellation(id1);
+        let (_, token2) = state.register_cancellation(id2);
         assert!(!token1.is_cancelled());
         assert!(!token2.is_cancelled());
 
@@ -205,10 +205,89 @@ mod tests {
         let state = make_state();
         assert_eq!(state.active_execution_count(), 0);
         let id = Uuid::new_v4();
-        let _ = state.register_cancellation(id);
+        let (registration, _) = state.register_cancellation(id);
         assert_eq!(state.active_execution_count(), 1);
-        state.remove_cancellation(id);
+        state.remove_cancellation(id, registration);
         assert_eq!(state.active_execution_count(), 0);
+    }
+
+    // ── Two registrations under one key ──────────────────────────────────
+    //
+    // Design pipelines are keyed by workflow id rather than by anything unique
+    // to the run, so a second Design click while the first is still working
+    // files a second token under the same key. These pin down that neither one
+    // can displace or retire the other.
+
+    #[test]
+    fn registering_twice_under_one_key_keeps_both_cancellable() {
+        let state = make_state();
+        let id = Uuid::new_v4();
+
+        let (_, first) = state.register_cancellation(id);
+        let (_, second) = state.register_cancellation(id);
+
+        assert_eq!(state.active_execution_count(), 2);
+        assert!(state.cancel_execution(id));
+        assert!(first.is_cancelled());
+        assert!(second.is_cancelled());
+    }
+
+    #[test]
+    fn removing_one_registration_leaves_the_other_cancellable() {
+        let state = make_state();
+        let id = Uuid::new_v4();
+
+        let (first_registration, first) = state.register_cancellation(id);
+        let (_, second) = state.register_cancellation(id);
+
+        // The first pipeline finishes and cleans up after itself.
+        state.remove_cancellation(id, first_registration);
+
+        assert_eq!(state.active_execution_count(), 1);
+        assert!(state.cancel_execution(id));
+        assert!(!first.is_cancelled());
+        assert!(second.is_cancelled());
+    }
+
+    #[test]
+    fn removing_the_last_registration_drops_the_key() {
+        let state = make_state();
+        let id = Uuid::new_v4();
+
+        let (first_registration, _) = state.register_cancellation(id);
+        let (second_registration, _) = state.register_cancellation(id);
+        state.remove_cancellation(id, first_registration);
+        state.remove_cancellation(id, second_registration);
+
+        assert_eq!(state.active_execution_count(), 0);
+        // Nothing left to cancel — the endpoint answers "not generating".
+        assert!(!state.cancel_execution(id));
+    }
+
+    #[test]
+    fn removing_an_unknown_registration_is_a_no_op() {
+        let state = make_state();
+        let id = Uuid::new_v4();
+        let (_, token) = state.register_cancellation(id);
+
+        state.remove_cancellation(id, Uuid::new_v4());
+        state.remove_cancellation(Uuid::new_v4(), Uuid::new_v4());
+
+        assert_eq!(state.active_execution_count(), 1);
+        assert!(state.cancel_execution(id));
+        assert!(token.is_cancelled());
+    }
+
+    #[test]
+    fn cancel_all_executions_counts_every_registration_not_every_key() {
+        let state = make_state();
+        let id = Uuid::new_v4();
+        let (_, first) = state.register_cancellation(id);
+        let (_, second) = state.register_cancellation(id);
+
+        assert_eq!(state.cancel_all_executions(), 2);
+        assert!(first.is_cancelled());
+        assert!(second.is_cancelled());
     }
 
     // ── WebSocket connection tracking tests ──────────────────────────────

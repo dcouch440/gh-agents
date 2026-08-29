@@ -152,6 +152,7 @@ export const API = {
   STEP_LAST_RUN: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}/last-run`,
   STEP_PIN: (wid: string, sid: string) => `/workflows/${wid}/steps/${sid}/pin`,
   WORKFLOW_RUN: (id: string) => `/workflows/${id}/run`,
+  WORKFLOW_EXECUTION_CANCEL: (executionId: string) => `/workflow-executions/${executionId}/cancel`,
   WORKFLOW_WORKSHOP: (id: string) => `/workflows/${id}/workshop`,
   WORKFLOW_WORKSHOP_STEP: (wid: string, stepId: string) => `/workflows/${wid}/workshop/steps/${stepId}/execute`,
   WORKFLOW_EXECUTIONS: (id: string) => `/workflows/${id}/executions`,
@@ -165,6 +166,7 @@ export const API = {
   WORKFLOW_TEMPLATES: (id: string) => `/workflows/${id}/templates`,
   WORKFLOW_AGENT_SESSION: (id: string) => `/workflows/${id}/agent-session`,
   WORKFLOW_GENERATE: (id: string) => `/workflows/${id}/generate`,
+  WORKFLOW_GENERATE_CANCEL: (id: string) => `/workflows/${id}/generate/cancel`,
   WORKFLOW_BOARD_SUBMIT: (id: string) => `/workflows/${id}/board/submit`,
   WORKFLOW_BOARD_ELEMENTS: (id: string) => `/workflows/${id}/board/elements`,
 

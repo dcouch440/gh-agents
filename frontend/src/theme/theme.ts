@@ -7,7 +7,7 @@ import type { ThemeId } from './themes'
 const createAppTheme = (themeId: ThemeId) => {
   const def = THEMES[themeId]
   const options: ThemeOptions = {
-    palette: { ...def.palette, custom: def.custom, nodePalette: def.nodePalette },
+    palette: { ...def.palette, custom: def.custom, nodePalette: def.nodePalette, statusPalette: def.statusPalette },
     typography,
     shape: { borderRadius: 10 },
     shadows: def.shadows,

@@ -33,3 +33,11 @@
 *, *::before, *::after {
   transition: background-color 200ms ease, border-color 200ms ease;
 }
+
+/* Sidebar status dot spinner — declared once instead of re-injected by MUI per
+   component instance. The board's own ring pulse is not here: it animates
+   imperatively in Canvas2D's rAF loop, because it paints to a canvas. */
+@keyframes statusDotSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

@@ -198,6 +198,10 @@ fn workflow_routes() -> Router<AppState> {
         )
         .route(routes::WORKFLOW_GENERATE, post(api::generate_workflow))
         .route(
+            routes::WORKFLOW_GENERATE_CANCEL,
+            post(api::cancel_workflow_generate),
+        )
+        .route(
             routes::WORKFLOW_VERSIONS,
             get(api::list_workflow_versions).post(api::save_workflow_version),
         )
@@ -296,6 +300,10 @@ fn execution_routes() -> Router<AppState> {
         .route(
             routes::AGENT_EXECUTION_CANCEL,
             post(api::cancel_agent_execution),
+        )
+        .route(
+            routes::WORKFLOW_EXECUTION_CANCEL,
+            post(api::cancel_workflow_execution),
         )
         .route(routes::AGENT_EXECUTIONS, get(api::list_agent_executions))
         .route(routes::AGENT_EXECUTION, get(api::get_agent_execution))

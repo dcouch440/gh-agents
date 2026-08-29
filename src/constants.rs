@@ -277,6 +277,9 @@ pub mod routes {
     // Agent executions
     pub const AGENT_EXECUTION_CANCEL: &str = "/agent-executions/:execution_id/cancel";
 
+    // Workflow execution (run) cancellation
+    pub const WORKFLOW_EXECUTION_CANCEL: &str = "/workflow-executions/:execution_id/cancel";
+
     // Config
     pub const CONFIG: &str = "/config";
 
@@ -340,6 +343,7 @@ pub mod routes {
     // Workflow Agent
     pub const WORKFLOW_AGENT_SESSION: &str = "/workflows/:id/agent-session";
     pub const WORKFLOW_GENERATE: &str = "/workflows/:id/generate";
+    pub const WORKFLOW_GENERATE_CANCEL: &str = "/workflows/:id/generate/cancel";
 
     // Workflow Versions
     pub const WORKFLOW_VERSIONS: &str = "/workflows/:id/versions";

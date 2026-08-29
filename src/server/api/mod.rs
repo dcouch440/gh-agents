@@ -107,23 +107,23 @@ pub use results::{delete_result, get_result, list_results, ResultQuery, ResultRe
 
 // Re-export workflow handlers and types
 pub use workflows::{
-    add_step_document, add_workflow_edge, clear_step_messages, create_template, create_workflow,
-    create_workflow_step, delete_template, delete_workflow, delete_workflow_edge_by_id,
-    delete_workflow_step, download_run_files, execute_workshop_step, generate_workflow,
-    get_or_create_step_session, get_or_create_workflow_agent_session, get_or_create_workshop,
-    get_run_detail, get_step_chat_debug, get_step_config, get_step_dispatch_history,
-    get_step_last_run, get_step_run_for_execution, get_step_session, get_step_sub_dag,
-    get_template, get_workflow, get_workflow_live_state, get_workflow_plans, get_workflow_step,
-    get_workshop, list_question_states, list_step_documents, list_templates, list_workflow_edges,
-    list_workflow_executions, list_workflow_steps, list_workflow_versions, list_workflows,
-    rebase_workshop, remove_step_document, remove_workflow_edge, restore_workflow_version,
-    run_workflow, save_workflow_version, toggle_step_pin, update_workflow, update_workflow_step,
-    CreateStepRequest, CreateTemplateRequest, CreateWorkflowRequest, EdgeRequest, EdgeResponse,
-    RebaseResponse, RunDetailResponse, RunStepResultResponse, RunTemplateDetailResponse,
-    RunTemplateResponse, RunWorkflowRequest, StepDocumentRequest, StepDocumentResponse,
-    UpdateStepRequest, UpdateWorkflowRequest, WorkflowExecutionResponse, WorkflowResponse,
-    WorkflowRunResponse, WorkflowStepResponse, WorkshopResponse, WorkshopStatusResponse,
-    WorkshopStepResponse,
+    add_step_document, add_workflow_edge, cancel_workflow_generate, clear_step_messages,
+    create_template, create_workflow, create_workflow_step, delete_template, delete_workflow,
+    delete_workflow_edge_by_id, delete_workflow_step, download_run_files, execute_workshop_step,
+    generate_workflow, get_or_create_step_session, get_or_create_workflow_agent_session,
+    get_or_create_workshop, get_run_detail, get_step_chat_debug, get_step_config,
+    get_step_dispatch_history, get_step_last_run, get_step_run_for_execution, get_step_session,
+    get_step_sub_dag, get_template, get_workflow, get_workflow_live_state, get_workflow_plans,
+    get_workflow_step, get_workshop, list_question_states, list_step_documents, list_templates,
+    list_workflow_edges, list_workflow_executions, list_workflow_steps, list_workflow_versions,
+    list_workflows, rebase_workshop, remove_step_document, remove_workflow_edge,
+    restore_workflow_version, run_workflow, save_workflow_version, toggle_step_pin,
+    update_workflow, update_workflow_step, CreateStepRequest, CreateTemplateRequest,
+    CreateWorkflowRequest, EdgeRequest, EdgeResponse, RebaseResponse, RunDetailResponse,
+    RunStepResultResponse, RunTemplateDetailResponse, RunTemplateResponse, RunWorkflowRequest,
+    StepDocumentRequest, StepDocumentResponse, UpdateStepRequest, UpdateWorkflowRequest,
+    WorkflowExecutionResponse, WorkflowResponse, WorkflowRunResponse, WorkflowStepResponse,
+    WorkshopResponse, WorkshopStatusResponse, WorkshopStepResponse,
 };
 
 // Re-export archetype handlers
@@ -182,7 +182,7 @@ pub use system_config::{
 pub use health::{health_check, HealthResponse};
 
 // Re-export cancellation handlers
-pub use cancellation::{cancel_agent_execution, cancel_chat_message};
+pub use cancellation::{cancel_agent_execution, cancel_chat_message, cancel_workflow_execution};
 
 // Re-export timeline handlers and types
 pub mod timeline;

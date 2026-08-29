@@ -1,4 +1,6 @@
 import Box from '@mui/material/Box'
+import { useTheme } from '@mui/material/styles'
+import { statusColor, designStatusColor } from '@/utils/statusColor'
 import type { StepExecutionStatus } from '@/stores/workflowExecutionStore/types'
 import type { SourceStreamStatus } from '@/stores/stepStreamStore'
 
@@ -11,31 +13,29 @@ type StatusDotProps = {
 
 const SIZE = 6
 
+/**
+ * The sidebar's per-step dot.
+ *
+ * Colors come from the theme's status palette via the shared `statusColor`, so
+ * the dot and the node's ring on the canvas are the same color for the same
+ * state by construction rather than by two lists agreeing.
+ */
 function StatusDot({ status, designStatus, pinned }: StatusDotProps) {
+  const theme = useTheme()
+  const palette = theme.palette.statusPalette
   const resolved = status ?? 'idle'
 
-  // When execution is running and design status exists, show design indicator
-  // instead of generic yellow — workforce steps show design phase, agent dots handle execution
-  if (resolved === 'running' && designStatus !== null) {
-    const color = designStatus === 'failed' ? '#f85149' : '#58a6ff'
-    if (designStatus === 'running') {
-      return (
-        <Box
-          sx={{
-            width: SIZE,
-            height: SIZE,
-            borderRadius: '50%',
-            flexShrink: 0,
-            background: `conic-gradient(${color} 0deg, ${color} 180deg, transparent 180deg, transparent 360deg)`,
-            animation: 'statusDotSpin 1s linear infinite',
-            '@keyframes statusDotSpin': {
-              from: { transform: 'rotate(0deg)' },
-              to: { transform: 'rotate(360deg)' },
-            },
-          }}
-        />
-      )
-    }
+  // An active design phase describes a step better than a generic "running":
+  // workforce steps design their agents before any of them execute. The design
+  // axis only gets to speak while the run axis is running or silent.
+  const design = designStatus !== null && designStatus !== undefined && designStatus !== 'idle'
+    ? designStatus
+    : null
+  const showDesign = design !== null && (resolved === 'running' || resolved === 'idle')
+
+  const color = showDesign ? designStatusColor(design, palette) : statusColor(resolved, palette)
+
+  if (color === null) {
     return (
       <Box
         sx={{
@@ -43,99 +43,15 @@ function StatusDot({ status, designStatus, pinned }: StatusDotProps) {
           height: SIZE,
           borderRadius: '50%',
           flexShrink: 0,
-          backgroundColor: color,
+          border: '1px solid',
+          borderColor: 'text.disabled',
         }}
       />
     )
   }
 
-  // Execution status takes precedence when active (non-workforce steps)
-  if (resolved === 'running') {
-    return (
-      <Box
-        sx={{
-          width: SIZE,
-          height: SIZE,
-          borderRadius: '50%',
-          flexShrink: 0,
-          background: `conic-gradient(#e3b341 0deg, #e3b341 180deg, transparent 180deg, transparent 360deg)`,
-          animation: 'statusDotSpin 1s linear infinite',
-          '@keyframes statusDotSpin': {
-            from: { transform: 'rotate(0deg)' },
-            to: { transform: 'rotate(360deg)' },
-          },
-        }}
-      />
-    )
-  }
+  const spinning = showDesign ? design === 'running' : resolved === 'running'
 
-  if (resolved === 'success' || resolved === 'error') {
-    const color = resolved === 'success' ? '#3fb950' : '#f85149'
-    return (
-      <Box
-        sx={{
-          width: SIZE,
-          height: SIZE,
-          borderRadius: '50%',
-          flexShrink: 0,
-          backgroundColor: color,
-          ...(pinned === true && resolved === 'success'
-            ? { boxShadow: `0 0 0 2px rgba(63, 185, 80, 0.28)` }
-            : {}),
-        }}
-      />
-    )
-  }
-
-  // When idle, show design status if present
-  if (designStatus === 'running') {
-    return (
-      <Box
-        sx={{
-          width: SIZE,
-          height: SIZE,
-          borderRadius: '50%',
-          flexShrink: 0,
-          background: `conic-gradient(#58a6ff 0deg, #58a6ff 180deg, transparent 180deg, transparent 360deg)`,
-          animation: 'statusDotSpin 1s linear infinite',
-          '@keyframes statusDotSpin': {
-            from: { transform: 'rotate(0deg)' },
-            to: { transform: 'rotate(360deg)' },
-          },
-        }}
-      />
-    )
-  }
-
-  if (designStatus === 'completed') {
-    return (
-      <Box
-        sx={{
-          width: SIZE,
-          height: SIZE,
-          borderRadius: '50%',
-          flexShrink: 0,
-          backgroundColor: '#58a6ff',
-        }}
-      />
-    )
-  }
-
-  if (designStatus === 'failed') {
-    return (
-      <Box
-        sx={{
-          width: SIZE,
-          height: SIZE,
-          borderRadius: '50%',
-          flexShrink: 0,
-          backgroundColor: '#f85149',
-        }}
-      />
-    )
-  }
-
-  // Default: idle, no design status
   return (
     <Box
       sx={{
@@ -143,8 +59,16 @@ function StatusDot({ status, designStatus, pinned }: StatusDotProps) {
         height: SIZE,
         borderRadius: '50%',
         flexShrink: 0,
-        border: '1px solid',
-        borderColor: 'text.disabled',
+        ...(spinning
+          ? {
+              background: `conic-gradient(${color} 0deg, ${color} 180deg, transparent 180deg, transparent 360deg)`,
+              animation: 'statusDotSpin 1s linear infinite',
+              '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+            }
+          : { backgroundColor: color }),
+        ...(pinned === true && resolved === 'success'
+          ? { boxShadow: `0 0 0 2px ${color}47` }
+          : {}),
       }}
     />
   )

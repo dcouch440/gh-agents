@@ -16,6 +16,11 @@ const BOARD = {
   BOX_PADDING_Y: 12,
   BOX_BORDER_RADIUS: 14,
   BOX_BORDER_WIDTH: 2,
+  /**
+   * Dash for a box that has not been designed yet, in *screen* px — the
+   * renderer divides by zoom so the gaps stay readable when zoomed out.
+   */
+  BOX_UNDESIGNED_DASH: [7, 5] as readonly number[],
 
   // ── Arrow rendering ──────────────────────────────────────────────────────
   /** Gap between arrow endpoint and box edge (px). */
@@ -75,4 +80,17 @@ const BOARD = {
   HISTORY_MAX_DEPTH: 100,
 } as const
 
-export { BOARD }
+/**
+ * Status ring tuning, kept apart from BOARD because these govern an animation
+ * budget rather than board geometry.
+ */
+const BOARD_RING = {
+  /** Below this zoom, rings still draw but stop breathing. */
+  ANIMATE_MIN_ZOOM: 0.45,
+  /** One full breath, in ms. */
+  PULSE_PERIOD_MS: 1800,
+  /** Minimum ms between pulse repaints — well under display refresh on purpose. */
+  PULSE_FRAME_MS: 50,
+} as const
+
+export { BOARD, BOARD_RING }

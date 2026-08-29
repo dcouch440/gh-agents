@@ -298,18 +298,47 @@ pub async fn generate_workflow(
     if !instructions.is_empty() {
         let state_clone = state.clone();
         let user_id = auth.user_id;
+        let (registration, cancel_token) = state.register_cancellation(workflow_id);
         tokio::spawn(async move {
             crate::server::services::dispatch::sequential::run_sequential_design_pipeline(
-                state_clone,
+                state_clone.clone(),
                 workflow_id,
                 user_id,
                 instructions,
                 steps,
                 edges,
+                cancel_token,
             )
             .await;
+            state_clone.remove_cancellation(workflow_id, registration);
         });
     }
 
     Ok(Json(super::types::GenerateResponse { generating }))
+}
+
+/// POST /workflows/:id/generate/cancel — stop an in-flight design pipeline.
+///
+/// Cancels the pipeline-level token (stopping any not-yet-started levels) and
+/// its currently running node dispatch, if any — see
+/// `TaskRegistry::spawn_child_task`.
+pub async fn cancel_workflow_generate(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(workflow_id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let wf = state
+        .repos()
+        .workflows
+        .get_workflow(workflow_id)
+        .await?
+        .ok_or(AppError::not_found("Workflow"))?;
+    if wf.user_id != auth.user_id.0 {
+        return Err(AppError::not_found("Workflow"));
+    }
+
+    let cancelled = state.cancel_execution(workflow_id);
+    Ok(Json(serde_json::json!({
+        "status": if cancelled { "cancelled" } else { "not_generating" }
+    })))
 }

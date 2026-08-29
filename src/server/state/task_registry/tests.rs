@@ -227,4 +227,51 @@ mod tests {
         let registry = TaskRegistry::new();
         assert!(registry.list_tasks_for_workflow(Uuid::new_v4()).is_empty());
     }
+
+    #[test]
+    fn spawn_child_task_is_cancelled_when_parent_is_cancelled() {
+        let registry = TaskRegistry::new();
+        let parent = tokio_util::sync::CancellationToken::new();
+
+        let (exec_id, child_token) = registry.spawn_child_task(
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            "child task".into(),
+            &parent,
+        );
+
+        assert!(!child_token.is_cancelled());
+        parent.cancel();
+        assert!(
+            child_token.is_cancelled(),
+            "cancelling the parent must cancel the child"
+        );
+        // The registry stores the same child token, so lookups see it too.
+        assert!(registry
+            .get_task(exec_id)
+            .unwrap()
+            .cancel_token
+            .is_cancelled());
+    }
+
+    #[test]
+    fn spawn_child_task_does_not_cancel_parent() {
+        let registry = TaskRegistry::new();
+        let parent = tokio_util::sync::CancellationToken::new();
+
+        let (exec_id, _child_token) = registry.spawn_child_task(
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            "child task".into(),
+            &parent,
+        );
+
+        registry.cancel_task(exec_id);
+        assert!(
+            !parent.is_cancelled(),
+            "cancelling a child must not cancel its parent"
+        );
+    }
 }

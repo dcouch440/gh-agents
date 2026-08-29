@@ -5,7 +5,7 @@ import { api } from '@/api'
 import { boardStore, workflowStore, workflowLiveStore, layoutStore, sidebarStore, useStore } from '@/stores'
 import { boardElementStore } from '@/stores/boardElementStore'
 import { useWorkflowRun } from '@/components/canvas/useWorkflowRun'
-import { useBoardTheme, useBoardSubmit, useBoardElements, useCanvasSync, useActivityHistory } from './hooks'
+import { useBoardTheme, useBoardSubmit, useBoardElements, useCanvasSync, useActivityHistory, useBoardStatusRings } from './hooks'
 import { BoardContextMenu } from './BoardContextMenu'
 import type { MenuPosition } from './BoardContextMenu'
 import { SubmitBar } from './SubmitBar'
@@ -35,6 +35,7 @@ function Board({ workflowId }: BoardProps) {
 
   // ── Data hooks ────────────────────────────────────────────────────────────
   const theme = useBoardTheme()
+
   const { loading } = useBoardElements(workflowId)
   useBoardSubmit(workflowId) // kept for initial element load
   // Server truth, not local state — a refresh mid-generation still reads as
@@ -73,13 +74,19 @@ function Board({ workflowId }: BoardProps) {
       })
   }, [workflowId, flushAndWait])
 
+  const handleCancelGenerate = useCallback(() => {
+    api.workflows.cancelGenerate(workflowId).catch((err: unknown) => {
+      console.error('Cancel generate failed:', err)
+    })
+  }, [workflowId])
+
   const steps = useStore(workflowStore.store, workflowStore.selectSteps)
   const entryStep = useMemo(() => {
     const inputStep = steps.find((s) => s.execution_mode === 'input')
     if (inputStep) return inputStep
     return steps.find((s) => s.execution_mode === 'context') ?? null
   }, [steps])
-  const { status: runStatus, handleRun } = useWorkflowRun(entryStep?.prompt_template ?? '')
+  const { status: runStatus, handleRun, handleCancel: handleCancelRun } = useWorkflowRun(entryStep?.prompt_template ?? '')
 
   useActivityHistory(workflowId)
 
@@ -115,6 +122,20 @@ function Board({ workflowId }: BoardProps) {
     handleContextMenuDelete, handleContextMenuSelectAll,
   } = useBoardInteractions(elements, setElements, containerRef, syncDeletedElements, handleContextMenuOpen, handleCanvasChange)
 
+  // ── Status rings ─────────────────────────────────────────────────────────
+  //
+  // Run/design state drawn around each mapped box. The pulse is kept out of the
+  // ring map so a breathing node never rebuilds it, and the rAF loop only runs
+  // while something is actually pulsing.
+
+  const statusRings = useBoardStatusRings(viewport.zoom)
+  const hasPulsingRing = useMemo(() => {
+    for (const ring of statusRings.values()) {
+      if (ring.pulse) return true
+    }
+    return false
+  }, [statusRings])
+
   // ── Context menu ─────────────────────────────────────────────────────────
 
   const closeContextMenu = useCallback(() => { setContextMenu(null) }, [])
@@ -145,6 +166,8 @@ function Board({ workflowId }: BoardProps) {
           interaction={interaction}
           viewport={viewport}
           theme={theme}
+          statusRings={statusRings}
+          pulsing={hasPulsingRing}
           previews={previews}
           {...handlers}
         />
@@ -160,8 +183,10 @@ function Board({ workflowId }: BoardProps) {
 
       <SubmitBar
         onGenerate={handleGenerate}
+        onCancelGenerate={handleCancelGenerate}
         isGenerating={isGenerating}
         onRun={handleRun}
+        onCancelRun={handleCancelRun}
         runStatus={runStatus}
         showDebug={showDebug}
         onToggleDebug={() => { layoutStore.toggleDispatchPanel() }}

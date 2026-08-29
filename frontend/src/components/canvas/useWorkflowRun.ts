@@ -7,11 +7,12 @@ type RunStatus = 'idle' | 'running' | 'error'
 type UseWorkflowRunResult = {
   status: RunStatus
   handleRun: () => void
+  handleCancel: () => void
   tooltipText: string
 }
 
 const TOOLTIP_MAP: Record<RunStatus, string> = {
-  running: 'Workflow is running...',
+  running: 'Click to cancel',
   error: 'Execution failed to start',
   idle: 'Run workflow',
 }
@@ -26,6 +27,7 @@ const TOOLTIP_MAP: Record<RunStatus, string> = {
 const useWorkflowRun = (promptInput: string): UseWorkflowRunResult => {
   const activeWorkflowId = useStore(workflowStore.store, workflowStore.selectActiveWorkflowId)
   const isRunning = useStore(workflowExecutionStore.store, workflowExecutionStore.selectIsRunning)
+  const runId = useStore(workflowExecutionStore.store, workflowExecutionStore.selectRunId)
   const [lastError, setLastError] = useState<string | null>(null)
 
   const handleRun = useCallback(async () => {
@@ -44,11 +46,21 @@ const useWorkflowRun = (promptInput: string): UseWorkflowRunResult => {
     }
   }, [activeWorkflowId, isRunning, promptInput])
 
+  const handleCancel = useCallback(async () => {
+    if (!runId) return
+    try {
+      await api.workflows.cancel(runId)
+    } catch (e) {
+      console.error('Cancel run failed:', e)
+    }
+  }, [runId])
+
   const status: RunStatus = isRunning ? 'running' : lastError !== null ? 'error' : 'idle'
 
   return {
     status,
     handleRun: () => { void handleRun() },
+    handleCancel: () => { void handleCancel() },
     tooltipText: TOOLTIP_MAP[status],
   }
 }

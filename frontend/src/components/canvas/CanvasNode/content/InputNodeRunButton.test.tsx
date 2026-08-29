@@ -3,19 +3,31 @@ import { render, screen } from '@/test/render'
 import userEvent from '@testing-library/user-event'
 import { InputNodeRunButton } from './InputNodeRunButton'
 
-const { mockSelectActiveWorkflowId, mockSelectStepById, mockRunWorkflow, mockSelectIsRunning, mockBeginRun, mockHydrateActive } = vi.hoisted(() => ({
+const {
+  mockSelectActiveWorkflowId,
+  mockSelectStepById,
+  mockRunWorkflow,
+  mockCancelWorkflow,
+  mockSelectIsRunning,
+  mockSelectRunId,
+  mockBeginRun,
+  mockHydrateActive,
+} = vi.hoisted(() => ({
   mockSelectIsRunning: vi.fn<() => boolean>(() => false),
+  mockSelectRunId: vi.fn<() => string | null>(() => null),
   mockBeginRun: vi.fn(),
   mockHydrateActive: vi.fn(() => Promise.resolve()),
   mockSelectActiveWorkflowId: vi.fn<() => string | null>(() => 'wf-001'),
   mockSelectStepById: vi.fn(() => () => ({ prompt_template: 'Default input text' })),
   mockRunWorkflow: vi.fn(() => Promise.resolve({ id: 'exec-001' })),
+  mockCancelWorkflow: vi.fn(() => Promise.resolve({ status: 'cancelled' })),
 }))
 
 vi.mock('@/stores', () => ({
   useStore: vi.fn((_store: unknown, selector: unknown) => {
     if (selector === mockSelectActiveWorkflowId) return mockSelectActiveWorkflowId()
     if (selector === mockSelectIsRunning) return mockSelectIsRunning()
+    if (selector === mockSelectRunId) return mockSelectRunId()
     if (typeof selector === 'function') return (selector as () => unknown)()
     return undefined
   }),
@@ -27,6 +39,7 @@ vi.mock('@/stores', () => ({
   workflowExecutionStore: {
     store: { getState: vi.fn(), subscribe: vi.fn() },
     selectIsRunning: mockSelectIsRunning,
+    selectRunId: mockSelectRunId,
     beginRun: mockBeginRun,
   },
   workflowLiveStore: {
@@ -38,17 +51,20 @@ vi.mock('@/api', () => ({
   api: {
     workflows: {
       run: mockRunWorkflow,
+      cancel: mockCancelWorkflow,
     },
   },
 }))
 
 beforeEach(() => {
   mockSelectIsRunning.mockReturnValue(false)
+  mockSelectRunId.mockReturnValue(null)
   vi.clearAllMocks()
   vi.useFakeTimers({ shouldAdvanceTime: true })
   mockSelectActiveWorkflowId.mockReturnValue('wf-001')
   mockSelectStepById.mockReturnValue(() => ({ prompt_template: 'Default input text' }))
   mockRunWorkflow.mockReturnValue(Promise.resolve({ id: 'exec-001' }))
+  mockCancelWorkflow.mockReturnValue(Promise.resolve({ status: 'cancelled' }))
 })
 
 describe('InputNodeRunButton', () => {
@@ -83,12 +99,24 @@ describe('InputNodeRunButton', () => {
     expect(mockRunWorkflow).toHaveBeenCalledWith('wf-001', undefined)
   })
 
-  it('disables the button whenever the server reports an active run', () => {
+  it('stays enabled whenever the server reports an active run, so it can be cancelled', () => {
     mockSelectIsRunning.mockReturnValue(true)
 
     render(<InputNodeRunButton stepId="step-1" />)
 
-    expect(screen.getByRole('button')).toBeDisabled()
+    expect(screen.getByRole('button')).not.toBeDisabled()
+  })
+
+  it('calls api.workflows.cancel when clicked while running', async () => {
+    mockSelectIsRunning.mockReturnValue(true)
+    mockSelectRunId.mockReturnValue('exec-001')
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+
+    render(<InputNodeRunButton stepId="step-1" />)
+    await user.click(screen.getByRole('button'))
+
+    expect(mockCancelWorkflow).toHaveBeenCalledWith('exec-001')
+    expect(mockRunWorkflow).not.toHaveBeenCalled()
   })
 
   it('stays enabled after a failure so the run can be retried', async () => {

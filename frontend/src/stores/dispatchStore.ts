@@ -118,17 +118,6 @@ const upsertEntry = (
   })
 }
 
-const updateEntry = (
-  stepId: string,
-  updater: (entry: DispatchEntry) => DispatchEntry
-): void => {
-  store.setState((s) => {
-    const existing = s.byStep[stepId]
-    if (!existing) return s
-    return { byStep: { ...s.byStep, [stepId]: updater(existing) } }
-  })
-}
-
 /** Append a trace event, dropping the oldest events if the cap is exceeded. */
 const appendTrace = (trace: DispatchTraceEvent[], event: DispatchTraceEvent): DispatchTraceEvent[] => {
   const next = [...trace, event]
@@ -170,8 +159,12 @@ const handleWsEvent = (msg: WsWireMessage): void => {
       }))
       break
     }
+    // The three terminal events upsert for the same reason the stream events do:
+    // a socket that connects after `dispatch_started` (or reconnects across it)
+    // still has to be able to report how the dispatch ended. Dropping them left
+    // a row that had failed showing no status and no reason.
     case SESSION_EVENT.DISPATCH_COMPLETED: {
-      updateEntry(stepId, (e) => ({
+      upsertEntry(stepId, msg.ts, (e) => ({
         ...e,
         status: 'completed',
         summary: (data.summary as string | undefined) ?? null,
@@ -180,7 +173,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
       break
     }
     case SESSION_EVENT.DISPATCH_FAILED: {
-      updateEntry(stepId, (e) => ({
+      upsertEntry(stepId, msg.ts, (e) => ({
         ...e,
         status: 'failed',
         error: (data.error as string | undefined) ?? null,
@@ -189,7 +182,7 @@ const handleWsEvent = (msg: WsWireMessage): void => {
       break
     }
     case SESSION_EVENT.DISPATCH_CANCELLED: {
-      updateEntry(stepId, (e) => ({ ...e, status: 'cancelled' }))
+      upsertEntry(stepId, msg.ts, (e) => ({ ...e, status: 'cancelled' }))
 
       break
     }
@@ -318,14 +311,23 @@ const hydrateFromApi = (resp: DispatchTraceResponse): void => {
     ? incomingStatus
     : existing?.status ?? incomingStatus
 
+  // The registry stores a failure's text in the task's `result`, so a failed
+  // dispatch's result is an error message rather than a summary. Filing it as
+  // a summary is how the reason for a failure used to vanish on refresh: the
+  // only copy arrived over the socket, and nothing rendered it afterwards.
+  const failed = status === 'failed'
+  const result = resp.result ?? null
+  const summary = failed ? existing?.summary ?? null : result ?? existing?.summary ?? null
+  const error = failed ? result ?? existing?.error ?? null : existing?.error ?? null
+
   const entry: DispatchEntry = {
     executionId: resp.execution_id,
     stepId,
     status,
     instruction: resp.instruction || (existing?.instruction ?? ''),
     message: existing?.message ?? null,
-    summary: resp.result ?? existing?.summary ?? null,
-    error: existing?.error ?? null,
+    summary,
+    error,
     startedAt: existing?.startedAt ?? '',
     trace,
     tokenBuffer,

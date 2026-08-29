@@ -349,6 +349,8 @@ pub enum WorkflowEventKind {
     Failed {
         error: String,
     },
+    /// Execution was cancelled by the user (as opposed to failing).
+    Cancelled,
     Resumed {
         step_id: Uuid,
     },
@@ -497,6 +499,7 @@ impl WorkflowEvent {
             WorkflowEventKind::DesignerAgentDesigned { .. } => "designer_agent_designed",
             WorkflowEventKind::Completed { .. } => "completed",
             WorkflowEventKind::Failed { .. } => "failed",
+            WorkflowEventKind::Cancelled => "cancelled",
             WorkflowEventKind::Resumed { .. } => "resumed",
             WorkflowEventKind::RosterChanged { .. } => "roster_changed",
             WorkflowEventKind::RoomMembersChanged { .. } => "room_members_changed",

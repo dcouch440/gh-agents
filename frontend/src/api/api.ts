@@ -347,6 +347,9 @@ const workflows = freeze({
   generate: (workflowId: string, config?: RequestConfig) =>
     baseApi.post<{ generating: number }>(API.WORKFLOW_GENERATE(workflowId), {}, config),
 
+  cancelGenerate: (workflowId: string, config?: RequestConfig) =>
+    baseApi.post<{ status: string }>(API.WORKFLOW_GENERATE_CANCEL(workflowId), undefined, config),
+
   getStepChatDebug: (workflowId: string, stepId: string, config?: RequestConfig) =>
     baseApi.get<StepChatDebugResponse>(API.STEP_CHAT_DEBUG(workflowId, stepId), config),
 
@@ -358,6 +361,9 @@ const workflows = freeze({
 
   run: (id: string, body?: { initial_input?: string }, config?: RequestConfig) =>
     baseApi.post<WorkflowRunResponse>(API.WORKFLOW_RUN(id), body ?? {}, config),
+
+  cancel: (executionId: string, config?: RequestConfig) =>
+    baseApi.post<{ status: string }>(API.WORKFLOW_EXECUTION_CANCEL(executionId), undefined, config),
 
   listExecutions: (workflowId: string, config?: RequestConfig) =>
     baseApi.get<WorkflowExecutionSummary[]>(API.WORKFLOW_EXECUTIONS(workflowId), config),

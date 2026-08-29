@@ -1,4 +1,6 @@
-//! Cancellation endpoints for agent executions and chat messages
+//! Cancellation endpoints for agent executions, chat messages, and workflow runs
+
+use std::sync::Arc;
 
 use axum::{
     extract::{Path, State},
@@ -7,6 +9,8 @@ use axum::{
 use uuid::Uuid;
 
 use super::AppError;
+use crate::db::pg_repo::PgRepo;
+use crate::db::traits::WorkflowCollectionRepo;
 use crate::server::auth as auth_utils;
 use crate::server::state::AppState;
 
@@ -66,6 +70,53 @@ pub async fn cancel_chat_message(
     if cancelled {
         tracing::info!("Cancelled chat message {}", message_id);
     }
+    Ok(Json(serde_json::json!({ "status": "cancelled" })))
+}
+
+/// POST /workflow-executions/:execution_id/cancel - Cancel a running workflow execution (Run).
+#[utoipa::path(
+    post,
+    path = "/workflow-executions/{execution_id}/cancel",
+    params(("execution_id" = Uuid, Path, description = "Workflow execution UUID")),
+    responses(
+        (status = 200, description = "Execution cancelled"),
+        (status = 404, description = "Execution not found or no cancellation token registered")
+    )
+)]
+pub async fn cancel_workflow_execution(
+    State(state): State<AppState>,
+    auth: auth_utils::AuthUser,
+    Path(execution_id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let db = state
+        .db()
+        .ok_or(AppError::Internal("Database not available".into()))?
+        .clone();
+    let collection_repo: Arc<dyn WorkflowCollectionRepo> = Arc::new(PgRepo::new(db));
+
+    // Ownership is checked before anything is cancelled. The registry is one
+    // flat map of UUIDs shared by runs, chat messages and design pipelines, so
+    // an unguarded `cancel_execution` here would kill any of them for any
+    // caller who knew the id. 404 rather than 403: a run the caller does not
+    // own should not be distinguishable from one that does not exist.
+    let execution = collection_repo
+        .get_workflow_execution(execution_id)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or(AppError::not_found("Execution"))?;
+    if execution.user_id != auth.user_id.0 {
+        return Err(AppError::not_found("Execution"));
+    }
+
+    let cancelled = state.cancel_execution(execution_id);
+    if !cancelled {
+        return Err(AppError::not_found("Execution"));
+    }
+
+    let _ = collection_repo
+        .update_workflow_execution_status(execution_id, "cancelled", None, None)
+        .await;
+
     Ok(Json(serde_json::json!({ "status": "cancelled" })))
 }
 

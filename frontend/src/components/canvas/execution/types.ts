@@ -14,16 +14,6 @@ type NodeHeaderProps = {
 
 type ExecutionStatus = 'idle' | 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'paused'
 
-const STATUS_COLORS: Record<ExecutionStatus, string | null> = {
-  idle: null,
-  pending: '#7d8590',
-  running: '#f59e0b',
-  completed: '#10b981',
-  failed: '#f85149',
-  skipped: '#7d8590',
-  paused: '#f59e0b',
-}
-
 const STATUS_LABELS: Record<ExecutionStatus, string | null> = {
   idle: null,
   pending: 'Pending',
@@ -52,4 +42,4 @@ const toExecutionStatus = (status: string | undefined): ExecutionStatus => {
 }
 
 export type { NodeHeaderSize, NodeHeaderProps, ExecutionStatus }
-export { STATUS_COLORS, STATUS_LABELS, SIZE_CONFIG, toExecutionStatus }
+export { STATUS_LABELS, SIZE_CONFIG, toExecutionStatus }

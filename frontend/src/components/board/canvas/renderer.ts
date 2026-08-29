@@ -19,6 +19,7 @@ import type { EdgeHover } from '../elements'
 import { getStrokeOutline } from '../pen'
 import { fillOutlinePath } from '../pen'
 import { wrapText } from './textMeasure'
+import type { StatusRing } from './statusRing'
 
 type DrawTheme = {
   readonly canvasBg: string
@@ -82,21 +83,30 @@ const drawBox = (
   isSelected: boolean,
   isEditing: boolean,
   theme: DrawTheme,
+  ring: StatusRing | null,
+  zoom: number,
 ): void => {
   const { x, y, width, height } = box
 
   // Stable seed from box id — keeps sketchy lines consistent across re-renders
   const seed = hashStringToSeed(box.id)
 
+  const boxStroke = resolveBoxStroke(ring, isSelected, theme, zoom)
+
   // Rough.js rounded rectangle via SVG path for hand-drawn rounded corners
   const d = roundedRectPath(x, y, width, height, BOARD.BOX_BORDER_RADIUS)
   rc.path(d, {
     fill: theme.surfaceBg,
     fillStyle: 'solid',
-    stroke: isSelected ? theme.accentColor : theme.strokeColor,
-    strokeWidth: BOARD.BOX_BORDER_WIDTH,
-    roughness: 1.0,
-    bowing: 1.5,
+    stroke: boxStroke.color,
+    strokeWidth: boxStroke.width,
+    // Rough.js sketches every stroke twice by default. On a solid line the two
+    // passes read as one hand-drawn edge, but on a dashed one they land at
+    // different offsets and each fills the other's gaps — the dash disappears
+    // into noise. One calmer pass is the only way the gaps survive.
+    ...(boxStroke.dash !== undefined
+      ? { strokeLineDash: boxStroke.dash, disableMultiStroke: true, roughness: 0.6, bowing: 1.0 }
+      : { roughness: 1.0, bowing: 1.5 }),
     seed,
   })
 
@@ -144,6 +154,99 @@ const drawBoxHighlight = (
   // Glow border
   ctx.strokeStyle = accentColor + '80' // 50% alpha
   ctx.lineWidth = 2.5
+  ctx.beginPath()
+  ctx.roundRect(x - pad, y - pad, width + pad * 2, height + pad * 2, BOARD.BOX_BORDER_RADIUS + pad)
+  ctx.stroke()
+  ctx.restore()
+}
+
+/**
+ * Two-digit hex alpha suffix, matching the `color + '80'` convention used
+ * throughout this renderer. Board palette colors are always 6-digit hex.
+ */
+const withAlpha = (color: string, alpha: number): string => {
+  const clamped = Math.max(0, Math.min(1, alpha))
+  return color + Math.round(clamped * 255).toString(16).padStart(2, '0')
+}
+
+/**
+ * Resolve the stroke a box is drawn with.
+ *
+ * Status *replaces* the outline rather than adding a ring beside it — the board
+ * is a hand-drawn surface, and a second concentric rectangle reads as chrome
+ * bolted on next to the sketch instead of the sketch itself carrying the state.
+ *
+ * Status also outranks selection for the same reason it outranks nothing else
+ * on this canvas: a selected box still has its eight resize handles to say so,
+ * whereas the run state has only the outline.
+ *
+ * There is no plain resting outline. A box with no status has not been designed
+ * yet, and that is a fact about the workflow worth showing, so it is drawn
+ * dashed — provisional, a sketch of a node rather than a node. The lifecycle is
+ * then legible without a legend: dashed, then blue while it is designed, then
+ * green once it has run. Selection still colors that dashed outline, because
+ * dash and color are answering different questions.
+ *
+ * The dash is divided by `zoom` because the canvas is drawn under a scale
+ * transform, and a world-space dash shrinks with it — at 0.25 a 7px dash is
+ * under two pixels and the outline reads solid. Zoomed out is exactly when
+ * someone is scanning for what has not been built yet, so the one state that
+ * must survive the zoom is this one.
+ */
+const resolveBoxStroke = (
+  ring: StatusRing | null,
+  isSelected: boolean,
+  theme: DrawTheme,
+  zoom: number,
+): { color: string; width: number; dash: number[] | undefined } => {
+  if (ring !== null) {
+    return {
+      color: ring.color,
+      // Slightly heavier so a colored outline reads as deliberate, not as a
+      // theme change.
+      width: BOARD.BOX_BORDER_WIDTH + 0.75,
+      dash: undefined,
+    }
+  }
+
+  // Guard a zero or negative zoom: the viewport clamps to MIN_ZOOM, but a dash
+  // array of Infinity would silently blank every undesigned box.
+  const scale = zoom > 0 ? zoom : 1
+  const dash = BOARD.BOX_UNDESIGNED_DASH.map((seg) => seg / scale)
+
+  return {
+    color: isSelected ? theme.accentColor : theme.strokeColor,
+    width: BOARD.BOX_BORDER_WIDTH,
+    dash,
+  }
+}
+
+/**
+ * The lit halo behind a box, for the two states worth interrupting someone for.
+ *
+ * Drawn under the boxes so a box's own fill masks the inner half. This is the
+ * only part of the status treatment that sits outside the outline — the color
+ * itself lives on the stroke.
+ *
+ * `pulse` is the current breathing value (0..1) from the render loop and only
+ * ever modulates alpha, never geometry, so a running node cannot shift the
+ * layout of anything around it.
+ */
+const drawBoxStatusGlow = (
+  ctx: CanvasRenderingContext2D,
+  box: BoxElement,
+  ring: StatusRing,
+  pulse: number,
+): void => {
+  if (!ring.glow) return
+
+  const pad = 3
+  const { x, y, width, height } = box
+  const breath = ring.pulse ? 0.55 + 0.45 * pulse : 1
+
+  ctx.save()
+  ctx.strokeStyle = withAlpha(ring.color, 0.32 * breath)
+  ctx.lineWidth = 10
   ctx.beginPath()
   ctx.roundRect(x - pad, y - pad, width + pad * 2, height + pad * 2, BOARD.BOX_BORDER_RADIUS + pad)
   ctx.stroke()
@@ -426,7 +529,10 @@ const drawSelectionRect = (
 
 /**
  * Draw a preview rectangle while the user is drag-creating a box.
- * Uses a dashed stroke to distinguish from finalized boxes.
+ *
+ * Distinguished from a finalized box by its translucent fill and accent stroke,
+ * not by a dash — dash is spoken for, and means a box that exists but has not
+ * been designed yet.
  */
 const drawDrawingBox = (
   ctx: CanvasRenderingContext2D,
@@ -509,6 +615,10 @@ const renderBoard = (
   drawingPen: DrawingPen,
   edgeHover: EdgeHover | null,
   theme: DrawTheme,
+  /** Status ring per box id. Boxes with no mapped step are simply absent. */
+  statusRings: ReadonlyMap<string, StatusRing>,
+  /** Breathing value 0..1 for pulsing rings. */
+  pulse: number,
 ): void => {
   const ctx = canvas.getContext('2d')
   if (ctx === null) return
@@ -536,6 +646,16 @@ const renderBoard = (
     }
   }
 
+  // Status glows, under every box so the fills mask their inner half
+  if (statusRings.size > 0) {
+    for (const boxId of elements.boxOrder) {
+      const ring = statusRings.get(boxId)
+      const box = elements.boxes.get(boxId)
+      if (ring === undefined || box === undefined) continue
+      drawBoxStatusGlow(ctx, box, ring, pulse)
+    }
+  }
+
   // Boxes in z-order
   for (let i = 0; i < elements.boxOrder.length; i++) {
     const boxId = elements.boxOrder[i]!
@@ -544,7 +664,17 @@ const renderBoard = (
 
     const isSelected = selection.selectedIds.has(boxId)
     const isEditing = editingBoxId === boxId
-    drawBox(ctx, rc, box, isSelected, isEditing, theme)
+
+    // A skipped step dims its whole box, not just the ring — the run passed
+    // it over, and it should recede from the board rather than compete.
+    const ring = statusRings.get(boxId) ?? null
+    const dimmed = ring?.dim === true
+    if (dimmed) {
+      ctx.save()
+      ctx.globalAlpha = 0.55
+    }
+    drawBox(ctx, rc, box, isSelected, isEditing, theme, ring, viewport.zoom)
+    if (dimmed) ctx.restore()
   }
 
   // Resize handles on selected boxes
@@ -618,8 +748,10 @@ export {
   drawGrid,
   drawHandle,
   drawPen,
+  drawBoxStatusGlow,
   drawResizeHandles,
   drawSelectionRect,
   renderBoard,
+  resolveBoxStroke,
 }
 export type { DrawTheme }

@@ -1,8 +1,8 @@
 import IconButton from '@mui/material/IconButton'
-import CircularProgress from '@mui/material/CircularProgress'
 import Tooltip from '@mui/material/Tooltip'
 import Fade from '@mui/material/Fade'
 import PlayArrowOutlined from '@mui/icons-material/PlayArrowOutlined'
+import StopOutlined from '@mui/icons-material/StopOutlined'
 import ErrorOutline from '@mui/icons-material/ErrorOutline'
 import { useTheme } from '@mui/material/styles'
 import { useStore, workflowStore } from '@/stores'
@@ -19,13 +19,13 @@ function InputNodeRunButton({ stepId }: InputNodeRunButtonProps) {
   const step = useStore(workflowStore.store, workflowStore.selectStepById(stepId))
   const promptTemplate = step?.prompt_template ?? ''
 
-  const { status, handleRun, tooltipText } = useWorkflowRun(promptTemplate)
+  const { status, handleRun, handleCancel, tooltipText } = useWorkflowRun(promptTemplate)
 
   if (!activeWorkflowId) return null
 
   const icon =
     status === 'running' ? (
-      <CircularProgress size={14} thickness={5} color="inherit" />
+      <StopOutlined sx={{ fontSize: 16 }} />
     ) : status === 'error' ? (
       <ErrorOutline sx={{ fontSize: 16 }} />
     ) : (
@@ -38,8 +38,7 @@ function InputNodeRunButton({ stepId }: InputNodeRunButtonProps) {
     <Tooltip title={tooltipText} TransitionComponent={Fade} enterDelay={300} placement="top">
       <IconButton
         size="small"
-        onClick={handleRun}
-        disabled={status === 'running'}
+        onClick={status === 'running' ? handleCancel : handleRun}
         sx={{
           width: 28,
           height: 28,

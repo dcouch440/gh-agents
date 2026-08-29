@@ -1,17 +1,18 @@
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
+import { useTheme } from '@mui/material/styles'
+import { statusColor } from '@/utils/statusColor'
 
 import type { ExecutionStatus } from './types'
-import { STATUS_COLORS, STATUS_LABELS } from './types'
+import { STATUS_LABELS } from './types'
 
 type ExecutionStatusBadgeProps = {
   status: ExecutionStatus
 }
 
 function ExecutionStatusBadge({ status }: ExecutionStatusBadgeProps) {
-  if (status === 'idle') return null
-
-  const color = STATUS_COLORS[status]
+  const theme = useTheme()
+  const color = statusColor(status, theme.palette.statusPalette)
   const label = STATUS_LABELS[status]
 
   if (color === null || label === null) return null

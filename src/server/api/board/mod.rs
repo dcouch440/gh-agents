@@ -225,18 +225,27 @@ async fn dispatch_board_changes(
         .await
         .unwrap_or_default();
 
-    // Spawn the sequential pipeline in the background
+    // Spawn the sequential pipeline in the background.
+    //
+    // The token is registered under the workflow id — the same key
+    // `POST /workflows/:id/generate/cancel` cancels by. An unregistered token
+    // would leave this pipeline uncancellable: the board flips its button to
+    // "Cancel" as soon as these dispatches make `is_generating` true, but the
+    // endpoint would find nothing to cancel and answer `not_generating`.
     let bg_state = state.clone();
+    let (registration, cancel_token) = state.register_cancellation(workflow_id);
     tokio::spawn(async move {
         dispatch::sequential::run_sequential_design_pipeline(
-            bg_state,
+            bg_state.clone(),
             workflow_id,
             user_id,
             instructions,
             steps,
             edges,
+            cancel_token,
         )
         .await;
+        bg_state.remove_cancellation(workflow_id, registration);
     });
 
     dispatches

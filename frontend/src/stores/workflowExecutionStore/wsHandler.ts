@@ -150,6 +150,17 @@ const handleWsEvent = (msg: WsWireMessage): void => {
         if (currentWorkflowId) void fetchRuns(currentWorkflowId)
         break
       }
+      case WORKFLOW_EVENT.CANCELLED: {
+        // User-initiated, not a failure — leave `error` untouched so the
+        // status resolves back to 'idle' rather than 'error'.
+        const currentWorkflowId = store.getState().workflowId
+        store.setState({
+          isRunning: false,
+          completedAt: msg.ts,
+        })
+        if (currentWorkflowId) void fetchRuns(currentWorkflowId)
+        break
+      }
       case WORKFLOW_EVENT.RESUMED: {
         ensureRunOverlay(msg)
         const d = msg.data as WorkflowResumedData

@@ -5,13 +5,17 @@ import { useWorkflowRun } from './useWorkflowRun'
 const {
   mockSelectActiveWorkflowId,
   mockSelectIsRunning,
+  mockSelectRunId,
   mockRunWorkflow,
+  mockCancelWorkflow,
   mockBeginRun,
   mockHydrateActive,
 } = vi.hoisted(() => ({
   mockSelectActiveWorkflowId: vi.fn<() => string | null>(() => 'wf-001'),
   mockSelectIsRunning: vi.fn<() => boolean>(() => false),
+  mockSelectRunId: vi.fn<() => string | null>(() => null),
   mockRunWorkflow: vi.fn(() => Promise.resolve({ execution_id: 'exec-001', workflow_id: 'wf-001', status: 'pending' })),
+  mockCancelWorkflow: vi.fn(() => Promise.resolve({ status: 'cancelled' })),
   mockBeginRun: vi.fn(),
   mockHydrateActive: vi.fn(() => Promise.resolve()),
 }))
@@ -20,6 +24,7 @@ vi.mock('@/stores', () => ({
   useStore: vi.fn((_store: unknown, selector: unknown) => {
     if (selector === mockSelectActiveWorkflowId) return mockSelectActiveWorkflowId()
     if (selector === mockSelectIsRunning) return mockSelectIsRunning()
+    if (selector === mockSelectRunId) return mockSelectRunId()
     return undefined
   }),
   workflowStore: {
@@ -29,6 +34,7 @@ vi.mock('@/stores', () => ({
   workflowExecutionStore: {
     store: { getState: vi.fn(), subscribe: vi.fn() },
     selectIsRunning: mockSelectIsRunning,
+    selectRunId: mockSelectRunId,
     beginRun: mockBeginRun,
   },
   workflowLiveStore: {
@@ -40,6 +46,7 @@ vi.mock('@/api', () => ({
   api: {
     workflows: {
       run: mockRunWorkflow,
+      cancel: mockCancelWorkflow,
     },
   },
 }))
@@ -49,9 +56,11 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true })
   mockSelectActiveWorkflowId.mockReturnValue('wf-001')
   mockSelectIsRunning.mockReturnValue(false)
+  mockSelectRunId.mockReturnValue(null)
   mockRunWorkflow.mockReturnValue(
     Promise.resolve({ execution_id: 'exec-001', workflow_id: 'wf-001', status: 'pending' }),
   )
+  mockCancelWorkflow.mockReturnValue(Promise.resolve({ status: 'cancelled' }))
 })
 
 describe('useWorkflowRun', () => {
@@ -68,7 +77,7 @@ describe('useWorkflowRun', () => {
     const { result } = renderHook(() => useWorkflowRun('hello'))
 
     expect(result.current.status).toBe('running')
-    expect(result.current.tooltipText).toBe('Workflow is running...')
+    expect(result.current.tooltipText).toBe('Click to cancel')
   })
 
   it('opens the overlay for the new run so the previous run cannot linger', async () => {
@@ -128,5 +137,29 @@ describe('useWorkflowRun', () => {
     })
 
     expect(mockRunWorkflow).not.toHaveBeenCalled()
+  })
+
+  it('cancels the active run', async () => {
+    mockSelectIsRunning.mockReturnValue(true)
+    mockSelectRunId.mockReturnValue('exec-001')
+    const { result } = renderHook(() => useWorkflowRun('hello'))
+
+    await act(async () => {
+      result.current.handleCancel()
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(mockCancelWorkflow).toHaveBeenCalledWith('exec-001')
+  })
+
+  it('does not attempt to cancel when there is no active run', async () => {
+    const { result } = renderHook(() => useWorkflowRun('hello'))
+
+    await act(async () => {
+      result.current.handleCancel()
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(mockCancelWorkflow).not.toHaveBeenCalled()
   })
 })

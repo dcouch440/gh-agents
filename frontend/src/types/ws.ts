@@ -160,6 +160,7 @@ export const WORKFLOW_EVENT = {
   FOR_EACH_PROGRESS: 'for_each_progress',
   COMPLETED: 'completed',
   FAILED: 'failed',
+  CANCELLED: 'cancelled',
   RESUMED: 'resumed',
   STEP_CONFIG_UPDATED: 'step_config_updated',
   STEP_NAME_UPDATED: 'step_name_updated',
@@ -213,6 +214,7 @@ export type StepPausedData = { workflow_id: string; step_id: string; step_name: 
 export type ForEachProgressData = { workflow_id: string; step_id: string; step_name: string; completed: number; total: number }
 export type WorkflowCompletedData = { workflow_id: string; duration_ms: number | null }
 export type WorkflowFailedData = { workflow_id: string; error: string }
+export type WorkflowCancelledData = { workflow_id: string }
 export type WorkflowResumedData = { workflow_id: string; step_id: string }
 export type StepConfigUpdatedData = { workflow_id: string; step_id: string }
 export type StepNameUpdatedData = { workflow_id: string; step_id: string; name: string }
