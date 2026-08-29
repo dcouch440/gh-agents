@@ -9,7 +9,7 @@ mod tests {
         let cfg = SYSTEM_NODE_AGENT.agent("system");
         assert_eq!(cfg.model_id, crate::constants::MODEL_TIER2);
         assert_eq!(cfg.temperature, 0.3);
-        assert_eq!(cfg.max_tokens, 8192);
+        assert_eq!(cfg.max_tokens, 32_768);
         assert_eq!(cfg.max_rounds, 30);
         assert_eq!(cfg.context_budget, 480_000);
     }
