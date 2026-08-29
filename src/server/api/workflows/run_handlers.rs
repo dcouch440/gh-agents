@@ -65,7 +65,7 @@ pub async fn run_workflow(
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     let execution_id = execution.id;
-    let cancel_token = state.register_cancellation(execution_id);
+    let (registration, cancel_token) = state.register_cancellation(execution_id);
 
     // Extract template_id and initial_input from body before consuming
     let (body_input, template_id) = match body {
@@ -191,7 +191,7 @@ pub async fn run_workflow(
             Some(&cancel_token),
         )
         .await;
-        bg_state.remove_cancellation(execution_id);
+        bg_state.remove_cancellation(execution_id, registration);
 
         match result {
             Ok(result) => {

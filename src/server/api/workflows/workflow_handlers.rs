@@ -298,7 +298,7 @@ pub async fn generate_workflow(
     if !instructions.is_empty() {
         let state_clone = state.clone();
         let user_id = auth.user_id;
-        let cancel_token = state.register_cancellation(workflow_id);
+        let (registration, cancel_token) = state.register_cancellation(workflow_id);
         tokio::spawn(async move {
             crate::server::services::dispatch::sequential::run_sequential_design_pipeline(
                 state_clone.clone(),
@@ -310,7 +310,7 @@ pub async fn generate_workflow(
                 cancel_token,
             )
             .await;
-            state_clone.remove_cancellation(workflow_id);
+            state_clone.remove_cancellation(workflow_id, registration);
         });
     }
 

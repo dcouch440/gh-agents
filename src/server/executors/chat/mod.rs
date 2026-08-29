@@ -80,7 +80,7 @@ async fn handle_message(
     msg: ConsumerMessage,
 ) -> anyhow::Result<()> {
     let message_id = msg.id;
-    let cancel_token = state.register_cancellation(message_id);
+    let (registration, cancel_token) = state.register_cancellation(message_id);
 
     // Check if this is a workflow agent session — route to run_workflow_agent_chat
     if let Some(session_id) = msg.session_id {
@@ -108,7 +108,7 @@ async fn handle_message(
                                     handle_chat_error(state, message_id, e).await;
                                 }
                             }
-                            state.remove_cancellation(message_id);
+                            state.remove_cancellation(message_id, registration);
                             crate::server::hub::schedule_stream_cleanup(state, message_id);
                             return Ok(());
                         }
@@ -150,7 +150,7 @@ async fn handle_message(
                                 handle_chat_error(state, message_id, e).await;
                             }
                         }
-                        state.remove_cancellation(message_id);
+                        state.remove_cancellation(message_id, registration);
                         crate::server::hub::schedule_stream_cleanup(state, message_id);
                         return Ok(());
                     }
@@ -192,7 +192,7 @@ async fn handle_message(
         }
     }
 
-    state.remove_cancellation(message_id);
+    state.remove_cancellation(message_id, registration);
     crate::server::hub::schedule_stream_cleanup(state, message_id);
     Ok(())
 }
