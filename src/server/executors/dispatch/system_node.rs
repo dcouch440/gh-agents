@@ -134,6 +134,7 @@ pub async fn run_system_node_task(
         state.clone(),
         step_id,
         workflow_id,
+        user_id,
         instruction.clone(),
         Some(session_id),
         container_handle,

@@ -48,6 +48,7 @@ pub struct ManagerDispatchStrategy {
     workflow_id: Uuid,
     user_id: UserId,
     session_id: Option<Uuid>,
+    agent_execution_id: Option<Uuid>,
 }
 
 impl ManagerDispatchStrategy {
@@ -89,7 +90,13 @@ impl ManagerDispatchStrategy {
             workflow_id,
             user_id,
             session_id,
+            agent_execution_id: None,
         })
+    }
+
+    /// Link the ledger entry to the execution record the dispatcher created.
+    pub fn set_agent_execution_id(&mut self, id: Option<Uuid>) {
+        self.agent_execution_id = id;
     }
 }
 
@@ -136,6 +143,14 @@ impl ExecutionStrategy for ManagerDispatchStrategy {
 
     fn state(&self) -> Option<&AppState> {
         Some(&self.state)
+    }
+
+    fn user_id(&self) -> Option<Uuid> {
+        Some(self.user_id.0)
+    }
+
+    fn agent_execution_id(&self) -> Option<Uuid> {
+        self.agent_execution_id
     }
 
     async fn build_messages(&self, _input: &str) -> Result<Vec<Message>, HubError> {

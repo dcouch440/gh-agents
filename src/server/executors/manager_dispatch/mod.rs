@@ -67,7 +67,7 @@ pub async fn run_manager_dispatch_task(
         );
     }
 
-    let strategy = match ManagerDispatchStrategy::new(
+    let mut strategy = match ManagerDispatchStrategy::new(
         state.clone(),
         workflow_id,
         user_id,
@@ -147,6 +147,8 @@ pub async fn run_manager_dispatch_task(
             None
         }
     };
+
+    strategy.set_agent_execution_id(ae_id);
 
     let engine = ExecutionEngine::new(provider, state.env().debug_stream);
     let recorder = ExecutionRecorder::new(
