@@ -25,15 +25,20 @@ pub const ENV_NEXOR_STATIC_DIR: &str = "NEXOR_STATIC_DIR";
 /// The default LLM provider name used by the registry and all internal callers.
 pub const ACTIVE_PROVIDER: &str = "deepinfra";
 /// Orchestrator tier — highest capability.
-pub const MODEL_TIER1: &str = MODEL_DEEPSEEK_V4_FLASH;
+pub const MODEL_TIER1: &str = MODEL_GLM_5_3_FLASH;
 /// Worker tier — fast reasoning.
-pub const MODEL_TIER2: &str = MODEL_DEEPSEEK_V4_FLASH;
+pub const MODEL_TIER2: &str = MODEL_GLM_5_3_FLASH;
 /// Utility tier — fast non-reasoning.
-pub const MODEL_TIER3: &str = MODEL_DEEPSEEK_V4_FLASH;
+pub const MODEL_TIER3: &str = MODEL_GLM_5_3_FLASH;
 
 // All three DeepInfra tiers are the same model. The tiers differ only by
 // reasoning effort, so `EFFORT_TIER*` below — not the model id — is what
 // separates an orchestrator call from a utility one.
+
+// ── DeepSeek Profile (uncomment to switch back) ─────────────────────────
+// pub const MODEL_TIER1: &str = MODEL_DEEPSEEK_V4_FLASH;
+// pub const MODEL_TIER2: &str = MODEL_DEEPSEEK_V4_FLASH;
+// pub const MODEL_TIER3: &str = MODEL_DEEPSEEK_V4_FLASH;
 
 // Reasoning effort is per-agent configuration, not a constant: it lives in
 // each `config/**/config.yaml` beside `model_id`, `temperature` and
@@ -58,11 +63,15 @@ pub const MODEL_TIER3: &str = MODEL_DEEPSEEK_V4_FLASH;
 /// Default Anthropic model (used by AnthropicClient when no model specified).
 pub const ANTHROPIC_DEFAULT_MODEL: &str = "claude-sonnet-4-20250514";
 
-/// The DeepSeek model served by DeepInfra.
+/// The GLM model served by DeepInfra — the active DeepInfra tier model.
 ///
 /// A literal, deliberately not an alias of `MODEL_TIER1`: the tier constants
 /// change when the active profile is switched, and a provider's own default
 /// model must not follow them to another vendor's id.
+pub const MODEL_GLM_5_3_FLASH: &str = "zai-org/GLM-5.3-Flash";
+
+/// The DeepSeek model served by DeepInfra. Kept for the commented-out
+/// DeepSeek profile above and for pricing coverage of runs that used it.
 pub const MODEL_DEEPSEEK_V4_FLASH: &str = "deepseek-ai/DeepSeek-V4-Flash-0731";
 
 // ── Well-known IDs ────────────────────────────────────────────────────────
@@ -513,7 +522,7 @@ pub const WEB_USER_AGENT: &str = concat!("nexor-agent/", env!("CARGO_PKG_VERSION
 /// Base URL for DeepInfra's OpenAI-compatible API.
 pub const DEEPINFRA_DEFAULT_BASE_URL: &str = "https://api.deepinfra.com/v1/openai";
 /// Default model for DeepInfra chat completions.
-pub const DEEPINFRA_DEFAULT_MODEL: &str = MODEL_DEEPSEEK_V4_FLASH;
+pub const DEEPINFRA_DEFAULT_MODEL: &str = MODEL_GLM_5_3_FLASH;
 /// Whole-request timeout for DeepInfra chat completions (seconds).
 ///
 /// Generous because DeepInfra queues requests when a model is at capacity,

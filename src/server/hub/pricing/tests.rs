@@ -26,6 +26,35 @@ mod tests {
         assert!((output - 0.18).abs() < 1e-6, "output rate was {output}");
     }
 
+    // GLM is on a 50% promotion as of 2026-08-29; these assert the
+    // promotional rates actually billed, not the list price.
+    #[test]
+    fn glm_rates_match_the_deepinfra_promotional_tier() {
+        let (input, output) = per_million(crate::constants::MODEL_GLM_5_3_FLASH);
+        assert!((input - 0.075).abs() < 1e-6, "input rate was {input}");
+        assert!((output - 0.25).abs() < 1e-6, "output rate was {output}");
+    }
+
+    #[test]
+    fn glm_cached_input_is_billed_at_the_cache_rate() {
+        // 1M input of which 800k cached: 200k at 0.075 + 800k at 0.015.
+        let cost =
+            compute_cost_cached(crate::constants::MODEL_GLM_5_3_FLASH, 1_000_000, 800_000, 0);
+        let want = 0.2 * 0.075 + 0.8 * 0.015;
+        assert!((cost - want).abs() < 1e-6, "got {cost}, want {want}");
+    }
+
+    /// The active tier model must never fall through to the generic
+    /// $1.00/$3.00 default — that silently over-bills every run by >13x.
+    #[test]
+    fn the_active_tier_model_has_explicit_rates() {
+        let (input, _) = per_million(crate::constants::MODEL_TIER1);
+        assert!(
+            (input - 0.075).abs() < 1e-6,
+            "tier 1 input rate was {input}"
+        );
+    }
+
     #[test]
     fn cached_input_is_billed_at_the_cache_rate() {
         // 1M input of which 800k cached: 200k at 0.08 + 800k at 0.016.

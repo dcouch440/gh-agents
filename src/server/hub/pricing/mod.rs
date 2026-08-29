@@ -18,6 +18,9 @@ struct Rates {
 /// while anything under this namespace is a hosted, billed model.
 const DEEPINFRA_DEEPSEEK_PREFIX: &str = "deepseek-ai/";
 
+/// DeepInfra's namespace prefix for the Z.ai GLM family.
+const DEEPINFRA_GLM_PREFIX: &str = "zai-org/";
+
 /// Approximate cost computation per model ($/1M tokens).
 ///
 /// Local models (Ollama) are free — returns $0.00.
@@ -60,6 +63,20 @@ fn rates_for(model_id: &str) -> Option<Rates> {
             input: 0.08,
             output: 0.18,
             cached_input: 0.016,
+        });
+    }
+
+    // Hosted GLM (Z.ai) — the active DeepInfra tier model.
+    //
+    // These are DeepInfra's promotional rates: 50% off the $0.15 / $0.50 /
+    // $0.03 list price, in effect as of 2026-08-29. When the promotion ends
+    // these double; the numbers below are the ones actually billed today, so
+    // estimates track reality rather than a list price nobody is charged.
+    if model_id.starts_with(DEEPINFRA_GLM_PREFIX) {
+        return Some(Rates {
+            input: 0.075,
+            output: 0.25,
+            cached_input: 0.015,
         });
     }
 
