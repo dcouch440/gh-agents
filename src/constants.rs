@@ -509,6 +509,35 @@ pub const ENV_BRAVE_SEARCH_API_KEY: &str = "BRAVE_SEARCH_API_KEY";
 /// Brave Web Search API endpoint.
 pub const BRAVE_SEARCH_ENDPOINT: &str = "https://api.search.brave.com/res/v1/web/search";
 
+/// Env var overriding [`BRAVE_SEARCH_MAX_RPS`], so a key on a paid tier can be
+/// let loose without a rebuild. Parsed as a float; ignored if unparseable.
+pub const ENV_BRAVE_SEARCH_MAX_RPS: &str = "BRAVE_SEARCH_MAX_RPS";
+
+/// Brave searches allowed per second across the whole process.
+///
+/// Brave's Free tier permits one request per second. An agent routinely emits
+/// several `brave_search` calls in a single turn, and several agents run at
+/// once, so without a shared limit the tool 429s on its own traffic.
+pub const BRAVE_SEARCH_MAX_RPS: f64 = 1.0;
+
+/// Brave searches allowed to be in flight at once.
+///
+/// One, to match the rate: overlapping requests would arrive within the same
+/// second regardless of the bucket and defeat it.
+pub const BRAVE_SEARCH_MAX_CONCURRENT: usize = 1;
+
+/// How long a search may wait for its turn before giving up.
+///
+/// Bounds the queue: a long backlog should surface as a failed search the agent
+/// can react to, not a request that outlives the run.
+pub const BRAVE_SEARCH_QUEUE_TIMEOUT_SECS: u64 = 60;
+
+/// Fallback wait after a 429 that carried no `Retry-After` header.
+pub const BRAVE_SEARCH_RETRY_AFTER_FALLBACK_SECS: u64 = 2;
+
+/// Longest `Retry-After` this honours before failing instead of sleeping.
+pub const BRAVE_SEARCH_RETRY_AFTER_MAX_SECS: u64 = 30;
+
 /// Connect timeout for outbound web requests (seconds).
 pub const WEB_CONNECT_TIMEOUT_SECS: u64 = 10;
 /// User-Agent sent by the web tools.

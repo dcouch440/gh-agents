@@ -11,6 +11,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{Mutex, RwLock, Semaphore};
 
+use crate::net::throttle::TokenBucket;
+
 use super::provider::{LLMProvider, LLMResult};
 use super::types::{LLMError, LLMRequest, LLMResponse, StreamChunk};
 
@@ -34,46 +36,6 @@ impl Default for RateLimitConfig {
             requests_per_minute: crate::constants::RATE_LIMIT_REQUESTS_PER_MINUTE,
             global_backoff_initial_ms: crate::constants::RATE_LIMIT_GLOBAL_BACKOFF_INITIAL_MS,
             global_backoff_max_ms: crate::constants::RATE_LIMIT_GLOBAL_BACKOFF_MAX_MS,
-        }
-    }
-}
-
-/// Simple token bucket for RPM limiting.
-struct TokenBucket {
-    tokens: f64,
-    capacity: f64,
-    refill_rate: f64, // tokens per second
-    last_refill: Instant,
-}
-
-impl TokenBucket {
-    fn new(requests_per_minute: usize) -> Self {
-        let capacity = requests_per_minute as f64;
-        Self {
-            tokens: capacity,
-            capacity,
-            refill_rate: capacity / 60.0,
-            last_refill: Instant::now(),
-        }
-    }
-
-    fn refill(&mut self) {
-        let now = Instant::now();
-        let elapsed = now.duration_since(self.last_refill).as_secs_f64();
-        self.tokens = (self.tokens + elapsed * self.refill_rate).min(self.capacity);
-        self.last_refill = now;
-    }
-
-    /// Wait until a token is available, then consume it.
-    async fn acquire(&mut self) {
-        loop {
-            self.refill();
-            if self.tokens >= 1.0 {
-                self.tokens -= 1.0;
-                return;
-            }
-            let wait = (1.0 - self.tokens) / self.refill_rate;
-            tokio::time::sleep(Duration::from_secs_f64(wait)).await;
         }
     }
 }
@@ -146,7 +108,7 @@ pub struct RateLimitedProvider<P: LLMProvider> {
 impl<P: LLMProvider + 'static> RateLimitedProvider<P> {
     pub fn new(provider: P, config: RateLimitConfig) -> Self {
         let token_bucket = if config.requests_per_minute > 0 {
-            Some(Arc::new(Mutex::new(TokenBucket::new(
+            Some(Arc::new(Mutex::new(TokenBucket::per_minute(
                 config.requests_per_minute,
             ))))
         } else {

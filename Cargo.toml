@@ -104,6 +104,9 @@ utoipa-swagger-ui = { version = "8", features = ["axum"] }
 bytes = "1.11.1"
 
 [dev-dependencies]
+# `test-util` gives tests a pausable clock, so throttle tests assert real
+# wait behaviour without actually sleeping. Dev-only: it must not ship.
+tokio = { version = "1", features = ["test-util"] }
 tempfile = "3"
 wiremock = "0.6"
 mockall = "0.13"
