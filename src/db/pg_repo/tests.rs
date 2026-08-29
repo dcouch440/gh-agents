@@ -1297,14 +1297,22 @@ mod tests {
             .unwrap();
 
         // Create messages (agent_a first, then agent_b)
-        repo.create_execution_message(exec_a.id, "assistant", "Hello from Alice", None, 10, 5)
-            .await
-            .unwrap();
+        repo.create_execution_message(
+            exec_a.id,
+            "assistant",
+            "Hello from Alice",
+            None,
+            None,
+            10,
+            5,
+        )
+        .await
+        .unwrap();
 
         // Small delay to ensure ordering
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
 
-        repo.create_execution_message(exec_b.id, "assistant", "Hello from Bob", None, 10, 5)
+        repo.create_execution_message(exec_b.id, "assistant", "Hello from Bob", None, None, 10, 5)
             .await
             .unwrap();
 
@@ -1319,6 +1327,57 @@ mod tests {
         assert_eq!(transcript[1].agent_name, "Bob");
         assert_eq!(transcript[1].content, "Hello from Bob");
         assert_eq!(transcript[1].role_description, "Reviewer");
+
+        db.cleanup().await;
+    }
+
+    #[tokio::test]
+    #[ignore = "requires running Postgres"]
+    async fn execution_message_reasoning_round_trips() {
+        let db = TestDb::new().await;
+        let repo = PgRepo::new(db.pool.clone());
+
+        let user = create_test_user(&repo).await;
+        let agent = create_test_agent(&repo, user).await;
+        let exec = repo
+            .create_agent_execution(CreateAgentExecutionInput {
+                agent_id: Some(agent.id),
+                workflow_step_id: None,
+                execution_type: ExecutionType::DagStep,
+                parent_agent_execution_id: None,
+                system_prompt_rendered: "sys".to_string(),
+                input: "input".to_string(),
+                room_session_id: None,
+                speaker_order: None,
+                workflow_execution_id: None,
+            })
+            .await
+            .unwrap();
+
+        let with_reasoning = repo
+            .create_execution_message(
+                exec.id,
+                "assistant",
+                "42",
+                Some("let me think...".to_string()),
+                None,
+                10,
+                5,
+            )
+            .await
+            .unwrap();
+        assert_eq!(with_reasoning.reasoning.as_deref(), Some("let me think..."));
+
+        let without_reasoning = repo
+            .create_execution_message(exec.id, "assistant", "hi", None, None, 1, 1)
+            .await
+            .unwrap();
+        assert_eq!(without_reasoning.reasoning, None);
+
+        let messages = repo.list_execution_messages(exec.id).await.unwrap();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].reasoning.as_deref(), Some("let me think..."));
+        assert_eq!(messages[1].reasoning, None);
 
         db.cleanup().await;
     }

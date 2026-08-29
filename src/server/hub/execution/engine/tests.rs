@@ -106,6 +106,7 @@ mod tests {
     async fn execute_simple_response() {
         let provider = Arc::new(FixedProvider {
             response: LLMResponse {
+                reasoning: None,
                 content: "Hello!".into(),
                 content_blocks: vec![ContentBlock::Text {
                     text: "Hello!".into(),
@@ -139,6 +140,7 @@ mod tests {
     async fn execute_context_budget_exceeded() {
         let provider = Arc::new(FixedProvider {
             response: LLMResponse {
+                reasoning: None,
                 content: String::new(),
                 content_blocks: vec![],
                 model: "test-model".into(),
@@ -212,6 +214,7 @@ mod tests {
                 let n = self.calls.fetch_add(1, Ordering::SeqCst);
                 if n == 0 {
                     Ok(LLMResponse {
+                        reasoning: None,
                         content: String::new(),
                         content_blocks: vec![ContentBlock::ToolUse {
                             id: "t1".into(),
@@ -228,6 +231,7 @@ mod tests {
                     })
                 } else {
                     Ok(LLMResponse {
+                        reasoning: None,
                         content: "Done!".into(),
                         content_blocks: vec![ContentBlock::Text {
                             text: "Done!".into(),
@@ -285,6 +289,7 @@ mod tests {
         impl LLMProvider for AlwaysToolUse {
             async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
                 Ok(LLMResponse {
+                    reasoning: None,
                     content: String::new(),
                     content_blocks: vec![ContentBlock::ToolUse {
                         id: "t1".into(),
@@ -416,6 +421,7 @@ mod tests {
 
         let provider = Arc::new(FixedProvider {
             response: LLMResponse {
+                reasoning: None,
                 content: "callback test".into(),
                 content_blocks: vec![ContentBlock::Text {
                     text: "callback test".into(),
@@ -448,6 +454,7 @@ mod tests {
     async fn execute_max_tokens_stop_reason() {
         let provider = Arc::new(FixedProvider {
             response: LLMResponse {
+                reasoning: None,
                 content: "partial response".into(),
                 content_blocks: vec![ContentBlock::Text {
                     text: "partial response".into(),
@@ -494,6 +501,7 @@ mod tests {
                 let n = self.calls.fetch_add(1, Ordering::SeqCst);
                 if n == 0 {
                     Ok(LLMResponse {
+                        reasoning: None,
                         content: String::new(),
                         content_blocks: vec![
                             ContentBlock::ToolUse {
@@ -522,6 +530,7 @@ mod tests {
                     })
                 } else {
                     Ok(LLMResponse {
+                        reasoning: None,
                         content: "All done".into(),
                         content_blocks: vec![ContentBlock::Text {
                             text: "All done".into(),
@@ -616,6 +625,7 @@ mod tests {
     async fn execute_cancelled_before_start() {
         let provider = Arc::new(FixedProvider {
             response: LLMResponse {
+                reasoning: None,
                 content: "should not reach".into(),
                 content_blocks: vec![],
                 model: "m".into(),
@@ -652,6 +662,7 @@ mod tests {
         impl LLMProvider for CancelAfterToolProvider {
             async fn send_message(&self, _req: LLMRequest) -> Result<LLMResponse, LLMError> {
                 Ok(LLMResponse {
+                    reasoning: None,
                     content: String::new(),
                     content_blocks: vec![ContentBlock::ToolUse {
                         id: "t1".into(),
@@ -964,6 +975,7 @@ mod tests {
             let first = self.calls.fetch_add(1, Ordering::SeqCst) == 0;
             Ok(if first {
                 LLMResponse {
+                    reasoning: None,
                     content: String::new(),
                     content_blocks: vec![ContentBlock::ToolUse {
                         id: "t1".into(),
@@ -976,6 +988,7 @@ mod tests {
                 }
             } else {
                 LLMResponse {
+                    reasoning: None,
                     content: "done".into(),
                     content_blocks: vec![ContentBlock::Text {
                         text: "done".into(),

@@ -20,6 +20,7 @@ use crate::server::services::system_node::{file_reader, state, validate};
 use crate::server::state::AppState;
 use crate::server::tools::system_node::complete_system_tool;
 use crate::tools::registry::run_command_tool_shell_only;
+use crate::types::UserId;
 
 mod tests;
 
@@ -34,6 +35,10 @@ pub struct SystemNodeStrategy {
     state: AppState,
     step_id: Uuid,
     _workflow_id: Uuid,
+    /// Owner of the design run. Without it `ExecutionStrategy::user_id`
+    /// returns `None` and the default `on_complete` silently skips the token
+    /// ledger — which is how every designer run billed as $0.00.
+    user_id: UserId,
     session_id: Option<Uuid>,
     agent_execution_id: Option<Uuid>,
     container_handle: Option<ContainerHandle>,
@@ -46,10 +51,12 @@ impl SystemNodeStrategy {
         SYSTEM_NODE_AGENT.agent("system")
     }
 
+    #[allow(clippy::too_many_arguments)] // Identifiers + handles, no natural grouping
     pub fn new(
         state: AppState,
         step_id: Uuid,
         workflow_id: Uuid,
+        user_id: UserId,
         instruction: String,
         session_id: Option<Uuid>,
         container_handle: Option<ContainerHandle>,
@@ -65,6 +72,7 @@ impl SystemNodeStrategy {
             state,
             step_id,
             _workflow_id: workflow_id,
+            user_id,
             session_id,
             agent_execution_id: None,
             container_handle,
@@ -126,6 +134,10 @@ impl ExecutionStrategy for SystemNodeStrategy {
 
     fn state(&self) -> Option<&AppState> {
         Some(&self.state)
+    }
+
+    fn user_id(&self) -> Option<Uuid> {
+        Some(self.user_id.0)
     }
 
     fn agent_execution_id(&self) -> Option<Uuid> {

@@ -45,6 +45,7 @@ pub(crate) struct DesiredNode {
 
 /// Sync board repo files to DB state.
 ///
+/// Phase 0: Read and persist `board.md` (the board spec)
 /// Phase 1: Read files (topology + nodes)
 /// Phase 2: Diff nodes (create/update/remove steps)
 /// Phase 3: Diff edges (add/remove)
@@ -58,6 +59,28 @@ pub(crate) async fn sync_to_db(
     state: &AppState,
 ) -> Result<SyncResult, ServiceError> {
     let mut result = SyncResult::default();
+
+    // Phase 0: Persist the board spec.
+    //
+    // Written before the nodes because it is what makes them legible: every
+    // node designed after this point gets it verbatim, and a node synced
+    // against a stale spec is designed against the wrong contracts.
+    let spec = file_reader::read_board_spec(base_dir);
+    match repo.get_board_spec(workflow_id).await {
+        Ok(current) if current == spec => {}
+        Ok(_) => {
+            if let Err(e) = repo.update_board_spec(workflow_id, &spec).await {
+                warn!(workflow_id = %workflow_id, error = %e, "Failed to persist board spec");
+            } else {
+                info!(
+                    workflow_id = %workflow_id,
+                    spec_len = spec.len(),
+                    "Board spec updated"
+                );
+            }
+        }
+        Err(e) => warn!(workflow_id = %workflow_id, error = %e, "Failed to read board spec"),
+    }
 
     // Phase 1: Read files
     let (topology, nodes_content) = file_reader::read_board(base_dir)

@@ -234,6 +234,7 @@ impl OllamaClient {
         Ok(LLMResponse {
             content: text_parts.join(""),
             content_blocks,
+            reasoning: None,
             model: response.model,
             stop_reason,
             usage: TokenUsage {

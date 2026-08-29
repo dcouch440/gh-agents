@@ -35,6 +35,11 @@ pub const MODEL_TIER3: &str = MODEL_DEEPSEEK_V4_FLASH;
 // reasoning effort, so `EFFORT_TIER*` below — not the model id — is what
 // separates an orchestrator call from a utility one.
 
+// ── GLM Profile (uncomment to switch back) ──────────────────────────────
+// pub const MODEL_TIER1: &str = MODEL_GLM_5_3_FLASH;
+// pub const MODEL_TIER2: &str = MODEL_GLM_5_3_FLASH;
+// pub const MODEL_TIER3: &str = MODEL_GLM_5_3_FLASH;
+
 // Reasoning effort is per-agent configuration, not a constant: it lives in
 // each `config/**/config.yaml` beside `model_id`, `temperature` and
 // `max_tokens`. See `AgentConfig` in `src/config/protocols.rs`.
@@ -58,7 +63,11 @@ pub const MODEL_TIER3: &str = MODEL_DEEPSEEK_V4_FLASH;
 /// Default Anthropic model (used by AnthropicClient when no model specified).
 pub const ANTHROPIC_DEFAULT_MODEL: &str = "claude-sonnet-4-20250514";
 
-/// The DeepSeek model served by DeepInfra.
+/// The GLM model served by DeepInfra. Kept for the commented-out GLM profile
+/// above and for pricing coverage of runs that used it.
+pub const MODEL_GLM_5_3_FLASH: &str = "zai-org/GLM-5.3-Flash";
+
+/// The DeepSeek model served by DeepInfra — the active DeepInfra tier model.
 ///
 /// A literal, deliberately not an alias of `MODEL_TIER1`: the tier constants
 /// change when the active profile is switched, and a provider's own default
@@ -126,6 +135,22 @@ pub const DEFAULT_TIMEOUT_SECS: u64 = 300;
 
 /// Per-verification-agent LLM call timeout (60s). On timeout, treat as approved.
 pub const VERIFICATION_AGENT_TIMEOUT_SECS: u64 = 60;
+
+/// Wall-clock ceiling for one system node design (30 min).
+///
+/// This is a runaway guard, not a schedule. It must exceed the longest design
+/// the configuration can legitimately produce, and that product moved three
+/// times while the old 120s ceiling did not:
+///
+///   `config/system_agent/config.yaml`  max_rounds 30, max_tokens 32768, effort high
+///   `DEEPINFRA_CHAT_TIMEOUT_SECS`      900s for a SINGLE call
+///
+/// 120s could not cover one slow round, let alone thirty, so the guard was
+/// firing on healthy designs and discarding them — see `dispatch::system_node`.
+/// Decomposing a step into a team of agents is the expensive case this budget
+/// exists for: it reads the board spec, plans the split, and writes one file
+/// per agent. Anything still running at 30 minutes is stuck, not thinking.
+pub const SYSTEM_NODE_TIMEOUT_SECS: u64 = 1800;
 
 // ── Retry / Backoff ─────────────────────────────────────────────────────────
 
@@ -483,6 +508,51 @@ pub const ENV_BRAVE_SEARCH_API_KEY: &str = "BRAVE_SEARCH_API_KEY";
 
 /// Brave Web Search API endpoint.
 pub const BRAVE_SEARCH_ENDPOINT: &str = "https://api.search.brave.com/res/v1/web/search";
+
+/// Env var overriding [`BRAVE_SEARCH_MAX_RPS`], so a key on a paid tier can be
+/// let loose without a rebuild. Parsed as a float; ignored if unparseable.
+///
+/// Raising it alone only removes the bucket wait: throughput stays capped at
+/// one request per round trip until [`ENV_BRAVE_SEARCH_MAX_CONCURRENT`] is
+/// raised to match.
+pub const ENV_BRAVE_SEARCH_MAX_RPS: &str = "BRAVE_SEARCH_MAX_RPS";
+
+/// Env var overriding [`BRAVE_SEARCH_MAX_CONCURRENT`], the other half of the
+/// paid-tier release valve. Parsed as an integer; ignored if unparseable.
+pub const ENV_BRAVE_SEARCH_MAX_CONCURRENT: &str = "BRAVE_SEARCH_MAX_CONCURRENT";
+
+/// Brave searches allowed per second across the whole process.
+///
+/// Brave's Free tier permits one request per second. An agent routinely emits
+/// several `brave_search` calls in a single turn, and several agents run at
+/// once, so without a shared limit the tool 429s on its own traffic.
+pub const BRAVE_SEARCH_MAX_RPS: f64 = 1.0;
+
+/// Brave searches allowed to be in flight at once.
+///
+/// One, to match the rate: overlapping requests would arrive within the same
+/// second regardless of the bucket and defeat it. Because it gates throughput
+/// as hard as the rate does, a paid tier needs both this and
+/// [`BRAVE_SEARCH_MAX_RPS`] raised — see [`ENV_BRAVE_SEARCH_MAX_CONCURRENT`].
+pub const BRAVE_SEARCH_MAX_CONCURRENT: usize = 1;
+
+/// How long a search may wait for its turn before giving up.
+///
+/// Bounds the queue: a long backlog should surface as a failed search the agent
+/// can react to, not a request that outlives the run.
+///
+/// It has to exceed the longest a single search can hold a concurrency slot,
+/// or the holder alone times out everyone behind it: 20s for the first
+/// request, up to [`BRAVE_SEARCH_RETRY_AFTER_MAX_SECS`] waiting out a 429, and
+/// 20s for the retry — 70s worst case. At 60s a single rate-limited search
+/// failed every other search queued behind it.
+pub const BRAVE_SEARCH_QUEUE_TIMEOUT_SECS: u64 = 120;
+
+/// Fallback wait after a 429 that carried no `Retry-After` header.
+pub const BRAVE_SEARCH_RETRY_AFTER_FALLBACK_SECS: u64 = 2;
+
+/// Longest `Retry-After` this honours before failing instead of sleeping.
+pub const BRAVE_SEARCH_RETRY_AFTER_MAX_SECS: u64 = 30;
 
 /// Connect timeout for outbound web requests (seconds).
 pub const WEB_CONNECT_TIMEOUT_SECS: u64 = 10;

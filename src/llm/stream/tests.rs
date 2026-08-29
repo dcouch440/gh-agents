@@ -204,6 +204,7 @@ mod tests {
     impl LLMProvider for MockStreamProvider {
         async fn send_message(&self, _request: LLMRequest) -> LLMResult<LLMResponse> {
             Ok(LLMResponse {
+                reasoning: None,
                 content: String::new(),
                 content_blocks: vec![],
                 model: "mock".to_string(),

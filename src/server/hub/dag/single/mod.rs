@@ -263,10 +263,10 @@ pub(crate) async fn run_step_via_engine(
 
     // Record initial messages
     let _ = ae_repo
-        .create_execution_message(ae_row.id, "system", &system_prompt, None, 0, 0)
+        .create_execution_message(ae_row.id, "system", &system_prompt, None, None, 0, 0)
         .await;
     let _ = ae_repo
-        .create_execution_message(ae_row.id, "user", prompt, None, 0, 0)
+        .create_execution_message(ae_row.id, "user", prompt, None, None, 0, 0)
         .await;
 
     // Build strategy

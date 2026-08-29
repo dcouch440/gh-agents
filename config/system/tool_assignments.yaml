@@ -104,10 +104,13 @@ tool_assignments:
   # ==========================================================================
 
   run_command:
-    capabilities:
-      - shell_execution
-      - process_management
+    capabilities: []
     notes: >
+      Baseline for every containerized agent (CONTAINER_BASELINE_TOOLS), so it
+      is never assigned by capability and claims none. shell_execution and
+      process_management used to live here and both resolved to this one tool,
+      which made assigning either a no-op the designer could not detect.
+
       DANGEROUS: Executes arbitrary shell commands.
       Full system access. Use only when no safer alternative exists.
       Sandboxed execution when possible.
@@ -139,13 +142,11 @@ tool_assignments:
   # DEVELOPMENT & TESTING
   # ==========================================================================
 
-  run_tests:
-    capabilities:
-      - test_execution
-    notes: >
-      Runs project test suite. Can execute unit, integration, e2e tests.
-      May take significant time for large test suites.
-    priority: 10
+# run_tests is deliberately unassignable. `container_run_tests`
+# (server/tools/execution/container.rs:350) builds `cargo test || npm test` and
+# shells that out, so it is hardcoded to Rust and Node and fails without running
+# anything on any other project. run_command already runs a test suite, and it
+# runs the right one.
 
   # Future tools (examples):
   # lint_code:
@@ -181,38 +182,11 @@ tool_assignments:
       and metadata. Read-only operation.
     priority: 10
 
-  create_doc:
-    capabilities:
-      - document_create
-    notes: >
-      Create structured knowledge documents (notes, specs, architecture docs).
-      Documents are stored in the system knowledge base with metadata.
-      Supports markdown formatting and tagging.
-
-      Orchestrator tool - used by planning and documentation workflows.
-    priority: 10
-
-  search_docs:
-    capabilities:
-      - document_search
-    notes: >
-      Search knowledge base using full-text search, tags, or metadata.
-      Returns matching documents with relevance scores.
-      Essential for retrieving context and reference material.
-
-      Orchestrator tool - used for finding relevant documentation.
-    priority: 10
-
-  update_doc:
-    capabilities:
-      - document_update
-    notes: >
-      Update existing knowledge documents.
-      Preserves version history and metadata.
-      Use for refining documentation and correcting information.
-
-      Orchestrator tool - used for iterative documentation improvement.
-    priority: 10
+# create_doc, search_docs and update_doc are deliberately unassignable.
+# They reach the user-scoped document store, not the workspace, and the
+# container tool path has no handler for any of them
+# (server/tools/execution/container.rs:42). read_document stays: it is the one
+# an agent can use to read reference material it was pointed at.
 
 # =============================================================================
 # Usage Notes

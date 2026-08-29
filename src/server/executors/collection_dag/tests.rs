@@ -550,6 +550,12 @@ mod tests {
             async fn update_designer_handoff(&self, _: Uuid, _: &str) -> Result<()> {
                 unimplemented!()
             }
+            async fn get_board_spec(&self, _: Uuid) -> Result<String> {
+                Ok(String::new())
+            }
+            async fn update_board_spec(&self, _: Uuid, _: &str) -> Result<()> {
+                unimplemented!()
+            }
             // Step question state stubs
             async fn get_step_question_state(
                 &self,

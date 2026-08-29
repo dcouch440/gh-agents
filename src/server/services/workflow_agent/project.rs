@@ -1,5 +1,5 @@
 //! DB → Repo projection: reads steps + edges from the DB and writes
-//! `topology.json` + `nodes/*.md` to the board repo on disk.
+//! `board.md` + `topology.json` + `nodes/*.md` to the board repo on disk.
 //!
 //! Full overwrite approach — the DB is the source of truth for this direction.
 
@@ -8,7 +8,7 @@ use std::path::Path;
 
 use uuid::Uuid;
 
-use super::file_reader::{BoardTopology, NodeEntry};
+use super::file_reader::{BoardTopology, NodeEntry, BOARD_SPEC_FILE};
 use super::{name_to_slug, next_unnamed_slug};
 use crate::db::traits::WorkflowRepo;
 use crate::db::WorkflowStepRow;
@@ -88,7 +88,14 @@ pub(crate) async fn project_to_repo(
         })?;
     }
 
-    // Phase 5: Clean up orphaned .md files
+    // Phase 5: Write board.md
+    let spec = repo
+        .get_board_spec(workflow_id)
+        .await
+        .map_err(ServiceError::Internal)?;
+    write_board_spec(base_dir, &spec)?;
+
+    // Phase 6: Clean up orphaned .md files
     let valid_slugs: std::collections::HashSet<&str> =
         projected.iter().map(|n| n.slug.as_str()).collect();
 
@@ -106,7 +113,7 @@ pub(crate) async fn project_to_repo(
 
     let count = projected.len();
 
-    // Phase 6: Update ref_ids in DB for steps that got new slugs
+    // Phase 7: Update ref_ids in DB for steps that got new slugs
     for node in &projected {
         if node.ref_id_changed {
             let mut step = repo
@@ -125,6 +132,22 @@ pub(crate) async fn project_to_repo(
 }
 
 // ── Internals ──────────────────────────────────────────────────────────────
+
+/// Write `board.md`, or remove it when the board has no spec.
+///
+/// Removed rather than left stale: this direction is a full overwrite, the
+/// agent reads the directory with `cat`, and a board.md holding contracts the
+/// board no longer has is worse than no board.md at all. A spec that is only
+/// whitespace is no spec.
+pub(crate) fn write_board_spec(base_dir: &Path, spec: &str) -> Result<(), ServiceError> {
+    let path = base_dir.join(BOARD_SPEC_FILE);
+    if spec.trim().is_empty() {
+        let _ = std::fs::remove_file(&path);
+        return Ok(());
+    }
+    std::fs::write(&path, spec)
+        .map_err(|e| ServiceError::Internal(anyhow::anyhow!("cannot write {BOARD_SPEC_FILE}: {e}")))
+}
 
 struct ProjectedNode {
     step_id: Uuid,

@@ -85,4 +85,57 @@ mod tests {
         );
         assert!(!result);
     }
+
+    // ── Board spec ──────────────────────────────────────────────────────────
+    //
+    // The designer's whole input used to be the node's own sentence. A brief
+    // carrying an output schema, a fixed vocabulary and a table of exit codes
+    // had no channel to reach it, so the node text became a lossy paraphrase
+    // and the contracts were gone before any agent was designed. board.md is
+    // that channel, and this is where it joins the instruction.
+
+    use crate::server::services::dispatch::sequential::append_board_spec;
+
+    /// Most boards are a plan and nothing more. A board with no contracts must
+    /// not gain an empty block that reads as "there are no rules".
+    #[test]
+    fn a_board_without_a_spec_appends_nothing() {
+        let instruction = "Configure this new workflow node.";
+        assert_eq!(append_board_spec(instruction, ""), instruction);
+        assert_eq!(append_board_spec(instruction, "   \n\n  "), instruction);
+    }
+
+    /// Verbatim is the whole point: a schema that arrives reworded has lost
+    /// the types and ranges that made it worth carrying.
+    #[test]
+    fn a_board_spec_arrives_whole_and_tagged() {
+        let spec = "# Output\n\n  id     string\n  score  number  0.0 to 1.0";
+        let out = append_board_spec("Configure this new workflow node.", spec);
+
+        assert!(out.contains(spec), "spec must survive unchanged");
+        assert!(out.contains("<board_spec>"));
+        assert!(out.ends_with("</board_spec>"));
+    }
+
+    /// Last, not first. The node text is what the turn is about; prepending a
+    /// page of schema buries the instruction it is meant to support.
+    #[test]
+    fn a_board_spec_follows_the_node_text() {
+        let out = append_board_spec(
+            "Configure this new workflow node.\n\n<user_text>\nBuild it.\n</user_text>",
+            "One rule.",
+        );
+
+        let node_text = out.find("<user_text>").unwrap();
+        let spec = out.find("<board_spec>").unwrap();
+        assert!(node_text < spec, "node text must come before the spec");
+    }
+
+    /// Whitespace from a heredoc is not content, and the block should not
+    /// carry blank lines that make the spec look like it starts elsewhere.
+    #[test]
+    fn a_board_spec_is_trimmed_before_it_is_wrapped() {
+        let out = append_board_spec("Task.", "\n\nOne rule.\n\n");
+        assert!(out.ends_with("<board_spec>\nOne rule.\n</board_spec>"));
+    }
 }

@@ -249,6 +249,7 @@ mod tests {
 
     fn make_llm_response(content: &str, input_tokens: u32, output_tokens: u32) -> LLMResponse {
         LLMResponse {
+            reasoning: None,
             content: content.into(),
             content_blocks: vec![],
             model: "test-model".into(),
@@ -324,7 +325,7 @@ mod tests {
             .returning(|_| Ok(agent_execution()));
         ae_repo
             .expect_create_execution_message()
-            .returning(|_, _, _, _, _, _| Ok(execution_message(Uuid::new_v4())));
+            .returning(|_, _, _, _, _, _, _| Ok(execution_message(Uuid::new_v4())));
         ae_repo
             .expect_update_agent_execution_status()
             .returning(|_, _, _, _| Ok(agent_execution()));
@@ -716,7 +717,7 @@ mod tests {
             .returning(|_| Ok(agent_execution()));
         ae_repo
             .expect_create_execution_message()
-            .returning(|_, _, _, _, _, _| Ok(execution_message(Uuid::new_v4())));
+            .returning(|_, _, _, _, _, _, _| Ok(execution_message(Uuid::new_v4())));
         ae_repo
             .expect_update_agent_execution_status()
             .returning(|_, _, _, _| Ok(agent_execution()));
@@ -1022,7 +1023,7 @@ mod tests {
             .returning(|_| Ok(agent_execution()));
         ae_repo
             .expect_create_execution_message()
-            .returning(|_, _, _, _, _, _| Ok(execution_message(Uuid::new_v4())));
+            .returning(|_, _, _, _, _, _, _| Ok(execution_message(Uuid::new_v4())));
         ae_repo
             .expect_update_agent_execution_status()
             .returning(|_, _, _, _| Ok(agent_execution()));

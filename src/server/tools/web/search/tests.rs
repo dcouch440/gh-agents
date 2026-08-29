@@ -226,6 +226,121 @@ Results are search snippets, not sources. Use read_webpage on a URL above before
         let v = execute(&json!({"query": "   "})).await;
         assert!(v.get("error").is_some(), "{v}");
     }
+    // ── Throttle ────────────────────────────────────────────────────────────
+
+    fn retry_headers(value: &str) -> reqwest::header::HeaderMap {
+        let mut h = reqwest::header::HeaderMap::new();
+        h.insert(reqwest::header::RETRY_AFTER, value.parse().unwrap());
+        h
+    }
+
+    #[test]
+    fn a_retry_after_within_the_cap_is_honoured() {
+        assert_eq!(retry_after_secs(&retry_headers("5")), Some(5));
+    }
+
+    /// Sleeping through a very long wait would strand the agent, so past the
+    /// cap the search fails and lets it decide what to do instead.
+    #[test]
+    fn a_retry_after_beyond_the_cap_is_refused_rather_than_slept_through() {
+        let over = crate::constants::BRAVE_SEARCH_RETRY_AFTER_MAX_SECS + 1;
+        assert_eq!(retry_after_secs(&retry_headers(&over.to_string())), None);
+    }
+
+    #[test]
+    fn a_429_without_a_retry_after_falls_back_to_the_default_wait() {
+        let h = reqwest::header::HeaderMap::new();
+        assert_eq!(
+            retry_after_secs(&h),
+            Some(crate::constants::BRAVE_SEARCH_RETRY_AFTER_FALLBACK_SECS)
+        );
+    }
+
+    /// An HTTP-date `Retry-After` is not parsed; it must degrade to the
+    /// fallback rather than being read as zero and retrying immediately.
+    #[test]
+    fn an_unparseable_retry_after_falls_back_rather_than_retrying_at_once() {
+        let h = retry_headers("Wed, 21 Oct 2026 07:28:00 GMT");
+        assert_eq!(
+            retry_after_secs(&h),
+            Some(crate::constants::BRAVE_SEARCH_RETRY_AFTER_FALLBACK_SECS)
+        );
+    }
+
+    /// `set_var` is process-global, so these tests must not run concurrently.
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// Run `f` with `key` set to `value`, restoring the environment after.
+    fn with_env_override(key: &str, value: &str, f: impl FnOnce()) {
+        let _guard = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let previous = std::env::var(key).ok();
+        std::env::set_var(key, value);
+        f();
+        match previous {
+            Some(v) => std::env::set_var(key, v),
+            None => std::env::remove_var(key),
+        }
+    }
+
+    /// Run `f` with the rate override set, restoring the environment after.
+    fn with_rps_override(value: &str, f: impl FnOnce()) {
+        with_env_override(crate::constants::ENV_BRAVE_SEARCH_MAX_RPS, value, f);
+    }
+
+    /// Run `f` with the concurrency override set, restoring it after.
+    fn with_concurrency_override(value: &str, f: impl FnOnce()) {
+        with_env_override(crate::constants::ENV_BRAVE_SEARCH_MAX_CONCURRENT, value, f);
+    }
+
+    /// The tool must never be taken offline by a typo in an env var.
+    #[test]
+    fn a_malformed_rate_override_falls_back_to_the_compiled_default() {
+        with_rps_override("not-a-number", || {
+            assert_eq!(configured_rps(), crate::constants::BRAVE_SEARCH_MAX_RPS);
+        });
+    }
+
+    #[test]
+    fn a_nonpositive_rate_override_is_ignored() {
+        with_rps_override("0", || {
+            assert_eq!(configured_rps(), crate::constants::BRAVE_SEARCH_MAX_RPS);
+        });
+    }
+
+    #[test]
+    fn a_valid_rate_override_is_used() {
+        with_rps_override("20", || {
+            assert!((configured_rps() - 20.0).abs() < f64::EPSILON);
+        });
+    }
+
+    #[test]
+    fn a_malformed_concurrency_override_falls_back_to_the_compiled_default() {
+        with_concurrency_override("lots", || {
+            assert_eq!(
+                configured_concurrency(),
+                crate::constants::BRAVE_SEARCH_MAX_CONCURRENT
+            );
+        });
+    }
+
+    /// A zero would wedge the semaphore shut: no search could ever get a slot.
+    #[test]
+    fn a_zero_concurrency_override_is_ignored() {
+        with_concurrency_override("0", || {
+            assert_eq!(
+                configured_concurrency(),
+                crate::constants::BRAVE_SEARCH_MAX_CONCURRENT
+            );
+        });
+    }
+
+    #[test]
+    fn a_valid_concurrency_override_is_used() {
+        with_concurrency_override("8", || {
+            assert_eq!(configured_concurrency(), 8);
+        });
+    }
 }
 
 #[cfg(test)]

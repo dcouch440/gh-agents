@@ -96,16 +96,18 @@ impl AgentExecutionRepo for PgRepo {
         agent_execution_id: Uuid,
         role: &str,
         content: &str,
+        reasoning: Option<String>,
         tool_call_id: Option<String>,
         input_tokens: i64,
         output_tokens: i64,
     ) -> Result<ExecutionMessageRow> {
         let row = sqlx::query_as::<_, ExecutionMessageRow>(
-            "INSERT INTO execution_messages (agent_execution_id, role, content, tool_call_id, input_tokens, output_tokens) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+            "INSERT INTO execution_messages (agent_execution_id, role, content, reasoning, tool_call_id, input_tokens, output_tokens) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *",
         )
         .bind(agent_execution_id)
         .bind(role)
         .bind(content)
+        .bind(reasoning)
         .bind(tool_call_id)
         .bind(input_tokens)
         .bind(output_tokens)
@@ -324,6 +326,7 @@ impl AgentExecutionRepo for PgRepo {
                    em.created_at AS ts, \
                    em.role, \
                    em.content, \
+                   em.reasoning, \
                    em.tool_call_id, \
                    em.input_tokens, \
                    em.output_tokens, \
@@ -365,6 +368,7 @@ impl AgentExecutionRepo for PgRepo {
                    em.created_at AS ts, \
                    em.role, \
                    em.content, \
+                   em.reasoning, \
                    em.tool_call_id, \
                    em.input_tokens, \
                    em.output_tokens, \

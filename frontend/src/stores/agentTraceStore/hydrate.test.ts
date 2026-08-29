@@ -254,6 +254,39 @@ describe('tool call/result pairing', () => {
     expect(call).not.toBe(result)
   })
 
+  it('pairs parallel calls by id even when their results come back out of order', async () => {
+    // The bug this guards: one assistant turn issuing several tool calls at
+    // once. Their results land in completion order, not call order, so
+    // positional pairing showed each card another call's result — a
+    // read_webpage rendering a search's rate-limit error, and a brave_search
+    // rendering a truncated 40k page.
+    mockGetExecutionTimeline.mockResolvedValue({
+      entries: [
+        makeEntry({ id: 'c1', kind: 'tool_call', tool_name: 'read_webpage', tool_call_id: 'call_page', content: '{}' }),
+        makeEntry({ id: 'c2', kind: 'tool_call', tool_name: 'brave_search', tool_call_id: 'call_search', content: '{}' }),
+        makeEntry({ id: 'r2', kind: 'tool_result', tool_name: 'brave_search', tool_call_id: 'call_search', content: 'rate limited' }),
+        makeEntry({ id: 'r1', kind: 'tool_result', tool_name: 'read_webpage', tool_call_id: 'call_page', content: 'page body' }),
+      ],
+      has_more: false,
+      next_cursor: null,
+    })
+
+    await hydrateFromTimeline('run-1')
+
+    const events = agentTraceStore.store.getState().traces['ae-1']?.events ?? []
+    const idOf = (name: string, type: 'tool_call' | 'tool_result'): string | undefined =>
+      Collections.filterMap(events, (e) =>
+        (e.type === 'tool_call' || e.type === 'tool_result') && e.type === type && e.toolName === name
+          ? e.toolId
+          : null,
+      )[0]
+
+    // Each tool's call and result share a key despite the reversed arrival.
+    expect(idOf('read_webpage', 'tool_call')).toBe(idOf('read_webpage', 'tool_result'))
+    expect(idOf('brave_search', 'tool_call')).toBe(idOf('brave_search', 'tool_result'))
+    expect(idOf('read_webpage', 'tool_call')).not.toBe(idOf('brave_search', 'tool_call'))
+  })
+
   it('leaves a call with no result unpaired, so it correctly reads as running', async () => {
     mockGetExecutionTimeline.mockResolvedValue({
       entries: [

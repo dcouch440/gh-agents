@@ -12,6 +12,9 @@ use serde::{Deserialize, Serialize};
 #[path = "file_reader_tests.rs"]
 mod tests;
 
+/// The board specification file, relative to the board repo root.
+pub(crate) const BOARD_SPEC_FILE: &str = "board.md";
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 /// Deserialized `topology.json`.
@@ -75,6 +78,16 @@ pub(crate) fn read_all_nodes(base_dir: &Path) -> Result<HashMap<String, String>,
     Ok(nodes)
 }
 
+/// Read `board.md` — the board specification.
+///
+/// Optional: a board with no fixed contracts has no file, and that is not an
+/// error. Returns the trimmed content, or an empty string when absent.
+pub(crate) fn read_board_spec(base_dir: &Path) -> String {
+    std::fs::read_to_string(base_dir.join(BOARD_SPEC_FILE))
+        .map(|c| c.trim().to_string())
+        .unwrap_or_default()
+}
+
 /// Read topology + all node contents in one call.
 ///
 /// Returns `(topology_map, nodes_map)`.
@@ -95,6 +108,11 @@ pub(crate) fn snapshot_board_files(base_dir: &Path) -> HashMap<std::path::PathBu
     let topology_path = base_dir.join("topology.json");
     if let Ok(content) = std::fs::read_to_string(&topology_path) {
         snapshot.insert(std::path::PathBuf::from("topology.json"), content);
+    }
+
+    // board.md
+    if let Ok(content) = std::fs::read_to_string(base_dir.join(BOARD_SPEC_FILE)) {
+        snapshot.insert(std::path::PathBuf::from(BOARD_SPEC_FILE), content);
     }
 
     // nodes/*.md

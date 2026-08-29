@@ -10,10 +10,6 @@
 
 use uuid::Uuid;
 
-/// Wall-clock timeout for the system node agent. Prevents runaway LLM loops
-/// that exhaust max_rounds slowly (~10s per round x 10 rounds = 100s).
-const SYSTEM_NODE_TIMEOUT_SECS: u64 = 120;
-
 use crate::db::traits::CreateAgentExecutionInput;
 use crate::server::hub::dag::container::{
     create_optional_container, destroy_optional_container, ManagedContainer,
@@ -138,6 +134,7 @@ pub async fn run_system_node_task(
         state.clone(),
         step_id,
         workflow_id,
+        user_id,
         instruction.clone(),
         Some(session_id),
         container_handle,
@@ -208,7 +205,7 @@ pub async fn run_system_node_task(
     let sink = DispatchStreamSink::new(state.clone(), execution_id, step_id);
 
     let result = match tokio::time::timeout(
-        std::time::Duration::from_secs(SYSTEM_NODE_TIMEOUT_SECS),
+        std::time::Duration::from_secs(crate::constants::SYSTEM_NODE_TIMEOUT_SECS),
         engine.execute(
             &strategy,
             &instruction,
@@ -222,8 +219,9 @@ pub async fn run_system_node_task(
         Ok(inner) => inner,
         Err(_) => Err(crate::server::hub::error::HubError::Internal(
             anyhow::anyhow!(
-                "System node agent timed out after {}s",
-                SYSTEM_NODE_TIMEOUT_SECS
+                "The designer for this node ran for {} minutes without finishing \
+                 and was stopped. Nothing it wrote has been kept.",
+                crate::constants::SYSTEM_NODE_TIMEOUT_SECS / 60
             ),
         )),
     };

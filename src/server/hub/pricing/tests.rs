@@ -26,6 +26,45 @@ mod tests {
         assert!((output - 0.18).abs() < 1e-6, "output rate was {output}");
     }
 
+    // GLM is on a 50% promotion as of 2026-08-29; these assert the
+    // promotional rates actually billed, not the list price.
+    #[test]
+    fn glm_rates_match_the_deepinfra_promotional_tier() {
+        let (input, output) = per_million(crate::constants::MODEL_GLM_5_3_FLASH);
+        assert!((input - 0.075).abs() < 1e-6, "input rate was {input}");
+        assert!((output - 0.25).abs() < 1e-6, "output rate was {output}");
+    }
+
+    #[test]
+    fn glm_cached_input_is_billed_at_the_cache_rate() {
+        // 1M input of which 800k cached: 200k at 0.075 + 800k at 0.015.
+        let cost =
+            compute_cost_cached(crate::constants::MODEL_GLM_5_3_FLASH, 1_000_000, 800_000, 0);
+        let want = 0.2 * 0.075 + 0.8 * 0.015;
+        assert!((cost - want).abs() < 1e-6, "got {cost}, want {want}");
+    }
+
+    /// Whichever profile is active, its tiers must never fall through to the
+    /// generic $1.00/$3.00 default — that silently over-bills by more than 13x.
+    ///
+    /// Deliberately asserts *against the fallback* rather than for a specific
+    /// number: pinning the rate would mean every model switch also had to edit
+    /// this test, and the point is to catch a model nobody priced.
+    #[test]
+    fn no_active_tier_model_falls_through_to_the_generic_default() {
+        for (tier, model) in [
+            ("tier 1", crate::constants::MODEL_TIER1),
+            ("tier 2", crate::constants::MODEL_TIER2),
+            ("tier 3", crate::constants::MODEL_TIER3),
+        ] {
+            let (input, output) = per_million(model);
+            assert!(
+                (input - 1.0).abs() > 1e-6 || (output - 3.0).abs() > 1e-6,
+                "{tier} ({model}) is priced at the generic fallback — add it to rates_for"
+            );
+        }
+    }
+
     #[test]
     fn cached_input_is_billed_at_the_cache_rate() {
         // 1M input of which 800k cached: 200k at 0.08 + 800k at 0.016.

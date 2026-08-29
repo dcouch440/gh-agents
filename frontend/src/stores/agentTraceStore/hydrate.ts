@@ -24,18 +24,22 @@ const parseToolInput = (content: string): Record<string, unknown> => {
 }
 
 /**
- * Pair a call with its result by position within one agent execution.
+ * Fallback pairing, by position within one agent execution.
  *
- * The DB has no link between them: `execution_messages` only stores
- * `tool_call_id` on the tool-result row, and the assistant row that issued the
- * call records just `"tool_use: name {json}"`. Tools run sequentially within an
- * agent execution, so the Nth call is the Nth result.
+ * Used only for rows written before the engine recorded `tool_call_id` on the
+ * assistant side. It is approximate by nature: an agent can issue several tool
+ * calls in one turn, so the Nth call is not reliably the Nth result. Anything
+ * with an id pairs by id instead — see `toolIdFor`.
  *
  * A trailing call with no result keeps a distinct key and stays "running" —
  * which is correct: it genuinely never returned.
  */
 const pairKey = (agentExecutionId: string, index: number): string =>
   `${agentExecutionId}#${String(index)}`
+
+/** Pair by the provider's tool-call id, which both sides of a pair share. */
+const idKey = (agentExecutionId: string, toolCallId: string): string =>
+  `${agentExecutionId}#id:${toolCallId}`
 
 const toEvent = (entry: TimelineEntry, toolId: string): AgentTraceEvent | null => {
   switch (entry.kind) {
@@ -92,18 +96,31 @@ const hydrateFromTimeline = async (executionId: string): Promise<void> => {
   const callCounts = new Map<string, number>()
   const resultCounts = new Map<string, number>()
 
+  // Results always carry a `tool_call_id`; calls only carry one if the engine
+  // that wrote the run recorded it. So the calls decide which scheme an
+  // execution uses, and it must be decided per execution before pairing —
+  // keying results by id while their calls fall back to position would pair
+  // nothing at all.
+  const pairsById = new Set(
+    Collections.filterMap(entries, (e) =>
+      e.kind === 'tool_call' && e.tool_call_id !== null ? e.agent_execution_id : null,
+    ),
+  )
+
   // Entries arrive oldest-first, which is also the order we want to display.
   for (const entry of entries) {
     const agentId = entry.agent_execution_id
     let toolId = entry.id
+    const callId = entry.tool_call_id
+    const byId = pairsById.has(agentId) && callId !== null
     if (entry.kind === 'tool_call') {
       const n = callCounts.get(agentId) ?? 0
       callCounts.set(agentId, n + 1)
-      toolId = pairKey(agentId, n)
+      toolId = byId ? idKey(agentId, callId) : pairKey(agentId, n)
     } else if (entry.kind === 'tool_result') {
       const n = resultCounts.get(agentId) ?? 0
       resultCounts.set(agentId, n + 1)
-      toolId = pairKey(agentId, n)
+      toolId = byId ? idKey(agentId, callId) : pairKey(agentId, n)
     }
 
     const event = toEvent(entry, toolId)

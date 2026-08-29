@@ -439,6 +439,15 @@ pub trait WorkflowRepo: Send + Sync {
     /// Update the board overview summary for a workflow.
     async fn update_board_overview_summary(&self, workflow_id: Uuid, summary: &str) -> Result<()>;
 
+    // --- Board Spec ---
+
+    /// Get the board specification — the fixed contracts every node's designer
+    /// must obey. Empty when the board has none.
+    async fn get_board_spec(&self, workflow_id: Uuid) -> Result<String>;
+
+    /// Replace the board specification for a workflow.
+    async fn update_board_spec(&self, workflow_id: Uuid, spec: &str) -> Result<()>;
+
     // --- Designer Handoff ---
 
     /// Update the designer handoff description for a step.

@@ -204,6 +204,7 @@ impl SseProviderAdapter for AnthropicAdapter {
         Ok(LLMResponse {
             content: text_parts.join(""),
             content_blocks,
+            reasoning: None,
             model: api_response.model,
             stop_reason: parse_stop_reason(&api_response.stop_reason),
             usage: TokenUsage {

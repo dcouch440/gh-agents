@@ -5,4 +5,4 @@ agents:
     temperature: 0.3
     max_rounds: 60
     context_budget: 950000
-    effort: high
+    effort: medium

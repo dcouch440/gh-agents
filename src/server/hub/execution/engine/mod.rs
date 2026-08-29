@@ -672,28 +672,54 @@ impl ExecutionEngine {
 
         // Persist assistant response (tool calls) + tool results
         if let Some(ae_id) = strategy.agent_execution_id() {
-            let assistant_content = response
-                .content_blocks
-                .iter()
-                .filter_map(|b| match b {
-                    ContentBlock::ToolUse { name, input, .. } => {
-                        Some(format!("tool_use: {} {}", name, input))
+            // One row per content block rather than one joined row. The row is
+            // what the timeline pairs against tool results, and a row holding
+            // several calls cannot say which result belongs to which call —
+            // the id was dropped here, so the UI paired by position and every
+            // card after a parallel round showed another call's result.
+            let mut rows: Vec<(String, Option<String>)> = Vec::new();
+            for block in &response.content_blocks {
+                match block {
+                    ContentBlock::Text { text } if !text.trim().is_empty() => {
+                        rows.push((text.clone(), None));
                     }
-                    ContentBlock::Text { text } => Some(text.clone()),
-                    _ => None,
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
-            let _ = recorder
-                .record_execution_message(
-                    ae_id,
-                    "assistant",
-                    &assistant_content,
-                    None,
-                    response.usage.input_tokens as i64,
-                    response.usage.output_tokens as i64,
-                )
-                .await;
+                    ContentBlock::ToolUse { id, name, input } => {
+                        rows.push((format!("tool_use: {} {}", name, input), Some(id.clone())));
+                    }
+                    _ => {}
+                }
+            }
+            // A turn with no renderable block still has usage to account for.
+            if rows.is_empty() {
+                rows.push((String::new(), None));
+            }
+
+            for (i, (content, tool_call_id)) in rows.into_iter().enumerate() {
+                // Usage and reasoning belong to the turn, not to any one block.
+                // Repeating them per row would multiply the turn's tokens by
+                // its block count everywhere they are summed.
+                let (input_tokens, output_tokens, reasoning) = if i == 0 {
+                    (
+                        response.usage.input_tokens as i64,
+                        response.usage.output_tokens as i64,
+                        response.reasoning.clone(),
+                    )
+                } else {
+                    (0, 0, None)
+                };
+
+                let _ = recorder
+                    .record_execution_message(
+                        ae_id,
+                        "assistant",
+                        &content,
+                        reasoning,
+                        tool_call_id,
+                        input_tokens,
+                        output_tokens,
+                    )
+                    .await;
+            }
 
             // Debug: emit tool calls with full input payloads
             if self.debug_stream {
@@ -714,6 +740,7 @@ impl ExecutionEngine {
                             ae_id,
                             "tool",
                             content,
+                            None,
                             Some(tool_use_id.clone()),
                             0,
                             0,
@@ -837,6 +864,7 @@ impl ExecutionEngine {
                     ae_id,
                     "assistant",
                     &final_content,
+                    response.reasoning.clone(),
                     None,
                     response.usage.input_tokens as i64,
                     response.usage.output_tokens as i64,

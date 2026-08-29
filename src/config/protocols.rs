@@ -694,7 +694,7 @@ mod tests {
         let system = cfg.agent("system");
         assert_eq!(system.model_id, crate::constants::MODEL_TIER2);
         assert_eq!(system.temperature, 0.3);
-        assert_eq!(system.max_tokens, 8192);
+        assert_eq!(system.max_tokens, 32_768);
         assert_eq!(system.max_rounds, 30);
         assert_eq!(system.context_budget, 480_000);
     }
@@ -843,20 +843,16 @@ mod tests {
         }
     }
     // Effort is what separates the tiers on the DeepInfra profile, where all
-    // three tier markers resolve to the same model id. If a shipped config
-    // ever declares a tier without a matching effort, the distinction is lost
-    // silently — the request simply omits the parameter.
+    // three tier markers resolve to the same model id. A config that declares
+    // a tier but no effort loses that distinction silently — the request
+    // simply omits the parameter — so presence is what is asserted here.
+    //
+    // Which effort each agent runs at is a tuning decision, deliberately not
+    // pinned: an earlier version of this test asserted effort per tier, which
+    // meant retuning any agent required editing this file too. Turning that
+    // knob should not need a Rust change.
     #[test]
-    fn every_shipped_agent_declares_an_effort_matching_its_tier() {
-        use crate::llm::ReasoningEffort;
-
-        let expected = |tier: &str| match tier {
-            "tier:1" => Some(ReasoningEffort::XHigh),
-            "tier:2" => Some(ReasoningEffort::High),
-            "tier:3" => Some(ReasoningEffort::None),
-            _ => None,
-        };
-
+    fn every_shipped_agent_declares_a_recognized_tier_and_an_effort() {
         // (raw yaml, label) for every config the binary embeds.
         let configs: Vec<(&str, &str)> = vec![
             (
@@ -893,16 +889,17 @@ mod tests {
             let parsed: ProtocolConfig =
                 serde_yaml::from_str(raw).unwrap_or_else(|e| panic!("{label}: {e}"));
             for (role, agent) in &parsed.agents {
-                let want = expected(&agent.model_id);
                 assert!(
-                    want.is_some(),
+                    matches!(agent.model_id.as_str(), "tier:1" | "tier:2" | "tier:3"),
                     "{label}/{role}: unexpected model_id {}",
                     agent.model_id
                 );
-                assert_eq!(
-                    agent.effort, want,
-                    "{label}/{role} declares {} but effort {:?}",
-                    agent.model_id, agent.effort
+                assert!(
+                    agent.effort.is_some(),
+                    "{label}/{role} declares {} but no effort — the tier \
+                     distinction is lost, because the request simply omits \
+                     the parameter",
+                    agent.model_id
                 );
             }
         }

@@ -30,7 +30,8 @@ use crate::types::UserId;
 
 use super::super::{broadcast_workflow_event, DagContext};
 use super::output::{
-    build_filtered_outputs_block, compute_execution_levels, filter_outputs_for_agent,
+    build_filtered_outputs_block, build_team_blocks, compute_execution_levels,
+    filter_outputs_for_agent,
 };
 use super::types::{
     AgentExecutionResult, AgentFailureAction, DesignedAgentPrompt, LevelExecutionResult,
@@ -293,6 +294,9 @@ pub(super) async fn execute_agent_levels(
     failure_mode: &str,
 ) -> Result<LevelExecutionResult, HubError> {
     let levels = compute_execution_levels(designed_prompts);
+    // One block per agent, computed once: the roster is a property of the
+    // design, not of the run, so it cannot change between levels.
+    let team_blocks = build_team_blocks(designed_prompts);
     let mut agent_outputs: Vec<(String, String)> = Vec::with_capacity(designed_prompts.len());
     let mut input_tokens: i64 = 0;
     let mut output_tokens: i64 = 0;
@@ -314,6 +318,7 @@ pub(super) async fn execute_agent_levels(
                 designed,
                 &agent_outputs,
                 idx,
+                &team_blocks[idx],
             )
             .await
             {
@@ -337,6 +342,7 @@ pub(super) async fn execute_agent_levels(
 
             for &idx in level_indices {
                 let designed = designed_prompts[idx].clone();
+                let team_block = team_blocks[idx].clone();
                 let env_clone = env.clone();
                 let provider = dag.engine.provider();
                 let debug_stream = dag.state.env().debug_stream;
@@ -345,8 +351,15 @@ pub(super) async fn execute_agent_levels(
                 join_set.spawn(async move {
                     let engine =
                         crate::server::hub::engine::ExecutionEngine::new(provider, debug_stream);
-                    let result =
-                        execute_single_agent(&env_clone, &engine, &designed, &outputs, idx).await;
+                    let result = execute_single_agent(
+                        &env_clone,
+                        &engine,
+                        &designed,
+                        &outputs,
+                        idx,
+                        &team_block,
+                    )
+                    .await;
                     (idx, result)
                 });
             }
@@ -405,6 +418,7 @@ async fn execute_single_agent(
     designed: &DesignedAgentPrompt,
     prior_outputs: &[(String, String)],
     agent_index: usize,
+    team_block: &str,
 ) -> Result<AgentExecutionResult, HubError> {
     let agent_cfg = WORKFORCE.agent("agent");
 
@@ -496,6 +510,7 @@ async fn execute_single_agent(
 
     let task_prompt = TaskPromptBuilder {
         previous_step,
+        team: team_block.to_string(),
         assignment: designed.assignment.clone(),
         expected_output: designed.expected_output.clone(),
         has_container: env.container_handle.is_some(),
@@ -520,10 +535,10 @@ async fn execute_single_agent(
     {
         Ok(row) => {
             let _ = ae_repo
-                .create_execution_message(row.id, "system", &system_prompt, None, 0, 0)
+                .create_execution_message(row.id, "system", &system_prompt, None, None, 0, 0)
                 .await;
             let _ = ae_repo
-                .create_execution_message(row.id, "user", &task_prompt, None, 0, 0)
+                .create_execution_message(row.id, "user", &task_prompt, None, None, 0, 0)
                 .await;
             Some(row.id)
         }
@@ -784,6 +799,11 @@ async fn synthesize_tool_summary(
 /// time an agent legitimately produced more than one file, or none.
 pub(super) struct TaskPromptBuilder {
     pub(super) previous_step: String,
+    /// Who else is on this step and what each is contracted to leave behind.
+    ///
+    /// Empty for a single-agent step, and omitted entirely when empty — an
+    /// agent working alone has no team to be told about.
+    pub(super) team: String,
     pub(super) assignment: String,
     pub(super) expected_output: Option<String>,
     /// Whether the agent has a workspace container.
@@ -804,6 +824,14 @@ impl TaskPromptBuilder {
                 "<previous_step>\n{}\n</previous_step>\n\n",
                 self.previous_step
             ));
+        }
+
+        // Between the receipts and the assignment: <previous_step> is what the
+        // team already said, <team> is who they are, <assignment> is this
+        // agent's own share. Reading them in that order is reading the step
+        // from the outside in.
+        if !self.team.is_empty() {
+            prompt.push_str(&format!("<team>\n{}\n</team>\n\n", self.team));
         }
 
         prompt.push_str(&format!("<assignment>\n{}\n</assignment>", self.assignment,));

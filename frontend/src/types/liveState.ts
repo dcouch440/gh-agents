@@ -67,6 +67,7 @@ type TimelineEntry = {
   agent_name: string | null
   agent_execution_id: string
   content: string
+  reasoning: string | null
   tool_name: string | null
   tool_call_id: string | null
   input_tokens: number

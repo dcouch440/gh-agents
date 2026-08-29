@@ -42,6 +42,7 @@ mod tests {
 
     fn make_response(content: &str) -> LLMResponse {
         LLMResponse {
+            reasoning: None,
             content: content.to_string(),
             content_blocks: vec![ContentBlock::Text {
                 text: content.to_string(),

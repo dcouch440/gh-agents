@@ -240,6 +240,29 @@ mod tests {
     }
 
     #[test]
+    fn parse_response_reads_reasoning_content() {
+        let body = json!({
+            "choices": [{
+                "message": {"content": "42", "reasoning_content": "let me think..."},
+                "finish_reason": "stop"
+            }]
+        })
+        .to_string();
+        let r = adapter().parse_response(body.as_bytes()).unwrap();
+        assert_eq!(r.reasoning.as_deref(), Some("let me think..."));
+    }
+
+    #[test]
+    fn missing_reasoning_content_is_none_not_empty_string() {
+        let body = json!({
+            "choices": [{"message": {"content": "42"}, "finish_reason": "stop"}]
+        })
+        .to_string();
+        let r = adapter().parse_response(body.as_bytes()).unwrap();
+        assert_eq!(r.reasoning, None);
+    }
+
+    #[test]
     fn missing_cached_details_mean_zero_not_an_error() {
         let body = json!({
             "choices": [{"message": {"content": "x"}, "finish_reason": "stop"}],
@@ -360,14 +383,22 @@ mod tests {
         );
     }
 
-    // Chain of thought must not be concatenated into the answer.
+    // Chain of thought must be captured, but never concatenated into the answer.
     #[test]
-    fn reasoning_content_is_not_surfaced_as_output() {
+    fn reasoning_content_becomes_a_reasoning_delta_not_a_content_delta() {
         let e = events(r#"data: {"choices":[{"delta":{"reasoning_content":"thinking..."}}]}"#);
-        assert!(
-            e.is_empty(),
-            "reasoning must not reach the response, got {e:?}"
+        assert_eq!(
+            e,
+            vec![StreamChunk::ReasoningDelta {
+                text: "thinking...".into()
+            }]
         );
+    }
+
+    #[test]
+    fn empty_reasoning_content_delta_emits_nothing() {
+        let e = events(r#"data: {"choices":[{"delta":{"reasoning_content":""}}]}"#);
+        assert!(e.is_empty());
     }
 
     #[test]
