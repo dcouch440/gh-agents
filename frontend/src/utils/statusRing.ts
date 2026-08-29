@@ -6,18 +6,23 @@ import type { SourceStreamStatus } from '@/stores/stepStreamStore'
 /**
  * The resolved visual treatment for one node's outline.
  *
- * `null` means idle — the absence of a ring, not a transparent one. Callers
- * fall back to the plain `screenBorder` from `getNodeHighlightStyles`.
+ * `null` means the node has no status yet — nothing has been designed and
+ * nothing has run. That is a state the board draws (a dashed outline), but it
+ * is not a *status*, so it is represented by the absence of a ring rather than
+ * by a ring that means "nothing". The board's `resolveBoxStroke` owns what an
+ * absent ring looks like.
+ *
+ * There is deliberately no `dashed` field. Dash carries exactly one meaning on
+ * this canvas — "not designed yet" — and that is the null case, so no status
+ * may claim it.
  */
 type StatusRing = {
   readonly color: string
-  /** Dashed rather than solid — a step the run stepped over. */
-  readonly dashed: boolean
   /** Outer glow. Reserved for the two states worth interrupting someone for. */
   readonly glow: boolean
-  /** Breathing animation. Suppressed at MINIMAL LOD by the caller. */
+  /** Breathing animation. Suppressed below `BOARD_RING.ANIMATE_MIN_ZOOM`. */
   readonly pulse: boolean
-  /** Dims the node body along with the ring. */
+  /** Dims the node body along with the ring — the run stepped over it. */
   readonly dim: boolean
 }
 
@@ -25,7 +30,7 @@ type ResolveStatusRingInput = {
   readonly status: StepExecutionStatus
   readonly designStatus: SourceStreamStatus | null
   readonly palette: StatusPalette
-  /** False at MINIMAL LOD, where dozens of animated nodes would thrash. */
+  /** False when zoomed out, where dozens of animated nodes would thrash. */
   readonly animated: boolean
 }
 
@@ -50,7 +55,8 @@ const resolveStatusRing = ({
   if (runColor !== null) {
     return {
       color: runColor,
-      dashed: status === 'skipped',
+      // A skipped step recedes rather than competing: the run passed it over,
+      // which is worth showing but never worth reading first.
       dim: status === 'skipped',
       glow: status === 'running' || status === 'error',
       pulse: animated && status === 'running',
@@ -61,7 +67,6 @@ const resolveStatusRing = ({
   if (designColor !== null) {
     return {
       color: designColor,
-      dashed: false,
       dim: false,
       glow: designStatus === 'failed',
       pulse: animated && designStatus === 'running',

@@ -23,7 +23,7 @@ describe('resolveStatusRing', () => {
   describe('run axis', () => {
     it('gives running a pulsing, glowing ring', () => {
       expect(resolve('running')).toEqual({
-        color: '#running', dashed: false, dim: false, glow: true, pulse: true,
+        color: '#running', dim: false, glow: true, pulse: true,
       })
     })
 
@@ -41,13 +41,14 @@ describe('resolveStatusRing', () => {
       expect(ring?.pulse).toBe(false)
     })
 
-    it('draws skipped dashed and dims the node body', () => {
+    it('dims a skipped node body instead of dashing it', () => {
       const ring = resolve('skipped')
-      expect(ring?.dashed).toBe(true)
       expect(ring?.dim).toBe(true)
+      // Dash belongs to the undesigned state alone; a skipped step was designed.
+      expect(ring).not.toHaveProperty('dashed')
     })
 
-    it('returns null for idle so the plain border shows through', () => {
+    it('returns null for idle — the board draws that as an undesigned dash', () => {
       expect(resolve('idle')).toBeNull()
     })
   })

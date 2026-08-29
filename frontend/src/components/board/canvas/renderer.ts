@@ -84,13 +84,14 @@ const drawBox = (
   isEditing: boolean,
   theme: DrawTheme,
   ring: StatusRing | null,
+  zoom: number,
 ): void => {
   const { x, y, width, height } = box
 
   // Stable seed from box id — keeps sketchy lines consistent across re-renders
   const seed = hashStringToSeed(box.id)
 
-  const boxStroke = resolveBoxStroke(ring, isSelected, theme)
+  const boxStroke = resolveBoxStroke(ring, isSelected, theme, zoom)
 
   // Rough.js rounded rectangle via SVG path for hand-drawn rounded corners
   const d = roundedRectPath(x, y, width, height, BOARD.BOX_BORDER_RADIUS)
@@ -99,9 +100,13 @@ const drawBox = (
     fillStyle: 'solid',
     stroke: boxStroke.color,
     strokeWidth: boxStroke.width,
-    ...(boxStroke.dash !== undefined ? { strokeLineDash: boxStroke.dash } : {}),
-    roughness: 1.0,
-    bowing: 1.5,
+    // Rough.js sketches every stroke twice by default. On a solid line the two
+    // passes read as one hand-drawn edge, but on a dashed one they land at
+    // different offsets and each fills the other's gaps — the dash disappears
+    // into noise. One calmer pass is the only way the gaps survive.
+    ...(boxStroke.dash !== undefined
+      ? { strokeLineDash: boxStroke.dash, disableMultiStroke: true, roughness: 0.6, bowing: 1.0 }
+      : { roughness: 1.0, bowing: 1.5 }),
     seed,
   })
 
@@ -174,11 +179,25 @@ const withAlpha = (color: string, alpha: number): string => {
  * Status also outranks selection for the same reason it outranks nothing else
  * on this canvas: a selected box still has its eight resize handles to say so,
  * whereas the run state has only the outline.
+ *
+ * There is no plain resting outline. A box with no status has not been designed
+ * yet, and that is a fact about the workflow worth showing, so it is drawn
+ * dashed — provisional, a sketch of a node rather than a node. The lifecycle is
+ * then legible without a legend: dashed, then blue while it is designed, then
+ * green once it has run. Selection still colors that dashed outline, because
+ * dash and color are answering different questions.
+ *
+ * The dash is divided by `zoom` because the canvas is drawn under a scale
+ * transform, and a world-space dash shrinks with it — at 0.25 a 7px dash is
+ * under two pixels and the outline reads solid. Zoomed out is exactly when
+ * someone is scanning for what has not been built yet, so the one state that
+ * must survive the zoom is this one.
  */
 const resolveBoxStroke = (
   ring: StatusRing | null,
   isSelected: boolean,
   theme: DrawTheme,
+  zoom: number,
 ): { color: string; width: number; dash: number[] | undefined } => {
   if (ring !== null) {
     return {
@@ -186,11 +205,20 @@ const resolveBoxStroke = (
       // Slightly heavier so a colored outline reads as deliberate, not as a
       // theme change.
       width: BOARD.BOX_BORDER_WIDTH + 0.75,
-      dash: ring.dashed ? [7, 5] : undefined,
+      dash: undefined,
     }
   }
-  if (isSelected) return { color: theme.accentColor, width: BOARD.BOX_BORDER_WIDTH, dash: undefined }
-  return { color: theme.strokeColor, width: BOARD.BOX_BORDER_WIDTH, dash: undefined }
+
+  // Guard a zero or negative zoom: the viewport clamps to MIN_ZOOM, but a dash
+  // array of Infinity would silently blank every undesigned box.
+  const scale = zoom > 0 ? zoom : 1
+  const dash = BOARD.BOX_UNDESIGNED_DASH.map((seg) => seg / scale)
+
+  return {
+    color: isSelected ? theme.accentColor : theme.strokeColor,
+    width: BOARD.BOX_BORDER_WIDTH,
+    dash,
+  }
 }
 
 /**
@@ -501,7 +529,10 @@ const drawSelectionRect = (
 
 /**
  * Draw a preview rectangle while the user is drag-creating a box.
- * Uses a dashed stroke to distinguish from finalized boxes.
+ *
+ * Distinguished from a finalized box by its translucent fill and accent stroke,
+ * not by a dash — dash is spoken for, and means a box that exists but has not
+ * been designed yet.
  */
 const drawDrawingBox = (
   ctx: CanvasRenderingContext2D,
@@ -642,7 +673,7 @@ const renderBoard = (
       ctx.save()
       ctx.globalAlpha = 0.55
     }
-    drawBox(ctx, rc, box, isSelected, isEditing, theme, ring)
+    drawBox(ctx, rc, box, isSelected, isEditing, theme, ring, viewport.zoom)
     if (dimmed) ctx.restore()
   }
 

@@ -66,25 +66,40 @@ beforeEach(() => {
 })
 
 describe('useBoardStatusRings', () => {
-  it('honours an element-id override when the map has one', () => {
+  it('finds the box under the element id the user drew it as', () => {
     workflowExecutionStore.store.setState({ stepStates: { [STEP_ID]: makeRunState('running') } })
-    const map = rings()
-    expect(map.get(ELEMENT_ID)).toMatchObject({ color: palette.running })
-    expect(map.has(STEP_ID)).toBe(false)
+    expect(rings().get(ELEMENT_ID)).toMatchObject({ color: palette.running })
   })
 
-  /**
-   * The production path. `elementStepMap` is only ever filled from a submit
-   * response, and its rehydration source (`canvas_snapshots.last_response_json`)
-   * is never written — so it is empty on every page load. Rings must still
-   * appear, keyed by step id, because the server builds board elements from
-   * steps and the two ids are identical.
-   */
   it('keys by step id when the element map is empty', () => {
     boardStore.store.setState({ elementStepMap: {} })
     workflowExecutionStore.store.setState({ stepStates: { [STEP_ID]: makeRunState('running') } })
+    expect(rings().get(STEP_ID)).toMatchObject({ color: palette.running })
+  })
+
+  /**
+   * Regression: a node went blue while being designed, then dropped back to a
+   * bare outline and stayed there until a refresh.
+   *
+   * `sync_canvas_elements` rebuilds the board from the steps whenever the
+   * manager agent touches a node, and the boxes it writes are keyed by step id.
+   * `refreshBoardElements` swaps them in but leaves `elementStepMap` holding the
+   * client ids from the last submit, so a ring keyed only by the mapped id
+   * landed on an element that was no longer on the board.
+   */
+  it('keys by step id too, so a board rebuilt from steps keeps its rings', () => {
+    workflowExecutionStore.store.setState({ stepStates: { [STEP_ID]: makeRunState('running') } })
     const map = rings()
     expect(map.get(STEP_ID)).toMatchObject({ color: palette.running })
+    expect(map.get(ELEMENT_ID)).toMatchObject({ color: palette.running })
+  })
+
+  it('survives a stale mapping left over from a deleted element', () => {
+    boardStore.store.setState({ elementStepMap: { 'gone-from-the-board': STEP_ID } })
+    workflowLiveStore.store.setState({
+      baselineByStep: { [STEP_ID]: makeBaseline({ baselineStatus: 'configured' }) },
+    })
+    expect(rings().get(STEP_ID)).toMatchObject({ color: palette.designed })
   })
 
   // A box the user drew but never submitted matches no step, so stays bare.
@@ -134,9 +149,9 @@ describe('useBoardStatusRings', () => {
     expect(rings().get(ELEMENT_ID)).toMatchObject({ color: palette.designed, pulse: false })
   })
 
-  it('marks a skipped step dashed and dimmed', () => {
+  it('dims a skipped step without dashing it — dash means undesigned', () => {
     workflowExecutionStore.store.setState({ stepStates: { [STEP_ID]: makeRunState('skipped') } })
-    expect(rings().get(ELEMENT_ID)).toMatchObject({ dashed: true, dim: true })
+    expect(rings().get(ELEMENT_ID)).toMatchObject({ color: palette.skipped, dim: true })
   })
 
   it('stops breathing when zoomed out but keeps the ring', () => {

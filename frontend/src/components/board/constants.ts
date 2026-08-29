@@ -16,6 +16,11 @@ const BOARD = {
   BOX_PADDING_Y: 12,
   BOX_BORDER_RADIUS: 14,
   BOX_BORDER_WIDTH: 2,
+  /**
+   * Dash for a box that has not been designed yet, in *screen* px — the
+   * renderer divides by zoom so the gaps stay readable when zoomed out.
+   */
+  BOX_UNDESIGNED_DASH: [7, 5] as readonly number[],
 
   // ── Arrow rendering ──────────────────────────────────────────────────────
   /** Gap between arrow endpoint and box edge (px). */

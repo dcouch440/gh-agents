@@ -56,37 +56,68 @@ const paint = (rings: ReadonlyMap<string, StatusRing>) => {
 }
 
 const ring = (over: Partial<StatusRing> = {}): StatusRing => ({
-  color: '#3fb950', dashed: false, glow: false, pulse: false, dim: false, ...over,
+  color: '#3fb950', glow: false, pulse: false, dim: false, ...over,
 })
 
 describe('resolveBoxStroke', () => {
   // Status replaces the outline rather than adding a ring beside it.
   it('paints the box outline with the status color', () => {
-    expect(resolveBoxStroke(ring({ color: '#3fb950' }), false, theme))
+    expect(resolveBoxStroke(ring({ color: '#3fb950' }), false, theme, 1))
       .toMatchObject({ color: '#3fb950' })
   })
 
   it('outranks selection, which still has its resize handles', () => {
-    expect(resolveBoxStroke(ring({ color: '#3fb950' }), true, theme).color).toBe('#3fb950')
+    expect(resolveBoxStroke(ring({ color: '#3fb950' }), true, theme, 1).color).toBe('#3fb950')
   })
 
-  it('falls back to the accent when selected with no status', () => {
-    expect(resolveBoxStroke(null, true, theme).color).toBe(theme.accentColor)
-  })
-
-  it('falls back to the plain stroke when idle and unselected', () => {
-    const stroke = resolveBoxStroke(null, false, theme)
-    expect(stroke.color).toBe(theme.strokeColor)
-    expect(stroke.dash).toBeUndefined()
+  it('draws a solid outline for every status, dash being reserved', () => {
+    for (const r of [ring(), ring({ dim: true }), ring({ glow: true })]) {
+      expect(resolveBoxStroke(r, false, theme, 1).dash).toBeUndefined()
+    }
   })
 
   it('thickens a status outline so it reads as deliberate', () => {
-    expect(resolveBoxStroke(ring(), false, theme).width)
-      .toBeGreaterThan(resolveBoxStroke(null, false, theme).width)
+    expect(resolveBoxStroke(ring(), false, theme, 1).width)
+      .toBeGreaterThan(resolveBoxStroke(null, false, theme, 1).width)
   })
 
-  it('dashes a skipped step', () => {
-    expect(resolveBoxStroke(ring({ dashed: true }), false, theme).dash).toEqual([7, 5])
+  describe('undesigned', () => {
+    it('dashes a box with no status, rather than leaving a plain outline', () => {
+      const stroke = resolveBoxStroke(null, false, theme, 1)
+      expect(stroke.color).toBe(theme.strokeColor)
+      expect(stroke.dash).toEqual([7, 5])
+    })
+
+    // Dash says "not designed", color says "selected" — two questions, two channels.
+    it('keeps the dash while the accent marks selection', () => {
+      const stroke = resolveBoxStroke(null, true, theme, 1)
+      expect(stroke.color).toBe(theme.accentColor)
+      expect(stroke.dash).toEqual([7, 5])
+    })
+
+    // The canvas draws under ctx.scale(zoom), so a world-space dash would shrink
+    // to nothing exactly when someone is scanning the board for unbuilt nodes.
+    it('scales the dash against zoom so the gaps survive zooming out', () => {
+      expect(resolveBoxStroke(null, false, theme, 0.25).dash).toEqual([28, 20])
+      expect(resolveBoxStroke(null, false, theme, 2).dash).toEqual([3.5, 2.5])
+    })
+
+    it('does not divide by a zero zoom', () => {
+      expect(resolveBoxStroke(null, false, theme, 0).dash).toEqual([7, 5])
+    })
+  })
+})
+
+describe('renderBoard — undesigned dash', () => {
+  // resolveBoxStroke returning a dash proves nothing on its own: it is handed to
+  // rough.js, which decides whether it survives to the context.
+  it('sets a line dash on a box with no status', () => {
+    expect(paint(new Map()).calls.some((c) => c.startsWith('setLineDash(7,5'))).toBe(true)
+  })
+
+  it('sets no line dash once the box has a status', () => {
+    expect(paint(new Map([[BOX_ID, ring()]]))
+      .calls.some((c) => c.startsWith('setLineDash(7,5'))).toBe(false)
   })
 })
 

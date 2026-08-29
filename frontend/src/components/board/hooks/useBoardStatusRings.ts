@@ -10,16 +10,28 @@ import { BOARD_RING } from '../constants'
 /**
  * A status ring per board box, keyed by element id.
  *
- * Driven from the steps that actually have status, not from
- * `boardStore.elementStepMap`. That map is populated only from a submit
- * response and rehydrated from `canvas_snapshots.last_response_json`, which is
- * never written — so it is empty on every page load and cannot be the spine of
- * this lookup. It is still consulted as an override when present.
+ * A step's box can be found under either of two ids, because the board has two
+ * element regimes and switches between them at runtime:
  *
- * The fallback is the real invariant: the server builds board elements *from*
- * steps (`build_canvas_elements`), so a box's element id is its step id. A box
- * the user has drawn but not yet submitted matches no step, resolves to idle,
- * and correctly gets no ring.
+ * - Boxes the user drew keep their client-generated ids. `POST /board` returns
+ *   the element→step pairing, which `boardStore.elementStepMap` holds and
+ *   `canvas_snapshots.last_response_json` persists across a refresh.
+ * - `workflow_agent::sync::sync_canvas_elements` rebuilds the board from the
+ *   steps whenever the manager agent adds, removes or edits a node, and the
+ *   elements it writes use `step.id` as the element id. It broadcasts
+ *   `board_elements_updated`, and `refreshBoardElements` swaps the board over.
+ *
+ * Nothing clears `elementStepMap` when that swap happens, so the map keeps
+ * pointing at client ids that no longer exist on the board. Keying a ring only
+ * by the mapped id therefore dropped every ring the moment the manager agent
+ * touched the workflow — a node mid-design went blue, then back to a bare
+ * outline, and stayed that way until a page refresh (which rebuilds the map
+ * empty, because the same rebuild nulls `last_response_json`).
+ *
+ * Registering the ring under both ids is what fixes that, and it costs nothing:
+ * the two are the same string in the rebuilt regime, and in the drawn regime
+ * only one of them is ever on the board. Neither id can be trusted alone, so
+ * neither is asked to be.
  *
  * Status comes from `resolveNodeStatus`, the same resolver the sidebar uses,
  * so a box and its sidebar row can never disagree.
@@ -42,7 +54,8 @@ const useBoardStatusRings = (zoom: number): ReadonlyMap<string, StatusRing> => {
     const rings = new Map<string, StatusRing>()
     const dispatchByStep = Collections.keyBy(dispatches, (d) => d.stepId)
 
-    // step id -> element id, for the rare case the two ever diverge.
+    // step id -> the client element id it was drawn as, when the board is still
+    // showing user-drawn boxes. Absent once the board has been rebuilt from steps.
     const elementByStep = new Map<string, string>()
     for (const [elementId, stepId] of Object.entries(elementStepMap)) {
       elementByStep.set(stepId, elementId)
@@ -67,7 +80,12 @@ const useBoardStatusRings = (zoom: number): ReadonlyMap<string, StatusRing> => {
         palette: theme.palette.statusPalette,
         animated,
       })
-      if (ring !== null) rings.set(elementByStep.get(stepId) ?? stepId, ring)
+      if (ring === null) continue
+
+      // Both regimes, always. See the note above on why neither id is trusted alone.
+      rings.set(stepId, ring)
+      const elementId = elementByStep.get(stepId)
+      if (elementId !== undefined) rings.set(elementId, ring)
     }
 
     return rings

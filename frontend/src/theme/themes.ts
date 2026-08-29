@@ -41,7 +41,10 @@ type NodePalette = {
  * unrelated states); `designing`/`designed` are a separate axis and hold blue
  * so they can never collide with the green/red run colors.
  *
- * There is no `idle` key on purpose — idle is the absence of a ring.
+ * There is no `idle` key on purpose. A node with no status has not been
+ * designed yet, and the board says so with a dashed outline in the plain stroke
+ * color rather than a status color — so idle stays the absence of a status, not
+ * a status of its own.
  */
 type StatusPalette = {
   pending: string
