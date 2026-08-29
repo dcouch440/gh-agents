@@ -131,8 +131,8 @@ The step you are in is one node on a board a person drew.
 
      DO NOT ENUMERATE THE TOOL LIST HERE. The baseline five are constant
      (`CONTAINER_BASELINE_TOOLS` in agent_executor) but capability tools are per-agent:
-     brave_search, read_webpage, the git tools, run_tests and the four document tools are
-     all assignable and all optional. A list here would be wrong for most agents and would
+     brave_search, read_webpage, the git tools and read_document are all assignable and
+     all optional. A list here would be wrong for most agents and would
      need editing every time a tool is added. The tool definitions travel with the call
      and describe themselves. This section describes only what is true for every agent.
      If this is ever edited to name tools, read `CONTAINER_BASELINE_TOOLS` and

@@ -91,10 +91,9 @@ You get thirty rounds.
      "web_search and web_fetch are the only capabilities that add a tool" WAS FALSE and it
      is the worst claim in the old prompt because the agent has no way to discover it is
      wrong. Generated from config/system/tool_assignments.yaml, the assignable set is
-     fifteen keys: document_create, document_read, document_search, document_update,
-     file_metadata, file_read, file_search, file_write, git_read, git_write,
-     web_fetch, web_search. All nine resolve to real tools and all nine dispatch
-     (`route_for`, and `execute_tool_in_container` for the container path).
+     nine keys: document_read, file_metadata, file_read, file_search, file_write,
+     git_read, git_write, web_fetch, web_search. All nine resolve to real tools and all
+     nine dispatch (`route_for`, and `execute_tool_in_container` for the container path).
 
      IT WAS FIFTEEN AND SHELL_EXECUTION AND PROCESS_MANAGEMENT ARE GONE. Both mapped to
      `run_command` and nothing else, and `run_command` is in CONTAINER_BASELINE_TOOLS, so
@@ -152,7 +151,7 @@ You get thirty rounds.
 
      THE EIGHT REJECTED KEYS ARE NAMED because the failure is silent-looking and total:
      `validate_agent` rejects the whole file, and the agent has no way to guess which of
-     the twenty-three keys in capabilities.yaml are backed by a tool. content_search is
+     the seventeen keys in capabilities.yaml are backed by a tool. content_search is
      the one most likely to be reached for — it is in capabilities.yaml, it sounds exactly
      like something a code-searching agent needs, and config/assistant/system.md still
      shows it in a panel's capability column.
@@ -375,7 +374,7 @@ work.
      in the graph. An agent that rewords a description while fixing a typo in an agent
      prompt rebuilds half the board. Nothing stops it and nothing warns anyone. -->
 
-- Never use a capability that is not in the list. There are fifteen. Anything else fails
+- Never use a capability that is not in the list. There are nine. Anything else fails
   the whole design, including keys that sound obvious.
 
 - Never list a baseline tool in capabilities. read_file, write_file, edit_file, list_files
@@ -988,7 +987,7 @@ agents/{slug}.json — one per agent, matching a topology slug exactly:
       what the next agent has to find in it, and where it goes — a saved file,
       several files, or the reply itself for a read_only agent. This is the
       only place any of that is said.",
-    "capabilities": ["only from the fifteen; empty for most agents"],
+    "capabilities": ["only from the nine; empty for most agents"],
     "read_only": true
   }
 
