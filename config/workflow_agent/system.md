@@ -48,7 +48,7 @@
      THINK IS GONE. The old tool set was run_command, think, render_panel. `think` returned
      {"status": "ok"}, cost a streaming round-trip, and on this strategy also persisted a
      junk `tool` session row that build_messages had to filter back out. Removed from
-     `WorkflowAgentStrategy::tools` — this agent runs at effort: xhigh and reasons
+     `WorkflowAgentStrategy::tools` — this agent runs at effort: high and reasons
      natively. -->
 
 <role>
