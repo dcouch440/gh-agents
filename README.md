@@ -2,7 +2,7 @@
 
 **An experiment: can agents design their own agents?**
 
-Rather than hand-writing orchestration, could a designer agent read a plain-language goal, decide what roles the work needs, write their system prompts and tool assignments, and hand a structured plan to an executor that runs it?
+Rather than hand-writing orchestration, could one agent read a plain-language goal, decide what roles the work needs, write their system prompts and tool assignments, and hand a structured plan to an executor that runs it?
 
 nexor is what I built to find out. Draw a workflow on a canvas; the system builds the structure instantly, then designs and runs the agents behind it.
 
@@ -33,7 +33,7 @@ It builds that structure as files, not database rows: a `topology.json` plus one
 
 ![The workflow agent builds the board](docs/images/run-1-draw-the-board.png)
 
-Structure lands immediately; nothing is staffed yet. Hit **Generate** and each node is dispatched to its own **designer agent**, which decides what agents that node needs, writes their system prompts and tool assignments, and records the dependency graph between them. That runs asynchronously across the whole board. The designer is told *what* the node must accomplish and never *how* to staff it, so a single sentence on the board routinely becomes a team — a step that reads "write the brief" can come back as an analyst feeding a writer.
+Structure lands immediately; nothing is staffed yet. Hit **Generate** and each node is dispatched to its own **system agent**, which decides what agents that node needs, writes their system prompts and tool assignments, and records the dependency graph between them. That runs asynchronously across the whole board. The system agent is told *what* the node must accomplish and never *how* to staff it, so a single sentence on the board routinely becomes a team — a step that reads "write the brief" can come back as an analyst feeding a writer.
 
 Then you hit **Run**. Steps with no dependencies between them dispatch together; each level waits on the one before it. Inside a step, the agents that node was given run the same way, in parallel wherever their own graph allows. Agents in a step share one container, so they hand work off through files rather than through prose, and every file change is captured as a diff.
 
@@ -45,24 +45,33 @@ The core primitive is the **workforce step** — a single node in the canvas tha
 
 Every workforce is designed before it executes, and the two phases are separate artifacts.
 
-**Dispatch** runs first, once per step, when you hit Generate. The designer agent receives one sentence from the board and answers *how*: which agents exist, what each one knows, and what file each produces. It designs by writing config files to disk — `config.json`, `topology.json`, `agents/*.json` — then calls `complete_system`, attesting against its own checklist (`prompts_not_trivial`, `assignments_expanded`, `no_filenames_prescribed`) before the execution engine reads those files back. The design is therefore inspectable and editable: a structured artifact, not an implicit LLM call.
+**Dispatch** runs first, once per step, when you hit Generate. The system agent receives one sentence from the board and answers *how*: which agents exist, what each one knows, and what file each produces. It designs by writing config files to disk — `config.json`, `topology.json`, `agents/*.json` — then calls `complete_system`, attesting against a six-item checklist (`prompts_not_trivial`, `assignments_expanded` and `no_filenames_prescribed` among them) before the execution engine reads those files back. The design is therefore inspectable and editable: a structured artifact, not an implicit LLM call.
 
-**Runtime** is what those config files produced. Every system prompt is a designer-written role plus one shared preamble; every input is an `<assignment>` block and a `<deliverable>` block, with upstream results arriving as `<previous_step>` blocks.
+**Runtime** is what those config files produced. Every runtime agent's system prompt is two halves joined at a named seam: the role the system agent wrote for it, wrapped in an `<expertise>` tag and unique to that agent, followed by one operational file that is byte-identical for every agent in every step. Its input is an `<assignment>` block and a `<deliverable>` block, with upstream results arriving as `<previous_step>` blocks.
 
 <details>
-<summary>The shared preamble, in full — appended byte-identical to every runtime prompt</summary>
+<summary>The five hard rules, in full — the same five reach every runtime agent</summary>
 
 ```
-You are in a shared workspace. Files and installed packages from previous steps are available.
-Save files with run_command — do not put file content in your response.
-When saving non-code output files (reports, data, text), use specific descriptive names — never
-generic names like output.txt or result.json. If transforming an upstream file, save to a new name
-that reflects your contribution.
-When previous steps mention files they saved, read those files before starting your work — do not
-assume their contents from the summary alone.
+- Never put the deliverable in your reply when you have write access. Write it to a file.
+  A reply is read once by the next agent and then it is gone.
+
+- Never overwrite a file you were given. Upstream files are the only copy and other agents
+  are reading them. Save what you make under a new name.
+
+- Never name a file in your receipt that you did not confirm landed. write_file and
+  edit_file report what they wrote, and run_command's `changes:` block names what moved.
+
+- Never re-run a command the report called a no-op or a loop. It did nothing the first
+  time and it will do nothing again. Read the file and find out why.
+
+- Never invent what an upstream file contains. If you could not read it, say so in your
+  receipt and say what you did instead.
 ```
 
 </details>
+
+`<previous_step>` carries the upstream agents' prose receipts, not their files — nothing about a file's contents is in it. That is what the last rule is guarding against.
 
 The contract is not always honoured. Agents told to write files sometimes return their output inline instead, which is one of the reasons the handoff is file-based rather than conversational — a missing file is a visible failure.
 
@@ -74,15 +83,15 @@ This means a workforce automatically exploits concurrency wherever the dependenc
 
 ### Shared Workspace
 
-All agents in a step share one container — files written by one are visible to the next, which is what makes file-based handoff possible. The container is created once at the start of the step and torn down after all agents complete. A filesystem diff is captured and stored, so every file change across the entire workforce is tracked.
+When a run is containerized, all agents in a step share one container — files written by one are visible to the next, which is what makes file-based handoff possible. The container is created once at the start of the step and torn down after all agents complete. A filesystem diff is extracted before teardown and stored, so every file change across the entire workforce is tracked, including from a step that wrote files and then failed.
 
-The handoff contract itself is carried in the preamble appended to every agent's system prompt, shown in full above.
+The handoff contract itself is carried in the operational half of every agent's system prompt, shown in part above.
 
 ## Architecture Overview
 
 The system splits into two planes. A **design plane** of agents that edit files writes the agent configs onto a shared filesystem. A **run plane** reads those files back and executes them. The handoff between the two is `system_node/<step-id>/agents/*.json` on disk, not a function call.
 
-The design plane is one pattern applied at two scales. The **workflow agent** — the chat panel you actually type into — projects the whole board out to a repo, edits `topology.json` and `nodes/*.md` as files, and syncs the result back to the database. The **node builder** does the identical thing one level down, for the agents inside a single node. Neither writes to the DB directly; both edit files and let the sync reconcile.
+The design plane is one pattern applied at two scales. The **workflow agent** — the chat panel you actually type into — projects the whole board out to a repo, edits `board.md`, `topology.json` and `nodes/*.md` as files, and syncs the result back to the database. The **system agent** does the identical thing one level down, for the agents inside a single node. Neither writes to the DB directly; both edit files and let the sync reconcile.
 
 Two details in the run plane are easy to get wrong. `execution_mode` looks like it selects the executor, but it only decides whether a step is a passthrough — everything else routes on whether `child_workflow_id` is set, so `"workforce"` is never actually matched at dispatch. And there are two topological sorts stacked: one ordering steps across the board, a second ordering agents inside a single workforce step.
 
@@ -96,7 +105,7 @@ Two details in the run plane are easy to get wrong. `execution_mode` looks like 
 
 **Canvas changes are filtered before any LLM call.** Not every canvas edit is worth dispatching. The board serializer runs a six-stage pipeline on every diff: pan detection (all nodes moving by the same delta is a camera move, not a rearrangement), whitespace normalisation, oscillation detection against a baseline snapshot (you typed it and undid it — net zero), reorder detection (same lines, different order), token-level change scoring on whatever survives, and finally a topological sort so surviving changes reach the agent upstream-first. Only genuinely meaningful changes reach an agent, tiered by significance. Everything else is a direct database write.
 
-**The backend re-renders your drawing in order to see it.** Freehand strokes aren't handed to the model as raw coordinates. The server rasterises them — `perfect-freehand`, the pressure-sensitive stroke algorithm the canvas draws with, ported to Rust and numerically verified against the TypeScript original, so the outline the backend fills is the one you actually saw. Strokes then leave by one of two paths depending on the model: an ASCII grid for text-only models, or an anti-aliased PNG cropped to the stroke's bounding box for vision models.
+**The backend re-renders your drawing in order to see it — built, currently unplugged.** The goal is for a sketch drawn on a node to reach the agent as an image rather than as prose about a shape. The rasteriser is the part that exists: `perfect-freehand`, the pressure-sensitive stroke algorithm the canvas draws with, ported to Rust and numerically verified against the TypeScript original, then filled anti-aliased and cropped to the stroke's bounding box — so what the backend renders is the outline you actually saw, not a re-guess from the input points. The path from there to a live agent isn't connected today.
 
 **Parallel agents share a workspace, and the merge is verified.** Steps running in the same level write through OverlayFS; their diffs are merged before the next batch begins. Non-conflicting changes auto-merge, multi-step modifications go through a three-way diff3, and genuine conflict hunks are resolved by a one-shot LLM call with file-type-aware context extraction. That resolution is then checked programmatically — non-empty, plausible length, imports preserved, still syntactically valid — because a merge you can't verify is a merge you can't ship.
 
@@ -108,23 +117,17 @@ It was an experiment, so the findings matter more than the feature list.
 
 The hard part wasn't execution. It was the protocol between agents.
 
-When a designer agent is uncertain and passes rich detail downstream, the receiving agent has no way to separate its guesses from its knowledge — everything arrives as established fact. The next agent builds on it, elaborates, and the invention hardens. By the third hop the fabrication *is* the spec, and every agent after that is faithfully implementing something nobody asked for.
+When an upstream agent is uncertain and passes rich detail downstream, the receiving agent has no way to separate its guesses from its knowledge — everything arrives as established fact. The next agent builds on it, elaborates, and the invention hardens. By the third hop the fabrication *is* the spec, and every agent after that is faithfully implementing something nobody asked for.
 
 Brevity fixes it. A short, bounded summary of the job as it stands forces the downstream agent to derive detail from the actual source of truth rather than inherit an invention. Detail isn't free — detail from an uncertain agent is worse than none.
 
-That's why the designer's handoff is constrained rather than free-form. It writes **what** a node must accomplish, never **how** to staff it, across five fixed fields: the node's role, what it receives and from where, what it must produce, the constraints the user actually stated, and how it relates to its neighbours. Team composition is the downstream builder's decision, made with the context to make it. See [`config/manager/builder/system.md`](config/manager/builder/system.md).
+That's why the board-level handoff to a node is constrained rather than free-form. The workflow architect writes **what** a node must accomplish, never **how** to staff it, across five fixed fields: the node's role, what it receives and from where, what it must produce, the constraints the user actually stated, and how it relates to its neighbours. Team composition is the system agent's decision, made one level down with the context to make it. See [`config/manager/builder/system.md`](config/manager/builder/system.md).
 
-### Confidence-scored one-liners beat transcripts
+### Mappable context
 
-When a new agent joins an ongoing conversation, it doesn't need the transcript. It needs a small set of factual statements, each carrying a confidence score — so it knows not just what is believed, but how firmly.
+The other thing I tried was making context *mappable* rather than readable. Instead of handing a new agent the conversation so far, hand it a set of discrete statements it can navigate — each tagged, each carrying a confidence score, so it knows not just what is believed but how firmly. Uncertainty that travels *with* a claim stays uncertainty; uncertainty flattened into fluent prose becomes fact at the next hop, which is the failure above.
 
-I tested this rather than assuming it, in a side experiment that grew into a short paper: [**Belief-Oriented Conversation Architecture**](proto/paper.md). A gatekeeper agent reads the full source and authors *belief slices* — tagged, confidence-weighted statements of understanding. Downstream agents never see the source at all; they reason entirely from the slices they are given.
-
-Converged belief slices scored **26/30 against full context's 27/30**, at roughly a fifth of the token cost, compressing 70 raw beliefs into 22 contradiction-free ones. Against adversarially poisoned sources, the revision pass identified and killed every planted distortion from the structure of the belief store alone, with no access to ground truth.
-
-The confidence score is what makes it work, and it is the fix for the failure above. Uncertainty that travels *with* a claim stays uncertainty. Uncertainty flattened into fluent prose becomes fact at the next hop.
-
-The paper reports where the approach loses, too — full context still wins outright when the source fits in the window, and convergence dropped a claim in Phase 5 that only better prompting recovered.
+That grew into a side experiment and a short paper: [**Belief-Oriented Conversation Architecture**](proto/paper.md). A gatekeeper agent reads the full source and authors *belief slices*; downstream agents never see the source at all and reason entirely from the slices they are given. Seven phases of results, including where it loses to simply passing the whole source along, are in the paper.
 
 ### Refactoring at scale is a different skill from writing at scale
 
@@ -145,13 +148,14 @@ Phase 7 came in at 635 lines while doing more, because the shared machinery was 
 - Rust (via [rustup](https://rustup.rs))
 - Node.js + npm
 - Docker + Docker Compose (for Postgres, MinIO, and JuiceFS)
-- An xAI API key (the default LLM provider)
+- A DeepInfra API key — the active provider, set by `ACTIVE_PROVIDER` in `src/constants.rs`. xAI, Anthropic and local Ollama are also wired up; switching is a one-line change there.
 
 ## Setup
 
 ```bash
 cp .env.example .env
-# fill in XAI_API_KEY and JWT_SECRET at minimum
+# fill in DEEPINFRA_API_KEY and JWT_SECRET at minimum
+# BRAVE_SEARCH_API_KEY too, if you want the agents' web tools to work
 ```
 
 ```bash
