@@ -14,6 +14,10 @@ use crate::db::{AgentExecutionRow, ExecutionMessageRow, ResultRow, TimelineRow, 
 pub struct CreateAgentExecutionInput {
     pub execution_type: crate::types::ExecutionType,
     pub agent_id: Option<Uuid>,
+    /// Display name for an execution with no `agent_id` to take one from.
+    /// A pipeline agent is designed per run and never persisted as an `agents`
+    /// row, so its name has to be recorded here to survive the run.
+    pub agent_name: Option<String>,
     pub workflow_step_id: Option<Uuid>,
     pub parent_agent_execution_id: Option<Uuid>,
     pub system_prompt_rendered: String,

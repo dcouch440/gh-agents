@@ -324,6 +324,7 @@ impl ExecutionFilter for DebateVerificationFilter {
                     match ae_repo
                         .create_agent_execution(CreateAgentExecutionInput {
                             execution_type: ExecutionType::DebateVerification,
+                            agent_name: None,
                             agent_id: Some(verifier_id),
                             workflow_step_id: step_id,
                             parent_agent_execution_id: parent_execution_id,

@@ -170,6 +170,7 @@ pub async fn run_system_node_task(
         .agent_executions
         .create_agent_execution(CreateAgentExecutionInput {
             execution_type: ExecutionType::Dispatch,
+            agent_name: None,
             agent_id: None,
             workflow_step_id: Some(step_id),
             parent_agent_execution_id: None,

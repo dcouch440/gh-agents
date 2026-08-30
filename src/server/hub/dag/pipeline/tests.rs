@@ -751,6 +751,7 @@ mod tests {
         let row = repo
             .create_agent_execution(CreateAgentExecutionInput {
                 execution_type: ExecutionType::PipelineAgent,
+                agent_name: None,
                 agent_id: None,
                 workflow_step_id: None,
                 parent_agent_execution_id: None,

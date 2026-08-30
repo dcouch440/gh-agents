@@ -108,6 +108,7 @@ mod tests {
         let result = recorder
             .record_agent_execution(CreateAgentExecutionInput {
                 execution_type: ExecutionType::DagStep,
+                agent_name: None,
                 agent_id: Some(Uuid::new_v4()),
                 workflow_step_id: Some(Uuid::new_v4()),
                 parent_agent_execution_id: None,

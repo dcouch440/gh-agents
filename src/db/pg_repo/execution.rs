@@ -18,13 +18,14 @@ impl AgentExecutionRepo for PgRepo {
         let is_interactive = input.execution_type == ExecutionType::InteractiveReview;
         let row = sqlx::query_as::<_, AgentExecutionRow>(
             "INSERT INTO agent_executions \
-             (execution_type, agent_id, workflow_step_id, is_interactive, \
+             (execution_type, agent_id, agent_name, workflow_step_id, is_interactive, \
               parent_agent_execution_id, system_prompt_rendered, input, \
               room_session_id, speaker_order, workflow_execution_id) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *",
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *",
         )
         .bind(input.execution_type.as_str())
         .bind(input.agent_id)
+        .bind(&input.agent_name)
         .bind(input.workflow_step_id)
         .bind(is_interactive)
         .bind(input.parent_agent_execution_id)
@@ -334,23 +335,12 @@ impl AgentExecutionRepo for PgRepo {
                    ae.execution_type, \
                    ae.workflow_step_id AS step_id, \
                    ws.name AS step_name, \
-                   CASE WHEN ae.execution_type = 'pipeline_agent' \
-                     THEN pe.agent_name \
-                     ELSE a.name \
-                   END AS agent_name, \
+                   COALESCE(ae.agent_name, a.name) AS agent_name, \
                    ae.status AS agent_status \
                  FROM execution_messages em \
                  JOIN agent_executions ae ON ae.id = em.agent_execution_id \
                  LEFT JOIN workflow_steps ws ON ws.id = ae.workflow_step_id \
                  LEFT JOIN agents a ON a.id = ae.agent_id \
-                 LEFT JOIN protocol_executions pe \
-                   ON pe.protocol_step_id = ae.workflow_step_id \
-                   AND pe.workflow_run_id = $1 \
-                   AND pe.phase LIKE 'agent_%' \
-                   AND pe.agent_name IS NOT NULL \
-                   AND ae.execution_type = 'pipeline_agent' \
-                   AND ae.started_at >= pe.created_at \
-                   AND (pe.completed_at IS NULL OR ae.started_at <= pe.completed_at) \
                  WHERE ae.workflow_execution_id = $1 \
                    AND em.created_at < $2 \
                  ORDER BY em.created_at DESC \
@@ -376,23 +366,12 @@ impl AgentExecutionRepo for PgRepo {
                    ae.execution_type, \
                    ae.workflow_step_id AS step_id, \
                    ws.name AS step_name, \
-                   CASE WHEN ae.execution_type = 'pipeline_agent' \
-                     THEN pe.agent_name \
-                     ELSE a.name \
-                   END AS agent_name, \
+                   COALESCE(ae.agent_name, a.name) AS agent_name, \
                    ae.status AS agent_status \
                  FROM execution_messages em \
                  JOIN agent_executions ae ON ae.id = em.agent_execution_id \
                  LEFT JOIN workflow_steps ws ON ws.id = ae.workflow_step_id \
                  LEFT JOIN agents a ON a.id = ae.agent_id \
-                 LEFT JOIN protocol_executions pe \
-                   ON pe.protocol_step_id = ae.workflow_step_id \
-                   AND pe.workflow_run_id = $1 \
-                   AND pe.phase LIKE 'agent_%' \
-                   AND pe.agent_name IS NOT NULL \
-                   AND ae.execution_type = 'pipeline_agent' \
-                   AND ae.started_at >= pe.created_at \
-                   AND (pe.completed_at IS NULL OR ae.started_at <= pe.completed_at) \
                  WHERE ae.workflow_execution_id = $1 \
                  ORDER BY em.created_at DESC \
                  LIMIT $2",
