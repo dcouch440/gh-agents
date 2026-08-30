@@ -249,6 +249,7 @@ pub(crate) async fn run_step_via_engine(
     let ae_row = ae_repo
         .create_agent_execution(CreateAgentExecutionInput {
             execution_type: ExecutionType::DagStep,
+            agent_name: None,
             agent_id: Some(agent.id),
             workflow_step_id: Some(step.id),
             parent_agent_execution_id: None,

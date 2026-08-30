@@ -522,6 +522,8 @@ async fn execute_single_agent(
     let ae_id = match ae_repo
         .create_agent_execution(CreateAgentExecutionInput {
             execution_type: ExecutionType::PipelineAgent,
+            // Designed per run, so there is no `agents` row to name it.
+            agent_name: Some(designed.agent_name.clone()),
             agent_id: None,
             workflow_step_id: Some(env.step_id),
             parent_agent_execution_id: None,

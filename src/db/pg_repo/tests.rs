@@ -6,11 +6,13 @@ mod tests {
     use crate::db::test_utils::TestDb;
     use crate::db::traits::{
         AgentExecutionRepo, AgentRepo, AuthConfigRepo, CreateAgentExecutionInput,
-        CreateDocumentInput, CreateRoomInput, CreateWorkflowInput, DocumentRepo, RoomMemberInput,
-        RoomRepo, TokenLedgerRepo, ToolRepo, UserRepo, WorkflowCollectionRepo, WorkflowRepo,
+        CreateDocumentInput, CreateRoomInput, CreateWorkflowInput, DocumentRepo, ProtocolRepo,
+        RoomMemberInput, RoomRepo, TokenLedgerRepo, ToolRepo, UserRepo, WorkflowCollectionRepo,
+        WorkflowRepo,
     };
     use crate::db::{
-        AgentRow, RoomRow, ToolRow, WorkflowRow, WorkflowStepEdgeRow, WorkflowStepRow,
+        AgentRow, ProtocolExecutionRow, RoomRow, ToolRow, WorkflowRow, WorkflowStepEdgeRow,
+        WorkflowStepRow,
     };
     use crate::types::ExecutionType;
     use chrono::Utc;
@@ -550,6 +552,7 @@ mod tests {
         let exec = repo
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent.id),
+                agent_name: None,
                 workflow_step_id: None,
                 execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
@@ -597,6 +600,7 @@ mod tests {
         let exec1 = repo
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent.id),
+                agent_name: None,
                 workflow_step_id: None,
                 execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
@@ -629,6 +633,7 @@ mod tests {
         let exec2 = repo
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent.id),
+                agent_name: None,
                 workflow_step_id: None,
                 execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
@@ -651,6 +656,7 @@ mod tests {
         let exec3 = repo
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent.id),
+                agent_name: None,
                 workflow_step_id: None,
                 execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
@@ -696,6 +702,7 @@ mod tests {
             let exec = repo
                 .create_agent_execution(CreateAgentExecutionInput {
                     agent_id: Some(agent.id),
+                    agent_name: None,
                     workflow_step_id: None,
                     execution_type: ExecutionType::InteractiveReview,
                     parent_agent_execution_id: None,
@@ -754,6 +761,7 @@ mod tests {
         let e1 = repo
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent.id),
+                agent_name: None,
                 workflow_step_id: Some(step_a.id),
                 execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
@@ -772,6 +780,7 @@ mod tests {
         let e2 = repo
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent.id),
+                agent_name: None,
                 workflow_step_id: Some(step_b.id),
                 execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
@@ -790,6 +799,7 @@ mod tests {
         // running + non-interactive (should NOT match)
         repo.create_agent_execution(CreateAgentExecutionInput {
             agent_id: Some(agent.id),
+            agent_name: None,
             workflow_step_id: Some(step_a.id),
             execution_type: ExecutionType::DagStep,
             parent_agent_execution_id: None,
@@ -806,6 +816,7 @@ mod tests {
         let e4 = repo
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent.id),
+                agent_name: None,
                 workflow_step_id: Some(step_a.id),
                 execution_type: ExecutionType::InteractiveReview,
                 parent_agent_execution_id: None,
@@ -851,6 +862,7 @@ mod tests {
         let exec = repo
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent.id),
+                agent_name: None,
                 workflow_step_id: Some(step.id),
                 execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
@@ -1270,6 +1282,7 @@ mod tests {
         let exec_a = repo
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent_a.id),
+                agent_name: None,
                 workflow_step_id: None,
                 execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
@@ -1284,6 +1297,7 @@ mod tests {
         let exec_b = repo
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent_b.id),
+                agent_name: None,
                 workflow_step_id: None,
                 execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
@@ -1342,6 +1356,7 @@ mod tests {
         let exec = repo
             .create_agent_execution(CreateAgentExecutionInput {
                 agent_id: Some(agent.id),
+                agent_name: None,
                 workflow_step_id: None,
                 execution_type: ExecutionType::DagStep,
                 parent_agent_execution_id: None,
@@ -1679,6 +1694,7 @@ mod tests {
         let orphan = repo
             .create_agent_execution(CreateAgentExecutionInput {
                 execution_type: ExecutionType::PipelineAgent,
+                agent_name: None,
                 agent_id: Some(agent.id),
                 workflow_step_id: None,
                 parent_agent_execution_id: None,
@@ -1723,6 +1739,7 @@ mod tests {
         let orphan = repo
             .create_agent_execution(CreateAgentExecutionInput {
                 execution_type: ExecutionType::PipelineAgent,
+                agent_name: None,
                 agent_id: Some(agent.id),
                 workflow_step_id: None,
                 parent_agent_execution_id: None,
@@ -1753,6 +1770,88 @@ mod tests {
         let after = repo.get_agent_execution(orphan.id).await.unwrap().unwrap();
         assert_eq!(after.status, "failed");
         assert!(after.completed_at.is_some());
+
+        db.cleanup().await;
+    }
+
+    /// A step's pipeline agents run in parallel and their `protocol_executions`
+    /// phase rows are indistinguishable by step or by time, so the timeline
+    /// must not reach for one: any join on them multiplies each message by the
+    /// number of agents on the step and attributes it to an arbitrary one.
+    /// Each execution's name comes from its own row.
+    #[tokio::test]
+    #[ignore = "requires running Postgres"]
+    async fn timeline_does_not_duplicate_parallel_pipeline_agents() {
+        let db = TestDb::new().await;
+        let repo = PgRepo::new(db.pool.clone());
+
+        let user = create_test_user(&repo).await;
+        let agent = create_test_agent(&repo, user).await;
+        let (we_id, workflow_id) = create_execution_chain(&repo, user).await;
+        let step = create_test_step(&repo, workflow_id, agent.id).await;
+
+        // Two roster phases on one step, created together and still open —
+        // the shape that made the old window match both agents.
+        for (i, name) in ["Alpha", "Beta"].iter().enumerate() {
+            repo.create_protocol_execution(ProtocolExecutionRow {
+                id: Uuid::new_v4(),
+                protocol_step_id: step.id,
+                workflow_run_id: Some(we_id),
+                phase: format!("agent_{i}"),
+                document_def_id: None,
+                agent_id: None,
+                input_prompt: None,
+                output_content: None,
+                status: "running".to_string(),
+                error_message: None,
+                tokens_in: None,
+                tokens_out: None,
+                cost_usd: None,
+                model: None,
+                capabilities_used: None,
+                created_at: Utc::now(),
+                completed_at: None,
+                agent_name: Some((*name).to_string()),
+                archetype: Some("workforce".to_string()),
+                designer_run_id: None,
+            })
+            .await
+            .unwrap();
+        }
+
+        // One execution per agent, each writing a single message.
+        for name in ["Alpha", "Beta"] {
+            let ae = repo
+                .create_agent_execution(CreateAgentExecutionInput {
+                    execution_type: ExecutionType::PipelineAgent,
+                    agent_id: None,
+                    agent_name: Some(name.to_string()),
+                    workflow_step_id: Some(step.id),
+                    parent_agent_execution_id: None,
+                    system_prompt_rendered: "prompt".to_string(),
+                    input: "task".to_string(),
+                    room_session_id: None,
+                    speaker_order: None,
+                    workflow_execution_id: Some(we_id),
+                })
+                .await
+                .unwrap();
+            repo.create_execution_message(ae.id, "assistant", name, None, None, 0, 0)
+                .await
+                .unwrap();
+        }
+
+        let rows = repo
+            .list_execution_timeline(we_id, 100, None)
+            .await
+            .unwrap();
+
+        assert_eq!(rows.len(), 2, "each message must appear exactly once");
+        for row in &rows {
+            // The name comes from the execution's own row, so it matches the
+            // message that execution wrote.
+            assert_eq!(row.agent_name.as_deref(), Some(row.content.as_str()));
+        }
 
         db.cleanup().await;
     }
