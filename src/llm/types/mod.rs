@@ -105,6 +105,12 @@ impl MessageContent {
 pub struct Message {
     pub role: Role,
     pub content: MessageContent,
+    /// The model's private deliberation behind this turn, when the provider
+    /// surfaces one (e.g. DeepInfra's `reasoning_content`). Carried on
+    /// assistant messages so it can be round-tripped back to providers that
+    /// require it (e.g. DeepSeek-family models in a tool-use conversation).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reasoning: Option<String>,
 }
 
 impl Message {
@@ -112,6 +118,7 @@ impl Message {
         Self {
             role: Role::User,
             content: MessageContent::Text(content.into()),
+            reasoning: None,
         }
     }
 
@@ -119,6 +126,7 @@ impl Message {
         Self {
             role: Role::Assistant,
             content: MessageContent::Text(content.into()),
+            reasoning: None,
         }
     }
 
@@ -127,6 +135,7 @@ impl Message {
         Self {
             role: Role::Assistant,
             content: MessageContent::Blocks(blocks),
+            reasoning: None,
         }
     }
 
@@ -135,6 +144,7 @@ impl Message {
         Self {
             role: Role::User,
             content: MessageContent::Blocks(blocks),
+            reasoning: None,
         }
     }
 
@@ -143,7 +153,15 @@ impl Message {
         Self {
             role: Role::User,
             content: MessageContent::Blocks(results),
+            reasoning: None,
         }
+    }
+
+    /// Attach the model's reasoning for this turn, so providers that require
+    /// it round-tripped (e.g. DeepSeek-family models mid tool-use) get it back.
+    pub fn with_reasoning(mut self, reasoning: Option<String>) -> Self {
+        self.reasoning = reasoning;
+        self
     }
 
     /// Get the text content of this message.
