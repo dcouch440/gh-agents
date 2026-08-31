@@ -281,6 +281,103 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn tool_use_reasoning_is_carried_into_next_round_request() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        use std::sync::Mutex;
+
+        let call_count = Arc::new(AtomicU32::new(0));
+        let call_count_clone = call_count.clone();
+        let second_request_messages = Arc::new(Mutex::new(None));
+        let second_request_messages_clone = second_request_messages.clone();
+
+        // Provider that returns tool_use with reasoning on the first call,
+        // captures what it's sent on the second call, then ends the turn.
+        struct ToolThenDone {
+            calls: Arc<AtomicU32>,
+            second_request_messages: Arc<Mutex<Option<Vec<Message>>>>,
+        }
+
+        #[async_trait]
+        impl LLMProvider for ToolThenDone {
+            async fn send_message(&self, req: LLMRequest) -> Result<LLMResponse, LLMError> {
+                let n = self.calls.fetch_add(1, Ordering::SeqCst);
+                if n == 0 {
+                    Ok(LLMResponse {
+                        reasoning: Some("I should search for this".into()),
+                        content: String::new(),
+                        content_blocks: vec![ContentBlock::ToolUse {
+                            id: "t1".into(),
+                            name: "search".into(),
+                            input: serde_json::json!({"q": "test"}),
+                        }],
+                        model: "m".into(),
+                        stop_reason: StopReason::ToolUse,
+                        usage: TokenUsage {
+                            input_tokens: 10,
+                            output_tokens: 5,
+                            ..Default::default()
+                        },
+                    })
+                } else {
+                    *self.second_request_messages.lock().unwrap() = Some(req.messages.clone());
+                    Ok(LLMResponse {
+                        reasoning: None,
+                        content: "Done!".into(),
+                        content_blocks: vec![ContentBlock::Text {
+                            text: "Done!".into(),
+                        }],
+                        model: "m".into(),
+                        stop_reason: StopReason::EndTurn,
+                        usage: TokenUsage {
+                            input_tokens: 20,
+                            output_tokens: 10,
+                            ..Default::default()
+                        },
+                    })
+                }
+            }
+            async fn send_message_stream(
+                &self,
+                _req: LLMRequest,
+            ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, LLMError>> + Send>>, LLMError>
+            {
+                Err(LLMError::StreamError("not implemented".into()))
+            }
+            fn provider_name(&self) -> &'static str {
+                "tool-test"
+            }
+            fn model_id(&self) -> &str {
+                "m"
+            }
+        }
+
+        let provider = Arc::new(ToolThenDone {
+            calls: call_count_clone,
+            second_request_messages: second_request_messages_clone,
+        });
+        let engine = ExecutionEngine::new(provider, false);
+        let strategy = TestStrategy::new();
+        let sink = NullSink;
+        let recorder = make_mock_recorder();
+
+        let result = engine
+            .execute(&strategy, "search for test", &sink, &recorder, None)
+            .await
+            .unwrap();
+        assert_eq!(result.content, "Done!");
+
+        let messages = second_request_messages.lock().unwrap().take().unwrap();
+        let assistant_msg = messages
+            .iter()
+            .find(|m| m.role == crate::llm::Role::Assistant)
+            .expect("round 2 request should include round 1's assistant turn");
+        assert_eq!(
+            assistant_msg.reasoning.as_deref(),
+            Some("I should search for this")
+        );
+    }
+
+    #[tokio::test]
     async fn execute_max_rounds_exhausted() {
         // Provider that always returns tool_use
         struct AlwaysToolUse;

@@ -319,7 +319,13 @@ fn convert_message(message: &Message, out: &mut Vec<serde_json::Value>) {
                     } => {
                         // Flush anything accumulated so far, so ordering with
                         // respect to the tool results is preserved.
-                        flush_parts(role, &mut parts, &mut tool_calls, out);
+                        flush_parts(
+                            role,
+                            &mut parts,
+                            &mut tool_calls,
+                            message.reasoning.as_deref(),
+                            out,
+                        );
                         out.push(serde_json::json!({
                             "role": "tool",
                             "tool_call_id": tool_use_id,
@@ -328,16 +334,28 @@ fn convert_message(message: &Message, out: &mut Vec<serde_json::Value>) {
                     }
                 }
             }
-            flush_parts(role, &mut parts, &mut tool_calls, out);
+            flush_parts(
+                role,
+                &mut parts,
+                &mut tool_calls,
+                message.reasoning.as_deref(),
+                out,
+            );
         }
     }
 }
 
 /// Emit the pending content parts and tool calls as one message, if any.
+///
+/// `reasoning` is DeepSeek-family `reasoning_content`: DeepInfra requires it
+/// echoed back on the assistant message once tools are in play, so attach it
+/// whenever the caller has one — it's ignored, not rejected, on turns/models
+/// where it isn't needed.
 fn flush_parts(
     role: &str,
     parts: &mut Vec<serde_json::Value>,
     tool_calls: &mut Vec<serde_json::Value>,
+    reasoning: Option<&str>,
     out: &mut Vec<serde_json::Value>,
 ) {
     if parts.is_empty() && tool_calls.is_empty() {
@@ -361,6 +379,12 @@ fn flush_parts(
         _ => serde_json::Value::Array(std::mem::take(parts)),
     };
     msg.insert("content".into(), content);
+
+    if role == "assistant" {
+        if let Some(text) = reasoning.filter(|s| !s.is_empty()) {
+            msg.insert("reasoning_content".into(), serde_json::json!(text));
+        }
+    }
 
     if !tool_calls.is_empty() {
         msg.insert(

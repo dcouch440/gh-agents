@@ -160,6 +160,47 @@ mod tests {
         assert_eq!(call["function"]["arguments"], r#"{"path":"a.rs"}"#);
     }
 
+    // DeepSeek-family models require reasoning_content echoed back on the
+    // assistant message once tools are in play, or a subsequent request is
+    // rejected.
+    #[test]
+    fn assistant_reasoning_is_echoed_back_as_reasoning_content() {
+        let msg = Message::assistant_with_blocks(vec![ContentBlock::ToolUse {
+            id: "call_1".into(),
+            name: "read_file".into(),
+            input: json!({"path": "a.rs"}),
+        }])
+        .with_reasoning(Some("I should read the file first".into()));
+        let req = LLMRequest::new("m", vec![msg]);
+        let body = adapter().build_request_body(&req, false);
+        assert_eq!(
+            body["messages"][0]["reasoning_content"],
+            "I should read the file first"
+        );
+    }
+
+    #[test]
+    fn assistant_without_reasoning_omits_reasoning_content() {
+        let msg = Message::assistant("hi there");
+        let req = LLMRequest::new("m", vec![msg]);
+        let body = adapter().build_request_body(&req, false);
+        assert!(body["messages"][0].get("reasoning_content").is_none());
+    }
+
+    // reasoning_content is meaningless on a user-role message — never emit it
+    // even if one were (incorrectly) attached to a tool-results message.
+    #[test]
+    fn tool_results_never_carry_reasoning_content() {
+        let msg = Message::tool_results(vec![ContentBlock::ToolResult {
+            tool_use_id: "call_1".into(),
+            content: "ok".into(),
+        }])
+        .with_reasoning(Some("should never appear".into()));
+        let req = LLMRequest::new("m", vec![msg]);
+        let body = adapter().build_request_body(&req, false);
+        assert!(body["messages"][0].get("reasoning_content").is_none());
+    }
+
     // Tool results arrive inside a *user* message here, but OpenAI wants each
     // as its own `role: "tool"` message.
     #[test]

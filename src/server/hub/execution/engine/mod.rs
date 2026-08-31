@@ -575,9 +575,10 @@ impl ExecutionEngine {
             .collect();
 
         // Append assistant message with all blocks
-        messages.push(Message::assistant_with_blocks(
-            response.content_blocks.clone(),
-        ));
+        messages.push(
+            Message::assistant_with_blocks(response.content_blocks.clone())
+                .with_reasoning(response.reasoning.clone()),
+        );
 
         // Execute each tool and build result blocks
         let mut result_blocks = Vec::new();
@@ -816,7 +817,10 @@ impl ExecutionEngine {
                     attempt = *end_turn_retries,
                     "LLM returned EndTurn without calling terminal tool — re-prompting"
                 );
-                messages.push(Message::assistant(&response.content));
+                messages.push(
+                    Message::assistant(&response.content)
+                        .with_reasoning(response.reasoning.clone()),
+                );
                 messages.push(Message::user(format!(
                     "You must call the `{terminal_tool}` tool to complete this task. \
                      Do not end your turn without calling it. Review your work and \
@@ -837,7 +841,10 @@ impl ExecutionEngine {
                 match f.on_response(&ctx, response).await? {
                     ResponseAction::Retry { feedback } => {
                         debug!(filter = f.name(), round, "filter requested retry");
-                        messages.push(Message::assistant(&response.content));
+                        messages.push(
+                            Message::assistant(&response.content)
+                                .with_reasoning(response.reasoning.clone()),
+                        );
                         messages.push(Message::user(&feedback));
                         filter_retried[i] = true;
                         return Ok(None);

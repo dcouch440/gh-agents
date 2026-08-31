@@ -19,6 +19,24 @@ mod tests {
     }
 
     #[test]
+    fn message_constructors_default_reasoning_to_none() {
+        assert_eq!(Message::user("hi").reasoning, None);
+        assert_eq!(Message::assistant("hi").reasoning, None);
+        assert_eq!(Message::assistant_with_blocks(vec![]).reasoning, None);
+        assert_eq!(Message::user_with_blocks(vec![]).reasoning, None);
+        assert_eq!(Message::tool_results(vec![]).reasoning, None);
+    }
+
+    #[test]
+    fn with_reasoning_attaches_and_overwrites() {
+        let msg = Message::assistant("answer").with_reasoning(Some("because...".to_string()));
+        assert_eq!(msg.reasoning, Some("because...".to_string()));
+
+        let cleared = msg.with_reasoning(None);
+        assert_eq!(cleared.reasoning, None);
+    }
+
+    #[test]
     fn request_builder_works() {
         let request = LLMRequest::new("claude-3", vec![Message::user("Hi")])
             .with_system("You are helpful")
